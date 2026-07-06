@@ -18,6 +18,7 @@ A declarative language to describe a system. It abstracts away the stack, functi
 - Rules are defined as top-level structures associated with shapes, rather than buried in nested functions calls
 - Needs a way to for conditions to be described without resorting to nesting `if` stanzas
     - I'm thinking a condition is a shape that can be associated with another shape (putting conditions on relationships, for example)
+- "Compiling" Velle results in 1) validating shapes and relationships through strong types and 2) deterministic, executable spec tests that AI or human-generated code can be verified against.
 
 ## Typical Language Constructs
 What makes up the definition of a system?
@@ -40,6 +41,14 @@ What makes up the definition of a system?
 
 ### Calculations
 - Calculations are mapped more straightforward: math is already a declarative language. The "computer" (in the original sense) does the actual calculations given the inputs, but the mathematical functions are abstract.
+
+## Inputs and Outputs
+Systems operate on inputs and produce outputs. Inputs are the data that the system receives, and outputs are the data that the system produces. APIs and DBs are typical input/output endpoints of a system.
+
+### Translating to traditional software terms
+- An object has a constructor that takes arguments. These are inputs to a shape. Inputs to shapes are other shapes or scalar values.
+- A function takes arguments - same as a constructor. The arguments to a function are identical to the constructor of an object. Once a function is "instantiated", it is then "executed".
+- An object shape is a function shape that doesn't do anything - it's output is itself.
 
 # AI
 Originally, my thought was to create a language that had nothing to do with AI, strictly focused on developing a language that abstracted away traditional typical code structures. However, it seems to me this language could be used to define a system in a strongly typed way that could then be used as a prompt reference and context for AI generated code.
