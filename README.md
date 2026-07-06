@@ -69,4 +69,7 @@ Shapes, properties, and relationships with other shapes are strongly typed.
 The "compiler" is responsible for enforcing strong typing, ensuring the relationships are valid
 
 ## Specs & Tests
-Because the language declares the rules of the system, it can be used to generate tests and specifications that are executable.
+"Compiling" Velle results in:
+1) validating shapes and relationships through strong types
+2) deterministic, executable spec tests that AI or human-generated code can be verified against.
+3) transpiled executable code that runs the system, baking in best practices (security, error handling, etc.)
