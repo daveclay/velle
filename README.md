@@ -1,5 +1,7 @@
 # Velle
 
+A declarative language to describe a system. It abstracts away the stack, functions, variables, scope, closures in favor of shapes, relationships, and rules.
+
 ## Philosophy
 - Computers execute code using stacks, registers, addresses, etc.
 - We humans don't think about solving problems using stacks, registers, addresses, etc.
@@ -17,11 +19,29 @@
 - Needs a way to for conditions to be described without resorting to nesting `if` stanzas
     - I'm thinking a condition is a shape that can be associated with another shape (putting conditions on relationships, for example)
 
-## Practical Problems
+## Practical Considerations
+What makes up the definition of a system?
+
+- Data - data comes in from an API or DB and then written to an API or DB. A huge amount of code is spent mapping one to the other.
+- Conditions - largely rules around data.
+- Loops - Doing something for each datum
+- Calculations - maths, adding, subtracting, multiplying, dividing, etc.
+
+### Conditions
 - how do I describe the behavior of a condition?
     - Generally, conditions are defined by branching. Do I keep the branch syntax, where a condition has an if/else declaration?
     - Let's say a "rule" simply includes a referenced shape or not. Could that be used to build up a coherent system?
+    - Typically in code, a condition is a structure that tells the computer to compare values "at runtime, in the moment, these values that are in scope." The code is written without knowing what those values will be, but still structures the values in terms of scope and function. Can we move even more abstract, by just referencing shapes?
 
+### For loops
+- Similar philosophy to conditions
+- Typically in code a loop tells the computer to iterate over some values that will be present at runtime, and the computer then executes the loop using the actual values.
+- Abstract away stack/function, make the iteration about shapes: for each row in a file, for each record in this SQL result set, etc. Iterations are declared over shapes/concepts instead of runtime variables/scope.
+
+### Calculations
+- Calculations are mapped more straightforward: math is already a declarative language. The "computer" (in the original sense) does the actual calculations given the inputs, but the mathematical functions are abstract.
+
+### 
 
 ## what is a for loop?
 - Why do we iterate?
