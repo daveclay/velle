@@ -264,3 +264,82 @@ PeptideOrderItem {
     order is reference to one Order required
 }
 ```
+
+# From initial Claude.ai:
+
+This is a solid foundation, and there's one idea buried in your notes that I think is the actual breakthrough worth building the whole language around. Let me work through it, then sketch what the language could look like.
+
+## The strongest idea: conditions are shapes
+
+You wrote "a condition is a shape that can be associated with another shape." Taken seriously, this means conditions become **named refinements** — subsets of a shape defined by a predicate:
+
+```
+shape Invoice {
+  customer: one Customer
+  amount:   Money
+  due:      Date
+  paid_on:  Date?
+}
+
+shape OverdueInvoice = Invoice where paid_on is none and due < today
+shape SettledInvoice = Invoice where paid_on is some
+```
+
+Now `if/else` disappears not by hiding it, but by inverting it. Instead of "if overdue, do X, else Y," you attach rules to the refined shapes:
+
+```
+rule LateFee on OverdueInvoice {
+  fee = amount * 5%
+}
+```
+
+And here's the payoff that no amount of nested `if` gives you: **the compiler can check exhaustiveness and overlap**. It can prove your refinements partition `Invoice` completely (no unhandled case), or warn that two rules both claim the same invoice. Branching logic becomes something the type system audits, rather than something a human traces through indentation. That's a real, demonstrable advantage — I'd make it the demo that sells the language.
+
+## Tighten the ontology
+
+Right now a shape is "an object, function, or relationship" — three very different things, which will make the semantics mushy. I'd propose a smaller core:
+
+- **Shape** — a typed record (your nouns)
+- **Relationship** — a typed, named edge between shapes, with cardinality (`one`, `many`, `optional`), and crucially, relationships can carry conditions and properties themselves
+- **Rule** — a top-level derivation or constraint attached to a shape or relationship
+- **Mapping** — a first-class construct for shape-to-shape translation
+
+Mapping deserves its own keyword because, as you note, it's where most real code lives:
+
+```
+mapping InvoiceFromApi: api.InvoiceDto -> Invoice {
+  amount   <- dto.total_cents as Money(cents)
+  due      <- dto.due_date
+  customer <- Customer with id = dto.customer_id
+}
+```
+
+The compiler checks *totality*: every required field of the target is produced, every source field is either used or explicitly ignored. A whole category of integration bugs becomes a compile error.
+
+Loops then fall out for free — iteration is just a rule quantified over a collection, the way SQL quantifies over rows:
+
+```
+derive MonthlyStatement for each Customer {
+  total = sum(invoices where issued in current_month, amount)
+}
+```
+
+## Prior art worth mining
+
+You're in good company, which is encouraging — this space has real lessons:
+
+**Eve** (Chris Granger's project) is the closest ancestor: records plus reactive top-level rules. It died mostly on tooling and unclear audience, not on the idea. **Alloy** proves that "shapes + relationships + constraints" can be checked mechanically — steal its relational logic. **CUE** treats types and values as one lattice, which is exactly what "conditions are shapes" implies. **Datalog** gives you the cleanest semantics for derivation rules. And **SQL** is the existence proof that ordinary developers happily write declarative logic over shapes — when the domain is scoped tightly.
+
+## Three hard problems you'll need answers for
+
+First, **effects and sequence**. Data, conditions, loops, and calculations describe the static world, but systems *do* things: "when payment arrives, mark invoice paid, then email a receipt." Pure declaration struggles with "then." My suggestion: declarative event rules (`when PaymentReceived on Invoice ...`) plus explicit state machines as a shape kind, statechart-style. Don't smuggle imperative code back in through a side door — but do have an answer.
+
+Second, **the escape hatch**. Every real system has 5% that won't fit the paradigm. And this is where your AI insight becomes structural rather than bolted-on: a Velle behavior with no declarative body is a *contract* — signature, conditions, invariants — and the implementation is AI-generated (or hand-written) code that must pass the tests the compiler emits from the spec. Velle stays the source of truth; code becomes a build artifact. That's a genuinely sharp positioning: today AI-assisted development has no verifiable spec layer, just markdown that rots. A compiled, exhaustiveness-checked spec that generates the conformance tests is exactly the missing piece.
+
+Third, **provenance**. Debugging declarative systems means asking "why did this rule fire?" or "why is this value 47?" Plan for a `why` command from day one — Prolog's biggest adoption wound was operational opacity.
+
+## Where I'd start
+
+The pragmatic MVP: a parser and type-checker for shapes, refinements, relationships, and mappings, plus a checker that verifies refinement exhaustiveness — no code generation yet. That alone is a useful tool (a linter for system design), and it forces the semantic questions to get answered early.
+
+One fork in the road determines a lot of the design, though: is Velle ultimately *executable* (compiler emits a running system), or is it a *specification layer* whose output is contracts and tests that constrain AI-generated code? Which of those is the version you're most excited about?
