@@ -10,6 +10,9 @@ A declarative language to describe a system. It abstracts away the stack, functi
 - We use layers of abstraction to try and abstract away technical details from the real-world problem we're trying to solve
 - What if we abstract away the stack, functions, variables, scope, closures?
 - What would a language look like where we declare how the system should work without using stacks, functions, variables, scope, closures?
+- Interactions are "shapes" that describe the states of an interaction.
+  - instead of thinking about "parameters" to a "function" that "returns a result" or "throws an error"
+  - there's an input state and several potential resulting state (success, error, retry, etc)
 
 ## Goals
 - The language should define "shapes":
