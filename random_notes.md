@@ -22,6 +22,10 @@ rule SendSlackMessage using CustomSlackMessage {
 # Visualization
 can velle language generate a clear, explicit process diagram?
 
+# Thoughts on Time
+
+rephrase the problem in terms of someone trying to describe what the system should do in the case where an invoice has been paid, then a refund is applied, and the invoice is reverted back to unsettled. There's two things here: first, the human has to describe what the system should do - someone has to decide whether the account should be re-flagged or the custom should be re-notified. Second, the language needs to be flexible enough for that human to tell it which to do. Velle is more like trying to describe what rules exist in the system separately from "when" these rules get applied. So far, the "when" is controlled by artifact shapes, which helps Velle be self-consistent. What artifact shapes might be used by the human to describe what the system should do? The human could decide the customer should be re-flagged and re-notified, or the human could decide the customer should be in some _other_ state where they are in a grace period.
+
 # Thoughts on Traditional Languages
 ## what is a for loop?
 - Why do we iterate?

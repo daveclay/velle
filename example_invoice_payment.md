@@ -348,4 +348,100 @@ This example exposed two problems rather than resolving cleanly on its own:
 
 A payment gets refunded; the invoice goes from `SettledInvoice` back to `PartiallyPaidInvoice`. Do rules run symmetrically on the way out of a refinement (e.g. revoke the receipt?) or only on the way in?
 
+```
+shape Refund {
+    payment: one Payment
+    amount: Money
+    refundedOn: Date
+}
+```
+
+Extend `Payment` and `Invoice.balance` to account for it:
+
+```
+shape Payment {
+    invoice: one Invoice
+    amount: Money
+    receivedOn: Date
+    refunds: many Refund
+}
+
+shape Invoice {
+    customer: one Customer
+    amount: Money
+    due: Date
+    payments: many Payment
+    balance: Money = amount - sum(payments, amount) + sum(payments.refunds, amount)
+}
+```
+
+Walk the sequence: an invoice is fully paid, `balance` drops to `0`, it satisfies `SettledInvoice`, `SendReceipt` fires and `produces Receipt`. Later, the payment is refunded — a `Refund` shape is created, `balance` recomputes above `0`, and the invoice no longer satisfies `SettledInvoice`; it's back to `PartiallyPaidInvoice` or `OverdueInvoice` depending on `due`.
+
+Nothing reacts to that transition. `Receipt` still exists, referencing an invoice that is, in the system's current state, not actually settled. Two concrete things this breaks:
+
+- **The `Receipt` guard, if the invoice is later paid off again.** `SendReceipt on SettledInvoice produces Receipt` guards on "does a `Receipt` exist for this invoice" — full stop, permanently, the same guard-granularity issue as `FlagNotification` in #4. If the customer legitimately pays the invoice again after the refund, `SendReceipt` can never fire a second time, because a `Receipt` from the *first* settlement still exists. The guard doesn't distinguish "settled once, forever" from "settled right now."
+- **`AccountFlag` from #4**, cited above: if the refund also drops the customer's overdue-invoice count back under 3, does `FlaggedCustomer` no longer applying mean anything? Nothing currently un-flags the account or notifies the customer they're clear.
+
+#### Reframing the question
+
+"Is a refinement transition symmetric or one-directional" assumed Velle itself needs an opinion about what reversal means. It doesn't — reversal-handling is a business decision, not a language design decision. Velle's job is only to give the human vocabulary to express whichever decision they make. The mechanism for that is exactly what's already built: artifact shapes control "when," so the human's decision gets encoded as *which* artifact shapes they choose to declare, not as a new language primitive.
+
+Detecting that a reversal happened at all doesn't need new machinery either — it's a refinement comparing current state against past evidence:
+
+```
+shape ReopenedInvoice = Invoice where exists Receipt for this and not (this is SettledInvoice)
+```
+
+**Option A — re-flag and re-notify.** The human decides the customer should go through the exact same treatment as a first-time flag. The artifact shape they add is a *resolution* — evidence that the old flag no longer applies, so the guard can be satisfied again:
+
+```
+shape AccountFlagResolved {
+    accountFlag: one AccountFlag
+    resolvedOn: Date
+}
+
+shape ActiveAccountFlag = AccountFlag where not exists AccountFlagResolved for this
+
+rule ResolveFlagIfCleared on DailyReview {
+    each Customer where exists ActiveAccountFlag for this and not (this is FlaggedCustomer) produces AccountFlagResolved {
+        AccountFlagResolved for (ActiveAccountFlag for this) resolvedOn: now
+    }
+}
+
+rule FlagOverdueAccounts on DailyReview {
+    each FlaggedCustomer where not exists ActiveAccountFlag for this produces AccountFlag {
+        AccountFlag for this flaggedOn: now
+    }
+}
+```
+
+Once resolved, a later `FlaggedCustomer` match produces a *new* `AccountFlag`, which — because `NotifyCustomerOfFlag` is already scoped to the specific `AccountFlag` instance, not the customer (the fix from #4) — automatically re-notifies too, with no separate declaration needed.
+
+**Option B — grace period.** A genuinely different policy, not just an undo: the human decides a reopened invoice shouldn't immediately re-trigger flagging at all, but should suspend it for a window:
+
+```
+shape GracePeriod {
+    customer: one Customer
+    startedOn: Date
+    endsOn: Date
+}
+
+shape InGracePeriod = Customer where exists GracePeriod for this and today <= (GracePeriod for this).endsOn
+
+rule StartGracePeriod on ReopenedInvoice produces GracePeriod {
+    GracePeriod for invoice.customer startedOn: now endsOn: now + 14 days
+}
+
+rule FlagOverdueAccounts on DailyReview {
+    each FlaggedCustomer where not exists ActiveAccountFlag for this and not (this is InGracePeriod) produces AccountFlag {
+        AccountFlag for this flaggedOn: now
+    }
+}
+```
+
+Both options reuse the same four things — `shape`, `where`, `produces`, `for` — the difference is entirely which artifact shapes the human chose to declare and what conditions they wired into `FlagOverdueAccounts`. This was never a gap where the language needed a new construct for "reversal semantics." It's evidence the existing vocabulary is expressive enough for a human to encode either business decision explicitly, and Velle staying silent about which one is correct is the right behavior, not an omission.
+
+>
+
+
 >
