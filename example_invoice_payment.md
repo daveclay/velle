@@ -436,8 +436,3 @@ rule FlagOverdueAccounts {
 ```
 
 Both options reuse the same four things — `shape`, `where`, `produces`, `for` — the difference is entirely which artifact shapes the human chose to declare and what conditions they wired into `FlagOverdueAccounts`. This was never a gap where the language needed a new construct for "reversal semantics." It's evidence the existing vocabulary is expressive enough for a human to encode either business decision explicitly, and Velle staying silent about which one is correct is the right behavior, not an omission.
-
->
-
-
->
