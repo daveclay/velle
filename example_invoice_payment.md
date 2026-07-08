@@ -92,11 +92,9 @@ shape FlagNotification {
     accountFlag: one AccountFlag
     sentOn: Date
 }
-
-shape DailyReview via schedule every 1 day {
-    ranOn: Date
-}
 ```
+
+Schedule definition itself (what `Daily` below actually means — cadence, timezone, etc.) is a separate, not-yet-designed concern, assumed to be provided by some schedule construct that can fire arbitrarily, cron-like. Only the rule-side trigger syntax is settled so far — see "Process and rules," below.
 
 ## Process and rules
 
@@ -125,11 +123,11 @@ rule SendReceipt on SettledInvoice produces Receipt {
     Receipt for invoice sentOn: now
 }
 
-rule FlagOverdueAccounts on DailyReview {
+rule FlagOverdueAccounts {
     each FlaggedCustomer produces AccountFlag {
         AccountFlag for this flaggedOn: now
     }
-}
+} on Daily
 
 rule NotifyCustomerOfFlag on AccountFlag produces FlagNotification {
     FlagNotification for this sentOn: now
@@ -144,7 +142,7 @@ What each rule demonstrates:
 - **`RecordPayment` → `SendReceipt`** — sequencing as data dependency, branching as refinement dispatch, no state-machine construct needed.
 - **`ReleaseInventory on FailedCharge`** — errors are a refinement, not a control-flow mechanism (stress test #1).
 - **`SendReceipt`, `ReleaseInventory`, `RecordPayment` all using `produces`** — firing-once via evidence shapes, not runtime bookkeeping (stress test #2).
-- **`FlagOverdueAccounts on DailyReview`** — explicit scheduled ticks as the only trigger for purely time-dependent refinements (stress test #3), reacting to a cross-shape aggregate refinement (stress test #4).
+- **`FlagOverdueAccounts { ... } on Daily`** — explicit scheduled ticks as the only trigger for purely time-dependent refinements (stress test #3), reacting to a cross-shape aggregate refinement (stress test #4). Postfix `on` marks a schedule trigger, distinct from the prefix `on Refinement` used everywhere else for data-driven triggers.
 - **`NotifyCustomerOfFlag on AccountFlag`** — chaining through a produced shape, and guard granularity scoped to the specific triggering instance, not the broader customer.
 
 Stress test #5 (reversal) is not reflected here — still open.
@@ -278,24 +276,22 @@ Every rule with a side effect earlier in this doc was underspecified without thi
 "If the receipt isn't opened within 3 days, send a reminder." No triggering shape exists until a clock passes with nothing else happening — tests whether time itself needs to be a shape/relationship, or some other primitive.
 
 > In software today, nothing executes purely on the passage of time by default — a developer explicitly writes a timer/interval and registers a function to run on it. Velle shouldn't pretend otherwise: assume a scheduling framework is provided by the runtime, and make the registration explicit, the same way `via API` explicitly registers a REST endpoint in the earlier notes.
+>
+> Revised: schedule *definition* (cadence, timezone, whatever "fire arbitrarily like cron" ends up needing) is its own concern, separate from how a rule reacts to a schedule — deferred, not designed yet. What's settled is only the rule side: a schedule is referenced by name in a trailing `on` clause, syntactically distinct from the prefix `on Refinement` used for data-driven rules.
 
-#### Resolution: a schedule is an explicit registration that produces tick shapes
+#### Resolution: schedule triggers are postfix, schedule definition is deferred
 
 ```
-shape DailyReview via schedule every 1 day {
-    ranOn: Date
-}
-
-rule FlagOverdueAccounts on DailyReview {
+rule FlagOverdueAccounts {
     each FlaggedCustomer produces AccountFlag {
         AccountFlag for this flaggedOn: now
     }
-}
+} on Daily
 ```
 
-`via schedule every 1 day` tells the runtime to generate a scheduler that creates a `DailyReview` instance once a day — that instance is the actual trigger, the same category of thing as a `Payment` arriving or a `ChargeResponse` coming back. There's still no ambient "time passing" primitive; the developer explicitly registered the equivalent of a timer via this declaration.
+`Daily` here is a placeholder name for whatever schedule construct eventually defines it — not a built-in, not sugar for a specific interval. All that's fixed is the position: prefix `on Refinement` means "react to a data condition," postfix `on Schedule` means "react to a schedule tick," and the two read differently on purpose even though both mechanically react to a shape existing. `on` can take a comma-separated list (`on Daily, Hourly`) for a rule that needs multiple cadences.
 
-This also sharpens something that was implicit until now: **a refinement is a pure predicate, not a trigger.** `OverdueInvoice` (`due < today`) doesn't "become true" and notify anyone — it's just always evaluable against current data, same as `balance <= 0`. Only *rules* react to something actually happening, and "something happening" always means a new shape got created. For rules driven by data changes (a `Payment` arriving), that's naturally satisfied. For a rule that depends purely on elapsed time with no other data change, nothing would ever re-check it without `DailyReview` existing to be the shape that happened. `FlagOverdueAccounts on DailyReview` is what actually walks the `FlaggedCustomer` refinement (#4) and notices invoices that silently crossed into `OverdueInvoice` since the clock advanced.
+This also sharpens something that was implicit until now: **a refinement is a pure predicate, not a trigger.** `OverdueInvoice` (`due < today`) doesn't "become true" and notify anyone — it's just always evaluable against current data, same as `balance <= 0`. Only *rules* react to something actually happening, and "something happening" always means a new shape got created. For rules driven by data changes (a `Payment` arriving), that's naturally satisfied. For a rule that depends purely on elapsed time with no other data change, nothing would ever re-check it without a scheduled tick existing to be the thing that happened. `FlagOverdueAccounts` is what actually walks the `FlaggedCustomer` refinement (#4) and notices invoices that silently crossed into `OverdueInvoice` since the clock advanced.
 
 `each FlaggedCustomer produces AccountFlag` also composes two existing mechanisms rather than adding a new one: `each` is the loop construct from the original "Typical Language Constructs" section, and `produces` is the firing guard from #2 — now applied to a filtered set instead of a single shape.
 
@@ -402,17 +398,17 @@ shape AccountFlagResolved {
 
 shape ActiveAccountFlag = AccountFlag where not exists AccountFlagResolved for this
 
-rule ResolveFlagIfCleared on DailyReview {
+rule ResolveFlagIfCleared {
     each Customer where exists ActiveAccountFlag for this and not (this is FlaggedCustomer) produces AccountFlagResolved {
         AccountFlagResolved for (ActiveAccountFlag for this) resolvedOn: now
     }
-}
+} on Daily
 
-rule FlagOverdueAccounts on DailyReview {
+rule FlagOverdueAccounts {
     each FlaggedCustomer where not exists ActiveAccountFlag for this produces AccountFlag {
         AccountFlag for this flaggedOn: now
     }
-}
+} on Daily
 ```
 
 Once resolved, a later `FlaggedCustomer` match produces a *new* `AccountFlag`, which — because `NotifyCustomerOfFlag` is already scoped to the specific `AccountFlag` instance, not the customer (the fix from #4) — automatically re-notifies too, with no separate declaration needed.
@@ -432,11 +428,11 @@ rule StartGracePeriod on ReopenedInvoice produces GracePeriod {
     GracePeriod for invoice.customer startedOn: now endsOn: now + 14 days
 }
 
-rule FlagOverdueAccounts on DailyReview {
+rule FlagOverdueAccounts {
     each FlaggedCustomer where not exists ActiveAccountFlag for this and not (this is InGracePeriod) produces AccountFlag {
         AccountFlag for this flaggedOn: now
     }
-}
+} on Daily
 ```
 
 Both options reuse the same four things — `shape`, `where`, `produces`, `for` — the difference is entirely which artifact shapes the human chose to declare and what conditions they wired into `FlagOverdueAccounts`. This was never a gap where the language needed a new construct for "reversal semantics." It's evidence the existing vocabulary is expressive enough for a human to encode either business decision explicitly, and Velle staying silent about which one is correct is the right behavior, not an omission.

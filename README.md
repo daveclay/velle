@@ -13,6 +13,13 @@ A declarative language to describe a system. It abstracts away the stack, functi
 - Interactions are "shapes" that describe the states of an interaction.
   - instead of thinking about "parameters" to a "function" that "returns a result" or "throws an error"
   - there's an input state and several potential resulting state (success, error, retry, etc)
+- The language intends to separate human concerns from computer concerns.
+  - Velle captures system design choices made with human judgement, capturing rules and data shapes, interactions, relationships, conditions.
+  - "Compiling" Velle results in code that can be executed. The code is fungible. Today, AI writes a lot of code. But even before AI, software engineering was _mostly_ changing existing code to support business changes rather than greenfield projects. Code should be thought of as _change_. Now that AI writes code, we expect code to change even more often, and treat it as some intermediary commodity.
+  - The problem with code today is that it's complex and noisy and requires interpretation. The more code AI writes, the less the engineers can be confident it does what they intend. 
+  - Humans can write tests/specs to ensure the "arbitrary" code does what they intend, current test frameworks have no opinion about their structure in terms of use cases (Cucumber BDD attempts to capture this more than junit, which is focused specifically around code, not system use cases).
+  - Velle attempts to provide a concise use-case system design language that helps humans capture requirements and make judgements without translating those into the domain of computer science and code.
+  - But then extrapolate those requirements into executable tests, modular code, tools to be able to organize and read AI-generated (or human-generated) code.
 
 ## Goals
 - The language should define "shapes":
@@ -76,3 +83,37 @@ The "compiler" is responsible for enforcing strong typing, ensuring the relation
 1) validating shapes and relationships through strong types
 2) deterministic, executable spec tests that AI or human-generated code can be verified against.
 3) transpiled executable code that runs the system, baking in best practices (security, error handling, etc.)
+
+# Testing, Spec'ing
+
+- Every rule's spec-worthy content is `Given`/`Then`: the precondition (its refinement or `where` clause, plus its `produces` guard) and the effect (what gets produced).
+- The "when" something happens using `on` — whether it names a refinement or a schedule — is invocation plumbing, not business behavior. It doesn't belong in the scenario describing what the rule does; it's the same category of concern as "this runs as a DB trigger vs. a cron job."
+- Example:
+    ```
+    rule SendReceipt on SettledInvoice produces Receipt {
+        Receipt for invoice sentOn: now
+    }
+    ```
+    translates to:
+    ```gherkin
+    Scenario: An invoice is settled
+      Given an Invoice with a positive balance
+        And no Receipt exists for the invoice
+      Then a Receipt is produced for the invoice
+    ```
+- A schedule-triggered rule works the same way — the schedule itself isn't part of the scenario:
+    ```
+    rule FlagOverdueAccounts {
+        each FlaggedCustomer where not exists ActiveAccountFlag for this produces AccountFlag {
+            AccountFlag for this flaggedOn: now
+        }
+    } on Daily
+    ```
+    ```gherkin
+    Scenario: A customer with too many overdue invoices is flagged
+      Given a Customer has 3 or more OverdueInvoices
+        And no ActiveAccountFlag exists for the customer
+      Then an AccountFlag is produced for the customer
+    ```
+- The schedule wiring (`FlagOverdueAccounts` runs `on Daily`) is tested separately, at the infrastructure level — it's a fact about invocation, not about the rule's logic.
+- This is the concrete answer to the testing gap named in Philosophy: rules compile directly into use-case-structured (`Given`/`Then`) scenarios, rather than needing a hand-written, separately-maintained BDD layer bolted on top of code.

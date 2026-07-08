@@ -2,6 +2,16 @@
 
 Draft reference, organized by keyword/construct. Derived from the design exploration in `README.md`, `random_notes.md`, `discussion_hard_problems.md`, and `example_invoice_payment.md` — those remain the record of *why* each construct looks the way it does; this doc is meant to become the settled *what*. Update it as constructs stabilize; open questions are called out explicitly rather than silently omitted.
 
+## Philosophy
+
+Computers execute in terms of stacks, registers, and addresses; humans don't think in those terms when solving problems. Conventional software engineering is the effortful, lossy act of translating a human problem into computer mechanics — functions, variables, scope, closures. Velle removes that translation step: it describes a system directly as shapes, relationships, and rules, and leaves the computer-mechanics translation to compilation.
+
+Interactions are described as shapes with states, not function calls. Instead of a function taking parameters and returning a result or throwing an error, an interaction has an input state and several potential resulting states — success, error, retry, and so on — expressed as ordinary refinements (see `produces` and the errors-are-refinements pattern in `example_invoice_payment.md`).
+
+Velle separates human concerns from computer concerns. Capturing rules, data shapes, interactions, relationships, and conditions is human judgment about system design; "compiling" that judgment into running code is a mechanical, computer concern. Code itself is treated as fungible — a disposable, regenerable artifact of compiling the spec, not the durable source of truth. This was true even before AI (most software engineering is changing existing code to meet business change, not writing greenfield systems), and AI-generated code makes it more true: code changes faster, and the more of it AI writes, the less confidently engineers can say it does what's intended just by reading it.
+
+The gap this is meant to close: existing test frameworks have no opinion about structuring around use cases rather than code (JUnit is code-centric; Cucumber/BDD gets closer but isn't structured enough). Velle aims to be a concise, use-case-oriented system design language humans can use to capture requirements and judgment without first translating them into computer-science concepts — then to extrapolate those requirements into executable tests, modular code, and tooling for organizing and reading AI- or human-generated code.
+
 ## shape
 
 A typed record — Velle's only structural noun. Replaces objects, functions, and (per Inputs and Outputs, below) constructors, since all three reduce to "a set of typed properties."
@@ -60,7 +70,9 @@ rule SendReceipt on SettledInvoice {
 }
 ```
 
-A rule fires when a shape newly satisfies the refinement named in `on`. There is no polling, clock, or re-evaluation pass in the model — a rule is only reconsidered when data it depends on changes (see `produces` and `via schedule`, below, for how that's kept true even for purely time-dependent refinements).
+A rule fires when a shape newly satisfies the refinement named in `on`. There is no polling, clock, or re-evaluation pass in the model — a rule is only reconsidered when data it depends on changes (see `produces` and Schedule triggers, below, for how that's kept true even for purely time-dependent refinements).
+
+Prefix `on` (`rule X on Refinement { ... }`) is specifically for data-driven triggers. Schedule-driven triggers use a different position — postfix, after the rule body — precisely so the two don't read as the same kind of thing even though both mechanically react to a shape existing. See Schedule triggers, below.
 
 ## `produces`
 
@@ -109,26 +121,30 @@ Effects listed without `then` are unordered — the transpiler/AI-assisted codeg
 Applies a rule across every member of a refined collection, combined with the `produces` guard per member:
 
 ```
-rule FlagOverdueAccounts on DailyReview {
+rule FlagOverdueAccounts {
     each FlaggedCustomer produces AccountFlag {
         AccountFlag for this flaggedOn: now
     }
-}
+} on Daily
 ```
 
 No separate loop construct — `each` composes the original "for each" iteration idea with `produces`, applied to a filtered set instead of a single shape.
 
-## `via schedule every <interval>`
+## Schedule triggers (postfix `on`)
 
-Explicit registration of a timer, analogous to `via API` registering a REST endpoint. The runtime is responsible for creating an instance of the shape on the declared cadence:
+A rule can be triggered by a named schedule instead of (or in addition to) a refinement, using `on` *after* the rule body rather than before it:
 
 ```
-shape DailyReview via schedule every 1 day {
-    ranOn: Date
-}
+rule FlagOverdueAccounts {
+    each FlaggedCustomer produces AccountFlag {
+        AccountFlag for this flaggedOn: now
+    }
+} on Daily
 ```
 
-This is the *only* way a purely time-dependent refinement (like `OverdueInvoice`, which depends on `today`) gets re-checked — nothing in Velle executes purely on the passage of time by default. A scheduled tick is a shape instance like any other (the same category as a `Payment` arriving or a `ChargeResponse` coming back), so it can be a rule's `on` target like any other trigger.
+`on` accepts a comma-separated list (`on Daily, Hourly`) for a rule that needs to run on more than one cadence. `Daily` is a placeholder name, not a built-in or sugar for a specific interval — what actually defines a schedule (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be provided by some cron-like scheduling framework. Only the rule-side trigger syntax is settled.
+
+This postfix form is the *only* way a purely time-dependent refinement (like `OverdueInvoice`, which depends on `today`) gets re-checked — nothing in Velle executes purely on the passage of time by default. A scheduled tick is conceptually a shape instance like any other (the same category as a `Payment` arriving or a `ChargeResponse` coming back), but it's referenced by name in `on`, not declared inline as a custom shape the way earlier drafts of this doc did.
 
 ## Inputs and Outputs
 
@@ -147,7 +163,8 @@ An "object" shape is a degenerate case of a "function" shape whose output is its
 ## Open / unresolved
 
 - **Mapping** (shape-to-shape translation, e.g. API DTO → domain shape) — part of the original design goals, not yet exercised in a worked example.
-- **Reversal** — if a shape moves *out* of a refinement it previously satisfied (e.g. a refunded payment moves an invoice from `SettledInvoice` back to `PartiallyPaidInvoice`), do rules run symmetrically on the way out, or only on the way in? Unresolved.
+- **Schedule definition** — `on Daily` (postfix) settles how a rule *references* a schedule; what actually defines `Daily` (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be a cron-like scheduling framework.
+- **Reversal** — resolved as a non-issue for the language itself (it's a business-policy choice, expressed via which artifact shapes a human declares — see `example_invoice_payment.md` #5), but no single canonical pattern has been adopted yet; the consolidated top-of-file example still doesn't reflect a chosen policy.
 - **Escape hatch / override syntax** — how a human marks part of a spec as intentionally hand-implemented/AI-implemented rather than declarative. Deferred; agreed to be a lesser concern until the core language settles.
 - **Compiled guardrails** — the idea that the compiler/transpiler should structurally enforce best practices (e.g. forced prepared statements, automatic error-context capture) as a byproduct of codegen. A design principle, not yet a syntax construct.
 - **`why` / provenance** — a command to trace which rule/refinement produced a given piece of state, mapped back to Velle source. Agreed as a goal; no syntax proposed yet.
