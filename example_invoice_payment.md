@@ -2,6 +2,10 @@
 
 Testing whether "output feeds input" + refinements (conditions-as-shapes) are enough to express order-dependent, multi-step behavior without a separate sequencing or state-machine construct.
 
+This section is the consolidated model — every mechanism from every stress test below, wired into one coherent example. The stress-test sections that follow are the derivation history: how each piece was found and why it looks the way it does.
+
+One synthesis choice made to unify the two flows that were developed somewhat separately below (`Invoice`/`Payment` and `Order`/`ChargeAttempt`): a successful card charge is treated as *one way* a `Payment` gets created against an `Invoice` — the same target the original `ApplyPayment` shape feeds. That wasn't explicitly discussed; flag it if that's not the intended relationship between the two flows.
+
 ## Shapes
 
 ```
@@ -23,6 +27,23 @@ shape Payment {
     amount: Money
     receivedOn: Date
 }
+
+shape Order {
+    customer: one Customer
+    invoice: one Invoice
+    amount: Money
+}
+
+shape ChargeAttempt {
+    order: one Order
+    requestedOn: Date
+    response: ChargeResponse?
+}
+
+shape ChargeResponse {
+    outcome: text
+    processedOn: Date
+}
 ```
 
 ## Refinements (conditions as shapes)
@@ -31,9 +52,53 @@ shape Payment {
 shape OverdueInvoice       = Invoice where balance > 0 and due < today
 shape PartiallyPaidInvoice = Invoice where balance > 0 and balance < amount
 shape SettledInvoice       = Invoice where balance <= 0
+
+shape PendingChargeAttempt   = ChargeAttempt where response is none
+shape CompletedChargeAttempt = ChargeAttempt where response is some
+shape SuccessfulCharge       = CompletedChargeAttempt where response.outcome = "approved"
+shape FailedCharge           = CompletedChargeAttempt where response.outcome = "declined"
+
+shape FlaggedCustomer = Customer where count(invoices where OverdueInvoice) >= 3
 ```
 
-## Process: apply a payment, notify if settled
+`invoices` above is the inferred inverse of `Invoice.customer` (per the many-to-one shorthand from the early notes) — not separately declared on `Customer`.
+
+## Evidence and effect shapes
+
+Shapes produced by rules. Each one is both the record of what happened and the guard against it happening twice (stress test #2) — there's no separate "evidence" category, these are ordinary shapes doing double duty.
+
+```
+shape AuditLogEntry {
+    order: one Order
+    loggedOn: Date
+}
+
+shape Receipt {
+    invoice: one Invoice
+    sentOn: Date
+}
+
+shape InventoryRelease {
+    order: one Order
+    releasedOn: Date
+}
+
+shape AccountFlag {
+    customer: one Customer
+    flaggedOn: Date
+}
+
+shape FlagNotification {
+    accountFlag: one AccountFlag
+    sentOn: Date
+}
+
+shape DailyReview via schedule every 1 day {
+    ranOn: Date
+}
+```
+
+## Process and rules
 
 ```
 shape ApplyPayment {
@@ -42,22 +107,47 @@ shape ApplyPayment {
     output: invoice with payments += payment
 }
 
-shape Receipt {
-    invoice: one Invoice
-    sentOn: Date
+rule InitiateCharge on Order produces ChargeAttempt {
+    AuditLogEntry for order loggedOn: now
+    then
+    ChargeAttempt for order requestedOn: now
+}
+
+rule RecordPayment on SuccessfulCharge produces Payment {
+    Payment for order.invoice amount: order.amount receivedOn: now
+}
+
+rule ReleaseInventory on FailedCharge produces InventoryRelease {
+    InventoryRelease for order releasedOn: now
 }
 
 rule SendReceipt on SettledInvoice produces Receipt {
     Receipt for invoice sentOn: now
 }
+
+rule FlagOverdueAccounts on DailyReview {
+    each FlaggedCustomer produces AccountFlag {
+        AccountFlag for this flaggedOn: now
+    }
+}
+
+rule NotifyCustomerOfFlag on AccountFlag produces FlagNotification {
+    FlagNotification for this sentOn: now
+}
 ```
 
-No explicit "then send receipt" step is written anywhere. `ApplyPayment` recomputes `balance` (derived), which changes which refinement the invoice belongs to, which means `SendReceipt` — a rule scoped to `SettledInvoice` — fires automatically. `produces Receipt` also guards against firing twice — see stress test #2.
+No explicit "then send receipt" step is written for the payment/settlement path. `ApplyPayment` (or `RecordPayment`, chained from a successful charge) recomputes `balance` (derived), which changes which refinement the invoice belongs to, which means `SendReceipt` — a rule scoped to `SettledInvoice` — fires automatically.
 
-- **Sequencing** here is just data dependency: you can't know the invoice is settled until after the payment is applied, so ordering falls out of the input/output graph.
-- **Branching** is just refinement dispatch, not an explicit "then."
+What each rule demonstrates:
 
-This supports the idea that state-machine-like behavior is an artifact of how inputs/outputs and refinements are wired, with no separate state-machine mechanism needed.
+- **`InitiateCharge`** — ordering without data dependency, via `then` (stress test: order with no data dependency, below).
+- **`RecordPayment` → `SendReceipt`** — sequencing as data dependency, branching as refinement dispatch, no state-machine construct needed.
+- **`ReleaseInventory on FailedCharge`** — errors are a refinement, not a control-flow mechanism (stress test #1).
+- **`SendReceipt`, `ReleaseInventory`, `RecordPayment` all using `produces`** — firing-once via evidence shapes, not runtime bookkeeping (stress test #2).
+- **`FlagOverdueAccounts on DailyReview`** — explicit scheduled ticks as the only trigger for purely time-dependent refinements (stress test #3), reacting to a cross-shape aggregate refinement (stress test #4).
+- **`NotifyCustomerOfFlag on AccountFlag`** — chaining through a produced shape, and guard granularity scoped to the specific triggering instance, not the broader customer.
+
+Stress test #5 (reversal) is not reflected here — still open.
 
 ## Stress test: order with no data dependency
 
@@ -187,11 +277,70 @@ Every rule with a side effect earlier in this doc was underspecified without thi
 
 "If the receipt isn't opened within 3 days, send a reminder." No triggering shape exists until a clock passes with nothing else happening — tests whether time itself needs to be a shape/relationship, or some other primitive.
 
+> In software today, nothing executes purely on the passage of time by default — a developer explicitly writes a timer/interval and registers a function to run on it. Velle shouldn't pretend otherwise: assume a scheduling framework is provided by the runtime, and make the registration explicit, the same way `via API` explicitly registers a REST endpoint in the earlier notes.
+
+#### Resolution: a schedule is an explicit registration that produces tick shapes
+
+```
+shape DailyReview via schedule every 1 day {
+    ranOn: Date
+}
+
+rule FlagOverdueAccounts on DailyReview {
+    each FlaggedCustomer produces AccountFlag {
+        AccountFlag for this flaggedOn: now
+    }
+}
+```
+
+`via schedule every 1 day` tells the runtime to generate a scheduler that creates a `DailyReview` instance once a day — that instance is the actual trigger, the same category of thing as a `Payment` arriving or a `ChargeResponse` coming back. There's still no ambient "time passing" primitive; the developer explicitly registered the equivalent of a timer via this declaration.
+
+This also sharpens something that was implicit until now: **a refinement is a pure predicate, not a trigger.** `OverdueInvoice` (`due < today`) doesn't "become true" and notify anyone — it's just always evaluable against current data, same as `balance <= 0`. Only *rules* react to something actually happening, and "something happening" always means a new shape got created. For rules driven by data changes (a `Payment` arriving), that's naturally satisfied. For a rule that depends purely on elapsed time with no other data change, nothing would ever re-check it without `DailyReview` existing to be the shape that happened. `FlagOverdueAccounts on DailyReview` is what actually walks the `FlaggedCustomer` refinement (#4) and notices invoices that silently crossed into `OverdueInvoice` since the clock advanced.
+
+`each FlaggedCustomer produces AccountFlag` also composes two existing mechanisms rather than adding a new one: `each` is the loop construct from the original "Typical Language Constructs" section, and `produces` is the firing guard from #2 — now applied to a filtered set instead of a single shape.
+
 >
 
 ### 4. Cross-shape aggregate conditions
 
 "Flag the customer's account if they have 3+ overdue invoices." A refinement on `Customer` defined by a condition over `many Invoice` — tests whether refinements compose across relationships, not just within one shape.
+
+```
+shape FlaggedCustomer = Customer where count(invoices where OverdueInvoice) >= 3
+
+shape AccountFlag {
+    customer: one Customer
+    flaggedOn: Date
+}
+
+rule FlagAccountForReview on FlaggedCustomer produces AccountFlag {
+    AccountFlag for customer flaggedOn: now
+}
+```
+
+`invoices where OverdueInvoice` reuses `where` both to define a refinement and to filter a collection by one — no new mechanism, refinements just compose across a relationship the same way they compose within one shape.
+
+#### Extending it: notify the customer, not just flag the account
+
+```
+shape FlagNotification {
+    accountFlag: one AccountFlag
+    sentOn: Date
+}
+
+rule NotifyCustomerOfFlag on AccountFlag produces FlagNotification {
+    FlagNotification for this sentOn: now
+}
+```
+
+This chains through a produced shape, the same pattern as `ApplyPayment → SettledInvoice → SendReceipt` earlier in the doc: `AccountFlag` is simultaneously the evidence guarding `FlagAccountForReview` against re-firing, and the trigger for `NotifyCustomerOfFlag`.
+
+Worth noting why `FlagNotification` references `accountFlag: one AccountFlag` rather than `customer: one Customer` directly: if it referenced the customer, the `produces` guard (from #2) would mean "has this *customer* ever been notified" — which would silently suppress notification on a legitimate future re-flagging once #5 (reversal) allows a customer to be un-flagged and re-flagged later. Scoping to the specific `AccountFlag` instance instead means a second, later flag is a distinct trigger with its own guard. The `for` target in `produces` isn't a style choice — it sets the guard's granularity.
+
+This example exposed two problems rather than resolving cleanly on its own:
+
+- **Time (#3):** `OverdueInvoice` is `due < today` — nothing "happens" to make an invoice cross into it, no shape is created, time just passes. So `FlaggedCustomer` can become true with zero new data, and nothing in the model so far would ever notice. Resolved under #3 below.
+- **Reversal (#5) — still open:** if a customer pays down one overdue invoice and drops back to 2, does `AccountFlag`'s `produces` guard mean the flag persists forever, or does the account get un-flagged symmetrically? Unresolved — see #5.
 
 >
 

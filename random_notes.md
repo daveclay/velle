@@ -1,3 +1,28 @@
+# Compiling Velle
+
+assume we're transpiling to an existing traditional language (leaning towards kotlin but maybe rust)
+ 
+## Codegen/Modifying Velle output
+- when Velle "compiles", it produces separate files for every shape/rule/refinement
+- those files can be modified by the user or AI
+- AI can be given rules about implementing transpiled code from Velle (override within these files, structured file layouts)
+- a way to demarcate/introspect generated code "modules"/files
+- "escape hatch" isn't one-way; you can pick and choose which files to override or re-generate
+
+## Language "extension"
+- lightweight way to introduce new "verbs" or terms that correspond to files of custom code that velle can use
+- expose new DSL to the language to support custom ... stuff
+- expose DSL via `using` keyword
+```
+rule SendSlackMessage using CustomSlackMessage {
+    // properties here can reference `CustomSlackMessage` definition in a Velle "extension"
+}
+```
+
+# Visualization
+can velle language generate a clear, explicit process diagram?
+
+# Thoughts on Traditional Languages
 ## what is a for loop?
 - Why do we iterate?
     - Go through a set of records, operate on each
