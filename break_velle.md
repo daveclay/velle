@@ -246,10 +246,96 @@ Both diagrams assume the same naive implementation: "re-evaluate a refinement us
 
 The same patient chart looks different to the patient, the treating doctor, and billing — some fields redacted, some visible. Every refinement so far is a pure function of the shape's own data plus `today`; this needs a refinement parameterized by *who's asking*, a dimension that doesn't exist yet.
 
+### Partial resolution: field-level `visible to`, role definition deferred
+
+This is a field-level projection problem, not a row-level one — `where` subsets *instances* by a predicate over the shape's own data; this needs subsetting *fields* by who's asking, a different axis entirely. The duplication trap to avoid: don't hand-declare a second shape per viewer that re-lists fields (fragile the same way TypeScript's `Pick`/`Omit` are). Instead, tag visibility once, directly on each field:
+
+```
+shape MedicalRecord {
+    patient: one Patient
+    summary: text visible to PatientRole, TreatingPhysicianRole
+    diagnosis: text visible to TreatingPhysicianRole
+    treatmentNotes: text visible to TreatingPhysicianRole
+    billingCode: text visible to BillingRole
+}
+```
+
+`visible to Role, Role` is the settled surface syntax: a comma-separated list of role names tacked onto a property. A viewer-scoped view (`MedicalRecord as seen by X`) is a projection derived from these tags, not a hand-written second shape — the first real use of **Mapping**, the shape-to-shape translation construct from the original design goals, flagged in `LANGUAGE.md` as stated but never exercised.
+
+**Deliberately deferred:** how a `Role` (`PatientRole`, `TreatingPhysicianRole`, `BillingRole`) is actually defined — as a condition over an implicit `viewer` and the record's own relationships, as an external RBAC concept, or something else — is a separate concern, not resolved here. This is the same shape of deferral as scheduling: `via schedule every <interval>` / `on Daily` settled the rule-side reference while leaving what actually defines a schedule as open; `visible to Role, Role` settles the field-side reference while leaving what actually defines a role as open. Also unresolved, inherited from the discussion that led here: whether an undeclared-visibility field should fail closed (compiler error) rather than silently default to visible-to-everyone or visible-to-no-one.
+
 >
 
 ## 6. Retroactive invalidation
 
 A lab result was entered wrong, corrected an hour later — but a treatment decision was already made based on the bad value. This is reversal (#5 from `example_invoice_payment.md`) turned up several notches: it's not just "un-flag the account," it's "a past decision was made in a context that's since been proven false," which smells like it needs some notion of causality/provenance Velle hasn't had to reckon with yet.
+
+### Resolved: the single-dependency case is just shapes and rules
+
+"Recalculation" is a system design behavior, not a Velle construct — the same conclusion as #5 (reversal): the language's job is to make the behavior expressible, not to have an opinion about what the behavior should be.
+
+```
+shape LabResult {
+    patient: one Patient
+    test: text
+    value: decimal
+    recordedOn: DateTime
+    supersedes: one LabResult?
+}
+
+shape SupersededLabResult = LabResult where corrections is not empty
+```
+
+`corrections` is the inferred inverse of `supersedes` — the same inference already used for `invoices` off `Invoice.customer`, just self-referential here.
+
+```
+shape TreatmentDecision {
+    patient: one Patient
+    basedOn: one LabResult
+    action: text
+    decidedOn: DateTime
+}
+
+shape DecisionBasedOnSupersededData = TreatmentDecision where basedOn is SupersededLabResult
+
+shape DecisionReviewFlag {
+    decision: one TreatmentDecision
+    flaggedOn: DateTime
+}
+
+rule FlagDecisionForReview on DecisionBasedOnSupersededData produces DecisionReviewFlag {
+    DecisionReviewFlag for this flaggedOn: now
+}
+```
+
+`basedOn is SupersededLabResult` is the same relationship-refinement pattern as `alert is UnacknowledgedAlert` from #3 — nothing new. This resolves the *single-dependency* case with zero new mechanism.
+
+**The one required discipline this depends on:** a correction must be a new, immutable `LabResult` instance linked by `supersedes`, never an in-place edit. If `value` were mutated directly, `TreatmentDecision.basedOn` would silently point at a record whose meaning changed underneath it, and there'd be nothing to detect — the same "capture, don't mutate" principle from #1's `VitalReading`, now load-bearing for a new reason: it's what makes provenance possible at all, not just what avoids write conflicts.
+
+### Aggregate provenance: explicit mapping, not compiler inference
+
+The single-dependency resolution above assumes a single `basedOn` relationship. `FlaggedCustomer` (from `example_invoice_payment.md`) has no such thing — `count(invoices where OverdueInvoice) >= 3` is an aggregate over an unbounded set, and nothing captures *which members of the counted set* made the refinement true at the moment a rule fired.
+
+The instinct to explore first was having the compiler auto-derive an implicit provenance field (tried under the names `basis`, then `producedFrom`) by statically analyzing the triggering refinement's predicate. That doesn't work in general: conjunctions are fine, disjunctions are ambiguous about which side "really" contributed, and negation has no positive witness at all — `where not exists X` is true because of a global absence, not because of any instance you could point to, so a later-created `X` that would have flipped it can never be captured after the fact. Real predicates will combine all of these, so this was heading toward an unsound, best-effort mechanism with a permanent blind spot.
+
+The actual resolution: don't infer it, state it. If a rule's decision is based on specific instances — single or aggregate — that's an ordinary field on the output shape, explicitly populated in the rule body, the same as every other field:
+
+```
+shape AccountFlag {
+    customer: one Customer
+    flaggedOn: Date
+    basedOn: many Invoice
+}
+
+rule FlagOverdueAccounts {
+    each FlaggedCustomer produces AccountFlag {
+        AccountFlag for this basedOn: (this.invoices where OverdueInvoice) flaggedOn: now
+    }
+} on Daily
+```
+
+`basedOn: (this.invoices where OverdueInvoice)` reuses the same query expression that appears in `FlaggedCustomer`'s own definition, but restated explicitly by the human in the rule body — not reverse-engineered by the compiler from the refinement's predicate tree. This sidesteps disjunction ambiguity and the negation blind spot at once: the human decides what's captured, and simply wouldn't try to capture "the witness of an absence," because they'd know there isn't one.
+
+This also means `produces` was always a small, inline instance of **Mapping** — the shape-to-shape translation construct from the original design goals, previously flagged as stated but never exercised. The compiler's real job is what Mapping was always meant to do: **totality checking** — every field the output shape declares must have an explicit value in the rule body, or it's a compile error. That's the third deferred construct (after viewer-scoped views in #5) that turns out to just be Mapping wearing a different name.
 
 >
