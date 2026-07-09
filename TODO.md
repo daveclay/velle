@@ -13,6 +13,7 @@ Constructs settled in `example_refinements.md` / `break_velle.md` that haven't b
 - [ ] `visible to Role, Role` field-level visibility — `break_velle.md` #5
 - [ ] `produces` as an inline `Mapping` + totality checking — `break_velle.md` #6
 - [ ] Retroactive-invalidation modeling pattern (`supersedes`, corrections as new immutable instances) — `break_velle.md` #6
+- [ ] Split `LANGUAGE.md`'s single blurred "`why` / provenance" entry into the two distinct concerns below (source provenance vs. data lineage)
 
 ## Open design questions (deliberately deferred, not decided)
 
@@ -23,7 +24,8 @@ Constructs settled in `example_refinements.md` / `break_velle.md` that haven't b
 - [ ] Canonical reversal pattern — `example_invoice_payment.md` #5 showed two valid options (resolution artifact vs. grace period) but never settled on "the" idiom for the common case
 - [ ] True cross-shape structural mixins — a trait reusable across unrelated shapes (not just within one shape's own refinement family)
 - [ ] Predicate syntax itself — the expression language used inside `where`/`requires`/`visible to ... where` (comparisons, `and`/`or`/`not`, `is`, `exists`, `count`, `sum`, relationship traversal) has only ever been used by example, never formally specified as its own grammar with defined precedence and semantics — negation and disjunction semantics surfaced as real ambiguities in `break_velle.md` #6 without a home to be resolved in
-- [ ] `why` / provenance command — motivated repeatedly (Philosophy, #6) but never designed as an actual concrete tool/output format
+- [ ] Source provenance — tracing generated/running behavior back to the Velle source construct responsible (rule/refinement/shape), the original `why`-command motivation from the very first design conversation; compile-time/source-level, closer to a source map
+- [ ] Data lineage — tracing a specific produced effect instance back to the specific data instances that justified it at the moment it fired; runtime/instance-level, this is what #6's explicit `basedOn`-in-`produces` resolution actually addressed, but only for cases a human thought to model explicitly
 - [ ] Escape hatch / override syntax — deferred all the way back in `discussion_hard_problems.md`, never revisited since
 
 ## Bigger, deferred on purpose
