@@ -1,37 +1,55 @@
 # TODO
 
-Tracking work beyond the `break_velle.md` stress tests themselves — syncing settled decisions back into the reference doc, and open questions that came up but got deliberately deferred rather than resolved.
+Split two ways, per `LANGUAGE.md` `## Principles`. **Language & structure** is what a human can declare — syntax, grammar, modeling idioms; the description, complete on its own. **Compiling** is what happens once a spec exists — executing it correctly, safely, efficiently (compiler obligations, guardrails, mechanisms, tooling); a separate, later phase, never part of resolving the language question. A few items were originally written as one bullet spanning both; those are split below and cross-referenced rather than force-fit into one side.
 
-## Sync into LANGUAGE.md
+## Language & structure of Velle
 
-Constructs settled in `example_refinements.md` / `break_velle.md` that haven't been folded back into the reference doc yet.
+### Settled, not yet synced into LANGUAGE.md
 
-- [ ] `and`/`or` combinator for named refinements (mixins) — `example_refinements.md`
-- [ ] `requires` — atomic check-then-act rule modifier — `break_velle.md` #1
-- [ ] Blanket compiler obligation for `produces` (safety + liveness under concurrent writers, not just single-writer chains) — `break_velle.md` #4
-- [ ] Event-anchored schedules, `via schedule <duration> after <Shape>` — `break_velle.md` #3 (surface syntax only, mechanism still deferred)
-- [ ] `visible to Role, Role` field-level visibility — `break_velle.md` #5
-- [ ] `produces` as an inline `Mapping` + totality checking — `break_velle.md` #6
-- [ ] Retroactive-invalidation modeling pattern (`supersedes`, corrections as new immutable instances) — `break_velle.md` #6
-- [ ] Split `LANGUAGE.md`'s single blurred "`why` / provenance" entry into the two distinct concerns below (source provenance vs. data lineage)
+- [ ] `requires` — new rule-modifier keyword, distinct from `where` (its atomicity mechanism is a compiling concern, below) — `break_velle.md` #1
+- [ ] Event-anchored schedules, surface syntax `via schedule <duration> after <Shape>` (the scheduling mechanism itself is a compiling concern, below) — `break_velle.md` #3
+- [ ] `visible to Role, Role` field-level visibility syntax — `break_velle.md` #5
+- [ ] `produces` is a small inline `Mapping` (shape-to-shape translation) — the semantic clarification is language; totality *checking* is a compiling concern, below — `break_velle.md` #6
+- [ ] Retroactive-invalidation modeling idiom (`supersedes`, corrections as new immutable instances, never in-place edits) — `break_velle.md` #6
+- [ ] Split `LANGUAGE.md`'s single blurred "`why` / provenance" entry into two: data lineage is already resolved as an ordinary language pattern (explicit `basedOn`-style fields, populated by the rule author, not inferred by the compiler) — `break_velle.md` #6; source provenance is a compiling/tooling concern, below
 
-## Open design questions (deliberately deferred, not decided)
+*Synced this pass: `and`/`or` refinement composition, self-referential/recursive shape and derived-property definitions, and the full predicate expression grammar (comparisons, `is`, `exists`, `count`/`sum`, `as` bindings, `this`/bare-name scoping) — now `LANGUAGE.md` `## Composing refinements`, `## Predicate expressions`, and the `## Derived properties` self-reference note. The two genuinely open predicate-grammar items (`for`-as-expression cardinality, sibling joins) now live directly in `LANGUAGE.md` `## Open / unresolved` rather than here.*
 
-- [ ] Scheduling framework mechanism itself — both calendar cadence and event-anchored timeouts still assume an undesigned cron-like framework
-- [ ] How a `Role` (e.g. `PatientRole`) is actually defined — condition over an implicit `viewer`, external RBAC, something else
-- [ ] Undeclared-visibility field: fail closed (compiler error) vs. some default?
-- [ ] Reconcile `requires` (#1) with the "blanket compiler obligation" framing (#4) — same mechanism, or two genuinely different things that happen to look similar?
+### Open design questions
+
+- [ ] How a `Role` (e.g. `PatientRole`) is defined as a predicate over an implicit `viewer` — the external-RBAC alternative is a compiling/integration concern, below
+- [ ] Undeclared-visibility field: should the *language semantics* be fail-closed by default? (enforcing that is a compiling concern, below)
 - [ ] Canonical reversal pattern — `example_invoice_payment.md` #5 showed two valid options (resolution artifact vs. grace period) but never settled on "the" idiom for the common case
 - [ ] True cross-shape structural mixins — a trait reusable across unrelated shapes (not just within one shape's own refinement family)
-- [ ] Predicate syntax itself — the expression language used inside `where`/`requires`/`visible to ... where` (comparisons, `and`/`or`/`not`, `is`, `exists`, `count`, `sum`, relationship traversal) has only ever been used by example, never formally specified as its own grammar with defined precedence and semantics — negation and disjunction semantics surfaced as real ambiguities in `break_velle.md` #6 without a home to be resolved in
-- [ ] Source provenance — tracing generated/running behavior back to the Velle source construct responsible (rule/refinement/shape), the original `why`-command motivation from the very first design conversation; compile-time/source-level, closer to a source map
-- [ ] Data lineage — tracing a specific produced effect instance back to the specific data instances that justified it at the moment it fired; runtime/instance-level, this is what #6's explicit `basedOn`-in-`produces` resolution actually addressed, but only for cases a human thought to model explicitly
-- [ ] Escape hatch / override syntax — deferred all the way back in `discussion_hard_problems.md`, never revisited since
-
-## Bigger, deferred on purpose
-
-- [ ] Compiled guardrails catalog — start an actual running list of what compiling must always enforce (forced prepared statements, atomic `produces`, forced totality checks, etc.) rather than leaving it as a scattered principle
+- [ ] Escape hatch / override syntax — how a human marks part of a spec as a contract (signature + conditions + invariants) instead of a declarative body; deferred all the way back in `discussion_hard_problems.md` (compiler-emitted conformance tests + generated implementation are a compiling concern, below)
+- [ ] Data-derived (not literal) schedule durations — does the `via schedule <duration> after <Shape>` grammar position accept an expression (e.g. `escalatedTo.role.timeoutMinutes`), not just a literal (`10 minutes`)? — surfaced by `example_predicates.md` #9
 - [ ] `Mapping` — full spec beyond "`produces` is a small inline Mapping"; the original DTO-to-shape translation use case from the design goals has never been worked through end-to-end
-- [ ] Prior art mining — Eve, Alloy, CUE, Datalog, SQL, named in the very first design conversation, never revisited in depth since
-- [ ] Parser / implementation — intentionally not started; revisit once shapes/rules/refinements feel stable
+
+## Compiling Velle into code
+
+### Settled obligations, not yet cataloged
+
+- [ ] Blanket compiler obligation for `produces`: safety + liveness under concurrent writers, not just single-writer chains — `break_velle.md` #4
+- [ ] `produces`-as-`Mapping` totality checking — every field the output shape declares must have an explicit value in the rule body, or it's a compile error — `break_velle.md` #6
+
+*Synced this pass: correctly (and efficiently) evaluating self-referential/recursive shape and derived-property definitions is now noted in `LANGUAGE.md`'s `## Open / unresolved` "Compiled guardrails" bullet — `example_predicates.md` #9. The full running catalog remains the bigger, deferred task below.*
+
+### Open design questions
+
+- [ ] Scheduling framework mechanism itself — both calendar cadence (`Daily`) and event-anchored timeouts (`via schedule ... after ...`) still assume an undesigned cron-like framework; now also needs to support data-derived durations, not just literals
+- [ ] `requires`'s atomicity mechanism — lock, transaction, or optimistic-retry, left to whatever fits the target, per the human/computer split
+- [ ] Reconcile `requires` (`break_velle.md` #1) and `produces`'s "blanket compiler obligation" (`break_velle.md` #4) as *mechanisms* — same underlying implementation technique underneath, or two genuinely different ones that happen to look similar from the language side?
+- [ ] External RBAC integration, as the alternative to a `Role` defined purely as a predicate
+- [ ] Enforcing fail-closed semantics for an undeclared-visibility field (once the language decision above is made)
+- [ ] Source provenance tooling — a `why` command tracing generated/running behavior back to the Velle source construct responsible (rule/refinement/shape); compile-time/source-level, closer to a source map
+- [ ] Compiler-emitted conformance tests + generated implementation for escape-hatch contracts — the execution side of the escape-hatch language decision above
 - [ ] Given/Then spec-generation tooling — decided conceptually (`README.md` `# Testing`), no concrete generator designed
+- [ ] Parser / implementation — intentionally not started; revisit once shapes/rules/refinements feel stable
+
+### Bigger, deferred on purpose
+
+- [ ] Compiled guardrails catalog — start an actual running list of everything compiling must always enforce (forced prepared statements, atomic `produces`, forced totality checks, correctly evaluating self-referential definitions, etc.) rather than leaving it as a scattered principle
+
+## Neither — process / research
+
+- [ ] Prior art mining — Eve, Alloy, CUE, Datalog, SQL, named in the very first design conversation; `example_predicates.md` #8 did a first real pass on Datalog specifically, the rest remain unstudied
