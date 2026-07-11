@@ -23,7 +23,7 @@ Split two ways, per `LANGUAGE.md` `## Principles`. **Language & structure** is w
 - [ ] True cross-shape structural mixins — a trait reusable across unrelated shapes (not just within one shape's own refinement family)
 - [ ] Escape hatch / override syntax — how a human marks part of a spec as a contract (signature + conditions + invariants) instead of a declarative body; deferred all the way back in `discussion_hard_problems.md` (compiler-emitted conformance tests + generated implementation are a compiling concern, below)
 - [ ] Data-derived (not literal) schedule durations — does the `via schedule <duration> after <Shape>` grammar position accept an expression (e.g. `escalatedTo.role.timeoutMinutes`), not just a literal (`10 minutes`)? — surfaced by `example_predicates.md` #9
-- [ ] `Mapping` — full spec beyond "`produces` is a small inline Mapping"; the original DTO-to-shape translation use case from the design goals has never been worked through end-to-end
+- [ ] `Mapping` — full spec beyond "`produces` is a small inline Mapping"; the original shape-to-shape translation use case from the design goals has never been worked through end-to-end
 
 ## Compiling Velle into code
 
