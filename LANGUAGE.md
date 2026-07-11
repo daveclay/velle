@@ -102,6 +102,8 @@ The expression language usable inside `where`, `requires`, and `visible to ... w
 
 **`exists`** — `exists Receipt for this`, `not exists AccountFlagResolved for this` — tests whether any instance of a shape references the given subject via `for`.
 
+**`for` field ambiguity.** `for <expr>` matches by type: whichever field on the shape has a type matching `<expr>`'s type is the one compared against (or populated, in an effect clause). This breaks the moment a shape has two fields of the same type — e.g. `Referral { referrer: one Customer, referee: one Customer }` makes `exists Referral for this` ambiguous. Name the field explicitly whenever more than one matches: `exists Referral for referrer: this` / `exists Referral for referee: this`. Bare `for this` stays legal everywhere it already is — the field name is required only when the shape has more than one field of the matching type, the same shape of rule as `latest`/`first` below.
+
 **Aggregates** take a collection expression as their first argument — a relationship filtered by `where` (`invoices where OverdueInvoice`) is already a complete collection expression on its own, not special call syntax:
 
 ```
@@ -110,6 +112,17 @@ sum(<collection-expr>, <field>)
 ```
 
 **Relationship traversal** is ordinary dot access (`response.outcome`, `ward.admissions`), including through a relationship back to the same shape (self-reference — no special syntax needed).
+
+**Dot access through an optional** requires the left side to be provably non-absent — either its type isn't optional, or it's been narrowed by an `is some`/`is none` check earlier in the same conjunction (`and`) or the corresponding branch of a value-expression conditional. Plain, unnarrowed `.` on an optional is a compile error. `?.` — reusing the existing `?` optionality marker in a new position, not a new symbol — is the explicit escape valve: it short-circuits the rest of the chain to `none` if that link is absent, with no narrowing required:
+
+```
+shape Foo {
+    parent: Foo?
+    root: Foo? = if parent?.root is none then parent else parent?.root
+}
+```
+
+Both forms stay legal — narrowed `.` when a predicate already needs to branch on presence anyway, `?.` when it doesn't and propagation is all that's wanted.
 
 **`as` — naming an intermediate binding.** `this` is the built-in, always-present alias for the outermost subject a refinement is defined over; a bare unqualified field name means the innermost collection-filter's element. Between those two, `as` names any other level a predicate needs to reach back to:
 
@@ -122,33 +135,62 @@ shape CustomerWithBadInvoice =
   )
 ```
 
-An alias is visible within the predicate it's declared over and anything nested inside that scope, the same as a SQL correlated subquery — it doesn't leak to the enclosing scope or across to a sibling `as` binding. Not covered: binding two independent, unrelated collection paths in the same predicate (a true multi-table join) — no worked example has forced this yet, see Open/unresolved.
+An alias is visible within the predicate it's declared over and anything nested inside that scope, the same as a SQL correlated subquery — it doesn't leak to the enclosing scope or across to a sibling `as` binding.
+
+**Sibling joins** — correlating two independently-filtered collections against each other (not a straight chain) — take a comma-separated list of bindings instead of one, all visible to each other and to a single shared `where`:
+
+```
+shape CustomerWithMatchingIssue = Customer where
+    exists (tickets as tix, orders as ord
+        where tix is OverdueTicket and ord is ReturnedOrder and ord.product == tix.product)
+```
+
+Every binding in the list must be reachable as a relationship from the same enclosing subject (`this`, or the enclosing `as` alias) — a correlated join relative to a shared parent, not an arbitrary cross-product of any two shapes in the system. A single binding (`invoices where OverdueInvoice`, `invoices as inv where ...`) is just the one-binding case of this same rule.
+
+**`for` as a query expression** (e.g. `(NurseVerification for this).nurse`) is legal only when the compiler can prove at most one matching instance exists — because the shape carries a `produces` guard scoped to that same target, or the relationship is to-one from the other side. Otherwise, disambiguate explicitly:
+
+```
+latest(Shape for expr)
+first(Shape for expr)
+```
+
+Ordered by each instance's implicit creation moment — every instance has one for free, under the same capture-don't-mutate discipline used throughout (`## Principles`).
 
 **Duration arithmetic**: `today - 7 days`, `now + 14 days` — an integer literal plus a unit (`seconds`/`minutes`/`hours`/`days`/`weeks`), added to or subtracted from a `Date`/`DateTime`.
 
 Grammar, informally:
 
 ```
-predicate    := disjunction
-disjunction  := conjunction ("or" conjunction)*
-conjunction  := negation ("and" negation)*
-negation     := "not"? atom
-atom         := comparison | isExpr | existsExpr | "(" predicate ")"
+predicate      := disjunction
+disjunction    := conjunction ("or" conjunction)*
+conjunction    := negation ("and" negation)*
+negation       := "not"? atom
+atom           := comparison | isExpr | existsExpr | "(" predicate ")"
 
-comparison   := expr ("==" | "!=" | "<" | "<=" | ">" | ">=") expr
-isExpr       := expr "is" ("none" | "some" | "empty" | "not empty" | ShapeName)
-existsExpr   := "exists" ShapeName "for" expr
+comparison     := expr ("==" | "!=" | "<" | "<=" | ">" | ">=") expr
+isExpr         := expr "is" ("none" | "some" | "empty" | "not empty" | ShapeName)
+existsExpr     := "exists" ShapeName "for" forTarget
 
-expr         := path (("+" | "-") duration)?
-path         := ("this" | Identifier) ("." Identifier)*
-             | aggregateCall
-             | "(" ShapeName "for" expr ")"   -- cardinality unresolved, see Open/unresolved
+expr           := path (("+" | "-") duration)?
+path           := pathRoot (accessor Identifier)*
+               | aggregateCall
+               | selectorCall
+               | "(" ShapeName "for" forTarget ")"   -- legal only when provably at-most-one; else use selectorCall
+pathRoot       := "this" | Identifier
+accessor       := "." | "?."   -- "." requires the left side provably non-absent (unoptional, or narrowed by a
+                                -- prior "is some"/"is none" in the same conjunction); "?." short-circuits to
+                                -- none instead, no narrowing required
 
-aggregateCall := "count" "(" collectionExpr ")"
-              | "sum" "(" collectionExpr "," Identifier ")"
-collectionExpr := path ("as" Identifier)? ("where" predicate)?
+forTarget      := expr | Identifier ":" expr   -- field name required only when more than one field on the
+                                                -- shape matches expr's type
 
-duration     := IntegerLiteral ("seconds"|"minutes"|"hours"|"days"|"weeks")
+aggregateCall  := "count" "(" collectionExpr ")"
+               | "sum" "(" collectionExpr "," Identifier ")"
+selectorCall   := ("latest" | "first") "(" collectionExpr ")"   -- ordered by each instance's implicit creation moment
+collectionExpr := binding ("," binding)* ("where" predicate)?
+binding        := path ("as" Identifier)?
+
+duration       := IntegerLiteral ("seconds"|"minutes"|"hours"|"days"|"weeks")
 ```
 
 See `example_predicates.md` for the worked derivation of every rule above.
@@ -195,7 +237,7 @@ Associates a newly produced shape instance with the subject it's about:
 Receipt for invoice sentOn: now
 ```
 
-`for` is also reused as a query expression inside predicates (e.g. `(NurseVerification for this).nurse`) — see Predicate expressions and Open/unresolved for the unresolved cardinality question this raises.
+`for <expr>` matches by **type**, not name: whichever field on the produced shape has a type matching `<expr>`'s type is the one populated. When a shape has more than one field of that type, name the field explicitly: `Referral for referrer: this.referrer` — see Predicate expressions, below, for the full rule and the query-expression reuse of `for`.
 
 ## `then`
 
@@ -261,7 +303,6 @@ An "object" shape is a degenerate case of a "function" shape whose output is its
 - **Schedule definition** — `on Daily` (postfix) settles how a rule *references* a schedule; what actually defines `Daily` (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be a cron-like scheduling framework.
 - **Reversal** — resolved as a non-issue for the language itself (it's a business-policy choice, expressed via which artifact shapes a human declares — see `example_invoice_payment.md` #5), but no single canonical pattern has been adopted yet; the consolidated top-of-file example still doesn't reflect a chosen policy.
 - **Escape hatch / override syntax** — how a human marks part of a spec as intentionally hand-implemented/AI-implemented rather than declarative. Deferred; agreed to be a lesser concern until the core language settles.
-- **Compiled guardrails** — the idea that the compiler/transpiler should structurally enforce best practices (e.g. forced prepared statements, automatic error-context capture, correctly evaluating self-referential shape/derived-property definitions) as a byproduct of codegen. A design principle, not yet a syntax construct.
+- **Compiled guardrails** — the idea that the compiler/transpiler should structurally enforce best practices (e.g. forced prepared statements, automatic error-context capture, correctly evaluating self-referential shape/derived-property definitions, ordering `latest`/`first` selectors by implicit creation moment, how deep narrowing analysis for `.`-vs-`?.` sees through nested expressions) as a byproduct of codegen. A design principle, not yet a syntax construct.
 - **`why` / provenance** — a command to trace which rule/refinement produced a given piece of state, mapped back to Velle source. Agreed as a goal; no syntax proposed yet.
-- **`for`-as-expression cardinality** — `(NurseVerification for this).nurse`-style expressions assume exactly one matching instance exists; no selection/ordering primitive exists for when more than one could (e.g. a re-verified order, a customer with two historical grace periods).
-- **Sibling joins** — binding two independent, unrelated collection paths in the same predicate (a true multi-table join, as opposed to `as`'s single-chain aliasing); no worked example has forced this yet.
+- **Derived-property value-expression grammar** — `## Derived properties`' arithmetic and conditional (`if`/`else`) forms have only ever been used by example, the same gap `## Predicate expressions` closed for boolean predicates. Not yet formalized.

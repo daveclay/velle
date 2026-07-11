@@ -13,7 +13,7 @@ Split two ways, per `LANGUAGE.md` `## Principles`. **Language & structure** is w
 - [ ] Retroactive-invalidation modeling idiom (`supersedes`, corrections as new immutable instances, never in-place edits) — `break_velle.md` #6
 - [ ] Split `LANGUAGE.md`'s single blurred "`why` / provenance" entry into two: data lineage is already resolved as an ordinary language pattern (explicit `basedOn`-style fields, populated by the rule author, not inferred by the compiler) — `break_velle.md` #6; source provenance is a compiling/tooling concern, below
 
-*Synced this pass: `and`/`or` refinement composition, self-referential/recursive shape and derived-property definitions, and the full predicate expression grammar (comparisons, `is`, `exists`, `count`/`sum`, `as` bindings, `this`/bare-name scoping) — now `LANGUAGE.md` `## Composing refinements`, `## Predicate expressions`, and the `## Derived properties` self-reference note. The two genuinely open predicate-grammar items (`for`-as-expression cardinality, sibling joins) now live directly in `LANGUAGE.md` `## Open / unresolved` rather than here.*
+*Synced this pass: `and`/`or` refinement composition, self-referential/recursive shape and derived-property definitions, and the full predicate expression grammar (comparisons, `is`, `exists`, `count`/`sum`, `as` bindings, `this`/bare-name scoping, `latest`/`first` selectors, sibling joins, `for` field-name disambiguation, `.`-vs-`?.` narrowing) — now `LANGUAGE.md` `## Composing refinements`, `## Predicate expressions`, `## for`, and the `## Derived properties` self-reference note. `example_predicates.md` considers the predicate grammar itself fully settled: every remaining loose end (selector ordering, self-referential evaluation, `produces`/`requires` mechanisms, narrowing-analysis depth) is a compiling concern, tracked below, not a language gap. One adjacent, still-open item surfaced along the way: derived-property *value*-expression grammar (`if`/`else`, arithmetic) has never been formalized the way boolean predicates now have — added to `LANGUAGE.md` `## Open / unresolved`.
 
 ### Open design questions
 
@@ -32,7 +32,7 @@ Split two ways, per `LANGUAGE.md` `## Principles`. **Language & structure** is w
 - [ ] Blanket compiler obligation for `produces`: safety + liveness under concurrent writers, not just single-writer chains — `break_velle.md` #4
 - [ ] `produces`-as-`Mapping` totality checking — every field the output shape declares must have an explicit value in the rule body, or it's a compile error — `break_velle.md` #6
 
-*Synced this pass: correctly (and efficiently) evaluating self-referential/recursive shape and derived-property definitions is now noted in `LANGUAGE.md`'s `## Open / unresolved` "Compiled guardrails" bullet — `example_predicates.md` #9. The full running catalog remains the bigger, deferred task below.*
+*Synced this pass: correctly (and efficiently) evaluating self-referential/recursive shape and derived-property definitions, and ordering `latest`/`first` selectors by implicit creation moment, are now noted in `LANGUAGE.md`'s `## Open / unresolved` "Compiled guardrails" bullet — `example_predicates.md` #9–11. The full running catalog remains the bigger, deferred task below.*
 
 ### Open design questions
 

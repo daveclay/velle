@@ -31,6 +31,14 @@ Both spellings appear for the same thing: `priority == "high"` (`example_refinem
 Every worked predicate so far is a conjunction. `or` is named in `TODO.md` as expected grammar but no stress test has actually forced it. Constructing one deliberately, extending the `SupportTicket` mixin set from `example_refinements.md`:
 
 ```
+shape SupportTicket {
+    due: Date
+    escalations: integer
+}
+
+shape Overdue   = SupportTicket where due < today
+shape Escalated = SupportTicket where escalations >= 1
+
 shape NeedsAttention = Overdue or Escalated
 ```
 
@@ -65,7 +73,22 @@ Every use of `is` so far falls into one of three shapes:
 
 Nothing new needed — this is documentation, not new syntax. Worth stating explicitly in `LANGUAGE.md` as three sanctioned right-hand forms of one keyword, so a future predicate doesn't invent a fourth meaning for `is` by accident.
 
-Checked against existing typing rule: `assignee is none` and `response is none` are both applying `none`/`some` to optional fields already declared with `?` in their shapes (`assignee: one User?`, `response: ...?` implied by `PendingChargeAttempt = ChargeAttempt where response is none`) — consistent, no exception found.
+Checked against existing typing rule — both examples apply `none`/`some` to fields already declared optional with `?`:
+
+```
+shape SupportTicket {
+    assignee: one User?
+}
+shape Unassigned = SupportTicket where assignee is none
+
+shape ChargeAttempt {
+    order: one Order
+    response: ChargeResponse?
+}
+shape PendingChargeAttempt = ChargeAttempt where response is none
+```
+
+Consistent, no exception found.
 
 >
 
@@ -74,8 +97,44 @@ Checked against existing typing rule: `assignee is none` and `response is none` 
 `Receipt for invoice` and `AuditLogEntry for order` were introduced purely as *effect* syntax — associating a newly produced instance with its subject. But two places reuse it as a *query* expression that must resolve to a single existing instance:
 
 ```
-Administration for this administeredBy: (NurseVerification for this).nurse administeredOn: now
-...
+shape MedicationOrder {
+    patient: one Patient
+    orderedBy: one Physician
+    orderedOn: DateTime
+}
+
+shape NurseVerification {
+    order: one MedicationOrder
+    nurse: one Nurse
+    verifiedOn: DateTime
+}
+
+shape Administration {
+    order: one MedicationOrder
+    administeredBy: one Nurse
+    administeredOn: DateTime
+}
+
+shape PharmacistVerified = MedicationOrder where exists PharmacistVerification for this
+shape NurseVerified      = MedicationOrder where exists NurseVerification for this
+shape FullyVerifiedOrder = PharmacistVerified and NurseVerified
+
+rule AdministerMedication on FullyVerifiedOrder produces Administration {
+    Administration for this administeredBy: (NurseVerification for this).nurse administeredOn: now
+}
+```
+
+```
+shape Customer {
+    name: text
+}
+
+shape GracePeriod {
+    customer: one Customer
+    startedOn: Date
+    endsOn: Date
+}
+
 shape InGracePeriod = Customer where exists GracePeriod for this and today <= (GracePeriod for this).endsOn
 ```
 
@@ -95,6 +154,14 @@ Leaving unresolved — this is a genuine new mechanism (the first selection/orde
 The windowed-BP example is the only predicate so far with two levels of `where`:
 
 ```
+shape VitalReading {
+    patient: one Patient
+    systolicBP: integer
+    recordedOn: DateTime
+}
+
+shape LowReading = VitalReading where systolicBP < 90
+
 shape ThirdConsecutiveLowReading = VitalReading where
     systolicBP < 90
     and count(patient.vitalReadings where LowReading and recordedOn >= (this.recordedOn - 10 minutes) and recordedOn <= this.recordedOn) >= 3
@@ -116,7 +183,23 @@ Checked against the example: `recordedOn >= (this.recordedOn - 10 minutes)` — 
 
 **Resolution:** there isn't one, because `where` was never part of either call's syntax — `invoices where OverdueInvoice` is already a complete, independently valid collection expression (a relationship filtered by a refinement), and both aggregates simply take a collection expression as their first argument. `count` only needs the collection; `sum` additionally needs to know which field to add, hence the second argument. That's arity following from what each aggregate fundamentally computes, not an inconsistency in how filtering works.
 
-This means `sum(payments where SuccessfulPayment, amount)` should already be valid today even though no example has tried it — worth stating as the general call shape rather than leaving `sum` looking unfiltered by omission:
+This means a filtered `sum` should already be valid today even though no example has tried it — worth stating as the general call shape rather than leaving `sum` looking unfiltered by omission:
+
+```
+shape Invoice {
+    payments: many Payment
+}
+shape Payment {
+    invoice: one Invoice
+    amount: Money
+    outcome: text
+}
+shape SuccessfulPayment = Payment where outcome == "settled"
+
+sum(payments where SuccessfulPayment, amount)
+```
+
+General call shape:
 
 ```
 count(<collection-expr>)
@@ -132,6 +215,23 @@ The deeper structural question underneath #5: every predicate so far implicitly 
 **Resolution:** an optional `as <name>` binding on a collection expression, usable anywhere `where` filters a collection:
 
 ```
+shape Customer {
+    invoices: many Invoice
+}
+shape Invoice {
+    customer: one Customer
+    balance: Money
+    due: Date
+    payments: many Payment
+}
+shape Payment {
+    invoice: one Invoice
+    outcome: text
+}
+
+shape OverdueInvoice = Invoice where balance > 0 and due < today
+shape FailedPayment  = Payment where outcome == "declined"
+
 shape CustomerWithBadInvoice =
   Customer where exists (
     invoices as inv where
@@ -192,6 +292,12 @@ Revisits `break_velle.md` #3's claim that *"Multi-level escalation chains (nurse
 **The forcing case:** a hospital's actual on-call chain is admin-configured data, not a fixed count — different departments/shifts may have a different number of tiers, and it can change without a respec:
 
 ```
+shape Alert {
+    raisedOn: DateTime
+    acknowledgedOn: DateTime?
+}
+shape UnacknowledgedAlert = Alert where acknowledgedOn is none
+
 shape OnCallTier {
     chain: one OnCallChain
     order: integer
@@ -279,35 +385,183 @@ One small new pattern worth noting, not a problem: typing `root`/`rootFoo` as `F
 
 >
 
+## 10. `for`-as-expression cardinality — resolved
+
+Revisits #4. `(NurseVerification for this).nurse` and `(GracePeriod for this).endsOn` both assume exactly one matching instance exists. The doc's own later text undermines that assumption for the first one — it explicitly floats "a `MedicationOrder` re-verified after a correction" as a realistic case with more than one `NurseVerification` for the same order.
+
+**Resolution:** `(Shape for expr)` stays legal exactly when the compiler can prove at most one `Shape` instance exists for `expr` — because `Shape` carries a `produces` guard scoped to that same target, or the relationship is declared to-one from the other side. Otherwise it's a compile error, and the human must disambiguate with an explicit selector:
+
+```
+latest(Shape for expr)
+first(Shape for expr)
+```
+
+Ordered by each instance's implicit creation moment — every instance has one, for free, under the same capture-don't-mutate discipline already load-bearing everywhere else in these docs (`example_predicates.md` #9, `break_velle.md` #6). No new field to declare, no ambiguity about which timestamp to sort by.
+
+Applied to the actual case that exposed the gap (`break_velle.md` #4, re-verification — `MedicationOrder`/`NurseVerification`/`Administration` as defined in #4 above):
+
+```
+rule AdministerMedication on FullyVerifiedOrder produces Administration {
+    Administration for this administeredBy: latest(NurseVerification for this).nurse administeredOn: now
+}
+```
+
+This resolves the same way as the visibility question in `break_velle.md` #5 — fail closed on an undeclared case rather than silently picking "most recent" by default. The difference here is the silent behavior would have been *correct* in the common case and *wrong* only in the re-verification edge case — exactly the kind of bug that stays invisible until it matters, which is why it's a compile error rather than a runtime default.
+
+>
+
+## 11. Sibling joins — resolved
+
+Revisits #7's "not covered" note: binding two *different*, unrelated collection paths in the same predicate — e.g. "this customer has an overdue ticket and a returned order for the same product," where `tickets` and `orders` are both reached from `Customer` but aren't a straight chain through each other.
+
+First check: is this actually new, or does ordinary multi-hop `path` already cover it? `customer.tickets` is just two dots on established relationships, no different from `patient.vitalReadings` elsewhere in these docs — that part was never the gap. The actual gap only shows up when a predicate needs to **correlate** two independently-filtered collections against each other:
+
+```
+shape Customer {
+    tickets: many Ticket
+    orders: many Order
+}
+shape Ticket {
+    customer: one Customer
+    status: text
+    product: text
+}
+shape Order {
+    customer: one Customer
+    status: text
+    product: text
+}
+
+shape OverdueTicket   = Ticket where status == "overdue"
+shape ReturnedOrder   = Order where status == "returned"
+
+shape CustomerWithMatchingIssue = Customer where
+    exists (tickets as tix where tix is OverdueTicket)
+    and exists (orders as ord where ord is ReturnedOrder and ord.product == tix.product)   -- tix not in scope here
+```
+
+`as`'s scoping rule (§7) is exactly what makes this fail: an alias is visible in the predicate it's declared over and anything nested inside it — `tix`, bound inside the first `exists(...)`, is a sibling scope to the second `exists(...)`, not a parent of it, so it's correctly out of reach there. The gap isn't `as` being broken; it's that there was no way to introduce two bindings into the *same* scope so they could see each other.
+
+**Resolution:** generalize `collectionExpr` from one binding to a comma-separated list of bindings, all visible to each other and to one shared `where`:
+
+```
+shape CustomerWithMatchingIssue = Customer where
+    exists (tickets as tix, orders as ord
+        where tix is OverdueTicket and ord is ReturnedOrder and ord.product == tix.product)
+```
+
+This is additive, the same way `as` itself was additive over bare `where` (§7): a single binding (`invoices where OverdueInvoice`, `invoices as inv where ...`) is just the one-binding case of this more general rule, so nothing already written needs to change. The same base-shape-compatibility guardrail extends naturally: every binding in the list must be reachable as a relationship from the *same* enclosing subject (`this`, or the enclosing `as` alias) — a correlated join relative to a shared parent, not an arbitrary cross-product of any two shapes in the system. No new keyword; `as`, `,`, and `where` already existed, just not in this combination.
+
+>
+
+## 12. `for` field ambiguity — type-directed matching breaks with two same-typed fields
+
+`for <expr>` has quietly relied on type-directed field resolution since the very first construct in `LANGUAGE.md`: whichever field on the shape has a type matching `<expr>`'s type is the one populated (effect form, e.g. `Receipt for invoice`) or compared against (query form, e.g. `GracePeriod for this`) — never matched by name. This has worked in every example so far because no shape has ever had two fields of the same type.
+
+**The forcing case:**
+
+```
+shape Customer {
+    name: text
+}
+
+shape Referral {
+    referrer: one Customer
+    referee: one Customer
+    referredOn: DateTime
+}
+```
+
+`Referral` has two `Customer`-typed fields. `exists Referral for this` is now genuinely ambiguous — "this customer referred someone" (`referrer`) or "this customer was referred" (`referee`)? Nothing about the target's type decides between them; both fields match.
+
+**Resolution:** let `for` optionally carry the field name, required exactly when more than one field on the shape shares the target's type:
+
+```
+shape ReferralRequest {
+    referrer: one Customer
+    referee: one Customer
+}
+
+shape ReferredCustomer  = Customer where exists Referral for referee: this
+shape ReferringCustomer = Customer where exists Referral for referrer: this
+
+rule RecordReferral on ReferralRequest produces Referral {
+    Referral for referrer: this.referrer
+        referee: this.referee
+        referredOn: now
+}
+```
+
+`for referrer: this.referrer` marks `referrer` as the association field — the one `produces`'s guard scopes against, per `LANGUAGE.md`'s "guard granularity matters" note — everything after it (`referee`, `referredOn`) is an ordinary field assignment, same as always. Bare `for this` keeps working everywhere it already does, since the field name is only required when the shape has more than one field of the matching type — additive, the same shape of resolution as `latest`/`first` in #10.
+
+Applies symmetrically to the query-expression form: `(Referral for referrer: this).referee`. Cardinality (#10) and field ambiguity (this section) are independent concerns that can both apply to the same expression.
+
+>
+
+## 13. Dot-traversal through an optional — narrowing or explicit `?.`
+
+`root: Foo? = none if parent is none else (parent if parent.root is none else parent.root)` (#9) needed an explicit `if parent is none` guard before ever writing `parent.root`. Nothing has stated why, or what `parent.root` would even mean without that guard.
+
+**The question:** `parent: Foo?` is optional. Does `parent.root` implicitly short-circuit to `none` when `parent` is absent (the way SQL propagates `NULL`, or Swift/Kotlin/TypeScript's `?.`), or is dotting into a possibly-absent value simply not allowed?
+
+**Resolution:** dot access (`.`) requires the left side to be provably non-absent — either its type isn't optional, or it's been narrowed by an `is some` check earlier in the same conjunction (`and`) or the corresponding branch of a value-expression conditional. That's exactly what the original `root` formula's `else` branch was doing — narrowing `parent` before writing `parent.root`. Plain, unnarrowed `.` on an optional is a compile error.
+
+For genuine null-propagation without narrowing first, `?.` is available as an explicit escape valve — reusing the existing `?` optionality marker in a new position, not a new symbol — short-circuiting the rest of the chain to `none` if that link is absent:
+
+```
+shape Foo {
+    parent: Foo?
+    root: Foo? = if parent?.root is none then parent else parent?.root
+}
+```
+
+Same result as #9's original formula, without the outer guard: `parent?.root` is already `none` when `parent` itself is absent, so `if ... is none then parent` handles both "I have no parent" and "my parent has no root" (i.e. my parent *is* the root) in one check — the same `none`-means-root ambiguity `is none`/`is some` already resolve elsewhere (#3), not a new kind of check.
+
+Both forms stay legal: narrowed `.` when a predicate already needs to branch on presence anyway (as #9 originally did), `?.` when it doesn't and propagation is all that's wanted. Neither is new mechanism in spirit — `?.` is `?` in a new position, and narrowing is the same "prove it, don't infer it" discipline used throughout this doc, applied to absence instead of cardinality or field ambiguity.
+
+**Left deliberately out of scope:** exactly how sophisticated the compiler's narrowing analysis is (does it see through nested parens, survive across `or`, etc.) is a compiling concern (`LANGUAGE.md` `## Principles`) — the language only guarantees the simple case (an `is some`/`is none` check narrows for the rest of that same conjunction), not a specific algorithm. Also out of scope: derived-property *value* expressions (`if`/`else`, arithmetic) have never had their own grammar the way boolean predicates now have in this doc — `if`/`else` conditionals like `root`'s formula are still used by example only. Same gap this whole doc existed to close for `where`, just on the value-expression side — worth its own pass, not this one.
+
+>
+
 ## Toward a formal grammar
 
 Pulling every resolution above together, informally (not a real BNF, just shaped like one):
 
 ```
-predicate    := disjunction
-disjunction  := conjunction ("or" conjunction)*
-conjunction  := negation ("and" negation)*
-negation     := "not"? atom
-atom         := comparison | isExpr | existsExpr | "(" predicate ")"
+predicate      := disjunction
+disjunction    := conjunction ("or" conjunction)*
+conjunction    := negation ("and" negation)*
+negation       := "not"? atom
+atom           := comparison | isExpr | existsExpr | "(" predicate ")"
 
-comparison   := expr ("==" | "!=" | "<" | "<=" | ">" | ">=") expr
-isExpr       := expr "is" ("none" | "some" | "empty" | "not empty" | ShapeName)
-existsExpr   := "exists" ShapeName "for" expr
+comparison     := expr ("==" | "!=" | "<" | "<=" | ">" | ">=") expr
+isExpr         := expr "is" ("none" | "some" | "empty" | "not empty" | ShapeName)
+existsExpr     := "exists" ShapeName "for" forTarget
 
-expr         := path (("+" | "-") duration)?
-path         := ("this" | Identifier) ("." Identifier)*
-             | aggregateCall
-             | "(" ShapeName "for" expr ")"   -- cardinality unresolved, see #4
+expr           := path (("+" | "-") duration)?
+path           := pathRoot (accessor Identifier)*
+               | aggregateCall
+               | selectorCall
+               | "(" ShapeName "for" forTarget ")"   -- legal only when provably at-most-one; else use selectorCall
+pathRoot       := "this" | Identifier
+accessor       := "." | "?."   -- "." requires the left side provably non-absent (unoptional, or narrowed by a
+                                -- prior "is some"/"is none" in the same conjunction); "?." short-circuits to
+                                -- none instead, no narrowing required
 
-aggregateCall := "count" "(" collectionExpr ")"
-              | "sum" "(" collectionExpr "," Identifier ")"
-collectionExpr := path ("as" Identifier)? ("where" predicate)?
+forTarget      := expr | Identifier ":" expr   -- field name required only when more than one field on the
+                                                -- shape matches expr's type
 
-duration     := IntegerLiteral ("seconds"|"minutes"|"hours"|"days"|"weeks")
+aggregateCall  := "count" "(" collectionExpr ")"
+               | "sum" "(" collectionExpr "," Identifier ")"
+selectorCall   := ("latest" | "first") "(" collectionExpr ")"   -- ordered by each instance's implicit creation moment
+collectionExpr := binding ("," binding)* ("where" predicate)?
+binding        := path ("as" Identifier)?
+
+duration       := IntegerLiteral ("seconds"|"minutes"|"hours"|"days"|"weeks")
 ```
 
-Open items this grammar deliberately leaves as `-- unresolved` comments rather than papering over: `for`-as-expression cardinality (#4), and the deeper nested-scope binding beyond one level (#5, edge case).
+Every production is now either settled or explicitly a downstream compiling concern — nothing left as an `-- unresolved` comment. `example_predicates.md`'s job on this topic is done; what remains (correctly realizing `produces`'s safety/liveness, `requires`'s atomicity, self-referential definitions, narrowing analysis, and selector ordering) all belongs to `TODO.md`'s compiled-guardrails catalog, not here.
 
-Not yet propagated into `LANGUAGE.md` — only #1 (equality) and #6 (count/sum) are pure cleanups; #2, #3, #5, #7, #9 add real content to the reference (#9's is a compiler-obligations note, not new grammar); #4 and #7's sibling-join case are the remaining genuinely open design questions, not syntax fixes.
+All of #1–#13 and the grammar block above are now propagated into `LANGUAGE.md`.
 
 >
