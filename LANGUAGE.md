@@ -102,7 +102,14 @@ The expression language usable inside `where`, `requires`, and `visible to ... w
 
 **`exists`** — `exists Receipt for this`, `not exists AccountFlagResolved for this` — tests whether any instance of a shape references the given subject via `for`.
 
-**`for` field ambiguity.** `for <expr>` matches by type: whichever field on the shape has a type matching `<expr>`'s type is the one compared against (or populated, in an effect clause). This breaks the moment a shape has two fields of the same type — e.g. `Referral { referrer: one Customer, referee: one Customer }` makes `exists Referral for this` ambiguous. Name the field explicitly whenever more than one matches: `exists Referral for referrer: this` / `exists Referral for referee: this`. Bare `for this` stays legal everywhere it already is — the field name is required only when the shape has more than one field of the matching type, the same shape of rule as `latest`/`first` below.
+**`for` field ambiguity.** `for <expr>` matches by type: whichever field on the shape has a type matching `<expr>`'s type is the one compared against (or populated, in an effect clause). This breaks the moment a shape has two fields of the same type — e.g. `Referral { referrer: one Customer, referee: one Customer }` makes `exists Referral for this` ambiguous, and there's no reading of "this customer" that says whether it means referrer or referee. `for <expr>` is sugar for the common, unambiguous case; when it doesn't apply — two fields match, or a second condition on the same matched instance is needed — fall back to the general `where`-filtered form `exists` already shares with `count`/`sum`:
+
+```
+exists (Referral where referee == this)
+exists (Referral where referee == this and referrer is VipCustomer)
+```
+
+Reads as an actual sentence and needs nothing beyond `==` and `where`. `for <expr>` never grows a second syntax to handle what it can't — it just stops applying, and the general form was already there to fall back to.
 
 **Aggregates** take a collection expression as their first argument — a relationship filtered by `where` (`invoices where OverdueInvoice`) is already a complete collection expression on its own, not special call syntax:
 
@@ -147,11 +154,12 @@ shape CustomerWithMatchingIssue = Customer where
 
 Every binding in the list must be reachable as a relationship from the same enclosing subject (`this`, or the enclosing `as` alias) — a correlated join relative to a shared parent, not an arbitrary cross-product of any two shapes in the system. A single binding (`invoices where OverdueInvoice`, `invoices as inv where ...`) is just the one-binding case of this same rule.
 
-**`for` as a query expression** (e.g. `(NurseVerification for this).nurse`) is legal only when the compiler can prove at most one matching instance exists — because the shape carries a `produces` guard scoped to that same target, or the relationship is to-one from the other side. Otherwise, disambiguate explicitly:
+**`for` as a query expression** (e.g. `(NurseVerification for this).nurse`) is legal only when the compiler can prove at most one matching instance exists *and* exactly one field matches by type — because the shape carries a `produces` guard scoped to that same target, or the relationship is to-one from the other side. Otherwise, disambiguate with `latest`/`first` over a `where`-filtered collection instead — the same fallback as the field-ambiguity case above, not a second mechanism:
 
 ```
 latest(Shape for expr)
 first(Shape for expr)
+latest(Referral where referrer == this).referee
 ```
 
 Ordered by each instance's implicit creation moment — every instance has one for free, under the same capture-don't-mutate discipline used throughout (`## Principles`).
@@ -169,20 +177,21 @@ atom           := comparison | isExpr | existsExpr | "(" predicate ")"
 
 comparison     := expr ("==" | "!=" | "<" | "<=" | ">" | ">=") expr
 isExpr         := expr "is" ("none" | "some" | "empty" | "not empty" | ShapeName)
-existsExpr     := "exists" ShapeName "for" forTarget
+existsExpr     := "exists" ShapeName "for" expr           -- sugar; legal only when exactly one field matches expr's type
+               | "exists" "(" collectionExpr ")"          -- general form; required when more than one field
+                                                           -- matches, or more than one condition is needed
 
 expr           := path (("+" | "-") duration)?
 path           := pathRoot (accessor Identifier)*
                | aggregateCall
                | selectorCall
-               | "(" ShapeName "for" forTarget ")"   -- legal only when provably at-most-one; else use selectorCall
+               | "(" ShapeName "for" expr ")"   -- sugar; legal only when provably at-most-one AND exactly one
+                                                 -- field matches expr's type; else use selectorCall with a
+                                                 -- "where"-filtered collectionExpr instead
 pathRoot       := "this" | Identifier
 accessor       := "." | "?."   -- "." requires the left side provably non-absent (unoptional, or narrowed by a
                                 -- prior "is some"/"is none" in the same conjunction); "?." short-circuits to
                                 -- none instead, no narrowing required
-
-forTarget      := expr | Identifier ":" expr   -- field name required only when more than one field on the
-                                                -- shape matches expr's type
 
 aggregateCall  := "count" "(" collectionExpr ")"
                | "sum" "(" collectionExpr "," Identifier ")"
@@ -227,7 +236,17 @@ shape UnacknowledgedSettledInvoice = SettledInvoice where not exists Receipt for
 
 There is no separate "evidence" or "error" category of shape — an evidence shape is an ordinary shape that happens to also serve as a guard. This is also how errors are handled: an outcome (success or failure) is just a refinement of a result shape, and reacting to failure (`rule ReleaseInventory on FailedCharge produces InventoryRelease`) uses the exact same mechanism as reacting to success — no `return`/`throw` distinction.
 
-**Guard granularity matters**: the shape a rule `produces`, and what that shape's `for` target references, determines what "already happened" is scoped to. A `FlagNotification` referencing `accountFlag: one AccountFlag` (the specific flagging event) behaves differently from one referencing `customer: one Customer` (the customer in general) — the former allows a fresh notification on a later re-flagging; the latter would silently suppress it.
+**Guard granularity matters**: the shape a rule `produces`, and what field that shape's guard is scoped to, determines what "already happened" is scoped to. A `FlagNotification` scoped to `accountFlag: one AccountFlag` (the specific flagging event) behaves differently from one scoped to `customer: one Customer` (the customer in general) — the former allows a fresh notification on a later re-flagging; the latter would silently suppress it. Since this choice can carry business meaning rather than just resolving a mechanical ambiguity, state it explicitly with `for <field>` on `produces` whenever it isn't the obvious one:
+
+```
+rule RecordReferral on ReferralRequest produces Referral for referrer from {
+    referrer: this.referrer
+    referee: this.referee
+    referredOn: now
+}
+```
+
+Omit `for <field>` when only one field's type obviously matches the trigger (the common case, e.g. `produces Receipt` alone); require it when the guard is deliberately keyed on something else, the same field-ambiguity rule as `## Predicate expressions`' `for` section.
 
 ## `for`
 
@@ -237,21 +256,41 @@ Associates a newly produced shape instance with the subject it's about:
 Receipt for invoice sentOn: now
 ```
 
-`for <expr>` matches by **type**, not name: whichever field on the produced shape has a type matching `<expr>`'s type is the one populated. When a shape has more than one field of that type, name the field explicitly: `Referral for referrer: this.referrer` — see Predicate expressions, below, for the full rule and the query-expression reuse of `for`.
+`for <expr>` matches by **type**, not name: whichever field on the produced shape has a type matching `<expr>`'s type is the one populated. When a shape has more than one field of that type, name the field explicitly: `Referral for referrer: this.referrer`.
+
+Inside a rule body, `from { field: value, ... }` is the general, clearer way to write this — every field as an ordinary, totality-checked mapping entry, with no field singled out syntactically:
+
+```
+Referral from {
+    referrer: this.referrer
+    referee: this.referee
+    referredOn: now
+}
+```
+
+This is what `produces` was always doing conceptually (`break_velle.md` #6: `produces` is a small inline `Mapping`) made visible in the syntax. The guard-scope field (when one needs stating) lives on `produces` itself, not inside the mapping — see `## produces`, above. `for` as a *query* expression (`(NurseVerification for this).nurse`, `exists Shape for expr`) is unaffected by this — see `## Predicate expressions`, below.
 
 ## `then`
 
 Explicit, opt-in ordering between two effects that have no data dependency forcing an order:
 
 ```
-rule InitiateCharge on Order produces ChargeAttempt {
-    AuditLogEntry for order loggedOn: now
+rule InitiateCharge on Order produces ChargeAttempt for order {
+    AuditLogEntry from {
+        order: this
+        loggedOn: now
+    }
     then
-    ChargeAttempt for order requestedOn: now
+    ChargeAttempt from {
+        order: this
+        requestedOn: now
+    }
 }
 ```
 
 Effects listed without `then` are unordered — the transpiler/AI-assisted codegen is free to run them in any order or in parallel. Effects joined by `then` are forced into that order. Ordering that *is* implied by data dependency (one effect's input is another's output) never needs `then` — it falls out of the input/output graph for free.
+
+`then` and `from` don't compete: `then` orders *statements*, `from` is the *form* of one statement. `AuditLogEntry` above isn't the `produces` target, so it carries no guard-scope annotation at all — `from { }` there is just a clearer mapping, nothing guards it. When a rule body is exactly one effect and it *is* the `produces` target, `produces X for field from { mapping }` collapses header and body into one line — shorthand for `produces X for field { X from { mapping } }`, the same kind of collapse `each X produces Y { Y for this ... }` already does for iteration and production.
 
 ## `each ... produces ...`
 

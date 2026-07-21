@@ -474,7 +474,9 @@ shape Referral {
 
 `Referral` has two `Customer`-typed fields. `exists Referral for this` is now genuinely ambiguous — "this customer referred someone" (`referrer`) or "this customer was referred" (`referee`)? Nothing about the target's type decides between them; both fields match.
 
-**Resolution:** let `for` optionally carry the field name, required exactly when more than one field on the shape shares the target's type:
+**First attempt, revised below:** let `for` optionally carry the field name — `exists Referral for referee: this`. Workable, but reads badly as a sentence: "exists a Referral, for referee: this" isn't English, it's a keyword-argument list. Pushing on a harder case makes the deeper problem visible — "has this customer been referred by a VIP" needs to check *two* fields of the same matched `Referral` (`referee == this` *and* `referrer is VipCustomer`), and the colon-pair form has nowhere to put the second condition, because `for`'s single slot was never meant to carry more than one comparison. Same shape of breakdown as #5/#7/#11: a single bare position runs out the moment a second thing needs saying.
+
+**Resolution:** don't extend `for` — fall back to the general `where`-filtered collection expression `exists`/`count`/`sum` already share (#6, #11), and retire the colon-pair form entirely. `for <expr>` (bare, unambiguous case only) is sugar for this general form, not a separate mechanism:
 
 ```
 shape ReferralRequest {
@@ -482,19 +484,26 @@ shape ReferralRequest {
     referee: one Customer
 }
 
-shape ReferredCustomer  = Customer where exists Referral for referee: this
-shape ReferringCustomer = Customer where exists Referral for referrer: this
-
-rule RecordReferral on ReferralRequest produces Referral {
-    Referral for referrer: this.referrer
-        referee: this.referee
-        referredOn: now
-}
+shape ReferredCustomer  = Customer where exists (Referral where referee == this)
+shape ReferringCustomer = Customer where exists (Referral where referrer == this)
 ```
 
-`for referrer: this.referrer` marks `referrer` as the association field — the one `produces`'s guard scopes against, per `LANGUAGE.md`'s "guard granularity matters" note — everything after it (`referee`, `referredOn`) is an ordinary field assignment, same as always. Bare `for this` keeps working everywhere it already does, since the field name is only required when the shape has more than one field of the matching type — additive, the same shape of resolution as `latest`/`first` in #10.
+`exists (Referral where referee == this)` reads as an actual sentence and reuses only what's already established: `==` (#1) and `where` (the mechanism everything else in this doc reduces to). It also scales to the harder case for free — no new syntax needed to add a second condition on the same matched instance:
 
-Applies symmetrically to the query-expression form: `(Referral for referrer: this).referee`. Cardinality (#10) and field ambiguity (this section) are independent concerns that can both apply to the same expression.
+```
+shape VipCustomer          = Customer where tier == "vip"
+shape ReferredByVip        = Customer where exists (Referral where referee == this and referrer is VipCustomer)
+```
+
+The value-position form (`(Shape for expr)`, #4/#10) gets the same treatment: it stays as sugar for the unambiguous single-field case, and falls back to `latest`/`first` over a `where`-filtered collection — already legal under #10's grammar, since `collectionExpr` never required its `path` to be a plain relationship (`exists Receipt for this` already treated a bare `ShapeName` as "all instances of it," this just extends that to `where` too):
+
+```
+latest(Referral where referrer == this).referee
+```
+
+Field ambiguity (this section) and cardinality ambiguity (#10) turn out to share one fallback, not two: whenever `for`'s bare shorthand doesn't apply — because more than one field matches, or more than one instance could — the answer is the same general `where`-filtered form, with `latest`/`first` layered on top only when a single value (not a boolean) is needed. `for <expr>` keeps working exactly as before everywhere it already does; it just never grows a second syntax to handle what it can't.
+
+**`produces`'s guard-scope annotation (#14) is unaffected.** `produces Referral for referrer` names a bare field, not an expression to filter by — there's nothing to disambiguate against a `where` clause there, since it's marking which field of a *soon-to-be-created* instance serves as the guard key, not filtering an existing collection. That resolution stands as written.
 
 >
 
@@ -523,6 +532,59 @@ Both forms stay legal: narrowed `.` when a predicate already needs to branch on 
 
 >
 
+## 14. `produces` is a Mapping — `from` makes it look like one, and separates cleanly from `then`
+
+`break_velle.md` #6 established that `produces` was always a small inline `Mapping`: the compiler's real job is totality checking, every field the output shape declares needs an explicit value in the rule body. #12's rule example never made that visible — `Referral for referrer: this.referrer referee: this.referee referredOn: now` reads as one long clause, with the field that also happens to set the `produces` guard indistinguishable, syntactically, from the ordinary fields after it.
+
+**Resolution:** split the two jobs `for` was doing inside the effect statement. Guard-scope selection moves to the `produces` clause itself; the effect statement becomes a plain, braced field-by-field mapping introduced by `from`:
+
+```
+shape Customer {
+    name: text
+}
+shape ReferralRequest {
+    referrer: one Customer
+    referee: one Customer
+}
+shape Referral {
+    referrer: one Customer
+    referee: one Customer
+    referredOn: DateTime
+}
+
+rule RecordReferral on ReferralRequest produces Referral for referrer from {
+    referrer: this.referrer
+    referee: this.referee
+    referredOn: now
+}
+```
+
+`for referrer` on `produces` states the guard key explicitly, the same field-ambiguity rule as #12: omit it when only one field's type obviously matches the trigger, require it when the choice is a business decision (`LANGUAGE.md`'s `accountFlag`-vs-`customer` `FlagNotification` example is exactly this — two fields where either could reasonably serve, and the choice changes behavior). `from { }` is the mapping — every field gets a value, still totality-checked, no field privileged over any other syntactically.
+
+**Comparison with `then`, since both now touch rule bodies:** they operate on different axes and don't compete. `then` orders *statements*; `from` is the *form* of one statement. A body can hold any number of `from`-style statements and sequence some or all of them with `then`:
+
+```
+rule InitiateCharge on Order produces ChargeAttempt for order {
+    AuditLogEntry from {
+        order: this
+        loggedOn: now
+    }
+    then
+    ChargeAttempt from {
+        order: this
+        requestedOn: now
+    }
+}
+```
+
+`AuditLogEntry` isn't the `produces` target, so it carries no `for` at all — nothing guards it, `from { }` is just a clearer mapping. `ChargeAttempt` is the target, so its guard scope (`for order`) lives on the header, same as the single-effect case above. `then` does exactly what it always did, indifferent to which form the statements on either side of it use.
+
+That also explains the relationship between the compact and full forms: `produces X for field from { mapping }` is shorthand for `produces X for field { X from { mapping } } ` — collapsing "the whole body is one obvious effect" the same way `each X produces Y { Y for this ... }` already collapses iteration and production into one line. It only applies when there's exactly one effect and it's the `produces` target; a second effect or a `then` needs the full body form.
+
+**Not part of this doc's scope, flagging rather than resolving:** `from { }` is an effect-statement/rule-body construct, not a boolean-predicate one — this section sits next to, not inside, the predicate grammar `## Toward a formal grammar` below covers. It belongs in `LANGUAGE.md`'s `## produces`/`## for`/`## then` sections, not the predicate-expression grammar.
+
+>
+
 ## Toward a formal grammar
 
 Pulling every resolution above together, informally (not a real BNF, just shaped like one):
@@ -536,20 +598,21 @@ atom           := comparison | isExpr | existsExpr | "(" predicate ")"
 
 comparison     := expr ("==" | "!=" | "<" | "<=" | ">" | ">=") expr
 isExpr         := expr "is" ("none" | "some" | "empty" | "not empty" | ShapeName)
-existsExpr     := "exists" ShapeName "for" forTarget
+existsExpr     := "exists" ShapeName "for" expr           -- sugar; legal only when exactly one field matches expr's type
+               | "exists" "(" collectionExpr ")"          -- general form; required whenever more than one field
+                                                           -- matches, or more than one condition is needed
 
 expr           := path (("+" | "-") duration)?
 path           := pathRoot (accessor Identifier)*
                | aggregateCall
                | selectorCall
-               | "(" ShapeName "for" forTarget ")"   -- legal only when provably at-most-one; else use selectorCall
+               | "(" ShapeName "for" expr ")"   -- sugar; legal only when provably at-most-one AND exactly one
+                                                 -- field matches expr's type; else use selectorCall with a
+                                                 -- "where"-filtered collectionExpr instead
 pathRoot       := "this" | Identifier
 accessor       := "." | "?."   -- "." requires the left side provably non-absent (unoptional, or narrowed by a
                                 -- prior "is some"/"is none" in the same conjunction); "?." short-circuits to
                                 -- none instead, no narrowing required
-
-forTarget      := expr | Identifier ":" expr   -- field name required only when more than one field on the
-                                                -- shape matches expr's type
 
 aggregateCall  := "count" "(" collectionExpr ")"
                | "sum" "(" collectionExpr "," Identifier ")"
@@ -562,6 +625,6 @@ duration       := IntegerLiteral ("seconds"|"minutes"|"hours"|"days"|"weeks")
 
 Every production is now either settled or explicitly a downstream compiling concern — nothing left as an `-- unresolved` comment. `example_predicates.md`'s job on this topic is done; what remains (correctly realizing `produces`'s safety/liveness, `requires`'s atomicity, self-referential definitions, narrowing analysis, and selector ordering) all belongs to `TODO.md`'s compiled-guardrails catalog, not here.
 
-All of #1–#13 and the grammar block above are now propagated into `LANGUAGE.md`.
+All of #1–#14 and the grammar block above are now propagated into `LANGUAGE.md`.
 
 >
