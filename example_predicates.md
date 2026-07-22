@@ -210,14 +210,11 @@ sum(<collection-expr>, <field>)
 
 ## 7. Multi-hop traversal: naming intermediate bindings (`as`)
 
-The deeper structural question underneath #5: every predicate so far implicitly relies on exactly two binding positions — `this` (always the outermost subject) and a bare unqualified field name (always the *innermost* collection element in the nearest `where`). That's enough for everything written so far because nothing has gone past two hops. It breaks down at three: `Customer` → `invoices` → `payments`, needing to reference the *invoice* in the middle — not the customer (`this` skips straight past it to the root) and not the payment (bare names now mean the innermost level). There's no position left to put a reference to the middle hop.
+The deeper structural question underneath #5: every predicate so far implicitly relies on exactly two binding positions — `this` (always the outermost subject) and a bare unqualified field name (always the *innermost* collection element in the nearest `where`). That's enough for a predicate that only ever asks about the innermost level, no matter how many hops of plain traversal got there — `invoices`, then `payments`, each evaluated relative to whatever scope is current at that point in the text, never needs a name of its own along the way. It only breaks down at the moment a *deeper* nested scope needs to reference a *middle* level's own field — `this` skips straight past the middle to the root, and bare names inside the deepest scope mean the deepest level, not the middle one.
 
-**Resolution:** an optional `as <name>` binding on a collection expression, usable anywhere `where` filters a collection:
+**An earlier draft of this section reached for the wrong forcing case, worth recording why it wasn't one.** `Customer → invoices → payments`, checking `inv is OverdueInvoice` and `count(inv.payments where FailedPayment) >= 1`, was originally offered as needing a name for the middle `invoices` element. It doesn't: `OverdueInvoice` filters `invoices` directly, by the named refinement, no `is` or binding required; and `payments`, referenced from *inside* that same `where`, is already evaluated in the invoice's own scope — same as `balance`/`due` would be — so it already means "this invoice's payments" with no name required:
 
 ```
-shape Customer {
-    invoices: many Invoice
-}
 shape Invoice {
     customer: one Customer
     balance: Money
@@ -228,21 +225,42 @@ shape Payment {
     invoice: one Invoice
     outcome: text
 }
-
 shape OverdueInvoice = Invoice where balance > 0 and due < today
 shape FailedPayment  = Payment where outcome == "declined"
 
-shape CustomerWithBadInvoice =
+shape CustomerWithBadInvoice = Customer where exists (invoices where OverdueInvoice and count(payments where FailedPayment) >= 1)
+```
+
+Three hops of plain traversal, zero bindings — `FailedPayment` never references the invoice at all, so nothing here ever needed to reach the middle level from inside a deeper scope.
+
+**The actual forcing case: a deeper scope needing a middle level's own field.** "Does this invoice have a payment larger than the invoice's own amount":
+
+```
+shape Customer {
+    invoices: many Invoice
+}
+shape Invoice {
+    customer: one Customer
+    amount: Money
+    payments: many Payment
+}
+shape Payment {
+    invoice: one Invoice
+    amount: Money
+}
+
+shape CustomerWithOverpayment =
   Customer where exists (
     invoices as inv where
-      inv is OverdueInvoice
-      and count(inv.payments where FailedPayment) >= 1
+      count(inv.payments where amount > inv.amount) >= 1
   )
 ```
 
-`inv` names the middle rung so the nested `payments` filter (still using the ordinary bare-name-means-innermost convention for `FailedPayment`'s own fields) can be reached via `inv.payments`, while the aggregate's own predicate keeps referring to *its* innermost element (`FailedPayment`) unqualified, same as every `count(collection where Refinement)` before it.
+`inv.amount`, needed from *inside* `payments`' own `where`, has nowhere else to come from: `this` skips past the invoice straight to `Customer` (the root), and bare `amount` inside `payments where amount > ...` already means the *payment's* own amount (innermost), not the invoice's. `inv` is the only way to keep the middle level reachable once a deeper scope opens — this is what actually forces `as`, not the earlier example.
 
-This is additive, not a replacement: `invoices where OverdueInvoice` (no `as`) keeps working exactly as before for one- and two-hop predicates — `as` only earns its keep once a predicate needs to reach back to a hop that bare names and `this` can't address. The cleanest way to state the whole scheme: **`this` is just the always-present, built-in alias for the root subject; `as` lets a predicate introduce additional named aliases for any collection-filter scope it opens.** One mechanism (named binding), two ways to get one (implicit for the root, explicit via `as` for anything nested), rather than two unrelated ideas.
+**Resolution:** an optional `as <name>` binding on a collection expression, usable anywhere `where` filters a collection. `inv` names the middle rung so the nested `payments` filter can reach back to it (`inv.amount`), while the aggregate's own predicate keeps referring to *its* innermost element (`amount`, the payment's own) unqualified, same as every `count(collection where Refinement)` before it.
+
+This is additive, not a replacement: plain traversal (`invoices where OverdueInvoice`, `count(payments where FailedPayment)`, no `as`) keeps working exactly as before, however many hops deep, as long as nothing needs to reach back to a middle level from inside a deeper one — `as` only earns its keep at that specific point. The cleanest way to state the whole scheme: **`this` is just the always-present, built-in alias for the root subject; `as` lets a predicate introduce additional named aliases for any collection-filter scope it opens.** One mechanism (named binding), two ways to get one (implicit for the root, explicit via `as` for anything nested), rather than two unrelated ideas.
 
 **Scoping:** an alias is visible within the predicate it's declared over and any predicate nested inside that scope (the same lexical-scoping shape as a SQL correlated subquery) — it doesn't leak back out to the enclosing scope or across to a sibling `as` binding declared elsewhere in the same predicate.
 

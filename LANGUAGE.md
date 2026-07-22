@@ -4,11 +4,15 @@ Draft reference, organized by keyword/construct. Derived from the design explora
 
 ## Principles
 
-Two rules that filter every design decision in this document, stated up front because they were both gotten wrong once before being pinned down (see `example_predicates.md` §9's correction history).
+Three rules that filter every design decision in this document, stated up front because they were each gotten wrong once before being pinned down (see `example_predicates.md` §9's correction history).
 
 **Velle describes, it doesn't execute — and those are two separate phases, not one.** First, make declarative statements about a system's conceptual models: shapes, relationships, rules, behaviors. That description is complete and meaningful entirely on its own. Only afterward does a human engineer pick up the description and make runtime decisions from it — storage strategy, caching, mutability, execution order, data structures, traditional computer-science machinery generally. Velle's own scope stops at *can this be declaratively stated*; it never extends to *how should this be executed*. If a design question can only be answered by talking about caching, mutable-vs-immutable storage, or when a computation runs, it has strayed into the second phase and doesn't belong in this document.
 
 **Corollary: truthfulness never depends on whether the underlying implementation is mutable or immutable.** A refinement or derived property means the same thing regardless of how the current state it's evaluated against came to be — recomputed from a mutable field, or derived from an immutable stream of captured facts, the answer must be identical at any given instant. Mutability/immutability is a fact about caching safety (whether a stored value can be trusted without recomputation) — it is never a fact about what's true, and it is never itself a resolution to a language-design question.
+
+**"Compiling" means validating a coherent spec, not primarily building an executable.** The compiler's main job is checking that shapes, relationships, and rules form a strongly-typed, self-coherent system description — producing runnable code is a possible downstream output, not the defining purpose (the same instinct already behind refinement exhaustiveness/overlap checking, `## Refinements`, and totality checking, `## produces`). This gives ambiguity a home: a construct that would resolve one way today and a different way after some unrelated, later change to the spec (a field added to some other shape, say) is a compile error, not a runtime concern or a style nit — compiling *is* the later event that forces a human to notice and be explicit, rather than the moment a silent, schema-dependent resolution quietly starts pointing somewhere else.
+
+Because ambiguity can be introduced by a change *anywhere* in the spec, "compiling" has to mean re-validating the whole spec as one coherent unit every time, not incrementally re-checking just the file or shape that changed — a traditional compiler's file-scoped, incrementally-cached model doesn't fit here, since the whole point is catching effects at a distance (a field added to `Referral` invalidating a `Customer` refinement that never mentions the change). Velle's "compiler" is closer to a global logic/consistency checker running over the whole spec as a single knowledge base — the same category of thing as a theorem prover or constraint solver checking a whole model for coherence — than to a traditional per-file compiler, even though it also happens to be the thing that may eventually emit code.
 
 ## Philosophy
 
@@ -131,18 +135,17 @@ shape Foo {
 
 Both forms stay legal — narrowed `.` when a predicate already needs to branch on presence anyway, `?.` when it doesn't and propagation is all that's wanted.
 
-**`as` — naming an intermediate binding.** `this` is the built-in, always-present alias for the outermost subject a refinement is defined over; a bare unqualified field name means the innermost collection-filter's element. Between those two, `as` names any other level a predicate needs to reach back to:
+**`as` — naming an intermediate binding.** `this` is the built-in, always-present alias for the outermost subject a refinement is defined over; a bare unqualified field name means the innermost collection-filter's element. Plain traversal through any number of hops needs neither — `exists (invoices where OverdueInvoice and count(payments where FailedPayment) >= 1)` needs no binding at all, since each hop is evaluated relative to whatever scope is current at that point in the text. `as` only earns its keep when a *deeper* nested scope needs to reach back to a *middle* level's own field — `this` skips past the middle straight to the root, and bare names in the deeper scope mean the deeper level, not the middle one:
 
 ```
-shape CustomerWithBadInvoice =
+shape CustomerWithOverpayment =
   Customer where exists (
     invoices as inv where
-      inv is OverdueInvoice
-      and count(inv.payments where FailedPayment) >= 1
+      count(inv.payments where amount > inv.amount) >= 1
   )
 ```
 
-An alias is visible within the predicate it's declared over and anything nested inside that scope, the same as a SQL correlated subquery — it doesn't leak to the enclosing scope or across to a sibling `as` binding.
+`inv.amount`, needed from inside `payments`' own `where`, has nowhere else to come from — `inv` is what keeps the middle level reachable once a deeper scope opens. An alias is visible within the predicate it's declared over and anything nested inside that scope, the same as a SQL correlated subquery — it doesn't leak to the enclosing scope or across to a sibling `as` binding.
 
 **Sibling joins** — correlating two independently-filtered collections against each other (not a straight chain) — take a comma-separated list of bindings instead of one, all visible to each other and to a single shared `where`:
 
@@ -342,6 +345,6 @@ An "object" shape is a degenerate case of a "function" shape whose output is its
 - **Schedule definition** — `on Daily` (postfix) settles how a rule *references* a schedule; what actually defines `Daily` (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be a cron-like scheduling framework.
 - **Reversal** — resolved as a non-issue for the language itself (it's a business-policy choice, expressed via which artifact shapes a human declares — see `example_invoice_payment.md` #5), but no single canonical pattern has been adopted yet; the consolidated top-of-file example still doesn't reflect a chosen policy.
 - **Escape hatch / override syntax** — how a human marks part of a spec as intentionally hand-implemented/AI-implemented rather than declarative. Deferred; agreed to be a lesser concern until the core language settles.
-- **Compiled guardrails** — the idea that the compiler/transpiler should structurally enforce best practices (e.g. forced prepared statements, automatic error-context capture, correctly evaluating self-referential shape/derived-property definitions, ordering `latest`/`first` selectors by implicit creation moment, how deep narrowing analysis for `.`-vs-`?.` sees through nested expressions) as a byproduct of codegen. A design principle, not yet a syntax construct.
+- **Compiled guardrails** — the idea that the compiler/transpiler should structurally enforce best practices (e.g. forced prepared statements, automatic error-context capture, correctly evaluating self-referential shape/derived-property definitions, ordering `latest`/`first` selectors by implicit creation moment, how deep narrowing analysis for `.`-vs-`?.` sees through nested expressions, erroring — not silently resolving — a bare unqualified name that doesn't exist in its innermost scope but would resolve unambiguously in exactly one enclosing scope, per `## Principles`'s compiling-as-validation rule: the fix is always an explicit `this.field`, never an inferred scope-walk that could silently start pointing elsewhere the moment an enclosing shape gains a same-named field; a field addition that creates a new type-match ambiguity for an existing bare `for` reference elsewhere in the spec, per §12, must be reported as one connected diagnostic naming both the declaration that introduced the ambiguity — e.g. `Referral` gaining a second `Customer`-typed field — and every reference it now makes ambiguous — e.g. `CustomerWhoReferred`'s `for this` — since the compiler's job is reporting an incoherence in the spec as a whole, not a syntax error in one isolated line, and a human should never have to search for why an untouched line stopped compiling) as a byproduct of codegen. A design principle, not yet a syntax construct.
 - **`why` / provenance** — a command to trace which rule/refinement produced a given piece of state, mapped back to Velle source. Agreed as a goal; no syntax proposed yet.
 - **Derived-property value-expression grammar** — `## Derived properties`' arithmetic and conditional (`if`/`else`) forms have only ever been used by example, the same gap `## Predicate expressions` closed for boolean predicates. Not yet formalized.

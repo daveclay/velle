@@ -77,11 +77,11 @@ shape HighLifetimeValue = Customer where totalPaid > 10000
 
 -- active_risk_flags (the LEFT JOIN ... WHERE arf.customer_id IS NULL anti-pattern)
 shape ActiveRiskFlag           = RiskFlag where resolvedOn is none
-shape CustomerCurrentlyFlagged = Customer where exists (RiskFlag as rf where rf.customer == this and rf is ActiveRiskFlag)
+shape CustomerCurrentlyFlagged = Customer where exists (ActiveRiskFlag where customer == this)
 
 -- referral_risk
-shape ReferralLedToRisk      = Referral where exists (RiskFlag as rf where rf.customer == referee and rf.flaggedOn <= referredOn + 30 days)
-shape CustomerWhoReferredRisk = Customer where exists (Referral as ref where ref.referrer == this and ref is ReferralLedToRisk)
+shape ReferralLedToRisk      = Referral where exists (RiskFlag where customer == this.referee and flaggedOn <= this.referredOn + 30 days)
+shape CustomerWhoReferredRisk = Customer where exists (ReferralLedToRisk where referrer == this)
 
 -- final SELECT
 shape HighRiskCustomer =
@@ -91,9 +91,9 @@ shape HighRiskCustomer =
     and not CustomerCurrentlyFlagged
 ```
 
-Nine named refinements, mirroring the four CTEs plus the final `WHERE`. Every line reduces to grammar already resolved elsewhere: `and`/`or`/`not` (`example_predicates.md` #2, `example_refinements.md`), `is`/`exists` (#3), `as` bindings (#7), `count` (#6), duration arithmetic (#1's grammar), and the `exists (Shape where predicate)` form (`example_predicates.md` #12, revised) for existence checks that need more than one condition on the matched instance.
+Nine named refinements, mirroring the four CTEs plus the final `WHERE`. Every line reduces to grammar already resolved elsewhere: `and`/`or`/`not` (`example_predicates.md` #2, `example_refinements.md`), `is`/`exists` (#3), `count` (#6), duration arithmetic (#1's grammar), and the `exists (Shape where predicate)` form (`example_predicates.md` #12, revised) for existence checks that need more than one condition on the matched instance.
 
-**`CustomerCurrentlyFlagged` is the one worth reading twice.** Inside `RiskFlag as rf where rf.customer == this and rf is ActiveRiskFlag`, `rf is ActiveRiskFlag` only typechecks *because* `rf` is bound with `as`. Without the binding, bare `this` inside that nested `where` means the outer `Customer` (#5's rule: `this` never rebinds, unqualified names mean the innermost element) — so `this is ActiveRiskFlag` would silently ask "is this Customer an ActiveRiskFlag," which typechecks as false-but-meaningless rather than erroring, since nothing here forces `Customer` and `RiskFlag` to share a base shape at that position (`is`'s compatibility guardrail only kicks in when both sides *do* share ancestry — a `Customer` and a `RiskFlag` refinement simply don't, so it should actually be a compile error there, not a silent wrong answer — but that's exactly why the explicit `as rf` binding is what makes the correct reference possible in the first place, not just clearer).
+**None of these nine actually needs `as`, and that's worth dwelling on rather than skipping past.** Every earlier draft of `CustomerCurrentlyFlagged` and `ReferralLedToRisk`/`CustomerWhoReferredRisk` reached for `as rf`/`as ref` to re-check a named refinement inline or to reach the outer subject's own field — both times, the binding was doing no real work: filtering by the named refinement directly (`ActiveRiskFlag where customer == this`, `ReferralLedToRisk where referrer == this`) says the same thing with nothing bound, and `this.referee`/`this.referredOn` already reach the outer `Referral` explicitly without needing a name for the inner `RiskFlag` at all. `as` only earns its keep when a *deeper* nested scope needs a *middle* level's own field — nothing in this whole nine-refinement chain ever does that (`example_predicates.md` #7, corrected). Reaching for it defensively "just in case" is exactly the kind of computer-layer ceremony leaking into the logic layer that's worth resisting — the compiler is what catches an actual ambiguity; the human shouldn't have to pre-empt one that was never there.
 
 ## The actual lesson
 

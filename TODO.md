@@ -16,6 +16,8 @@ Split two ways, per `LANGUAGE.md` `## Principles`. **Language & structure** is w
 
 *Also synced: `produces` is a small inline `Mapping`, made visible in the syntax — the guard-scope field moves to an optional `for <field>` on `produces` itself, and the rule body becomes a plain `from { field: value, ... }` mapping, replacing the old overloaded in-body `for` — now `LANGUAGE.md` `## produces`, `## for`, `## then` — `example_predicates.md` #14. Totality *checking* remains a compiling concern, below.*
 
+*Correction to #7 (`as` bindings), synced: the original motivating example (`CustomerWithBadInvoice`, `inv is OverdueInvoice and count(inv.payments where FailedPayment) >= 1`) never actually forced `as` — filtering by the named refinement directly and plain multi-hop traversal both already cover it with no binding. `as` only earns its keep when a deeper nested scope needs to reach a middle level's own field (the invoice-amount-vs-payment-amount case now in #7 and `LANGUAGE.md`'s `## Predicate expressions`). Surfaced while applying the "don't require defensive `as` when the compiler already catches real ambiguity" principle to `example_composition_depth.md`, which turned out to need zero `as` bindings across all nine of its refinements once corrected.
+
 ### Open design questions
 
 - [ ] How a `Role` (e.g. `PatientRole`) is defined as a predicate over an implicit `viewer` — the external-RBAC alternative is a compiling/integration concern, below
@@ -49,7 +51,7 @@ Split two ways, per `LANGUAGE.md` `## Principles`. **Language & structure** is w
 
 ### Bigger, deferred on purpose
 
-- [ ] Compiled guardrails catalog — start an actual running list of everything compiling must always enforce (forced prepared statements, atomic `produces`, forced totality checks, correctly evaluating self-referential definitions, etc.) rather than leaving it as a scattered principle
+- [ ] Compiled guardrails catalog — start an actual running list of everything compiling must always enforce (forced prepared statements, atomic `produces`, forced totality checks, correctly evaluating self-referential definitions, erroring on out-of-scope bare names instead of scope-walking to resolve them, reporting a declaration change that creates new `for` field ambiguity (§12) as one diagnostic connecting the declaration to every reference it now affects rather than an isolated error at either site, etc.) rather than leaving it as a scattered principle
 
 ## Neither — process / research
 
