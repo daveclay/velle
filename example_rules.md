@@ -112,6 +112,8 @@ A rule name may have any number of `triggerDecl`s pointing at it (inline-sugared
 
 # Stress test: DRY across rule bodies (`mapping`)
 
+> **SUPERSEDED — `mapping` was dissolved; see "Dissolved: `mapping` is not a construct" below.** This section and its `A`–`E` sequel are kept as the derivation trail that led to the dissolution: the DRY problem, the candidate constructs, the surface-syntax exploration. Its "Resolution:" statements describe a `mapping` construct that **no longer exists** — everything here decomposes into a shape + relationships + derived properties + occurrence-references. Read it as history, not current design.
+
 A separate thread from the `trigger`/`rule` split above, sharing the same method. Two unrelated rules can need an identical effect fragment. `InitiateCharge` (reacting to a new `Order`) and a hypothetically extended `ReleaseInventory` (reacting to a `FailedCharge`) both need to write the same `AuditLogEntry`, differing only in the source expression for `order`:
 
 ```
@@ -306,197 +308,114 @@ A mapping is pure, non-triggered, non-effectful, and never originates a fact —
 
 ---
 
-# Resolved: mapping surface syntax — `from … as`, dot-access, shallow determination
+# Dissolved: `mapping` is not a construct
 
-`## 1`–`## 13` settled the *semantics* of `mapping` on a function-shaped surface (`mapping AuditLog(order: Order) = { order: order … }`). This thread settled the **surface**. The decisions are below; a few genuinely separate questions (call-site invocation, mapping-vs-shape naming) stay open at the end (§E).
+Everything the `## 1`–`## 13` / `A`–`E` threads built a `mapping` construct to do decomposes, with nothing left over, into things Velle already has — **a shape, relationships its producing rule wires up, and derived properties (§6)** — plus one genuinely new thing that is *temporal*, not transformational, and gets its own thread below (**occurrence**). So there is no `mapping` construct. This section records why, and why that is the right answer rather than a shortcut.
 
-## A. The decided surface
+## The diagnosis — a mapping was a homeless derived property
 
-A mapping populates a shape declared in the ordinary way — it never redeclares one:
+A `mapping` read as code because it was the one construct describing a *transformation* (inputs → a new record) rather than a state or a relationship — a verb. And a verb with no subject is a function, which is exactly what "it's not a function" kept failing to deny.
+
+But Velle already contains this computation and it does *not* read as code: the **derived property** (§6). `Invoice.total: sum of items.amount` is, field-for-field, the same kind of thing as a mapping line — a value defined in terms of other values. Nobody calls it a function, because it is *anchored to a shape*: a timeless property of the Invoice. A mapping was a derived property **evicted from its shape**. The homelessness was the whole code-smell.
+
+Re-anchor it and the transformation disappears. Give the produced shape a relationship to what it is made from, and every pass-through, rename, and compute becomes an ordinary derived property reaching *through that relationship*:
+
 ```
-shape AuditLogEntry {
-    order:    one Order
-    loggedOn: Timestamp
-}
-```
-The mapping that builds it:
-```
-mapping AuditLogEntry from Order {
-    order
-    loggedOn: now
-}
-```
-
-**Header — `from <Shape> [as <name>], …`.** Each input is a shape bound to a name. `as` is *optional*: the binding name defaults to the shape name with a lowercased initial (`from Order` ⇒ `order`, `from ExchangeRate` ⇒ `exchangeRate`). `as` is *required* only to disambiguate — when two inputs would otherwise default to the same name (`from Order as buy, Order as sell`). Same "explicit only when ambiguous" rule the language uses elsewhere, now at the binding level.
-
-**Body — dot-access, one line per target field.** A field is `field: expr`, where `expr` uses ordinary dot-access into the bindings (`order.customer`, `payment.amount`). This is the language's single traversal syntax — the same `this.x` a rule body uses — so a mapping body reads like a rule body. Operators and aggregates stay word-based (`minus`, `times`, `count of`, `the lesser of`); only property access is dots.
-
-**`the X's y` was never syntax.** Earlier passes of this thread wrote `the Order's customer`; that was *description*, not surface. The surface is `order.customer`. (Recorded because the description-vs-syntax ambiguity actively derailed the derivation for several rounds.)
-
-**Bare field = pass-through, and it is the *only* thing the compiler determines.** A field written bare — just `order`, no `: value` — means `order: order`, filled from the like-named binding. Bare is permitted **only** when the field name matches a binding name; that match is unambiguous, because bindings are a small flat named set. This removes the `order: order` pun with zero guessing.
-
-**Determination is shallow — decided, not left open.** The compiler does **not** walk a binding's shape tree to fill a field from a same-named sub-field: it will *not* fill `customer` from `payment.customer`. Walking the tree would find *a* `customer` and most likely not the one intended, and a wrong *silent* guess in a spec is a latent bug. So anything past the top level of a binding is written explicitly (`customer: payment.customer`). Name-identity against the binding set is the whole of determination.
-
-**Why `from … as` is acceptable here, though it was flagged "shape-like" earlier.** The earlier strike was that `mapping X from Order as order { order: order, customer: order.customer … }` read like a `shape` declaration. The decided form breaks the resemblance on every point: the header lists *inputs* (`from Order`), which a shape never does; values are dot-expressions, obviously values not types; pass-throughs are bare (`order` — no shape field is ever written bare); and there is not one `: Type` pair in the body. The old governing constraint (a mapping must not read as a shape declaration) is satisfied — it just needed the body to stop looking like field declarations, which dot-access + bare pass-through accomplish.
-
-## B. One subject at scale — `OrderSnapshot`
-
-The fat single-subject case, in the decided syntax. Target shape:
-```
+-- not a mapping; just a shape whose fields are derived properties
 shape OrderSnapshot {
-    order:           one Order
-    customer:        one Customer
-    customerName:    Text
-    customerEmail:   Text
-    shippingAddress: one Address
-    items:           many LineItem
-    itemCount:       Whole
-    subtotal:        Money
-    tax:             Money
-    total:           Money
-    currency:        Currency
-    placedOn:        Timestamp
-    snapshotOn:      Timestamp
-    status:          Text
-}
-```
-built from an `Order` (`customer: one Customer`, `shippingAddress: one Address`, `items: many LineItem`, plus the scalars):
-```
-mapping OrderSnapshot from Order {
-    order
-    customer:        order.customer
-    customerName:    order.customer.name
-    customerEmail:   order.customer.email
-    shippingAddress: order.shippingAddress
-    items:           order.items
-    itemCount:       count of order.items
-    subtotal:        order.subtotal
-    tax:             order.tax
-    total:           order.total
-    currency:        order.currency
-    placedOn:        order.placedOn
-    snapshotOn:      now
-    status:          "captured"
-}
-```
-
-Only `order` is bare. Everything else is explicit dot-access, and `order.` repeating down the body is **accepted**, not a problem to be optimized away: shallow determination was chosen over any implicit-subject or tree-walking compression precisely because that compression can't be done unambiguously (§A). The body is a complete, predictable manifest of the target shape with the pun removed — nothing more, nothing guessed.
-
-## C. More than one subject
-
-**Distinct shapes — `Reconciliation` (Invoice + Payment).** Target:
-```
-shape Reconciliation {
-    invoice:          one Invoice
-    payment:          one Payment
-    customer:         one Customer
-    invoiceNumber:    Text
-    paymentReference: Text
-    method:           Text
-    invoiced:         Money
-    paid:             Money
-    shortfall:        Money
-    currency:         Currency
-    dueOn:            Timestamp
-    receivedOn:       Timestamp
-    reconciledOn:     Timestamp
-    status:           Text
-}
-```
-built from an `Invoice` (`amount`, `currency`, `customer: one Customer`, `number`, `dueOn`) and a `Payment` (`amount`, `currency`, `reference`, `method`, `receivedOn`):
-```
-mapping Reconciliation from Invoice, Payment {
-    invoice
-    payment
-    customer:         invoice.customer
-    invoiceNumber:    invoice.number
-    paymentReference: payment.reference
-    method:           payment.method
-    invoiced:         invoice.amount
-    paid:             payment.amount
-    shortfall:        invoice.amount minus payment.amount
-    currency:         invoice.currency
-    dueOn:            invoice.dueOn
-    receivedOn:       payment.receivedOn
-    reconciledOn:     now
-    status:           "reconciled"
-}
-```
-- distinct shapes get distinct default binding names (`invoice`, `payment`), so no `as` is needed; `invoice` and `payment` are bare, everything else is dot-access.
-- the `currency` collision (both sources have one) is handled the ordinary way — write it explicitly against the intended binding (`currency: invoice.currency`). There is nothing to be ambiguous about, because shallow determination never reaches into a binding for a field in the first place (§A).
-- still **reduces to a single subject** if a relationship links the two — give `Payment` an `invoice: one Invoice` and every `invoice.x` becomes `payment.invoice.x`, dropping the second input.
-
-**Reference-data second subject — `LedgerEntry` (Payment + ExchangeRate).** The `ExchangeRate` is looked up by key (`(fromCurrency, toCurrency, asOf)` → `rate`), never a stored link on `Payment`. Target:
-```
-shape LedgerEntry {
-    payment:          one Payment
-    customer:         one Customer
-    originalAmount:   Money
-    originalCurrency: Currency
-    rateUsed:         Decimal
-    rateAsOf:         Date
-    baseAmount:       Money
-    baseCurrency:     Currency
-    convertedOn:      Timestamp
-}
-```
-built from both, and originated in a rule:
-```
-mapping LedgerEntry from Payment, ExchangeRate {
-    payment
-    customer:         payment.customer
-    originalAmount:   payment.amount
-    originalCurrency: payment.currency
-    rateUsed:         exchangeRate.rate
-    rateAsOf:         exchangeRate.asOf
-    baseAmount:       payment.amount times exchangeRate.rate
-    baseCurrency:     exchangeRate.toCurrency
-    convertedOn:      now
-}
-
-rule RecordInBaseCurrency on SettledPayment produces LedgerEntry for payment {
-    -- call-site invocation syntax is still open (§E); provisional:
-    LedgerEntry from this, (the ExchangeRate for this.currency)
+    order:        one Order                -- the relationship the producing rule establishes
+    customerName: order.customer.name      -- derived property
+    total:        order.total              -- derived property
     ...
 }
 ```
-The second subject arrives by a **lookup** (`the ExchangeRate for this.currency`), not a traversal (`this.exchangeRate` doesn't and shouldn't exist), and `baseAmount` reads from both, so neither input alone can produce it. Whether such a case is genuinely *forced* or only *clearer* than inlining the lookup is still open (§E).
 
-**Same shape — `TradeMatch` (Order + Order).** Target:
+`customerName: order.customer.name` is the same construct as `Invoice.total: sum of …` — a derived property over a relationship. Nothing is being transformed; the fields are just *properties*.
+
+## The residue was `now`, and `now` was the only imperative token left
+
+Push every field through the re-anchoring and only two kinds resist:
+- `loggedOn: now` — not derivable from any source; an ambient value that exists only at the instant of birth.
+- any field meant to be *historical* — a snapshot's `total` should be the value *as it was*, not a live view that drifts.
+
+Both are the same thing: **capture** — freezing a value at the moment of birth. That was the entire irreducible residue of "mapping." Not transformation. Capture.
+
+And capture was an illusion created by one token: `now`, meaning "read the clock at execution time" — the sole genuinely imperative instruction in the language. Replace it with a *reference to the moment an event occurred* — "the moment this was reconciled," "when the payment was made" — and the timestamp stops being a captured runtime value and becomes a reference to an **occurrence**, which is a fact like any other: permanent and timeless once true. Nothing is frozen because nothing was ever live. `reconciledOn` was always "the moment of that event"; we were spelling it `now` and letting the runtime fill it in.
+
+Crucially this **dissolves the mutability question rather than answering it.** Whether the runtime stores a snapshot, recomputes, or versions is exactly the detail Velle is entitled to defer — a derived property is timelessly true whenever it is evaluated. Capture only looked necessary because `now` smuggled a runtime moment into a fact.
+
+## The proof — the two hard cases, with no `mapping`
+
+(`when this occurred` is illustrative of the concept, not proposed syntax — the occurrence thread deliberately fixes no surface yet.)
+
 ```
-shape TradeMatch {
-    buy:       one Order
-    sell:      one Order
-    price:     Money
-    quantity:  Whole
-    matchedOn: Timestamp
+shape AuditLogEntry {
+    order:    one Order            -- established by the producing rule
+    loggedOn: when this occurred   -- a reference to this fact's own moment
 }
 ```
-Two `Order`s with no link between them force `as`, because the default binding name would collide:
 ```
-mapping TradeMatch from Order as buy, Order as sell {
-    buy
-    sell
-    price:     sell.price
-    quantity:  the lesser of buy.quantity and sell.quantity
-    matchedOn: now
+shape LedgerEntry {
+    payment:      one Payment            -- established by the rule, from its trigger
+    exchangeRate: one ExchangeRate       -- established by the rule, the one it looked up
+    baseAmount:   payment.amount times exchangeRate.rate   -- derived property
+    convertedOn:  when this occurred
 }
 ```
-`buy` and `sell` are the required aliases; both are then bare pass-throughs, and the rest is dot-access off them. This is the sole case where `as` is not optional — exactly the ambiguity the optional-`as` rule (§A) reserves it for.
 
-## D. The determination rule, stated once
+A shape, relationships the **rule** wires up, derived properties, and moment-references — no transformation, no `from … as`, no bare pass-through, no capture. `baseAmount` stays correct not because it is frozen but because a payment's amount and a historical rate are *event-facts that never change* — immutability isn't decreed, it is what those nouns are.
 
-- **bare `field`** ⇒ `field: field`, permitted **iff** `field` names a binding. This is the *only* thing the compiler determines.
-- **everything else** is explicit `field: expr`, dot-access into the bindings.
-- **deep / tree-walking determination is rejected** — filling `customer` from `payment.customer` would make the compiler *guess* which reachable `customer` was meant, and a wrong silent guess in a spec is a latent bug (§A).
-- **`## 9`'s spread is likewise rejected, not subsumed** — "auto-carry same-named sub-fields" *is* the deep case, and dies for the same reason. Spread stops being a candidate feature.
-- **`## 11`'s "no `this`" stands** — a mapping still has no `this`; its inputs are named bindings reached by dot-access, never an implicit subject.
-- **totality (`## 12`) holds** — every target field appears in the body, bare or explicit; a missing field is a compile error ("nothing fills field X"). The body is therefore a complete manifest of the target shape, with pass-throughs abbreviated to bare. (One small remaining sub-question: whether a binding-name-match field may be *omitted entirely* rather than written bare. Kept bare-and-listed here, pending a reason to allow omission.)
-- **match strictness (leaning, not stress-tested):** a bare/name match must also type-check; a same-name/incompatible-type pairing is a compile error, not a silent skip. Untested against refinement-typed fields.
+## What each old thread became
 
-## E. Still open (separate questions)
+- **pass-through / rename / compute** → derived properties over a source relationship. (A rename is a derived property with a different name than its source — and still visibly the *vocabulary-impedance smell* it always was: it exists only because two shapes disagree on a name.)
+- **the source subject(s), single or multi, traversed or looked-up** → relationships the producing rule establishes. This dissolves the entire `## 5`–`## 13` / `C` multi-subject apparatus at once: a shape has as many source relationships as it has, and "how many subjects," "lookup vs. traversal," "same-shape aliasing," and the call-site question are all just *the rule* deciding what to relate the new fact to. There is nothing left for a mapping to arbitrate.
+- **capture (`now`, historical values)** → occurrence-references (next thread).
 
-- **Call-site invocation.** How a rule invokes a mapping and supplies its inputs — the provisional `LedgerEntry from this, (the ExchangeRate for this.currency)` in §C is not settled. This is the next thing to work.
-- **Mapping-vs-shape naming.** These examples assume a mapping **shares the name of the shape it builds** (`mapping LedgerEntry` → a `LedgerEntry`). The alternative — a separately-named mapping feeding a differently-named shape's slot, as `## 1`–`## 13` had it (`AuditLogEntry from AuditLog(this)`) — is not yet ruled out. This blocks sweeping `## 1`–`## 13` onto the decided surface.
-- **Multi-subject: forced or only clearer.** The lookup-vs-traversal criterion for a legit second subject (§C) still isn't pinned to "forced."
-- **Sweep of `## 1`–`## 13`.** Those examples still use the function surface and lack target-shape declarations; they can move to `from … as` once the naming question above is settled.
+## The philosophical result
+
+**A mapping was never a construct; it was a symptom.** It was the one place the language forced the question "should this value track its source, or freeze?" — which is the mutability question wearing a costume. Everywhere else you can stay agnostic about mutability; the moment you snapshot, you must take a stand, and a `mapping` was the recipe you wrote to paper over not having taken it. Nounify time — make the *moment* a fact — and the question dissolves, the recipe evaporates, and what is left is shapes, relationships, derived properties, and a new first-class citizen: **when things occur.**
+
+The cost, carried into the next thread: once time is a noun, every value is implicitly *as of* a moment.
+
+---
+
+# New thread: occurrence — the *when* of the system (concept, not yet syntax)
+
+The residue of the mapping dissolution is a single new idea: **occurrence** — *when* a thing happens or becomes true, treated as a first-class fact. It sits alongside the others as a distinct kind:
+
+- **shapes** — *what* exists
+- **relationships** (`one`/`many`) — *how* facts connect
+- **refinements** — *which* facts qualify
+- **rules** — *what* follows from *what*
+- **occurrence** — *when* things occur
+
+Per this repo's method the thread names and scopes the concept and records what forces it; it does **not** invent syntax (`when this occurred` above was illustrative).
+
+## It is the genus of things already scattered through the docs
+
+Occurrence isn't bolted on — three constructs already in play are all faces of it, previously unnamed:
+
+- `trigger X when FlaggedCustomer is created` — a rule **reacts to** an occurrence (a fact entering a refinement).
+- `on Daily` — a schedule **generates** recurring occurrences.
+- `loggedOn: now` → "when this occurred" — a field **refers to** an occurrence.
+
+So the `trigger`/`rule` stress-test at the top of this file was already building the *reactive* half of this concept without naming the genus; timestamp fields are its *referential* half. Unifying them is most of the work.
+
+## What forces it
+
+1. The mapping dissolution: capture had to land somewhere, and it lands here.
+2. Unification: triggers, schedules, and timestamps are three uses of one idea; leaving them un-unified is the same "syntax hasn't caught up to the semantics" gap the `trigger`/`rule` split opened with.
+
+## Open questions (recording, not resolving)
+
+- **"As of a moment" depth — the load-bearing one.** Nounifying time makes every derived value implicitly *as of* some moment. `loggedOn` (a fact's own moment) is trivial; a genuinely-changing quantity is not. Forcing case: an `Order`'s `total` while line items are still being added — is `total` a live sum, or "the sum as of when this occurred"? The declarative answer ("a quantity is the accumulation of its contributing events up to a moment") puts an implicit *as-of* under every derived property. How much of that surfaces in the language versus stays a deferred runtime detail is unresolved — and it decides whether the dissolution truly leaves nothing over, or leaves temporal-query machinery.
+- **What kinds of occurrence there are, and whether they are one kind.** A fact's origination ("when this was created"), a fact entering a refinement ("when it became a `FlaggedCustomer`"), a schedule tick (`Daily`), an externally-asserted event ("when the payment was made" — is that just the `Payment` fact's origination, or a separately declared event?). Candidate: all are occurrences of one kind; not yet tested.
+- **Reference vs. reaction — one thing or two?** Timestamps *refer to* occurrences; triggers *react to* them. Leaning: one concept consumed two ways, mirroring how a refinement is both a queryable set and a trigger condition. Unconfirmed.
+- **Is `now` ever irreducible?** Is there a legitimate "the actual wall-clock instant of execution" that is *not* expressible as "the moment of some event" (a genuinely external / nondeterministic reading)? If so, `now` survives as a narrow primitive rather than fully dissolving. Flag.
+- **Ties to parked items.** §17 provenance and the executable-vs-spec fork both live here — provenance only means something if occurrences persist and accumulate rather than overwrite, which is the same immutable-leaning world the "as of" answer relies on.
+
+## Not yet touched
+
+- Any surface syntax for referring to, reacting to, or scheduling occurrences (deliberately deferred).
+- Whether "occurrence" is the right *name* (event / moment / when are alternatives).
+- Whether derived properties need explicit temporal qualification at all, or whether the common cases (own-moment references, naturally-immutable event-facts) cover enough that "as of" rarely surfaces.
