@@ -2,7 +2,7 @@
 
 Draft reference, organized by keyword/construct. Derived from the design exploration in `README.md`, `random_notes.md`, `discussion_hard_problems.md`, and `example_invoice_payment.md` — those remain the record of *why* each construct looks the way it does; this doc is meant to become the settled *what*. Update it as constructs stabilize; open questions are called out explicitly rather than silently omitted.
 
-## Principles
+## 1. Principles
 
 Three rules that filter every design decision in this document, stated up front because they were each gotten wrong once before being pinned down (see `example_predicates.md` §9's correction history).
 
@@ -14,7 +14,7 @@ Three rules that filter every design decision in this document, stated up front 
 
 Because ambiguity can be introduced by a change *anywhere* in the spec, "compiling" has to mean re-validating the whole spec as one coherent unit every time, not incrementally re-checking just the file or shape that changed — a traditional compiler's file-scoped, incrementally-cached model doesn't fit here, since the whole point is catching effects at a distance (a field added to `Referral` invalidating a `Customer` refinement that never mentions the change). Velle's "compiler" is closer to a global logic/consistency checker running over the whole spec as a single knowledge base — the same category of thing as a theorem prover or constraint solver checking a whole model for coherence — than to a traditional per-file compiler, even though it also happens to be the thing that may eventually emit code.
 
-## Philosophy
+## 2. Philosophy
 
 Computers execute in terms of stacks, registers, and addresses; humans don't think in those terms when solving problems. Conventional software engineering is the effortful, lossy act of translating a human problem into computer mechanics — functions, variables, scope, closures. Velle removes that translation step: it describes a system directly as shapes, relationships, and rules, and leaves the computer-mechanics translation to compilation.
 
@@ -24,7 +24,7 @@ Velle separates human concerns from computer concerns. Capturing rules, data sha
 
 The gap this is meant to close: existing test frameworks have no opinion about structuring around use cases rather than code (JUnit is code-centric; Cucumber/BDD gets closer but isn't structured enough). Velle aims to be a concise, use-case-oriented system design language humans can use to capture requirements and judgment without first translating them into computer-science concepts — then to extrapolate those requirements into executable tests, modular code, and tooling for organizing and reading AI- or human-generated code.
 
-## shape
+## 3. shape
 
 A typed record — Velle's only structural noun. Replaces objects, functions, and (per Inputs and Outputs, below) constructors, since all three reduce to "a set of typed properties."
 
@@ -35,11 +35,11 @@ shape Customer {
 }
 ```
 
-## Scalars
+## 4. Scalars
 
 Property types seen so far: `text`, `integer`, `decimal`, `boolean`, `Date`, `Money`. A trailing `?` marks a property optional (`processedOn: Date?`); properties are required by default.
 
-## Relationships (`one`, `many`)
+## 5. Relationships (`one`, `many`)
 
 ```
 shape Invoice {
@@ -50,7 +50,7 @@ shape Invoice {
 
 `one`/`many` declare cardinality directly on a property. The inverse side of a relationship is inferred, not separately declared — e.g. `Customer` does not need its own `invoices: many Invoice` field for `Customer where count(invoices ...)` to work; it's derived from `Invoice.customer`.
 
-## Derived properties
+## 6. Derived properties
 
 A property can be defined as a computation over other properties instead of stored data:
 
@@ -62,7 +62,7 @@ Derived properties are recomputed from current data, not cached/stored — they'
 
 A derived property's formula may reference the same property one hop away through a relationship (self-reference) — e.g. `root: Foo? = none if parent is none else (parent if parent.root is none else parent.root)`. This needs no special syntax; correctly evaluating it is a compiler obligation (`## Principles`), not a language concern — see Predicate expressions, below.
 
-## Refinements (`where`)
+## 7. Refinements (`where`)
 
 The core idea of the language: a condition is a named subset of a shape, defined by a predicate — not a branch.
 
@@ -76,7 +76,7 @@ Refinements are **pure predicates, not triggers** — `OverdueInvoice` doesn't "
 
 A refinement's predicate may reference the shape it refines, directly or through a relationship — self-reference needs no special syntax (see `## Derived properties` and Predicate expressions, below).
 
-## Composing refinements (`and`, `or`)
+## 8. Composing refinements (`and`, `or`)
 
 A refinement can be built from other named refinements instead of restating their predicates:
 
@@ -93,7 +93,7 @@ shape NeedsAttention      = Overdue or Escalated
 
 The intended style: small, deliberately atomic refinements named to read like traits (`Open`, `Overdue`, `HighPriority` — no type suffix), with composites built as pure intersections/unions of trait names rather than restated predicates. Not solved: true cross-shape structural mixins, where a trait like `Overdue` is reusable across unrelated shapes (e.g. both `SupportTicket.due` and `Invoice.due`) — see Open/unresolved.
 
-## Predicate expressions
+## 9. Predicate expressions
 
 The expression language usable inside `where`, `requires`, and `visible to ... where`.
 
@@ -207,7 +207,7 @@ duration       := IntegerLiteral ("seconds"|"minutes"|"hours"|"days"|"weeks")
 
 See `example_predicates.md` for the worked derivation of every rule above.
 
-## `rule ... on ...`
+## 10. `rule ... on ...`
 
 A top-level reaction attached to a refinement — replaces `if`/`else` branching and imperative "then do X" sequencing for state-driven behavior.
 
@@ -217,11 +217,11 @@ rule SendReceipt on SettledInvoice {
 }
 ```
 
-A rule fires when a shape newly satisfies the refinement named in `on`. There is no polling, clock, or re-evaluation pass in the model — a rule is only reconsidered when data it depends on changes (see `produces` and Schedule triggers, below, for how that's kept true even for purely time-dependent refinements).
+A rule declares that an effect corresponds to a refinement — `on Refinement` names *what* the rule reacts to, not *when* or *how* that reaction gets detected. Whether the underlying mechanism is a check made at write-time, a scheduled sweep, an event stream, a runtime data-structure instantiation, or some mix of these for the same rule is left open by the declaration itself; the only contract that has to hold regardless of mechanism is that the effect happens if and only if the subject is or becomes a member of the refinement, exactly once per newly-satisfying instance (see `produces`, below, for how "exactly once" is guaranteed without runtime bookkeeping). Picking and implementing the actual detection mechanism is a compiling concern (`## 1. Principles`), not part of what the rule means — see Schedule triggers, below, for how that stays true even for purely time-dependent refinements.
 
 Prefix `on` (`rule X on Refinement { ... }`) is specifically for data-driven triggers. Schedule-driven triggers use a different position — postfix, after the rule body — precisely so the two don't read as the same kind of thing even though both mechanically react to a shape existing. See Schedule triggers, below.
 
-## `produces`
+## 11. `produces`
 
 Guards a rule against firing more than once for the same input, by tying the rule to a shape that serves as durable evidence it already ran.
 
@@ -251,7 +251,7 @@ rule RecordReferral on ReferralRequest produces Referral for referrer from {
 
 Omit `for <field>` when only one field's type obviously matches the trigger (the common case, e.g. `produces Receipt` alone); require it when the guard is deliberately keyed on something else, the same field-ambiguity rule as `## Predicate expressions`' `for` section.
 
-## `for`
+## 12. `for`
 
 Associates a newly produced shape instance with the subject it's about:
 
@@ -273,7 +273,7 @@ Referral from {
 
 This is what `produces` was always doing conceptually (`break_velle.md` #6: `produces` is a small inline `Mapping`) made visible in the syntax. The guard-scope field (when one needs stating) lives on `produces` itself, not inside the mapping — see `## produces`, above. `for` as a *query* expression (`(NurseVerification for this).nurse`, `exists Shape for expr`) is unaffected by this — see `## Predicate expressions`, below.
 
-## `then`
+## 13. `then`
 
 Explicit, opt-in ordering between two effects that have no data dependency forcing an order:
 
@@ -295,7 +295,7 @@ Effects listed without `then` are unordered — the transpiler/AI-assisted codeg
 
 `then` and `from` don't compete: `then` orders *statements*, `from` is the *form* of one statement. `AuditLogEntry` above isn't the `produces` target, so it carries no guard-scope annotation at all — `from { }` there is just a clearer mapping, nothing guards it. When a rule body is exactly one effect and it *is* the `produces` target, `produces X for field from { mapping }` collapses header and body into one line — shorthand for `produces X for field { X from { mapping } }`, the same kind of collapse `each X produces Y { Y for this ... }` already does for iteration and production.
 
-## `each ... produces ...`
+## 14. `each ... produces ...`
 
 Applies a rule across every member of a refined collection, combined with the `produces` guard per member:
 
@@ -309,7 +309,7 @@ rule FlagOverdueAccounts {
 
 No separate loop construct — `each` composes the original "for each" iteration idea with `produces`, applied to a filtered set instead of a single shape.
 
-## Schedule triggers (postfix `on`)
+## 15. Schedule triggers (postfix `on`)
 
 A rule can be triggered by a named schedule instead of (or in addition to) a refinement, using `on` *after* the rule body rather than before it:
 
@@ -325,7 +325,7 @@ rule FlagOverdueAccounts {
 
 This postfix form is the *only* way a purely time-dependent refinement (like `OverdueInvoice`, which depends on `today`) gets re-checked — nothing in Velle executes purely on the passage of time by default. A scheduled tick is conceptually a shape instance like any other (the same category as a `Payment` arriving or a `ChargeResponse` coming back), but it's referenced by name in `on`, not declared inline as a custom shape the way earlier drafts of this doc did.
 
-## Inputs and Outputs
+## 16. Inputs and Outputs
 
 A shape can act as a function by declaring input properties and an `output`:
 
@@ -339,7 +339,7 @@ shape ApplyPayment {
 
 An "object" shape is a degenerate case of a "function" shape whose output is itself. There's no `return`/function-call model — invoking a shape like this produces (or updates) a shape, the same as any rule's effect.
 
-## Open / unresolved
+## 17. Open / unresolved
 
 - **Mapping** (shape-to-shape translation, e.g. API DTO → domain shape) — part of the original design goals, not yet exercised in a worked example.
 - **Schedule definition** — `on Daily` (postfix) settles how a rule *references* a schedule; what actually defines `Daily` (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be a cron-like scheduling framework.

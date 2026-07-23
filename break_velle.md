@@ -334,6 +334,14 @@ rule FlagOverdueAccounts {
         AccountFlag for this basedOn: (this.invoices where OverdueInvoice) flaggedOn: now
     }
 } on Daily
+
+rule FlagOverdueAccounts {
+    each FlaggedCustomer produces AccountFlag {
+        AccountFlag for this basedOn: (this.invoices where OverdueInvoice) flaggedOn: now
+    }
+}
+
+
 ```
 
 `basedOn: (this.invoices where OverdueInvoice)` reuses the same query expression that appears in `FlaggedCustomer`'s own definition, but restated explicitly by the human in the rule body — not reverse-engineered by the compiler from the refinement's predicate tree. This sidesteps disjunction ambiguity and the negation blind spot at once: the human decides what's captured, and simply wouldn't try to capture "the witness of an absence," because they'd know there isn't one.
