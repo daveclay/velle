@@ -306,74 +306,63 @@ A mapping is pure, non-triggered, non-effectful, and never originates a fact —
 
 ---
 
-# Reopened: mapping's surface syntax and multi-subject mappings (no decision yet)
+# Resolved: mapping surface syntax — `from … as`, dot-access, shallow determination
 
-`## 1`–`## 13` settled the *semantics* of `mapping` — a pure, non-triggered value template that never originates a fact (`## 3`), nests (`## 5`, `## 12`), has no `this` (`## 11`), and stops at one record (`## 13`). They did all of that on top of a **function-shaped surface syntax** carried over from the first sketch:
+`## 1`–`## 13` settled the *semantics* of `mapping` on a function-shaped surface (`mapping AuditLog(order: Order) = { order: order … }`). This thread settled the **surface**. The decisions are below; a few genuinely separate questions (call-site invocation, mapping-vs-shape naming) stay open at the end (§E).
 
+## A. The decided surface
+
+A mapping populates a shape declared in the ordinary way — it never redeclares one:
 ```
-mapping AuditLog(order: Order) = {
-    order: order
-    loggedOn: now
+shape AuditLogEntry {
+    order:    one Order
+    loggedOn: Timestamp
 }
 ```
-
-That surface is now in question. This thread records the alternatives and the problems each one surfaces, and **resolves none of them** — it is deliberately a list of examples and open issues, not `## 1`–`## 13`'s "Resolution:" form. The examples in `## 1`–`## 13` still use the old surface; whether they get rewritten depends on how this settles.
-
-**Why the function surface is suspect (raised, not adjudicated):**
-- `(order: Order)` reads as a function parameter list and `AuditLog(this)` reads as a function *call*. A mapping is explicitly *not* a function (`## 7`); the syntax shouldn't invite the reader to think it is.
-- `order: order` is punning noise — the field name repeated as its own value — the kind of ceremony the language otherwise avoids.
-
-## A. Candidate surface registers (none chosen)
-
-Two poles and a hybrid, reusing the language's own `from` / `as` / `of` register instead of parens. Shown on the two-field `AuditLog` for comparison.
-
-**Register A — subject + article.** One privileged subject, referred to by article; anything else reached by traversal.
+The mapping that builds it:
 ```
-mapping AuditLog of an Order {
-    order:    the Order
-    loggedOn: now
-}
--- call:  AuditLogEntry from AuditLog of this
-```
-
-**Register B — `from … as`, aliased.** Type-led header binds a name with `as`; the call binds a value with `as`, mirroring it. A bare line is pass-through (kills `order: order`).
-```
-mapping AuditLog from Order as order {
+mapping AuditLogEntry from Order {
     order
     loggedOn: now
 }
--- call:  AuditLogEntry from AuditLog with this        (one input, bound by shape)
 ```
 
-**Hybrid — `of` by default, `as` only to disambiguate.** Article for the common single-subject case; `as` aliases only where a name is genuinely needed (see Issue 2).
+**Header — `from <Shape> [as <name>], …`.** Each input is a shape bound to a name. `as` is *optional*: the binding name defaults to the shape name with a lowercased initial (`from Order` ⇒ `order`, `from ExchangeRate` ⇒ `exchangeRate`). `as` is *required* only to disambiguate — when two inputs would otherwise default to the same name (`from Order as buy, Order as sell`). Same "explicit only when ambiguous" rule the language uses elsewhere, now at the binding level.
 
-## B. Issue 1 — at scale, the per-field reference syntax dominates, and the readable form wants an implicit subject
+**Body — dot-access, one line per target field.** A field is `field: expr`, where `expr` uses ordinary dot-access into the bindings (`order.customer`, `payment.amount`). This is the language's single traversal syntax — the same `this.x` a rule body uses — so a mapping body reads like a rule body. Operators and aggregates stay word-based (`minus`, `times`, `count of`, `the lesser of`); only property access is dots.
 
-A fat *single*-subject mapping exposes what the two-field case hides. `OrderSnapshot` denormalizes an `Order` (`customer: one Customer`, `shippingAddress: one Address`, `items: many LineItem`, plus scalars `subtotal`/`tax`/`total`/`currency`/`placedOn`).
+**`the X's y` was never syntax.** Earlier passes of this thread wrote `the Order's customer`; that was *description*, not surface. The surface is `order.customer`. (Recorded because the description-vs-syntax ambiguity actively derailed the derivation for several rounds.)
 
-**Register A:**
+**Bare field = pass-through, and it is the *only* thing the compiler determines.** A field written bare — just `order`, no `: value` — means `order: order`, filled from the like-named binding. Bare is permitted **only** when the field name matches a binding name; that match is unambiguous, because bindings are a small flat named set. This removes the `order: order` pun with zero guessing.
+
+**Determination is shallow — decided, not left open.** The compiler does **not** walk a binding's shape tree to fill a field from a same-named sub-field: it will *not* fill `customer` from `payment.customer`. Walking the tree would find *a* `customer` and most likely not the one intended, and a wrong *silent* guess in a spec is a latent bug. So anything past the top level of a binding is written explicitly (`customer: payment.customer`). Name-identity against the binding set is the whole of determination.
+
+**Why `from … as` is acceptable here, though it was flagged "shape-like" earlier.** The earlier strike was that `mapping X from Order as order { order: order, customer: order.customer … }` read like a `shape` declaration. The decided form breaks the resemblance on every point: the header lists *inputs* (`from Order`), which a shape never does; values are dot-expressions, obviously values not types; pass-throughs are bare (`order` — no shape field is ever written bare); and there is not one `: Type` pair in the body. The old governing constraint (a mapping must not read as a shape declaration) is satisfied — it just needed the body to stop looking like field declarations, which dot-access + bare pass-through accomplish.
+
+## B. One subject at scale — `OrderSnapshot`
+
+The fat single-subject case, in the decided syntax. Target shape:
 ```
-mapping OrderSnapshot of an Order {
-    order:           the Order
-    customer:        the Order's customer
-    customerName:    the Order's customer's name
-    customerEmail:   the Order's customer's email
-    shippingAddress: the Order's shippingAddress
-    items:           the Order's items
-    itemCount:       count of the Order's items
-    subtotal:        the Order's subtotal
-    tax:             the Order's tax
-    total:           the Order's total
-    currency:        the Order's currency
-    placedOn:        the Order's placedOn
-    snapshotOn:      now
-    status:          "captured"
+shape OrderSnapshot {
+    order:           one Order
+    customer:        one Customer
+    customerName:    Text
+    customerEmail:   Text
+    shippingAddress: one Address
+    items:           many LineItem
+    itemCount:       Whole
+    subtotal:        Money
+    tax:             Money
+    total:           Money
+    currency:        Currency
+    placedOn:        Timestamp
+    snapshotOn:      Timestamp
+    status:          Text
 }
 ```
-
-**Register B:**
+built from an `Order` (`customer: one Customer`, `shippingAddress: one Address`, `items: many LineItem`, plus the scalars):
 ```
-mapping OrderSnapshot from Order as order {
+mapping OrderSnapshot from Order {
     order
     customer:        order.customer
     customerName:    order.customer.name
@@ -391,86 +380,123 @@ mapping OrderSnapshot from Order as order {
 }
 ```
 
-- The *header* choice (`of an Order` vs `from Order as order`) is now noise; the *per-field reference* choice is everything. Register A repeats `the Order's` on nearly every line; register B repeats `order.` — dot-access, the exact code texture the reconsideration is trying to avoid.
-- The genuinely readable form drops the qualifier and lets bare field names resolve against the single subject, leaving only the deltas:
+Only `order` is bare. Everything else is explicit dot-access, and `order.` repeating down the body is **accepted**, not a problem to be optimized away: shallow determination was chosen over any implicit-subject or tree-walking compression precisely because that compression can't be done unambiguously (§A). The body is a complete, predictable manifest of the target shape with the pun removed — nothing more, nothing guessed.
 
+## C. More than one subject
+
+**Distinct shapes — `Reconciliation` (Invoice + Payment).** Target:
 ```
-mapping OrderSnapshot of an Order {
-    -- order, customer, shippingAddress, items, subtotal, tax,
-    -- total, currency, placedOn  carried from the Order by name
-    customerName:  the customer's name
-    customerEmail: the customer's email
-    itemCount:     count of items
-    snapshotOn:    now
-    status:        "captured"
+shape Reconciliation {
+    invoice:          one Invoice
+    payment:          one Payment
+    customer:         one Customer
+    invoiceNumber:    Text
+    paymentReference: Text
+    method:           Text
+    invoiced:         Money
+    paid:             Money
+    shortfall:        Money
+    currency:         Currency
+    dueOn:            Timestamp
+    receivedOn:       Timestamp
+    reconciledOn:     Timestamp
+    status:           Text
 }
 ```
-
-**Issue, not resolved:** that compression needs (a) an **implicit subject** — bare `items` meaning *the Order's* `items` — which is exactly the `this` that `## 11` wrote *out* of mappings; and (b) automatic carry of same-named fields, which is the **spread/extension** that `## 9` parked as unforced. A fat mapping is a forcing case for both. Whether to reopen `## 9` / `## 11` for the single-subject form specifically is left open.
-
-## C. Issue 2 — more than one subject
-
-When two shapes are combined, the single-subject compression breaks and new questions appear.
-
-**Reducible multi-subject — `Reconciliation` (Invoice + Payment).** Both have `amount` and `currency`; the Invoice has `customer`/`number`/`dueOn`, the Payment has `reference`/`method`/`receivedOn`.
+built from an `Invoice` (`amount`, `currency`, `customer: one Customer`, `number`, `dueOn`) and a `Payment` (`amount`, `currency`, `reference`, `method`, `receivedOn`):
 ```
-mapping Reconciliation from Invoice as inv, Payment as pay {
-    invoice:          inv
-    payment:          pay
-    customer:         inv.customer
-    invoiceNumber:    inv.number
-    paymentReference: pay.reference
-    method:           pay.method
-    invoiced:         inv.amount
-    paid:             pay.amount
-    shortfall:        inv.amount minus pay.amount
-    currency:         inv.currency
-    dueOn:            inv.dueOn
-    receivedOn:       pay.receivedOn
+mapping Reconciliation from Invoice, Payment {
+    invoice
+    payment
+    customer:         invoice.customer
+    invoiceNumber:    invoice.number
+    paymentReference: payment.reference
+    method:           payment.method
+    invoiced:         invoice.amount
+    paid:             payment.amount
+    shortfall:        invoice.amount minus payment.amount
+    currency:         invoice.currency
+    dueOn:            invoice.dueOn
+    receivedOn:       payment.receivedOn
     reconciledOn:     now
     status:           "reconciled"
 }
 ```
-Three observations, none resolved:
-- implicit-spread (Issue 1) **cannot** apply — both shapes have `amount`/`currency`, so a bare `amount` is ambiguous. Spread appears to be a single-subject-only affordance.
-- `as` aliases, redundant at one subject, become load-bearing: `shortfall: inv.amount minus pay.amount` cannot be written without two distinct names.
-- this whole mapping **reduces to a single subject** the moment a relationship links the two — if `Payment` has `invoice: one Invoice`, traverse `the Payment's invoice's amount` and the second subject disappears. So it is not a genuine multi-subject case.
+- distinct shapes get distinct default binding names (`invoice`, `payment`), so no `as` is needed; `invoice` and `payment` are bare, everything else is dot-access.
+- the `currency` collision (both sources have one) is handled the ordinary way — write it explicitly against the intended binding (`currency: invoice.currency`). There is nothing to be ambiguous about, because shallow determination never reaches into a binding for a field in the first place (§A).
+- still **reduces to a single subject** if a relationship links the two — give `Payment` an `invoice: one Invoice` and every `invoice.x` becomes `payment.invoice.x`, dropping the second input.
 
-**Irreducible multi-subject — `BaseCurrency` (Payment + ExchangeRate).** A foreign-currency `Payment` (`amount`, `currency`, `customer: one Customer`) converted to base currency using the day's `ExchangeRate` (reference data keyed by `(fromCurrency, toCurrency, asOf)`, with a `rate`). A `Payment` has no `exchangeRate` field and shouldn't — the rate is looked up, not linked.
+**Reference-data second subject — `LedgerEntry` (Payment + ExchangeRate).** The `ExchangeRate` is looked up by key (`(fromCurrency, toCurrency, asOf)` → `rate`), never a stored link on `Payment`. Target:
 ```
-mapping BaseCurrency of a Payment and an ExchangeRate {
-    payment:          the Payment
-    customer:         the Payment's customer
-    originalAmount:   the Payment's amount
-    originalCurrency: the Payment's currency
-    rateUsed:         the ExchangeRate's rate
-    rateAsOf:         the ExchangeRate's asOf
-    baseAmount:       the Payment's amount times the ExchangeRate's rate
-    baseCurrency:     the ExchangeRate's toCurrency
+shape LedgerEntry {
+    payment:          one Payment
+    customer:         one Customer
+    originalAmount:   Money
+    originalCurrency: Currency
+    rateUsed:         Decimal
+    rateAsOf:         Date
+    baseAmount:       Money
+    baseCurrency:     Currency
+    convertedOn:      Timestamp
+}
+```
+built from both, and originated in a rule:
+```
+mapping LedgerEntry from Payment, ExchangeRate {
+    payment
+    customer:         payment.customer
+    originalAmount:   payment.amount
+    originalCurrency: payment.currency
+    rateUsed:         exchangeRate.rate
+    rateAsOf:         exchangeRate.asOf
+    baseAmount:       payment.amount times exchangeRate.rate
+    baseCurrency:     exchangeRate.toCurrency
     convertedOn:      now
 }
 
 rule RecordInBaseCurrency on SettledPayment produces LedgerEntry for payment {
-    LedgerEntry from BaseCurrency of this
-                                  and the ExchangeRate for this.currency
+    -- call-site invocation syntax is still open (§E); provisional:
+    LedgerEntry from this, (the ExchangeRate for this.currency)
     ...
 }
 ```
-The second subject arrives by a **lookup** (`the ExchangeRate for this.currency` — a unique selection out of reference data by key), not a traversal (`this.exchangeRate` — which does not and should not exist). The cross-source field `baseAmount` reads from both, so neither subject alone can produce it.
+The second subject arrives by a **lookup** (`the ExchangeRate for this.currency`), not a traversal (`this.exchangeRate` doesn't and shouldn't exist), and `baseAmount` reads from both, so neither input alone can produce it. Whether such a case is genuinely *forced* or only *clearer* than inlining the lookup is still open (§E).
 
-**Candidate criterion (recorded, not adopted):** a mapping's second subject is legit when it comes from a **selection/lookup** rather than a **traversal**. Traversable → reduces to one subject; looked-up reference data → irreducibly two. Undercut, and left open, by: a purist can still inline the lookup —
+**Same shape — `TradeMatch` (Order + Order).** Target:
 ```
-baseAmount: the Payment's amount times (the ExchangeRate for the Payment's currency)'s rate
+shape TradeMatch {
+    buy:       one Order
+    sell:      one Order
+    price:     Money
+    quantity:  Whole
+    matchedOn: Timestamp
+}
 ```
-— and stay single-subject, so "forced" is arguable; only "clearer" is clear.
+Two `Order`s with no link between them force `as`, because the default binding name would collide:
+```
+mapping TradeMatch from Order as buy, Order as sell {
+    buy
+    sell
+    price:     sell.price
+    quantity:  the lesser of buy.quantity and sell.quantity
+    matchedOn: now
+}
+```
+`buy` and `sell` are the required aliases; both are then bare pass-throughs, and the rest is dot-access off them. This is the sole case where `as` is not optional — exactly the ambiguity the optional-`as` rule (§A) reserves it for.
 
-**Same-shape sub-case, also open:** a marketplace `Match` of a `BuyOrder` and a `SellOrder` — two `Order`s with no link between them until matched — forces `as buy` / `as sell`, because bare shape-names cannot tell two same-shape subjects apart. This is the one case where aliasing is not optional in either the declaration or the call.
+## D. The determination rule, stated once
 
-## D. Open issues, undecided
+- **bare `field`** ⇒ `field: field`, permitted **iff** `field` names a binding. This is the *only* thing the compiler determines.
+- **everything else** is explicit `field: expr`, dot-access into the bindings.
+- **deep / tree-walking determination is rejected** — filling `customer` from `payment.customer` would make the compiler *guess* which reachable `customer` was meant, and a wrong silent guess in a spec is a latent bug (§A).
+- **`## 9`'s spread is likewise rejected, not subsumed** — "auto-carry same-named sub-fields" *is* the deep case, and dies for the same reason. Spread stops being a candidate feature.
+- **`## 11`'s "no `this`" stands** — a mapping still has no `this`; its inputs are named bindings reached by dot-access, never an implicit subject.
+- **totality (`## 12`) holds** — every target field appears in the body, bare or explicit; a missing field is a compile error ("nothing fills field X"). The body is therefore a complete manifest of the target shape, with pass-throughs abbreviated to bare. (One small remaining sub-question: whether a binding-name-match field may be *omitted entirely* rather than written bare. Kept bare-and-listed here, pending a reason to allow omission.)
+- **match strictness (leaning, not stress-tested):** a bare/name match must also type-check; a same-name/incompatible-type pairing is a compile error, not a silent skip. Untested against refinement-typed fields.
 
-- Which surface register — A, B, hybrid, or none.
-- How to kill `field: field` punning: bare pass-through lines (register B), article restatement (`the Order's x`), or implicit-subject spread — each has a different cost.
-- Whether the single-subject form gets an implicit subject + spread, which reopens `## 9` (spread) and `## 11` (no `this`).
-- Whether multi-subject mappings are ever *forced* or only ever *clearer*, and whether "lookup vs. traversal" is the right criterion for a legit second subject.
-- The same-shape multi-subject case (`Match`), which forces mandatory aliasing.
-- Whether `## 1`–`## 13`'s examples get rewritten out of the function surface once a register is chosen.
+## E. Still open (separate questions)
+
+- **Call-site invocation.** How a rule invokes a mapping and supplies its inputs — the provisional `LedgerEntry from this, (the ExchangeRate for this.currency)` in §C is not settled. This is the next thing to work.
+- **Mapping-vs-shape naming.** These examples assume a mapping **shares the name of the shape it builds** (`mapping LedgerEntry` → a `LedgerEntry`). The alternative — a separately-named mapping feeding a differently-named shape's slot, as `## 1`–`## 13` had it (`AuditLogEntry from AuditLog(this)`) — is not yet ruled out. This blocks sweeping `## 1`–`## 13` onto the decided surface.
+- **Multi-subject: forced or only clearer.** The lookup-vs-traversal criterion for a legit second subject (§C) still isn't pinned to "forced."
+- **Sweep of `## 1`–`## 13`.** Those examples still use the function surface and lack target-shape declarations; they can move to `from … as` once the naming question above is settled.
