@@ -45,7 +45,7 @@ The rest of this entry walks each capability and marks where "the model is the s
 
 ---
 
-## Holds free
+## What the implicit surface covers for free
 
 **Navigation from a known fact.** `account.balance`, `account.transactions`, `order.customer.name` — arbitrary-depth traversal is just following relationship edges. This is the bulk of what a reader does, and it is entirely the existing model. Free.
 
@@ -72,7 +72,49 @@ Everything reached inherits Jan 10 as its reading moment → a coherent point-in
 
 **3. Named/curated answer shapes.** A reader assembling `{ accountId, balance as of T, ownerName }` themselves is free (GraphQL selection set). But a *named, promised* answer shape — a view the system contracts to provide — is precisely the dissolved-`mapping`-at-the-boundary: supplied coordinates + derived fields, now legitimately homed because the reader supplies the inputs. Nothing forces you to name it, but the moment you want the read surface to be a **contract** rather than "navigate whatever you like," you are declaring reads. Second vote.
 
-**4. Collection-level aggregates are homeless.** "Total deposits across *all* accounts as of today" is `sum of allAccounts.balance` — a derived property of no single Account. It is a homeless derived property again (the §-mapping diagnosis), and it has nowhere to hang unless the model has a root/"system"/"all-accounts" shape for it to be a property *of*. GraphQL supplies `accounts_aggregate`. Implicit Velle can only expose an aggregate that is already anchored to some shape; a genuinely cross-collection aggregate forces either a declared root shape or a declared read. Third vote.
+**4. Collection-level aggregates are homeless.** "Total deposits across *all* accounts as of today" is `sum of allAccounts.balance` — a derived property of no single Account. It is a homeless derived property again (the §-mapping diagnosis), and it has nowhere to hang unless the model has a root/"system"/"all-accounts" shape for it to be a property *of*. GraphQL supplies `accounts_aggregate`. Implicit Velle can only expose an aggregate that is already anchored to some shape; a genuinely cross-collection aggregate forces either a declared root shape or a declared read. Third vote. *(Reframed below — this one dissolves.)*
+
+---
+
+## Reframe — a read *is* a view shape; three of the strains dissolve
+
+The strains above were written as votes for a new *read construct*. Pushing on strain #4 collapses that framing: a read is not a different kind of thing from a shape.
+
+**The aggregate was only homeless because it was unhomed.** Give it a home:
+
+```
+shape Bank {
+    accounts: many Account                    -- the free inverse of Account.bank
+    totalDeposits: sum of accounts.balance     -- ordinary §6 derived property
+}
+```
+
+Now `totalDeposits` is a plain derived property and reading it is navigation — `theBank.totalDeposits` (as-of any moment via the query-wide `as of`). No `accounts_aggregate` special form, no read construct. Strain #4 was an illusion created by leaving the aggregate unanchored — the exact homeless-derived-property diagnosis from the mapping dissolution, same fix: re-anchor onto a shape.
+
+**Read and shape are structurally identical.** Set a read beside a shape:
+
+```
+read AccountBalance {              shape AccountBalance {
+    account: one Account               account: one Account
+    asOf:    one Moment                asOf:    one Moment
+    balance: account.balance as of asOf   balance: account.balance as of asOf
+}                                  }
+```
+
+The *only* difference is **who binds the input fields**. In the read, the reader binds `account` and `asOf` at query time; in the shape, the system binds them (a rule produces it, an assertion supplies it, a relationship establishes it). Everything else — the derived answer, no persistence, transience — falls out of "all the non-input fields are derived."
+
+So, stripped of user inputs, **a read is a view shape** (a shape whose every field is derived). "Read" is not a kind of thing; it is a **binding mode** for a shape's input fields. A field's value always comes from *somewhere* — a rule, an assertion, a relationship, a derivation, **or the reader**. "Read" just names the last one. Same three-faced structure as before: a `mapping` was homeless because *nothing* bound its inputs; a shape is where the *system* binds them; a read is where the *reader* binds them. And a read's identity is exactly its input coordinates — `AccountBalance(acct-1, Jan 10)` is fixed by what the reader supplied — which is the identity/keys thread from the read side (a fact is keyed by its key; a read is keyed by its coordinates).
+
+**What each strain becomes under this lens:**
+- **#3 named answer shapes** → a view shape. Not a new construct.
+- **#4 collection aggregates** → home them on a shape (`Bank`). Dissolves.
+- **#1 entry points** → home on a **singleton root shape** (the system, or `Bank`) — which is *also* where collection aggregates live. That is literally GraphQL's `Query` type: one root object owning the top-level entry points and aggregates. So "the read root" **is** a singleton shape, and entry-points + aggregates collapse onto the same place.
+
+**The one genuine residue — #2, and precisely why.** A reader binding `min: Amount, max: Amount` and getting `accounts where balance >= min and balance <= max` is *still a view shape with reader-bound values* — the predicate *structure* is fixed in the declaration; only values are supplied. What exceeds a shape is letting the reader **author the predicate itself** at runtime ("filter by whatever field/operator I choose"). That is the reader *writing logic*, not *supplying a value* — the parameterized-refinement/function road Velle forbids internally. So the shape/read boundary lands exactly here:
+
+> A read is a shape whose input fields the reader binds **with values**. The only thing *more* than a shape is letting the reader supply **predicate structure** — which is not a read at all but runtime authoring of Velle logic, and probably should not be implicit.
+
+Consequence for the later "declared reads" entry: it is almost certainly **not a new construct** — it is a view shape plus a marking of *which fields the reader supplies*. The whole thread likely folds back into shapes, exactly as `mapping` did. What that marking looks like is the next open question (how you *tell Velle about inputs*).
 
 ---
 
@@ -80,16 +122,13 @@ Everything reached inherits Jan 10 as its reading moment → a coherent point-in
 
 Free, with only identity/keys added: **navigate the whole model from any keyed entry, select any fields (stored or derived), at any observer-moment (query-wide or per-field).** That is a large, genuinely useful read surface — essentially "GraphQL auto-generated from the schema," and for a lot of real usage it is enough. The account-balance-as-of-any-date case is *fully* covered by the implicit surface (fetch account by key + query-wide `as of`), which is why it felt so easy.
 
-Where implicit runs out, and declared reads start to earn their place:
-- **ad-hoc reader-supplied filtering** (parameterized selection — don't want a blanket auto-DSL),
-- **named answer shapes** (a read *contract*, not free-for-all navigation),
-- **cross-collection aggregates** (homeless without a root shape).
-
-And underneath all of it, the one hard prerequisite the implicit angle cannot dodge:
-- **identity / keys** — how a fact is named from outside so a reader can point at it cold. Internal Velle never needed this; the boundary forces it. This likely wants its own thread before declared reads.
+After the reframe, most of what looked like "declared reads" is just **view shapes with reader-bound inputs** — not a new construct. Two things genuinely remain:
+- **ad-hoc reader-*authored* predicates** — the only thing more than a shape (the reader writing logic at runtime); probably should not be implicit at all.
+- **identity / keys** — the one hard prerequisite the implicit angle cannot dodge: how a fact is named from outside so a reader can point at it cold. Internal Velle never needed this; the boundary forces it. Likely its own thread.
 
 ## Open — next
 
-- **Fully settle the implicit surface**: is auto-exposing every shape as fetch-by-key + fetch-collection the right default, or too much? Does query-wide `as of` compose cleanly with the free inverses (can you observe an inverse relationship as-of a past moment)?
+- **How you tell Velle about inputs** — the live question. A read is a view shape where *some fields are reader-supplied*; what marks those fields as inputs (versus system-bound)? This is the immediate thread.
 - **Identity/keys** — the forced prerequisite. What is a Velle-native key (a unique field? a declared identifying set?), is it declarative (a stated fact about a shape), and does it touch occurrences (a fact's identity vs. its moment)?
-- **Declared reads** (suspected needed) — the curated/contract surface for the three strains above. Its shape is likely the dissolved `mapping`, rehomed at the boundary where the reader supplies the inputs. Deferred to its own entry.
+- **Fully settle the implicit surface**: is auto-exposing every shape as fetch-by-key + fetch-collection the right default, or too much? Does query-wide `as of` compose cleanly with the free inverses (can you observe an inverse relationship as-of a past moment)?
+- **Reader-authored predicates**: decide whether ad-hoc filtering is offered at all, and if so, as an explicit opt-in rather than a blanket auto-DSL.

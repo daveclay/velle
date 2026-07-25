@@ -1,6 +1,6 @@
 # Stress test: separating `trigger` from `rule`
 
-`LANGUAGE.md` §10 already states the principle: a rule declares *what* effect corresponds to *what* refinement, not *when* or *how* that correspondence gets checked — mechanism (write-time check, scheduled sweep, event stream, or a mix of these for the same rule) is a compiling concern, not part of what the rule means. The syntax hasn't caught up to that yet: every rule declared so far still bakes exactly one trigger, in exactly one position, directly into the rule's own header or footer — prefix `on Refinement` or postfix `on Schedule`, never both, never more than one. If the same rule can legitimately be triggered more than one way, the rule declaration shouldn't be the thing that owns "when" at all.
+`README.md` §10 already states the principle: a rule declares *what* effect corresponds to *what* refinement, not *when* or *how* that correspondence gets checked — mechanism (write-time check, scheduled sweep, event stream, or a mix of these for the same rule) is a compiling concern, not part of what the rule means. The syntax hasn't caught up to that yet: every rule declared so far still bakes exactly one trigger, in exactly one position, directly into the rule's own header or footer — prefix `on Refinement` or postfix `on Schedule`, never both, never more than one. If the same rule can legitimately be triggered more than one way, the rule declaration shouldn't be the thing that owns "when" at all.
 
 `break_velle.md` already has a sketch of the fix, sitting next to the old form for comparison:
 
@@ -19,10 +19,10 @@ Same method as `example_predicates.md`: don't invent syntax speculatively, work 
 
 ## Inventory: every distinct rule/trigger form used so far
 
-- Prefix, data-driven: `rule SendReceipt on SettledInvoice { ... }` — `LANGUAGE.md` §10
+- Prefix, data-driven: `rule SendReceipt on SettledInvoice { ... }` — `README.md` §10
 - Prefix, data-driven, with a `where`-narrowed refinement to react to: `rule ResolveFlagIfCleared { each Customer where exists ActiveAccountFlag for this and not (this is FlaggedCustomer) produces AccountFlagResolved { ... } } on Daily` — `example_invoice_payment.md` #5
-- Postfix, schedule-driven, alone: `rule FlagOverdueAccounts { each FlaggedCustomer produces AccountFlag { ... } } on Daily` — `LANGUAGE.md` §14/§15
-- Postfix, schedule-driven, comma list: `on Daily, Hourly` — `LANGUAGE.md` §15
+- Postfix, schedule-driven, alone: `rule FlagOverdueAccounts { each FlaggedCustomer produces AccountFlag { ... } } on Daily` — `README.md` §14/§15
+- Postfix, schedule-driven, comma list: `on Daily, Hourly` — `README.md` §15
 - The new, not-yet-formalized sketch: no `on` anywhere in the `rule` block at all, one or more standalone `trigger <RuleName> on <Schedule>` / `trigger <RuleName> when <Refinement> is created` declarations elsewhere — `break_velle.md` (most recent edit)
 
 ## 1. Why the current syntax doesn't match the stated semantics
@@ -71,11 +71,11 @@ trigger FlagOverdueAccounts when FlaggedCustomer is created
 
 Two independent paths to the same effect: a `Daily` sweep, and an immediate reaction the moment some customer's own data change makes them newly a `FlaggedCustomer`. Multiple `trigger`s for one rule are a disjunction, not a conjunction — "run this rule's body whenever *any* of its triggers fire," never "wait for all of them." A rule with two triggers is not a rendezvous/join condition (`break_velle.md` #4, which is about a single firing needing evidence from two different producers before it may proceed) — it's the same effect reachable by two unrelated doors.
 
-This composes with zero new mechanism because `produces` was already required to be safe under concurrent, independent firings (`break_velle.md` #4's "blanket obligation," `LANGUAGE.md`'s Compiled guardrails). If the `Daily` sweep and the eager event-driven path both happen to notice the same customer and both attempt to fire, `produces AccountFlag`'s guard already guarantees only one `AccountFlag` results — the same guarantee that already had to hold for two independent human writers, now covering two independent triggers on the same rule instead. Nothing about supporting multiple triggers per rule adds a *new* safety obligation; it just means an existing one (produces-is-safe-under-concurrency) gets exercised by a new kind of concurrency (trigger-level, not just writer-level).
+This composes with zero new mechanism because `produces` was already required to be safe under concurrent, independent firings (`break_velle.md` #4's "blanket obligation," `README.md`'s Compiled guardrails). If the `Daily` sweep and the eager event-driven path both happen to notice the same customer and both attempt to fire, `produces AccountFlag`'s guard already guarantees only one `AccountFlag` results — the same guarantee that already had to hold for two independent human writers, now covering two independent triggers on the same rule instead. Nothing about supporting multiple triggers per rule adds a *new* safety obligation; it just means an existing one (produces-is-safe-under-concurrency) gets exercised by a new kind of concurrency (trigger-level, not just writer-level).
 
 ## 4. Why `on Schedule` but `when Refinement is created` — deliberately different words, not drift
 
-`LANGUAGE.md` §10 already establishes that prefix and postfix `on` "don't read as the same kind of thing even though both mechanically react to a shape existing" — the position difference was standing in for a real conceptual difference (reacting to a data condition vs. reacting to a schedule tick). Once triggering moves out of position-based sugar into an explicit keyword, that same distinction has to be carried by the keyword instead:
+`README.md` §10 already establishes that prefix and postfix `on` "don't read as the same kind of thing even though both mechanically react to a shape existing" — the position difference was standing in for a real conceptual difference (reacting to a data condition vs. reacting to a schedule tick). Once triggering moves out of position-based sugar into an explicit keyword, that same distinction has to be carried by the keyword instead:
 
 - `trigger Name on Schedule` — reacts to a named schedule tick, a thing that exists independent of any particular shape's data (`Daily`, `Hourly`).
 - `trigger Name when Refinement is created` — reacts to some shape instance newly satisfying a refinement; "is created" reads this as an event (an instance becoming a member of the refined set) rather than a poll of current state, consistent with refinements already being pure, timeless predicates (§7) that something else has to notice changing.
@@ -130,7 +130,7 @@ rule ReleaseInventory on FailedCharge produces InventoryRelease for order {
 }
 ```
 
-The `AuditLogEntry from { order: ..., loggedOn: now }` fragment is pure copy-paste. There's no mechanism today to name it once and reuse it. Crucially, the fix must *not* be one rule referencing another — that's forbidden as a durable design principle (rule-to-rule reference reintroduces function-call/stack semantics, exactly the computer-mechanics layer Velle exists to replace; see persistent memory `feedback_velle_no_rule_chaining`). The reusable unit has to be *smaller than a rule*. This is the long-parked **Mapping** goal — `LANGUAGE.md` §17 lists it as unfinished, and §12 already notes `produces`/`from` "is a small inline Mapping." What's never been designed is a *named, reusable* one.
+The `AuditLogEntry from { order: ..., loggedOn: now }` fragment is pure copy-paste. There's no mechanism today to name it once and reuse it. Crucially, the fix must *not* be one rule referencing another — that's forbidden as a durable design principle (rule-to-rule reference reintroduces function-call/stack semantics, exactly the computer-mechanics layer Velle exists to replace; see persistent memory `feedback_velle_no_rule_chaining`). The reusable unit has to be *smaller than a rule*. This is the long-parked **Mapping** goal — `README.md` §17 lists it as unfinished, and §12 already notes `produces`/`from` "is a small inline Mapping." What's never been designed is a *named, reusable* one.
 
 ## 1. Candidate — reuse §16 function-shapes (`output:`) — rejected
 
@@ -220,7 +220,7 @@ Nesting (a mapping field valued by another mapping, `## 5`) is in. But "`AuditLo
 
 ## 10. Is `mapping` even forced yet? — methodology check
 
-Recorded honestly: the forcing case is thin — one pair of rules sharing one two-field fragment. The `## 3` reframe makes `mapping` **coherent** (the missing corner of a duality the language already commits to), but coherent is not the same as **forced**, and this repo's discipline is "don't invent syntax speculatively; resolve what a worked case actually forces." So the most defensible outcome may not be "promote `mapping` to a numbered `LANGUAGE.md` section now," but "record the resolved *design* — the `from`-takes-a-record-expr generalization (`## 3`) and the §16 boundary (`## 7`) included — in §17's Mapping note, and promote it the moment a second, independent DRY case appears." Flagging the promotion decision itself as the open call.
+Recorded honestly: the forcing case is thin — one pair of rules sharing one two-field fragment. The `## 3` reframe makes `mapping` **coherent** (the missing corner of a duality the language already commits to), but coherent is not the same as **forced**, and this repo's discipline is "don't invent syntax speculatively; resolve what a worked case actually forces." So the most defensible outcome may not be "promote `mapping` to a numbered `README.md` section now," but "record the resolved *design* — the `from`-takes-a-record-expr generalization (`## 3`) and the §16 boundary (`## 7`) included — in §17's Mapping note, and promote it the moment a second, independent DRY case appears." Flagging the promotion decision itself as the open call.
 
 ## 11. What's in scope inside a mapping body — no `this`
 
@@ -302,7 +302,7 @@ A mapping is pure, non-triggered, non-effectful, and never originates a fact —
 ## Not yet touched by this pass
 
 - Extension/spread of a mapping (`## 9`) — a flat "reuse plus one more field" form, unforced.
-- Whether a mapping should be promoted to its own `LANGUAGE.md` section or kept as a resolved sketch in §17 until a second forcing case (`## 10`).
+- Whether a mapping should be promoted to its own `README.md` section or kept as a resolved sketch in §17 until a second forcing case (`## 10`).
 - Whether the optional output-shape annotation (`## 8`) is worth its weight before a case wants a mapping validated independent of use.
 - Whether a mapping *param* may be `one`/`many`/refinement-typed rather than a plain shape/scalar (`params := Identifier ":" TypeName` above leaves `TypeName` unspecified) — brushed by `## 9`'s extension flag, forced by no case yet. Every worked case passes a single shape (`order: Order`).
 
