@@ -269,7 +269,7 @@ Referral from {
 }
 ```
 
-This is what `produces` was always doing conceptually (`break_velle.md` #6: `produces` is a small inline `Mapping`) made visible in the syntax. The guard-scope field (when one needs stating) lives on `produces` itself, not inside the mapping — see `## produces`, above. `for` as a *query* expression (`(NurseVerification for this).nurse`, `exists Shape for expr`) is unaffected by this — see `## Predicate expressions`, below.
+This is what `produces` was always doing conceptually made visible in the syntax. The guard-scope field (when one needs stating) lives on `produces` itself, not inside the mapping — see `## produces`, above. `for` as a *query* expression (`(NurseVerification for this).nurse`, `exists Shape for expr`) is unaffected by this — see `## Predicate expressions`, below.
 
 ## 13. `then`
 
