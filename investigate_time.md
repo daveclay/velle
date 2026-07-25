@@ -98,8 +98,8 @@ shape Shipment {
     priceDrift:  Money = billedTotal - quotedTotal
 }
 
-shape Quoted    = Shipment where quoteRequestedOn is some
-shape Delivered = Shipment where deliveredOn is some
+shape Quoted    = Shipment where quoteRequestedOn exists
+shape Delivered = Shipment where deliveredOn exists
 
 rule SendQuote on Quoted produces QuoteSent {
     QuoteSent from {
