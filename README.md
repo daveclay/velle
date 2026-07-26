@@ -218,7 +218,7 @@ rule SendReceipt on SettledInvoice {
 
 A rule declares that an effect corresponds to a refinement — `on Refinement` names *what* the rule reacts to, not *when* or *how* that reaction gets detected. Whether the underlying mechanism is a check made at write-time, a scheduled sweep, an event stream, a runtime data-structure instantiation, or some mix of these for the same rule is left open by the declaration itself; the only contract that has to hold regardless of mechanism is that the effect happens if and only if the subject is or becomes a member of the refinement, exactly once per newly-satisfying instance (see `produces`, below, for how "exactly once" is guaranteed without runtime bookkeeping). Picking and implementing the actual detection mechanism is a compiling concern (`## 1. Principles`), not part of what the rule means — see Schedule triggers, below, for how that stays true even for purely time-dependent refinements.
 
-Prefix `on` (`rule X on Refinement { ... }`) is specifically for data-driven triggers. Schedule-driven triggers use a different position — postfix, after the rule body — precisely so the two don't read as the same kind of thing even though both mechanically react to a shape existing. See Schedule triggers, below.
+Prefix `on` (`rule X on Refinement { ... }`) is specifically for data-driven triggers, and means *entering* — the rule reacts to an instance becoming a member. Its mirror, reacting to an instance *leaving* a refinement, is `on leaving` (see Exit triggers, below). Schedule-driven triggers use a different position — postfix, after the rule body — precisely so the two don't read as the same kind of thing even though both mechanically react to a shape existing. See Schedule triggers, below.
 
 ## 11. `produces`
 
@@ -250,7 +250,41 @@ rule RecordReferral on ReferralRequest produces Referral for referrer from {
 
 Omit `for <field>` when only one field's type obviously matches the trigger (the common case, e.g. `produces Receipt` alone); require it when the guard is deliberately keyed on something else, the same field-ambiguity rule as `## Predicate expressions`' `for` section.
 
-## 12. `for`
+## 12. Exit triggers (`on leaving`)
+
+Prefix `on R` reacts to an instance *entering* a refinement — becoming a member. `on leaving R` is its mirror: a reaction to an instance that was a member of R and stopped being one.
+
+```
+rule RestoreService on leaving Delinquent produces ServiceRestoration {
+    ServiceRestoration from {
+        account: this
+        restoredOn: now
+    }
+}
+```
+
+**Not expressible as a complement.** Reacting to entering `Compliant` is not the same thing: a newly created, never-delinquent account also "enters" `Compliant` — *became compliant* and *was always compliant* are indistinguishable from current data alone. `leaving` needs no such reconstruction: only a member can leave, so the trigger is inherently transitional. This completes the trigger vocabulary — prefix `on` for entry, `on leaving` for exit, postfix `on` for schedules (below). The `produces` guard applies identically, and guard granularity (`## produces`) decides what a *repeated* exit means, exactly as it does for repeated entries.
+
+**What an exit rule may read.** At the moment the rule fires, the instance is no longer a member of R, and everything membership implied is gone with it. The body may read the instance's current data and durable evidence produced while it was a member; it must not read anything only membership in R could supply — such a read can never be satisfied, and is a compile error. The discipline this enforces: a rule acting on a membership should record what it acted on in its evidence mapping, because evidence is the only thing that survives the exit.
+
+**Mutation policy on evidence.** The sharper use of `on leaving` is answering what happens to evidence when its premise is later falsified — the rule fired, the effect escaped, and then the instance left the refinement. A producing rule declares this as a clause:
+
+```
+rule SuspendService on Delinquent produces ServiceSuspension {
+    ServiceSuspension from { account: this, suspendedOn: now }
+    on leaving Delinquent: compensate ServiceRestoration
+}
+```
+
+Three policies, each an answer a Product Owner already gives in the wild:
+
+- **`stands`** — the evidence is history and stays true on its own ("the quote is the quote; prices drift"). No reaction.
+- **`forbidden`** — while the evidence exists, any change that would cause the exit is rejected ("you can't edit line items on an issued invoice"). Immutability in Velle is exactly this — not a property of a field, but a lien held by an effect that witnessed it, acquired when the evidence is produced and lifted if it's compensated away.
+- **`compensate X`** — the exit produces a compensating fact ("invoices are never edited — voided and reissued"). Sugar for a dedicated `on leaving` rule that fires only for instances whose evidence exists and produces `X` scoped to that evidence. Evidence scoping settles the edge cases: a membership too brief for the producing rule to fire has no evidence, so its exit compensates nothing; repeated exits are guarded per compensated evidence, the same granularity rule as `produces` itself.
+
+Deleting evidence is never one of the options — a produced fact records something that happened in the world (the email was sent), and deleting the record makes the description lie. Which policy applies when none is declared — default `stands`, or a compile error that forces the question — is unsettled; see Open / unresolved, and `investigate_time.md` for the full derivation.
+
+## 13. `for`
 
 Associates a newly produced shape instance with the subject it's about:
 
@@ -272,7 +306,7 @@ Referral from {
 
 This is what `produces` was always doing conceptually made visible in the syntax. The guard-scope field (when one needs stating) lives on `produces` itself, not inside the mapping — see `## produces`, above. `for` as a *query* expression (`(NurseVerification for this).nurse`, `exists Shape for expr`) is unaffected by this — see `## Predicate expressions`, below.
 
-## 13. `then`
+## 14. `then`
 
 Explicit, opt-in ordering between two effects that have no data dependency forcing an order:
 
@@ -294,7 +328,7 @@ Effects listed without `then` are unordered — the transpiler/AI-assisted codeg
 
 `then` and `from` don't compete: `then` orders *statements*, `from` is the *form* of one statement. `AuditLogEntry` above isn't the `produces` target, so it carries no guard-scope annotation at all — `from { }` there is just a clearer mapping, nothing guards it. When a rule body is exactly one effect and it *is* the `produces` target, `produces X for field from { mapping }` collapses header and body into one line — shorthand for `produces X for field { X from { mapping } }`, the same kind of collapse `each X produces Y { Y for this ... }` already does for iteration and production.
 
-## 14. `each ... produces ...`
+## 15. `each ... produces ...`
 
 Applies a rule across every member of a refined collection, combined with the `produces` guard per member:
 
@@ -308,7 +342,7 @@ rule FlagOverdueAccounts {
 
 No separate loop construct — `each` composes the original "for each" iteration idea with `produces`, applied to a filtered set instead of a single shape.
 
-## 15. Schedule triggers (postfix `on`)
+## 16. Schedule triggers (postfix `on`)
 
 A rule can be triggered by a named schedule instead of (or in addition to) a refinement, using `on` *after* the rule body rather than before it:
 
@@ -324,7 +358,7 @@ rule FlagOverdueAccounts {
 
 This postfix form is the *only* way a purely time-dependent refinement (like `OverdueInvoice`, which depends on `today`) gets re-checked — nothing in Velle executes purely on the passage of time by default. A scheduled tick is conceptually a shape instance like any other (the same category as a `Payment` arriving or a `ChargeResponse` coming back), but it's referenced by name in `on`, not declared inline as a custom shape the way earlier drafts of this doc did.
 
-## 16. Inputs and Outputs
+## 17. Inputs and Outputs
 
 A shape can act as a function by declaring input properties and an `output`:
 
@@ -338,13 +372,14 @@ shape ApplyPayment {
 
 An "object" shape is a degenerate case of a "function" shape whose output is itself. There's no `return`/function-call model — invoking a shape like this produces (or updates) a shape, the same as any rule's effect.
 
-## 17. Open / unresolved
+## 18. Open / unresolved
 
 - **Mapping** (shape-to-shape translation, e.g. API DTO → domain shape) — part of the original design goals, not yet exercised in a worked example.
 - **Schedule definition** — `on Daily` (postfix) settles how a rule *references* a schedule; what actually defines `Daily` (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be a cron-like scheduling framework.
 - **Reversal** — resolved as a non-issue for the language itself (it's a business-policy choice, expressed via which artifact shapes a human declares — see `example_invoice_payment.md` #5), but no single canonical pattern has been adopted yet; the consolidated top-of-file example still doesn't reflect a chosen policy.
+- **Exit-trigger loose ends** — whether an undeclared mutation policy on evidence defaults to `stands` or is a compile error; the surface syntax of `compensate`'s desugared form (guarding an exit rule on the evidence's existence, and naming the matched evidence instance inside the compensating mapping); and whether a membership that begins and ends unobserved obligates the *entry* rule's effect at all — a business question the exit design sharpens but doesn't answer. See `investigate_time.md`.
 - **Escape hatch / override syntax** — how a human marks part of a spec as intentionally hand-implemented/AI-implemented rather than declarative. Deferred; agreed to be a lesser concern until the core language settles.
-- **Compiled guardrails** — the idea that the compiler/transpiler should structurally enforce best practices (e.g. forced prepared statements, automatic error-context capture, correctly evaluating self-referential shape/derived-property definitions, how deep narrowing analysis for `.`-vs-`?.` sees through nested expressions, erroring — not silently resolving — a bare unqualified name that doesn't exist in its innermost scope but would resolve unambiguously in exactly one enclosing scope, per `## Principles`'s compiling-as-validation rule: the fix is always an explicit `this.field`, never an inferred scope-walk that could silently start pointing elsewhere the moment an enclosing shape gains a same-named field; a field addition that creates a new type-match ambiguity for an existing bare `for` reference elsewhere in the spec, per §12, must be reported as one connected diagnostic naming both the declaration that introduced the ambiguity — e.g. `Referral` gaining a second `Customer`-typed field — and every reference it now makes ambiguous — e.g. `CustomerWhoReferred`'s `for this` — since the compiler's job is reporting an incoherence in the spec as a whole, not a syntax error in one isolated line, and a human should never have to search for why an untouched line stopped compiling) as a byproduct of codegen. A design principle, not yet a syntax construct.
+- **Compiled guardrails** — the idea that the compiler/transpiler should structurally enforce best practices (e.g. forced prepared statements, automatic error-context capture, correctly evaluating self-referential shape/derived-property definitions, how deep narrowing analysis for `.`-vs-`?.` sees through nested expressions, erroring — not silently resolving — a bare unqualified name that doesn't exist in its innermost scope but would resolve unambiguously in exactly one enclosing scope, per `## Principles`'s compiling-as-validation rule: the fix is always an explicit `this.field`, never an inferred scope-walk that could silently start pointing elsewhere the moment an enclosing shape gains a same-named field; a field addition that creates a new type-match ambiguity for an existing bare `for` reference elsewhere in the spec, per §13, must be reported as one connected diagnostic naming both the declaration that introduced the ambiguity — e.g. `Referral` gaining a second `Customer`-typed field — and every reference it now makes ambiguous — e.g. `CustomerWhoReferred`'s `for this` — since the compiler's job is reporting an incoherence in the spec as a whole, not a syntax error in one isolated line, and a human should never have to search for why an untouched line stopped compiling) as a byproduct of codegen. A design principle, not yet a syntax construct.
 - **`latest`/`first` ordering property** — selectors order by an explicit `Date`/`DateTime` property, not an implicit creation timestamp; how that property is identified is undecided. Likely the same pattern as `for` field-ambiguity: bare `latest(...)` legal only when the element shape has exactly one date property, an explicit form (e.g. `latest(payments by receivedOn)`) required otherwise — but no syntax is settled.
 - **`why` / provenance** — a command to trace which rule/refinement produced a given piece of state, mapped back to Velle source. Agreed as a goal; no syntax proposed yet.
 - **Derived-property value-expression grammar** — `## Derived properties`' arithmetic and conditional (`if`/`else`) forms have only ever been used by example, the same gap `## Predicate expressions` closed for boolean predicates. Not yet formalized.
