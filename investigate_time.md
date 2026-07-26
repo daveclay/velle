@@ -181,7 +181,7 @@ A pure-predicate description is a complete description only of systems whose beh
 
 **2. §10 and §11 disagree about what "once" means.** The prose says once per *newly-satisfying* (per entry). The `produces` guard desugars to `not exists Receipt for this` — once per *lifetime*. For monotone refinements the two coincide, which is why the contradiction has been invisible. Re-entry splits them: the prose says fire again; the guard says don't. Note how §11's own guard-granularity example (`AccountFlag`) escaped this — by reifying each flagging as a *new instance*, so "re-entry" never happens to any single instance. The existing idiom was already routing around re-entry by turning occurrences into facts.
 
-**3. Exit events are missing.** With mutation, leaving a refinement is a business-meaningful occurrence ("no longer delinquent → restore service"), and Velle has no `on leaving R`. The workaround — react to entering the complement — is wrong: a newly created, never-delinquent account also "enters" `Compliant`. *Became compliant* and *was always compliant* are indistinguishable from current state alone. Same root cause: no memory.
+**3. Exit events are missing.** With mutation, leaving a refinement is a business-meaningful occurrence ("no longer delinquent → restore service"), and Velle has no `on leaving R`. The workaround — react to entering the complement — is wrong: a newly created, never-delinquent account also "enters" `Compliant`. *Became compliant* and *was always compliant* are indistinguishable from current state alone. Same root cause: no memory. *(Resolved later 7/26: `on leaving R` is designed below — see* `on leaving R`: the effect layer's half of truth maintenance*.)*
 
 ## Thought experiment: un-issuing an invoice
 
@@ -231,7 +231,7 @@ Corollary: when a deletion has downstream meaning, the language's own constructs
 | on re-entry | re-captures freely | doesn't re-fire (lifetime evidence guard) unless evidence is scoped to a reified occurrence |
 | when wrong | recompute | compensate (Reversal) |
 
-This table is the yield of the investigation: the state/effect stratification is the load-bearing structure, and every question encountered — retraction, re-entry, once-ness, un-issuing, transients — divides cleanly along it.
+This table is the yield of the investigation: the state/effect stratification is the load-bearing structure, and every question encountered — retraction, re-entry, once-ness, un-issuing, transients — divides cleanly along it. *(The "persists" and "compensate" cells are developed further below: persistence plus a declared policy — stands / forbidden / compensate — hooked on `on leaving R`.)*
 
 ## Worked example: mutating `issued` and the effect boundary
 
@@ -272,7 +272,7 @@ The timeline:
 - **Keep the evidence** (what the guard `not exists IssuedNotification for this` actually does): the rule is suppressed. The customer is never told about the $650 invoice — they act on a $500 email for an invoice that now says $650. The runtime is perfectly "consistent" by the guard's definition and the business outcome is broken.
 - **Delete the evidence on Jan 8** (to make the description true when membership was retracted): re-issue correctly sends the $650 email — but the system now has no record the $500 email ever went out. The customer holds an email the system says was never sent. `why`/provenance is broken, and if the customer disputes ("you told me $500"), the spec has nothing to point at.
 
-Stale suppression or falsified history — the whole effect-boundary dilemma in one rule, and current Velle can neither express a preference between them nor acknowledge the choice exists. The guard's real problem: it's scoped to the invoice's *lifetime* when the business meaning is per-*issuance* — and mutation gives it nothing better to scope to, because the issuance-occurrence isn't a thing in the spec; it's a date field that got overwritten.
+Stale suppression or falsified history — the whole effect-boundary dilemma in one rule, and current Velle can neither express a preference between them nor acknowledge the choice exists. The guard's real problem: it's scoped to the invoice's *lifetime* when the business meaning is per-*issuance* — and mutation gives it nothing better to scope to, because the issuance-occurrence isn't a thing in the spec; it's a date field that got overwritten. *(The general mechanism for declaring that preference — per-effect mutation policy via `on leaving R` — is designed two sections below.)*
 
 Which is exactly the reification fix from the punchline section above — make the occurrence a fact and every problem dissolves without deleting anything:
 
@@ -293,14 +293,84 @@ rule NotifyCustomer on Issuance produces IssuedNotification for issuance {
 
 Two `Issuance` facts, two notifications, each guard scoped to its own occurrence; the Jan 5 notification stays true history ($500 *was* sent, about *that* issuance); un-issuing, if the business does it, becomes its own fact with its own reactions. The original spec isn't illegal Velle — that's the point. It compiles, reads naturally, and quietly contains a business-breaking ambiguity that only surfaces the day someone deletes `issued`.
 
+## When does the PO allow a property to mutate?
+
+The boundary gives that question a sharp answer: **the PO never grants permission for state-layer consequences, and always owes a policy for effect-layer ones.** "May this property change?" is the wrong granularity — the real decision is per *(property × downstream effect)*.
+
+**The blast radius is computable.** For any property, trace what reads it:
+
+- **Only derived properties.** Mutation is invisible to the description — `carrier.name` changes, `liveTotal` recomputes. No PO decision exists here; asking would be noise.
+- **A refinement predicate** (directly, or transitively through derived properties and captures). Mutation can cause membership exit; captures on that refinement retract; refinements over captured values (`shape BigIssue = Invoice where totalWhenIssued > 1000`) retract transitively. Still no PO decision — this is the truth maintenance of the un-issuing section, and it is automatic.
+- **Evidence produced by rules on those refinements.** The decision point. Mutation strands an effect whose premise is gone; the state layer cannot resolve that (retracting evidence is lying), so the resolution *must* be a declared policy.
+
+This also settles what "another shape becomes suspect after this mutation" means: **a shape is never suspect.** If it's state, it retracts and there is nothing to discuss; if it's evidence, it stands as a record-of-then, and the only open question is what the business wants done about the divergence. Suspicion is the phenomenology of a missing policy declaration.
+
+**There are only three policies, and POs already say all three in the wild:**
+
+1. **Stands** — "the quote is the quote; prices drift, that's fine." The effect is understood as history; divergence from current state is expected and meaningful (`priceDrift` literally computes it).
+2. **Forbidden** — "you can't edit line items on an issued invoice." The mutation is rejected while the effect exists.
+3. **Compensate** — "invoices are never edited — they're voided and reissued." The mutation is allowed only in company with a compensating effect (`InvoiceRetraction`, a correction notice). Forbid and compensate usually travel together: bare forbiddance is rare — it's *forbid-with-a-ritual*, and the ritual is itself ordinary shapes and rules.
+
+The correction policy from the punchline section is exactly this, given a home and a vocabulary: "never edited — reissued" is *compensate*; "corrected in place" is *stands*. And monotonicity is now derived rather than declared: a refinement is monotone exactly when every mutation that could cause exit is *forbidden*.
+
+**Immutability is a lien held by effects, not a property of data.** Nothing in Velle freezes `lineItems`. What freezes it is that `IssuedNotification` witnessed a value derived from it and the PO chose *forbidden*. The lien is acquired when the evidence is produced and lifts if the evidence is compensated away. This is why real systems' immutability rules are so irregular — they aren't type-level facts but liens acquired by specific effects. Asked "is this field immutable?", a PO can't answer; asked "who has acted on this field's value, and do we owe them anything if it changes?", they can.
+
+## `on leaving R`: the effect layer's half of truth maintenance
+
+The three policies need a moment to fire at — which resolves exposure 3 (exit events), and ties it to the boundary.
+
+**It is a genuinely new trigger, not sugar.** `on NotIssued` can't express it: entering the complement includes every invoice that was *never* issued — *became* vs. *always was* again. Exit has no such problem: an instance can only leave R if it was in R, so `on leaving R` is inherently transitional. The trigger vocabulary becomes symmetric: prefix `on R` already means *entering* ("newly satisfying"); `leaving` is its mirror.
+
+**The trap: at the moment of exit, the state layer has already forgotten.** When `issued` is deleted, `totalWhenIssued` retracts — that is capture's settled semantics doing its job. So an exit rule that wants to say "disregard the $500 notice" cannot read the capture; it is gone precisely because the membership ended. The tempting fix — deliver the exit event *before* retraction, a destructor-style "last look" at the dying values — breaks the invariant everything else paid for: a capture present on a non-member is exactly the incoherence the design exists to prevent.
+
+**Evidence is the only survivor of the exit, so evidence is what exit rules read.** `IssuedNotification` copied `totalWhenIssued` at witness time; the $500 lives there, durably, on the effect side where retraction can't reach. The compensation form scopes to the evidence:
+
+```
+rule CorrectNotification on leaving Issued
+    where exists IssuedNotification for this
+    produces NotificationCorrection {
+    NotificationCorrection from {
+        original: that IssuedNotification
+        sentOn: now
+    }
+}
+```
+
+The policy clause reads best attached to the producing rule — where the evidence shape is already named — as sugar for the rule above:
+
+```
+rule NotifyCustomer on Issued produces IssuedNotification {
+    IssuedNotification from { invoice: this, total: totalWhenIssued, sentOn: now }
+    on leaving Issued: compensate NotificationCorrection
+}
+
+rule SendQuote on Quoted produces QuoteSent {
+    QuoteSent from { shipment: this, amount: quotedTotal, sentOn: now }
+    on leaving Quoted: stands
+}
+```
+
+with `forbidden` as the third clause: while this evidence exists, any mutation that would falsify the premise is rejected — the lien, computed transitively through the dependency graph.
+
+**Evidence scoping answers two questions for free:**
+
+- **Transients.** An invoice that flickered through `Issued` too fast for `NotifyCustomer` to fire has no `IssuedNotification` — its exit compensates nothing. Right answer, no special case. (Whether the transient should have fired the *entry* rule remains open — see below.)
+- **Re-entry.** Exits repeat, so "once per exit" needs a guard the same way "once per entry" did — and it is the same guard: the compensation `produces` its own evidence, scoped to the notification it corrects. Reify occurrences (`Issuance`) and entries, exits, effects, and compensations all key off the same occurrence.
+
+**Captures are the state layer's stable interface to the effect layer.** `NotifyCustomer` reads `totalWhenIssued`, not `sum(lineItems, amount)` — not incidental. Because a capture is frozen for the duration of the membership, the effect's inputs cannot drift *while the premise still holds*: editing a line item on a still-issued invoice doesn't make the sent notification unexplainable, because `why` still resolves to the captured value. Had the rule read the live derivation, every mutation of `lineItems` would silently break provenance, with no membership change to hook a policy onto. So: **effects should witness captures, not live derivations** — then the only event that can falsify an effect's inputs is membership exit, a single nameable moment, which is precisely where `on leaving R` sits. The mutation-policy problem collapses from "any write to any transitive input" to "exit from the named premise" — a question a PO can actually be asked.
+
+**The boundary is one-way in each direction.** `on R` fires the effect and copies captures forward into evidence; `on leaving R` fires the policy and reads evidence back. State crosses the boundary only at entry; only evidence crosses back at exit. That is what keeps the description coherent under mutation.
+
+**A third guardrail follows** (same family as finding 5): a rule triggered `on leaving R` must not read captures anchored to R — they retract at the very moment the rule fires, so the read can never be satisfied. The compiler should reject it and point at the evidence instead.
+
 ## Open questions
 
-All on the effect side; capture carries only the atomicity obligation.
+*(Updated later 7/26: the mutation-policy and `on leaving R` sections above resolve two of these and reshape two more.)*
 
-- **Correction policy per property** — the missing PO-level declaration ("never edited — reissued" vs. "corrected in place") from which refinement monotonicity, legal detection mechanisms, and hidden-history synthesis would all be derived.
-- **Transient observation intent** — does a membership that begins and ends unobserved obligate a rule's effect? A business question with no syntax; currently decided silently by mechanism choice.
-- **Exit events** — no `on leaving R`; entering the complement conflates *became* with *always was*.
-- **Occurrence reification for per-entry rules** — a guard needs something to scope evidence to, and mutation provides nothing; per-entry rules on re-enterable refinements still require occurrence facts (the `AccountFlag` pattern).
+- **Correction policy per property** — **resolved in structure**: the policy is per *(property × witnessed effect)*, its vocabulary is stands / forbidden / compensate, and its declaration site is the producing rule (the `on leaving R` clause). Monotonicity is derived from it rather than declared. Still open: whether an undeclared policy defaults to *stands* (semantically honest — evidence *is* a record-of-then) or is a compile hole (methodologically honest — forces the PO to answer, like the other missing contracts).
+- **Transient observation intent** — **half resolved**: the exit side is automatic (no evidence → nothing to compensate). The entry side remains: does a membership that begins and ends unobserved obligate the entry rule's effect? Still decided silently by mechanism choice.
+- **Exit events** — **resolved**: `on leaving R`, a new transitional trigger, mirror of prefix `on`; exit rules read evidence, never captures of the departed membership (third guardrail).
+- **Occurrence reification for per-entry rules** — still open as syntax, but the exit design confirms the shape of the answer: entries, exits, effects, and compensations all want to key off the same reified occurrence (the `Issuance` pattern).
 - **Atomicity granularity** — which clusters of state (e.g. membership + its captures) must change as one observable step.
 - **Retention of synthesized history** — if the compiler must keep hidden history for guards/captures, how long it's kept has business meaning (audit, GDPR) and no home in the spec.
 
@@ -308,4 +378,6 @@ All on the effect side; capture carries only the atomicity obligation.
 
 Capture's settled semantics: present iff currently a member of the anchoring refinement, value as of the moment the current membership began — a new state-layer primitive, distinct from effect-layer `produces`. Commitments that survive from the first phase of the investigation: transitive value-freezing (finding 1, including the capture-vs-ledger-reconstruction distinction), capture-implies-presence narrowing (finding 3), and the two guardrails (finding 5). Superseded along the way (marked inline): the `produces` desugar claim and finding 4's once-ness legality rule.
 
-Not yet settled: whether the capture belongs on the base shape (as written here) or on the refinement itself (which would give presence typing for free but requires refinements to grow bodies) — plus everything under Open questions.
+Added in the mutation phase: the state/effect stratification and its table; the mutation-policy trio (stands / forbidden / compensate) declared per *(property × witnessed effect)* on the producing rule, with immutability recast as a lien held by effects; `on leaving R` as the new transitional trigger, with evidence-only reads (the third guardrail) and the effects-witness-captures discipline.
+
+Not yet settled: whether the capture belongs on the base shape (as written here) or on the refinement itself (which would give presence typing for free but requires refinements to grow bodies); whether an undeclared mutation policy defaults to *stands* or is a compile hole — plus everything still marked open above.
