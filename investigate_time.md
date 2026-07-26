@@ -365,14 +365,139 @@ with `forbidden` as the third clause: while this evidence exists, any mutation t
 
 ## Open questions
 
-*(Updated later 7/26: the mutation-policy and `on leaving R` sections above resolve two of these and reshape two more.)*
+*(Rewritten later 7/26, after the mutation-policy and `on leaving R` sections above and their promotion to README §12.)*
 
-- **Correction policy per property** — **resolved in structure**: the policy is per *(property × witnessed effect)*, its vocabulary is stands / forbidden / compensate, and its declaration site is the producing rule (the `on leaving R` clause). Monotonicity is derived from it rather than declared. Still open: whether an undeclared policy defaults to *stands* (semantically honest — evidence *is* a record-of-then) or is a compile hole (methodologically honest — forces the PO to answer, like the other missing contracts).
-- **Transient observation intent** — **half resolved**: the exit side is automatic (no evidence → nothing to compensate). The entry side remains: does a membership that begins and ends unobserved obligate the entry rule's effect? Still decided silently by mechanism choice.
-- **Exit events** — **resolved**: `on leaving R`, a new transitional trigger, mirror of prefix `on`; exit rules read evidence, never captures of the departed membership (third guardrail).
-- **Occurrence reification for per-entry rules** — still open as syntax, but the exit design confirms the shape of the answer: entries, exits, effects, and compensations all want to key off the same reified occurrence (the `Issuance` pattern).
-- **Atomicity granularity** — which clusters of state (e.g. membership + its captures) must change as one observable step.
-- **Retention of synthesized history** — if the compiler must keep hidden history for guards/captures, how long it's kept has business meaning (audit, GDPR) and no home in the spec.
+Resolved and struck from the list: **correction policy** (now the stands / forbidden / compensate trio, declared per *(property × witnessed effect)* on the producing rule, monotonicity derived from it rather than declared) and **exit events** (`on leaving R`, evidence-only reads, third guardrail — both now in README §12). What remains falls into four groups.
+
+### Policy machinery
+
+**The default question.** When a producing rule declares no `on leaving` policy, does silence mean *stands* or a compile hole?
+
+```
+rule SendQuote on Quoted produces QuoteSent {
+    QuoteSent from { shipment: this, amount: quotedTotal, sentOn: now }
+    -- no on leaving clause
+}
+```
+
+A shipment's `quoteRequestedOn` is cleared; it leaves `Quoted`. Reading one: silence defaults to *stands* — `QuoteSent` quietly becomes history, which is semantically honest (that's what evidence does anyway) but means the PO never actually confirmed that quotes survive un-quoting. Reading two: the spec doesn't compile until the clause is written — methodologically honest per compiling-as-validation, but noisy: every producing rule on any refinement an instance *could* leave demands a clause, including the many that are monotone in practice but not provably so. (And provable monotonicity is derived from `forbidden` declarations — so the cost of the strict reading depends on how much of the spec has already answered it.)
+
+**What `forbidden` actually rejects.** Newly visible, unexamined.
+
+```
+rule NotifyCustomer on Issued produces IssuedNotification {
+    IssuedNotification from { invoice: this, total: totalWhenIssued, sentOn: now }
+    on leaving Issued: forbidden
+}
+```
+
+A user now tries to delete `issued` on a notified invoice, and "the mutation is rejected" — but no Velle statement describes any part of that sentence: there is no *tries*, no *user*, no *rejected* anywhere in the language. Every other construct describes what *is*; the lien describes what *may not come to be*. The plausible landing keeps it declarative by reifying the attempt (README §17 Inputs/Outputs plus the errors-are-refinements pattern):
+
+```
+shape UnissueRequest {
+    invoice: one Invoice
+    requestedOn: DateTime
+}
+
+shape RefusedUnissue = UnissueRequest where exists IssuedNotification for invoice
+shape AppliedUnissue = UnissueRequest where not exists IssuedNotification for invoice
+```
+
+But as written the PO has restated the lien by hand — the `RefusedUnissue` predicate duplicates what `forbidden` already declared, and the two can drift. The unworked parts: whether the compiler *derives* the refused refinement from the `forbidden` clauses the request would break, and what an applied request's output clause even looks like (§17 has `+=`; "set `issued` to none" has no spelling).
+
+### Occurrences and time
+
+**Occurrence reification.** The `Issuance` fix (worked example above) presupposes `Issuance` facts exist — but nothing in the language creates them. The obvious attempt is a rule:
+
+```
+rule RecordIssuance on Issued produces Issuance {
+    Issuance from { invoice: this, issuedOn: issued, total: sum(lineItems, amount) }
+}
+```
+
+which has the exact disease it exists to cure: its own `produces` guard is lifetime-scoped, so on re-issuance the guard finds the *first* `Issuance` and suppresses the second — the occurrence-recorder can't record re-occurrences. Breaking the circularity needs something whose "once" is per-entry natively, e.g.
+
+```
+occurrence Issuance of Issued {
+    issuedOn: issued
+    total: sum(lineItems, amount)
+}
+```
+
+— no syntax settled. This is also the still-unfixed §10/§11 contradiction in the README ("once per newly-satisfying" vs. the lifetime guard), and it resolves whichever way this lands: rules keep lifetime-once and occurrences carry per-entry, or rules grow a per-entry mode.
+
+**Entry-side transients.** One rule, two legal mechanisms, two business outcomes:
+
+```
+shape Overdue = Invoice where balance > 0 and due < today
+
+rule AssessLateFee on Overdue produces LateFee {
+    LateFee from { invoice: this, amount: balance * 0.05, assessedOn: now }
+}
+```
+
+An invoice crosses `due` at midnight and is paid at 6am. An event-stream compilation fires the fee at midnight; a 7am sweep never sees the membership and fires nothing. Both satisfy §10's contract as written, so whether the customer owes a fee is decided by an engineer's mechanism choice. The missing spelling is the PO's intent — something in the direction of `on Overdue` vs. `on Overdue however briefly` vs. `on Overdue observed Daily` — none proposed seriously yet. (The exit side needs no such spelling: no evidence → nothing to compensate.)
+
+### Compilation contracts
+
+**Atomicity granularity.** The description already *proves* certain refinements empty — capture-implies-presence narrowing makes
+
+```
+shape Impossible = Invoice where issued is none and totalWhenIssued exists
+```
+
+provably memberless. A non-atomic runtime can still *show* one: between deleting `issued` and retracting the capture, a report query sees an unissued invoice with an issued total. The missing contract is which provably-empty refinements must also be *observably* empty at every instant — plausibly a one-word declaration:
+
+```
+never Impossible    -- candidate spelling: may not be observable, even transiently
+```
+
+which turns "transaction boundaries" into a description-level statement without ever saying the word transaction.
+
+**Retention of synthesized history.** Guards and compensations read evidence forever; retention obligations delete it:
+
+```
+rule NotifyCustomer on Issuance produces IssuedNotification for issuance { ... }
+```
+
+The guard's "exactly once per issuance" is only true while every past `IssuedNotification` still exists — and the privacy office requires customer data erased after seven years. Erase the evidence and the guard's claim silently goes false; keep it and the system violates a business rule the spec has no way to state. The same problem sits one layer down for history the compiler synthesizes itself (the entry/exit log behind `on leaving Delinquent`): it exists in every correct compilation, and nobody can declare its retention because it isn't in the spec at all. Candidate: retention as a first-class declaration on evidence shapes (`shape IssuedNotification ... retained 7 years`), propagated by the compiler to whatever hidden history serves the same constructs.
+
+### Syntax loose ends (lower stakes)
+
+**The desugared `compensate` form.** The sketch from the exit section:
+
+```
+rule CorrectNotification on leaving Issued
+    where exists IssuedNotification for this
+    produces NotificationCorrection {
+    NotificationCorrection from {
+        original: that IssuedNotification
+        sentOn: now
+    }
+}
+```
+
+Three inventions in one rule, none in the grammar: a `where` guard on a rule, the `that` binding naming the matched evidence — and, after two issuances, an ambiguity about *which* `IssuedNotification` `that` means, resolvable only if evidence is occurrence-scoped (tying this to occurrence reification, above).
+
+**Capture's location.** Two spellings:
+
+```
+-- as written throughout this doc: on the base shape, anchored by name
+shape Invoice {
+    lineItems: many LineItem
+    issued: Date?
+    totalWhenIssued: Money = sum(lineItems, amount) on Issued
+}
+
+-- alternative: on the refinement, anchored by position
+shape Issued = Invoice where issued exists {
+    totalWhenIssued: Money = sum(lineItems, amount)
+}
+```
+
+The refinement-body form gets presence typing for free — `Issued` simply *has* the property and `Invoice` simply doesn't, so finding 3's narrowing obligation becomes ordinary field typing, and no `on` clause is needed. The costs: refinements stop being pure predicates (§7's "pure predicates, not triggers" gains an asterisk), and a shape's full data scatters — an `Invoice`'s properties are no longer readable from its own declaration.
+
+Priority: the two that could still reshape the design are *what `forbidden` rejects* (it may force a new kind of statement into the language) and *occurrence reification* (load-bearing for making re-entry coherent everywhere at once). The rest are contracts to add, not designs to find.
 
 ## Status
 
@@ -380,4 +505,6 @@ Capture's settled semantics: present iff currently a member of the anchoring ref
 
 Added in the mutation phase: the state/effect stratification and its table; the mutation-policy trio (stands / forbidden / compensate) declared per *(property × witnessed effect)* on the producing rule, with immutability recast as a lien held by effects; `on leaving R` as the new transitional trigger, with evidence-only reads (the third guardrail) and the effects-witness-captures discipline.
 
-Not yet settled: whether the capture belongs on the base shape (as written here) or on the refinement itself (which would give presence typing for free but requires refinements to grow bodies); whether an undeclared mutation policy defaults to *stands* or is a compile hole — plus everything still marked open above.
+Promoted to README §12 (later 7/26): `on leaving`, the evidence-only read rule, and the three mutation policies.
+
+Not yet settled — see the regrouped Open questions above. Two questions could still reshape the design: what `forbidden` rejects (attempts/actors/refusal have no vocabulary), and occurrence-reification syntax (which also carries the unfixed §10/§11 "once" contradiction in the README). The rest — the policy default, entry-side transients, atomicity granularity, retention, the desugared `compensate` form, capture's location — are contracts to add, not designs to find.
