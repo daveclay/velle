@@ -406,6 +406,8 @@ shape ApplyPayment {
 
 An "object" shape is a degenerate case of a "function" shape whose output is itself. There's no `return`/function-call model — invoking a shape like this produces (or updates) a shape, the same as any rule's effect.
 
+`output` is provisional — a captured thought, not a settled principle. The post-state investigation (`investigate_state.md`) points toward replacing it with `after:` postconditions on acts (what is true after the commit, verified or derived — never a sequence of instructions); this example's `+=` in particular is likely unnecessary, since `invoice.payments` is an inferred inverse (`## Relationships`) and the `Payment` fact's existence already is the collection change.
+
 ## 18. Open / unresolved
 
 - **Mapping** (shape-to-shape translation, e.g. API DTO → domain shape) — part of the original design goals, not yet exercised in a worked example.

@@ -4,7 +4,7 @@
 
 ## The problem, in one sentence
 
-A Velle description quantifies over *now* — but capture, `produces` guards, `latest`, and rule firing all depend on *moments and memory*, and mutation is what exposes the difference. Pulling that thread forced: two axioms, a state/effect stratification, one new primitive (capture, now living as refinement properties), a mutation-policy vocabulary, and a taxonomy of the questions mutation obliges the compiler to raise.
+**How does state change impact the truth of the system design's shapes and rules?** A Velle description quantifies over *now* — but capture, `produces` guards, `latest`, and rule firing all depend on *moments and memory*, and mutation is what exposes the difference. Pulling that thread forced: two axioms, a state/effect stratification, one new primitive (capture, now living as refinement properties), a mutation-policy vocabulary, a taxonomy of the questions mutation obliges the compiler to raise — and the truth ladder (below), which is the consolidated answer to the question.
 
 ## Two axioms
 
@@ -85,6 +85,18 @@ If any rule, guard, capture, or `latest` depends on history and the store mutate
 
 **The reissue example, compressed.** `rule NotifyCustomer on Issued produces IssuedNotification` with a mutable `issued: Date?`: un-issue, edit, re-issue — and the lifetime guard either suppresses the second notification (customer acts on a stale $500 email for a $650 invoice) or the evidence was deleted (the system denies an email the customer holds). Both wrong, because the guard is scoped to the invoice's *lifetime* while the business meaning is per-*issuance* — and the issuance isn't a thing in the spec, just an overwritten date field. Reify the occurrence (`Issuance` facts, guards scoped `for issuance`) and every problem dissolves without deleting anything.
 
+## The truth ladder: how a commit impacts each kind of statement
+
+The central question, answered in one structure. Every statement in a Velle spec sits on exactly one rung, and each rung has a fully determined response to state change. That determinacy *is* the coherence guarantee; the rungs where determinacy runs out are exactly where the compiler must stop and ask a human.
+
+1. **Timeless statements** — shape and refinement *definitions*, rules as declarations. Claims about every possible state; no commit affects their truth. Only *spec edits* do, and those are handled by whole-spec re-validation (README §1).
+2. **State-dependent truths** — derived properties and memberships. True by construction at every commit: recomputed, never maintained. A commit cannot make them false, only different.
+3. **Membership-anchored truths** — captured properties. True relative to the *current* membership: the commit that causes exit retracts them, re-entry re-captures. Maintained by lifecycle, not recomputation — and just as automatic.
+4. **Historical truths** — evidence and the effects it stands for. True about the state that was *witnessed*; no commit can make them false. But a commit can falsify their **premise**, and the divergence between record-of-then and state-of-now is the one thing truth maintenance cannot resolve — it is not a truth question but a business question, which is why it requires a declared policy (stands / forbidden / compensate) and why silence there is a hole in the spec.
+5. **Meta-truths** — compiler proofs: monotonicity, at-most-one, exhaustiveness/partition, entry-evaluability, guard exactly-once. Quantified over all states *reachable given the act roster*. No individual commit can break them — but adding or changing an *act* re-opens them, and re-verification must report connectedly (the new act and every proof it voids, in one diagnostic).
+
+So "does this mutation make the design incoherent?" always has a determinate answer by rung: 1–2 are safe by construction, 3 is safe by lifecycle, 4 is where the PO owes a policy, 5 is where a spec change triggers re-proof. The mutation taxonomy (next) is this ladder applied case-by-case, and the three compiler responses are its verdicts: **silence** (rungs 2–3), **demand a declaration** (rung 4), **report a broken proof** (rung 5).
+
 ## The mutation taxonomy (7/27)
 
 *Where* a mutated property is referenced determines what goes questionable and what the compiler should say. Under inertness, "P can be mutated" means precisely: **some declared act's post-state can change P** — the mutation surface of the system *is the act roster*. Compiling walks it: for each act, for each field it can write, trace the references and classify.
@@ -107,13 +119,84 @@ If any rule, guard, capture, or `latest` depends on history and the store mutate
 - **Demand a declaration** (cases 2, 3, 4, 8) — a business question exists that the spec can't answer and an engineer must not answer by default. The compile error *is* the PO/Engineer conversation, scheduled.
 - **Report a broken proof, connectedly** (cases 5, 6, 9) — the mutation falsifies something the spec elsewhere depends on; the diagnostic names both ends.
 
+## The post-state grammar: a worked sketch (7/27)
+
+The direction, made concrete. An act's `after:` clause states **what is true after the commit** — never a sequence of instructions. The compiler does one of two things with each conjunct: **verifies** it (when the act's own arrival achieves it) or **derives the write** (when the assertion is invertible). Worked across the spectrum:
+
+**Case 1 — act-entry: verified, nothing written.**
+
+```
+shape Issued = Invoice where exists IssueRequest for this {
+    captured issuedOn: DateTime = now
+    captured totalWhenIssued: Money = total
+}
+
+shape IssueRequest {
+    invoice: one Invoice
+    after: invoice is Issued
+}
+```
+
+`Issued`'s predicate is the existence of this very act, so committing an `IssueRequest` *necessarily* makes its invoice `Issued` — the clause writes nothing; the compiler proves the claim. It still earns its place: the PO reads "issuing makes the invoice Issued" as a sentence, and the checker *fails* this clause the day someone edits `Issued`'s predicate so the act no longer suffices — a connected diagnostic, per README §1.
+
+**Case 2 — value change: invertible, the write is derived.**
+
+```
+shape CorrectEmail {
+    customer: one Customer
+    corrected: text
+    after: customer.email == corrected
+}
+
+shape RetractApproval {
+    invoice: one Invoice
+    after: invoice.approvedBy is none
+}
+```
+
+An equality between a writable stored field and a supplied value has exactly one satisfying delta — the compiler derives it. Not `set email = ...` (an instruction), but a postcondition that determines its own write. `is none` on a writable optional is invertible the same way — "set `issued` to none" finally has a spelling, and it's declarative.
+
+**Case 3 — collections mostly dissolve.** README §17's `output: invoice with payments += payment` describes a write the data model already makes automatic: inverse relationships are *inferred* (README §5) — `invoice.payments` is derived from `Payment.invoice`, so "applying a payment" is just the `Payment` fact coming into existence with its `invoice` field set. The collection changes the way a membership changes: by derivation. Most `+=` cases are case 1 in disguise; the residue (genuinely stored, non-inverse collections) may not need to exist.
+
+**Case 4 — the illegal case, and why the error is the feature.**
+
+```
+shape MakeOverdue {
+    invoice: one Invoice
+    after: invoice is Overdue        -- COMPILE ERROR
+}
+```
+
+`Overdue`'s predicate is `balance > 0 and due < today` — inequalities over a derived value and the clock; no unique delta makes it true. The rule: **you can't command drift.** An `after` conjunct is legal iff it is an equality on a writable field with a supplied value, an `is none`/`is some` on a writable optional, or a membership this act's own existence entails. Inequalities, aggregates, `latest`, and derived properties are not invertible; the error names the underdetermined conjunct and the writable fields near it ("you can't command an invoice to be overdue; you can change what it owes or when it's due").
+
+**Case 5 — exit, the hard half, falls out under occurrence pairing.**
+
+```
+shape ArchivedInvoice = Invoice where
+    exists ArchiveRequest for this
+    and not exists UnarchiveRequest for this newer than that ArchiveRequest {
+    captured archivedBy: one User = (latest ArchiveRequest for this).requestedBy
+}
+
+shape UnarchiveRequest {
+    invoice: one Invoice
+    after: invoice is not ArchivedInvoice
+}
+```
+
+With the old monotone predicate (`exists ArchiveRequest` alone), `after: invoice is not ArchivedInvoice` is a compile error — nothing can falsify an existence — which is exactly the act-entered-exit open problem surfacing at the right moment, in the right construct. With occurrence pairing, exit becomes case 1 again: *the unarchive act's own arrival is the falsifying fact*, the clause is verified rather than computed, and re-archival re-enters with fresh captures. (`newer than that X` is invented here — it is the occurrence-ordering vocabulary the reification question already demands; this example is why it's load-bearing.)
+
+**The finding:** the grammar wants only **two mechanisms** — *verified* assertions (act-existence, including paired exits) and *derived* writes (invertible equalities) — and everything CRUD-shaped either reduces to one of them or is illegal for a reason a PO can understand. Multiple conjuncts in one `after` are unordered (ordering is compilation's, same as `then`-less effects); contradictory conjuncts are a compile error. The correction-vs-change marker slots in on the act, orthogonal to `after` itself.
+
+**Wobbliest parts:** the `newer than that X` ordering syntax is pure invention; and whether invertible equalities should also get `with` sugar (`customer with email: corrected`) for POs who prefer that reading — same semantics either way. (`after` vs. `output` is *not* a tension: §17's `output` was a captured thought, never a settled principle — `after` simply replaces it. Whether the function-style "shape with a result" pattern needs any distinct construct at all, or reduces to acts plus `produces`, can be decided when Mapping is designed.)
+
 ## Open questions
 
 ### New design surface
 
 - **Correction vs. change** (taxonomy case 2). An act needs to declare whether it corrects the record or changes the world; downstream reactions legitimately differ; no vocabulary proposed.
 - **Relationship re-parenting** (taxonomy case 5). What evidence, guards, and aggregates mean when the path between instances is re-wired. No vocabulary proposed.
-- **The post-state grammar** — the central gap. The reducer language barely exists: README §17 has `+=` and nothing else; "set `issued` to none" has no spelling. Direction worth pursuing: **membership vocabulary, not field-write vocabulary** — an act declares what is true after (`after: invoice is ArchivedInvoice`), and the compiler derives the delta. Entry via act-existence already works this way for free; the hard half is **exit** ("make it stop being true"), which runs straight into the monotone-`exists` problem.
+- **The post-state grammar** — the central gap, now with a worked sketch (previous section): `after:` assertions, two mechanisms only (verified act-existence, derived invertible writes), "you can't command drift" as the legality rule, exit falling out under occurrence pairing. `after` replaces §17's `output`, which was provisional. What remains open from the sketch: the occurrence-ordering syntax (`newer than that X` is invented) and optional `with` sugar for invertible equalities.
 
 ### Occurrences and "once"
 
@@ -141,4 +224,6 @@ If any rule, guard, capture, or `latest` depends on history and the store mutate
 
 Settled: the two axioms (inertness — the system as a fold of external acts; one state — the black box as a single committed state, serializability as its justification); all-change-through-acts with one kind of commit point; state change as membership delta, CRUD as materialization; capture's semantics and its home as refinement properties (README §7); the state/effect stratification and its table; the mutation-policy trio with immutability as a lien and `on leaving R` with evidence-only reads (README §12); mutation-relocates-the-ledger; the nine-case mutation taxonomy with mutability derived from the act roster and the three compiler response kinds.
 
-Open, by weight: the post-state grammar (central — it carries the exit problem), correction-vs-change and re-parenting (new vocabulary needed), occurrence reification (carries the "once" contradiction and the `that` ambiguity), then the spellings and contracts (policy default, commit points, observability, retention, compensate form, grouping). Next after the grammar work: the state partition declaration.
+Also settled (7/27): the truth ladder — the consolidated answer to "how does state change impact the truth of the design": five rungs (timeless / state-dependent / membership-anchored / historical / meta), each with a determined response to a commit, with rung 4 the only place a human owes a policy and rung 5 the only place a spec change re-opens proofs. And sketched: the post-state grammar — `after:` postconditions with exactly two mechanisms (verified act-existence assertions, derived writes from invertible equalities), the "can't command drift" legality rule, collections dissolving into inferred inverses, exit reducing to a verified assertion under occurrence pairing, and `after` replacing §17's provisional `output`.
+
+Open, by weight: the post-state grammar's residue (occurrence-ordering syntax — `newer than that X` — and `with` sugar), correction-vs-change and re-parenting (new vocabulary needed), occurrence reification (carries the "once" contradiction and the `that` ambiguity, and now the ordering syntax the exit sketch leans on), then the spellings and contracts (policy default, commit points, observability, retention, compensate form, grouping). Next after the grammar work: the state partition declaration.
