@@ -47,7 +47,7 @@ Split two ways, per `README.md` `## Principles`. **Language & structure** is wha
 - [ ] Source provenance tooling — a `why` command tracing generated/running behavior back to the Velle source construct responsible (rule/refinement/shape); compile-time/source-level, closer to a source map
 - [ ] Compiler-emitted conformance tests + generated implementation for escape-hatch contracts — the execution side of the escape-hatch language decision above
 - [ ] Given/Then spec-generation tooling — decided conceptually (`README.md` `# Testing`), no concrete generator designed
-- [ ] Parser / implementation — intentionally not started; revisit once shapes/rules/refinements feel stable
+- [ ] Parser / implementation — intentionally not started; revisit once shapes/rules/refinements feel stable. First PoC: `compiler/` — a restricted-subset Velle-to-Postgres transpiler, see `compiler/README.md` for exact scope.
 
 ### Bigger, deferred on purpose
 

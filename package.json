@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "name": "velle",
+  "workspaces": [
+    "compiler"
+  ],
+  "scripts": {
+    "test": "npm test -w compiler",
+    "compile": "npm run compile -w compiler --",
+    "demo": "npm run demo -w compiler"
+  }
+}

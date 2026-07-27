@@ -1,0 +1,22 @@
+// Negative fixture: produces guard has two type-matching fields, per README.md
+// section 11's own canonical ambiguity example (a Referral with two Customer-typed
+// fields). Compiling this must fail with a clear resolver error demanding an
+// explicit `for <field>`, not silently pick the first match.
+
+shape Customer {
+    name: text
+}
+
+shape Referral {
+    referrer: one Customer
+    referee: one Customer
+    referredOn: Date
+}
+
+rule RecordReferral on Customer produces Referral {
+    Referral from {
+        referrer: this
+        referee: this
+        referredOn: now
+    }
+}

@@ -1,0 +1,113 @@
+// Trimmed subset of ../../example_invoice_payment.md, reduced to exactly the
+// constructs this proof-of-concept compiler supports. See ../README.md for
+// what's deliberately out of scope and why, and ../../postgres_transpile_brainstorm.md
+// for the design rationale this compiler implements.
+
+// ---- Shapes ----
+
+shape Customer {
+    name: text
+    email: text
+}
+
+shape Invoice {
+    customer: one Customer
+    amount: Money
+    due: Date
+    payments: many Payment
+    balance: Money = amount - sum(payments, amount) + sum(payments.refunds, amount)
+}
+
+shape Payment {
+    invoice: one Invoice
+    chargeAttempt: one ChargeAttempt?
+    amount: Money
+    receivedOn: Date
+    refunds: many Refund
+}
+
+shape Refund {
+    payment: one Payment
+    amount: Money
+    refundedOn: Date
+}
+
+shape Order {
+    customer: one Customer
+    invoice: one Invoice
+    amount: Money
+}
+
+shape ChargeAttempt {
+    order: one Order
+    requestedOn: Date
+    response: one ChargeResponse?
+}
+
+shape ChargeResponse {
+    outcome: text
+    processedOn: Date
+}
+
+// ---- Refinements ----
+
+shape SettledInvoice = Invoice where balance <= 0
+
+shape PendingChargeAttempt   = ChargeAttempt where response is none
+shape CompletedChargeAttempt = ChargeAttempt where response is some
+shape SuccessfulCharge       = CompletedChargeAttempt where response.outcome == "approved"
+shape FailedCharge           = CompletedChargeAttempt where response.outcome == "declined"
+
+// ---- Evidence / effect shapes ----
+
+shape AuditLogEntry {
+    order: one Order
+    loggedOn: Date
+}
+
+shape Receipt {
+    invoice: one Invoice
+    sentOn: Date
+}
+
+shape InventoryRelease {
+    order: one Order
+    releasedOn: Date
+}
+
+// ---- Rules ----
+
+rule InitiateCharge on Order produces ChargeAttempt {
+    AuditLogEntry from {
+        order: this
+        loggedOn: now
+    }
+    then
+    ChargeAttempt from {
+        order: this
+        requestedOn: now
+    }
+}
+
+rule RecordPayment on SuccessfulCharge produces Payment for chargeAttempt {
+    Payment from {
+        invoice: this.order.invoice
+        chargeAttempt: this
+        amount: this.order.amount
+        receivedOn: now
+    }
+}
+
+rule ReleaseInventory on FailedCharge produces InventoryRelease for order {
+    InventoryRelease from {
+        order: this.order
+        releasedOn: now
+    }
+}
+
+rule SendReceipt on SettledInvoice produces Receipt {
+    Receipt from {
+        invoice: this
+        sentOn: now
+    }
+}
