@@ -1,0 +1,22 @@
+{
+  "name": "velle-compiler",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Proof-of-concept transpiler: a restricted subset of Velle (.vel) to Postgres SQL",
+  "type": "module",
+  "bin": {
+    "vel-compile": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "compile": "tsx src/cli.ts",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

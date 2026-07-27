@@ -1,0 +1,26 @@
+// Negative fixture: produces guard has zero type-matching fields to infer from.
+// ChargeAttempt triggers the rule, but Payment has no field of type ChargeAttempt,
+// so the implicit "not exists Payment for this" guard can't be expressed.
+// Compiling this must fail with a clear resolver error, not silently pick a field
+// or silently omit the guard. See postgres_transpile_brainstorm.md's "Gap B".
+
+shape Order {
+    amount: Money
+}
+
+shape ChargeAttempt {
+    order: one Order
+    requestedOn: Date
+}
+
+shape Payment {
+    amount: Money
+    receivedOn: Date
+}
+
+rule RecordPayment on ChargeAttempt produces Payment {
+    Payment from {
+        amount: this.order.amount
+        receivedOn: now
+    }
+}
