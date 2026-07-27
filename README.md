@@ -74,6 +74,38 @@ Refinements are **pure predicates, not triggers** — `OverdueInvoice` doesn't "
 
 A refinement's predicate may reference the shape it refines, directly or through a relationship — self-reference needs no special syntax (see `## Derived properties` and Predicate expressions, below).
 
+### Refinement properties
+
+A refinement can declare properties of its own, in a body after its predicate — data that belongs to the refined state rather than to the base shape:
+
+```
+shape ArchivedInvoice = Invoice where exists ArchiveRequest for this {
+    captured archivedBy: one User = (ArchiveRequest for this).requestedBy
+    captured archivedOn: Date = today
+}
+```
+
+Asking an `Invoice` for `archivedBy` is nonsensical — only an archived invoice has an archiver. Rather than polluting the base shape with an optional field for every refined state's data (secretly correlated with that state), the property lives on the refinement, where membership itself guarantees its presence. The base shape's declaration stays a clean statement of what *every* instance has; each refinement's body states what membership *adds*.
+
+Refinement properties come in exactly the same two kinds as base-shape properties — there is no third, "assigned" kind:
+
+- **Derived** — plain `= expr`, recomputed live from current data, exactly as in `## Derived properties`. The only novelty is scope: it's evaluable exactly where membership holds (`priceDrift` below is one).
+- **Captured** — marked with the leading keyword `captured`: evaluated once at the moment the current membership begins, fixed for the duration of that membership, absent before entry, retracted on exit, re-captured on re-entry. The marker is required because a bare `= expr` in body position is a live derivation — the two kinds must read differently. Capturing `today`/`now` anchors them to the entry moment: `archivedOn` above is the membership's start date, with no implicit system timestamp needed (the same stance `latest`/`first` already take).
+
+**Every captured value traces to data.** There is no ambient execution context — no "current user", no request-scoped magic. `archivedBy` can only reach a `User` through the data graph, which forces the act carrying that data to be reified as a shape (`ArchiveRequest`) before the refinement can capture from it. That's a feature, not a workaround: reified acts are independently required for occurrence identity under re-entry (see `investigate_time.md`), and they are what `why`/provenance will walk. (`(ArchiveRequest for this)` above is legal only while the spec proves at most one can exist per invoice — `## Predicate expressions`' `for`-query rule; the moment re-archival enters the model, the reference must become an ordered selection — see Open/unresolved.)
+
+**Entry-evaluability guardrail.** A captured property's expression must be provably evaluable at the moment membership begins: every reference in it must be guaranteed by the refinement's own predicate, or be unconditionally present on the base shape. `(ArchiveRequest for this)` is legal above precisely because the predicate asserts `exists ArchiveRequest for this` — the predicate narrows the capture expression, the same machinery by which `is some` licenses `.`. A capture reading something its predicate doesn't guarantee is a compile error. A refinement whose captures need nothing beyond the base shape's own data (`captured balanceWhenOverdue: Money = balance` on `OverdueInvoice`) can be entered by drift; one whose predicate requires an act-fact can only be entered by that act occurring — the compiler derives which kind each refinement is from its predicate, the human never declares it.
+
+**Visibility and narrowing.** From the base shape, refinement properties are invisible: `invoice.archivedBy` is a compile error unless `invoice` has been narrowed by `is ArchivedInvoice` earlier in the same conjunction (or the corresponding branch of a conditional) — `is <Refinement>` narrows exactly the way `is some` does. A property whose formula reads properties of *two* refinements lives on their intersection, where both are in scope and provably present:
+
+```
+shape Reconciled = Quoted and Delivered {
+    priceDrift: Money = billedTotal - quotedTotal
+}
+```
+
+**Membership is unchanged.** A refinement with properties is still a pure predicate as to *membership* — properties change what a member *has*, never when membership *holds*. Captured properties are per-membership memory, state-layer through and through: they retract on exit. If the business cares about past memberships ("who archived it back in March, before it was unarchived?"), that was never a property — it's history, modeled as occurrence facts plus `latest(... by ...)`. See `investigate_time.md` for the state/effect stratification this rests on.
+
 ## 8. Composing refinements (`and`, `or`)
 
 A refinement can be built from other named refinements instead of restating their predicates:
@@ -89,6 +121,8 @@ shape NeedsAttention      = Overdue or Escalated
 
 `A and B` / `A or B` desugar to conjunction/disjunction of the operands' own predicates — not new mechanism, `and`/`or` in a new position (between named refinements instead of inside one `where`). They only typecheck when both operands share a base shape, or one refines the other; `Overdue or SuccessfulCharge` is a compile error, since combining unrelated shapes is meaningless. `and` binds tighter than `or`; `not` binds tighter than both (`A and B or C` ≡ `(A and B) or C`).
 
+Composition carries refinement properties (`## Refinements`): `A and B` has the union of its operands' properties — a same-name collision between two *distinct* declarations is a compile error, while the same declaration inherited through a shared base is fine. `A or B` exposes only properties both operands inherit from a shared declaration, since a member may belong to either side alone. A composite may declare its own body (`Reconciled`, above), and a refinement of a refinement inherits its base's properties down the chain.
+
 The intended style: small, deliberately atomic refinements named to read like traits (`Open`, `Overdue`, `HighPriority` — no type suffix), with composites built as pure intersections/unions of trait names rather than restated predicates. Not solved: true cross-shape structural mixins, where a trait like `Overdue` is reusable across unrelated shapes (e.g. both `SupportTicket.due` and `Invoice.due`) — see Open/unresolved.
 
 ## 9. Predicate expressions
@@ -100,7 +134,7 @@ The expression language usable inside `where`, `requires`, and `visible to ... w
 **`is`** — one operator, three sanctioned right-hand forms:
 - optionality: `assignee is none`, `response is some` — valid on an optional (`?`) field or to-one relationship
 - collection emptiness: `corrections is not empty` — valid on a `many` relationship or collection expression
-- refinement membership: `alert is UnacknowledgedAlert`, `this is FlaggedCustomer` — valid whenever the left side's shape shares a base with the named refinement
+- refinement membership: `alert is UnacknowledgedAlert`, `this is FlaggedCustomer` — valid whenever the left side's shape shares a base with the named refinement; within a conjunction it also *narrows*, licensing access to the refinement's own properties (`## Refinements`), the same way `is some` licenses `.` on an optional
 
 **`exists`** — `exists Receipt for this`, `not exists AccountFlagResolved for this` — tests whether any instance of a shape references the given subject via `for`.
 
@@ -265,7 +299,7 @@ rule RestoreService on leaving Delinquent produces ServiceRestoration {
 
 **Not expressible as a complement.** Reacting to entering `Compliant` is not the same thing: a newly created, never-delinquent account also "enters" `Compliant` — *became compliant* and *was always compliant* are indistinguishable from current data alone. `leaving` needs no such reconstruction: only a member can leave, so the trigger is inherently transitional. This completes the trigger vocabulary — prefix `on` for entry, `on leaving` for exit, postfix `on` for schedules (below). The `produces` guard applies identically, and guard granularity (`## produces`) decides what a *repeated* exit means, exactly as it does for repeated entries.
 
-**What an exit rule may read.** At the moment the rule fires, the instance is no longer a member of R, and everything membership implied is gone with it. The body may read the instance's current data and durable evidence produced while it was a member; it must not read anything only membership in R could supply — such a read can never be satisfied, and is a compile error. The discipline this enforces: a rule acting on a membership should record what it acted on in its evidence mapping, because evidence is the only thing that survives the exit.
+**What an exit rule may read.** At the moment the rule fires, the instance is no longer a member of R, and everything membership implied is gone with it. The body may read the instance's current data and durable evidence produced while it was a member; it must not read anything only membership in R could supply — R's own captured properties above all, which retract at the very moment the rule fires — such a read can never be satisfied, and is a compile error. The discipline this enforces: a rule acting on a membership should record what it acted on in its evidence mapping, because evidence is the only thing that survives the exit.
 
 **Mutation policy on evidence.** The sharper use of `on leaving` is answering what happens to evidence when its premise is later falsified — the rule fired, the effect escaped, and then the instance left the refinement. A producing rule declares this as a clause:
 
@@ -381,5 +415,7 @@ An "object" shape is a degenerate case of a "function" shape whose output is its
 - **Escape hatch / override syntax** — how a human marks part of a spec as intentionally hand-implemented/AI-implemented rather than declarative. Deferred; agreed to be a lesser concern until the core language settles.
 - **Compiled guardrails** — the idea that the compiler/transpiler should structurally enforce best practices (e.g. forced prepared statements, automatic error-context capture, correctly evaluating self-referential shape/derived-property definitions, how deep narrowing analysis for `.`-vs-`?.` sees through nested expressions, erroring — not silently resolving — a bare unqualified name that doesn't exist in its innermost scope but would resolve unambiguously in exactly one enclosing scope, per `## Principles`'s compiling-as-validation rule: the fix is always an explicit `this.field`, never an inferred scope-walk that could silently start pointing elsewhere the moment an enclosing shape gains a same-named field; a field addition that creates a new type-match ambiguity for an existing bare `for` reference elsewhere in the spec, per §13, must be reported as one connected diagnostic naming both the declaration that introduced the ambiguity — e.g. `Referral` gaining a second `Customer`-typed field — and every reference it now makes ambiguous — e.g. `CustomerWhoReferred`'s `for this` — since the compiler's job is reporting an incoherence in the spec as a whole, not a syntax error in one isolated line, and a human should never have to search for why an untouched line stopped compiling) as a byproduct of codegen. A design principle, not yet a syntax construct.
 - **`latest`/`first` ordering property** — selectors order by an explicit `Date`/`DateTime` property, not an implicit creation timestamp; how that property is identified is undecided. Likely the same pattern as `for` field-ambiguity: bare `latest(...)` legal only when the element shape has exactly one date property, an explicit form (e.g. `latest(payments by receivedOn)`) required otherwise — but no syntax is settled.
+- **Exit from act-entered refinements** — a membership predicate of the form `exists ArchiveRequest for this` is monotone: facts persist, so nothing can ever leave `ArchivedInvoice`, and un-archiving is inexpressible. Exit requires either pairing occurrences in the predicate (`... and not exists Unarchival` newer than the matched request — which needs occurrence ordering/scoping vocabulary not yet designed) or a mutable field plus a declared mutation policy (`## Exit triggers`). Both are expressible; which is idiomatic is unsettled, and ties into occurrence reification (`investigate_time.md`).
+- **State partition declaration** — refinement properties give states their data (`## Refinements`), reified acts give transitions their payloads, and mutation policies bound which transitions are legal — but nothing yet asserts that a set of refinements *partitions* a shape: mutually exclusive, jointly exhaustive ("an invoice is always in exactly one of Draft, Issued, Paid, Voided"). Candidate spelling `states of Invoice = Draft | Issued | Paid | Voided`, invoking the exhaustiveness/overlap check `## Refinements` already names as a compiler goal. The next investigation.
 - **`why` / provenance** — a command to trace which rule/refinement produced a given piece of state, mapped back to Velle source. Agreed as a goal; no syntax proposed yet.
 - **Derived-property value-expression grammar** — `## Derived properties`' arithmetic and conditional (`if`/`else`) forms have only ever been used by example, the same gap `## Predicate expressions` closed for boolean predicates. Not yet formalized.

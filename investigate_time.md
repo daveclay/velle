@@ -1,510 +1,122 @@
-# Time & Immutability
+# Time, Mutation & Refinement Properties — consolidated findings
 
-Current state of velle (as of 7/25) - describes "facts" of a system using `shape` and `rule`. These definitions are true regardless of _when_ they occur. However, the answer at runtime to these statements could be different depending on _when_ a definition is "executed" given real data.
+*(Rewritten 7/27: this file records current findings only. The debate history — the original `expr on Refinement` proposal, its retracted `produces`-desugar, the dead once-ness legality rule, the capture-location question — is pruned; consult git history for the derivations.)*
 
-## Example
+## The problem this file answers
+
+`currentTotal: Money = sum(lineItems, amount)` is a live calculation and should stay one. What was missing was a way to say the same calculation *frozen at a moment* (`totalWhenIssued`) without importing runtime storage concepts. Pulling that thread forced answers about mutation, re-entry, exit, and where state ends and effects begin.
+
+## Capture: the primitive
+
+**Settled semantics.** A captured value is *present iff the instance is currently a member of the refinement; its value is the expression as evaluated at the moment the current membership began.* Absent before entry, fixed during membership, retracted on exit, re-captured on re-entry. It is a function of (current membership, when this membership began) — fully coherent under mutation, and transient-safe: a membership that comes and goes leaves no anomaly. For a monotone refinement this degenerates to "evaluated once, fixed forever."
+
+**A genuinely new primitive, not sugar.** Capture cannot desugar to a hidden `rule ... on R produces` evidence shape: produced facts are effect-layer — durable, and deleting one makes the description lie about the world — while a capture *must* retract on exit. You can't build a thing that must be deleted out of a thing that must never be. Capture is the first construct in Velle whose stored state tracks membership — strictly more than a predicate, strictly less than history.
+
+**Capture anchors the clock.** Capturing `now`/`today` yields the entry moment. Occurrence timestamps fall out with no implicit system timestamp — the same stance already taken for `latest`/`first`.
+
+**Capture freezes transitively — and that's a distinct concept from ledger reconstruction.** A capture closes over its entire live dependency graph at the entry instant (through `carrier.currentSurcharge`, through `latest(...)` on other shapes' collections — everything). The sharp edge that proves the concept is real: if someone later *backdates* a fact (a fuel surcharge with `effectiveOn` before the quote date), the captured value and the ledger reconstruction (`latest(surcharges where effectiveOn <= quotedOn by effectiveOn)`) now disagree — and both are right, because they answer different Product Owner questions: *what we told the customer then* (capture) vs. *what we now believe was true then* (ledger). Both forms must exist; neither is a redundant spelling of the other.
+
+## Capture's home: refinement properties (resolved 7/27)
+
+Capture is spelled as a **property on the refinement**, not as an `on R`-anchored property on the base shape. The earlier base-shape spelling (`totalWhenIssued: Money = sum(lineItems, amount) on Issued` on `Invoice`) is retired. Now in README §7:
 
 ```
-shape Invoice {
-    lineItems: many LineItem
-    issued: Date
-    currentTotal: sum(lineItems.amount)
-    totalWhenIssued: sum(lineItems.amount) "when issued"
+shape ArchivedInvoice = Invoice where exists ArchiveRequest for this {
+    captured archivedBy: one User = (ArchiveRequest for this).requestedBy
+    captured archivedOn: Date = today
 }
 ```
 
-An `Invoice` has two "total" values: a "current" total and a "total" that is the sum of the `amount` of all the `lineItems` at the time the `Invoice` was `issued`.
+What the positional form settles:
 
-## Problem
+- **Presence typing is ordinary field typing.** `ArchivedInvoice` simply *has* `archivedBy`; `Invoice` simply doesn't. The old narrowing obligation ("capture-on-R implies present-when-R, even though R's predicate never mentions it") stops being a special compiler favor and becomes what fields already mean. `is ArchivedInvoice` narrows exactly the way `is some` does, licensing access.
+- **The `captured` marker is required.** In body position a bare `= expr` is a live derivation — refinement properties come in the same two kinds as base-shape properties (derived and captured), and the two must read differently. (`captured` was held in reserve as a variant during the original design; the body position is what finally forces it.)
+- **Both old anchor guardrails dissolve syntactically.** "The anchor must name a refinement of the containing shape" — there is no anchor to misname; the property is *on* the refinement. "The anchor must not be a schedule" — a schedule isn't a refinement and has no body to put a property in. Neither rule needs stating anymore.
+- **Scattering is correct, not a cost.** The earlier objection to the body form — "a shape's full data scatters across declarations" — inverted on inspection: `archivedBy` was never `Invoice` data. The base shape's declaration stays a clean statement of what every instance has; each refinement's body states what membership adds. The pollution was the alternative: optional fields on the base, secretly correlated with a state.
 
-Velle currently doesn't have an explicit way to distinguish these.
+**There is no third property kind.** "Supplied" data (`archivedBy: one User` — a value no expression over the invoice's own fields could produce) reduces to *capture from a reified act*. Velle has no ambient execution context — no "current user", no request-scoped magic — so a capture can only reach data through the data graph, which forces the act carrying the data to exist as a shape (`ArchiveRequest`) before the refinement can capture from it. Two independent pressures converge on the same requirement — captures need a data source, and re-entry needs occurrence identity (below) — which is the design telling us reified acts are right, not a workaround.
 
-## Hints at a Solution
+**Entry-evaluability guardrail (new).** A captured property's expression must be provably evaluable at the moment membership begins: every reference in it must be guaranteed by the refinement's own predicate, or be unconditionally present on the base shape. `(ArchiveRequest for this)` is legal above precisely because the predicate asserts `exists ArchiveRequest for this` — the predicate narrows the capture expression, the same machinery by which `is some` licenses `.`. A capture reading something its predicate doesn't guarantee is a compile error. Same family as the retired anchor guardrails, but this one survives because it's about *evaluability*, not position.
 
-Velle is intended to avoid having to solve "runtime" computer science problems like variables and functions. The language is intended to capture a dialog between a Product Owner and an Engineer.
+**Drift-entered vs. act-entered is derived, not declared.** A refinement whose captures need nothing beyond the base shape's own data (`captured balanceWhenOverdue: Money = balance` on `OverdueInvoice`) can be entered by drift; one whose predicate requires an act-fact can only be entered by that act occurring. The compiler classifies each refinement from its predicate — compiling-as-validation, not a new declaration.
 
-The difference of `currentTotal` vs `totalWhenIssued` is a Product Owner concern, so it is appropriate to capture using Velle.
+**Cross-refinement reads live on intersections.** A property reading captures of two different refinements (`priceDrift = billedTotal - quotedTotal`) belongs on `Quoted and Delivered`, where both operands' properties are in scope and provably present — not on the base shape, where both reads would be secretly optional.
 
-`shape` often _looks_ like it can describe immutable ledger-like models that capture the state at a given time. Also, `currentTotal: sum(lineItems.amount)` looks like it describes a "running calculation". 
+**Terminology, settled in passing:** these stay *refinements*, not "derived shapes." "Derived" already means recomputed-from-current-data (§6), and captured properties are precisely *not* that; "refinement" names the subset-of-base relationship all the machinery (`is`, narrowing, `and`/`or`, exhaustiveness) hangs on; and "derived shape" should stay reserved for Mapping when it arrives — a *translation into a new instance* rather than a *narrower view of the same instance*.
 
-It is not clear that Velle actually describes the difference between the two - and it's important enough to warrant some way to describe the difference.
+## The state/effect stratification
 
-## Questions
+The load-bearing structure of the whole investigation. Everything downstream of a refinement divides into layers with opposite lifecycle disciplines:
 
-- Does answering this question rely on some notion of "committing" or "saving" some data at some point in time where values are "captured"?
-- How much does that start to bring in concepts of data storage, where we might pollute Velle with runtime execution concerns?
+- **Derived state** (`= expr`, refinement memberships): never retracted, *recomputed* — being a function of current state is the definition of the layer.
+- **Captured state** (`captured ... = expr`): retracts on exit, re-captures on re-entry — memory of the current membership only.
+- **Effects** (produced shapes and the external actions they stand for): history. Not a function of current state and not recomputable. Deleting evidence makes the description lie (the email *was* sent); the only coherent correction is a compensating fact — accounting's answer, arrived at as logical necessity.
 
-## Proposed direction: `expr on Refinement` capture
-
-`currentTotal: sum(lineItems.amount)` reads intuitively as a live calculation and should stay exactly that. What's missing is a way to capture a calculation at a moment in time — and the whole design decision is what that moment *anchors to*. Two candidates:
-
-1. **An arbitrary point in time** — `sum(lineItems.amount) as of issued`. Reads nicely but is a trap: answering it requires reconstructing what `lineItems` contained at any past date, which means full history storage — exactly the runtime concern this doc worries about, and the same implicit-timestamp assumption already removed from `latest`/`first`.
-2. **A moment the system witnesses** — the instant a refinement's predicate becomes true. Capturing at a witnessed transition needs no history at all; it's the same moment a `rule ... on` already fires at.
-
-So: anchor capture to refinements and reuse `on`, which already means "at the moment of membership" everywhere else in the language:
-
-```
-shape Issued = Invoice where issued exists
-
-shape Invoice {
-    lineItems: many LineItem
-    issued: Date?
-    currentTotal: Money = sum(lineItems, amount)
-    totalWhenIssued: Money = sum(lineItems, amount) on Issued
-}
-```
-
-Read aloud: "totalWhenIssued is the sum of line item amounts, on becoming Issued." The expression is evaluated once, at the moment the instance enters the refinement, and is a fixed fact thereafter. Before that moment the property is simply absent — an unissued invoice *has no* issued total.
-
-This answers the doc's first question directly: yes, it relies on a notion of committing a value at a moment — but Velle already has that notion, and it's `produces`. `expr on Refinement` desugars into a hidden `rule ... on Refinement produces <evidence shape>` whose field values are computed at production time — produced shapes are already immutable facts recorded at a moment. No new storage concept enters the language, which answers the second question: nothing here is a runtime execution concern.
-
-> **Superseded (7/26):** the desugaring claim above was retracted — a capture must *retract* when the instance leaves the refinement, while produced facts must persist, so capture cannot be sugar for `produces`. It is a small new primitive: a value remembered from the current membership's beginning. See *Where mutation leaves capture*, below.
-
-### Variants considered and set aside
-
-- `sum(...) when issued` — closest to natural speech, but overloads the *field* `issued` as an *event* ("when issued became present"), a pun the compiler would have to bless field-by-field. Anchoring to a named refinement is one rule with no special cases.
-- A leading keyword, `captured sum(...) on Issued` — held in reserve if bare `expr on Refinement` collides with postfix schedule-`on` in the grammar, or if captures should be visually scannable in large shapes.
-- The ledger form — `sum(lineItems where addedOn <= issued, amount)` — needs zero new syntax *when the facts carry dates*, and remains the right answer for ad-hoc historical questions (see finding 1 below for why it is a genuinely different concept, not a redundant spelling).
-
-## Stress test: freight shipping with fluctuating fuel surcharges
-
-A deliberately layered example: captures over live derivations over `latest(...)` on *related* shapes, with a rule on the same refinement a capture anchors to.
-
-```
-shape Carrier {
-    name: text
-    ratePerKg: Money
-    surcharges: many FuelSurcharge
-    currentSurcharge: decimal = latest(surcharges by effectiveOn).rate
-}
-
-shape FuelSurcharge {
-    rate: decimal
-    effectiveOn: Date
-}
-
-shape Package {
-    weight: decimal
-}
-
-shape Shipment {
-    carrier: one Carrier
-    packages: many Package
-    quoteRequestedOn: Date?
-    deliveredOn: Date?
-
-    liveTotal: Money = sum(packages, weight) * carrier.ratePerKg * (1 + carrier.currentSurcharge)
-
-    quotedTotal: Money = liveTotal on Quoted
-    billedTotal: Money = liveTotal on Delivered
-    priceDrift:  Money = billedTotal - quotedTotal
-}
-
-shape Quoted    = Shipment where quoteRequestedOn exists
-shape Delivered = Shipment where deliveredOn exists
-
-rule SendQuote on Quoted produces QuoteSent {
-    QuoteSent from {
-        shipment: this
-        amount: quotedTotal      -- reads the capture made at this same moment
-        sentOn: now
-    }
-}
-```
-
-### Findings
-
-**1. Capture freezes the value, transitively — and backdating makes that observable.** `quotedTotal` reaches through `carrier.currentSurcharge`, a `latest(...)` over a *different shape's* collection. The capture must close over the entire live dependency graph at that instant — a surcharge row added to the carrier later must not move `quotedTotal`. The sharp edge: if someone later adds a *backdated* surcharge (`effectiveOn` before the quote date), the captured value and the ledger reconstruction (`latest(surcharges where effectiveOn <= quoteRequestedOn by effectiveOn)`) now disagree. That's not a bug — it's two different Product Owner concepts: *what we told the customer then* vs. *what we now believe was true then*. The capture form is the first; the ledger form remains the only way to say the second. This is the crispest argument that both forms need to exist — they are distinct concepts, not one syntax with two spellings.
-
-**2. A rule reading a same-moment capture is already solved.** `SendQuote` fires `on Quoted` and reads `quotedTotal`, captured at that same transition. If capture desugars to a hidden rule-plus-produces, that's two effects at one moment with a data dependency — and `then`'s design (README §13) already says data-dependency ordering falls out of the input/output graph for free. Existing machinery; nothing new. *(Update 7/26: the desugar framing is retracted — see *Where mutation leaves capture*, below — but the conclusion stands on data-dependency ordering alone: the capture is an input to the rule, so capture-before-rule is implied.)*
-
-**3. Captured properties are inherently optional, with a narrowing obligation.** A shipment delivered without ever being quoted has `billedTotal` but no `quotedTotal`, ever — nothing orders the two moments. So a capture's type is effectively `Money?`, and `priceDrift` is absent unless both captures exist. Compiler obligation: `this is Quoted` should narrow `quotedTotal` to present, even though `Quoted`'s predicate never mentions it — capture-on-R implies present-when-R. Same family as the existing `.`-vs-`?.` narrowing.
-
-**4. Re-entry resolved as a legality rule: once-able moments only.** Customer adds a package after quoting; sales wants a revised quote. `Quoted` never lapses (`quoteRequestedOn` stays present), so there's no re-entry to re-fire the capture — and that's correct: a moment that can happen *more than once* was never a captured property. It's a produced shape:
-
-```
-rule IssueQuote on QuoteRequested produces Quote for request {
-    Quote from { shipment: this.shipment, amount: liveTotal, quotedOn: now }
-}
-
--- on Shipment:
-quotedTotal: Money? = latest(quotes by quotedOn).amount
-```
-
-`expr on Refinement` is legal exactly where a `produces`-style once-per-instance guard holds. Repeatable moments must be shapes plus `latest(... by ...)` — the language pushes toward the honest model rather than silently re-capturing.
-
-> **Superseded (7/26):** the once-ness legality rule is dead. Under mutation, exit *retracts* a capture and re-entry *re-captures* — forced by keeping the description true, not silent dishonesty. Capture's semantics are now: present iff currently a member, value as of the moment the current membership began. What survives of this finding is a modeling distinction, not a compiler gate: if past occurrences matter to the business, use produced facts plus `latest(... by ...)`. See *Where mutation leaves capture*, below.
-
-**5. Two compile guardrails fall out.**
-
-First: `on` in capture position must name a refinement *of the containing shape*. Suppose the spec also defined a refinement of `Carrier`:
-
-```
-shape PriorityCarrier = Carrier where ratePerKg > 10
-
-shape Shipment {
-    ...
-    quotedTotal: Money = liveTotal on PriorityCarrier   -- compile error
-}
-```
-
-A `Shipment` is never a member of a `Carrier` refinement, so there is no moment of *this shipment* entering `PriorityCarrier` to capture at. Same base-shape rule that already governs composing refinements with `and`/`or` (README §8).
-
-Second: the capture anchor must not name a schedule:
-
-```
-shape Shipment {
-    ...
-    dailyTotal: Money = liveTotal on Daily   -- compile error
-}
-```
-
-A scheduled anchor would be a *repeating* capture, which can't be a scalar property. A recurring snapshot is already expressible as `each Carrier produces MonthlyRateReport ... on Daily` (README §14/§15). This reuses the existing prefix-`on`-vs-postfix-`on` distinction: data-driven moments can anchor captures, scheduled ticks can't.
-
----
-
-# Continuing (7/26): mutation, re-enterable refinements, and the state/effect boundary
-
-The capture question above led to a larger one: does Velle demand immutability at all, what do re-enterable refinements do to the self-consistency of a Velle description, and what does that imply is *missing* when compiling from the high-level description to runtime concerns? Several findings below supersede findings above (marked inline where they do).
-
-## Does Velle demand immutability?
-
-No — and it never did. Refinements are *pure predicates over current data*; derived properties "recompute from current data"; §16's `invoice with payments += payment` is an in-place update. The language quantifies over *now*. Many real systems mutate records in the database, and nothing in Velle's principles forbids describing them.
-
-Immutability was never a language principle. It's a requirement of three specific constructs — `produces`-as-guard, capture, and `latest` — and the reason is precise: those are exactly the constructs that need **memory**. That observation organizes everything below.
-
-A pure-predicate description is a complete description only of systems whose behavior depends solely on current state. Re-enterable refinements are precisely where that stops being true: two systems with *identical current data* can carry different obligations depending on history (was this invoice overdue before?). At that point the Velle text, read as predicates-over-now, underdetermines the system it claims to describe — unless the history that behavior depends on is itself represented.
-
-## What re-enterability exposes in the current README
-
-**1. §10's mechanism-independence claim quietly assumed monotonicity.** The rule contract says the effect fires "exactly once per newly-satisfying instance," and claims the detection mechanism — write-time check, scheduled sweep, event stream — is a free compile-time choice. Test with a transient: an invoice becomes `Overdue` at 2am, is paid at 3am, the sweep runs at 4am. The event stream fires the late-fee rule; the sweep never sees the membership. The contract as written says the transient *did* become a member, so strictly the sweep is a *wrong* implementation — mechanism freedom was only ever true for refinements an instance enters once and never leaves. Worse: whether a transient counts is a *business* question the Product Owner has an opinion about ("they paid before we noticed — no fee" vs. "overdue is overdue"), and the spec currently can't record that opinion — a compile-time mechanism choice silently decides it. That is exactly the pollution (business meaning leaking into compilation) the language exists to prevent.
-
-**2. §10 and §11 disagree about what "once" means.** The prose says once per *newly-satisfying* (per entry). The `produces` guard desugars to `not exists Receipt for this` — once per *lifetime*. For monotone refinements the two coincide, which is why the contradiction has been invisible. Re-entry splits them: the prose says fire again; the guard says don't. Note how §11's own guard-granularity example (`AccountFlag`) escaped this — by reifying each flagging as a *new instance*, so "re-entry" never happens to any single instance. The existing idiom was already routing around re-entry by turning occurrences into facts.
-
-**3. Exit events are missing.** With mutation, leaving a refinement is a business-meaningful occurrence ("no longer delinquent → restore service"), and Velle has no `on leaving R`. The workaround — react to entering the complement — is wrong: a newly created, never-delinquent account also "enters" `Compliant`. *Became compliant* and *was always compliant* are indistinguishable from current state alone. Same root cause: no memory. *(Resolved later 7/26: `on leaving R` is designed below — see* `on leaving R`: the effect layer's half of truth maintenance*.)*
-
-## Thought experiment: un-issuing an invoice
-
-Take `shape Issued = Invoice where issued exists` with `totalWhenIssued: Money = sum(lineItems, amount) on Issued`. A user deletes the `issued` date. From the description's perspective, that invoice has no `totalWhenIssued`. Can the runtime always be brought back into agreement with the description ("made true")?
-
-Yes — up to the effect boundary. Stratify everything downstream of `Issued`:
-
-- **Derived state** (`currentTotal`, refinement memberships, anything `= expr`): automatically true, always. Nothing is retracted; it's *recomputed* — being a function of current state is the definition of the layer.
-- **Captured state** (`totalWhenIssued`): retractable by decision. "An unissued invoice *has no* issued total" entails that un-issuing deletes the capture — coherent, and the right semantics. But note this is a semantic choice: exit retracts, re-entry re-captures — which quietly turns capture into "value as of the most recent membership entry." (This becomes capture's official semantics — see below.)
-- **Effects** (produced shapes and the external actions they stand for): here true-making by retraction **fails**, and no runtime cleverness fixes it. If `rule SendReceipt on Issued produces Receipt` already fired, deleting the `Receipt` makes the description true and the record a lie about the world — the email *was sent* (and on re-issue, the vanished guard sends a second one). Keeping it leaves the description asserting evidence for a membership that no longer holds. An effect is not a function of current state — it's history, and history can't be recomputed. The only coherent move is the one accounting discovered: don't erase, *append a compensating fact* (a voided-receipt record, a credit memo). README §17's "Reversal" bullet, arrived at as logical necessity rather than policy preference: irreversible effects + a description that must stay true ⇒ compensation, not deletion.
-
-**A spec is fully coherent under un-issuing iff every rule downstream of `Issued` either hasn't fired or has a declared compensation.**
-
-### Runtime cost of truth maintenance
-
-The cascade through *state* is real but is entirely a **materialization choice** — a compile concern, invisible to the description, properly so. Computed-on-read: retraction costs nothing (nothing stored), reads pay. Materialized: the un-issue write pays O(dependents) — this is incremental view maintenance, known technology. Async: writes are cheap, but stored state contradicts the description in a window. All three compile the same Velle. One asymmetry: the capture *must* be stored — non-derivability from current state is its entire point — so it is the one thing genuinely deleted, but it's one value on one record.
-
-Two sharpenings:
-
-1. **The "moment where the record is inconsistent" (issued deleted, capture still present) is a missing atomicity contract, not an inevitability.** Transactions make intermediate states unobservable. But nothing in Velle says which clusters of state must change as *one observable step* — and a PO plausibly cares ("no report may ever show an unissued invoice with an issued total"). Missing vocabulary: the granularity of observable consistency.
-2. **The genuinely hard cascade is the effect layer, not the millions of derived values.** Un-issuing flips memberships on related records whose rules already fired, whose effects already escaped. The state cascade is a performance problem (solvable); the effect cascade is a semantics problem (compensation policy — not solvable by machinery).
-
-## The punchline: mutation relocates the ledger, it doesn't eliminate it
-
-If any rule, guard, capture, or `latest` depends on history, and the store mutates in place, a correct compilation *must synthesize* the history the spec didn't describe: an entry/exit event log, occurrence identities for guards to scope to, write-path transition detection (sweeps are incorrect for non-monotone refinements, per above), snapshot-consistent predicate evaluation, and an atomic check-membership-then-write-evidence step (the `produces` guard is exactly-once only under an atomicity assumption stated nowhere). This is the industry's actual trajectory: mutable rows grow audit tables, triggers, and CDC streams precisely because history-dependent behavior over mutating stores forces the event log back into existence — unnamed.
-
-So the design axis is not *immutability: yes/no*. It is: **is history part of the description, or part of the implementation?** Relocated into the implementation, the ledger exists but the spec can't name it — `why`/provenance can't cite it, POs can't query it, and its retention (a real business concern: audits, GDPR) is decided by nobody.
-
-Velle's coherent permissive position: **mutation is fine wherever no construct remembers; wherever history is load-bearing, it must be reified or the refinement provably monotone.** And monotonicity isn't provable from predicates alone — `issued exists` is enter-once only if `issued`, once set, is never unset. That's a **correction policy**, and it's PO vocabulary, not runtime vocabulary: "a quote is never edited — you issue a new one; a customer's email is just corrected in place." Nobody currently gets to say that in Velle, yet it's the fact from which the compiler would derive which refinements are monotone, which rules can use sweeps, where hidden history must be synthesized, and what transients mean.
-
-Corollary: when a deletion has downstream meaning, the language's own constructs steer it back into being a fact. If un-issuing is a thing the business does, it's an *event* ("the invoice was retracted") with reactions ("notify the customer, void the receipt") — modeled as mutation, all of that lives in hidden cascade machinery the spec can't see; modeled as a fact (`InvoiceRetraction for invoice`), the cascade itself becomes ordinary describable rules.
-
-## Where mutation leaves capture (`expr on Refinement`)
-
-**1. Capture survives with revised semantics.** Not "evaluated once at entry, fixed forever" but: *present iff the instance is currently a member of R; its value is the expression as evaluated at the moment the current membership began.* Absent before entry, fixed during membership, retracted on exit, re-captured on re-entry. Fully coherent under mutation — a function of (current membership, when this membership began) — so truth maintenance always has a well-defined target. The original "once and forever" version is the special case where R is monotone. This also makes capture *transient-safe*: a membership that comes and goes leaves no anomaly.
-
-**2. The once-ness legality rule (finding 4, above) is dead.** Re-entry isn't illegal or silently dishonest — it's *forced* by keeping the description true. What remains is a modeling distinction, not a compiler gate: `expr on R` means only the *current* membership's value matters; if the business cares about past occurrences ("show every quote we sent"), that was never a property — it's produced facts plus `latest(... by ...)`. The PO's choice of meaning.
-
-**3. The desugaring claim is retracted.** The proposal above claimed capture is "no new concept — sugar for a hidden `rule ... on R produces` evidence shape." The effect boundary kills that: produced facts are effect-layer (durable, unretractable, deletion-is-lying); the capture is state-layer (*must* retract on exit). You can't build a thing that must be deleted out of a thing that must never be. Capture is a genuinely new primitive — the first construct in Velle whose stored state tracks membership. The honest answer to this doc's original question: yes, one small new concept enters the language — *a value remembered from the current membership's beginning* — strictly more than a predicate, strictly less than history.
-
-**4. `on R` was never one mechanism.** The same trigger drives two constructs with opposite lifecycle disciplines, split exactly along the state/effect boundary:
-
-| | `expr on R` (capture) | `rule ... on R produces E` |
+| | `captured` property (state) | `rule ... produces E` (effect) |
 |---|---|---|
 | layer | state | effect |
 | on exit | retracts | persists — deletion would lie about the world |
-| on re-entry | re-captures freely | doesn't re-fire (lifetime evidence guard) unless evidence is scoped to a reified occurrence |
-| when wrong | recompute | compensate (Reversal) |
+| on re-entry | re-captures freely | doesn't re-fire under a lifetime guard; re-fires only if evidence is scoped to a reified occurrence |
+| when wrong | recompute / retract | compensate |
 
-This table is the yield of the investigation: the state/effect stratification is the load-bearing structure, and every question encountered — retraction, re-entry, once-ness, un-issuing, transients — divides cleanly along it. *(The "persists" and "compensate" cells are developed further below: persistence plus a declared policy — stands / forbidden / compensate — hooked on `on leaving R`.)*
-
-## Worked example: mutating `issued` and the effect boundary
-
-The table above, dramatized — the doc's own `Issued`/`Invoice` example plus one notification rule:
-
-```
-shape Invoice {
-    lineItems: many LineItem
-    issued: Date?
-    totalWhenIssued: Money = sum(lineItems, amount) on Issued
-}
-
-shape Issued = Invoice where issued exists
-
-shape IssuedNotification {
-    invoice: one Invoice
-    total: Money
-    sentOn: DateTime
-}
-
-rule NotifyCustomer on Issued produces IssuedNotification {
-    IssuedNotification from {
-        invoice: this
-        total: totalWhenIssued
-        sentOn: now
-    }
-}
-```
-
-The timeline:
-
-**Jan 5** — `issued` is set. Capture fires: `totalWhenIssued = $500`. Rule fires: email sent, and `IssuedNotification { total: $500, sentOn: Jan 5 }` now exists as the evidence guard.
-
-**Jan 8** — a user deletes `issued`. Truth maintenance does what it can: the invoice leaves `Issued`, `totalWhenIssued` retracts. But `IssuedNotification` is effect-layer — the email is in the customer's inbox — so it persists. The spec now contains evidence of a notification *about a membership that doesn't hold*, carrying a `total: $500` the invoice no longer has. Tolerable as history — but nothing in the language marks it as history; it's a fact sitting there, indistinguishable from live coherent state.
-
-**Jan 20** — a line item was added in the meantime; the invoice is re-issued. Capture re-fires correctly: `totalWhenIssued = $650`. The rule is where mutation draws blood, because there are only two possible behaviors and **both are wrong**:
-
-- **Keep the evidence** (what the guard `not exists IssuedNotification for this` actually does): the rule is suppressed. The customer is never told about the $650 invoice — they act on a $500 email for an invoice that now says $650. The runtime is perfectly "consistent" by the guard's definition and the business outcome is broken.
-- **Delete the evidence on Jan 8** (to make the description true when membership was retracted): re-issue correctly sends the $650 email — but the system now has no record the $500 email ever went out. The customer holds an email the system says was never sent. `why`/provenance is broken, and if the customer disputes ("you told me $500"), the spec has nothing to point at.
-
-Stale suppression or falsified history — the whole effect-boundary dilemma in one rule, and current Velle can neither express a preference between them nor acknowledge the choice exists. The guard's real problem: it's scoped to the invoice's *lifetime* when the business meaning is per-*issuance* — and mutation gives it nothing better to scope to, because the issuance-occurrence isn't a thing in the spec; it's a date field that got overwritten. *(The general mechanism for declaring that preference — per-effect mutation policy via `on leaving R` — is designed two sections below.)*
-
-Which is exactly the reification fix from the punchline section above — make the occurrence a fact and every problem dissolves without deleting anything:
-
-```
-shape Issuance {
-    invoice: one Invoice
-    issuedOn: Date
-    total: Money
-}
-
-rule NotifyCustomer on Issuance produces IssuedNotification for issuance {
-    IssuedNotification from {
-        issuance: this
-        sentOn: now
-    }
-}
-```
-
-Two `Issuance` facts, two notifications, each guard scoped to its own occurrence; the Jan 5 notification stays true history ($500 *was* sent, about *that* issuance); un-issuing, if the business does it, becomes its own fact with its own reactions. The original spec isn't illegal Velle — that's the point. It compiles, reads naturally, and quietly contains a business-breaking ambiguity that only surfaces the day someone deletes `issued`.
-
-## When does the PO allow a property to mutate?
-
-The boundary gives that question a sharp answer: **the PO never grants permission for state-layer consequences, and always owes a policy for effect-layer ones.** "May this property change?" is the wrong granularity — the real decision is per *(property × downstream effect)*.
-
-**The blast radius is computable.** For any property, trace what reads it:
-
-- **Only derived properties.** Mutation is invisible to the description — `carrier.name` changes, `liveTotal` recomputes. No PO decision exists here; asking would be noise.
-- **A refinement predicate** (directly, or transitively through derived properties and captures). Mutation can cause membership exit; captures on that refinement retract; refinements over captured values (`shape BigIssue = Invoice where totalWhenIssued > 1000`) retract transitively. Still no PO decision — this is the truth maintenance of the un-issuing section, and it is automatic.
-- **Evidence produced by rules on those refinements.** The decision point. Mutation strands an effect whose premise is gone; the state layer cannot resolve that (retracting evidence is lying), so the resolution *must* be a declared policy.
-
-This also settles what "another shape becomes suspect after this mutation" means: **a shape is never suspect.** If it's state, it retracts and there is nothing to discuss; if it's evidence, it stands as a record-of-then, and the only open question is what the business wants done about the divergence. Suspicion is the phenomenology of a missing policy declaration.
-
-**There are only three policies, and POs already say all three in the wild:**
-
-1. **Stands** — "the quote is the quote; prices drift, that's fine." The effect is understood as history; divergence from current state is expected and meaningful (`priceDrift` literally computes it).
-2. **Forbidden** — "you can't edit line items on an issued invoice." The mutation is rejected while the effect exists.
-3. **Compensate** — "invoices are never edited — they're voided and reissued." The mutation is allowed only in company with a compensating effect (`InvoiceRetraction`, a correction notice). Forbid and compensate usually travel together: bare forbiddance is rare — it's *forbid-with-a-ritual*, and the ritual is itself ordinary shapes and rules.
-
-The correction policy from the punchline section is exactly this, given a home and a vocabulary: "never edited — reissued" is *compensate*; "corrected in place" is *stands*. And monotonicity is now derived rather than declared: a refinement is monotone exactly when every mutation that could cause exit is *forbidden*.
-
-**Immutability is a lien held by effects, not a property of data.** Nothing in Velle freezes `lineItems`. What freezes it is that `IssuedNotification` witnessed a value derived from it and the PO chose *forbidden*. The lien is acquired when the evidence is produced and lifts if the evidence is compensated away. This is why real systems' immutability rules are so irregular — they aren't type-level facts but liens acquired by specific effects. Asked "is this field immutable?", a PO can't answer; asked "who has acted on this field's value, and do we owe them anything if it changes?", they can.
-
-## `on leaving R`: the effect layer's half of truth maintenance
-
-The three policies need a moment to fire at — which resolves exposure 3 (exit events), and ties it to the boundary.
-
-**It is a genuinely new trigger, not sugar.** `on NotIssued` can't express it: entering the complement includes every invoice that was *never* issued — *became* vs. *always was* again. Exit has no such problem: an instance can only leave R if it was in R, so `on leaving R` is inherently transitional. The trigger vocabulary becomes symmetric: prefix `on R` already means *entering* ("newly satisfying"); `leaving` is its mirror.
-
-**The trap: at the moment of exit, the state layer has already forgotten.** When `issued` is deleted, `totalWhenIssued` retracts — that is capture's settled semantics doing its job. So an exit rule that wants to say "disregard the $500 notice" cannot read the capture; it is gone precisely because the membership ended. The tempting fix — deliver the exit event *before* retraction, a destructor-style "last look" at the dying values — breaks the invariant everything else paid for: a capture present on a non-member is exactly the incoherence the design exists to prevent.
-
-**Evidence is the only survivor of the exit, so evidence is what exit rules read.** `IssuedNotification` copied `totalWhenIssued` at witness time; the $500 lives there, durably, on the effect side where retraction can't reach. The compensation form scopes to the evidence:
-
-```
-rule CorrectNotification on leaving Issued
-    where exists IssuedNotification for this
-    produces NotificationCorrection {
-    NotificationCorrection from {
-        original: that IssuedNotification
-        sentOn: now
-    }
-}
-```
-
-The policy clause reads best attached to the producing rule — where the evidence shape is already named — as sugar for the rule above:
-
-```
-rule NotifyCustomer on Issued produces IssuedNotification {
-    IssuedNotification from { invoice: this, total: totalWhenIssued, sentOn: now }
-    on leaving Issued: compensate NotificationCorrection
-}
-
-rule SendQuote on Quoted produces QuoteSent {
-    QuoteSent from { shipment: this, amount: quotedTotal, sentOn: now }
-    on leaving Quoted: stands
-}
-```
-
-with `forbidden` as the third clause: while this evidence exists, any mutation that would falsify the premise is rejected — the lien, computed transitively through the dependency graph.
-
-**Evidence scoping answers two questions for free:**
-
-- **Transients.** An invoice that flickered through `Issued` too fast for `NotifyCustomer` to fire has no `IssuedNotification` — its exit compensates nothing. Right answer, no special case. (Whether the transient should have fired the *entry* rule remains open — see below.)
-- **Re-entry.** Exits repeat, so "once per exit" needs a guard the same way "once per entry" did — and it is the same guard: the compensation `produces` its own evidence, scoped to the notification it corrects. Reify occurrences (`Issuance`) and entries, exits, effects, and compensations all key off the same occurrence.
-
-**Captures are the state layer's stable interface to the effect layer.** `NotifyCustomer` reads `totalWhenIssued`, not `sum(lineItems, amount)` — not incidental. Because a capture is frozen for the duration of the membership, the effect's inputs cannot drift *while the premise still holds*: editing a line item on a still-issued invoice doesn't make the sent notification unexplainable, because `why` still resolves to the captured value. Had the rule read the live derivation, every mutation of `lineItems` would silently break provenance, with no membership change to hook a policy onto. So: **effects should witness captures, not live derivations** — then the only event that can falsify an effect's inputs is membership exit, a single nameable moment, which is precisely where `on leaving R` sits. The mutation-policy problem collapses from "any write to any transitive input" to "exit from the named premise" — a question a PO can actually be asked.
+**Effects should witness captures, not live derivations.** Because a capture is frozen for the duration of the membership, an effect that reads it (`NotifyCustomer` reading `totalWhenIssued`) has inputs that cannot drift *while the premise holds* — editing a line item on a still-issued invoice doesn't break provenance. The only event that can falsify an effect's inputs is membership exit — a single nameable moment, which is exactly where `on leaving R` sits. This collapses the mutation-policy problem from "any write to any transitive input" to "exit from the named premise" — a question a PO can actually be asked.
 
 **The boundary is one-way in each direction.** `on R` fires the effect and copies captures forward into evidence; `on leaving R` fires the policy and reads evidence back. State crosses the boundary only at entry; only evidence crosses back at exit. That is what keeps the description coherent under mutation.
 
-**A third guardrail follows** (same family as finding 5): a rule triggered `on leaving R` must not read captures anchored to R — they retract at the very moment the rule fires, so the read can never be satisfied. The compiler should reject it and point at the evidence instead.
+## Mutation and policy (promoted to README §12)
+
+**Velle never demanded immutability.** Refinements quantify over *now*; §17's `invoice with payments += payment` is an in-place update. Immutability is a requirement of the specific constructs that need **memory** — `produces`-as-guard, capture, `latest` — not a language principle.
+
+**The three policies.** When mutation would falsify the premise of an already-fired effect, the resolution is a declared policy per *(property × witnessed effect)*, attached to the producing rule via an `on leaving` clause — and POs already say all three in the wild:
+
+1. **`stands`** — "the quote is the quote; prices drift." The effect is history; divergence is expected and meaningful.
+2. **`forbidden`** — "you can't edit line items on an issued invoice." The mutation is rejected while the evidence exists.
+3. **`compensate X`** — "invoices are never edited — voided and reissued." The exit produces a compensating fact, scoped to the evidence it corrects.
+
+**Immutability is a lien held by effects, not a property of data.** Nothing freezes `lineItems`; what freezes it is that `IssuedNotification` witnessed a value derived from it and the PO chose `forbidden`. The lien is acquired when evidence is produced and lifts if it's compensated away. Asked "is this field immutable?", a PO can't answer; asked "who has acted on this field's value, and do we owe them anything if it changes?", they can. Monotonicity is *derived*, not declared: a refinement is monotone exactly when every mutation that could cause exit is forbidden.
+
+**`on leaving R` is a genuinely new trigger.** Entering the complement can't express it — a never-issued invoice also "enters" `NotIssued`; *became* and *always was* are indistinguishable from current data. Only a member can leave, so the trigger is inherently transitional. **Exit rules read evidence only**: at the moment of exit, R's captured properties have already retracted (that's capture's semantics doing its job, not a bug to work around with a destructor-style "last look"). Evidence is the only survivor of the exit, so evidence — which copied the captures at witness time — is what exit rules and compensations read. Compile guardrail: a rule `on leaving R` must not read properties of R; the compiler should reject the read and point at the evidence instead.
+
+## Mutation relocates the ledger — it doesn't eliminate it
+
+If any rule, guard, capture, or `latest` depends on history and the store mutates in place, a correct compilation *must synthesize* the history the spec didn't describe: entry/exit logs, occurrence identities, write-path transition detection (sweeps are wrong for non-monotone refinements), snapshot-consistent evaluation, atomic check-then-write for guards. This is the industry's actual trajectory — mutable rows grow audit tables, triggers, and CDC streams because history-dependent behavior forces the event log back into existence, unnamed.
+
+So the design axis is not *immutability: yes/no* but: **is history part of the description, or part of the implementation?** Relocated into the implementation, the ledger exists but the spec can't name it — `why` can't cite it, POs can't query it, retention is decided by nobody. Velle's coherent position: **mutation is fine wherever no construct remembers; wherever history is load-bearing, it must be reified or the refinement provably monotone.**
+
+**The reissue example, compressed.** `rule NotifyCustomer on Issued produces IssuedNotification` with a mutable `issued: Date?`: un-issue, edit, re-issue, and the lifetime guard either suppresses the second notification (customer acts on a stale $500 email for a $650 invoice) or the evidence was deleted to keep the description true (the system denies an email the customer holds). Both wrong — because the guard is scoped to the invoice's *lifetime* while the business meaning is per-*issuance*, and the issuance isn't a thing in the spec, just an overwritten date field. Reify the occurrence (`Issuance` facts, guards scoped `for issuance`) and every problem dissolves without deleting anything. Corollary: when a deletion has downstream meaning, model it as a fact (`InvoiceRetraction`) with ordinary describable reactions, not as a mutation whose cascade lives in hidden machinery.
 
 ## Open questions
 
-*(Rewritten later 7/26, after the mutation-policy and `on leaving R` sections above and their promotion to README §12.)*
-
-Resolved and struck from the list: **correction policy** (now the stands / forbidden / compensate trio, declared per *(property × witnessed effect)* on the producing rule, monotonicity derived from it rather than declared) and **exit events** (`on leaving R`, evidence-only reads, third guardrail — both now in README §12). What remains falls into four groups.
+*(Struck as resolved: correction policy → the stands/forbidden/compensate trio; exit events → `on leaving R`, README §12; capture's location → refinement properties, README §7; capture once-ness and re-entry → capture's settled semantics.)*
 
 ### Policy machinery
 
-**The default question.** When a producing rule declares no `on leaving` policy, does silence mean *stands* or a compile hole?
+**The default question.** When a producing rule declares no `on leaving` clause, does silence mean *stands* (semantically honest — that's what evidence does anyway — but the PO never confirmed it) or a compile hole (methodologically honest per compiling-as-validation, but noisy: every producing rule on any leavable refinement demands a clause)? Note the strict reading's cost depends on how much of the spec has already declared `forbidden` — provable monotonicity removes the obligation.
 
-```
-rule SendQuote on Quoted produces QuoteSent {
-    QuoteSent from { shipment: this, amount: quotedTotal, sentOn: now }
-    -- no on leaving clause
-}
-```
-
-A shipment's `quoteRequestedOn` is cleared; it leaves `Quoted`. Reading one: silence defaults to *stands* — `QuoteSent` quietly becomes history, which is semantically honest (that's what evidence does anyway) but means the PO never actually confirmed that quotes survive un-quoting. Reading two: the spec doesn't compile until the clause is written — methodologically honest per compiling-as-validation, but noisy: every producing rule on any refinement an instance *could* leave demands a clause, including the many that are monotone in practice but not provably so. (And provable monotonicity is derived from `forbidden` declarations — so the cost of the strict reading depends on how much of the spec has already answered it.)
-
-**What `forbidden` actually rejects.** Newly visible, unexamined.
-
-```
-rule NotifyCustomer on Issued produces IssuedNotification {
-    IssuedNotification from { invoice: this, total: totalWhenIssued, sentOn: now }
-    on leaving Issued: forbidden
-}
-```
-
-A user now tries to delete `issued` on a notified invoice, and "the mutation is rejected" — but no Velle statement describes any part of that sentence: there is no *tries*, no *user*, no *rejected* anywhere in the language. Every other construct describes what *is*; the lien describes what *may not come to be*. The plausible landing keeps it declarative by reifying the attempt (README §17 Inputs/Outputs plus the errors-are-refinements pattern):
-
-```
-shape UnissueRequest {
-    invoice: one Invoice
-    requestedOn: DateTime
-}
-
-shape RefusedUnissue = UnissueRequest where exists IssuedNotification for invoice
-shape AppliedUnissue = UnissueRequest where not exists IssuedNotification for invoice
-```
-
-But as written the PO has restated the lien by hand — the `RefusedUnissue` predicate duplicates what `forbidden` already declared, and the two can drift. The unworked parts: whether the compiler *derives* the refused refinement from the `forbidden` clauses the request would break, and what an applied request's output clause even looks like (§17 has `+=`; "set `issued` to none" has no spelling).
+**What `forbidden` actually rejects.** *(Largely resolved 7/27 in `investigate_state.md`: what is refused is a commit; the act is the reified "tries," refusal is a refinement of the act. The derive-the-refusal-predicate sub-question below remains.)* "The mutation is rejected" contains a *tries*, a *user*, and a *rejected* — none of which exist in the language, which otherwise describes only what *is*. The plausible landing reifies the attempt (an `UnissueRequest` input shape with `RefusedUnissue`/`AppliedUnissue` refinements, the errors-are-refinements pattern) — but hand-written, the refusal predicate restates the lien and the two can drift. Unworked: whether the compiler *derives* the refused refinement from the `forbidden` clauses the request would break, and what an applied request's output clause looks like ("set `issued` to none" has no spelling; §17 only has `+=`).
 
 ### Occurrences and time
 
-**Occurrence reification.** The `Issuance` fix (worked example above) presupposes `Issuance` facts exist — but nothing in the language creates them. The obvious attempt is a rule:
+**Occurrence reification.** The `Issuance` fix presupposes `Issuance` facts, but nothing creates them: a recorder rule's own `produces` guard is lifetime-scoped, so it can't record re-occurrences — the recorder has the disease it exists to cure. Breaking the circularity needs something natively once-per-entry, e.g. `occurrence Issuance of Issued { issuedOn: issued, total: sum(lineItems, amount) }` — no syntax settled. This also carries the still-unfixed README §10/§11 contradiction ("once per newly-satisfying" prose vs. the lifetime guard): it resolves whichever way this lands.
 
-```
-rule RecordIssuance on Issued produces Issuance {
-    Issuance from { invoice: this, issuedOn: issued, total: sum(lineItems, amount) }
-}
-```
+**Exit from act-entered refinements** *(new 7/27)*. `exists ArchiveRequest for this` is monotone — facts persist, so nothing can ever leave `ArchivedInvoice` and un-archiving is inexpressible. Exit requires either pairing occurrences in the predicate (`... and not exists Unarchival` newer than the matched request — needing occurrence ordering/scoping vocabulary) or a mutable field plus a declared policy. Both expressible; which is idiomatic is unsettled, and it's really the occurrence question again: is a state transition a mutation with policy, or an append-only chain of occurrence facts whose latest entry determines current state?
 
-which has the exact disease it exists to cure: its own `produces` guard is lifetime-scoped, so on re-issuance the guard finds the *first* `Issuance` and suppresses the second — the occurrence-recorder can't record re-occurrences. Breaking the circularity needs something whose "once" is per-entry natively, e.g.
-
-```
-occurrence Issuance of Issued {
-    issuedOn: issued
-    total: sum(lineItems, amount)
-}
-```
-
-— no syntax settled. This is also the still-unfixed §10/§11 contradiction in the README ("once per newly-satisfying" vs. the lifetime guard), and it resolves whichever way this lands: rules keep lifetime-once and occurrences carry per-entry, or rules grow a per-entry mode.
-
-**Entry-side transients.** One rule, two legal mechanisms, two business outcomes:
-
-```
-shape Overdue = Invoice where balance > 0 and due < today
-
-rule AssessLateFee on Overdue produces LateFee {
-    LateFee from { invoice: this, amount: balance * 0.05, assessedOn: now }
-}
-```
-
-An invoice crosses `due` at midnight and is paid at 6am. An event-stream compilation fires the fee at midnight; a 7am sweep never sees the membership and fires nothing. Both satisfy §10's contract as written, so whether the customer owes a fee is decided by an engineer's mechanism choice. The missing spelling is the PO's intent — something in the direction of `on Overdue` vs. `on Overdue however briefly` vs. `on Overdue observed Daily` — none proposed seriously yet. (The exit side needs no such spelling: no evidence → nothing to compensate.)
+**Entry-side transients.** *(Reframed 7/27 in `investigate_state.md`: memberships are functions of committed states, so a membership exists only if some commit exhibited it — the mechanism choice becomes a declaration of commit/observation points, and only the spelling remains open.)* An invoice crosses `due` at midnight and is paid at 6am: an event-stream compilation fires the late fee, a 7am sweep fires nothing — both satisfy §10's contract as written, so a business outcome is decided by an engineer's mechanism choice. The missing spelling is the PO's intent: `on Overdue` vs. `on Overdue however briefly` vs. `on Overdue observed Daily` — none proposed seriously yet. (The exit side needs no such spelling: a transient too brief to produce evidence has nothing to compensate.)
 
 ### Compilation contracts
 
-**Atomicity granularity.** The description already *proves* certain refinements empty — capture-implies-presence narrowing makes
+**Atomicity granularity.** *(Subsumed 7/27 by `investigate_state.md`'s commit axiom: the commit is the definition of the observable step, and `never`-style declarations become observability allowances/prohibitions; only the spelling remains.)* Capture-implies-presence makes `shape Impossible = Invoice where issued is none and totalWhenIssued exists` provably memberless, yet a non-atomic runtime can still *show* one between the write and the retraction. Missing: which provably-empty refinements must be *observably* empty at every instant — candidate spelling `never Impossible`, which states transaction boundaries without ever saying the word transaction.
 
-```
-shape Impossible = Invoice where issued is none and totalWhenIssued exists
-```
+**Retention of synthesized history.** Guards and compensations read evidence forever; retention obligations (audits, GDPR) delete it. Erase the evidence and "exactly once per issuance" silently goes false; keep it and the system violates a business rule the spec can't state. Candidate: retention as a first-class declaration on evidence shapes (`retained 7 years`), propagated by the compiler to whatever hidden history (entry/exit logs) serves the same constructs.
 
-provably memberless. A non-atomic runtime can still *show* one: between deleting `issued` and retracting the capture, a report query sees an unissued invoice with an issued total. The missing contract is which provably-empty refinements must also be *observably* empty at every instant — plausibly a one-word declaration:
+### Syntax loose ends
 
-```
-never Impossible    -- candidate spelling: may not be observable, even transiently
-```
+**The desugared `compensate` form.** The general exit rule needs a `where` guard on a rule and a `that` binding naming the matched evidence (`original: that IssuedNotification`) — neither in the grammar — and after two issuances, *which* evidence `that` means is resolvable only if evidence is occurrence-scoped (ties to occurrence reification).
 
-which turns "transaction boundaries" into a description-level statement without ever saying the word transaction.
-
-**Retention of synthesized history.** Guards and compensations read evidence forever; retention obligations delete it:
-
-```
-rule NotifyCustomer on Issuance produces IssuedNotification for issuance { ... }
-```
-
-The guard's "exactly once per issuance" is only true while every past `IssuedNotification` still exists — and the privacy office requires customer data erased after seven years. Erase the evidence and the guard's claim silently goes false; keep it and the system violates a business rule the spec has no way to state. The same problem sits one layer down for history the compiler synthesizes itself (the entry/exit log behind `on leaving Delinquent`): it exists in every correct compilation, and nobody can declare its retention because it isn't in the spec at all. Candidate: retention as a first-class declaration on evidence shapes (`shape IssuedNotification ... retained 7 years`), propagated by the compiler to whatever hidden history serves the same constructs.
-
-### Syntax loose ends (lower stakes)
-
-**The desugared `compensate` form.** The sketch from the exit section:
-
-```
-rule CorrectNotification on leaving Issued
-    where exists IssuedNotification for this
-    produces NotificationCorrection {
-    NotificationCorrection from {
-        original: that IssuedNotification
-        sentOn: now
-    }
-}
-```
-
-Three inventions in one rule, none in the grammar: a `where` guard on a rule, the `that` binding naming the matched evidence — and, after two issuances, an ambiguity about *which* `IssuedNotification` `that` means, resolvable only if evidence is occurrence-scoped (tying this to occurrence reification, above).
-
-**Capture's location.** Two spellings:
-
-```
--- as written throughout this doc: on the base shape, anchored by name
-shape Invoice {
-    lineItems: many LineItem
-    issued: Date?
-    totalWhenIssued: Money = sum(lineItems, amount) on Issued
-}
-
--- alternative: on the refinement, anchored by position
-shape Issued = Invoice where issued exists {
-    totalWhenIssued: Money = sum(lineItems, amount)
-}
-```
-
-The refinement-body form gets presence typing for free — `Issued` simply *has* the property and `Invoice` simply doesn't, so finding 3's narrowing obligation becomes ordinary field typing, and no `on` clause is needed. The costs: refinements stop being pure predicates (§7's "pure predicates, not triggers" gains an asterisk), and a shape's full data scatters — an `Invoice`'s properties are no longer readable from its own declaration.
-
-Priority: the two that could still reshape the design are *what `forbidden` rejects* (it may force a new kind of statement into the language) and *occurrence reification* (load-bearing for making re-entry coherent everywhere at once). The rest are contracts to add, not designs to find.
+**State partition declaration** *(new 7/27 — the next investigation)*. Refinement properties give states their data; reified acts give transitions their payloads; mutation policies bound which transitions are legal. What's missing is asserting that a set of refinements *partitions* a shape — mutually exclusive, jointly exhaustive ("an invoice is always in exactly one of Draft, Issued, Paid, Voided"). Candidate spelling `states of Invoice = Draft | Issued | Paid | Voided`, invoking the exhaustiveness/overlap check §7 already names as a compiler goal — an assertion to verify, not a new semantic mechanism.
 
 ## Status
 
-Capture's settled semantics: present iff currently a member of the anchoring refinement, value as of the moment the current membership began — a new state-layer primitive, distinct from effect-layer `produces`. Commitments that survive from the first phase of the investigation: transitive value-freezing (finding 1, including the capture-vs-ledger-reconstruction distinction), capture-implies-presence narrowing (finding 3), and the two guardrails (finding 5). Superseded along the way (marked inline): the `produces` desugar claim and finding 4's once-ness legality rule.
+Settled: capture's semantics (present iff member, value as of current membership's start) and its home as `captured` properties on refinement bodies (README §7), with the entry-evaluability guardrail, `is R` narrowing as ordinary field typing, no-ambient-context / reified acts, and drift-vs-act classification derived from predicates. Settled earlier and still standing: transitive freezing and the capture-vs-ledger distinction; the state/effect stratification and its table; the mutation-policy trio with immutability as a lien (README §12); `on leaving R` with evidence-only reads (README §12); effects-witness-captures.
 
-Added in the mutation phase: the state/effect stratification and its table; the mutation-policy trio (stands / forbidden / compensate) declared per *(property × witnessed effect)* on the producing rule, with immutability recast as a lien held by effects; `on leaving R` as the new transitional trigger, with evidence-only reads (the third guardrail) and the effects-witness-captures discipline.
-
-Promoted to README §12 (later 7/26): `on leaving`, the evidence-only read rule, and the three mutation policies.
-
-Not yet settled — see the regrouped Open questions above. Two questions could still reshape the design: what `forbidden` rejects (attempts/actors/refusal have no vocabulary), and occurrence-reification syntax (which also carries the unfixed §10/§11 "once" contradiction in the README). The rest — the policy default, entry-side transients, atomicity granularity, retention, the desugared `compensate` form, capture's location — are contracts to add, not designs to find.
+Still open, by weight: occurrence reification (load-bearing — carries the §10/§11 "once" contradiction, the `that` ambiguity, and act-entered exit) and what `forbidden` rejects (may force a new kind of statement into the language). Then the contracts to add rather than designs to find: the policy default, entry transients, atomicity granularity, retention. Next investigation: the state partition declaration.
