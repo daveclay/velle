@@ -10,7 +10,7 @@
 
 Terms this document leans on throughout:
 
-- **Act** — a shape instance that arrives from *outside* the system: a user's request, a payment from a bank's feed, the scheduler's tick. An act is ordinary data with a declared shape — `ArchiveRequest { invoice: one Invoice, requestedBy: one User }` is an act shape, and one user archiving one invoice is one instance of it. "Act" names a *role*, not a syntax category: any shape whose instances originate outside the system is an act. Under inertness (below), acts are the only source of state change.
+- **Act** — shorthand for a shape instance that arrives from *outside* the system: a user's request, a payment from a bank's feed, the scheduler's tick. Not a special kind of shape and not a syntax category — shapes are arbitrary conceptual models, *any* shape may come from an external source, and where and how an external instance arrives is deliberately set aside in this document. `ArchiveRequest { invoice: one Invoice, requestedBy: one User }` is an ordinary shape; one user archiving one invoice is one externally-arriving instance of it. Under inertness (below), externally-arriving instances are the only source of state change.
 - **Commit** — the atomic application of one act to the state: the act instance is added to the data, and everything that follows from its presence — derived values, memberships, captures, rule reactions — takes effect as a single observable step.
 - **Act-entered refinement** — a refinement an instance can only enter because a specific act was committed, because its predicate tests for the existence of an act instance. `shape ArchivedInvoice = Invoice where exists ArchiveRequest for this`: the only way any invoice becomes `ArchivedInvoice` is that someone committed an `ArchiveRequest` referencing it.
 - **Drift-entered refinement** — a refinement an instance can enter as a *side consequence* of a commit that never mentioned it. `shape OverdueInvoice = Invoice where balance > 0 and due < today` becomes true for an invoice when a scheduler act's commit observes that time has passed, or when some other act changed the balance. No act "makes" an invoice overdue.
@@ -109,7 +109,7 @@ So "does this mutation make the design incoherent?" always has a determinate ans
 
 ## The mutation taxonomy (7/27)
 
-*Where* a mutated property is referenced determines what goes questionable and what the compiler should say. Under inertness, "P can be mutated" means precisely: **some declared act's post-state can change P** — the mutation surface of the system *is the act roster*. Compiling walks it: for each act, for each field it can write, trace the references and classify.
+*Where* a mutated property is referenced determines what goes questionable and what the compiler should say. Under inertness, "P can be mutated" means precisely: **some externally-arriving shape's commit changes P** — the mutation surface of the system *is* the set of shapes that can arrive and what each changes (how that "what it changes" gets stated is itself the open commit-reconciliation gap, below). Compiling walks it: for each such shape, for each field its commit can change, trace the references and classify.
 
 1. **Read only by derived properties → silence.** Truth maintenance is automatic and total. Asking would be noise, and a tool that cries wolf here teaches people to ignore it. This is the contrast class for everything below.
 2. **In a rule's condition, causing *entry*.** An act (say `CorrectDueDate`) fixes a mistyped `due` date, and the fixed date happens to be in the past — the invoice enters `Overdue` and the late-fee rule fires because of a *data correction*. **Resolved (7/27): correction-vs-change is not a language distinction — it is act vocabulary the Product Owner declares.** An act is an act; if corrections and extensions should behave differently, they are *different acts* (`CorrectDueDate`, `ExtendDueDate`), possibly with identical postconditions — and because acts are facts in the tree, rules and refinements react to *which one occurred*: exclude corrected invoices from the late-fee refinement (`... and not exists CorrectDueDate for this`), or compensate a fee in reaction to a correction. The compiler's whole job here is case 7's conversation — surface that this act's writes reach that rule — and the PO answers with act and rule design. (On "the fee should have been assessed weeks ago": the committed history is what the system *knew* — capture-vs-ledger, above. A correction adds knowledge; it never rewrites past reactions. Any retroactive obligation is an ordinary rule reacting to the correction act.)
@@ -129,118 +129,32 @@ So "does this mutation make the design incoherent?" always has a determinate ans
 - **Demand a declaration** (cases 2, 3, 4, 7, 8) — a business question exists that the spec can't answer and an engineer must not answer by default. The compile error *is* the PO/Engineer conversation, scheduled. (For case 2 the demanded declaration is not a new construct — it is the act and rule design itself: which acts exist and how rules relate to them.)
 - **Report a broken proof, connectedly** (cases 5, 6, 9) — the mutation falsifies something the spec elsewhere depends on; the diagnostic names both ends.
 
-## The post-state grammar: a worked sketch (7/27)
+## The commit-reconciliation gap (7/27)
 
-The direction, made concrete. An act shape may declare an `after:` clause stating **what is true after the act commits** — a postcondition, never a sequence of instructions. For each conjunct of the postcondition, the compiler does one of exactly two things: **verifies** it (proves the act's own arrival makes it true, so nothing needs computing) or **derives the write** (computes the single field change that makes it true). Each case below states the business use case, what the example is meant to show, and where it falls short.
+*(This section states a problem deliberately in isolation, without proposing syntax. Spellings were sketched along the way — `after:` postcondition clauses, a dedicated `act`/`commit` declaration — and are set aside as unadopted proposals; git history has them. What follows is the gap itself, the use cases that exhibit it, and the constraints any eventual solution must satisfy.)*
 
-**Case 1 — entry by act existence: the claim is verified; nothing is written.**
+**The setup.** Shapes are arbitrary conceptual models. A system changes when a shape instance arrives from an external source and is committed — and *any* shape may arrive externally; where and how it arrives is set aside. The question this section isolates: **when a shape instance is committed, what reconciles the truths of the other shapes?**
 
-*Use case:* a user issues an invoice. Issuing is what makes an invoice count as issued, and the total at that moment must be remembered.
+**What is already reconciled — truth carried by existence.** For most of the truth ladder, the commit's consequences follow from declarations the spec already contains, by ordinary truth maintenance:
 
-```
-shape IssueRequest {
-    invoice: one Invoice
-    after: invoice is Issued
-}
+- *Memberships and derived properties recompute* (rung 2). Given `shape ArchivedInvoice = Invoice where exists ArchiveRequest for this`, committing an `ArchiveRequest` referencing an invoice makes that invoice a member — the new instance's *existence* satisfies the predicate. Nothing further needs stating; nothing stored changes.
+- *Captures fire and retract with membership* (rung 3).
+- *Collections reconcile through inferred inverses.* `invoice.payments` is derived from each `Payment`'s own `invoice` field (README §5), so committing a `Payment` changes what the collection contains by derivation. What §17's provisional `output: invoice with payments += payment` spelled as a write was never a write.
 
-shape Issued = Invoice where exists IssueRequest for this {
-    captured issuedOn: DateTime = now
-    captured totalWhenIssued: Money = total
-}
-```
+Call this **existence-carried truth**: everything a committed instance changes simply by being there.
 
-`IssueRequest` is the act — the user's issuing action, recorded as data, with a field pointing at the invoice being issued. `Issued`'s predicate tests whether an `IssueRequest` referencing the invoice exists. So when an `IssueRequest` instance commits, that instance's own presence in the data is what makes the predicate true for its invoice — no field on `Invoice` is written, and there is nothing for the compiler to compute.
+**The gap: truths not carried by existence.** Use case: a customer's email address was mistyped, and support submits a correction — a `CorrectEmail { customer: one Customer, corrected: text }` instance is committed. The *intent* is that the customer's stored `email` is now the corrected value. But nothing in the language connects the two: `email` is a stored property, no predicate anywhere references `CorrectEmail`, and the committed instance changes nothing beyond itself. The correction sits in the tree, inert — the spec has recorded that a correction *was requested*, and has no way to say the customer's stored truth *changed accordingly*. **Velle has no statement form connecting a committed shape to the stored truths of other shapes it is meant to change.** That is the gap, whole.
 
-*Intent of the example:* show that `after:` here is a **verified claim, not a command**. The Product Owner reads "committing an `IssueRequest` makes its invoice `Issued`" as a sentence in the spec; the compiler proves it holds. The payoff comes later: the day someone edits `Issued`'s predicate so that committing an `IssueRequest` no longer suffices, this clause *fails to verify*, and the diagnostic names the predicate edit and this clause together (README §1's connected diagnostics).
+The same gap, from the exit side. Use case: unarchiving. With `ArchivedInvoice` defined by `exists ArchiveRequest for this`, membership is permanent — the `ArchiveRequest`, once committed, exists forever, so no later commit can falsify the predicate, and "this invoice is no longer archived" has no way to become true. (Redefining the predicate to pair occurrences — "an archive request exists *and no unarchive request has arrived since*" — would close this instance of the gap by turning exit back into existence-carried truth; but that pairing needs occurrence-ordering vocabulary the language doesn't have. See Open questions.)
 
-*Shortcoming:* none for entry — this is the well-behaved case the rest of the sketch is measured against.
+**Constraints any solution must satisfy** — findings about the gap itself, independent of any spelling:
 
-**Case 2 — value change: the claim is invertible; the write is derived.**
-
-*Use case:* a customer's email address was mistyped and support corrects it. Second use case: an approval is withdrawn, so the approver field must be cleared.
-
-```
-shape CorrectEmail {
-    customer: one Customer
-    corrected: text
-    after: customer.email == corrected
-}
-
-shape RetractApproval {
-    invoice: one Invoice
-    after: invoice.approvedBy is none
-}
-```
-
-Unlike case 1, neither postcondition is satisfied by the act's mere existence — `customer.email` has to actually change. But each claim has exactly **one** delta that satisfies it: an equality between a writable stored field and a value the act supplies determines the write (`email` becomes `corrected`); `is none` on a writable optional determines the clearing. The compiler derives these writes from the claims.
-
-*Intent of the example:* show that "update" and "clear" — including the long-missing "set `issued` to none" spelling — are both expressible as postconditions: the spec states the truth that must hold after the commit, not the operation that brings it about.
-
-*Shortcoming:* this only works when the claim is invertible (one unique satisfying delta). What happens at the limits is case 4.
-
-**Case 3 — collection change: no grammar needed at all.**
-
-*Use case:* recording a payment against an invoice — the use case behind README §17's original `output: invoice with payments += payment` example.
-
-There is no example block because there is nothing left to write. Inverse relationships are inferred (README §5): `invoice.payments` is *derived* from each `Payment`'s own `invoice` field. A `Payment` is itself an act — money arrived from outside — and committing a `Payment` whose `invoice` field is set already changes what `invoice.payments` contains, by derivation, the same way a membership changes. The `+=` was describing a write the data model performs automatically.
-
-*Intent of the example:* show that most collection "mutations" dissolve under the commit model — they were never writes.
-
-*Shortcoming:* if genuinely stored, non-inverse collections exist anywhere, they would still need a spelling — but they may simply not need to exist.
-
-**Case 4 — the illegal claim: the error is the design working.**
-
-*Use case:* deliberately broken — an act that tries to declare an invoice overdue by fiat.
-
-```
-shape MakeOverdue {
-    invoice: one Invoice
-    after: invoice is Overdue        -- COMPILE ERROR
-}
-```
-
-`Overdue = Invoice where balance > 0 and due < today` is drift-entered (see Vocabulary): its predicate is inequalities over a derived value and the clock. No unique delta makes it true — should the compiler lower `due`? raise `balance`? wait for time to pass? The claim is neither satisfied by the act's existence (case 1) nor invertible (case 2), so it is illegal.
-
-*Intent of the example:* establish the legality rule — **you can't command drift**. An `after` conjunct must be one of: a membership the act's own existence entails; an equality on a writable field with a supplied value; `is none`/`is some` on a writable optional. Inequalities, aggregates, `latest`, and derived properties are none of these.
-
-*Why the error is right:* the fix is to state what actually changes, and the error can say so in Product Owner terms — "you can't command an invoice to be overdue; you can change what it owes or when it's due."
-
-**Case 5 — exit: the claim exposes the open problem, then occurrence pairing solves it.**
-
-*Use case:* archiving with undo. A user archives an invoice; later someone unarchives it; it may be archived again after that.
-
-First, the shortcoming, deliberately exposed. With the archive definition used elsewhere in these docs —
-
-```
-shape ArchivedInvoice = Invoice where exists ArchiveRequest for this
-```
-
-— membership is *permanent*: an `ArchiveRequest`, once committed, exists forever (facts are never deleted), so no later commit can ever make `exists ArchiveRequest for this` false. An unarchive act declaring `after: invoice is not ArchivedInvoice` is a compile error — the postcondition is unsatisfiable. That is exactly the "exit from act-entered refinements" open problem (README §18), and the `after` clause is where it surfaces: at spec-writing time, as a diagnostic, instead of as a runtime surprise.
-
-The fix is to redefine archived-ness as "archived, *and not unarchived since*" — pairing each `ArchiveRequest` with any later `UnarchiveRequest`:
-
-```
-shape ArchivedInvoice = Invoice where
-    exists ArchiveRequest for this
-    and not exists UnarchiveRequest for this newer than that ArchiveRequest {
-    captured archivedBy: one User = (latest ArchiveRequest for this).requestedBy
-}
-
-shape UnarchiveRequest {
-    invoice: one Invoice
-    after: invoice is not ArchivedInvoice
-}
-```
-
-Now committing an `UnarchiveRequest` is itself the fact that falsifies the predicate — exit works by case 1's mechanism again: the claim is *verified* (the act's own arrival achieves it), nothing is written, and a later re-archival re-enters the refinement with fresh captures.
-
-*Intent of the example:* show that exit-as-postcondition is expressible; that the compiler correctly rejects it when the predicate makes exit impossible; and that the fix is a *predicate* redesign, not new act machinery.
-
-*Shortcoming:* `newer than that ArchiveRequest` is invented syntax — the occurrence-ordering vocabulary the reification open question already demands. This example is why that vocabulary is load-bearing.
-
-**The finding:** the grammar wants only **two mechanisms** — *verified* claims (the act's existence entails the postcondition: entry, and exit under occurrence pairing) and *derived* writes (invertible equalities) — and everything CRUD-shaped either reduces to one of them or is illegal for a reason a Product Owner can understand. Multiple conjuncts in one `after` are unordered (ordering is compilation's, same as `then`-less effects); contradictory conjuncts are a compile error. And **an act's meaning is not exhausted by its delta**: two acts may declare identical postconditions and remain different facts — downstream rules and refinements distinguish them by which act exists (see taxonomy case 2).
-
-**Wobbliest parts:** the `newer than that X` ordering syntax is pure invention; and whether invertible equalities should also get `with` sugar (`customer with email: corrected`) for POs who prefer that reading — same semantics either way. (`after` vs. `output` is *not* a tension: §17's `output` was a captured thought, never a settled principle — `after` simply replaces it. Whether the function-style "shape with a result" pattern needs any distinct construct at all, or reduces to acts plus `produces`, can be decided when Mapping is designed.)
+1. **Two mechanisms exhaust the space.** A truth a commit establishes is either *carried by existence* (some predicate references the new instance; verification, no stored change) or it *requires a stored change* — and then the statement must determine that change **uniquely**. There is no third kind.
+2. **Underdetermined change must be illegal.** "Make this invoice `Overdue`" (`balance > 0 and due < today`) names no unique change — lower `due`? raise `balance`? wait? Whatever the statement form, it must reject truths a commit cannot determinately bring about — *you can't command drift* — and the rejection should speak in Product Owner terms: "you can't declare an invoice overdue; you can change what it owes or when it's due."
+3. **Reconciliation must be declared, not inferred.** The compiler must never guess that `CorrectEmail.corrected` "obviously" targets `Customer.email` by name or type affinity — a silent resolution that a field added elsewhere could redirect is exactly what §1's compiling-as-validation forbids.
+4. **Meaning is not exhausted by the change.** Two shapes may imply the *same* stored change and remain distinct facts (a correction vs. a deadline extension); downstream rules and refinements distinguish them by which one exists (taxonomy case 2). The committed shape's identity must survive in the tree, whatever states its reconciliation.
+5. **Refusal reads the reconciliation.** A lien (`forbidden`, README §12) rejects a *commit*; to know a commit would break it, the lien must see what the commit would change. The reconciliation statement — whatever form it takes — is what liens inspect.
+6. **The mutation surface is read off reconciliations.** The taxonomy's "some act can change P" becomes precise only here: the fields a committed shape can change are exactly those its declared reconciliation names. "Mutability is derived, not declared" depends on this gap being closed *declaratively*.
 
 ## Open questions
 
@@ -249,7 +163,7 @@ Now committing an `UnarchiveRequest` is itself the fact that falsifies the predi
 *(Struck 7/27: correction-vs-change — resolved as PO-declared act vocabulary, not a language distinction; see taxonomy case 2.)*
 
 - **Relationship re-parenting** (taxonomy case 5). What evidence, guards, and aggregates mean when the path between instances is re-wired. No vocabulary proposed.
-- **The post-state grammar** — the central gap, now with a worked sketch (previous section): `after:` assertions, two mechanisms only (verified act-existence, derived invertible writes), "you can't command drift" as the legality rule, exit falling out under occurrence pairing. `after` replaces §17's `output`, which was provisional. What remains open from the sketch: the occurrence-ordering syntax (`newer than that X` is invented) and optional `with` sugar for invertible equalities.
+- **Closing the commit-reconciliation gap** — the central open problem, documented in isolation in its own section above: a statement form connecting a committed shape to the stored truths of other shapes it is meant to change, satisfying that section's six constraints. Candidate spellings were sketched and set aside unadopted (`after:` postcondition clauses; a dedicated `act`/`commit` declaration); §17's provisional `output` is retired either way. The exit side additionally needs occurrence-ordering vocabulary ("no unarchive request has arrived *since*") — see occurrence reification, below.
 
 ### Occurrences and "once"
 
@@ -277,8 +191,8 @@ Now committing an `UnarchiveRequest` is itself the fact that falsifies the predi
 
 Settled: the two axioms (inertness — the system as a fold of external acts; one state — the black box as a single committed state, serializability as its justification); all-change-through-acts with one kind of commit point; state change as membership delta, CRUD as materialization; capture's semantics and its home as refinement properties (README §7); the state/effect stratification and its table; the mutation-policy trio with immutability as a lien and `on leaving R` with evidence-only reads (README §12); mutation-relocates-the-ledger; the nine-case mutation taxonomy with mutability derived from the act roster and the three compiler response kinds.
 
-Also settled (7/27): the truth ladder — the consolidated answer to "how does state change impact the truth of the design": five rungs (timeless / state-dependent / membership-anchored / historical / meta), each with a determined response to a commit, with rung 4 the only place a human owes a policy and rung 5 the only place a spec change re-opens proofs. And sketched: the post-state grammar — `after:` postconditions with exactly two mechanisms (verified act-existence assertions, derived writes from invertible equalities), the "can't command drift" legality rule, collections dissolving into inferred inverses, exit reducing to a verified assertion under occurrence pairing, and `after` replacing §17's provisional `output`.
+Also settled (7/27): the truth ladder — the consolidated answer to "how does state change impact the truth of the design": five rungs (timeless / state-dependent / membership-anchored / historical / meta), each with a determined response to a commit, with rung 4 the only place a human owes a policy and rung 5 the only place a spec change re-opens proofs. And documented (7/27), deliberately in isolation from any syntax proposal: the commit-reconciliation gap — existence-carried truth (memberships, captures, inferred-inverse collections) reconciles automatically; changes to the *stored* truths of other shapes have no statement form at all; six constraints bound any solution (two mechanisms exhaust the space; underdetermined change is illegal — you can't command drift; declared, not inferred; meaning not exhausted by the change; refusal reads the reconciliation; the mutation surface is read off reconciliations). Spellings sketched along the way (`after:` postconditions, `act`/`commit` declarations) are set aside, unadopted; §17's provisional `output` is retired regardless.
 
 Also resolved (7/27): correction-vs-change — not a language distinction but PO-declared act vocabulary. An act is an act; corrections and changes that should behave differently are different acts, distinguishable downstream because acts are facts (an act's meaning is not exhausted by its delta). The committed history is what the system knew; corrections add knowledge rather than rewriting past reactions, and retroactive obligations are ordinary rules on the correction act.
 
-Open, by weight: the post-state grammar's residue (occurrence-ordering syntax — `newer than that X` — and `with` sugar), relationship re-parenting (new vocabulary needed), occurrence reification (carries the "once" contradiction and the `that` ambiguity, and now the ordering syntax the exit sketch leans on), then the spellings and contracts (policy default, commit points, observability, retention, compensate form, grouping). Next after the grammar work: the state partition declaration.
+Open, by weight: closing the commit-reconciliation gap (central — its exit side leans on occurrence ordering), relationship re-parenting (new vocabulary needed), occurrence reification (carries the "once" contradiction, the `that` ambiguity, and the ordering vocabulary exit-pairing needs), then the spellings and contracts (policy default, commit points, observability, retention, compensate form, grouping). Next after the gap: the state partition declaration.
