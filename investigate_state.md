@@ -202,7 +202,7 @@ rule NagCustomer when OverdueInvoice on commit, Daily {
 
 "Newly-satisfying" (README §10) is well-defined with no hidden bookkeeping, but only *per commit*: a commit is a discrete moment, and evaluating its consequences means pre-state and post-state are both transiently available. `when Delinquent on commit` means *the commit that made it true* — false before, true after. `when leaving` is the same diff reversed. Consequences:
 
-- **Episodes are free at commit granularity.** September's re-entry into `Delinquent` is a new entering commit, so `SuspendService` fires again — once per episode, with no guard apparatus. (The outcomes even accumulate as history: one `ServiceSuspension` per episode.) OQ2's episode machinery was compensating for monotone evidence-guards; commit-entry semantics never had the problem. The guard patterns remain what you buy for *durability* (crash recovery) and *cross-tick memory*, not for entry itself.
+- **Episodes are free at commit granularity.** September's re-entry into `Delinquent` is a new entering commit, so `SuspendService` fires again — once per episode, with no guard apparatus. (The outcomes even accumulate as history: one `ServiceSuspension` per episode.) The episode apparatus ("Episodes as data," below) was compensating for monotone evidence-guards; commit-entry semantics never had the problem. The guard patterns remain what you buy for *durability* (crash recovery) and *cross-tick memory*, not for entry itself.
 - **Bare act triggers are sound.** `when CorrectEmail on commit` fires once per correction commit — the commit is the unit of firing. The rule is never tick-evaluated, so no sweep can re-apply old corrections.
 - **A tick is a commit whose changed datum is `today`.** So `on commit, Daily` is one mechanism, not two: an invoice *aging* into `OverdueInvoice` is a commit-local diff over the tick — the same entry semantics as a payment-reversal commit. (Compare the sweep: a subjectless `each` rule on a tick is the *sampling* usage; `when` + schedule is the *aging* usage. Both valid, visibly different spellings.)
 
@@ -234,114 +234,26 @@ rule ApplyDeposit when UnappliedDeposit on commit, Hourly {
 }
 ```
 
-`on commit` gives latency; `on Hourly` is a reconciliation backstop that catches anything a crash dropped — safe to add precisely because OQ2's canonical guard makes re-evaluation harmless. One line reads: *immediately, and self-healing hourly*.
+`on commit` gives latency; `on Hourly` is a reconciliation backstop that catches anything a crash dropped — safe to add precisely because the canonical guard ("Run-once guards," below) makes re-evaluation harmless. One line reads: *immediately, and self-healing hourly*.
 
-## Open questions
+## Run-once guards
 
-(Retired tags are not reused. OQ1, concurrent assignments to one field, is settled — see "One writer per field, per commit." OQ3, assignment targets must be stored fields, is settled — see "Assignment targets are stored fields.")
-
-### OQ2. Exactly-once, and what an assignment's RHS may read
-
-**Still open — under active discussion.** What follows is the current state of the thinking, not a resolution.
-
-There's a clean static split between two kinds of assignment RHS:
-
-```
-rule ApplyEmailCorrection when CorrectEmail {
-    customer.email = corrected               -- reads only the act's own data: idempotent
-}
-
-rule ApplyDeposit when Deposit {
-    account.balance = account.balance + amount   -- reads the state being mutated: NOT idempotent
-}
-```
-
-The first is harmless to re-fire — exactly-once degrades gracefully to at-least-once. The second applied twice is a double deposit; it is non-idempotent and order-sensitive, and the compiler can tell the two apart statically (does the RHS traverse into mutable stored state, or only into the triggering act?). Whether the non-idempotent kind is (a) forbidden outright, (b) legal only with a run-once guard, or (c) legal and the product owner's problem, is undecided; the discussion so far has been about what (b)'s guard actually is.
-
-**The guard is a data invariant, and it can't be anything else.** README §11's `produces` guard, desugared, is a refinement of the trigger — "a Deposit for which no DepositApplication exists" — and firing creates the evidence that falsifies its own trigger. Run-once protection requires durable memory that a firing happened; Velle's principles leave exactly one place for durable memory: data. A runtime keeping hidden fired-flags somewhere no shape describes would be untraceable state, which the language forbids everywhere else — so the witness *must* be a shape. (Strongly agreed.) The fully explicit spelling needs no new syntax at all — the guard is just a refinement in the trigger:
+Commit-triggered rules already fire exactly once per commit ("Entry and exit are commit-local diffs"), so an ordinary rule needs no guard. A guard earns its place in exactly two situations: **durability** — the firing must survive a crash and be provable afterward — and **cross-tick memory** — a tick rule needs "already handled" as data (the tick law). The canonical form, which any future sugar must desugar to exactly, is a named refinement whose predicate the rule's own body falsifies:
 
 ```
 shape UnappliedDeposit = Deposit where not exists DepositApplication for this
 
-rule ApplyDeposit when UnappliedDeposit {
+rule ApplyDeposit when UnappliedDeposit on commit, Hourly {
     account.balance = account.balance + amount
     DepositApplication from { deposit: this, appliedOn: now }
 }
 ```
 
-**Settled direction: this is the canonical form — any sugar must desugar to exactly this.** The guard is a named refinement: a business state (*an unapplied deposit*) up front in trigger position, in the language's core vocabulary. And the connection between gate and witness is not a keyword but a **compiler obligation**: the body must provably falsify the trigger's own predicate — the rule disarms itself. A rule on `UnappliedDeposit` that forgets the production line fails to compile ("this rule never leaves its trigger state") — the double-deposit bug caught as structural incoherence, not a runtime surprise. As a law: *a non-idempotent rule's trigger must be a state its own effects provably exit.* The disarm analysis unifies every witness kind with zero keywords: producing evidence falsifies an `exists` predicate; `this.applied = true` falsifies a flag predicate; the nightly sweep's assignment falsifies its filter — with a restore rule legally *re-arming* it, making non-monotone re-entry ordinary behavior of a resettable state rather than an edge case.
+**The guard is a data invariant, and it can be nothing else.** Run-once protection requires durable memory that a firing happened, and the only durable memory in Velle is data. A runtime keeping hidden fired-flags somewhere no shape describes would be untraceable state, forbidden everywhere else — so the witness must be data: a produced shape, or a stored field.
 
-**Sugar is the open part, and every header candidate shares `produces`' flaw.** `produces` reads like a *data* concept ("this rule emits a DepositApplication") but behaves like a *guard* — one keyword doing two jobs, its name only admitting to the first. A header keyword naming the behavior instead (`once`, `once by DepositApplication`, or `until DepositApplication` — "fires until the witness exists") reads better but keeps the structural weakness: the gate in the header and the witness in the body are two mentions joined only by name-coincidence; nothing in the syntax says they are the same fact. A statement-level marker fuses them instead:
+**The disarm law.** The connection between gate and witness is a compiler obligation, not a keyword: the body must provably falsify the trigger's own predicate — *a guarded rule's trigger must be a state its own effects provably exit*. A rule on `UnappliedDeposit` that forgets the production line fails to compile ("this rule never leaves its trigger state") — the double-deposit bug caught as structural incoherence, not a runtime surprise.
 
-```
-rule ApplyDeposit when Deposit {
-    once DepositApplication from { deposit: this, appliedOn: now }
-    account.balance = account.balance + amount
-}
-```
-
-— gate and effect are one piece of syntax, at the cost of the header no longer showing the rule is guarded, and of one statement silently gating the whole body. Which sugar, if any, earns adoption is open; deferring costs nothing, since the canonical form is fully expressive today. Points that survive whichever sugar wins:
-
-- **Guard granularity is predicate content, not annotation.** Once-per-deposit is `not exists DepositApplication for this`; at-most-once-per-customer-ever is `not exists (FlagNotification where customer == this.customer)`. §11's `produces X for field` annotation was rendering this choice; the canonical form states it directly.
-- **No guard means "once ever" unless its predicate says so.** The plural case is the default: every commit of an act is a new instance with its own guard state — a hundred `Deposit` commits, a hundred firings, each exactly once.
-- **The enforcement chain**, each step a one-line diagnostic pointing at the next missing piece: RHS reads mutable state → not idempotent → the trigger must be a dischargeable state → the body must provably discharge it.
-
-**The edge: a guard's unit must be a shape the data contains — and a drift episode isn't one.** A rule on a drift-entered refinement, guarded per instance, silently under-fires on re-entry:
-
-```
-shape Delinquent = Account where balance < 0
-shape UnsuspendedDelinquent = Delinquent where not exists ServiceSuspension for this
-
-rule SuspendService when UnsuspendedDelinquent {
-    ServiceSuspension from { account: this, suspendedOn: now }
-}
-
--- Jan  5: enters Delinquent → no evidence → fires, suspension recorded
--- Feb  1: paid in full → leaves Delinquent → service restored (when leaving, §12)
--- Sep 12: enters Delinquent again → ServiceSuspension for this account already
---         exists → silently does not fire. September is never suspended.
-```
-
-The business intent was once per *episode*, but the September entry happened by drift — no act instance marks it, so `once per <episode>` has nothing to name. The fix, using only existing machinery, is to reify the episode as a flag/resolution pair:
-
-```
-shape DelinquencyFlag {
-    account: one Account
-    flaggedOn: Date
-}
-
-shape DelinquencyResolution {
-    flag: one DelinquencyFlag
-    resolvedOn: Date
-}
-
-shape OpenDelinquencyFlag = DelinquencyFlag where not exists DelinquencyResolution for this
-
--- entry: a delinquent account with no open flag starts a new episode
-rule OpenDelinquencyEpisode
-    when (Delinquent where not exists (OpenDelinquencyFlag where account == this)) {
-    DelinquencyFlag from { account: this, flaggedOn: today }
-}
-
--- exit: leaving Delinquent closes the open episode
-rule CloseDelinquencyEpisode when leaving Delinquent {
-    DelinquencyResolution from {
-        flag: (OpenDelinquencyFlag where account == this)
-        resolvedOn: today
-    }
-}
-
--- the business rule, now guarded at the right unit
-shape UnsuspendedFlag = DelinquencyFlag where not exists ServiceSuspension for this
-
-rule SuspendService when UnsuspendedFlag {
-    ServiceSuspension from { flag: this, suspendedOn: now }
-}
-```
-
-September now works: the old flag is resolved, so a new flag opens — a new instance with its own guard state — and the rule fires again. Noteworthy in passing: the exit rule's singular reference `(OpenDelinquencyFlag where account == this)` is provably at-most-one *because of the entry rule's own guard* — a whole-spec singularity proof (§9's rule discharged by a guard elsewhere in the spec). And reified episodes immediately pay for themselves the moment the business quantifies over them (`count(DelinquencyFlag where account == this) >= 3`, episode duration, "second delinquency this year"). The honest cost: three shapes and two rules of completely mechanical pattern — possible future sugar territory (`episode of Delinquent`?), same relationship any guard sugar has to the canonical form.
-
-**The flag-guard variant.** A PO may want the guard as a field on the act itself rather than a separate evidence shape — and with in-place mutation in the language, that's now expressible with existing machinery (it wasn't before: until assignment existed, evidence shapes were the only possible durable run-once memory):
+**Two witness kinds, one analysis.** Producing evidence falsifies an `exists` predicate; a flag assignment falsifies a flag predicate — a form in-place mutation made expressible at all (before assignment existed, evidence shapes were the only possible durable run-once memory):
 
 ```
 shape Deposit {
@@ -358,17 +270,19 @@ rule ApplyDeposit when UnappliedDeposit {
 }
 ```
 
-Same self-falsifying structure as the evidence guard: the body performs the write that removes the instance from the trigger set, so firing disarms it. The no-hidden-state principle is satisfied (`applied` is a declared, traceable field), the one-writer check covers the flag, and the compiler can even *prove* the rule disarms itself — the body assigns the exact field the trigger's predicate reads. Under the canonical form the two guard kinds are already unified: both are dischargeable trigger states, differing only in where the memory lives (a produced shape vs. a stored field), and the same disarm proof covers both.
+Both are dischargeable trigger states; the same disarm proof covers both, and the one-writer check covers the flag. Witness grain is the author's choice, history opt-in at every step: a boolean (*that* it happened), `appliedOn: Date?` (*when* — guard on `appliedOn is none`, disarm with `this.appliedOn = now`), or a full evidence shape (payload, provenance). Where the flag lives is likewise per use case — directly on a trusted client's act, or on an internal record the external act commits (the high-stakes flow, which still needs a worked example; OQ5 carries the boundary vocabulary).
 
-The flag-guard surfaces one real language gap and two authoring choices Velle should support, not police:
+**Granularity is predicate content, not annotation.** Once-per-deposit is `not exists DepositApplication for this`; at-most-once-per-customer-ever is `not exists (FlagNotification where customer == this.customer)`. The guard's unit is whatever its predicate says — and it must be something the data contains.
 
-1. **Stored fields have no initial values — and the obvious syntax is taken.** `applied` must start `false`, but `applied: boolean = false` in shape-body position means *derived, always false* — unassignable per "Assignment targets are stored fields," incoherent as a guard. "Stored but initialized" is a missing third property kind needing its own spelling (`applied: boolean initially false`?). The evidence guard got its initial state for free: absence *is* unstarted.
-2. **Where the flag lives is a modeling choice, per use case.** In a money case the flag likely wouldn't sit on the externally-committed act at all — realistically the external shape commits an *internal* record that carries the flag, and the internal record is applied against the account (a flow that presumably resembles the ledger pattern; worth working through as its own example). But where the client is trusted, or the stakes don't warrant the split, the flag directly on the mutation shape is legitimate. Velle's job is not to forbid the direct form — it's to give the author validation tools when intent needs enforcing (OQ5's boundary vocabulary, e.g. `requires`-style constraints on what a committer may supply).
-3. **Flag vs. evidence richness is the author's call, not Velle's.** A flag records only *that* it happened; if the business also wants the timestamp without a separate shape, `appliedOn: Date?` does both jobs in one field — guard on `appliedOn is none`, disarm with `this.appliedOn = now`. History stays opt-in at every grain: none (boolean), when (optional date), full payload (evidence shape).
+**The enforcement chain**, each step a one-line diagnostic pointing at the next missing piece: RHS reads the state it assigns (a self-referential fold in one of OQ2's dangerous sub-cases) → not idempotent → the trigger must be a dischargeable state → the body must provably discharge it. Whether the language *mandates* this chain is OQ2; guard soundness also assumes the mutation and its witness enter the state together, which is OQ6's territory; sugar over the canonical form is OQ8.
 
-(Grammar note: `applied == false` is the sanctioned spelling — a bare boolean field isn't an atom in the predicate grammar, so `where not applied` would need a small extension. Probably worth having; reads far better.)
+## State-change patterns
 
-**The solution space is wider than guards.** The flag/resolution apparatus was one PO's answer — the one who needs episodes as history. A PO who says "just suspend delinquent accounts nightly" is describing a different solution family, expressible with existing machinery, in which the episode problem *vanishes* rather than being solved:
+The same business sentence — "suspend delinquent accounts" — has several valid designs, chosen by what the business actually needs (Philosophy: flexible, not restrictive). The spectrum runs **derivation → reconciliation → exactly-once events**, and the guard question only exists at the far end.
+
+**1. Pure classification — no rule at all.** If "suspended" causes no external effect — it's a status the system reports — it isn't state, it's a predicate: `shape Suspended = Account where balance < 0`. Zero machinery, always exactly current, nothing to guard. The question that selects this rung: *is suspension a fact you compute, or an action you take?*
+
+**2. Reconciliation — idempotent sweep + resettable current-state flag.** When suspension must be *stored* (independently meaningful: manual overrides, grace periods, an external system reads it) but only its current value matters:
 
 ```
 shape Account {
@@ -391,31 +305,107 @@ rule RestoreService on Nightly {
 }
 ```
 
-The January/September bug came from using *immutable evidence* as the guard — evidence persists, the guard is monotone, a second episode can never re-arm it. The `suspended` flag is a *current-state* guard, and it resets: February's restoration writes `false`, which re-arms September for free. Reification was only ever the cost of history, and this PO isn't buying history.
+`this.suspended = true` writes a constant — idempotent, so exactly-once is moot: the sweep can run twice a night or crash mid-run and rerun; it converges. The answer here is not *guard the firing* but *make firing harmless* — a reconciliation loop, desired state enforced by an idempotent sweep, the React/Kubernetes shape matching this doc's React philosophy. The flag is a *current-state* guard and it resets (`RestoreService` re-arms it), so re-entry is ordinary behavior. Latency = cadence, and transient blips are deliberately unobserved ("Transient membership is a policy").
 
-The exactly-once obligation disappears too: `this.suspended = true` writes a constant — idempotent by this OQ's own static split. The sweep can run twice a night, crash mid-run and rerun; it converges to the same state. This is a genuinely different answer to exactly-once — not *guard the firing* but *make firing harmless*: a reconciliation loop, desired state (`suspended` ⇔ delinquent) enforced by an idempotent sweep — the React/Kubernetes shape, matching this doc's React philosophy almost verbatim. The tick grounds it per "Rules ground in commits" (no drift-detection machinery needed at all), and the trade-off is stated in the schedule itself: suspension latency = sweep cadence. "We suspend nightly" vs. "we suspend the moment you go negative" is a visible one-word business decision — `on Nightly` vs. `when Delinquent on commit`.
+**3. Exactly-once events.** When the moment matters or the record does:
 
-So the PO's solution space for "suspend delinquents" has three rungs, each existing machinery, chosen by what the business actually needs:
+```
+rule SuspendService when Delinquent {
+    ServiceSuspension from { account: this, suspendedOn: now }
+}
+```
 
-1. **Pure classification — no rule at all.** If "suspended" causes no external effect — it's just a status the system reports — it isn't state, it's a predicate: `shape Suspended = Account where balance < 0`. Zero machinery, always exactly current, nothing to guard. The PO question that selects this rung: *is suspension a fact you compute, or an action you take?*
-2. **Reconciliation — idempotent sweep + resettable flag.** When suspension must be *stored* (independently meaningful: manual overrides, grace periods, an external system reads it) but only its current value matters. No exactly-once machinery, no episodes; re-entry is free.
-3. **Exactly-once events — witnessed guard + reified episodes.** When the moment matters (suspend *now*, not tonight) or the history matters (count episodes, durations, "second delinquency this year"). This is where dischargeable guards, evidence, and the flag/resolution pattern live — the full apparatus, purchased only when the business is actually asking for occurrences.
+Commit-local entry makes re-entry free — September's second delinquency is a new entering commit, so the rule fires again, and the `ServiceSuspension`s accumulate as per-episode history. Add a guard ("Run-once guards") when the firing must be durable.
 
-There's a fourth point off the end of the scale: the deposit case done reconciliation-style is `balance: Money = openingBalance + sum(...)` — the derived property, i.e., the ledger. The spectrum runs *derivation → reconciliation → exactly-once events*, and the exactly-once question only exists at the far end. That reframes OQ2: the guard isn't the answer to mutation safety in general — it's the answer for the subset of designs where the PO has chosen occurrence semantics, and the language's job (per flexible-not-restrictive) is to make every rung expressible and validate whichever one the author picked.
+Off the end of the scale, the deposit case done reconciliation-style is `balance: Money = openingBalance + sum(...)` — the derived property, i.e., the ledger. The guard isn't the answer to mutation safety in general; it's the answer for the subset of designs where the author has chosen occurrence semantics, and the language's job is to make every rung expressible and validate whichever one the author picked (whether the compiler should *recognize* the rungs is OQ11).
 
-Open sub-questions:
+### Episodes as data
 
-- The main (a)/(b)/(c) decision itself.
-- **Fate of `produces`** — under the canonical direction it's sugar that must desugar to a dischargeable trigger state: retire it, or keep it as a pure data declaration with no guard semantics — either touches every rule in the README.
-- **Which sugar, if any** — header keywords (`once`, `once by X`, `until X`) fail the structural-connection test (gate and witness joined only by name-coincidence); the statement-level marker passes it but hides the gate from the header. Deferring costs nothing; usage of the canonical form can reveal which sugar is actually missed.
-- **Interaction with `each` and schedule triggers** — the sweep examples already use `each` over a guard refinement; whether the disarm proof extends cleanly through `each` bodies and multi-cadence schedules needs its own worked pass.
-- **Atomicity prerequisite (→ OQ6).** The guard is only sound if the mutation and its evidence enter the state as one commit; a failure between them re-arms the guard → double deposit. Rule-firing atomicity is undefined, so OQ6 is a prerequisite of any resolution here.
-- **The guard does not dedupe acts (→ OQ5).** It prevents one act from applying twice; two committed identical `Deposit` instances (double-click, retried API call) are two acts, each applying once. Whether they're two deposits or one is a business-identity question about external inputs.
-- **Episode sugar** — whether the flag/resolution reification pattern deserves a construct.
-- **Initial values for stored fields** — the flag-guard needs `applied` to start `false`, and `= false` is taken by derivation. A missing third property kind (stored-but-initialized); whether an initial-value declaration can *optionally* also mark a field internal (not suppliable by committers) ties into OQ5.
-- **The external→internal flow** — the realistic modeling for high-stakes cases: an external mutation shape whose rule commits an internal record carrying the guard, which is then applied against the target. Presumably resembles the ledger pattern; needs a worked example.
-- **Bare boolean atoms** — extend the predicate grammar so `where not applied` is legal, or keep `applied == false` as the only spelling.
-- **Does the compiler recognize the rungs?** The derivation/reconciliation/exactly-once spectrum is currently implicit in how a spec is written. Should the compiler classify which rung each rule sits on and validate accordingly (e.g. prove a sweep converges and is idempotent; warn when a stored flag could have been a predicate; require `once` only on the exactly-once rung)? Ties the whole solution space back to validation-of-intent.
+Commit-triggered rules get per-episode *firing* free, but a tick rule that needs "this episode was handled" across ticks, or a business that quantifies over episodes ("third delinquency this year," episode duration), needs the episode reified — the tick law again: cross-tick memory must be data. The pattern is a flag/resolution pair:
+
+```
+shape DelinquencyFlag {
+    account: one Account
+    flaggedOn: Date
+}
+
+shape DelinquencyResolution {
+    flag: one DelinquencyFlag
+    resolvedOn: Date
+}
+
+shape OpenDelinquencyFlag = DelinquencyFlag where not exists DelinquencyResolution for this
+
+-- a delinquent account with no open flag starts a new episode
+rule OpenDelinquencyEpisode
+    when (Delinquent where not exists (OpenDelinquencyFlag where account == this)) {
+    DelinquencyFlag from { account: this, flaggedOn: today }
+}
+
+-- leaving Delinquent closes the open episode
+rule CloseDelinquencyEpisode when leaving Delinquent {
+    DelinquencyResolution from {
+        flag: (OpenDelinquencyFlag where account == this)
+        resolvedOn: today
+    }
+}
+```
+
+Now `count(DelinquencyFlag where account == this) >= 3` is expressible, and any rule can guard per episode (`DelinquencyFlag where not exists ServiceSuspension for this`). Noteworthy in passing: the exit rule's singular reference `(OpenDelinquencyFlag where account == this)` is provably at-most-one *because of the entry rule's own guard* — a whole-spec singularity proof (§9's rule discharged by a guard elsewhere in the spec). The honest cost: three shapes and two rules of completely mechanical pattern — sugar territory (`episode of Delinquent`?), tracked in OQ8.
+
+## Open questions
+
+(Retired tags are not reused. OQ1, concurrent assignments to one field, is settled — see "One writer per field, per commit." OQ3, assignment targets must be stored fields, is settled — see "Assignment targets are stored fields.")
+
+### OQ2. What must the language require of a self-referential assignment?
+
+The static analysis splits assignment RHSes into three classes, and only part of the last is dangerous:
+
+**1. Act-only** — reads nothing but the triggering act. Idempotent; re-firing is harmless.
+
+```
+rule ApplyEmailCorrection when CorrectEmail {
+    customer.email = corrected
+}
+```
+
+**2. Recomputing** — reads state, but *not the target itself*: a deterministic formula over current data. Convergent — same inputs, same value — so exactly-once is moot on any trigger. Per-commit recompute is an incrementally maintained materialization (semantically a derived property that happens to be stored); tick recompute is a *snapshot* — "the score as of last night," deliberately stable between ticks, a business concept live derivation can't express. Both valid, no guard:
+
+```
+-- "every commit, update this value": materialized derivation
+rule UpdateRating when Review {
+    product.rating = sum(product.reviews, stars) / count(product.reviews)
+}
+
+-- "every night, recalculate this value": snapshot
+rule RecalculateRiskScore on Nightly {
+    each Account {
+        this.riskScore = <formula over payments, balance, history>
+    }
+}
+```
+
+**3. Self-referential — a denormalized fold.** The RHS reads the target's own current value, so the next value is a function of the previous one (`value′ = f(value, commit data)`): the stored field denormalizes a *fold over the commit sequence*. "Accumulating" (`balance = balance + amount`) is only the simplest instance — `streak = if payment.onTime then streak + 1 else 0`, `peak = max(peak, amount)`, and a moving average are all folds:
+
+```
+rule ApplyDeposit when Deposit {
+    account.balance = account.balance + amount
+}
+```
+
+The danger isn't self-reference itself — it's the algebra of *f*, and the compiler can distinguish three sub-cases statically:
+
+- **Duplication- and order-insensitive** (`max`, `min`, set-union, boolean-or): re-applying the same act changes nothing (`max(max(x, a), a) == max(x, a)`), and order doesn't matter — convergent, provably safe to re-fire, no guard needed. Self-reading, yet as harmless as the recomputing class.
+- **Duplication-sensitive** (`sum`, `count`): exactly-once matters — a double deposit, a double-counted submission. This is where the guard question genuinely lives. These have clean derivation twins, because they are exactly the language's aggregates: `submissionCount` is `count(Submission for this)`.
+- **Order-dependent** (streaks, moving averages, "reset on miss"): exactly-once *and* ordering both matter — and the derivation-twin argument has a hole here: a streak as a derivation requires folding over an *ordered* collection, vocabulary the derivation grammar doesn't have (README §18's derived-value grammar and `latest`-ordering items). For this sub-case, the self-referential mutation is currently the *only* spelling the language offers.
+
+The open question applies to the duplication-sensitive and order-dependent sub-cases only: **(a)** forbidden, **(b)** legal only with a run-once guard ("Run-once guards"), or **(c)** legal with the risk left to the author? Facts complicating a single answer:
+
+- **Expressible folds belong to compilation.** Where the fold is expressible as a recompute or derivation, the incremental spelling (`rating = (rating * n + stars) / (n + 1)`) and the recompute spelling (`rating = sum(reviews, stars) / count(reviews)`) are the same description with different *execution strategies* — and incremental maintenance is exactly what §1 assigns to compilation, not description. The author writes the recompute or derivation; the compiler chooses whether to maintain it incrementally. Both spellings stay legal (flexible, not restrictive); the compiler could surface the twin as guidance, or prove the two consistent (→ OQ11).
+- **Some folds are forced into mutation by a grammar gap.** Order-dependent folds have no derivation spelling today — arguably a vocabulary gap to close (ordered folds) rather than a mutation feature to guard.
+- **Tolerance is a business fact, per use case.** A double-counted page view is noise; a double-applied deposit is theft. So the answer is probably not one letter globally — current lean: guard required *by default* for the two dangerous sub-cases, with a declarable "approximate is fine" tolerance that waives it. Validation-of-intent rather than one-size enforcement; no syntax proposed.
+
+Dependencies: commit-triggered firing is already logically once-per-commit ("Entry and exit are commit-local diffs"), so the guard is about **durability** — the crash between the commit and the rule's effects — making OQ6's definition of a commit a prerequisite; and a guard cannot dedupe repeated acts (two identical `Deposit` commits are two firings, each exactly once) — OQ5's act-identity question. The sugar question is OQ8.
 
 ### OQ4. Act-level sugar for the one-assignment case
 
@@ -449,7 +439,7 @@ An author may eventually want to declare the distinction (e.g. only externally-c
 Grown from a footnote into the load-bearing question — commits, state, and guards all meet here. The open threads, from narrowest to widest:
 
 - **Is a commit a single act instance?** The one-writer check's "unrelated shapes can never coincide" holds only if two different acts can't enter the state as one commit. Nothing states this anywhere yet. If multi-instance commits exist, "can these triggers coincide?" needs a broader definition than trigger-shape overlap.
-- **Is a rule firing inside its triggering commit, or a subsequent commit of its own?** "Rules ground in commits" establishes that every firing happens *as a consequence of* a commit — but not whether the withdrawal and the suspension it triggers are one atomic state transition or two. OQ2's guard soundness already demands mutation-plus-evidence be atomic (a failure between them re-arms the guard → double deposit); that was this question in miniature.
+- **Is a rule firing inside its triggering commit, or a subsequent commit of its own?** "Rules ground in commits" establishes that every firing happens *as a consequence of* a commit — but not whether the withdrawal and the suspension it triggers are one atomic state transition or two. Guard soundness ("Run-once guards") already demands mutation-plus-witness be atomic (a failure between them re-arms the guard → double deposit); that was this question in miniature.
 - **What is a cascade?** A rule's effects can trip further rules — the suspension enters some refinement, another rule fires on that. Is the whole cascade one commit, a chain of commits with observable intermediate states, or bounded somehow? The atomicity OQ2 needs generalizes to the entire chain.
 - **Where do `then`'s intermediate moments sit?** README §14's `then` (ordering effects within one firing) implies observable intermediate states whose relationship to commit boundaries is undefined.
 
@@ -463,4 +453,107 @@ The core is settled — see "Rule triggers: `when` and `on`" above: the commit/t
 - **Re-derive §12 under commit-local diffs** — mutation policies (`stands`/`forbidden`/`compensate`), what an exit rule may read (captured properties retract at the very moment a `when leaving` rule fires), and `compensate`'s desugared form, now that `leaving` is a diff rather than a primitive observation.
 - **Latency vocabulary** — `on` expresses the evaluation *source*, not latency *requirements*. Is "immediate by default, named schedule otherwise" enough, or do deadlines ("within 24h") deserve first-class expression the compiler validates against declared cadences?
 - **`on commit of <Shape>` narrowing** — "only withdrawals suspend, not fee assessments." Expressible and occasionally meaningful, but it can silently miss entry paths; per flexible-not-restrictive it would be allowed *with* the compiler reporting exactly which entry paths go unobserved. Not yet designed.
-- **The pattern catalog and sugar.** The durable-state patterns — handled-once (*C ∧ ¬witness*), episode (flag/resolution pairing; entry = *C ∧ ¬open*, exit = *¬C ∧ open*), resettable latch (flag reconciled by sweeps), classification (*C* alone, no rule) — remain the vocabulary for crash-safe and cross-tick designs, no longer a replacement for entry/exit themselves. Whether they stabilize into sugar (`episode of Delinquent` generating the whole flag/resolution apparatus) is still the path sketched in OQ2.
+- **The pattern catalog and sugar.** The durable-state patterns — handled-once (*C ∧ ¬witness*), episode (flag/resolution pairing; entry = *C ∧ ¬open*, exit = *¬C ∧ open*), resettable latch (flag reconciled by sweeps), classification (*C* alone, no rule) — remain the vocabulary for crash-safe and cross-tick designs, no longer a replacement for entry/exit themselves. The patterns themselves are documented in "State-change patterns"; whether they stabilize into sugar (`episode of Delinquent` generating the whole flag/resolution apparatus) is OQ8.
+
+### OQ8. Guard and pattern sugar
+
+The canonical form is settled ("Run-once guards"); whether any sugar earns adoption is not.
+
+**The floor any sugar must respect: a guard is never *just* sugar.** Ordinary sugar is semantically weightless — it rewrites a spelling into constructs already present. A guard *adds model content*: a nameable state (the refinement) and a witness fact that lives in the data, appears in impact analysis, and is what `why` walks. Sugar may abbreviate the spelling; it may not make the witness anonymous — a keyword that had the compiler invent an unnamed internal record would be the hidden fired-flag in costume. Every candidate below keeps the witness named.
+
+**Use cases in canonical form, annotated where sugar could buy readability:**
+
+```
+-- use case: apply each deposit exactly once, durably
+shape UnappliedDeposit = Deposit where not exists DepositApplication for this
+                       -- ^ sugar target: pure mechanism, "X where not exists W for this"
+                       --   written out by hand just to name a trigger state
+
+rule ApplyDeposit when UnappliedDeposit on commit, Hourly {
+    account.balance = account.balance + amount
+    DepositApplication from { deposit: this, appliedOn: now }
+                       -- ^ sugar target: nothing in the syntax marks this statement
+                       --   as the witness; only the disarm proof connects it
+}
+
+-- candidate: rule ApplyDeposit when Deposit until DepositApplication { ... }
+--   collapses the hand-written refinement; the witness shape stays named
+```
+
+```
+-- use case: same guard, but the PO wants the flag on the deposit itself
+shape Deposit {
+    account: one Account
+    amount: Money
+    applied: boolean                    -- needs an initial value: OQ9
+}
+
+shape UnappliedDeposit = Deposit where applied == false
+
+rule ApplyDeposit when UnappliedDeposit {
+    account.balance = account.balance + amount
+    this.applied = true
+}
+
+-- four mechanical pieces spelling one idea ("track applied on the act"):
+-- the field, its initial value, the guard refinement, the disarm assignment.
+-- sugar over this quartet would generate all four from one declaration —
+-- but the field stays declared and visible, per the floor
+```
+
+```
+-- use case: notify at most once per customer, ever
+shape UnnotifiedFlag = AccountFlag
+    where not exists (FlagNotification where customer == this.customer)
+
+rule NotifyCustomer when UnnotifiedFlag {
+    FlagNotification from { customer: this.customer, notifiedOn: now }
+}
+
+-- the business phrase is "once per customer"; the correlated exists is its spelling.
+-- candidate: ... when AccountFlag once per customer by FlagNotification { ... }
+--   reads as the phrase, desugars to exactly the refinement above
+```
+
+```
+-- use case: remind overdue customers at most every 3 days
+rule SendReminder on Daily {
+    each (OverdueInvoice where
+          not exists (Reminder where invoice == this and sentOn > today - 3 days)) {
+        Reminder from { invoice: this, sentOn: today }
+    }
+}
+
+-- "at most every 3 days" is a rate limit; the dated-witness predicate is its spelling.
+-- candidate: ... at most every 3 days by Reminder — same desugaring shape as
+--   "once per customer": a policy phrase over a named, dated witness
+```
+
+```
+-- use case: track delinquency episodes ("Episodes as data" has the full apparatus)
+-- five declarations, all mechanical: the flag shape, the resolution shape,
+-- the open-refinement, the open rule, the close rule.
+-- candidate: episode DelinquencyEpisode of Delinquent — generating all five,
+--   with the generated shapes named and queryable, not anonymous
+```
+
+The pattern across all five: each sugar candidate is a **business policy phrase over a named witness** — *exactly once*, *once per customer*, *at most every 3 days*, *episode of* — desugaring to a guard refinement the author would otherwise hand-write. The witness is always the named survivor; the refinement is always the generated part. That suggests the sugar question is really one design, not five: a policy-clause grammar whose every form names its witness.
+
+Remaining sub-questions:
+
+- **Which forms, if any.** Header clauses (`until X`, `once per f by X`) still carry the structural-connection weakness — gate and witness joined by name — though the disarm proof backstops them; the statement-level marker (`once X from { ... }`) fuses gate and effect but hides the gate from the header. Deferring costs nothing; usage of the canonical form can reveal which phrases are actually missed.
+- **Fate of `produces`.** It reads like a *data* concept but behaves like a *guard* — one keyword, two jobs. Under the canonical direction it's sugar that must desugar to a dischargeable trigger state: retire it, or keep it as a pure data declaration with no guard semantics. Either touches every rule in the README (§§11 and 15 carry tentative markers).
+- **The `each`/multi-schedule pass** — whether the disarm proof extends cleanly through `each` bodies and multi-cadence `on` lists.
+- **Diagnostic-led adoption (← OQ2).** OQ2's enforcement lean means the compiler will be *proposing* guards at authors mid-error; whatever sugar exists is what the fix-it suggestion writes. Sugar ergonomics and OQ2's enforcement decision aren't separable — a required guard that's miserable to write makes (b) hostile; a one-phrase guard makes it a teaching moment.
+
+### OQ9. Initial values for stored fields
+
+Exposed by the flag guard but independent of it: `applied` must start `false`, and `applied: boolean = false` in shape-body position means *derived, always false* — unassignable ("Assignment targets are stored fields"), incoherent as a guard. "Stored but initialized" is a missing third property kind needing its own spelling (`applied: boolean initially false`?). The evidence-shape guard never faces this — absence *is* its initial state. Whether an initial-value declaration can *optionally* also mark a field internal (not suppliable by committers) ties into OQ5.
+
+### OQ10. Bare boolean atoms
+
+`where not applied` isn't grammatical — a bare boolean field isn't an atom in the predicate grammar, so `applied == false` is the only sanctioned spelling. Probably worth the small grammar extension; reads far better. Not yet decided.
+
+### OQ11. Should the compiler recognize the rungs?
+
+The derivation → reconciliation → exactly-once spectrum ("State-change patterns") is implicit in how a spec is written. Should the compiler classify which rung each rule sits on and validate accordingly — prove a sweep converges and is idempotent, warn when a stored flag could have been a predicate, require a guard only where non-idempotence demands one? Ties the whole solution space back to validation-of-intent.
