@@ -34,15 +34,15 @@ shape CorrectEmail {
 A rule is where a mutation's effect is described. The effect itself is an assignment statement:
 
 ```
-rule ApplyEmailCorrection on CorrectEmail {
+rule ApplyEmailCorrection when CorrectEmail {
     customer.email = corrected
 }
 ```
 
 The pieces:
 
-- **`on CorrectEmail`** — a plain-shape trigger, already sanctioned (README §14's `rule InitiateCharge on Order`): the rule fires when an instance is committed.
-- **`customer.email = corrected`** — assignment, a new effect-statement form alongside `X from { ... }` and `X for y ...`. `=` in rule-body position means *becomes, now*; in shape-body position it remains *is defined as, always* (derivation). One symbol, two positions — the same deliberate positional reuse the language already makes with `on` (prefix entry-trigger vs. postfix schedule), `for` (association vs. query), and `?` (optional marker vs. `?.`). The two contexts never collide: rule bodies contain no definitions, shape bodies contain no effects.
+- **`when CorrectEmail`** — a plain-shape condition, already sanctioned (README §14's `rule InitiateCharge when Order`): the rule fires when an instance is committed.
+- **`customer.email = corrected`** — assignment, a new effect-statement form alongside `X from { ... }` and `X for y ...`. `=` in rule-body position means *becomes, now*; in shape-body position it remains *is defined as, always* (derivation). One symbol, two positions — the same deliberate positional reuse the language already makes with `for` (association vs. query) and `?` (optional marker vs. `?.`). The two contexts never collide: rule bodies contain no definitions, shape bodies contain no effects.
 - **The target is a literal static path — a hard requirement.** Because `customer.email` is statically known, the whole-spec compiler knows every refinement predicate and derived property that reads `email`, and impact analysis falls out for free: which memberships may change, which entry/exit rules may consequently fire, which `forbidden` liens (README §12) could reject the commit. A computed or reflective target would destroy this, so no solution for mutation syntax may ever introduce one.
 
 ### One writer per field, per commit
@@ -57,11 +57,11 @@ Legal — separate acts whose triggers can never coincide fire from different co
 shape CorrectEmail  { customer: one Customer, corrected: text }
 shape OverrideEmail { customer: one Customer, admin: one Admin, overridden: text }
 
-rule ApplyEmailCorrection on CorrectEmail {
+rule ApplyEmailCorrection when CorrectEmail {
     customer.email = corrected
 }
 
-rule ApplyEmailOverride on OverrideEmail {
+rule ApplyEmailOverride when OverrideEmail {
     customer.email = overridden          -- legal: an OverrideEmail is never a CorrectEmail,
                                          -- so these always fire from different commits
 }
@@ -73,10 +73,10 @@ Errors — triggers that can coincide:
 
 ```
 -- same trigger shape: one CorrectEmail commit fires both
-rule ApplyEmailCorrection on CorrectEmail {
+rule ApplyEmailCorrection when CorrectEmail {
     customer.email = corrected
 }
-rule NormalizeEmail on CorrectEmail {
+rule NormalizeEmail when CorrectEmail {
     customer.email = lowercase(corrected)     -- compile error
 }
 ```
@@ -86,13 +86,31 @@ rule NormalizeEmail on CorrectEmail {
 -- so one commit fires both rules
 shape TrustedCorrection = CorrectEmail where customer is VerifiedCustomer
 
-rule ApplyEmailCorrection on CorrectEmail {
+rule ApplyEmailCorrection when CorrectEmail {
     customer.email = corrected
 }
-rule ApplyTrustedCorrection on TrustedCorrection {
+rule ApplyTrustedCorrection when TrustedCorrection {
     customer.email = corrected                -- compile error
 }
 ```
+
+### Assignment targets are stored fields
+
+A derived property is a computation; a computation can't be assigned:
+
+```
+shape Invoice {
+    amount: Money
+    payments: many Payment
+    balance: Money = amount - sum(payments, amount)
+}
+
+rule Forgive when ForgivenessGrant {
+    invoice.balance = 0        -- compile error: balance is derived
+}
+```
+
+Assignment writes stored truth; derived properties recompute over it. The correct model commits data the derivation already reads (a `Payment`, or a stored `forgiven` field the formula consults).
 
 ## Mutation with ledger design
 
@@ -124,23 +142,103 @@ A rule on a drift refinement looks, at first glance, like it's declared outside 
 ```
 shape Delinquent = Account where balance < 0
 
-rule SuspendService on Delinquent once {
+rule SuspendService when Delinquent {
     ServiceSuspension from { account: this, suspendedOn: now }
 }
 ```
 
-What makes it fire? The resolution: **drift is always commit-mediated.** An account doesn't drift into `Delinquent` by itself — `balance < 0` becomes true only because some commit changed the data the predicate reads. So a rule on a drift refinement is not waiting outside any commit; its real trigger set is *the set of commits that can affect its predicate*, and that set is statically computable from exactly the machinery in-place mutation mandates: `Delinquent` reads `balance`, and the static-path + one-writer requirements mean the compiler knows every assignment targeting `balance` and every act that feeds it. `SuspendService` compiles to a derived fact — it can fire only as a consequence of (say) a `Withdrawal` commit or a `Deposit` commit. The system never acts on its own; `on Delinquent` is a declarative surface over a commit-reactive reality, and the compiler can name the commits.
+What makes it fire? The resolution: **drift is always commit-mediated.** An account doesn't drift into `Delinquent` by itself — `balance < 0` becomes true only because some commit changed the data the predicate reads. So a rule on a drift refinement is not waiting outside any commit; its real trigger set is *the set of commits that can affect its predicate*, and that set is statically computable from exactly the machinery in-place mutation mandates: `Delinquent` reads `balance`, and the static-path + one-writer requirements mean the compiler knows every assignment targeting `balance` and every act that feeds it. `SuspendService` compiles to a derived fact — it can fire only as a consequence of (say) a `Withdrawal` commit or a `Deposit` commit. The system never acts on its own; `when Delinquent` is a declarative surface over a commit-reactive reality, and the compiler can name the commits.
 
 This preserves both halves of a real tension. The benefit of defining a rule *outside* its trigger survives: `on Delinquent` states the business condition — the durable judgment — and a new writer of `balance` added next year automatically extends the rule's trigger set with no edit to the rule (correct: the business condition didn't change). But Velle still knows *when* the rule executes — not because the author declared it, but because the "when" is derivable. Declared **what**, computed **when**, proven **reachable** — the same division of labor as the rest of the language.
 
 Two compiler obligations fall out:
 
-1. **The unfireable-rule error.** If the derived commit set is empty — no commit anywhere in the spec can cause entry into the refinement — the rule can never fire, and that's a whole-spec compile error, not a dead-code shrug. The sharp instance is time: `OverdueInvoice = Invoice where due < today` — no commit changes `today`. Entry at `Invoice` creation (committed already-overdue) is observable, but entry *by time passing* is unobservable without a tick. The diagnostic is precise: "entry into `OverdueInvoice` via the passage of time is unobserved by any schedule — add a postfix `on Daily` or this rule under-fires." README §16's stance stops being a convention and becomes a provable coverage check, since schedule ticks are commits and appear in the same derived trigger set.
+1. **The unfireable-rule error.** If the derived commit set is empty — no commit anywhere in the spec can cause entry into the refinement — the rule can never fire, and that's a whole-spec compile error, not a dead-code shrug. The sharp instance is time: `OverdueInvoice = Invoice where due < today` — no commit changes `today`. Entry at `Invoice` creation (committed already-overdue) is observable, but entry *by time passing* is unobservable without a tick. The diagnostic is precise: "entry into `OverdueInvoice` via the passage of time is unobserved by any schedule — add `on Daily` or this rule under-fires." README §16's stance stops being a convention and becomes a provable coverage check, since schedule ticks are commits and appear in the same derived trigger set.
 2. **The PO-facing answer to "when does this run?"** The derived commit set is impact analysis read backward. Forward: "if this commit lands, these rules may fire." Backward: "this rule fires as a consequence of: withdrawals, deposits, the daily tick." Both are the same graph; the author never writes the *when*, the compiler proves it and can show it.
+
+## Rule triggers: `when` and `on`
+
+**Settled direction.** A rule's header separates its condition from its trigger source, one keyword each:
+
+```
+rule <name> [when [leaving] <condition>] [on <trigger>, ...] { <effects> }
+```
+
+- **`when`** — the condition: a refinement, entered or left. Single meaning, always.
+- **`on`** — the trigger source: `commit`, or a named schedule (`Nightly`). Single meaning, always. This retires the prefix/postfix positional reuse of `on`; README §16's schedule references keep their existing `on Daily` spelling, relocated into the header.
+- Omitted `on` defaults to `on commit` — a single well-defined default, the same category as properties being required unless marked `?`.
+- The given/when/then echo is deliberate and on-brand: the README names BDD as "closer but not structured enough," and a rule now reads as that artifact made rigorous — *given* the declared shapes, *when* the condition holds, *on* commit or tick, then the effects (the body's sequencing keyword is already literally `then`).
+
+The two trigger sources are the two things a Product Owner actually distinguishes, and both are valid designs, chosen per use case:
+
+- **`on commit`** — "*the moment* it happens." The rule evaluates as a consequence of every commit that can affect its condition (the derived trigger set — computed, never enumerated by the author).
+- **`on <schedule>`** — "*every night*, check." The tick is itself a commit arriving; a tick carries no subject of its own, so a schedule-only rule quantifies over current state with `each`.
+
+```
+rule ApplyEmailCorrection when CorrectEmail on commit {
+    customer.email = corrected
+}
+
+rule SuspendService when Delinquent on commit {
+    ServiceSuspension from { account: this, suspendedOn: now }
+}
+
+rule RestoreService when leaving Delinquent on commit {
+    ServiceRestoration from { account: this, restoredOn: now }
+}
+
+rule SuspendDelinquents on Nightly {
+    each (Delinquent where suspended == false) {
+        this.suspended = true
+    }
+}
+
+rule NagCustomer when OverdueInvoice on commit, Daily {
+    Nag from { invoice: this, naggedOn: now }
+}
+```
+
+### Entry and exit are commit-local diffs
+
+"Newly-satisfying" (README §10) is well-defined with no hidden bookkeeping, but only *per commit*: a commit is a discrete moment, and evaluating its consequences means pre-state and post-state are both transiently available. `when Delinquent on commit` means *the commit that made it true* — false before, true after. `when leaving` is the same diff reversed. Consequences:
+
+- **Episodes are free at commit granularity.** September's re-entry into `Delinquent` is a new entering commit, so `SuspendService` fires again — once per episode, with no guard apparatus. (The outcomes even accumulate as history: one `ServiceSuspension` per episode.) OQ2's episode machinery was compensating for monotone evidence-guards; commit-entry semantics never had the problem. The guard patterns remain what you buy for *durability* (crash recovery) and *cross-tick memory*, not for entry itself.
+- **Bare act triggers are sound.** `when CorrectEmail on commit` fires once per correction commit — the commit is the unit of firing. The rule is never tick-evaluated, so no sweep can re-apply old corrections.
+- **A tick is a commit whose changed datum is `today`.** So `on commit, Daily` is one mechanism, not two: an invoice *aging* into `OverdueInvoice` is a commit-local diff over the tick — the same entry semantics as a payment-reversal commit. (Compare the sweep: a subjectless `each` rule on a tick is the *sampling* usage; `when` + schedule is the *aging* usage. Both valid, visibly different spellings.)
+
+### The tick law: cross-tick memory must be data
+
+A tick-triggered rule sees only current state — "what changed since last tick" would require persistent memory between ticks, and memory must be data. So sweeps carry their memory as witnesses, flags, or evidence:
+
+```
+rule SendReminder on Daily {
+    each (OverdueInvoice where
+          not exists (Reminder where invoice == this and sentOn > today - 3 days)) {
+        Reminder from { invoice: this, sentOn: today }
+    }
+}
+```
+
+"At most every 3 days" is memory across ticks, so it's data — the `Reminder` evidence itself, with no hidden last-run timestamp anywhere.
+
+### Transient membership is a policy, stated in the header
+
+An account goes negative Monday 09:00 and recovers at 17:00. Under `when Delinquent on commit`: suspension fires at 09:00, restoration at 17:00 — the blip was real, service was off for eight hours. Under the `on Nightly` sweep: the check sees a positive balance — the blip never mattered. Neither is wrong: commit-triggered observes every membership the commit stream produces; tick-triggered observes what persists to the tick. The choice is business-visible in one clause — README §18's "membership that begins and ends unobserved" question, answered per rule by the author rather than globally by the language.
+
+### Composition as a durability policy
+
+```
+rule ApplyDeposit when UnappliedDeposit on commit, Hourly {
+    account.balance = account.balance + amount
+    DepositApplication from { deposit: this, appliedOn: now }
+}
+```
+
+`on commit` gives latency; `on Hourly` is a reconciliation backstop that catches anything a crash dropped — safe to add precisely because OQ2's canonical guard makes re-evaluation harmless. One line reads: *immediately, and self-healing hourly*.
 
 ## Open questions
 
-(OQ1, concurrent assignments to one field, is settled — see "One writer per field, per commit" above. Retired tags are not reused.)
+(Retired tags are not reused. OQ1, concurrent assignments to one field, is settled — see "One writer per field, per commit." OQ3, assignment targets must be stored fields, is settled — see "Assignment targets are stored fields.")
 
 ### OQ2. Exactly-once, and what an assignment's RHS may read
 
@@ -149,11 +247,11 @@ Two compiler obligations fall out:
 There's a clean static split between two kinds of assignment RHS:
 
 ```
-rule ApplyEmailCorrection on CorrectEmail {
+rule ApplyEmailCorrection when CorrectEmail {
     customer.email = corrected               -- reads only the act's own data: idempotent
 }
 
-rule ApplyDeposit on Deposit {
+rule ApplyDeposit when Deposit {
     account.balance = account.balance + amount   -- reads the state being mutated: NOT idempotent
 }
 ```
@@ -165,7 +263,7 @@ The first is harmless to re-fire — exactly-once degrades gracefully to at-leas
 ```
 shape UnappliedDeposit = Deposit where not exists DepositApplication for this
 
-rule ApplyDeposit on UnappliedDeposit {
+rule ApplyDeposit when UnappliedDeposit {
     account.balance = account.balance + amount
     DepositApplication from { deposit: this, appliedOn: now }
 }
@@ -176,7 +274,7 @@ rule ApplyDeposit on UnappliedDeposit {
 **Sugar is the open part, and every header candidate shares `produces`' flaw.** `produces` reads like a *data* concept ("this rule emits a DepositApplication") but behaves like a *guard* — one keyword doing two jobs, its name only admitting to the first. A header keyword naming the behavior instead (`once`, `once by DepositApplication`, or `until DepositApplication` — "fires until the witness exists") reads better but keeps the structural weakness: the gate in the header and the witness in the body are two mentions joined only by name-coincidence; nothing in the syntax says they are the same fact. A statement-level marker fuses them instead:
 
 ```
-rule ApplyDeposit on Deposit {
+rule ApplyDeposit when Deposit {
     once DepositApplication from { deposit: this, appliedOn: now }
     account.balance = account.balance + amount
 }
@@ -194,12 +292,12 @@ rule ApplyDeposit on Deposit {
 shape Delinquent = Account where balance < 0
 shape UnsuspendedDelinquent = Delinquent where not exists ServiceSuspension for this
 
-rule SuspendService on UnsuspendedDelinquent {
+rule SuspendService when UnsuspendedDelinquent {
     ServiceSuspension from { account: this, suspendedOn: now }
 }
 
 -- Jan  5: enters Delinquent → no evidence → fires, suspension recorded
--- Feb  1: paid in full → leaves Delinquent → service restored (on leaving, §12)
+-- Feb  1: paid in full → leaves Delinquent → service restored (when leaving, §12)
 -- Sep 12: enters Delinquent again → ServiceSuspension for this account already
 --         exists → silently does not fire. September is never suspended.
 ```
@@ -221,12 +319,12 @@ shape OpenDelinquencyFlag = DelinquencyFlag where not exists DelinquencyResoluti
 
 -- entry: a delinquent account with no open flag starts a new episode
 rule OpenDelinquencyEpisode
-    on (Delinquent where not exists (OpenDelinquencyFlag where account == this)) {
+    when (Delinquent where not exists (OpenDelinquencyFlag where account == this)) {
     DelinquencyFlag from { account: this, flaggedOn: today }
 }
 
 -- exit: leaving Delinquent closes the open episode
-rule CloseDelinquencyEpisode on leaving Delinquent {
+rule CloseDelinquencyEpisode when leaving Delinquent {
     DelinquencyResolution from {
         flag: (OpenDelinquencyFlag where account == this)
         resolvedOn: today
@@ -236,7 +334,7 @@ rule CloseDelinquencyEpisode on leaving Delinquent {
 -- the business rule, now guarded at the right unit
 shape UnsuspendedFlag = DelinquencyFlag where not exists ServiceSuspension for this
 
-rule SuspendService on UnsuspendedFlag {
+rule SuspendService when UnsuspendedFlag {
     ServiceSuspension from { flag: this, suspendedOn: now }
 }
 ```
@@ -254,7 +352,7 @@ shape Deposit {
 
 shape UnappliedDeposit = Deposit where applied == false
 
-rule ApplyDeposit on UnappliedDeposit {
+rule ApplyDeposit when UnappliedDeposit {
     account.balance = account.balance + amount
     this.applied = true
 }
@@ -264,7 +362,7 @@ Same self-falsifying structure as the evidence guard: the body performs the writ
 
 The flag-guard surfaces one real language gap and two authoring choices Velle should support, not police:
 
-1. **Stored fields have no initial values — and the obvious syntax is taken.** `applied` must start `false`, but `applied: boolean = false` in shape-body position means *derived, always false* — unassignable per OQ3, incoherent as a guard. "Stored but initialized" is a missing third property kind needing its own spelling (`applied: boolean initially false`?). The evidence guard got its initial state for free: absence *is* unstarted.
+1. **Stored fields have no initial values — and the obvious syntax is taken.** `applied` must start `false`, but `applied: boolean = false` in shape-body position means *derived, always false* — unassignable per "Assignment targets are stored fields," incoherent as a guard. "Stored but initialized" is a missing third property kind needing its own spelling (`applied: boolean initially false`?). The evidence guard got its initial state for free: absence *is* unstarted.
 2. **Where the flag lives is a modeling choice, per use case.** In a money case the flag likely wouldn't sit on the externally-committed act at all — realistically the external shape commits an *internal* record that carries the flag, and the internal record is applied against the account (a flow that presumably resembles the ledger pattern; worth working through as its own example). But where the client is trusted, or the stakes don't warrant the split, the flag directly on the mutation shape is legitimate. Velle's job is not to forbid the direct form — it's to give the author validation tools when intent needs enforcing (OQ5's boundary vocabulary, e.g. `requires`-style constraints on what a committer may supply).
 3. **Flag vs. evidence richness is the author's call, not Velle's.** A flag records only *that* it happened; if the business also wants the timestamp without a separate shape, `appliedOn: Date?` does both jobs in one field — guard on `appliedOn is none`, disarm with `this.appliedOn = now`. History stays opt-in at every grain: none (boolean), when (optional date), full payload (evidence shape).
 
@@ -280,22 +378,22 @@ shape Account {
 
 shape Delinquent = Account where balance < 0
 
-rule SuspendDelinquents {
+rule SuspendDelinquents on Nightly {
     each (Delinquent where suspended == false) {
         this.suspended = true
     }
-} on Nightly
+}
 
-rule RestoreService {
+rule RestoreService on Nightly {
     each (Account where suspended == true and balance >= 0) {
         this.suspended = false
     }
-} on Nightly
+}
 ```
 
 The January/September bug came from using *immutable evidence* as the guard — evidence persists, the guard is monotone, a second episode can never re-arm it. The `suspended` flag is a *current-state* guard, and it resets: February's restoration writes `false`, which re-arms September for free. Reification was only ever the cost of history, and this PO isn't buying history.
 
-The exactly-once obligation disappears too: `this.suspended = true` writes a constant — idempotent by this OQ's own static split. The sweep can run twice a night, crash mid-run and rerun; it converges to the same state. This is a genuinely different answer to exactly-once — not *guard the firing* but *make firing harmless*: a reconciliation loop, desired state (`suspended` ⇔ delinquent) enforced by an idempotent sweep — the React/Kubernetes shape, matching this doc's React philosophy almost verbatim. The tick grounds it per "Rules ground in commits" (no drift-detection machinery needed at all), and the trade-off is stated in the schedule itself: suspension latency = sweep cadence. "We suspend nightly" vs. "we suspend the moment you go negative" is a visible one-word business decision — `on Nightly` vs. `on Delinquent`.
+The exactly-once obligation disappears too: `this.suspended = true` writes a constant — idempotent by this OQ's own static split. The sweep can run twice a night, crash mid-run and rerun; it converges to the same state. This is a genuinely different answer to exactly-once — not *guard the firing* but *make firing harmless*: a reconciliation loop, desired state (`suspended` ⇔ delinquent) enforced by an idempotent sweep — the React/Kubernetes shape, matching this doc's React philosophy almost verbatim. The tick grounds it per "Rules ground in commits" (no drift-detection machinery needed at all), and the trade-off is stated in the schedule itself: suspension latency = sweep cadence. "We suspend nightly" vs. "we suspend the moment you go negative" is a visible one-word business decision — `on Nightly` vs. `when Delinquent on commit`.
 
 So the PO's solution space for "suspend delinquents" has three rungs, each existing machinery, chosen by what the business actually needs:
 
@@ -318,24 +416,6 @@ Open sub-questions:
 - **The external→internal flow** — the realistic modeling for high-stakes cases: an external mutation shape whose rule commits an internal record carrying the guard, which is then applied against the target. Presumably resembles the ledger pattern; needs a worked example.
 - **Bare boolean atoms** — extend the predicate grammar so `where not applied` is legal, or keep `applied == false` as the only spelling.
 - **Does the compiler recognize the rungs?** The derivation/reconciliation/exactly-once spectrum is currently implicit in how a spec is written. Should the compiler classify which rung each rule sits on and validate accordingly (e.g. prove a sweep converges and is idempotent; warn when a stored flag could have been a predicate; require `once` only on the exactly-once rung)? Ties the whole solution space back to validation-of-intent.
-
-### OQ3. Assignment targets must be stored fields
-
-A derived property is a computation; a computation can't be assigned:
-
-```
-shape Invoice {
-    amount: Money
-    payments: many Payment
-    balance: Money = amount - sum(payments, amount)
-}
-
-rule Forgive on ForgivenessGrant {
-    invoice.balance = 0        -- compile error: balance is derived
-}
-```
-
-Assignment writes stored truth; derived properties recompute over it. The correct model commits data the derivation already reads (a `Payment`, a stored `forgiven` field the formula consults). Trivial check, needs stating in the reference.
 
 ### OQ4. Act-level sugar for the one-assignment case
 
@@ -375,57 +455,12 @@ Grown from a footnote into the load-bearing question — commits, state, and gua
 
 Needs pinning down before the one-writer check, the guard soundness argument, or the derived-trigger-set machinery can be specified precisely.
 
-### OQ7. Rule anatomy: is any timing semantic?
+### OQ7. Rule anatomy and timing — remaining threads
 
-A rule is named, has a condition, and has an outcome. Dissecting the prefix `on R` clause shows it bundling three distinguishable things:
+The core is settled — see "Rule triggers: `when` and `on`" above: the commit/tick dichotomy, entry and exit as commit-local diffs, the tick law (cross-tick memory must be data), transient membership as per-rule policy, and the `when`/`on` header with `on commit` as default. A rule's anatomy is **name + condition (`when`) + trigger source (`on`) + outcome (the body)** — an external API call is an outcome commit whose only db-visible trace is its witness, which is *why* the witness must exist. Still open:
 
-1. **The condition** — a boolean over state. Genuinely timeless: refinements are pure predicates (README §7); nothing about `balance < 0` says when to ask.
-2. **The evaluation moments** — when the condition gets calculated. Never a free choice (nothing-happens-on-its-own): evaluation only happens as a consequence of a commit, from exactly two sources — the *derived* set (commits whose impact touches what the predicate reads) and *tick* commits.
-3. **The firing semantics** — edge vs. level. Prefix `on R` means *entering* (edge: fire on the transition). A sweep means *while a member, sampled at the tick* (level).
-
-The conflation lives in the trigger clause, not the condition — and **a guarded rule in OQ2's canonical form is timing-independent, which dissolves it**. `UnsuspendedDelinquent` doesn't mean "just became delinquent" (edge — requires knowing when you last looked); it means "delinquent and not yet handled" (level — a fact about current state). The guard reifies *not yet handled* into the condition, so the rule observes no transition: evaluate it after every commit, once a night, or seventeen times in a row — extra evaluations are harmless, because firing discharges the guard and non-members are no-ops. (The independence is one-sided, though: *sparser* evaluation can miss transient truths entirely — see the transient-membership sub-question below.) *When to calculate* stops being semantic and becomes quality-of-service: the main thing timing changes is **latency**, the one timing fact the business owns ("suspend immediately" vs. "suspend nightly"), declared by schedule or defaulted to immediate. §10's "detection mechanism is a compiling concern" becomes provable rather than aspirational.
-
-Proposed anatomy, with no other timing anywhere in the semantics:
-
-- **name** — identity
-- **condition** — a *state* (refinement including its guard); level-semantics, safely re-evaluable
-- **outcome** — commits (an external API call is an outcome commit whose only db-visible trace is its witness — which is *why* the witness must exist)
-- **latency** — the single author-facing timing declaration
-
-**Hypothesis (suspected, not proven): entry and exit triggers are not primitives — they're state patterns.** The episode example already contains the demonstration. Entry is *C ∧ ¬witness*; exit is *¬C ∧ witness* — a symmetric pair, both level-triggered, both self-disarming, both safe under any evaluation schedule:
-
-```
--- "entry": condition holds, no open witness
-rule OpenDelinquencyEpisode
-    on (Delinquent where not exists (OpenDelinquencyFlag where account == this)) {
-    DelinquencyFlag from { account: this, flaggedOn: today }
-}
-
--- "exit": condition no longer holds, an open witness exists
-rule CloseDelinquencyEpisode
-    on (Account where balance >= 0 and exists (OpenDelinquencyFlag where account == this)) {
-    DelinquencyResolution from {
-        flag: (OpenDelinquencyFlag where account == this)
-        resolvedOn: today
-    }
-}
-```
-
-The second rule is `on leaving Delinquent` with the edge removed: the open witness is the memory that *we were in*, so "leaving" is reconstructed from state with no transition observation. "Only a member can leave" (README §12's argument for `leaving` as primitive) falls out: an open witness exists only for accounts that were flagged while in.
-
-**The pattern catalog so far** — nailing these down across use cases is the path to sugar:
-
-1. **Handled-once** — *C ∧ ¬witness* → produce witness (`UnappliedDeposit`)
-2. **Episode** — paired open/close acts + an "open" refinement; entry = *C ∧ ¬open*, exit = *¬C ∧ open* (flag/resolution)
-3. **Resettable latch** — stored flag reconciled to *C* by idempotent sweeps (`suspended`)
-4. **Classification** — *C* alone, no rule at all (`Suspended = Account where balance < 0`)
-
-If the catalog stabilizes, the sugar direction mirrors OQ2's settled one: `on entering R` / `on leaving R` could *survive as sugar* that desugars to the level+guard pair with a declared or generated witness — up to something like `episode of Delinquent` generating the entire flag/resolution apparatus. Canonical form is state; readable sugar must desugar to it.
-
-Open sub-questions:
-
-- **Do bare act triggers survive as a primitive?** `rule ApplyEmailCorrection on CorrectEmail { customer.email = corrected }` has no guard, and an act instance is a member of its shape forever — the level reading would re-fire for *every* correction at every evaluation, and the set of firings is order-sensitive (a nightly sweep could re-apply an old correction over a newer one; "idempotent per instance" does not mean "timing-independent as a set"). So either the act's *commit* is a real edge primitive (the one place entry is irreducible), or bare act triggers get an implicit per-instance guard, or the state-pure spelling is the derivation (`email = latest(correction).corrected` — the ledger again). The timing-independence claim currently holds only for guarded rules; this is the gap.
-- **Transient memberships: latency is also observational granularity.** Timing-independence is one-sided — extra evaluations are no-ops, but sparser evaluation can miss brief truths *entirely*. An account that enters and exits `Delinquent` between two nightly sweeps is never observed: Thursday sees a non-delinquent account with no open flag, and neither the entry nor the exit rule ever fires — the episode isn't delayed, it never existed as far as the spec's effects are concerned. Eager (per-commit) evaluation observes every membership the commit stream can produce; sampled evaluation observes only what persists across gaps. So a latency declaration is really also a declaration of *how short a truth may be and still matter* — and whether an unobserved brief membership obligates the effect at all is the business question README §18 already flags, made concrete.
-- **Re-derive §12 under the state reading** — mutation policies (`stands`/`forbidden`/`compensate`), what an exit rule may read (captured properties retract at exit — does *¬C ∧ witness* reproduce the same restriction?), and `compensate`'s desugared form.
-- **Latency vocabulary** — is "immediate by default, named schedule otherwise" enough, or does latency deserve first-class expression (deadlines, "within 24h") the compiler validates against cadences?
-- **What remains of "newly-satisfying instance" (§10)** if edges are derived — the contract language itself presumes entry semantics.
+- **Reliability of commit-triggered firing (→ OQ6).** "Once per commit" is logically clean, but a crash between the commit and the rule's effects is an atomicity question. The `on commit, Hourly` backstop is a business-legible mitigation, not a semantics; whether the language requires a backstop for non-idempotent rules, or OQ6's commit definition absorbs the problem, is open.
+- **Re-derive §12 under commit-local diffs** — mutation policies (`stands`/`forbidden`/`compensate`), what an exit rule may read (captured properties retract at the very moment a `when leaving` rule fires), and `compensate`'s desugared form, now that `leaving` is a diff rather than a primitive observation.
+- **Latency vocabulary** — `on` expresses the evaluation *source*, not latency *requirements*. Is "immediate by default, named schedule otherwise" enough, or do deadlines ("within 24h") deserve first-class expression the compiler validates against declared cadences?
+- **`on commit of <Shape>` narrowing** — "only withdrawals suspend, not fee assessments." Expressible and occasionally meaningful, but it can silently miss entry paths; per flexible-not-restrictive it would be allowed *with* the compiler reporting exactly which entry paths go unobserved. Not yet designed.
+- **The pattern catalog and sugar.** The durable-state patterns — handled-once (*C ∧ ¬witness*), episode (flag/resolution pairing; entry = *C ∧ ¬open*, exit = *¬C ∧ open*), resettable latch (flag reconciled by sweeps), classification (*C* alone, no rule) — remain the vocabulary for crash-safe and cross-tick designs, no longer a replacement for entry/exit themselves. Whether they stabilize into sugar (`episode of Delinquent` generating the whole flag/resolution apparatus) is still the path sketched in OQ2.

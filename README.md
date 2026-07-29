@@ -240,26 +240,30 @@ duration       := IntegerLiteral ("seconds"|"minutes"|"hours"|"days"|"weeks")
 
 See `example_predicates.md` for the worked derivation of every rule above.
 
-## 10. `rule ... on ...`
+## 10. `rule ... when ... on ...`
 
-A top-level reaction attached to a refinement — replaces `if`/`else` branching and imperative "then do X" sequencing for state-driven behavior.
+A top-level reaction attached to a refinement — replaces `if`/`else` branching and imperative "then do X" sequencing for state-driven behavior. The header separates the rule's *condition* from its *trigger source*, one keyword each:
 
 ```
-rule SendReceipt on SettledInvoice {
+rule <name> [when [leaving] <condition>] [on <trigger>, ...] { <effects> }
+```
+
+```
+rule SendReceipt when SettledInvoice {
     Receipt for invoice sentOn: now
 }
 ```
 
-A rule declares that an effect corresponds to a refinement — `on Refinement` names *what* the rule reacts to, not *when* or *how* that reaction gets detected. Whether the underlying mechanism is a check made at write-time, a scheduled sweep, an event stream, a runtime data-structure instantiation, or some mix of these for the same rule is left open by the declaration itself; the only contract that has to hold regardless of mechanism is that the effect happens if and only if the subject is or becomes a member of the refinement, exactly once per newly-satisfying instance (see `produces`, below, for how "exactly once" is guaranteed without runtime bookkeeping). Picking and implementing the actual detection mechanism is a compiling concern (`## 1. Principles`), not part of what the rule means — see Schedule triggers, below, for how that stays true even for purely time-dependent refinements.
+`when Refinement` names *what* the rule reacts to — the condition: a refinement, entered (or left — see Exit triggers, below). `on` names the *trigger source*: `on commit` — the rule evaluates as a consequence of any commit that can affect its condition — or a named schedule (`on Daily`, see Schedule triggers, below). `on commit` is the default when the clause is omitted (as above), the same single-well-defined-default category as properties being required unless marked `?`. The echo of BDD's given/when/then is deliberate: *given* the declared shapes, *when* the condition holds, *on* commit or tick, then the effects (`## then`).
 
-Prefix `on` (`rule X on Refinement { ... }`) is specifically for data-driven triggers, and means *entering* — the rule reacts to an instance becoming a member. Its mirror, reacting to an instance *leaving* a refinement, is `on leaving` (see Exit triggers, below). Schedule-driven triggers use a different position — postfix, after the rule body — precisely so the two don't read as the same kind of thing even though both mechanically react to a shape existing. See Schedule triggers, below.
+Neither clause says *how* detection gets implemented. Whether the underlying mechanism is a check made at write-time, an event stream, a runtime data-structure instantiation, or some mix of these for the same rule is left open by the declaration itself; the only contract that has to hold regardless of mechanism is that the effect happens if and only if the subject is or becomes a member of the refinement, exactly once per newly-satisfying instance (see `produces`, below, for how "exactly once" is guaranteed without runtime bookkeeping, and `investigate_state.md` for the commit-grounded definition of "newly-satisfying"). Picking and implementing the actual detection mechanism is a compiling concern (`## 1. Principles`), not part of what the rule means.
 
 ## 11. `produces`
 
 Guards a rule against firing more than once for the same input, by tying the rule to a shape that serves as durable evidence it already ran.
 
 ```
-rule SendReceipt on SettledInvoice produces Receipt {
+rule SendReceipt when SettledInvoice produces Receipt {
     Receipt for invoice sentOn: now
 }
 ```
@@ -270,12 +274,12 @@ This is sugar — the compiler derives an implicit "hasn't happened yet" guard f
 shape UnacknowledgedSettledInvoice = SettledInvoice where not exists Receipt for this
 ```
 
-There is no separate "evidence" or "error" category of shape — an evidence shape is an ordinary shape that happens to also serve as a guard. This is also how errors are handled: an outcome (success or failure) is just a refinement of a result shape, and reacting to failure (`rule ReleaseInventory on FailedCharge produces InventoryRelease`) uses the exact same mechanism as reacting to success — no `return`/`throw` distinction.
+There is no separate "evidence" or "error" category of shape — an evidence shape is an ordinary shape that happens to also serve as a guard. This is also how errors are handled: an outcome (success or failure) is just a refinement of a result shape, and reacting to failure (`rule ReleaseInventory when FailedCharge produces InventoryRelease`) uses the exact same mechanism as reacting to success — no `return`/`throw` distinction.
 
 **Guard granularity matters**: the shape a rule `produces`, and what field that shape's guard is scoped to, determines what "already happened" is scoped to. A `FlagNotification` scoped to `accountFlag: one AccountFlag` (the specific flagging event) behaves differently from one scoped to `customer: one Customer` (the customer in general) — the former allows a fresh notification on a later re-flagging; the latter would silently suppress it. Since this choice can carry business meaning rather than just resolving a mechanical ambiguity, state it explicitly with `for <field>` on `produces` whenever it isn't the obvious one:
 
 ```
-rule RecordReferral on ReferralRequest produces Referral for referrer from {
+rule RecordReferral when ReferralRequest produces Referral for referrer from {
     referrer: this.referrer
     referee: this.referee
     referredOn: now
@@ -284,12 +288,12 @@ rule RecordReferral on ReferralRequest produces Referral for referrer from {
 
 Omit `for <field>` when only one field's type obviously matches the trigger (the common case, e.g. `produces Receipt` alone); require it when the guard is deliberately keyed on something else, the same field-ambiguity rule as `## Predicate expressions`' `for` section.
 
-## 12. Exit triggers (`on leaving`)
+## 12. Exit triggers (`when leaving`)
 
-Prefix `on R` reacts to an instance *entering* a refinement — becoming a member. `on leaving R` is its mirror: a reaction to an instance that was a member of R and stopped being one.
+`when R` reacts to an instance *entering* a refinement — becoming a member. `when leaving R` is its mirror: a reaction to an instance that was a member of R and stopped being one.
 
 ```
-rule RestoreService on leaving Delinquent produces ServiceRestoration {
+rule RestoreService when leaving Delinquent produces ServiceRestoration {
     ServiceRestoration from {
         account: this
         restoredOn: now
@@ -297,16 +301,16 @@ rule RestoreService on leaving Delinquent produces ServiceRestoration {
 }
 ```
 
-**Not expressible as a complement.** Reacting to entering `Compliant` is not the same thing: a newly created, never-delinquent account also "enters" `Compliant` — *became compliant* and *was always compliant* are indistinguishable from current data alone. `leaving` needs no such reconstruction: only a member can leave, so the trigger is inherently transitional. This completes the trigger vocabulary — prefix `on` for entry, `on leaving` for exit, postfix `on` for schedules (below). The `produces` guard applies identically, and guard granularity (`## produces`) decides what a *repeated* exit means, exactly as it does for repeated entries.
+**Not expressible as a complement.** Reacting to entering `Compliant` is not the same thing: a newly created, never-delinquent account also "enters" `Compliant` — *became compliant* and *was always compliant* are indistinguishable from current data alone. `leaving` needs no such reconstruction: only a member can leave, so the trigger is inherently transitional. This completes the condition vocabulary — `when` for entry, `when leaving` for exit; the trigger source (`on commit` / `on <schedule>`, see Schedule triggers below) is orthogonal to both. The `produces` guard applies identically, and guard granularity (`## produces`) decides what a *repeated* exit means, exactly as it does for repeated entries.
 
 **What an exit rule may read.** At the moment the rule fires, the instance is no longer a member of R, and everything membership implied is gone with it. The body may read the instance's current data and durable evidence produced while it was a member; it must not read anything only membership in R could supply — R's own captured properties above all, which retract at the very moment the rule fires — such a read can never be satisfied, and is a compile error. The discipline this enforces: a rule acting on a membership should record what it acted on in its evidence mapping, because evidence is the only thing that survives the exit.
 
-**Mutation policy on evidence.** The sharper use of `on leaving` is answering what happens to evidence when its premise is later falsified — the rule fired, the effect escaped, and then the instance left the refinement. A producing rule declares this as a clause:
+**Mutation policy on evidence.** The sharper use of `when leaving` is answering what happens to evidence when its premise is later falsified — the rule fired, the effect escaped, and then the instance left the refinement. A producing rule declares this as a clause:
 
 ```
-rule SuspendService on Delinquent produces ServiceSuspension {
+rule SuspendService when Delinquent produces ServiceSuspension {
     ServiceSuspension from { account: this, suspendedOn: now }
-    on leaving Delinquent: compensate ServiceRestoration
+    when leaving Delinquent: compensate ServiceRestoration
 }
 ```
 
@@ -314,7 +318,7 @@ Three policies, each an answer a Product Owner already gives in the wild:
 
 - **`stands`** — the evidence is history and stays true on its own ("the quote is the quote; prices drift"). No reaction.
 - **`forbidden`** — while the evidence exists, any change that would cause the exit is rejected ("you can't edit line items on an issued invoice"). Immutability in Velle is exactly this — not a property of a field, but a lien held by an effect that witnessed it, acquired when the evidence is produced and lifted if it's compensated away.
-- **`compensate X`** — the exit produces a compensating fact ("invoices are never edited — voided and reissued"). Sugar for a dedicated `on leaving` rule that fires only for instances whose evidence exists and produces `X` scoped to that evidence. Evidence scoping settles the edge cases: a membership too brief for the producing rule to fire has no evidence, so its exit compensates nothing; repeated exits are guarded per compensated evidence, the same granularity rule as `produces` itself.
+- **`compensate X`** — the exit produces a compensating fact ("invoices are never edited — voided and reissued"). Sugar for a dedicated `when leaving` rule that fires only for instances whose evidence exists and produces `X` scoped to that evidence. Evidence scoping settles the edge cases: a membership too brief for the producing rule to fire has no evidence, so its exit compensates nothing; repeated exits are guarded per compensated evidence, the same granularity rule as `produces` itself.
 
 Deleting evidence is never one of the options — a produced fact records something that happened in the world (the email was sent), and deleting the record makes the description lie. Which policy applies when none is declared — default `stands`, or a compile error that forces the question — is unsettled; see Open / unresolved, and `investigate_state.md` for the full derivation.
 
@@ -345,7 +349,7 @@ This is what `produces` was always doing conceptually made visible in the syntax
 Explicit, opt-in ordering between two effects that have no data dependency forcing an order:
 
 ```
-rule InitiateCharge on Order produces ChargeAttempt for order {
+rule InitiateCharge when Order produces ChargeAttempt for order {
     AuditLogEntry from {
         order: this
         loggedOn: now
@@ -367,30 +371,30 @@ Effects listed without `then` are unordered — the transpiler/AI-assisted codeg
 Applies a rule across every member of a refined collection, combined with the `produces` guard per member:
 
 ```
-rule FlagOverdueAccounts {
+rule FlagOverdueAccounts on Daily {
     each FlaggedCustomer produces AccountFlag {
         AccountFlag for this flaggedOn: now
     }
-} on Daily
+}
 ```
 
 No separate loop construct — `each` composes the original "for each" iteration idea with `produces`, applied to a filtered set instead of a single shape.
 
-## 16. Schedule triggers (postfix `on`)
+## 16. Schedule triggers (`on <schedule>`)
 
-A rule can be triggered by a named schedule instead of (or in addition to) a refinement, using `on` *after* the rule body rather than before it:
+A rule can be triggered by a named schedule instead of (or in addition to) `on commit`, by naming the schedule in the header's `on` clause:
 
 ```
-rule FlagOverdueAccounts {
+rule FlagOverdueAccounts on Daily {
     each FlaggedCustomer produces AccountFlag {
         AccountFlag for this flaggedOn: now
     }
-} on Daily
+}
 ```
 
-`on` accepts a comma-separated list (`on Daily, Hourly`) for a rule that needs to run on more than one cadence. `Daily` is a placeholder name, not a built-in or sugar for a specific interval — what actually defines a schedule (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be provided by some cron-like scheduling framework. Only the rule-side trigger syntax is settled.
+`on` accepts a comma-separated list (`on Daily, Hourly`) for a rule that needs to run on more than one cadence — including mixed with commit (`on commit, Daily`: fire the moment the condition is entered, *and* re-check on the cadence). `Daily` is a placeholder name, not a built-in or sugar for a specific interval — what actually defines a schedule (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be provided by some cron-like scheduling framework. Only the rule-side trigger syntax is settled.
 
-This postfix form is the *only* way a purely time-dependent refinement (like `OverdueInvoice`, which depends on `today`) gets re-checked — nothing in Velle executes purely on the passage of time by default. A scheduled tick is conceptually a shape instance like any other (the same category as a `Payment` arriving or a `ChargeResponse` coming back), but it's referenced by name in `on`, not declared inline as a custom shape the way earlier drafts of this doc did.
+A schedule trigger is the *only* way a purely time-dependent refinement (like `OverdueInvoice`, which depends on `today`) gets re-checked — nothing in Velle executes purely on the passage of time by default. A scheduled tick is conceptually a commit like any other (the same category as a `Payment` arriving or a `ChargeResponse` coming back — a tick is a commit whose changed datum is `today`), but it's referenced by name in `on`, not declared inline as a custom shape the way earlier drafts of this doc did.
 
 ## 17. Inputs and Outputs
 
@@ -411,7 +415,7 @@ An "object" shape is a degenerate case of a "function" shape whose output is its
 ## 18. Open / unresolved
 
 - **Mapping** (shape-to-shape translation, e.g. API DTO → domain shape) — part of the original design goals, not yet exercised in a worked example.
-- **Schedule definition** — `on Daily` (postfix) settles how a rule *references* a schedule; what actually defines `Daily` (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be a cron-like scheduling framework.
+- **Schedule definition** — `on Daily` (the header's `on` clause) settles how a rule *references* a schedule; what actually defines `Daily` (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be a cron-like scheduling framework.
 - **Reversal** — resolved as a non-issue for the language itself (it's a business-policy choice, expressed via which artifact shapes a human declares — see `example_invoice_payment.md` #5), but no single canonical pattern has been adopted yet; the consolidated top-of-file example still doesn't reflect a chosen policy.
 - **Exit-trigger loose ends** — whether an undeclared mutation policy on evidence defaults to `stands` or is a compile error; the surface syntax of `compensate`'s desugared form (guarding an exit rule on the evidence's existence, and naming the matched evidence instance inside the compensating mapping); and whether a membership that begins and ends unobserved obligates the *entry* rule's effect at all — a business question the exit design sharpens but doesn't answer. See `investigate_state.md`.
 - **Escape hatch / override syntax** — how a human marks part of a spec as intentionally hand-implemented/AI-implemented rather than declarative. Deferred; agreed to be a lesser concern until the core language settles.
