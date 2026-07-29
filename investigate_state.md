@@ -137,24 +137,24 @@ The ledger case needs no connect-statement at all: the connection *is* the deriv
 
 ## Rules ground in commits
 
-A rule on a drift refinement looks, at first glance, like it's declared outside any commit — suspect under the nothing-happens-on-its-own principle:
+Nothing happens on its own, so a rule only ever fires as a consequence of a commit. The `when`/`on` header (next section) declares the rule's condition and its trigger source — but `on commit`, the default source, names no *particular* commits, and the condition it evaluates can be a drift refinement whose data no act shape mentions:
 
 ```
 shape Delinquent = Account where balance < 0
 
-rule SuspendService when Delinquent {
+rule SuspendService when Delinquent {          -- on commit, by default
     ServiceSuspension from { account: this, suspendedOn: now }
 }
 ```
 
-What makes it fire? The resolution: **drift is always commit-mediated.** An account doesn't drift into `Delinquent` by itself — `balance < 0` becomes true only because some commit changed the data the predicate reads. So a rule on a drift refinement is not waiting outside any commit; its real trigger set is *the set of commits that can affect its predicate*, and that set is statically computable from exactly the machinery in-place mutation mandates: `Delinquent` reads `balance`, and the static-path + one-writer requirements mean the compiler knows every assignment targeting `balance` and every act that feeds it. `SuspendService` compiles to a derived fact — it can fire only as a consequence of (say) a `Withdrawal` commit or a `Deposit` commit. The system never acts on its own; `when Delinquent` is a declarative surface over a commit-reactive reality, and the compiler can name the commits.
+Which commits can fire this? The author never says — and doesn't have to, because **drift is always commit-mediated**: `balance < 0` becomes true only when some commit changes data the predicate reads. That makes the trigger set derivable from exactly the machinery in-place mutation mandates: `Delinquent` reads `balance`; the static-path and one-writer requirements mean the compiler knows every assignment targeting `balance` and every act that feeds it; so `SuspendService` can fire only as a consequence of (say) a `Withdrawal` commit or a `Deposit` commit. `on <schedule>` adds tick commits to the same set — a tick is a commit whose changed datum is `today`, one more entry in the list rather than a second mechanism.
 
-This preserves both halves of a real tension. The benefit of defining a rule *outside* its trigger survives: `on Delinquent` states the business condition — the durable judgment — and a new writer of `balance` added next year automatically extends the rule's trigger set with no edit to the rule (correct: the business condition didn't change). But Velle still knows *when* the rule executes — not because the author declared it, but because the "when" is derivable. Declared **what**, computed **when**, proven **reachable** — the same division of labor as the rest of the language.
+The division of labor: the author declares the **what** (`when` — the business condition) and the **source** (`on` — commit, ticks, or both); the compiler computes the **which** (the exact commits) and proves the rule **reachable**. The benefit of the condition staying declarative survives intact: a new writer of `balance` added next year automatically extends `SuspendService`'s trigger set with no edit to the rule — correct, because the business condition didn't change.
 
 Two compiler obligations fall out:
 
-1. **The unfireable-rule error.** If the derived commit set is empty — no commit anywhere in the spec can cause entry into the refinement — the rule can never fire, and that's a whole-spec compile error, not a dead-code shrug. The sharp instance is time: `OverdueInvoice = Invoice where due < today` — no commit changes `today`. Entry at `Invoice` creation (committed already-overdue) is observable, but entry *by time passing* is unobservable without a tick. The diagnostic is precise: "entry into `OverdueInvoice` via the passage of time is unobserved by any schedule — add `on Daily` or this rule under-fires." README §16's stance stops being a convention and becomes a provable coverage check, since schedule ticks are commits and appear in the same derived trigger set.
-2. **The PO-facing answer to "when does this run?"** The derived commit set is impact analysis read backward. Forward: "if this commit lands, these rules may fire." Backward: "this rule fires as a consequence of: withdrawals, deposits, the daily tick." Both are the same graph; the author never writes the *when*, the compiler proves it and can show it.
+1. **The unfireable-rule error.** If a rule's trigger set is empty — no commit in the spec, and no tick in its `on` clause, can cause entry into its condition — the rule can never fire, and that's a whole-spec compile error, not a dead-code shrug. The sharp instance is time: `OverdueInvoice = Invoice where due < today` depends on `today`, which no act commit changes. A rule `when OverdueInvoice` with no schedule in its `on` clause observes entry at `Invoice` creation (committed already-overdue) but never entry *by aging* — and the diagnostic is precise: "entry into `OverdueInvoice` via the passage of time is unobserved — add a schedule to `on`, or this rule under-fires." README §16's stance stops being a convention and becomes a coverage check read directly off the header.
+2. **The PO-facing answer to "when does this run?"** The derived trigger set is impact analysis read backward. Forward: "if this commit lands, these rules may fire." Backward: "this rule fires as a consequence of: withdrawals, deposits, the daily tick." Both are the same graph; the author declares the source, and the compiler proves — and can show — the specifics.
 
 ## Rule triggers: `when` and `on`
 

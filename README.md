@@ -92,7 +92,7 @@ Refinement properties come in exactly the same two kinds as base-shape propertie
 - **Derived** — plain `= expr`, recomputed live from current data, exactly as in `## Derived properties`. The only novelty is scope: it's evaluable exactly where membership holds (`priceDrift` below is one).
 - **Captured** — marked with the leading keyword `captured`: evaluated once at the moment the current membership begins, fixed for the duration of that membership, absent before entry, retracted on exit, re-captured on re-entry. The marker is required because a bare `= expr` in body position is a live derivation — the two kinds must read differently. Capturing `today`/`now` anchors them to the entry moment: `archivedOn` above is the membership's start date, with no implicit system timestamp needed (the same stance `latest`/`first` already take).
 
-**Every captured value traces to data.** There is no ambient execution context — no "current user", no request-scoped magic. `archivedBy` can only reach a `User` through the data graph, which forces the act carrying that data to be reified as a shape (`ArchiveRequest`) before the refinement can capture from it. That's a feature, not a workaround: reified acts are independently required for occurrence identity under re-entry (see `investigate_state.md`), and they are what `why`/provenance will walk. (`(ArchiveRequest for this)` above is legal only while the spec proves at most one can exist per invoice — `## Predicate expressions`' `for`-query rule; the moment re-archival enters the model, the reference must become an ordered selection — see Open/unresolved.)
+**Every captured value traces to data.** There is no ambient execution context — no "current user", no request-scoped magic. `archivedBy` can only reach a `User` through the data graph, which forces the act carrying that data to be reified as a shape (`ArchiveRequest`) before the refinement can capture from it. That's a feature, not a workaround: reified acts are independently required for occurrence identity under re-entry, and they are what `why`/provenance will walk. (`(ArchiveRequest for this)` above is legal only while the spec proves at most one can exist per invoice — `## Predicate expressions`' `for`-query rule; the moment re-archival enters the model, the reference must become an ordered selection — see Open/unresolved.)
 
 **Entry-evaluability guardrail.** A captured property's expression must be provably evaluable at the moment membership begins: every reference in it must be guaranteed by the refinement's own predicate, or be unconditionally present on the base shape. `(ArchiveRequest for this)` is legal above precisely because the predicate asserts `exists ArchiveRequest for this` — the predicate narrows the capture expression, the same machinery by which `is some` licenses `.`. A capture reading something its predicate doesn't guarantee is a compile error. A refinement whose captures need nothing beyond the base shape's own data (`captured balanceWhenOverdue: Money = balance` on `OverdueInvoice`) can be entered by drift; one whose predicate requires an act-fact can only be entered by that act occurring — the compiler derives which kind each refinement is from its predicate, the human never declares it.
 
@@ -104,7 +104,7 @@ shape Reconciled = Quoted and Delivered {
 }
 ```
 
-**Membership is unchanged.** A refinement with properties is still a pure predicate as to *membership* — properties change what a member *has*, never when membership *holds*. Captured properties are per-membership memory, state-layer through and through: they retract on exit. If the business cares about past memberships ("who archived it back in March, before it was unarchived?"), that was never a property — it's history, modeled as occurrence facts plus `latest(... by ...)`. See `investigate_state.md` for the state/effect stratification this rests on.
+**Membership is unchanged.** A refinement with properties is still a pure predicate as to *membership* — properties change what a member *has*, never when membership *holds*. Captured properties are per-membership memory, state-layer through and through: they retract on exit. If the business cares about past memberships ("who archived it back in March, before it was unarchived?"), that was never a property — it's history, modeled as occurrence facts plus `latest(... by ...)`.
 
 ## 8. Composing refinements (`and`, `or`)
 
@@ -256,9 +256,11 @@ rule SendReceipt when SettledInvoice {
 
 `when Refinement` names *what* the rule reacts to — the condition: a refinement, entered (or left — see Exit triggers, below). `on` names the *trigger source*: `on commit` — the rule evaluates as a consequence of any commit that can affect its condition — or a named schedule (`on Daily`, see Schedule triggers, below). `on commit` is the default when the clause is omitted (as above), the same single-well-defined-default category as properties being required unless marked `?`. The echo of BDD's given/when/then is deliberate: *given* the declared shapes, *when* the condition holds, *on* commit or tick, then the effects (`## then`).
 
-Neither clause says *how* detection gets implemented. Whether the underlying mechanism is a check made at write-time, an event stream, a runtime data-structure instantiation, or some mix of these for the same rule is left open by the declaration itself; the only contract that has to hold regardless of mechanism is that the effect happens if and only if the subject is or becomes a member of the refinement, exactly once per newly-satisfying instance (see `produces`, below, for how "exactly once" is guaranteed without runtime bookkeeping, and `investigate_state.md` for the commit-grounded definition of "newly-satisfying"). Picking and implementing the actual detection mechanism is a compiling concern (`## 1. Principles`), not part of what the rule means.
+Neither clause says *how* detection gets implemented. Whether the underlying mechanism is a check made at write-time, an event stream, a runtime data-structure instantiation, or some mix of these for the same rule is left open by the declaration itself; the only contract that has to hold regardless of mechanism is that the effect happens if and only if the subject is or becomes a member of the refinement, exactly once per newly-satisfying instance — "newly-satisfying" is commit-relative: the commit that makes the condition become true is the occurrence the rule fires for. Picking and implementing the actual detection mechanism is a compiling concern (`## 1. Principles`), not part of what the rule means.
 
 ## 11. `produces`
+
+*Tentative — the guard mechanism is under active investigation; this section may be superseded (see `investigate_state.md`).*
 
 Guards a rule against firing more than once for the same input, by tying the rule to a shape that serves as durable evidence it already ran.
 
@@ -290,6 +292,8 @@ Omit `for <field>` when only one field's type obviously matches the trigger (the
 
 ## 12. Exit triggers (`when leaving`)
 
+*Tentative — being re-derived under the commit/tick trigger model (see `investigate_state.md`).*
+
 `when R` reacts to an instance *entering* a refinement — becoming a member. `when leaving R` is its mirror: a reaction to an instance that was a member of R and stopped being one.
 
 ```
@@ -320,7 +324,7 @@ Three policies, each an answer a Product Owner already gives in the wild:
 - **`forbidden`** — while the evidence exists, any change that would cause the exit is rejected ("you can't edit line items on an issued invoice"). Immutability in Velle is exactly this — not a property of a field, but a lien held by an effect that witnessed it, acquired when the evidence is produced and lifted if it's compensated away.
 - **`compensate X`** — the exit produces a compensating fact ("invoices are never edited — voided and reissued"). Sugar for a dedicated `when leaving` rule that fires only for instances whose evidence exists and produces `X` scoped to that evidence. Evidence scoping settles the edge cases: a membership too brief for the producing rule to fire has no evidence, so its exit compensates nothing; repeated exits are guarded per compensated evidence, the same granularity rule as `produces` itself.
 
-Deleting evidence is never one of the options — a produced fact records something that happened in the world (the email was sent), and deleting the record makes the description lie. Which policy applies when none is declared — default `stands`, or a compile error that forces the question — is unsettled; see Open / unresolved, and `investigate_state.md` for the full derivation.
+Deleting evidence is never one of the options — a produced fact records something that happened in the world (the email was sent), and deleting the record makes the description lie. Which policy applies when none is declared — default `stands`, or a compile error that forces the question — is unsettled; see Open / unresolved.
 
 ## 13. `for`
 
@@ -368,6 +372,8 @@ Effects listed without `then` are unordered — the transpiler/AI-assisted codeg
 
 ## 15. `each ... produces ...`
 
+*Tentative in part — inherits `produces`' open questions (see `investigate_state.md`).*
+
 Applies a rule across every member of a refined collection, combined with the `produces` guard per member:
 
 ```
@@ -410,10 +416,11 @@ shape ApplyPayment {
 
 An "object" shape is a degenerate case of a "function" shape whose output is itself. There's no `return`/function-call model — invoking a shape like this produces (or updates) a shape, the same as any rule's effect.
 
-`output` is provisional — a captured thought, not a settled principle. What should replace it is an open problem documented in `investigate_state.md` as the *commit-reconciliation gap*: the language has no statement form connecting a committed shape to the stored truths of other shapes it is meant to change, and no syntax has been adopted. This example's `+=` in particular is likely unnecessary regardless, since `invoice.payments` is an inferred inverse (`## Relationships`) and the `Payment` instance's existence already is the collection change.
+*Tentative* — `output` is provisional, a captured thought rather than a settled principle; its replacement is under active investigation (see `investigate_state.md`). This example's `+=` in particular is likely unnecessary regardless, since `invoice.payments` is an inferred inverse (`## Relationships`) and the `Payment` instance's existence already is the collection change.
 
 ## 18. Open / unresolved
 
+- **State change & rule mechanics** — in-place mutation, assignment, guards/`produces`, commit semantics, and trigger timing are under active investigation in `investigate_state.md` (its numbered open questions are the current frontier); §§11–12, 15, and 17 carry tentative markers accordingly.
 - **Mapping** (shape-to-shape translation, e.g. API DTO → domain shape) — part of the original design goals, not yet exercised in a worked example.
 - **Schedule definition** — `on Daily` (the header's `on` clause) settles how a rule *references* a schedule; what actually defines `Daily` (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be a cron-like scheduling framework.
 - **Reversal** — resolved as a non-issue for the language itself (it's a business-policy choice, expressed via which artifact shapes a human declares — see `example_invoice_payment.md` #5), but no single canonical pattern has been adopted yet; the consolidated top-of-file example still doesn't reflect a chosen policy.
