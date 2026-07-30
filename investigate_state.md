@@ -238,7 +238,7 @@ rule ApplyDeposit when UnappliedDeposit on commit, Hourly {
 
 ## Run-once guards
 
-Commit-triggered rules already fire exactly once per commit ("Entry and exit are commit-local diffs"), so an ordinary rule needs no guard. A guard earns its place in exactly two situations: **durability** — the firing must survive a crash and be provable afterward — and **cross-tick memory** — a tick rule needs "already handled" as data (the tick law). The canonical form, which any future sugar must desugar to exactly, is a named refinement whose predicate the rule's own body falsifies:
+Commit-triggered rules already fire exactly once per commit ("Entry and exit are commit-local diffs"), so an ordinary rule needs no guard. A guard earns its place in exactly two situations: **durability** — the firing must survive a crash and be provable afterward — and **cross-tick memory** — a tick rule needs "already handled" as data (the tick law). The canonical form — and the only form; there is no guard sugar ("No guard sugar", below) — is a named refinement whose predicate the rule's own body falsifies:
 
 ```
 shape UnappliedDeposit = Deposit where not exists DepositApplication for this
@@ -274,7 +274,31 @@ Both are dischargeable trigger states; the same disarm proof covers both, and th
 
 **Granularity is predicate content, not annotation.** Once-per-deposit is `not exists DepositApplication for this`; at-most-once-per-customer-ever is `not exists (FlagNotification where customer == this.customer)`. The guard's unit is whatever its predicate says — and it must be something the data contains.
 
-**The enforcement chain**, each step a one-line diagnostic pointing at the next missing piece: RHS reads the state it assigns (a self-referential fold in one of OQ2's dangerous sub-cases) → not idempotent → the trigger must be a dischargeable state → the body must provably discharge it. Whether the language *mandates* this chain is OQ2; guard soundness also assumes the mutation and its witness enter the state together, which is OQ6's territory; sugar over the canonical form is OQ8.
+**The enforcement chain**, each step a one-line diagnostic pointing at the next missing piece: RHS reads the state it assigns (a self-referential fold in one of OQ2's dangerous sub-cases) → not idempotent → the trigger must be a dischargeable state → the body must provably discharge it. Whether the language *mandates* this chain is OQ2; guard soundness also assumes the mutation and its witness enter the state together, which is OQ6's territory.
+
+### No guard sugar
+
+The canonical form is the spelling — no sugar layer sits over it. The candidates surveyed (a header clause like `until DepositApplication`, policy phrases like `once per customer by X` and `at most every 3 days by X`, an `episode of` apparatus generator) sounded like one family, but the connection between condition and witness has a different shape in every realistic use case:
+
+```
+-- identity: the witness correlates 1:1 with the trigger instance
+Deposit where not exists DepositApplication for this
+
+-- self: guard state lives on the trigger instance; no join at all
+Deposit where applied == false
+
+-- chosen key: "once per customer" — the granularity is a product decision
+AccountFlag where not exists (FlagNotification where customer == this.customer)
+
+-- chosen key + time window: a rate limit; the guard expires
+OverdueInvoice where
+    not exists (Reminder where invoice == this and sentOn > today - 3 days)
+
+-- paired apparatus: an episode's correlation is maintained by entry/exit rules
+-- ("Episodes as data")
+```
+
+Every guard is a triple *(witness shape, correlation predicate, optional temporal scope)*, and only the witness is keyword-nameable. The correlation predicate is not mechanism — it *is* the business rule: "once per customer" vs. "once per flag" is a product decision, and the refinement is already its clearest spelling. Sugar would either grow a clause for the join (at which point it is barely shorter than the refinement) or assume one (hiding the decision — `until DepositApplication` reads well only because it silently assumes 1:1). With no common desugaring, the phrases are not one construct but a pile of special cases, each hiding a decision that should stay visible. Even the purely mechanical residue — the 1:1 `not exists W for this` idiom, the unmarked witness statement in a rule body — stays unsweetened: the hand-written refinement names a trigger state worth naming, and connecting witness to trigger is the disarm proof's job, checked rather than spelled.
 
 ## State-change patterns
 
@@ -351,11 +375,11 @@ rule CloseDelinquencyEpisode when leaving Delinquent {
 }
 ```
 
-Now `count(DelinquencyFlag where account == this) >= 3` is expressible, and any rule can guard per episode (`DelinquencyFlag where not exists ServiceSuspension for this`). Noteworthy in passing: the exit rule's singular reference `(OpenDelinquencyFlag where account == this)` is provably at-most-one *because of the entry rule's own guard* — a whole-spec singularity proof (§9's rule discharged by a guard elsewhere in the spec). The honest cost: three shapes and two rules of completely mechanical pattern — sugar territory (`episode of Delinquent`?), tracked in OQ8.
+Now `count(DelinquencyFlag where account == this) >= 3` is expressible, and any rule can guard per episode (`DelinquencyFlag where not exists ServiceSuspension for this`). Noteworthy in passing: the exit rule's singular reference `(OpenDelinquencyFlag where account == this)` is provably at-most-one *because of the entry rule's own guard* — a whole-spec singularity proof (§9's rule discharged by a guard elsewhere in the spec). The honest cost: three shapes and two rules of completely mechanical pattern — accepted, not sugared ("No guard sugar").
 
 ## Open questions
 
-(Retired tags are not reused. OQ1, concurrent assignments to one field, is settled — see "One writer per field, per commit." OQ3, assignment targets must be stored fields, is settled — see "Assignment targets are stored fields.")
+(Retired tags are not reused. OQ1, concurrent assignments to one field, is settled — see "One writer per field, per commit." OQ3, assignment targets must be stored fields, is settled — see "Assignment targets are stored fields." OQ8, guard and pattern sugar, is settled — see "No guard sugar.")
 
 ### OQ2. What must the language require of a self-referential assignment?
 
@@ -405,7 +429,7 @@ The open question applies to the duplication-sensitive and order-dependent sub-c
 - **Some folds are forced into mutation by a grammar gap.** Order-dependent folds have no derivation spelling today — arguably a vocabulary gap to close (ordered folds) rather than a mutation feature to guard.
 - **Tolerance is a business fact, per use case.** A double-counted page view is noise; a double-applied deposit is theft. So the answer is probably not one letter globally — current lean: guard required *by default* for the two dangerous sub-cases, with a declarable "approximate is fine" tolerance that waives it. Validation-of-intent rather than one-size enforcement; no syntax proposed.
 
-Dependencies: commit-triggered firing is already logically once-per-commit ("Entry and exit are commit-local diffs"), so the guard is about **durability** — the crash between the commit and the rule's effects — making OQ6's definition of a commit a prerequisite; and a guard cannot dedupe repeated acts (two identical `Deposit` commits are two firings, each exactly once) — OQ5's act-identity question. The sugar question is OQ8.
+Dependencies: commit-triggered firing is already logically once-per-commit ("Entry and exit are commit-local diffs"), so the guard is about **durability** — the crash between the commit and the rule's effects — making OQ6's definition of a commit a prerequisite; and a guard cannot dedupe repeated acts (two identical `Deposit` commits are two firings, each exactly once) — OQ5's act-identity question.
 
 ### OQ4. Act-level sugar for the one-assignment case
 
@@ -453,98 +477,7 @@ The core is settled — see "Rule triggers: `when` and `on`" above: the commit/t
 - **Re-derive §12 under commit-local diffs** — mutation policies (`stands`/`forbidden`/`compensate`), what an exit rule may read (captured properties retract at the very moment a `when leaving` rule fires), and `compensate`'s desugared form, now that `leaving` is a diff rather than a primitive observation.
 - **Latency vocabulary** — `on` expresses the evaluation *source*, not latency *requirements*. Is "immediate by default, named schedule otherwise" enough, or do deadlines ("within 24h") deserve first-class expression the compiler validates against declared cadences?
 - **`on commit of <Shape>` narrowing** — "only withdrawals suspend, not fee assessments." Expressible and occasionally meaningful, but it can silently miss entry paths; per flexible-not-restrictive it would be allowed *with* the compiler reporting exactly which entry paths go unobserved. Not yet designed.
-- **The pattern catalog and sugar.** The durable-state patterns — handled-once (*C ∧ ¬witness*), episode (flag/resolution pairing; entry = *C ∧ ¬open*, exit = *¬C ∧ open*), resettable latch (flag reconciled by sweeps), classification (*C* alone, no rule) — remain the vocabulary for crash-safe and cross-tick designs, no longer a replacement for entry/exit themselves. The patterns themselves are documented in "State-change patterns"; whether they stabilize into sugar (`episode of Delinquent` generating the whole flag/resolution apparatus) is OQ8.
-
-### OQ8. Guard and pattern sugar
-
-The canonical form is settled ("Run-once guards"); whether any sugar earns adoption is not.
-
-**The floor any sugar must respect: a guard is never *just* sugar.** Ordinary sugar is semantically weightless — it rewrites a spelling into constructs already present. A guard *adds model content*: a nameable state (the refinement) and a witness fact that lives in the data, appears in impact analysis, and is what `why` walks. Sugar may abbreviate the spelling; it may not make the witness anonymous — a keyword that had the compiler invent an unnamed internal record would be the hidden fired-flag in costume. Every candidate below keeps the witness named.
-
-**Use cases in canonical form, annotated where sugar could buy readability:**
-
-```
--- use case: apply each deposit exactly once, durably
-shape UnappliedDeposit = Deposit where not exists DepositApplication for this
-                       -- ^ sugar target: pure mechanism, "X where not exists W for this"
-                       --   written out by hand just to name a trigger state
-
-rule ApplyDeposit when UnappliedDeposit on commit, Hourly {
-    account.balance = account.balance + amount
-    DepositApplication from { deposit: this, appliedOn: now }
-                       -- ^ sugar target: nothing in the syntax marks this statement
-                       --   as the witness; only the disarm proof connects it
-}
-
--- candidate: rule ApplyDeposit when Deposit until DepositApplication { ... }
---   collapses the hand-written refinement; the witness shape stays named
-```
-
-```
--- use case: same guard, but the PO wants the flag on the deposit itself
-shape Deposit {
-    account: one Account
-    amount: Money
-    applied: boolean                    -- needs an initial value: OQ9
-}
-
-shape UnappliedDeposit = Deposit where applied == false
-
-rule ApplyDeposit when UnappliedDeposit {
-    account.balance = account.balance + amount
-    this.applied = true
-}
-
--- four mechanical pieces spelling one idea ("track applied on the act"):
--- the field, its initial value, the guard refinement, the disarm assignment.
--- sugar over this quartet would generate all four from one declaration —
--- but the field stays declared and visible, per the floor
-```
-
-```
--- use case: notify at most once per customer, ever
-shape UnnotifiedFlag = AccountFlag
-    where not exists (FlagNotification where customer == this.customer)
-
-rule NotifyCustomer when UnnotifiedFlag {
-    FlagNotification from { customer: this.customer, notifiedOn: now }
-}
-
--- the business phrase is "once per customer"; the correlated exists is its spelling.
--- candidate: ... when AccountFlag once per customer by FlagNotification { ... }
---   reads as the phrase, desugars to exactly the refinement above
-```
-
-```
--- use case: remind overdue customers at most every 3 days
-rule SendReminder on Daily {
-    each (OverdueInvoice where
-          not exists (Reminder where invoice == this and sentOn > today - 3 days)) {
-        Reminder from { invoice: this, sentOn: today }
-    }
-}
-
--- "at most every 3 days" is a rate limit; the dated-witness predicate is its spelling.
--- candidate: ... at most every 3 days by Reminder — same desugaring shape as
---   "once per customer": a policy phrase over a named, dated witness
-```
-
-```
--- use case: track delinquency episodes ("Episodes as data" has the full apparatus)
--- five declarations, all mechanical: the flag shape, the resolution shape,
--- the open-refinement, the open rule, the close rule.
--- candidate: episode DelinquencyEpisode of Delinquent — generating all five,
---   with the generated shapes named and queryable, not anonymous
-```
-
-The pattern across all five: each sugar candidate is a **business policy phrase over a named witness** — *exactly once*, *once per customer*, *at most every 3 days*, *episode of* — desugaring to a guard refinement the author would otherwise hand-write. The witness is always the named survivor; the refinement is always the generated part. That suggests the sugar question is really one design, not five: a policy-clause grammar whose every form names its witness.
-
-Remaining sub-questions:
-
-- **Which forms, if any.** Header clauses (`until X`, `once per f by X`) still carry the structural-connection weakness — gate and witness joined by name — though the disarm proof backstops them; the statement-level marker (`once X from { ... }`) fuses gate and effect but hides the gate from the header. Deferring costs nothing; usage of the canonical form can reveal which phrases are actually missed.
-- **Fate of `produces`.** It reads like a *data* concept but behaves like a *guard* — one keyword, two jobs. Under the canonical direction it's sugar that must desugar to a dischargeable trigger state: retire it, or keep it as a pure data declaration with no guard semantics. Either touches every rule in the README (§§11 and 15 carry tentative markers).
-- **The `each`/multi-schedule pass** — whether the disarm proof extends cleanly through `each` bodies and multi-cadence `on` lists.
-- **Diagnostic-led adoption (← OQ2).** OQ2's enforcement lean means the compiler will be *proposing* guards at authors mid-error; whatever sugar exists is what the fix-it suggestion writes. Sugar ergonomics and OQ2's enforcement decision aren't separable — a required guard that's miserable to write makes (b) hostile; a one-phrase guard makes it a teaching moment.
+- **The pattern catalog and sugar.** The durable-state patterns — handled-once (*C ∧ ¬witness*), episode (flag/resolution pairing; entry = *C ∧ ¬open*, exit = *¬C ∧ open*), resettable latch (flag reconciled by sweeps), classification (*C* alone, no rule) — remain the vocabulary for crash-safe and cross-tick designs, no longer a replacement for entry/exit themselves. The patterns themselves are documented in "State-change patterns"; sugar over them is settled out — the apparatus stays hand-written ("No guard sugar").
 
 ### OQ9. Initial values for stored fields
 
@@ -557,3 +490,26 @@ Exposed by the flag guard but independent of it: `applied` must start `false`, a
 ### OQ11. Should the compiler recognize the rungs?
 
 The derivation → reconciliation → exactly-once spectrum ("State-change patterns") is implicit in how a spec is written. Should the compiler classify which rung each rule sits on and validate accordingly — prove a sweep converges and is idempotent, warn when a stored flag could have been a predicate, require a guard only where non-idempotence demands one? Ties the whole solution space back to validation-of-intent.
+
+### OQ12. Fate of `produces`
+
+It reads like a *data* concept but behaves like a *guard* — one keyword, two jobs. Under the canonical guard direction ("Run-once guards") it's sugar that must desugar to a dischargeable trigger state: retire it, or keep it as a pure data declaration with no guard semantics. Either answer touches every rule in the README (§§11 and 15 carry tentative markers). Guard sugar is settled out ("No guard sugar"), which removes the middle ground: `produces` cannot be re-justified as the blessed guard abbreviation.
+
+### OQ13. The `each`/multi-schedule pass
+
+Whether the disarm proof extends cleanly beyond the simple rule shape it was settled on. Two directions to check: multi-cadence `on` lists (`ApplyDeposit ... on commit, Hourly` — the disarm proof must hold under every trigger source for the durability backstop to be safe), and `each` bodies, where the guard predicate lives inside the selector, so the proof obligation is per iterated instance, not per rule firing:
+
+```
+rule SendReminder on Daily {
+    each (OverdueInvoice where
+          not exists (Reminder where invoice == this and sentOn > today - 3 days)) {
+        Reminder from { invoice: this, sentOn: today }
+    }
+}
+```
+
+No conclusions yet; needs worked examples.
+
+### OQ14. Diagnostic-led guard adoption (← OQ2)
+
+OQ2's enforcement lean means the compiler will be *proposing* guards to authors mid-error. With guard sugar dropped ("No guard sugar"), the fix-it suggestion writes the canonical form itself, so the question is now exactly this: is the canonical form pleasant enough to be what a diagnostic asks an author to write? Ergonomics and OQ2's enforcement decision aren't separable — a required guard that's miserable to write makes enforcement hostile; one that reads as the business rule makes it a teaching moment.
