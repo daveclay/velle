@@ -27,6 +27,7 @@ Split two ways, per `README.md` `## Principles`. **Language & structure** is wha
 - [ ] Escape hatch / override syntax — how a human marks part of a spec as a contract (signature + conditions + invariants) instead of a declarative body; deferred all the way back in `discussion_hard_problems.md` (compiler-emitted conformance tests + generated implementation are a compiling concern, below)
 - [ ] Data-derived (not literal) schedule durations — does the `via schedule <duration> after <Shape>` grammar position accept an expression (e.g. `escalatedTo.role.timeoutMinutes`), not just a literal (`10 minutes`)? — surfaced by `example_predicates.md` #9
 - [ ] `Mapping` — full spec beyond "`produces` is a small inline Mapping"; the original shape-to-shape translation use case from the design goals has never been worked through end-to-end
+- [ ] Cascade commit boundaries ("transactions") — where atomicity starts and stops when rules trigger other rules; closure vs. chain vs. hybrid, rejection scope for `forbidden`, external effects mid-cascade, atomicity as a declarable per-edge policy — `investigate_transactions.md` OQ16–19 (the runtime mechanism — db transaction, orchestrated queue, sagas — is a compiling concern, out of scope there too)
 
 ## Compiling Velle into code
 
