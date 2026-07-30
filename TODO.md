@@ -51,7 +51,7 @@ Split two ways, per `README.md` `## Principles`. **Language & structure** is wha
 
 ### Bigger, deferred on purpose
 
-- [ ] Compiled guardrails catalog — start an actual running list of everything compiling must always enforce (forced prepared statements, atomic `produces`, forced totality checks, correctly evaluating self-referential definitions, erroring on out-of-scope bare names instead of scope-walking to resolve them, reporting a declaration change that creates new `for` field ambiguity (§12) as one diagnostic connecting the declaration to every reference it now affects rather than an isolated error at either site, etc.) rather than leaving it as a scattered principle
+- [ ] Compiled guardrails catalog — start an actual running list of everything compiling must always enforce (forced prepared statements, atomic `produces`, forced totality checks, correctly evaluating self-referential definitions, erroring on out-of-scope bare names instead of scope-walking to resolve them, reporting a declaration change that creates new `for` field ambiguity (README §14) as one diagnostic connecting the declaration to every reference it now affects rather than an isolated error at either site, etc.) rather than leaving it as a scattered principle
 
 ## Neither — process / research
 

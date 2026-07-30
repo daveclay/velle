@@ -35,13 +35,23 @@ shape Customer {
 }
 ```
 
-## 4. Scalars
+## 4. State and commits
+
+Velle abstracts away the database. The system's **state** is a black box: the set of all shape instances and their stored properties. How that state is physically kept — tables, documents, caches, indexes — is a compiling concern (`## 1. Principles`); no CRUD vocabulary, storage API, or save/load call exists in the language.
+
+The one way state ever changes is a **commit**: a discrete moment at which the black box accepts a change from outside — an external act submitting a new shape instance (committing an instance *is* persisting the record — `## Assignment (mutation in place)`, "No act-level sugar"), together with whatever consequences rules attach to it (`## rule`); or a scheduled tick, which is a commit whose changed datum is `today` (`## Schedule triggers`). A system never does anything on its own; every change to state traces to some commit.
+
+The CRUD replacement reads off directly: "create" is committing a new instance, "update" is an assignment fired by a rule (`## Assignment (mutation in place)`), "read" is any predicate or derivation evaluated against current state, and "delete" has no primitive at all — a produced fact records something that happened in the world, and deleting the record would make the description lie (`## Exit triggers`); where the business needs reversal, that's a policy expressed as data, not an erasure (`example_invoice_payment.md` #5).
+
+Because a commit is a discrete moment, pre-state and post-state are both well-defined at it — which is what lets entry into and exit from a refinement mean something precise, with no hidden bookkeeping (`## rule ... when ... on ...`). What exactly one commit encompasses — the atomicity of a rule firing with its effects, whether cascaded firings share their initiating commit, the moments `then` occupies — is deliberately still open (`investigate_state.md`, OQ6).
+
+## 5. Scalars
 
 Property types seen so far: `text`, `integer`, `decimal`, `boolean`, `Date`, `Money`. A trailing `?` marks a property optional (`processedOn: Date?`); properties are required by default.
 
 `initially` gives a stored property a starting value: `applied: boolean initially false`. The field stays stored and assignable (`## Assignment (mutation in place)`); the initializer is evaluated once, at the instance's creation commit — so `submittedOn: Date initially now` records commit time as model data. This is a third property kind, distinct from derivation: `applied: boolean = false` in shape-body position would mean *derived, always false* — unassignable (`## Derived properties`).
 
-## 5. Relationships (`one`, `many`)
+## 6. Relationships (`one`, `many`)
 
 ```
 shape Invoice {
@@ -52,7 +62,7 @@ shape Invoice {
 
 `one`/`many` declare cardinality directly on a property. The inverse side of a relationship is inferred, not separately declared — e.g. `Customer` does not need its own `invoices: many Invoice` field for `Customer where count(invoices ...)` to work; it's derived from `Invoice.customer`.
 
-## 6. Derived properties
+## 7. Derived properties
 
 A property can be defined as a computation over other properties instead of stored data:
 
@@ -64,7 +74,7 @@ Derived properties are recomputed from current data, not cached/stored — they'
 
 A derived property's formula may reference the same property one hop away through a relationship (self-reference) — e.g. `root: Foo? = none if parent is none else (parent if parent.root is none else parent.root)`. This needs no special syntax; correctly evaluating it is a compiler obligation (`## Principles`), not a language concern — see Predicate expressions, below.
 
-## 7. Refinements (`where`)
+## 8. Refinements (`where`)
 
 The core idea of the language: a condition is a named subset of a shape, defined by a predicate — not a branch.
 
@@ -110,7 +120,7 @@ shape Reconciled = Quoted and Delivered {
 
 **Membership is unchanged.** A refinement with properties is still a pure predicate as to *membership* — properties change what a member *has*, never when membership *holds*. Captured properties are per-membership memory, state-layer through and through: they retract on exit. If the business cares about past memberships ("who archived it back in March, before it was unarchived?"), that was never a property — it's history, modeled as occurrence facts plus `latest(... by ...)`.
 
-## 8. Composing refinements (`and`, `or`)
+## 9. Composing refinements (`and`, `or`)
 
 A refinement can be built from other named refinements instead of restating their predicates:
 
@@ -129,7 +139,7 @@ Composition carries refinement properties (`## Refinements`): `A and B` has the 
 
 The intended style: small, deliberately atomic refinements named to read like traits (`Open`, `Overdue`, `HighPriority` — no type suffix), with composites built as pure intersections/unions of trait names rather than restated predicates. Not solved: true cross-shape structural mixins, where a trait like `Overdue` is reusable across unrelated shapes (e.g. both `SupportTicket.due` and `Invoice.due`) — see Open/unresolved.
 
-## 9. Predicate expressions
+## 10. Predicate expressions
 
 The expression language usable inside `where`, `requires`, and `visible to ... where`.
 
@@ -248,7 +258,7 @@ duration       := IntegerLiteral ("seconds"|"minutes"|"hours"|"days"|"weeks")
 
 See `example_predicates.md` for the worked derivation of every rule above.
 
-## 10. `rule ... when ... on ...`
+## 11. `rule ... when ... on ...`
 
 A top-level reaction attached to a refinement — replaces `if`/`else` branching and imperative "then do X" sequencing for state-driven behavior. The header separates the rule's *condition* from its *trigger source*, one keyword each:
 
@@ -280,7 +290,7 @@ Two compiler obligations fall out. **The unfireable-rule error**: if a rule's tr
 - **Bare act triggers are sound.** `when CorrectEmail` fires once per correction commit — the commit is the unit of firing. The rule is never tick-evaluated, so no sweep can re-apply old corrections.
 - **A tick is a commit whose changed datum is `today`.** So `on commit, Daily` is one mechanism, not two: an invoice *aging* into `OverdueInvoice` is a commit-local diff over the tick — the same entry semantics as a payment-reversal commit.
 
-## 11. Assignment (mutation in place)
+## 12. Assignment (mutation in place)
 
 A rule body changes stored state with an assignment statement — mutating a field in place is allowed; Velle does not force the ledger pattern (below) onto a model that doesn't need history:
 
@@ -363,7 +373,7 @@ shape EmailCorrection {
 
 Nothing here is new mechanism: `EmailCorrection` is a reified act like any other shape, `latest(...)` orders by `correctedOn` (the shape's only `Date` property), and the `exists` check narrows the then-branch so `.corrected` is provably evaluable. Commit means insert, the ledger is append-only, and the stored truth is never touched. The two patterns answer different business realities — "email changed" (in place) versus "email changed and the history matters" (ledger) — and the author picks per field.
 
-## 12. Exit triggers (`when leaving`)
+## 13. Exit triggers (`when leaving`)
 
 *Tentative in part — mutation policies are being re-derived under the commit-local diff model, and `compensate`'s desugaring is unsettled now that `produces` is retired (see `investigate_state.md`, OQ7).*
 
@@ -399,7 +409,7 @@ Three policies, each an answer a Product Owner already gives in the wild:
 
 Deleting evidence is never one of the options — a produced fact records something that happened in the world (the email was sent), and deleting the record makes the description lie. Which policy applies when none is declared — default `stands`, or a compile error that forces the question — is unsettled; see Open / unresolved.
 
-## 13. `for`
+## 14. `for`
 
 Associates a newly created shape instance with the subject it's about:
 
@@ -421,7 +431,7 @@ Referral from {
 
 Creating an instance is an ordinary body statement, nothing more — no header annotation is involved (the retired `produces`, `## Run-once guards`). When the created shape serves as a guard witness, the connection to the trigger is the disarm proof's job, checked rather than spelled. `for` as a *query* expression (`(NurseVerification for this).nurse`, `exists Shape for expr`) is unaffected by this — see `## Predicate expressions`, above.
 
-## 14. `then`
+## 15. `then`
 
 Explicit, opt-in ordering between two effects that have no data dependency forcing an order:
 
@@ -443,7 +453,7 @@ Effects listed without `then` are unordered — the transpiler/AI-assisted codeg
 
 `then` and `from` don't compete: `then` orders *statements*, `from` is the *form* of one statement. There is no one-effect header collapse — a rule whose body is a single effect is simply a one-statement body (`## Assignment (mutation in place)`'s no-sugar stance extends here). What moments `then`'s intermediate states occupy relative to commit boundaries is part of the open definition of a commit (`investigate_state.md`, OQ6).
 
-## 15. `each`
+## 16. `each`
 
 *Tentative in part — whether the disarm proof extends per iterated instance is under investigation (see `investigate_state.md`, OQ13).*
 
@@ -459,7 +469,7 @@ rule SuspendDelinquents on Nightly {
 
 No separate loop construct — `each` quantifies over current state. When a sweep must not re-handle a member, the guard predicate lives inside the selector (`where not suspended`, above; `## Run-once guards`), so the run-once obligation is per iterated instance, not per rule firing.
 
-## 16. Schedule triggers (`on <schedule>`)
+## 17. Schedule triggers (`on <schedule>`)
 
 A rule can be triggered by a named schedule instead of (or in addition to) `on commit`, by naming the schedule in the header's `on` clause:
 
@@ -480,7 +490,7 @@ A schedule trigger is the *only* way a purely time-dependent refinement (like `O
 
 **Transient membership is a policy, stated in the header.** An account goes negative Monday 09:00 and recovers at 17:00. Under `when Delinquent on commit`, suspension fires at 09:00 and restoration at 17:00 — the blip was real, service was off for eight hours. Under an `on Nightly` sweep, the check sees a positive balance — the blip never mattered. Neither is wrong: commit-triggered observes every membership the commit stream produces; tick-triggered observes what persists to the tick. The choice is business-visible in one clause, answered per rule by the author rather than globally by the language.
 
-## 17. Run-once guards
+## 18. Run-once guards
 
 Commit-triggered rules already fire exactly once per commit (`## rule`), so an ordinary rule needs no guard. A guard earns its place in exactly two situations: **durability** — the firing must survive a crash and be provable afterward — and **cross-tick memory** — a tick rule needs "already handled" as data (`## Schedule triggers`). The canonical form — and the only form; there is no guard sugar (below) — is a named refinement whose predicate the rule's own body falsifies:
 
@@ -550,7 +560,7 @@ Earlier drafts guarded a rule with a header keyword (`rule SendReceipt when Sett
 
 Guard soundness assumes the mutation and its witness enter the state together — atomicity, part of the open definition of a commit (`investigate_state.md`, OQ6).
 
-## 18. Self-referential folds and `tolerates`
+## 19. Self-referential folds and `tolerates`
 
 Static analysis splits assignment right-hand sides into three classes; only the last needs machinery.
 
@@ -631,7 +641,7 @@ rule TrackStreak when Payment {
 
 **Residual gap.** A *batched* order-dependent fold (a nightly streak sweep) is exposed to reordering with no honest discharge yet: no clause gives a batch an iteration order, and the derivation grammar has no ordered folds — declared tolerance is currently the only spelling, which is wrong for a streak. Until one exists, commit-cadence is the only fully-served spelling for order-dependent folds (`investigate_state.md`, OQ15).
 
-## 19. State-change patterns
+## 20. State-change patterns
 
 The same business sentence — "suspend delinquent accounts" — has several valid designs, chosen by what the business actually needs (flexible, not restrictive — `## Philosophy`). The spectrum runs **derivation → reconciliation → exactly-once events**, and the guard question only exists at the far end.
 
@@ -718,15 +728,15 @@ The spectrum is not just documentation — the compiler classifies which rung ea
 
 How this behaves against realistic specs is untested — the classification boundaries and the advisory/required line are expected to be calibrated when realistic Velle examples get written; the principle is settled, the calibration isn't.
 
-## 20. Open / unresolved
+## 21. Open / unresolved
 
-- **State change & rule mechanics — remaining frontier.** The core is settled — assignment and one-writer (§11), run-once guards with no sugar and `produces` retired (§17), folds and `tolerates` (§18), the pattern spectrum and rung recognition (§19). Still open in `investigate_state.md`: marking shapes as external input, act identity, and commit-metadata readability — `createdAt`/`updatedAt` are commit metadata, readable never writable, spelling unexplored (OQ5); what exactly one commit is — atomicity of a firing, cascades, `then`'s intermediate moments — the load-bearing question one-writer, guard soundness, and derived trigger sets all lean on (OQ6); remaining rule-anatomy threads including re-deriving §12's mutation policies under commit-local diffs (OQ7); the `each`/multi-schedule disarm-proof pass (OQ13); whether the canonical guard form is pleasant enough to be what fold diagnostics ask authors to write (OQ14); ordered folds and batch ordering (OQ15). §§12 and 15 carry tentative markers accordingly.
+- **State change & rule mechanics — remaining frontier.** The core is settled — assignment and one-writer (§12), run-once guards with no sugar and `produces` retired (§18), folds and `tolerates` (§19), the pattern spectrum and rung recognition (§20). Still open in `investigate_state.md`: marking shapes as external input, act identity, and commit-metadata readability — `createdAt`/`updatedAt` are commit metadata, readable never writable, spelling unexplored (OQ5); what exactly one commit is — atomicity of a firing, cascades, `then`'s intermediate moments — the load-bearing question one-writer, guard soundness, and derived trigger sets all lean on (OQ6); remaining rule-anatomy threads including re-deriving §13's mutation policies under commit-local diffs (OQ7); the `each`/multi-schedule disarm-proof pass (OQ13); whether the canonical guard form is pleasant enough to be what fold diagnostics ask authors to write (OQ14); ordered folds and batch ordering (OQ15). §§13 and 16 carry tentative markers accordingly.
 - **Mapping** (shape-to-shape translation, e.g. API DTO → domain shape) — part of the original design goals, not yet exercised in a worked example.
 - **Schedule definition** — `on Daily` (the header's `on` clause) settles how a rule *references* a schedule; what actually defines `Daily` (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be a cron-like scheduling framework.
 - **Reversal** — resolved as a non-issue for the language itself (it's a business-policy choice, expressed via which artifact shapes a human declares — see `example_invoice_payment.md` #5), but no single canonical pattern has been adopted yet; the consolidated top-of-file example still doesn't reflect a chosen policy.
-- **Exit-trigger loose ends** — whether an undeclared mutation policy on evidence defaults to `stands` or is a compile error; and `compensate`'s form now that `produces` is retired — it must either re-desugar to a canonical-guarded exit rule (guarding on the evidence's existence, naming the matched evidence instance inside the compensating mapping) or fall to the no-sugar reasoning (§17). The transient-membership question is answered: it's a per-rule policy, visible in the header's `on` clause (§16). See `investigate_state.md`, OQ7.
+- **Exit-trigger loose ends** — whether an undeclared mutation policy on evidence defaults to `stands` or is a compile error; and `compensate`'s form now that `produces` is retired — it must either re-desugar to a canonical-guarded exit rule (guarding on the evidence's existence, naming the matched evidence instance inside the compensating mapping) or fall to the no-sugar reasoning (§18). The transient-membership question is answered: it's a per-rule policy, visible in the header's `on` clause (§17). See `investigate_state.md`, OQ7.
 - **Escape hatch / override syntax** — how a human marks part of a spec as intentionally hand-implemented/AI-implemented rather than declarative. Deferred; agreed to be a lesser concern until the core language settles.
-- **Compiled guardrails** — the idea that the compiler/transpiler should structurally enforce best practices (e.g. forced prepared statements, automatic error-context capture, correctly evaluating self-referential shape/derived-property definitions, how deep narrowing analysis for `.`-vs-`?.` sees through nested expressions, erroring — not silently resolving — a bare unqualified name that doesn't exist in its innermost scope but would resolve unambiguously in exactly one enclosing scope, per `## Principles`'s compiling-as-validation rule: the fix is always an explicit `this.field`, never an inferred scope-walk that could silently start pointing elsewhere the moment an enclosing shape gains a same-named field; a field addition that creates a new type-match ambiguity for an existing bare `for` reference elsewhere in the spec, per §13, must be reported as one connected diagnostic naming both the declaration that introduced the ambiguity — e.g. `Referral` gaining a second `Customer`-typed field — and every reference it now makes ambiguous — e.g. `CustomerWhoReferred`'s `for this` — since the compiler's job is reporting an incoherence in the spec as a whole, not a syntax error in one isolated line, and a human should never have to search for why an untouched line stopped compiling) as a byproduct of codegen. A design principle, not yet a syntax construct.
+- **Compiled guardrails** — the idea that the compiler/transpiler should structurally enforce best practices (e.g. forced prepared statements, automatic error-context capture, correctly evaluating self-referential shape/derived-property definitions, how deep narrowing analysis for `.`-vs-`?.` sees through nested expressions, erroring — not silently resolving — a bare unqualified name that doesn't exist in its innermost scope but would resolve unambiguously in exactly one enclosing scope, per `## Principles`'s compiling-as-validation rule: the fix is always an explicit `this.field`, never an inferred scope-walk that could silently start pointing elsewhere the moment an enclosing shape gains a same-named field; a field addition that creates a new type-match ambiguity for an existing bare `for` reference elsewhere in the spec, per §14, must be reported as one connected diagnostic naming both the declaration that introduced the ambiguity — e.g. `Referral` gaining a second `Customer`-typed field — and every reference it now makes ambiguous — e.g. `CustomerWhoReferred`'s `for this` — since the compiler's job is reporting an incoherence in the spec as a whole, not a syntax error in one isolated line, and a human should never have to search for why an untouched line stopped compiling) as a byproduct of codegen. A design principle, not yet a syntax construct.
 - **`latest`/`first` ordering property** — selectors order by an explicit `Date`/`DateTime` property, not an implicit creation timestamp; how that property is identified is undecided. Likely the same pattern as `for` field-ambiguity: bare `latest(...)` legal only when the element shape has exactly one date property, an explicit form (e.g. `latest(payments by receivedOn)`) required otherwise — but no syntax is settled.
 - **Exit from act-entered refinements** — a membership predicate of the form `exists ArchiveRequest for this` is monotone: facts persist, so nothing can ever leave `ArchivedInvoice`, and un-archiving is inexpressible. Exit requires either pairing occurrences in the predicate (`... and not exists Unarchival` newer than the matched request — which needs occurrence ordering/scoping vocabulary not yet designed) or a mutable field plus a declared mutation policy (`## Exit triggers`). Both are expressible; which is idiomatic is unsettled, and ties into occurrence reification (`investigate_state.md`).
 - **State partition declaration** — refinement properties give states their data (`## Refinements`), reified acts give transitions their payloads, and mutation policies bound which transitions are legal — but nothing yet asserts that a set of refinements *partitions* a shape: mutually exclusive, jointly exhaustive ("an invoice is always in exactly one of Draft, Issued, Paid, Voided"). Candidate spelling `states of Invoice = Draft | Issued | Paid | Voided`, invoking the exhaustiveness/overlap check `## Refinements` already names as a compiler goal. The next investigation.

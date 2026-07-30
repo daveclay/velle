@@ -14,7 +14,7 @@ React is a similar analogy/approach with mutations committing to a single state 
 
 **Flexible, not restrictive.** Velle should not force one design pattern over another — evidence shape vs. guard flag, ledger vs. in-place, internal vs. client-supplied fields are the author's calls, made per use case (how much trust the client warrants, how much history the business needs). Velle's job is to provide the validation tools that prove the system does what the author intended, whichever pattern they chose.
 
-**A system never does anything on its own.** It can only react to an external event — a commit. Scheduled ticks are just another external event (README §16 already treats a tick as a shape instance arriving). Every rule firing must therefore trace to a commit; see "Rules ground in commits," below.
+**A system never does anything on its own.** It can only react to an external event — a commit. Scheduled ticks are just another external event (README §17 already treats a tick as a shape instance arriving). Every rule firing must therefore trace to a commit; see "Rules ground in commits," below.
 
 ## Mutation in place
 
@@ -41,15 +41,15 @@ rule ApplyEmailCorrection when CorrectEmail {
 
 The pieces:
 
-- **`when CorrectEmail`** — a plain-shape condition, already sanctioned (README §14's `rule InitiateCharge when Order`): the rule fires when an instance is committed.
+- **`when CorrectEmail`** — a plain-shape condition, already sanctioned (README §15's `rule InitiateCharge when Order`): the rule fires when an instance is committed.
 - **`customer.email = corrected`** — assignment, a new effect-statement form alongside `X from { ... }` and `X for y ...`. `=` in rule-body position means *becomes, now*; in shape-body position it remains *is defined as, always* (derivation). One symbol, two positions — the same deliberate positional reuse the language already makes with `for` (association vs. query) and `?` (optional marker vs. `?.`). The two contexts never collide: rule bodies contain no definitions, shape bodies contain no effects.
-- **The target is a literal static path — a hard requirement.** Because `customer.email` is statically known, the whole-spec compiler knows every refinement predicate and derived property that reads `email`, and impact analysis falls out for free: which memberships may change, which entry/exit rules may consequently fire, which `forbidden` liens (README §12) could reject the commit. A computed or reflective target would destroy this, so no solution for mutation syntax may ever introduce one.
+- **The target is a literal static path — a hard requirement.** Because `customer.email` is statically known, the whole-spec compiler knows every refinement predicate and derived property that reads `email`, and impact analysis falls out for free: which memberships may change, which entry/exit rules may consequently fire, which `forbidden` liens (README §13) could reject the commit. A computed or reflective target would destroy this, so no solution for mutation syntax may ever introduce one.
 
 ### One writer per field, per commit
 
 More than one assignment to the same field of the same referenced shape is a compile error whenever the assignments' triggers can coincide — whenever a single commit could fire both. There is no `then`-ordered escape: sequencing two writes to one field inside a single firing is not a real business statement, and one assignment whose RHS states the whole intent replaces it. Within a single commit's rule firings "last" is undefined; last-in-wins is only real *across* commits, where "last" is a fact of the world.
 
-"Can the triggers coincide?" is answered statically from the declarations, never at runtime: same trigger shape → yes; a refinement and its base (or two overlapping refinements) → yes; unrelated shapes → provably never. If the compiler can't prove two triggers disjoint, it errors — uncertainty fails closed. The machinery is the refinement-overlap check README §7 already names as a compiler goal, applied to trigger shapes. It's a whole-spec check: a second rule assigning `customer.email`, added months later in another file, trips it, reported as one connected diagnostic naming both rules. A spec that compiles has no ambiguous-write configuration reachable at runtime.
+"Can the triggers coincide?" is answered statically from the declarations, never at runtime: same trigger shape → yes; a refinement and its base (or two overlapping refinements) → yes; unrelated shapes → provably never. If the compiler can't prove two triggers disjoint, it errors — uncertainty fails closed. The machinery is the refinement-overlap check README §8 already names as a compiler goal, applied to trigger shapes. It's a whole-spec check: a second rule assigning `customer.email`, added months later in another file, trips it, reported as one connected diagnostic naming both rules. A spec that compiles has no ambiguous-write configuration reachable at runtime.
 
 Legal — separate acts whose triggers can never coincide fire from different commits, where last-in-wins orders them:
 
@@ -122,7 +122,7 @@ A bare boolean field is a predicate atom: `where not applied` and `where applied
 
 ### No act-level sugar
 
-A one-assignment rule stays a rule — there is no collapsed form letting a mutation shape carry its assignment in its own body (the territory README §17's provisional `output` was exploring):
+A one-assignment rule stays a rule — there is no collapsed form letting a mutation shape carry its assignment in its own body (the territory README §12's retired `output` construct was exploring):
 
 ```
 shape CorrectEmail {
@@ -175,7 +175,7 @@ The division of labor: the author declares the **what** (`when` — the business
 
 Two compiler obligations fall out:
 
-1. **The unfireable-rule error.** If a rule's trigger set is empty — no commit in the spec, and no tick in its `on` clause, can cause entry into its condition — the rule can never fire, and that's a whole-spec compile error, not a dead-code shrug. The sharp instance is time: `OverdueInvoice = Invoice where due < today` depends on `today`, which no act commit changes. A rule `when OverdueInvoice` with no schedule in its `on` clause observes entry at `Invoice` creation (committed already-overdue) but never entry *by aging* — and the diagnostic is precise: "entry into `OverdueInvoice` via the passage of time is unobserved — add a schedule to `on`, or this rule under-fires." README §16's stance stops being a convention and becomes a coverage check read directly off the header.
+1. **The unfireable-rule error.** If a rule's trigger set is empty — no commit in the spec, and no tick in its `on` clause, can cause entry into its condition — the rule can never fire, and that's a whole-spec compile error, not a dead-code shrug. The sharp instance is time: `OverdueInvoice = Invoice where due < today` depends on `today`, which no act commit changes. A rule `when OverdueInvoice` with no schedule in its `on` clause observes entry at `Invoice` creation (committed already-overdue) but never entry *by aging* — and the diagnostic is precise: "entry into `OverdueInvoice` via the passage of time is unobserved — add a schedule to `on`, or this rule under-fires." README §17's stance stops being a convention and becomes a coverage check read directly off the header.
 2. **The PO-facing answer to "when does this run?"** The derived trigger set is impact analysis read backward. Forward: "if this commit lands, these rules may fire." Backward: "this rule fires as a consequence of: withdrawals, deposits, the daily tick." Both are the same graph; the author declares the source, and the compiler proves — and can show — the specifics.
 
 ## Rule triggers: `when` and `on`
@@ -187,7 +187,7 @@ rule <name> [when [leaving] <condition>] [on <trigger>, ...] { <effects> }
 ```
 
 - **`when`** — the condition: a refinement, entered or left. Single meaning, always.
-- **`on`** — the trigger source: `commit`, or a named schedule (`Nightly`). Single meaning, always. This retires the prefix/postfix positional reuse of `on`; README §16's schedule references keep their existing `on Daily` spelling, relocated into the header.
+- **`on`** — the trigger source: `commit`, or a named schedule (`Nightly`). Single meaning, always. This retires the prefix/postfix positional reuse of `on`; README §17's schedule references keep their existing `on Daily` spelling, relocated into the header.
 - Omitted `on` defaults to `on commit` — a single well-defined default, the same category as properties being required unless marked `?`.
 - The given/when/then echo is deliberate and on-brand: the README names BDD as "closer but not structured enough," and a rule now reads as that artifact made rigorous — *given* the declared shapes, *when* the condition holds, *on* commit or tick, then the effects (the body's sequencing keyword is already literally `then`).
 
@@ -222,7 +222,7 @@ rule NagCustomer when OverdueInvoice on commit, Daily {
 
 ### Entry and exit are commit-local diffs
 
-"Newly-satisfying" (README §10) is well-defined with no hidden bookkeeping, but only *per commit*: a commit is a discrete moment, and evaluating its consequences means pre-state and post-state are both transiently available. `when Delinquent on commit` means *the commit that made it true* — false before, true after. `when leaving` is the same diff reversed. Consequences:
+"Newly-satisfying" (README §11) is well-defined with no hidden bookkeeping, but only *per commit*: a commit is a discrete moment, and evaluating its consequences means pre-state and post-state are both transiently available. `when Delinquent on commit` means *the commit that made it true* — false before, true after. `when leaving` is the same diff reversed. Consequences:
 
 - **Episodes are free at commit granularity.** September's re-entry into `Delinquent` is a new entering commit, so `SuspendService` fires again — once per episode, with no guard apparatus. (The outcomes even accumulate as history: one `ServiceSuspension` per episode.) The episode apparatus ("Episodes as data," below) was compensating for monotone evidence-guards; commit-entry semantics never had the problem. The guard patterns remain what you buy for *durability* (crash recovery) and *cross-tick memory*, not for entry itself.
 - **Bare act triggers are sound.** `when CorrectEmail on commit` fires once per correction commit — the commit is the unit of firing. The rule is never tick-evaluated, so no sweep can re-apply old corrections.
@@ -245,7 +245,7 @@ rule SendReminder on Daily {
 
 ### Transient membership is a policy, stated in the header
 
-An account goes negative Monday 09:00 and recovers at 17:00. Under `when Delinquent on commit`: suspension fires at 09:00, restoration at 17:00 — the blip was real, service was off for eight hours. Under the `on Nightly` sweep: the check sees a positive balance — the blip never mattered. Neither is wrong: commit-triggered observes every membership the commit stream produces; tick-triggered observes what persists to the tick. The choice is business-visible in one clause — README §18's "membership that begins and ends unobserved" question, answered per rule by the author rather than globally by the language.
+An account goes negative Monday 09:00 and recovers at 17:00. Under `when Delinquent on commit`: suspension fires at 09:00, restoration at 17:00 — the blip was real, service was off for eight hours. Under the `on Nightly` sweep: the check sees a positive balance — the blip never mattered. Neither is wrong: commit-triggered observes every membership the commit stream produces; tick-triggered observes what persists to the tick. The choice is business-visible in one clause — README §17's transient-membership question, answered per rule by the author rather than globally by the language.
 
 ### Composition as a durability policy
 
@@ -300,7 +300,7 @@ Both are dischargeable trigger states; the same disarm proof covers both, and th
 
 The keyword read like a *data* concept but behaved like a *guard* — one keyword, two jobs, and both are now done by settled machinery:
 
-- **Its guard job** — the compiler-derived implicit "hasn't happened yet" gate — is exactly what "No guard sugar" rejects: a header form whose correlation is *assumed* (field-type matching, `for <field>` as the patch when the guess is wrong). The granularity trap README §11 documents — a witness silently keyed to the flag vs. the customer — is the hidden-join problem by name. Gates are named refinements with a disarm proof; nothing else.
+- **Its guard job** — the compiler-derived implicit "hasn't happened yet" gate — is exactly what "No guard sugar" rejects: a header form whose correlation is *assumed* (field-type matching, `for <field>` as the patch when the guess is wrong). The granularity trap README §18 documents — a witness silently keyed to the flag vs. the customer — is the hidden-join problem by name. Gates are named refinements with a disarm proof; nothing else.
 - **Its data job** — the rule creates an instance — is an ordinary body statement: `Charge from { ... }`. A header `produces Charge` states the same fact twice.
 - **Its remaining candidates fail on principle.** A checked header summary of a rule's outputs is a *derived* fact, and derived facts aren't declared (the same precedent as refinement entry-kinds) — tooling can display what a rule produces; syntax shouldn't demand it. Singularity licensing for `for`-queries (`(NurseVerification for this).nurse` provably at-most-one) comes from *any* guard establishing at-most-one — the whole-spec singularity proof in "Episodes as data" — not from the keyword. Exactly-once external effects (API calls as commits without a db change) are the canonical witness pattern, unchanged.
 
@@ -407,7 +407,7 @@ rule CloseDelinquencyEpisode when leaving Delinquent {
 }
 ```
 
-Now `count(DelinquencyFlag where account == this) >= 3` is expressible, and any rule can guard per episode (`DelinquencyFlag where not exists ServiceSuspension for this`). Noteworthy in passing: the exit rule's singular reference `(OpenDelinquencyFlag where account == this)` is provably at-most-one *because of the entry rule's own guard* — a whole-spec singularity proof (§9's rule discharged by a guard elsewhere in the spec). The honest cost: three shapes and two rules of completely mechanical pattern — accepted, not sugared ("No guard sugar").
+Now `count(DelinquencyFlag where account == this) >= 3` is expressible, and any rule can guard per episode (`DelinquencyFlag where not exists ServiceSuspension for this`). Noteworthy in passing: the exit rule's singular reference `(OpenDelinquencyFlag where account == this)` is provably at-most-one *because of the entry rule's own guard* — a whole-spec singularity proof (README §10's rule discharged by a guard elsewhere in the spec). The honest cost: three shapes and two rules of completely mechanical pattern — accepted, not sugared ("No guard sugar").
 
 ### The compiler recognizes the rungs
 
@@ -551,7 +551,7 @@ Grown from a footnote into the load-bearing question — commits, state, and gua
 - **Is a commit a single act instance?** The one-writer check's "unrelated shapes can never coincide" holds only if two different acts can't enter the state as one commit. Nothing states this anywhere yet. If multi-instance commits exist, "can these triggers coincide?" needs a broader definition than trigger-shape overlap.
 - **Is a rule firing inside its triggering commit, or a subsequent commit of its own?** "Rules ground in commits" establishes that every firing happens *as a consequence of* a commit — but not whether the withdrawal and the suspension it triggers are one atomic state transition or two. Guard soundness ("Run-once guards") already demands mutation-plus-witness be atomic (a failure between them re-arms the guard → double deposit); that was this question in miniature.
 - **What is a cascade?** A rule's effects can trip further rules — the suspension enters some refinement, another rule fires on that. Is the whole cascade one commit, a chain of commits with observable intermediate states, or bounded somehow? The atomicity self-referential folds need generalizes to the entire chain.
-- **Where do `then`'s intermediate moments sit?** README §14's `then` (ordering effects within one firing) implies observable intermediate states whose relationship to commit boundaries is undefined.
+- **Where do `then`'s intermediate moments sit?** README §15's `then` (ordering effects within one firing) implies observable intermediate states whose relationship to commit boundaries is undefined.
 
 Needs pinning down before the one-writer check, the guard soundness argument, or the derived-trigger-set machinery can be specified precisely.
 
@@ -560,7 +560,7 @@ Needs pinning down before the one-writer check, the guard soundness argument, or
 The core is settled — see "Rule triggers: `when` and `on`" above: the commit/tick dichotomy, entry and exit as commit-local diffs, the tick law (cross-tick memory must be data), transient membership as per-rule policy, and the `when`/`on` header with `on commit` as default. A rule's anatomy is **name + condition (`when`) + trigger source (`on`) + outcome (the body)** — an external API call is an outcome commit whose only db-visible trace is its witness, which is *why* the witness must exist. Still open:
 
 - **Reliability of commit-triggered firing (→ OQ6).** "Once per commit" is logically clean, but a crash between the commit and the rule's effects is an atomicity question. The `on commit, Hourly` backstop is a business-legible mitigation, not a semantics; whether the language requires a backstop for non-idempotent rules, or OQ6's commit definition absorbs the problem, is open.
-- **Re-derive §12 under commit-local diffs** — mutation policies (`stands`/`forbidden`/`compensate`), what an exit rule may read (captured properties retract at the very moment a `when leaving` rule fires), and `compensate`'s desugared form, now that `leaving` is a diff rather than a primitive observation.
+- **Re-derive README §13 under commit-local diffs** — mutation policies (`stands`/`forbidden`/`compensate`), what an exit rule may read (captured properties retract at the very moment a `when leaving` rule fires), and `compensate`'s desugared form, now that `leaving` is a diff rather than a primitive observation.
 - **Latency vocabulary** — `on` expresses the evaluation *source*, not latency *requirements*. Is "immediate by default, named schedule otherwise" enough, or do deadlines ("within 24h") deserve first-class expression the compiler validates against declared cadences?
 - **`on commit of <Shape>` narrowing** — "only withdrawals suspend, not fee assessments." Expressible and occasionally meaningful, but it can silently miss entry paths; per flexible-not-restrictive it would be allowed *with* the compiler reporting exactly which entry paths go unobserved. Not yet designed.
 - **The pattern catalog and sugar.** The durable-state patterns — handled-once (*C ∧ ¬witness*), episode (flag/resolution pairing; entry = *C ∧ ¬open*, exit = *¬C ∧ open*), resettable latch (flag reconciled by sweeps), classification (*C* alone, no rule) — remain the vocabulary for crash-safe and cross-tick designs, no longer a replacement for entry/exit themselves. The patterns themselves are documented in "State-change patterns"; sugar over them is settled out — the apparatus stays hand-written ("No guard sugar").
@@ -587,4 +587,4 @@ Fold enforcement ("Self-referential folds and `tolerates`") means the compiler w
 
 ### OQ15. Ordered folds and batch ordering
 
-Exposed by "Self-referential folds and `tolerates`": a batched order-dependent fold (a nightly streak sweep) owes a reordering obligation with no honest discharge — declared tolerance is wrong for a streak, and the two missing spellings are both grammar, not analysis: an ordering clause giving a tick-cadence batch a defined iteration order (`ordered by`?), and ordered folds in the derivation grammar (which would let a streak be a derivation over ordered history, dissolving the mutation entirely — README §18's derived-value grammar and `latest`-ordering items are adjacent). Until one exists, commit-cadence is the only fully-served spelling for order-dependent folds.
+Exposed by "Self-referential folds and `tolerates`": a batched order-dependent fold (a nightly streak sweep) owes a reordering obligation with no honest discharge — declared tolerance is wrong for a streak, and the two missing spellings are both grammar, not analysis: an ordering clause giving a tick-cadence batch a defined iteration order (`ordered by`?), and ordered folds in the derivation grammar (which would let a streak be a derivation over ordered history, dissolving the mutation entirely — README §21's derived-value grammar and `latest`-ordering items are adjacent). Until one exists, commit-cadence is the only fully-served spelling for order-dependent folds.
