@@ -39,11 +39,11 @@ shape Customer {
 
 Velle abstracts away the database. The system's **state** is a black box: the set of all shape instances and their stored properties. How that state is physically kept — tables, documents, caches, indexes — is a compiling concern (`## 1. Principles`); no CRUD vocabulary, storage API, or save/load call exists in the language.
 
-The one way state ever changes is a **commit**: a discrete moment at which the black box accepts a change from outside — an external act submitting a new shape instance (committing an instance *is* persisting the record — `## Assignment (mutation in place)`, "No act-level sugar"), together with whatever consequences rules attach to it (`## rule`); or a scheduled tick, which is a commit whose changed datum is `today` (`## Schedule triggers`). A system never does anything on its own; every change to state traces to some commit.
+The one way state ever changes is a **commit**: one mutation entering the state at a discrete moment — an external act submitting a new shape instance (committing an instance *is* persisting the record — `## Assignment (mutation in place)`, "No act-level sugar"), a scheduled tick, which is a commit whose changed datum is `today` (`## Schedule triggers`), or a rule firing's effects (`## rule`). A rule's body is exactly one commit, and a firing's effects are a *new* commit that may match further rules' conditions just as an act's commit would — rules react to conditions holding at commits, never to other rules; there is no call graph. A system never does anything on its own; every change to state traces to some commit.
 
 The CRUD replacement reads off directly: "create" is committing a new instance, "update" is an assignment fired by a rule (`## Assignment (mutation in place)`), "read" is any predicate or derivation evaluated against current state, and "delete" has no primitive at all — a produced fact records something that happened in the world, and deleting the record would make the description lie (`## Exit triggers`); where the business needs reversal, that's a policy expressed as data, not an erasure (`example_invoice_payment.md` #5).
 
-Because a commit is a discrete moment, pre-state and post-state are both well-defined at it — which is what lets entry into and exit from a refinement mean something precise, with no hidden bookkeeping (`## rule ... when ... on ...`). What exactly one commit encompasses — the atomicity of a rule firing with its effects, whether cascaded firings share their initiating commit, the moments `then` occupies — is deliberately still open (`investigate_state.md`, OQ6; the cascade-boundary thread specifically is `investigate_transactions.md`, OQ16–20).
+Because a commit is a discrete moment, pre-state and post-state are both well-defined at it — which is what lets entry into and exit from a refinement mean something precise, with no hidden bookkeeping (`## rule ... when ... on ...`). By default, an act's commit and every commit its consequences produce stand or fall together — one all-or-nothing envelope that a rule opts out of with `after commit` (`## rule`, "Transactions and `after commit`"). Still open: act identity and multi-instance commits (`investigate_state.md`, OQ6), and the order-independence and quiescence proofs (`investigate_transactions.md`, OQ16–20).
 
 ## 5. Scalars
 
@@ -263,7 +263,7 @@ See `example_predicates.md` for the worked derivation of every rule above.
 A top-level reaction attached to a refinement — replaces `if`/`else` branching and imperative "then do X" sequencing for state-driven behavior. The header separates the rule's *condition* from its *trigger source*, one keyword each:
 
 ```
-rule <name> [when [leaving] <condition>] [on <trigger>, ...] { <effects> }
+rule <name> [when [leaving] <condition>] [on|after <trigger>, ...] { <effects> }
 ```
 
 ```
@@ -272,7 +272,7 @@ rule SendReceipt when SettledInvoice {
 }
 ```
 
-`when Refinement` names *what* the rule reacts to — the condition: a refinement, entered (or left — see Exit triggers, below). `on` names the *trigger source*: `on commit` — the rule evaluates as a consequence of any commit that can affect its condition — or a named schedule (`on Daily`, see Schedule triggers, below). `on commit` is the default when the clause is omitted (as above), the same single-well-defined-default category as properties being required unless marked `?`. The echo of BDD's given/when/then is deliberate: *given* the declared shapes, *when* the condition holds, *on* commit or tick, then the effects (`## then`).
+`when Refinement` names *what* the rule reacts to — the condition: a refinement, entered (or left — see Exit triggers, below). `on` names the *trigger source*: `on commit` — the rule evaluates as a consequence of any commit that can affect its condition — or a named schedule (`on Daily`, see Schedule triggers, below). `after commit` swaps the preposition to start a new transaction (see "Transactions and `after commit`", below). `on commit` is the default when the clause is omitted (as above), the same single-well-defined-default category as properties being required unless marked `?`. The echo of BDD's given/when/then is deliberate: *given* the declared shapes, *when* the condition holds, *on* commit or tick, then the effects (`## then`).
 
 Neither clause says *how* detection gets implemented. Whether the underlying mechanism is a check made at write-time, an event stream, a runtime data-structure instantiation, or some mix of these for the same rule is left open by the declaration itself; the only contract that has to hold regardless of mechanism is that the effect happens if and only if the subject is or becomes a member of the refinement, exactly once per newly-satisfying instance — "newly-satisfying" is commit-relative: the commit that makes the condition become true is the occurrence the rule fires for. Picking and implementing the actual detection mechanism is a compiling concern (`## 1. Principles`), not part of what the rule means.
 
@@ -289,6 +289,26 @@ Two compiler obligations fall out. **The unfireable-rule error**: if a rule's tr
 - **Episodes are free at commit granularity.** September's re-entry into `Delinquent` is a new entering commit, so the rule fires again — once per episode, with no guard apparatus, and the outcomes accumulate as history. Guards are what you buy for *durability* (crash recovery) and *cross-tick memory*, not for entry itself (`## Run-once guards`).
 - **Bare act triggers are sound.** `when CorrectEmail` fires once per correction commit — the commit is the unit of firing. The rule is never tick-evaluated, so no sweep can re-apply old corrections.
 - **A tick is a commit whose changed datum is `today`.** So `on commit, Daily` is one mechanism, not two: an invoice *aging* into `OverdueInvoice` is a commit-local transition over the tick — the same entry semantics as a payment-reversal commit.
+
+### Transactions and `after commit`
+
+A rule's body is **exactly one commit** — every effect statement lands together or none do; a body is never partially applied. That makes guard soundness structural (`## Run-once guards`) and makes `then` a compilation ordering with no observable intermediate states (`## then`). A firing's effects are a *new* commit, which may match further rules' conditions the same way an external act's commit would.
+
+By default, an act's commit and every commit its consequences produce share one all-or-nothing envelope — a *transaction*, a descriptive term, never a keyword: an unexpected error anywhere rolls back the whole set, the act included, and retrying the act re-produces the same commits. The grounding is **the transition law**, the tick law's sibling (`## Schedule triggers`): *a transition is not data — it exists only at the commit that caused it; a rule reacting to it either fires within that commit's transaction, or the obligation must first be reified as data (a guard); there is no third place for the trigger to live.* Current state can't reconstruct a past transition ("restored" and "never delinquent" are indistinguishable — `## Exit triggers`), so a rule outside the causing transaction that fails is unrecoverable: no sweep can find work whose trigger was never data. Sharing the transaction by default is the only reading under which a plain rule is reliable at all.
+
+A rule opts out with a preposition — **`after commit`**: its firing becomes a new transaction, entered only after the triggering transaction has durably committed. The act stands even if the firing fails; the declared backstop heals the gap:
+
+```
+rule SyncToCrm when UnsyncedSignup after commit, Hourly {
+    CrmSync from { signup: this, syncedOn: now }
+}
+```
+
+What a PO reads off a header: `on commit` — part of the act; `after commit` — follows the act, healed on the stated cadence; `on Nightly` — follows by its nature. Boundaries arise only three ways: **declared** (`after commit`); **inherent** (schedule sources — a tick is a fresh commit and any originating act's transaction is long gone, so no preposition distinction exists for schedules); **forced** (external effects — an API call happens in the world, so a rule containing one can never share the triggering transaction, and writing it plain is a compile error demanding `after commit` plus the apparatus, or an explicit acceptance of loss).
+
+**A boundary obligates the apparatus, and the check runs both ways** (`## Run-once guards`): an `after commit` rule without a dischargeable guard and a backstop schedule is the stranding error — "this firing can be lost at the declared boundary, and its trigger is not data"; a guard-plus-backstop on a plain rule is dead machinery — "serves no boundary; did you mean `after commit`?" — since inside a transaction there is no gap for a firing to be lost in.
+
+**Firing order within a transaction is never specified — and must provably not matter.** Velle states timeless facts, not call sequences: when one commit matches several conditions, the runtime may fire them in any order, or in parallel. Where data flows, the dependency graph orders firings — causality, not policy (`## then`). Where it doesn't, sibling firings must commute, and a spec whose outcome depends on an unstated order is *inconsistent* — a whole-spec compile error naming the rules involved, exactly like one-writer (write-write conflicts *are* one-writer at transaction scope; read-write conflicts and transition interference complete the check). The confluence and quiescence proofs backing this are open (`investigate_transactions.md`, OQ16), as are rejection scope, mid-cascade external effects, and boundary-grammar residue (OQ17–20).
 
 ## 12. Assignment (mutation in place)
 
@@ -451,7 +471,7 @@ rule InitiateCharge when Order {
 
 Effects listed without `then` are unordered — the transpiler/AI-assisted codegen is free to run them in any order or in parallel. Effects joined by `then` are forced into that order. Ordering that *is* implied by data dependency (one effect's input is another's output) never needs `then` — it falls out of the input/output graph for free.
 
-`then` and `from` don't compete: `then` orders *statements*, `from` is the *form* of one statement. There is no one-effect header collapse — a rule whose body is a single effect is simply a one-statement body (`## Assignment (mutation in place)`'s no-sugar stance extends here). What moments `then`'s intermediate states occupy relative to commit boundaries is part of the open definition of a commit (`investigate_state.md`, OQ6).
+`then` and `from` don't compete: `then` orders *statements*, `from` is the *form* of one statement. There is no one-effect header collapse — a rule whose body is a single effect is simply a one-statement body (`## Assignment (mutation in place)`'s no-sugar stance extends here). A rule's body is exactly one commit, so `then` orders effects *within* that commit — an ordering commitment for compilation, never an observable intermediate state (`## rule`, "Transactions and `after commit`").
 
 ## 16. `each`
 
@@ -484,7 +504,7 @@ rule RemindOverdue on Daily {
 
 `on` accepts a comma-separated list (`on Daily, Hourly`) for a rule that needs to run on more than one cadence — including mixed with commit (`on commit, Daily`: fire the moment the condition is entered, *and* re-check on the cadence). `Daily` is a placeholder name, not a built-in or sugar for a specific interval — what actually defines a schedule (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be provided by some cron-like scheduling framework. Only the rule-side trigger syntax is settled.
 
-A schedule trigger is the *only* way a purely time-dependent refinement (like `OverdueInvoice`, which depends on `today`) gets re-checked — nothing in Velle executes purely on the passage of time by default. A scheduled tick is conceptually a commit like any other (the same category as a `Payment` arriving or a `ChargeResponse` coming back — a tick is a commit whose changed datum is `today`), but it's referenced by name in `on`, not declared inline as a custom shape the way earlier drafts of this doc did.
+A schedule trigger is the *only* way a purely time-dependent refinement (like `OverdueInvoice`, which depends on `today`) gets re-checked — nothing in Velle executes purely on the passage of time by default. A scheduled tick is conceptually a commit like any other (the same category as a `Payment` arriving or a `ChargeResponse` coming back — a tick is a commit whose changed datum is `today`), but it's referenced by name in `on`, not declared inline as a custom shape the way earlier drafts of this doc did. A tick's firings inherently begin new transactions — by the time a schedule fires, any originating act's transaction is long gone (`## rule`, "Transactions and `after commit`"); whether all of one tick's firings share the tick's single transaction is open (`investigate_transactions.md`, OQ19).
 
 **The tick law: cross-tick memory must be data.** A tick-triggered rule sees only current state — "what changed since last tick" would require persistent memory between ticks, and memory must be data. Sweeps carry their memory as witnesses, flags, or evidence: the example's "at most every 3 days" lives in the `Reminder` evidence itself, with no hidden last-run timestamp anywhere.
 
@@ -492,18 +512,18 @@ A schedule trigger is the *only* way a purely time-dependent refinement (like `O
 
 ## 18. Run-once guards
 
-Commit-triggered rules already fire exactly once per commit (`## rule`), so an ordinary rule needs no guard. A guard earns its place in exactly two situations: **durability** — the firing must survive a crash and be provable afterward — and **cross-tick memory** — a tick rule needs "already handled" as data (`## Schedule triggers`). The canonical form — and the only form; there is no guard sugar (below) — is a named refinement whose predicate the rule's own body falsifies:
+Commit-triggered rules already fire exactly once per commit (`## rule`), so an ordinary rule needs no guard — inside a transaction there is no gap for a firing to be lost in, so a guard on a plain rule is dead machinery, and the compiler says so. A guard earns its place in exactly two situations: **durability across a transaction boundary** — an `after commit` rule's firing must survive the gap between transactions (`## rule`, "Transactions and `after commit`") — and **cross-tick memory** — a tick rule needs "already handled" as data (`## Schedule triggers`). The canonical form — and the only form; there is no guard sugar (below) — is a named refinement whose predicate the rule's own body falsifies:
 
 ```
 shape UnappliedDeposit = Deposit where not exists DepositApplication for this
 
-rule ApplyDeposit when UnappliedDeposit on commit, Hourly {
+rule ApplyDeposit when UnappliedDeposit after commit, Hourly {
     account.balance = account.balance + amount
     DepositApplication from { deposit: this, appliedOn: now }
 }
 ```
 
-`on commit` gives latency; `on Hourly` is a reconciliation backstop that catches anything a crash dropped — safe to add precisely because the guard makes re-evaluation harmless. One line reads: *immediately, and self-healing hourly*.
+`after commit` fires immediately, in its own transaction; `on Hourly` is the reconciliation backstop that heals anything the boundary gap dropped — safe to add precisely because the guard makes re-evaluation harmless. One line reads: *immediately, and self-healing hourly*. Boundary and apparatus are checked against each other both ways: declaring `after commit` without the guard-and-backstop apparatus is the stranding error, and this apparatus without a boundary is the dead-machinery diagnostic ("did you mean `after commit`?").
 
 **The guard is a data invariant, and it can be nothing else.** Run-once protection requires durable memory that a firing happened, and the only durable memory in Velle is data. A runtime keeping hidden fired-flags somewhere no shape describes would be untraceable state, forbidden everywhere else — so the witness must be data: a produced shape, or a stored field. There is no separate "evidence" or "error" category of shape — an evidence shape is an ordinary shape that happens to also serve as a guard witness, and reacting to failure (`when FailedCharge`) uses the exact same mechanism as reacting to success — no `return`/`throw` distinction.
 
@@ -520,7 +540,7 @@ shape Deposit {
 
 shape UnappliedDeposit = Deposit where not applied
 
-rule ApplyDeposit when UnappliedDeposit {
+rule ApplyDeposit when UnappliedDeposit after commit, Hourly {
     account.balance = account.balance + amount
     this.applied = true
 }
@@ -558,7 +578,7 @@ The correlation predicate is not mechanism — it *is* the business rule: "once 
 
 Earlier drafts guarded a rule with a header keyword (`rule SendReceipt when SettledInvoice produces Receipt`). It read like a *data* concept but behaved like a *guard*, and both jobs are now done by settled machinery. Its guard job — a compiler-derived implicit "hasn't happened yet" gate — is exactly what "No guard sugar" rejects: a header form whose correlation is *assumed* (field-type matching, `for <field>` as the patch when the guess was wrong); the granularity trap it carried — a witness silently keyed to the flag vs. the customer — is the hidden-join problem by name. Its data job — the rule creates an instance — is an ordinary body statement (`## for`). A checked header summary of a rule's outputs is a *derived* fact, and derived facts aren't declared — tooling can display what a rule produces; syntax shouldn't demand it. Singularity licensing for `for`-queries comes from *any* guard establishing at-most-one — a whole-spec proof ("Episodes as data", `## State-change patterns`) — not from a keyword. Exactly-once external effects are unchanged: an API call is an outcome commit whose only db-visible trace is its witness — which is *why* the witness must exist.
 
-Guard soundness assumes the mutation and its witness enter the state together — atomicity, part of the open definition of a commit (`investigate_state.md`, OQ6).
+Guard soundness is structural, not assumed: a mutation and its witness are statements of one body, and a body is exactly one commit — never partially applied (`## rule`, "Transactions and `after commit`").
 
 ## 19. Self-referential folds and `tolerates`
 
@@ -730,7 +750,7 @@ How this behaves against realistic specs is untested — the classification boun
 
 ## 21. Open / unresolved
 
-- **State change & rule mechanics — remaining frontier.** The core is settled — assignment and one-writer (§12), run-once guards with no sugar and `produces` retired (§18), folds and `tolerates` (§19), the pattern spectrum and rung recognition (§20). Still open in `investigate_state.md`: marking shapes as external input, act identity, and commit-metadata readability — `createdAt`/`updatedAt` are commit metadata, readable never writable, spelling unexplored (OQ5); what exactly one commit is — atomicity of a firing, cascades, `then`'s intermediate moments — the load-bearing question one-writer, guard soundness, and derived trigger sets all lean on (OQ6; cascades and transaction boundaries now have their own investigation, `investigate_transactions.md`, OQ16–20); remaining rule-anatomy threads including re-deriving §13's mutation policies under commit-local transitions (OQ7); the `each`/multi-schedule disarm-proof pass (OQ13); whether the canonical guard form is pleasant enough to be what fold diagnostics ask authors to write (OQ14); ordered folds and batch ordering (OQ15). §§13 and 16 carry tentative markers accordingly.
+- **State change & rule mechanics — remaining frontier.** The core is settled — assignment and one-writer (§12), run-once guards with no sugar and `produces` retired (§18), folds and `tolerates` (§19), the pattern spectrum and rung recognition (§20). Still open in `investigate_state.md`: marking shapes as external input, act identity, and commit-metadata readability — `createdAt`/`updatedAt` are commit metadata, readable never writable, spelling unexplored (OQ5); what remains of "what is one commit" — act identity and multi-instance commits (OQ6): firing atomicity, cascades, and `then`'s moments are settled (a body is one commit; consequences share the act's transaction by default; `after commit` declares a boundary — `## rule`, "Transactions and `after commit`"), while the order-independence/confluence and quiescence proofs, rejection scope, mid-cascade external effects, and boundary-grammar residue stay open in `investigate_transactions.md` (OQ16–20); remaining rule-anatomy threads including re-deriving §13's mutation policies under commit-local transitions (OQ7); the `each`/multi-schedule disarm-proof pass (OQ13); whether the canonical guard form is pleasant enough to be what fold diagnostics ask authors to write (OQ14); ordered folds and batch ordering (OQ15). §§13 and 16 carry tentative markers accordingly.
 - **Mapping** (shape-to-shape translation, e.g. API DTO → domain shape) — part of the original design goals, not yet exercised in a worked example.
 - **Schedule definition** — `on Daily` (the header's `on` clause) settles how a rule *references* a schedule; what actually defines `Daily` (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be a cron-like scheduling framework.
 - **Reversal** — resolved as a non-issue for the language itself (it's a business-policy choice, expressed via which artifact shapes a human declares — see `example_invoice_payment.md` #5), but no single canonical pattern has been adopted yet; the consolidated top-of-file example still doesn't reflect a chosen policy.
