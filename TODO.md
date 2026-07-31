@@ -57,4 +57,4 @@ Split two ways, per `README.md` `## Principles`. **Language & structure** is wha
 
 ## Neither — process / research
 
-- [ ] Prior art mining — Eve, Alloy, CUE, Datalog, SQL, named in the very first design conversation; `example_predicates.md` #8 did a first real pass on Datalog specifically, the rest remain unstudied
+- [ ] Prior art mining — Eve, Alloy, CUE, Datalog, SQL, named in the very first design conversation; `example_predicates.md` #8 did a first real pass on Datalog specifically, the rest remain unstudied. Now also: term rewriting (critical pairs, Newman's lemma) and CHR confluence checking, load-bearing for OQ16's order-independence proof (`investigate_transactions.md`)

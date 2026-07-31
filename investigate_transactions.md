@@ -44,7 +44,9 @@ rule NotifyRestored when ServiceRestoration {
 
 A \$50 `Deposit` against a −$20 account is **one transaction containing four commits**: the `Deposit` act; `ApplyDeposit`'s effects (at this commit the transition out of `Delinquent` occurs); `RestoreService`'s `ServiceRestoration`; `NotifyRestored`'s `RestorationEmail`. An unexpected error at any of them rolls back the whole envelope — the deposit never happened, and retrying the act re-produces the same sequence of commits intact.
 
-Because each firing is its own commit, transitions inside a transaction are ordinary commit-local transitions (README §11) — nothing new to define. A mid-transaction blip is real: if a later commit in the same transaction (a reinstatement fee, say) drops the balance negative again, the account genuinely left and re-entered `Delinquent`, and rules watching either transition fire — the same stance §17 already takes ("commit-triggered rules observe every membership the commit stream produces"). What is *not* yet defined is the **order** of that stream when one commit matches several conditions at once — OQ16, the doc's main open question.
+Because each firing is its own commit, transitions inside a transaction are ordinary commit-local transitions (README §11) — nothing new to define. A mid-transaction blip is real: if a later commit in the same transaction (a reinstatement fee, say) drops the balance negative again, the account genuinely left and re-entered `Delinquent`, and rules watching either transition fire — the same stance §17 already takes ("commit-triggered rules observe every membership the commit stream produces").
+
+When one commit matches several conditions at once, the order of the resulting firings is deliberately **never specified** — Velle states timeless facts about a system, not runtime call sequences, so the runtime may fire them in any order (or in parallel) and a valid spec must mean the same system either way. What makes that sound is a proof obligation on the spec, not a scheduler contract: an author *can* write a spec whose outcome depends on an unstated order, and catching that inconsistency is the compiler's job — OQ16, the doc's main open question.
 
 What grounds the default:
 
@@ -98,7 +100,7 @@ The full product sentence usually includes a retry budget — "retry, but give u
 
 ### Ordering across a boundary
 
-An `after commit` firing's transaction begins after its triggering transaction completes, so its commits are ordered *after* every commit of that transaction. Across transactions, last-in-wins is already defined (README §12). *Within* a transaction, ordering is OQ16.
+An `after commit` firing's transaction begins after its triggering transaction completes, so its commits are ordered *after* every commit of that transaction. Across transactions, last-in-wins is already defined (README §12). *Within* a transaction, order is never specified and must provably not matter — OQ16.
 
 ## What is not a boundary
 
@@ -147,15 +149,34 @@ The act lands (the request happened — audit for free: `count(RefusedVoid)`), t
 
 (Numbering continues from `investigate_state.md`; OQ tags are never reused.)
 
-### OQ16. Ordering within a transaction
+### OQ16. Order must not matter — can the compiler prove it?
 
-Each firing is its own commit, so transition semantics inside a transaction are settled per-commit (README §11). What isn't settled is the **sequence of commits**:
+**Settled direction: firing order within a transaction is never specified, and never matters in a valid spec.** Velle states timeless facts, not runtime call sequences; the runtime may fire sibling rules in any order, or in parallel, and every order must produce the same outcome — the same final state and the same set of produced facts. Two cases, sharply different:
 
-- **Sibling order.** One commit can match several rules' conditions at once — R1's effect-commit matches both R2 and R3. Which fires first? Their effects are separate commits, and the order between them determines which intermediate states exist, which transitions occur, and (where both feed a later condition) what fires next. Nothing in the spec defines this order — and spec declaration order isn't a business statement.
-- **Traversal.** When R2's effects match further conditions, do R2's consequences run to completion before R3 fires, or level by level? The same character as sibling order: a sequence that exists in execution but nowhere in the description.
-- **One-writer's scope.** README §12's check is per commit — but sibling firings write in *separate* commits within one transaction, so two rules assigning `account.tier` from one triggering commit would be technically legal last-in-wins with an undefined "last." Either one-writer's unit extends to the transaction, or ordering becomes defined enough to make "last" a fact.
-- **Candidate resolutions.** Define an order (spec order, or `then` promoted to a cross-rule position — both read as imperative sequencing creeping back into a declarative language), or require **order-independence**: the compiler proves the transaction's outcome is the same under any firing order and errors where it can't — with one-writer extended to transaction scope as the write-half of exactly that proof. Fail-closed order-independence fits the language's character (uncertainty fails closed, README §12); whether realistic specs can discharge it is unexamined. Datalog prior art (evaluation strategies, semi-naive/stratified evaluation) is adjacent — the prior-art item in `TODO.md`.
-- **Termination.** A transaction completes when no rule's condition is newly matched — it must quiesce. Cycles in the static condition graph are detectable (derived trigger sets), but convergence can be value-dependent (a deposit rule producing deposits) — undecidable in general. The folds precedent (README §19) applies: prove quiescence structurally (a DAG, or cycles broken by disarming guards), fail closed on the rest. Whether the disarm proof suffices is unexamined.
+- **Where data flows, order is causality, not policy.** If R3's condition matches on the commit R2's firing produces, the dependency graph orders them — the ordering README §15 already calls free. Nothing to prove; nothing was chosen.
+- **Where no data flows, order must provably not matter.** Sibling firings — one commit matching R2 and R3 with no dependency between them — must *commute*. A spec whose outcome depends on an unstated order is **inconsistent**: it describes two different systems and never says which. That is a whole-spec compile error in §1's deepest sense — the spec fails to be a self-coherent description — reported as one connected diagnostic naming the rules involved, exactly like one-writer.
+
+An author can absolutely write inconsistent Velle:
+
+```
+-- both fire from the same AccountReview commit
+rule AdjustTier when AccountReview {
+    account.tier = <formula over history>
+}
+
+rule RecordTier when AccountReview {
+    review.tierAtReview = account.tier     -- before or after the adjustment? unstated.
+}
+```
+
+`tierAtReview` differs depending on which firing runs first — the spec is ambiguous about its own meaning. The diagnostic demands the intent, not an ordering: "`tierAtReview` depends on the unstated order of `AdjustTier` and `RecordTier` — state what it means" (read the pre-adjustment inputs the formula reads, or make the dependency real by conditioning on the adjusted state).
+
+The check decomposes along familiar lines: **write-write** conflicts — two siblings assigning the same field (the `account.tier` example from earlier drafts) — are one-writer (README §12) extended to transaction scope; **read-write** conflicts — one sibling writes what another reads in a body or condition — are the example above; **transition interference** — one sibling's commit enters a refinement another sibling's commit exits — makes the set of mid-transaction transitions order-dependent, so transition-watching rules would see different histories. Traversal order (depth-first vs. level-by-level) stops being a question at all: once outcomes are order-independent, every traversal is a valid compilation.
+
+**Open:**
+
+- **The analysis itself.** Commutativity/confluence checking is charted territory — term rewriting's critical pairs and Newman's lemma (local confluence + termination ⇒ confluence, which ties this proof to quiescence below), CHR confluence tests, Datalog evaluation strategies. What Velle's version is — and how coarse it can be before it rejects legitimate specs — is the work. Fail-closed is given (uncertainty errors, README §12's stance); calibration is not.
+- **Quiescence.** A transaction completes when no rule's condition is newly matched — it must quiesce, and Newman's lemma needs termination for confluence to follow from local checks. Cycles in the static condition graph are detectable (derived trigger sets), but convergence can be value-dependent (a deposit rule producing deposits) — undecidable in general. The folds precedent (README §19) applies: prove quiescence structurally (a DAG, or cycles broken by disarming guards), fail closed on the rest. Whether the disarm proof suffices is unexamined.
 
 ### OQ17. Rejection scope
 
