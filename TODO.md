@@ -6,6 +6,7 @@ Split two ways, per `README.md` `## Principles`. **Language & structure** is wha
 
 ### Settled, not yet synced into README.md
 
+- [ ] Transaction boundaries — the one-transaction default (all rules fire within the triggering act's commit unless a boundary is set), the `after commit` trigger preposition (the firing becomes its own commit; boundary inherent at schedule sources, forced at external effects), the transition law (a transition is not data — fire inside the commit that caused it, or reify the obligation as data first), and the two-way clause/apparatus check; also requires re-grounding README §18's guard-durability story (the crash window between trigger and firing only exists at declared boundaries now) — `investigate_transactions.md`
 - [ ] `requires` — new rule-modifier keyword, distinct from `where` (its atomicity mechanism is a compiling concern, below) — `break_velle.md` #1
 - [ ] Event-anchored schedules, surface syntax `via schedule <duration> after <Shape>` (the scheduling mechanism itself is a compiling concern, below) — `break_velle.md` #3
 - [ ] `visible to Role, Role` field-level visibility syntax — `break_velle.md` #5

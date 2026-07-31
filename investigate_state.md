@@ -220,13 +220,13 @@ rule NagCustomer when OverdueInvoice on commit, Daily {
 }
 ```
 
-### Entry and exit are commit-local diffs
+### Entry and exit are commit-local transitions
 
-"Newly-satisfying" (README §11) is well-defined with no hidden bookkeeping, but only *per commit*: a commit is a discrete moment, and evaluating its consequences means pre-state and post-state are both transiently available. `when Delinquent on commit` means *the commit that made it true* — false before, true after. `when leaving` is the same diff reversed. Consequences:
+"Newly-satisfying" (README §11) is well-defined with no hidden bookkeeping, but only *per commit*: a commit is a discrete moment, and evaluating its consequences means pre-state and post-state are both transiently available. `when Delinquent on commit` means *the commit that made it true* — false before, true after. `when leaving` is the same transition reversed. Consequences:
 
 - **Episodes are free at commit granularity.** September's re-entry into `Delinquent` is a new entering commit, so `SuspendService` fires again — once per episode, with no guard apparatus. (The outcomes even accumulate as history: one `ServiceSuspension` per episode.) The episode apparatus ("Episodes as data," below) was compensating for monotone evidence-guards; commit-entry semantics never had the problem. The guard patterns remain what you buy for *durability* (crash recovery) and *cross-tick memory*, not for entry itself.
 - **Bare act triggers are sound.** `when CorrectEmail on commit` fires once per correction commit — the commit is the unit of firing. The rule is never tick-evaluated, so no sweep can re-apply old corrections.
-- **A tick is a commit whose changed datum is `today`.** So `on commit, Daily` is one mechanism, not two: an invoice *aging* into `OverdueInvoice` is a commit-local diff over the tick — the same entry semantics as a payment-reversal commit. (Compare the sweep: a subjectless `each` rule on a tick is the *sampling* usage; `when` + schedule is the *aging* usage. Both valid, visibly different spellings.)
+- **A tick is a commit whose changed datum is `today`.** So `on commit, Daily` is one mechanism, not two: an invoice *aging* into `OverdueInvoice` is a commit-local transition over the tick — the same entry semantics as a payment-reversal commit. (Compare the sweep: a subjectless `each` rule on a tick is the *sampling* usage; `when` + schedule is the *aging* usage. Both valid, visibly different spellings.)
 
 ### The tick law: cross-tick memory must be data
 
@@ -260,7 +260,7 @@ rule ApplyDeposit when UnappliedDeposit on commit, Hourly {
 
 ## Run-once guards
 
-Commit-triggered rules already fire exactly once per commit ("Entry and exit are commit-local diffs"), so an ordinary rule needs no guard. A guard earns its place in exactly two situations: **durability** — the firing must survive a crash and be provable afterward — and **cross-tick memory** — a tick rule needs "already handled" as data (the tick law). The canonical form — and the only form; there is no guard sugar ("No guard sugar", below) — is a named refinement whose predicate the rule's own body falsifies:
+Commit-triggered rules already fire exactly once per commit ("Entry and exit are commit-local transitions"), so an ordinary rule needs no guard. A guard earns its place in exactly two situations: **durability** — the firing must survive a crash and be provable afterward — and **cross-tick memory** — a tick rule needs "already handled" as data (the tick law). The canonical form — and the only form; there is no guard sugar ("No guard sugar", below) — is a named refinement whose predicate the rule's own body falsifies:
 
 ```
 shape UnappliedDeposit = Deposit where not exists DepositApplication for this
@@ -557,10 +557,10 @@ Needs pinning down before the one-writer check, the guard soundness argument, or
 
 ### OQ7. Rule anatomy and timing — remaining threads
 
-The core is settled — see "Rule triggers: `when` and `on`" above: the commit/tick dichotomy, entry and exit as commit-local diffs, the tick law (cross-tick memory must be data), transient membership as per-rule policy, and the `when`/`on` header with `on commit` as default. A rule's anatomy is **name + condition (`when`) + trigger source (`on`) + outcome (the body)** — an external API call is an outcome commit whose only db-visible trace is its witness, which is *why* the witness must exist. Still open:
+The core is settled — see "Rule triggers: `when` and `on`" above: the commit/tick dichotomy, entry and exit as commit-local transitions, the tick law (cross-tick memory must be data), transient membership as per-rule policy, and the `when`/`on` header with `on commit` as default. A rule's anatomy is **name + condition (`when`) + trigger source (`on`) + outcome (the body)** — an external API call is an outcome commit whose only db-visible trace is its witness, which is *why* the witness must exist. Still open:
 
 - **Reliability of commit-triggered firing (→ OQ6).** "Once per commit" is logically clean, but a crash between the commit and the rule's effects is an atomicity question. The `on commit, Hourly` backstop is a business-legible mitigation, not a semantics; whether the language requires a backstop for non-idempotent rules, or OQ6's commit definition absorbs the problem, is open.
-- **Re-derive README §13 under commit-local diffs** — mutation policies (`stands`/`forbidden`/`compensate`), what an exit rule may read (captured properties retract at the very moment a `when leaving` rule fires), and `compensate`'s desugared form, now that `leaving` is a diff rather than a primitive observation.
+- **Re-derive README §13 under commit-local transitions** — mutation policies (`stands`/`forbidden`/`compensate`), what an exit rule may read (captured properties retract at the very moment a `when leaving` rule fires), and `compensate`'s desugared form, now that `leaving` is a commit-local transition rather than a primitive observation.
 - **Latency vocabulary** — `on` expresses the evaluation *source*, not latency *requirements*. Is "immediate by default, named schedule otherwise" enough, or do deadlines ("within 24h") deserve first-class expression the compiler validates against declared cadences?
 - **`on commit of <Shape>` narrowing** — "only withdrawals suspend, not fee assessments." Expressible and occasionally meaningful, but it can silently miss entry paths; per flexible-not-restrictive it would be allowed *with* the compiler reporting exactly which entry paths go unobserved. Not yet designed.
 - **The pattern catalog and sugar.** The durable-state patterns — handled-once (*C ∧ ¬witness*), episode (flag/resolution pairing; entry = *C ∧ ¬open*, exit = *¬C ∧ open*), resettable latch (flag reconciled by sweeps), classification (*C* alone, no rule) — remain the vocabulary for crash-safe and cross-tick designs, no longer a replacement for entry/exit themselves. The patterns themselves are documented in "State-change patterns"; sugar over them is settled out — the apparatus stays hand-written ("No guard sugar").

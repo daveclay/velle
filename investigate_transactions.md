@@ -36,7 +36,7 @@ rule NotifyRestored when ServiceRestoration {
 }
 ```
 
-An account sits at −$20 and a $50 `Deposit` is committed. The deposit's commit fires `ApplyDeposit`; the balance mutation moves the account from −$20 to $30; that diff is exactly what `leaving Delinquent` means, so `RestoreService` fires; the `ServiceRestoration` it produces is itself the condition `NotifyRestored` watches, so that fires too. One external act; a chain of consequences two and three removes from it, none of which the depositor's act mentions and all of which the compiler can already see coming (the derived trigger set, README §11, read forward).
+An account sits at −$20 and a $50 `Deposit` is committed. The deposit's commit fires `ApplyDeposit`; the balance mutation moves the account from −$20 to $30; that is exactly the transition `leaving Delinquent` names, so `RestoreService` fires; the `ServiceRestoration` it produces is itself the condition `NotifyRestored` watches, so that fires too. One external act; a chain of consequences two and three removes from it, none of which the depositor's act mentions and all of which the compiler can already see coming (the derived trigger set, README §11, read forward).
 
 The question in one sentence: **is that one state transition, or four?**
 
@@ -62,7 +62,7 @@ rule UpgradeTier when GoodStanding {
 }
 ```
 
-`leaving Delinquent` and entering `GoodStanding` can be *the same diff* — one deposit trips both. If the cascade is one commit, this is precisely the one-writer error, caught transitively along the cascade graph. If each firing is its own commit, both writes are legal and some order decides — but *what* order? The two firings are siblings fired by the same diff, and nothing yet defines their sequence. Undefined sibling order resurrects exactly the ambiguity one-writer exists to kill; either the check extends across cascades, or sibling order becomes defined. There is no third option.
+Leaving `Delinquent` and entering `GoodStanding` can happen at *the same commit* — one deposit trips both. If the cascade is one commit, this is precisely the one-writer error, caught transitively along the cascade graph. If each firing is its own commit, both writes are legal and some order decides — but *what* order? The two firings are siblings fired by the same commit, and nothing yet defines their sequence. Undefined sibling order resurrects exactly the ambiguity one-writer exists to kill; either the check extends across cascades, or sibling order becomes defined. There is no third option.
 
 **4. `forbidden` liens must see consequences.** A lien rejects "any change that would cause the exit" (README §13) — and the exit-causing change can arrive as a downstream firing's effect rather than as the act itself:
 
@@ -114,7 +114,7 @@ What it buys:
 
 What it costs, or opens:
 
-- **The fixpoint question.** `RestoreService` fires because `ApplyDeposit`'s effect changed state — its predicate evaluation must see post-`ApplyDeposit` state while the closure is still open. So rules inside the closure evaluate against intermediate states that officially "don't exist." Worse: if entry/exit diffs are computed endpoint-to-endpoint, a refinement entered at step 2 and exited at step 4 of the same closure *never happened* — a transient-membership blip at closure granularity (the same question §17 answers per-rule for commit-vs-tick, at a new grain, currently with no clause to state a choice in). But if rules fire on *stepwise* diffs instead, intermediate states are semantically real after all, and the closure is just durability packaging around Model B. Which diffs are the real ones is the crux, and picking "endpoint" lands Velle in stratification territory — which rules fire depends on the final state, which depends on which rules fire. Known ground in Datalog (stratified negation); the prior-art mining item (`TODO.md`) becomes directly load-bearing here.
+- **The fixpoint question.** `RestoreService` fires because `ApplyDeposit`'s effect changed state — its predicate evaluation must see post-`ApplyDeposit` state while the closure is still open. So rules inside the closure evaluate against intermediate states that officially "don't exist." Worse: if entry and exit are judged endpoint-to-endpoint, a refinement entered at step 2 and exited at step 4 of the same closure *never happened* — a transient-membership blip at closure granularity (the same question §17 answers per-rule for commit-vs-tick, at a new grain, currently with no clause to state a choice in). But if rules fire on *stepwise* transitions instead — each firing's changes observed as they land — intermediate states are semantically real after all, and the closure is just durability packaging around Model B. Which transitions are the real ones is the crux, and picking "endpoint" lands Velle in stratification territory — which rules fire depends on the final state, which depends on which rules fire. Known ground in Datalog (stratified negation); the prior-art mining item (`TODO.md`) becomes directly load-bearing here.
 - **Termination.** A closure must terminate to be a commit at all. The cascade graph is static, so cycles are detectable — but not all cycles are infinite:
 
   ```
@@ -132,15 +132,16 @@ What it costs, or opens:
 
 What it buys:
 
-- **One uniform commit story.** No closure/fixpoint machinery; entry and exit stay commit-local diffs exactly as settled (README §11); a rule can't tell whether its trigger was an external act or another rule's effect — pleasing symmetry.
+- **One uniform commit story.** No closure/fixpoint machinery; entry and exit stay commit-local transitions exactly as settled (README §11); a rule can't tell whether its trigger was an external act or another rule's effect — pleasing symmetry.
 - **Crash windows are explicit, and the machinery for them already exists.** The gap between firings is real, so the guard patterns were built for precisely this: `on commit, Hourly` backstops, disarm proofs, reconciliation sweeps. Nothing new to invent — "self-healing" is already the language's answer to dropped work.
 - **External effects stop being special.** Every link boundary is a boundary; the saga shape is the native shape.
 
 What it costs:
 
 - **Partial cascades are durable, observable business states.** Balance restored, service still suspended, for an unbounded window unless a backstop is declared. Sometimes that's honest (eventual consistency is a real business policy); it needs to be *chosen*, not defaulted into.
+- **A dropped transition-triggered firing is unrecoverable.** Suppose R2 fires only on a transition R1's effects cause (`when leaving Delinquent`, where R1 holds the only write path into `balance`). Under chain semantics, an unexpected failure of R2's commit strands the system permanently: the transition existed only at the commit that caused it, and current state cannot reconstruct it — "restored" and "never delinquent" are indistinguishable from current data alone (the same fact that made `when leaving` irreducible, README §13). No sweep can find the pending work, because sweeps read current state and the trigger was never data. Nothing in the system will ever re-trigger R2. Call it **the transition law**, the tick law's sibling: *a transition is not data — a consequence of entering or leaving a refinement either fires inside the commit that caused the transition, or the obligation must first be reified as data (the guard); there is no third place for the trigger to live.*
 - **`forbidden` breaks — or forces closure validation anyway.** By the time the lien-tripping firing runs, the originating act is durable; rejection can't reach it. Either `forbidden` weakens to "the downstream firing fails" (leaving the cascade wedged mid-chain — visibly worse than rejection), or commit acceptance must *predictively* evaluate the consequence closure before accepting — at which point Model B has conceded constraint 4 and runs closure validation while keeping chained durability. Notable: that concession may be the actual design.
-- **Sibling order is undefined.** The `tier` example: two firings from one diff, two separate commits, no defined sequence — last-in-wins with no fact of the world to supply "last." Model B must either define sibling order (declaration order? `then` promoted to a cross-rule position? both smell like imperative sequencing creeping back in) or extend one-writer across cascades anyway — again conceding the transitive analysis.
+- **Sibling order is undefined.** The `tier` example: two firings from one commit, two separate commits of their own, no defined sequence — last-in-wins with no fact of the world to supply "last." Model B must either define sibling order (declaration order? `then` promoted to a cross-rule position? both smell like imperative sequencing creeping back in) or extend one-writer across cascades anyway — again conceding the transitive analysis.
 - **Interleaving.** An unrelated external act can land between links and observe (or mutate) the mid-cascade state. Every refinement evaluated during the window sees a world the initiating act's author never imagined as observable.
 
 ## Where the models converge
@@ -170,7 +171,7 @@ shape CrmSync {
 
 shape UnsyncedSignup = Signup where not exists CrmSync for this
 
-rule SyncToCrm when UnsyncedSignup on commit, Hourly {
+rule SyncToCrm when UnsyncedSignup after commit, Hourly {
     CrmSync from { signup: this, syncedOn: now }    -- outcome commit: the call's witness
 }
 ```
@@ -254,10 +255,11 @@ rule RestoreService when leaving Delinquent {
     ServiceRestoration from { account: this, restoredOn: now }
 }
 
--- "capture always; sync follows, self-healing hourly" — chained: the apparatus IS the declaration
+-- "capture always; sync follows, self-healing hourly" — chained: `after commit`
+-- declares the boundary, and the apparatus proves it safe ("Declaring the boundary")
 shape UnsyncedSignup = Signup where not exists CrmSync for this
 
-rule SyncToCrm when UnsyncedSignup on commit, Hourly {
+rule SyncToCrm when UnsyncedSignup after commit, Hourly {
     CrmSync from { signup: this, syncedOn: now }
 }
 ```
@@ -267,9 +269,36 @@ The eventual rule cannot help but announce itself: its trigger is a dischargeabl
 Under this lean, the fail-closed demand-a-decision from OQ19 gets concrete:
 
 - **Internal (pure-state) consequences may default to joined.** Joining holds no availability hostage — it's all local state; the cost is transaction size, a compiling concern. Authors who want internal lag (snapshots, reconciliation sweeps) already choose visibly tick-flavored spellings (README §19–20). So silent-atomic survives for internal edges — and silent-eventual exists nowhere, because eventual always wears its apparatus.
-- **External-effect rules can never join** (constraint 5), so a *bare* rule whose body contains an outcome commit is a compile error, and the diagnostic asks for exactly the missing decisions: "this call's failure would lose work with no heal path — gate the rule on a dischargeable state and add a backstop schedule, or state that loss is acceptable." The escape for genuine fire-and-forget (an analytics ping the PO shrugs about) wants a tolerance in the `tolerates` family — `tolerates loss`, signing the risk by name on the rule or witness — but extending that vocabulary beyond fold hazards is unexamined.
+- **External-effect rules can never join** (constraint 5), so a *bare* rule whose body contains an outcome commit is a compile error, and the diagnostic asks for exactly the missing decisions: "this call's failure would lose work with no heal path — declare the boundary ("Declaring the boundary," below), gate the rule on a dischargeable state, and add a backstop schedule; or state that loss is acceptable." The escape for genuine fire-and-forget (an analytics ping the PO shrugs about) wants a tolerance in the `tolerates` family — `tolerates loss`, signing the risk by name on the rule or witness — but extending that vocabulary beyond fold hazards is unexamined.
 
-What this deliberately leans on without settling: joined-by-default for internal edges assumes OQ16 resolves closure semantics for the joined case (endpoint diffs, termination, transitive one-writer). If OQ16 lands on chain semantics everywhere, "bare = joined" has nothing to mean, and the keyword candidates return.
+The default this implies is now settled the strong way (OQ16): all rules fire within a single transaction unless boundaries are explicitly set — decided not just by the spelling argument above but by recoverability (the transition law): a plain rule chained into its own transaction and failing would be *unrecoverable*, since its transition trigger was never data. What the settled default still owes is the closure semantics for the joined region (OQ16's sub-threads: endpoint-vs-stepwise transitions, termination, transitive one-writer).
+
+### Declaring the boundary: the `on` clause
+
+The settled default sharpens where a declaration is needed at all. Within one transaction there is no gap between trigger and firing — so for a plain rule, the crash window that motivated durability guards (README §18) no longer exists: a firing can't be "dropped" without the whole act rolling back. A boundary — a place where a gap is real, where an unexpected error rolls back *to the boundary* instead of to the act — now arises in exactly three ways:
+
+- **Inherently, at schedule triggers.** A tick is its own commit; by the time `on Hourly` fires, the triggering act's transaction is long gone. `on <schedule>` always implies a new boundary — there is nothing left to join, so no annotation is possible or needed.
+- **Forcibly, at external effects.** Constraint 5 — the call happens in the world and can't join any boundary.
+- **By declaration.** The one place an author needs a spelling — and it's only ever needed for the `commit` source, since that's the only trigger source where joining is otherwise the default. The chosen spelling is a preposition, not an annotation: **`after commit`**.
+
+```
+rule SyncToCrm when UnsyncedSignup after commit, Hourly {
+    CrmSync from { signup: this, syncedOn: now }
+}
+```
+
+`on commit` — the firing is part of the act's commit; `after commit` — the firing becomes *its own commit*, immediately following the act's. Read aloud: "when a signup is unsynced, after the commit, and hourly." An unexpected error executing the rule rolls back to this boundary: the signup survives, the sync doesn't, and the backstop finds it. Two prepositions carry the entire distinction, in vocabulary the language already owns (§4's commit) — the word "transaction" never enters the language, keeping this doc's opening promise that it was an investigation term, not a proposed keyword. The distinction only exists for `commit`: a schedule entry's boundary is inherent, so `Hourly` reads the same in either list.
+
+**The clause and the apparatus check each other** — the disarm-proof pattern again, declaration plus proof obligation:
+
+- A declared boundary *without* the apparatus is the stranding error (the transition law): "this rule's firing can be lost at the declared boundary, and its trigger is not data — gate it on a dischargeable state and add a backstop schedule, or remove the boundary."
+- The apparatus *without* a boundary is dead machinery under the default — a joined firing can't be dropped, so the guard and backstop protect nothing — and the diagnostic mirrors dead tolerances (README §19): "this rule's guard and backstop serve no boundary — did you mean `after commit`?"
+
+This refines the earlier lean rather than preserving it intact: **the apparatus is the proof, not the declaration.** The declaration is one clause in the header, in the position where trigger-source policy already lives (`on commit` vs. `on Nightly`); the apparatus is what the declaration obligates; the compiler holds the two consistent in both directions. What a PO reads off the header: `on commit` — part of the act; `after commit` — follows the act, healed on the stated cadence; `on Nightly` — follows by its nature.
+
+A declared boundary also settles the ordering Model B couldn't: the new transaction begins after its triggering transaction commits, so a detached write is ordered *after* every joined write of the same cascade — one-writer treats it as a separate commit, where across-commit last-in-wins is already defined (README §12).
+
+Unsettled beneath the settled concept: the small grammar of the mixed list — whether `after commit, Hourly` reads its preposition per-entry or the clause splits (`after commit on Hourly`); whether every rule fired by one tick joins that tick's *single* commit or each firing (or each `each` iteration) gets its own boundary — the granularity half of OQ13's pass; and nesting — an `after commit` rule's own downstream cascade joins *its* commit by default, so a cascade is really a tree of commits, each rooted at a declared, inherent, or forced boundary.
 
 ## Open questions
 
@@ -277,13 +306,20 @@ What this deliberately leans on without settling: joined-by-default for internal
 
 ### OQ16. Where are the commit boundaries in a cascade?
 
-The model choice, defined at a glance:
+The models, defined at a glance:
 
 - **Closure** (Model A) — the act plus every firing it transitively triggers is *one commit*: durable as a single state transition or rejected as one; intermediate states never observable, never durable; a crash means the act never happened.
 - **Chain** (Model B) — *every firing is its own commit*: the act lands first, each consequence lands separately after it; intermediate states are durable and observable, other commits can interleave between links, and a crash leaves a partial cascade for the guard/backstop machinery to heal.
 - **Hybrid** — firing bodies always atomic (the floor); closure-atomic from the act up to the first boundary that *must* exist (an external effect) or that the author spelled as eventual ("Writing the boundary"); chained beyond it, each chained link crash-safe via its guard.
 
-Sub-threads, each forced by a settled constraint: which diffs rules fire on (endpoint vs. stepwise — the fixpoint/stratification question; Datalog prior art applies); sibling firing order, or transitive one-writer instead; termination proof for cascade cycles (is the disarm proof sufficient?); membership blips at the unobservable grain (the §17 transient-membership question at cascade granularity). Subsumes the cascade bullet of OQ6; OQ6 retains act identity, multi-instance commits, and firing-vs-triggering-commit atomicity.
+**Settled direction: the hybrid is the frame, and the default is one transaction.** External edges are forced-chained (constraint 5), declared-eventual edges are chained by their apparatus, firings are atomic regardless. That collapses the A-vs-B choice into one residual question: *what does it mean when an author writes a plain rule* — `rule RestoreService when leaving Delinquent { ... }`, internal effects only, no guard, no backstop schedule — *and says nothing about boundaries?* Answer: all rules fire within a single transaction unless boundaries are explicitly set. Two arguments, one about spelling and one about recoverability:
+
+- **Elimination (spelling).** A consequence that runs *after* its triggering commit needs three things to be safe: a guard (so retrying can't double-apply it), a backstop schedule (so a crash between the commits gets healed), and a witness (so "already done" is checkable data). A consequence that runs *inside* its triggering commit needs none of those — there is no gap to crash in, so there is nothing to heal. The plain rule has none of that machinery; if plain rules meant "runs after," every one of them would be an eventual consequence with no retry safety and no heal path — precisely the silent-eventual failure the language refuses to allow. (And choosing "runs after" as the default would force "runs inside" to need an annotation to distinguish itself from bare, resurrecting exactly the `atomic` keyword already rejected.)
+- **Recoverability (the transition law — the decisive one).** If R2 is triggered *only* by a transition R1's effects cause, and R2 runs in its own transaction and fails unexpectedly, nothing in the system will ever re-trigger it: the transition existed only at the commit that caused it, current state can't reconstruct it, and no sweep can find work whose trigger was never data (Model B's "dropped transition-triggered firing" cost, above). Inside one transaction, R2's failure fails the whole thing — the act rolls back, the transition never happened, and retrying the act causes it again intact. Failure recovery collapses to "retry the act," the one retry the system's boundary already owns. Chained-by-default would instead make every plain rule a latent permanent stranding.
+
+The cost of the answer is that closure semantics must actually be solved for the joined region — which is what the sub-threads below are.
+
+Sub-threads, each forced by a settled constraint: which transitions rules fire on (endpoint vs. stepwise — the fixpoint/stratification question; Datalog prior art applies); sibling firing order, or transitive one-writer instead; termination proof for cascade cycles (is the disarm proof sufficient?); membership blips at the unobservable grain (the §17 transient-membership question at cascade granularity). Subsumes the cascade bullet of OQ6; OQ6 retains act identity, multi-instance commits, and firing-vs-triggering-commit atomicity.
 
 ### OQ17. Rejection scope — `forbidden` and validation across cascades
 
@@ -295,7 +331,7 @@ The unremovable boundary. When the call succeeds and a later link fails (or the 
 
 ### OQ19. How is the boundary written?
 
-Tentative lean recorded in "Writing the boundary": no new keyword — conditioned acceptance is refinement modeling (the `AcceptedOrder` definition, not a boundary); *eventual* is spelled by its own apparatus (dischargeable guard + backstop cadence + witness), which carries strictly more information than any annotation; *joined* is the bare default for internal-effect rules; and a bare rule containing an external effect is a compile error demanding the apparatus or an explicit acceptance of loss. Remaining threads: the loss-tolerance vocabulary (`tolerates loss` on a rule or witness — extending `tolerates` beyond fold hazards is unexamined); whether joined-by-default survives OQ16 (the lean is void if OQ16 lands on chain semantics everywhere, and the keyword candidates return); the `never`-invariant construct as verification of a chosen boundary (independently valuable, §1's consistency-checker category — where does it live?); and whether apparatus-as-spelling stays legible at realistic spec sizes, the same calibration question rung recognition deferred to worked examples (README §20).
+Settled direction, recorded in "Writing the boundary" and "Declaring the boundary": conditioned acceptance is refinement modeling (the `AcceptedOrder` definition, not a boundary); the default is one transaction (OQ16); a new boundary is *declared by a preposition swap on the commit source* — **`after commit`**, glossed as "the firing becomes its own commit" — is *inherent* at schedule sources (a tick's firing can never join the act's long-gone commit), and is *forced* at external effects; the eventual apparatus (dischargeable guard + backstop + witness) is the proof obligation a boundary imposes, not the declaration itself, and the compiler checks clause and apparatus against each other both ways (boundary without apparatus = stranding error; apparatus without boundary = dead machinery, "did you mean `after commit`?"). The word "transaction" never becomes a keyword. Remaining threads: the mixed-list grammar (`after commit, Hourly` — per-entry preposition or a split clause); tick granularity (one commit per tick, per firing, or per `each` iteration — with OQ13); boundary nesting (the cascade as a tree of commits); the loss-tolerance vocabulary (`tolerates loss` — extending `tolerates` beyond fold hazards is unexamined); the `never`-invariant construct as verification of a chosen boundary (independently valuable, §1's consistency-checker category — where does it live?); and legibility at realistic spec sizes, the calibration question rung recognition deferred to worked examples (README §20).
 
 ### OQ20. Is commit-refusal primitive, or derivable from reified refusal?
 

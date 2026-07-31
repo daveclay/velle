@@ -282,13 +282,13 @@ Neither clause says *how* detection gets implemented. Whether the underlying mec
 
 Two compiler obligations fall out. **The unfireable-rule error**: if a rule's trigger set is empty — no commit in the spec, and no tick in its `on` clause, can cause entry into its condition — the rule can never fire, and that's a whole-spec compile error, not a dead-code shrug. The sharp instance is time: `OverdueInvoice = Invoice where due < today` depends on `today`, which no act commit changes — a rule `when OverdueInvoice` with no schedule in its `on` clause observes entry at `Invoice` creation (committed already-overdue) but never entry *by aging*, and the diagnostic says exactly that: "entry into `OverdueInvoice` via the passage of time is unobserved — add a schedule to `on`, or this rule under-fires." **The PO-facing answer to "when does this run?"**: the derived trigger set is impact analysis read backward — forward, "if this commit lands, these rules may fire"; backward, "this rule fires as a consequence of: withdrawals, deposits, the daily tick."
 
-### Entry and exit are commit-local diffs
+### Entry and exit are commit-local transitions
 
-"Newly-satisfying" is well-defined with no hidden bookkeeping, but only *per commit*: a commit is a discrete moment, and evaluating its consequences means pre-state and post-state are both transiently available. `when Delinquent` means *the commit that made it true* — false before, true after; `when leaving` (`## Exit triggers`) is the same diff reversed. Consequences:
+"Newly-satisfying" is well-defined with no hidden bookkeeping, but only *per commit*: a commit is a discrete moment, and evaluating its consequences means pre-state and post-state are both transiently available. `when Delinquent` means *the commit that made it true* — false before, true after; `when leaving` (`## Exit triggers`) is the same transition reversed. Consequences:
 
 - **Episodes are free at commit granularity.** September's re-entry into `Delinquent` is a new entering commit, so the rule fires again — once per episode, with no guard apparatus, and the outcomes accumulate as history. Guards are what you buy for *durability* (crash recovery) and *cross-tick memory*, not for entry itself (`## Run-once guards`).
 - **Bare act triggers are sound.** `when CorrectEmail` fires once per correction commit — the commit is the unit of firing. The rule is never tick-evaluated, so no sweep can re-apply old corrections.
-- **A tick is a commit whose changed datum is `today`.** So `on commit, Daily` is one mechanism, not two: an invoice *aging* into `OverdueInvoice` is a commit-local diff over the tick — the same entry semantics as a payment-reversal commit.
+- **A tick is a commit whose changed datum is `today`.** So `on commit, Daily` is one mechanism, not two: an invoice *aging* into `OverdueInvoice` is a commit-local transition over the tick — the same entry semantics as a payment-reversal commit.
 
 ## 12. Assignment (mutation in place)
 
@@ -375,9 +375,9 @@ Nothing here is new mechanism: `EmailCorrection` is a reified act like any other
 
 ## 13. Exit triggers (`when leaving`)
 
-*Tentative in part — mutation policies are being re-derived under the commit-local diff model, and `compensate`'s desugaring is unsettled now that `produces` is retired (see `investigate_state.md`, OQ7).*
+*Tentative in part — mutation policies are being re-derived under the commit-local transition model, and `compensate`'s desugaring is unsettled now that `produces` is retired (see `investigate_state.md`, OQ7).*
 
-`when R` reacts to an instance *entering* a refinement — becoming a member. `when leaving R` is its mirror: a reaction to an instance that was a member of R and stopped being one — the same commit-local diff reversed (`## rule`).
+`when R` reacts to an instance *entering* a refinement — becoming a member. `when leaving R` is its mirror: a reaction to an instance that was a member of R and stopped being one — the same commit-local transition reversed (`## rule`).
 
 ```
 rule RestoreService when leaving Delinquent {
@@ -730,7 +730,7 @@ How this behaves against realistic specs is untested — the classification boun
 
 ## 21. Open / unresolved
 
-- **State change & rule mechanics — remaining frontier.** The core is settled — assignment and one-writer (§12), run-once guards with no sugar and `produces` retired (§18), folds and `tolerates` (§19), the pattern spectrum and rung recognition (§20). Still open in `investigate_state.md`: marking shapes as external input, act identity, and commit-metadata readability — `createdAt`/`updatedAt` are commit metadata, readable never writable, spelling unexplored (OQ5); what exactly one commit is — atomicity of a firing, cascades, `then`'s intermediate moments — the load-bearing question one-writer, guard soundness, and derived trigger sets all lean on (OQ6; cascades and transaction boundaries now have their own investigation, `investigate_transactions.md`, OQ16–20); remaining rule-anatomy threads including re-deriving §13's mutation policies under commit-local diffs (OQ7); the `each`/multi-schedule disarm-proof pass (OQ13); whether the canonical guard form is pleasant enough to be what fold diagnostics ask authors to write (OQ14); ordered folds and batch ordering (OQ15). §§13 and 16 carry tentative markers accordingly.
+- **State change & rule mechanics — remaining frontier.** The core is settled — assignment and one-writer (§12), run-once guards with no sugar and `produces` retired (§18), folds and `tolerates` (§19), the pattern spectrum and rung recognition (§20). Still open in `investigate_state.md`: marking shapes as external input, act identity, and commit-metadata readability — `createdAt`/`updatedAt` are commit metadata, readable never writable, spelling unexplored (OQ5); what exactly one commit is — atomicity of a firing, cascades, `then`'s intermediate moments — the load-bearing question one-writer, guard soundness, and derived trigger sets all lean on (OQ6; cascades and transaction boundaries now have their own investigation, `investigate_transactions.md`, OQ16–20); remaining rule-anatomy threads including re-deriving §13's mutation policies under commit-local transitions (OQ7); the `each`/multi-schedule disarm-proof pass (OQ13); whether the canonical guard form is pleasant enough to be what fold diagnostics ask authors to write (OQ14); ordered folds and batch ordering (OQ15). §§13 and 16 carry tentative markers accordingly.
 - **Mapping** (shape-to-shape translation, e.g. API DTO → domain shape) — part of the original design goals, not yet exercised in a worked example.
 - **Schedule definition** — `on Daily` (the header's `on` clause) settles how a rule *references* a schedule; what actually defines `Daily` (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be a cron-like scheduling framework.
 - **Reversal** — resolved as a non-issue for the language itself (it's a business-policy choice, expressed via which artifact shapes a human declares — see `example_invoice_payment.md` #5), but no single canonical pattern has been adopted yet; the consolidated top-of-file example still doesn't reflect a chosen policy.
