@@ -1,12 +1,18 @@
 # Transactions
 
-Where commits begin and end when rules trigger other rules: the default, the `after commit` boundary declaration, and what remains open.
+Where transaction boundaries sit when a rule's effects produce commits that match other rules' conditions: the default, the `after commit` boundary declaration, and what remains open.
 
-"Transaction" is not a Velle keyword and never becomes one — the **commit** (README §4) is the language's only unit of state change, and boundaries are expressed in commit vocabulary. Open questions here are numbered OQ16–20, continuing from `investigate_state.md`; OQ6 there keeps the umbrella question (act identity, multi-instance commits, what one commit encompasses).
+Open questions here are numbered OQ16–20, continuing from `investigate_state.md`; OQ6 there keeps the umbrella question (act identity, multi-instance commits).
 
-## The default: one commit, rules included
+## Two words, kept apart: commit and transaction
 
-A rule triggered `on commit` fires *inside* the commit that triggered it — cascades included. If rule R1's effects cause a transition rule R2 watches, R2 fires inside the same commit, and so on transitively. The whole consequence set becomes durable as one state transition, or not at all: an unexpected error anywhere rolls back everything, including the originating act.
+A **commit** is Velle's conceptual unit: one mutation entering the single state (README §4) — an external act arriving, a scheduled tick, or a rule firing's effects landing. Rules are never triggered *by rules*: a rule reacts to its condition — a shape or refinement — newly holding at some commit (README §11). There is no call graph; there is only state, commits mutating it, and conditions matching. When rule R1 fires, its effects are a **new commit**, and that commit may match the conditions of rules R2 and R3 exactly the way an external act's commit would.
+
+A **transaction** — this doc's descriptive term, never a Velle keyword — is the all-or-nothing envelope around a set of commits: which commits stand or fall together when something goes wrong. The two are different axes. A transaction *contains* commits — an act's commit plus the commits its consequences produce — it does not merge them into one; transition semantics stay per-commit inside it. How an envelope is implemented (a real database transaction, a queue with idempotent replay) is compilation's business (README §1); what Velle owes is the observable contract: what stands together, what may fail apart, and what heals the gap.
+
+## The default: one transaction
+
+Every rule fires within the transaction of the commit that matched its condition — transitively, with no declaration needed:
 
 ```
 shape Account {
@@ -36,18 +42,19 @@ rule NotifyRestored when ServiceRestoration {
 }
 ```
 
-A $50 `Deposit` against a −$20 account is one state transition: balance updated, deposit marked applied, restoration recorded, notification queued. If any firing fails, the deposit never happened; retrying the act re-causes every transition intact. The author declared none of this — plain rules join by default.
+A \$50 `Deposit` against a −$20 account is **one transaction containing four commits**: the `Deposit` act; `ApplyDeposit`'s effects (at this commit the transition out of `Delinquent` occurs); `RestoreService`'s `ServiceRestoration`; `NotifyRestored`'s `RestorationEmail`. An unexpected error at any of them rolls back the whole envelope — the deposit never happened, and retrying the act re-produces the same sequence of commits intact.
+
+Because each firing is its own commit, transitions inside a transaction are ordinary commit-local transitions (README §11) — nothing new to define. A mid-transaction blip is real: if a later commit in the same transaction (a reinstatement fee, say) drops the balance negative again, the account genuinely left and re-entered `Delinquent`, and rules watching either transition fire — the same stance §17 already takes ("commit-triggered rules observe every membership the commit stream produces"). What is *not* yet defined is the **order** of that stream when one commit matches several conditions at once — OQ16, the doc's main open question.
 
 What grounds the default:
 
-- **A firing's body is atomic.** Guard soundness demands a mutation and its witness enter the state together (README §18); a body is never partially applied. No boundary can cut through a body.
-- **The transition law** (the tick law's sibling): *a transition is not data — a consequence of entering or leaving a refinement either fires inside the commit that caused the transition, or the obligation must first be reified as data (the guard); there is no third place for the trigger to live.* A transition like `leaving Delinquent` exists only at the commit that caused it; current state can't reconstruct it afterward ("restored" and "never delinquent" are indistinguishable — the fact that made `when leaving` irreducible, README §13). A rule detached from that commit that then fails is therefore *unrecoverable*: no sweep can find work whose trigger was never data. Joined by default is the only reading under which a plain rule is reliable at all.
-- **One writer extends across the joined commit.** Two rules anywhere in the same joined cascade assigning the same field is the one-writer error (README §12), caught transitively: the compiler knows the full cascade graph statically (derived trigger sets, README §11, applied one level up), so "can these firings share a commit?" is answerable at compile time, fail-closed.
-- **Crash windows don't exist inside a commit.** The gap between trigger and firing that motivated durability guards (README §18) only exists at boundaries. A plain rule needs no guard; a guard on a plain rule is dead machinery (diagnostics below).
+- **A rule's body is atomic: one firing's body is exactly one commit.** Every effect statement in the body lands together, or none of them do — a body is never partially applied, and no boundary can cut through one. `then` (README §15) orders effects *within* that single commit — an ordering commitment for compilation, never an observable intermediate state. Guard soundness follows for free: a mutation and its witness are statements of one body, so they enter the state together (README §18) — the crash-between-them window is structurally impossible. (A body containing an external effect is the one thing this can't cover — the call happens in the world, outside any commit — which is exactly why such rules are forced to a boundary and a witness, below.)
+- **The transition law** (the tick law's sibling): *a transition is not data — it exists only at the commit that caused it. A rule reacting to a transition either fires within that commit's transaction, or the obligation must first be reified as data (the guard); there is no third place for the trigger to live.* Current state can't reconstruct a past transition ("restored" and "never delinquent" are indistinguishable — the fact that made `when leaving` irreducible, README §13), so a rule outside the causing transaction that fails is *unrecoverable*: no sweep can find work whose trigger was never data. Inside the transaction, failure rolls back the cause too, and retrying the act re-causes the transition. Sharing the transaction by default is the only reading under which a plain rule is reliable at all.
+- **Crash windows don't exist inside a transaction.** The gap between a condition matching and the rule firing — the gap that motivates durability guards (README §18) — only exists at transaction boundaries. A plain rule needs no guard; a guard on a plain rule is dead machinery (diagnostics below).
 
 ## Declaring a boundary: `after commit`
 
-A boundary is where a new commit begins — where an unexpected error rolls back *to the boundary* instead of to the act. It is declared by a preposition swap on the trigger source:
+A boundary is where a new transaction begins — where an unexpected error rolls back *to the boundary* instead of to the act. It is declared by a preposition swap on the trigger source:
 
 ```
 shape Signup {
@@ -67,8 +74,8 @@ rule SyncToCrm when UnsyncedSignup after commit, Hourly {
 }
 ```
 
-- **`on commit`** — the firing is part of the act's commit.
-- **`after commit`** — the firing becomes *its own commit*, immediately following the act's. The act stands even if the firing fails; the backstop heals the gap.
+- **`on commit`** — the firing's commit belongs to the triggering commit's transaction.
+- **`after commit`** — the firing's commit begins a **new transaction**, entered only after the triggering transaction has durably committed. The act stands even if the firing fails; the backstop heals the gap.
 
 Read aloud: "when a signup is unsynced, after the commit, and hourly." The signup is never hostage to CRM uptime; a failed call lands no witness, the guard stays armed, and the `Hourly` backstop retries — *immediately, and self-healing hourly*. "How far behind can the CRM be?" is answered by a schedule name in the header.
 
@@ -76,22 +83,22 @@ What a Product Owner reads off a header: `on commit` — part of the act; `after
 
 ### Boundaries arise exactly three ways
 
-1. **By declaration** — `after commit`, the only place a spelling is needed, because `commit` is the only trigger source where joining is otherwise the default.
-2. **Inherently, at schedule sources.** A tick is its own commit; by the time `on Hourly` fires, the triggering act's commit is long gone. There is nothing to join, so schedule entries carry no preposition distinction.
-3. **Forcibly, at external effects.** An API call happens in the world; no boundary drawn around state can contain it (its only state-visible trace is its witness, README §18). A rule containing an external effect can never join — writing one as a plain rule is a compile error: "this call's failure would lose work with no heal path — declare `after commit`, gate the rule on a dischargeable state, and add a backstop schedule; or state that loss is acceptable."
+1. **By declaration** — `after commit`, the only place a spelling is needed, because `commit` is the only trigger source where sharing the transaction is otherwise the default.
+2. **Inherently, at schedule sources.** A tick is a fresh commit; by the time `on Hourly` fires, the triggering act's transaction is long gone. There is nothing to share, so schedule entries carry no preposition distinction.
+3. **Forcibly, at external effects.** An API call happens in the world; no envelope drawn around state can contain it (its only state-visible trace is its witness, README §18). A rule containing an external effect can never share the triggering transaction — writing one as a plain rule is a compile error: "this call's failure would lose work with no heal path — declare `after commit`, gate the rule on a dischargeable state, and add a backstop schedule; or state that loss is acceptable."
 
 ### A boundary obligates the apparatus
 
 `after commit` and the eventual apparatus — a dischargeable guard (what makes retry safe), a backstop schedule (how far behind, how it heals), a witness (what *done* means) — are declaration and proof, checked against each other both ways, the disarm-proof pattern:
 
 - **Boundary without apparatus** is the stranding error (the transition law): "this rule's firing can be lost at the declared boundary, and its trigger is not data — gate it on a dischargeable state and add a backstop schedule, or remove the boundary."
-- **Apparatus without boundary** is dead machinery — a joined firing can't be dropped, so the guard and backstop protect nothing. The diagnostic mirrors dead tolerances (README §19): "this rule's guard and backstop serve no boundary — did you mean `after commit`?"
+- **Apparatus without boundary** is dead machinery — inside a transaction a firing can't be dropped, so the guard and backstop protect nothing. The diagnostic mirrors dead tolerances (README §19): "this rule's guard and backstop serve no boundary — did you mean `after commit`?"
 
-The full product sentence usually includes a retry budget — "retry, but give up after three and tell someone." An attempt count is cross-commit memory, so it is data (the tick law): reify each try (`SyncAttempt`), express failure outcomes as refinements (errors-are-refinements, README §2), guard the retry on `count(SyncAttempt for this) < 3`, and let a separate rule watch the exhausted state. Hand-written per "No guard sugar" (README §18).
+The full product sentence usually includes a retry budget — "retry, but give up after three and tell someone." An attempt count is memory across transactions, so it is data (the tick law): reify each try (`SyncAttempt`), express failure outcomes as refinements (errors-are-refinements, README §2), guard the retry on `count(SyncAttempt for this) < 3`, and let a separate rule watch the exhausted state. Hand-written per "No guard sugar" (README §18).
 
 ### Ordering across a boundary
 
-An `after commit` firing's commit begins after its triggering commit completes, so its writes are ordered *after* every joined write of the same cascade. One-writer treats it as a separate commit, where last-in-wins across commits is already defined (README §12).
+An `after commit` firing's transaction begins after its triggering transaction completes, so its commits are ordered *after* every commit of that transaction. Across transactions, last-in-wins is already defined (README §12). *Within* a transaction, ordering is OQ16.
 
 ## What is not a boundary
 
@@ -134,20 +141,21 @@ rule RecordRefusal when RefusedVoid {
 
 The act lands (the request happened — audit for free: `count(RefusedVoid)`), the consequence never fires for the refused subset, the refusal lands as a fact the caller reads back (delivery is compilation's job). `ApplicableVoid`/`RefusedVoid` partition `VoidPayment`, exhaustiveness-checked — the forgotten `catch` block becomes a compile-time uncovered-subset error. Three levels of "invalid," only the first pre-commit: **(1)** can't inhabit the shape's type at all — rejected below the language, at the trust/input boundary (OQ5); **(2)** well-shaped, business-invalid — rejection-as-data, above; **(3)** well-shaped, valid, consequence forbidden — the lien case, next.
 
-**Liens must see consequences.** A `forbidden` lien (README §13) rejects "any change that would cause the exit" — and the exit-causing change can arrive as a downstream firing's effect rather than the act itself: a `VoidPayment` names only a payment and a reason, yet `ApplyVoid`'s effect moves the invoice's derived balance and would exit `SettledInvoice`, which a `Receipt`'s lien forbids from two relationships away. The lien must *see* that consequence before it becomes real — the compiler's derived trigger sets make the check static. Whether seeing leads to *refusing the act* (the commit unwinds) or *producing a refusal fact* (nothing unwinds; the gate simply doesn't fire and a refusal shape records why) is the open modeling question, OQ20.
+**Liens must see consequences.** A `forbidden` lien (README §13) rejects "any change that would cause the exit" — and the exit-causing change can arrive as a downstream firing's commit rather than the act itself: a `VoidPayment` names only a payment and a reason, yet `ApplyVoid`'s effect moves the invoice's derived balance and would exit `SettledInvoice`, which a `Receipt`'s lien forbids from two relationships away. The lien must *see* that consequence before its transaction stands — the compiler's derived trigger sets (README §11) make the check static. Whether seeing leads to *refusing the act* (the transaction unwinds) or *producing a refusal fact* (nothing unwinds; the gate simply doesn't fire and a refusal shape records why) is the open modeling question, OQ20.
 
 ## Open questions
 
 (Numbering continues from `investigate_state.md`; OQ tags are never reused.)
 
-### OQ16. Semantics inside the joined commit
+### OQ16. Ordering within a transaction
 
-The boundaries are settled (default joined; `after commit` / schedules / external effects); what the joined region still owes is its precise semantics:
+Each firing is its own commit, so transition semantics inside a transaction are settled per-commit (README §11). What isn't settled is the **sequence of commits**:
 
-- **Which transitions rules fire on** — endpoint vs. stepwise. R2 fires because R1's effects changed state, so R2 evaluates against a state mid-commit; if entry/exit are judged endpoint-to-endpoint, a refinement entered and exited within one commit *never happened* (a transient-membership blip at commit granularity — the §17 question at a new grain); if rules fire on stepwise transitions, intermediate states are semantically real. Endpoint semantics lands in stratification territory — which rules fire depends on final state, which depends on which rules fire. Known ground in Datalog (stratified negation); the prior-art item in `TODO.md` is load-bearing here.
-- **Termination.** A joined cascade must terminate to be a commit. The cascade graph is static, so cycles are detectable, but convergence can be value-dependent (a deposit rule producing deposits) — undecidable in general. The folds precedent (README §19) applies: prove termination structurally (a DAG, or cycles broken by disarming guards), fail closed on the rest. Whether the disarm proof suffices as a termination proof is unexamined.
-- **Transitive one-writer, precisely.** The check extends across the joined cascade; the exact overlap analysis (two rules reachable from one act via different transition paths) needs specification.
-- **Firing-vs-triggering atomicity residue** stays with OQ6 (act identity, multi-instance commits).
+- **Sibling order.** One commit can match several rules' conditions at once — R1's effect-commit matches both R2 and R3. Which fires first? Their effects are separate commits, and the order between them determines which intermediate states exist, which transitions occur, and (where both feed a later condition) what fires next. Nothing in the spec defines this order — and spec declaration order isn't a business statement.
+- **Traversal.** When R2's effects match further conditions, do R2's consequences run to completion before R3 fires, or level by level? The same character as sibling order: a sequence that exists in execution but nowhere in the description.
+- **One-writer's scope.** README §12's check is per commit — but sibling firings write in *separate* commits within one transaction, so two rules assigning `account.tier` from one triggering commit would be technically legal last-in-wins with an undefined "last." Either one-writer's unit extends to the transaction, or ordering becomes defined enough to make "last" a fact.
+- **Candidate resolutions.** Define an order (spec order, or `then` promoted to a cross-rule position — both read as imperative sequencing creeping back into a declarative language), or require **order-independence**: the compiler proves the transaction's outcome is the same under any firing order and errors where it can't — with one-writer extended to transaction scope as the write-half of exactly that proof. Fail-closed order-independence fits the language's character (uncertainty fails closed, README §12); whether realistic specs can discharge it is unexamined. Datalog prior art (evaluation strategies, semi-naive/stratified evaluation) is adjacent — the prior-art item in `TODO.md`.
+- **Termination.** A transaction completes when no rule's condition is newly matched — it must quiesce. Cycles in the static condition graph are detectable (derived trigger sets), but convergence can be value-dependent (a deposit rule producing deposits) — undecidable in general. The folds precedent (README §19) applies: prove quiescence structurally (a DAG, or cycles broken by disarming guards), fail closed on the rest. Whether the disarm proof suffices is unexamined.
 
 ### OQ17. Rejection scope
 
@@ -155,15 +163,15 @@ If a lien or validation refusal unwinds the act (commit-refusal), what exactly u
 
 ### OQ18. External effects mid-cascade
 
-When the call succeeds and a later link fails (or the reverse), the witness records what happened — but what does the *cascade* do: halt and self-heal via backstop, compensate (README §13's `compensate`, itself unsettled — OQ7), or refuse to compile without a declared policy? Interacts directly with OQ7's `compensate` re-derivation.
+When the call succeeds and a later commit's firing fails (or the reverse), the witness records what happened — but what does the rest of the consequence chain do: halt and self-heal via backstop, compensate (README §13's `compensate`, itself unsettled — OQ7), or refuse to compile without a declared policy? Interacts directly with OQ7's `compensate` re-derivation.
 
 ### OQ19. Boundary grammar and policy residue
 
 - **Mixed-list grammar** — does `after commit, Hourly` read its preposition per-entry, or does the clause split (`after commit on Hourly`)?
-- **Tick granularity** — does every rule fired by one tick join that tick's single commit, or does each firing (or each `each` iteration) get its own boundary? The granularity half of OQ13's pass.
-- **Nesting** — an `after commit` rule's own downstream cascade joins *its* commit by default, so a cascade is a tree of commits, each rooted at a declared, inherent, or forced boundary. Consequences unexplored.
+- **Tick granularity** — do all rules fired at one tick share the tick's transaction, or does each firing (or each `each` iteration) get its own? The granularity half of OQ13's pass.
+- **Nesting** — an `after commit` rule's consequences share *its* transaction by default, so a cascade is a tree of transactions, each rooted at a declared, inherent, or forced boundary. Consequences unexplored.
 - **`tolerates loss`** — the fire-and-forget escape for external effects (an analytics ping the PO shrugs about); extending the `tolerates` vocabulary beyond fold hazards (README §19) is unexamined.
-- **`never` invariants** — a spec-level declaration over refinement combinations (`never (Account where balance >= 0 and suspended)`) as *verification* of a chosen boundary: the compiler proves the written boundaries honor the stated observable-state fact. Independently valuable, §1's consistency-checker category; where it lives is undecided.
+- **`never` invariants** — a spec-level declaration over refinement combinations (`never (Account where balance >= 0 and suspended)`) as *verification* of chosen boundaries: the compiler proves the written boundaries honor the stated observable-state fact. Independently valuable, §1's consistency-checker category; where it lives is undecided.
 - **Legibility at scale** — whether boundary-by-preposition plus apparatus stays readable in realistic specs; the calibration question rung recognition deferred to worked examples (README §20).
 
 ### OQ20. Is commit-refusal primitive, or derivable from reified refusal?
