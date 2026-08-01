@@ -134,7 +134,7 @@ The check decomposes along familiar lines: **write-write** conflicts — two sib
 
 #### OQ18. External effects mid-cascade
 
-When the call succeeds and a later commit's firing fails (or the reverse), the witness records what happened — but what does the rest of the consequence chain do: halt and self-heal via backstop, compensate via the evidence-subject pattern (README §13, "Compensation is a pattern, not a keyword"), or refuse to compile without a declared policy?
+When the call succeeds and a later commit's firing fails (or the reverse), the witness records what happened — but what does the rest of the consequence chain do: halt and self-heal via backstop, compensate via the evidence-subject pattern (README §13, "The compensation pattern"), or refuse to compile without a declared policy?
 
 #### OQ19. Boundary grammar and policy residue
 
