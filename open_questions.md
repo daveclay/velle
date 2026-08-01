@@ -1,6 +1,6 @@
-# Commits, Rules, and Transactions
+# Open Questions
 
-Consolidated from `investigate_state.md` and `investigate_transactions.md` (merged once their remaining open questions had converged on the same territory: what one commit is, which rules fire as its consequence, and what stands or falls with it). Settled results from both are promoted into `README.md`; only what remains open — and the worked notes it leans on — lives here. Open-question tags continue unchanged — OQ numbers are never renumbered or reused, so existing references (`OQ6`, `OQ16`) stay valid.
+The language's open questions, with the worked notes they lean on. Settled results are promoted into `README.md` as they land. OQ tags are stable — numbers are never renumbered or reused, so existing references (`OQ5`, `OQ16`) stay valid.
 
 ## Worked notes
 
@@ -93,15 +93,9 @@ Grouped by theme; tags are historical and unchanged.
 
 ### What one commit is
 
-#### OQ6. What, exactly, is one commit?
+#### OQ21. Record identity
 
-Grown from a footnote into the load-bearing question — commits, state, and guards all meet here. The firing/transaction side is settled (README §11); what remains:
-
-- **Is a commit a single act instance?** The one-writer check's "unrelated shapes can never coincide" holds only if two different acts can't enter the state as one commit. Nothing states this anywhere yet. If multi-instance commits exist, "can these triggers coincide?" needs a broader definition than trigger-shape overlap.
-- **Act identity.** A guard cannot dedupe *repeated acts* — two identical `Deposit` commits are two distinct firings, each exactly once (README §19's dependency). Whether acts carry identity, and what would make two commits "the same act," is unstated.
-- **Commit-metadata readability.** Whether the commit trace is queryable data at all — the substrate `createdAt`/`updatedAt` would read from (OQ5, part 3) — is adjacent here.
-
-Needs pinning down before the one-writer check, the guard-soundness argument, or the derived-trigger-set machinery can be specified precisely.
+Spun out of OQ6 when the rest of it settled: a commit is exactly **one act instance** — an author who wants several things to arrive together declares a container shape and commits that single instance, with the parts as related shapes (README §4) — which keeps "can these triggers coincide?" answerable from trigger-shape overlap alone (the one-writer check, README §12). What the settlement exposes is identity: a guard cannot dedupe *repeated acts* — two identical `Deposit` commits are two distinct instances and two firings, each exactly once (README §19's dependency). Nothing yet says what identifies a record: whether an instance has identity beyond its stored values, whether two indistinguishable instances are one fact or two, and what would make an external submitter's retry "the same act" rather than a new one (an idempotency key as ordinary data the author declares, or something the language owes). Ties into occurrence ordering/reification (README §21, "Exit from act-entered refinements").
 
 #### OQ16. Order must not matter — can the compiler prove it?
 
@@ -170,14 +164,18 @@ shape Review {
 }
 ```
 
-Committing a `Review` *is* saving the record — persistence needs no rule (README §12, "No act-level sugar"). What remains of the use case is the timestamps, and neither should be an author-maintained field:
+Committing a `Review` *is* saving the record — persistence needs no rule (README §12, "No act-level sugar"). What remains of the use case is the timestamps: `createdAt`/`updatedAt` are commit metadata, not author-maintained fields — declaring them is its own question (OQ22, below). Where the author wants a timestamp *as model data* — business rules over `submittedOn` — the spelling is `submittedOn: Date initially now` (README §5); what remains for this OQ is whether such a field can be marked internal (not committer-suppliable).
+
+So the boundary declaration this OQ contemplates has three parts: **(1)** who may commit the shape, **(2)** which fields the committer supplies vs. which are internal (an `initially` field is the natural candidate), and **(3)** what commit metadata is readable in predicates and derivations (→ OQ22).
+
+#### OQ22. Declaring commit metadata (`createdAt`/`updatedAt`)
+
+Spun out of OQ6. Every change to a record traces to a commit ("a system never does anything on its own"), so *when an instance was created* and *when it last changed* are already facts of the commit trace — and neither should be an author-maintained field:
 
 - `createdAt` can't be client-supplied (trust) and can't be `= now` (shape-body `=` is a live derivation — it would change constantly). It's a fact *about the commit*, not about the data.
 - `updatedAt` maintained by hand would mean every rule that assigns any field of the shape also assigns `updatedAt = now` — boilerplate that lies the first time a rule forgets it (though one-writer at least forces the writers' triggers disjoint).
 
-Both are **commit metadata**. "A system never does anything on its own" means every change to a record traces to a commit, so *when it was created* and *when it last changed* are already derivable from the commit trace that `why` and impact analysis walk. Author-maintained timestamp fields are a workaround from systems where the commit log isn't first-class; in Velle they should be readable, never writable — some spelling over the trace (syntax unexplored; whether the trace is queryable data at all is OQ6's third thread). Where the author wants a timestamp *as model data* — business rules over `submittedOn` — the spelling is `submittedOn: Date initially now` (README §5); what remains for this OQ is whether such a field can be marked internal (not committer-suppliable).
-
-So the boundary declaration this OQ contemplates has three parts: **(1)** who may commit the shape, **(2)** which fields the committer supplies vs. which are internal (an `initially` field is the natural candidate), and **(3)** what commit metadata is readable in predicates and derivations (→ OQ6).
+Author-maintained timestamp fields are a workaround from systems where the commit log isn't first-class; in Velle they should be **readable, never writable**. Needed: a way to declare them in a shape — a marker for a property that reads commit metadata, a fourth kind alongside stored, derived, and `initially`. Open: the spelling; which metadata exists (creation commit, last-write commit — whole-instance or per-field); and whether the commit trace is queryable in predicates and derivations beyond these (the trace `why` and impact analysis walk).
 
 #### OQ17. Rejection scope
 
@@ -185,7 +183,7 @@ If a refusal unwinds the act (commit-refusal), what exactly unwinds, what the co
 
 #### OQ20. Is commit-refusal primitive, or derivable from reified refusal?
 
-A full validate-and-reject flow needs no transaction machinery ("Validation rejection is data," above), and immutability needs no commit-refusal either (`frozen` — README §8, "Frozen fields"; derivation in `investigate_evidence_policies.md`) — which raises whether the language needs commit-refusal at all above the type/trust boundary (level 1 of the invalid layering — OQ5's territory, where it's irreducible). What remains is the residue: does any business case require that a well-shaped act *not enter the state* (compliance/data-retention pressures — "we may not store this request at all")? If so, is that declared per-act-shape or per-boundary (OQ5's who-may-commit declaration being the natural home)?
+A full validate-and-reject flow needs no transaction machinery ("Validation rejection is data," above), and immutability needs no commit-refusal either (`frozen` — README §8, "Frozen fields") — which raises whether the language needs commit-refusal at all above the type/trust boundary (level 1 of the invalid layering — OQ5's territory, where it's irreducible). What remains is the residue: does any business case require that a well-shaped act *not enter the state* (compliance/data-retention pressures — "we may not store this request at all")? If so, is that declared per-act-shape or per-boundary (OQ5's who-may-commit declaration being the natural home)?
 
 ### Rule anatomy and guard ergonomics
 
