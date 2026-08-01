@@ -70,7 +70,7 @@ Reading code is the hard part of software engineering. Humans rarely catch bugs 
 
 There are techniques for using markdown files to capture system requirements and providing AI context to build a system, but these are unstructured and not easily organized. Over time, they become even more messy than the code, and are removed from the source-of-truth (the AI-generated code itself).
 
-# Language Structure
+# Language Characteristics
 
 ## Strongly typed
 Shapes, properties, and relationships with other shapes are strongly typed.
@@ -117,7 +117,10 @@ The "compiler" is responsible for enforcing strong typing, ensuring the relation
     ```
 - The schedule wiring (`FlagOverdueAccounts` runs `on Daily`) is tested separately, at the infrastructure level — it's a fact about invocation, not about the rule's logic.
 - This is the concrete answer to the testing gap named in Philosophy: rules compile directly into use-case-structured (`Given`/`Then`) scenarios, rather than needing a hand-written, separately-maintained BDD layer bolted on top of code.
+ 
 # Compiling Velle
+
+Velle isn't really "compiled" in the traditional sense, it's _validated_ for consistency. Errors related to system design using that language and at that layer of abstraction. The output is transpiled code in a traditional language, plus executable tests that verify the behavior of the system runtime.
 
 assume we're transpiling to an existing traditional language (leaning towards kotlin but maybe rust)
  
@@ -127,6 +130,8 @@ assume we're transpiling to an existing traditional language (leaning towards ko
 - AI can be given rules about implementing transpiled code from Velle (override within these files, structured file layouts)
 - a way to demarcate/introspect generated code "modules"/files
 - "escape hatch" isn't one-way; you can pick and choose which files to override or re-generate
+- right-hand side can be extended with "plugins".
+  - might need the author to specify whether custom RHS functions are idempotent or not, if the Velle validation step is doing RHS idempotent validation 
 
 ## Language "extension"
 - lightweight way to introduce new "verbs" or terms that correspond to files of custom code that velle can use
@@ -204,6 +209,7 @@ rephrase the problem in terms of someone trying to describe what the system shou
         - use language of blocks, shapes, logics?
         - inputs, outputs? Outputs, or targets?
             - If a logic results in nothing happening it is meaningless
+
 ## Projections
 - "casting" is legitimate and safe in a declarative language - it's just a type/shape.
 
@@ -233,7 +239,7 @@ rephrase the problem in terms of someone trying to describe what the system shou
 ExperimentGroup where method === "SCREENING" should not create confluence pages
 ```
 
-# Language Spike
+# More random notes
 
 What's the difference between a function and an object? Traditionally, objects have properties/state, and aren't "executable", whereas functions don't have properties and are "executable". Of course, functions do have "state" in terms of closure and stack, but it's traditionally kinda meaningless for them to have "properties".
 
@@ -258,236 +264,3 @@ If both functions and objects have a single input defined by the required and op
 However, if a function is called with some properties, then performs some logic, it generally produces some outputs. Those outputs may be not-null. Is an object a shape with the one default input, while it's output is the thing itself? Where a function shape is something that has the one default input, and then provides some _other_ output?
 
 shape object defines the concept, not the construction of, or intermediary state.
-
-`shape` defines objects and functions.
-
-```
-Archivable {
-    timestamp archivedAt
-}
-
-FermenterBatch {
-    is Archivable
-    
-    // scalar types `text`, `integer`, `decimal` (precision), `boolean`, etc
-    integer sequenceNumber
-    integer flaskNumber
-    // many-to-one relationship to ProteinSequence
-    references ProteinSequence as `proteinSequence`
-    references PeptideOrderItem as `peptideOrderItem`
-    // many-to-many relationship to ProteinBatch implied by both sides flagged as `many`
-    references many ProteinBatch as `proteinBatches`
-}
-
-ProteinBatch {
-    integer sequenceNumber
-    // many-to-many is implied by both sides being flagged as `many`
-    many FermenterBatch as `fermenterBatches`
-}
-```
-
-ok, so functions: how do we define behavior? Setup fermenter runs is complex.
-```
-// `via API` tells the compiler to generate a Rest API for this shape?
-// API tells the compiler to look for `using` and `from param` etc?
-SetupFermenterRun API {
-    // "inputs" defined like properties on objects, with syntax?
-    User from AuthenticatedUser
-    Fermenter from param `fermenterId` using LookupFermenterById
-    Workbook from param `workbook` using ExcelFileUpload
-    
-    produces SetupFermenterRunResult
-}
-
-SetupFermenterRun {
-    Fermenter from param `fermenterId` using LookupFermenterById
-    Workbook from param `workbook` using ExcelFileUpload
-  
-    // how does it do this? Break this down into very small references, and the `using` syntax?
-    produces: {
-        // pass "arguments"? FermenterRun using is redundant if CreateFermenterRun defines FermenterRun as output
-        FermenterRun using CreateFermenterRun with User, Fermenter
-    }
-}
-
-CreateFermenterRun {
-    
-}
-
-shape FermenterRun {
-    User,
-    Fermenter,
-    FermenterBatch[],
-    ProteinBatch[]
-}
-
-shape AddFermenterBatchesToFermenterRun {
-    inputs: {
-        FermenterRun,
-        AddFermenterBatch[]
-    }
-}
-
-//////////////////
-
-Department {
-    name is text
-    references many Users
-}
-
-Order {
-    user references one User
-    orderItems references many OrderItem
-}
-
-OrderItem {
-    order references one Order // is this redundant?
-    product references one Product
-    quantity is integer
-}
-
-Product {
-    name is text
-    description is text
-}
-
-User {
-    firstName is text
-    lastName is text
-    active is boolean
-    orders references many Order
-    department references one Department
-   
-    // This is a shorthand for defining a method on User, but not sure if it's required. I don't have "scope" to care about whether or not the user has a method defined on it, right? This would only be valuable in the language itself.
-    addOrderItem is AddOrderItem with this as user
-}
-
-// "function" shapes can be thought of as "constructing a command pattern object to be passed to some logic that will perfrom the given command". So it's "state" is the things you need to provide to the "function" to execute it.
-
-LookupUserOrderById {
-    user references User from AuthenticatedUser
-    id references Order by id
-}
-
-SaveOrderItemToDB {
-    uses ORM
-    orderItem references OrderItem
-}
-
-FindUserOrderItemForProduct {
-    user from AuthenticatedUser
-    order from userOrder
-}
-
-AddOrderItem {
-    expose as RestAPI //  provides acces to `from request param` - but could be implied? No, probably want to control API path stuff
-    
-    // if user has existing orderItem for the given product, add the quantity to the existing order item quantity
-    existingOrderItem from FindUserOrderItemForProduct
-    
-    // ok, wiring up references yeah? "This request param is this property."
-    save OrderItem with {
-        order references one Order from request param orderId using LookupUserOrderById
-        product references one Product from request param productId using LookupProductById
-        quantity from request param quantity ensure PositiveInteger // note: required is default, optional must be explicit?
-    } 
-}
-
-UpdateOrderItem {
-    
-}
-
-
-```
-## Language Shorthands
-
-```
-PeptideOrderItem {
-    references one Order
-}
-```
-results in:
-```
-PeptideOrderItem {
-    order is reference to one Order required
-}
-```
-
-# From initial Claude.ai:
-
-This is a solid foundation, and there's one idea buried in your notes that I think is the actual breakthrough worth building the whole language around. Let me work through it, then sketch what the language could look like.
-
-## The strongest idea: conditions are shapes
-
-You wrote "a condition is a shape that can be associated with another shape." Taken seriously, this means conditions become **named refinements** — subsets of a shape defined by a predicate:
-
-```
-shape Invoice {
-  customer: one Customer
-  amount:   Money
-  due:      Date
-  paid_on:  Date?
-}
-
-shape OverdueInvoice = Invoice where paid_on is none and due < today
-shape SettledInvoice = Invoice where paid_on is some
-```
-
-Now `if/else` disappears not by hiding it, but by inverting it. Instead of "if overdue, do X, else Y," you attach rules to the refined shapes:
-
-```
-rule LateFee on OverdueInvoice {
-  fee = amount * 5%
-}
-```
-
-And here's the payoff that no amount of nested `if` gives you: **the compiler can check exhaustiveness and overlap**. It can prove your refinements partition `Invoice` completely (no unhandled case), or warn that two rules both claim the same invoice. Branching logic becomes something the type system audits, rather than something a human traces through indentation. That's a real, demonstrable advantage — I'd make it the demo that sells the language.
-
-## Tighten the ontology
-
-Right now a shape is "an object, function, or relationship" — three very different things, which will make the semantics mushy. I'd propose a smaller core:
-
-- **Shape** — a typed record (your nouns)
-- **Relationship** — a typed, named edge between shapes, with cardinality (`one`, `many`, `optional`), and crucially, relationships can carry conditions and properties themselves
-- **Rule** — a top-level derivation or constraint attached to a shape or relationship
-- **Mapping** — a first-class construct for shape-to-shape translation
-
-Mapping deserves its own keyword because, as you note, it's where most real code lives:
-
-```
-mapping InvoiceFromApi: api.InvoiceDto -> Invoice {
-  amount   <- dto.total_cents as Money(cents)
-  due      <- dto.due_date
-  customer <- Customer with id = dto.customer_id
-}
-```
-
-The compiler checks *totality*: every required field of the target is produced, every source field is either used or explicitly ignored. A whole category of integration bugs becomes a compile error.
-
-Loops then fall out for free — iteration is just a rule quantified over a collection, the way SQL quantifies over rows:
-
-```
-derive MonthlyStatement for each Customer {
-  total = sum(invoices where issued in current_month, amount)
-}
-```
-
-## Prior art worth mining
-
-You're in good company, which is encouraging — this space has real lessons:
-
-**Eve** (Chris Granger's project) is the closest ancestor: records plus reactive top-level rules. It died mostly on tooling and unclear audience, not on the idea. **Alloy** proves that "shapes + relationships + constraints" can be checked mechanically — steal its relational logic. **CUE** treats types and values as one lattice, which is exactly what "conditions are shapes" implies. **Datalog** gives you the cleanest semantics for derivation rules. And **SQL** is the existence proof that ordinary developers happily write declarative logic over shapes — when the domain is scoped tightly.
-
-## Three hard problems you'll need answers for
-
-First, **effects and sequence**. Data, conditions, loops, and calculations describe the static world, but systems *do* things: "when payment arrives, mark invoice paid, then email a receipt." Pure declaration struggles with "then." My suggestion: declarative event rules (`when PaymentReceived on Invoice ...`) plus explicit state machines as a shape kind, statechart-style. Don't smuggle imperative code back in through a side door — but do have an answer.
-
-Second, **the escape hatch**. Every real system has 5% that won't fit the paradigm. And this is where your AI insight becomes structural rather than bolted-on: a Velle behavior with no declarative body is a *contract* — signature, conditions, invariants — and the implementation is AI-generated (or hand-written) code that must pass the tests the compiler emits from the spec. Velle stays the source of truth; code becomes a build artifact. That's a genuinely sharp positioning: today AI-assisted development has no verifiable spec layer, just markdown that rots. A compiled, exhaustiveness-checked spec that generates the conformance tests is exactly the missing piece.
-
-Third, **provenance**. Debugging declarative systems means asking "why did this rule fire?" or "why is this value 47?" Plan for a `why` command from day one — Prolog's biggest adoption wound was operational opacity.
-
-## Where I'd start
-
-The pragmatic MVP: a parser and type-checker for shapes, refinements, relationships, and mappings, plus a checker that verifies refinement exhaustiveness — no code generation yet. That alone is a useful tool (a linter for system design), and it forces the semantic questions to get answered early.
-
-One fork in the road determines a lot of the design, though: is Velle ultimately *executable* (compiler emits a running system), or is it a *specification layer* whose output is contracts and tests that constrain AI-generated code? Which of those is the version you're most excited about?
