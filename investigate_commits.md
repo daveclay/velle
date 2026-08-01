@@ -1,29 +1,6 @@
 # Commits, Rules, and Transactions
 
-Consolidated from `investigate_state.md` and `investigate_transactions.md` (merged once their remaining open questions had converged on the same territory: what one commit is, which rules fire as its consequence, and what stands or falls with it). Settled results from both are promoted into `README.md`; the ledger below records what moved where. Open-question tags continue unchanged — OQ numbers are never renumbered or reused, so existing references (`OQ6`, `OQ16`) stay valid.
-
-## Settled — promoted to README
-
-From the state investigation:
-
-- **Single state, commits, last-in-wins substrate** — state is a black box; a commit is the only way it changes; nothing in any computer system provides anything other than last-in-wins at the bottom, so in-place mutation needs no ordering vocabulary → README §4, §12.
-- **Assignment in place** — `=` is positional (rule bodies contain no definitions, shape bodies contain no effects); targets are literal static paths (hard requirement — impact analysis depends on it); targets are stored fields, never derived → §12. (OQ1, OQ2, OQ3 settled.)
-- **One writer per field, per commit** — trigger coincidence checked statically from declarations, fail-closed, whole-spec, one connected diagnostic → §12.
-- **No act-level sugar** — committing an instance *is* persisting the record; a rule exists only when an act has a consequence beyond its own persistence → §12. (OQ4 settled.)
-- **`initially`** — the third property kind; `submittedOn: Date initially now` records commit time as model data → §5. (OQ9 settled.)
-- **Bare boolean atoms** → §10. (OQ10 settled.)
-- **Rules ground in commits** — drift is always commit-mediated, so trigger sets are derived, never enumerated; the unfireable-rule error; the PO-facing "when does this run?" → §11.
-- **The `when`/`on` header** — condition vs. trigger source; entry and exit as commit-local transitions; the tick law (cross-tick memory must be data); transient membership as a per-rule policy visible in the header → §11, §13, §17.
-- **Run-once guards** — needed only for durability across a boundary and cross-tick memory; the canonical refinement form is the only form (no guard sugar); the disarm law; two witness kinds, one analysis; granularity is predicate content → §18. (OQ8, OQ12 — the fate of `produces` — settled.)
-- **Self-referential folds** — three RHS classes; per-hazard structural exposure; fail-closed insensitivity whitelist; four discharges; `tolerates` → §19.
-- **The state-change pattern spectrum** — classification → reconciliation → exactly-once; episodes as data; compiler rung recognition → §20. (OQ11 settled in principle; calibration awaits realistic examples.)
-
-From the transactions investigation:
-
-- **Commit vs. transaction, kept apart** — a commit is one mutation entering the single state; a *transaction* (a descriptive term, never a keyword) is the all-or-nothing envelope around an act's commit and every commit its consequences produce. A rule's body is exactly one commit; a firing's effects are a *new* commit that may match further conditions — there is no call graph → §4, §11.
-- **The one-transaction default, grounded in the transition law** — a transition is not data; a rule reacting to one either fires within the causing commit's transaction or the obligation must first be reified as a guard. Crash windows exist only at transaction boundaries, which is why a plain rule needs no guard → §11, §18.
-- **`after commit`** — boundary by preposition swap; boundaries arise exactly three ways (declared, inherent at schedule sources, forced at external effects); boundary and apparatus are checked against each other both ways (stranding error / dead machinery) → §11, §18.
-- **Order within a transaction is never specified — and must provably not matter** — write-write conflicts are one-writer at transaction scope; read-write conflicts and transition interference complete the check; the backing proofs are open (OQ16) → §11.
+Consolidated from `investigate_state.md` and `investigate_transactions.md` (merged once their remaining open questions had converged on the same territory: what one commit is, which rules fire as its consequence, and what stands or falls with it). Settled results from both are promoted into `README.md`; only what remains open — and the worked notes it leans on — lives here. Open-question tags continue unchanged — OQ numbers are never renumbered or reused, so existing references (`OQ6`, `OQ16`) stay valid.
 
 ## Worked notes
 
@@ -110,10 +87,6 @@ The act lands (the request happened — audit for free: `count(RefusedVoid)`), t
 
 The full product sentence around an `after commit` rule usually includes a retry budget — "retry, but give up after three and tell someone." An attempt count is memory across transactions, so it is data (the tick law): reify each try (`SyncAttempt`), express failure outcomes as refinements (errors-are-refinements), guard the retry on `count(SyncAttempt for this) < 3`, and let a separate rule watch the exhausted state. Hand-written per "No guard sugar" (README §18).
 
-### Liens must see consequences (resolved)
-
-An exit-causing change can arrive as a downstream firing's commit rather than the act itself: a `VoidPayment` names only a payment and a reason, yet its consequence moves the invoice's derived balance from two relationships away. Any construct gating on that movement must *see* the consequence statically — which the compiler's derived trigger sets (README §11) provide. Resolved for immutability: the exit-gate lien construct is gone — the write-gate reformulation `frozen` (README §8, "Frozen fields") makes the check static writer-disjointness plus act partitions, with no unwind at all (`investigate_evidence_policies.md`). What survives of the question is OQ20's residue, below.
-
 ## Open questions
 
 Grouped by theme; tags are historical and unchanged.
@@ -122,7 +95,7 @@ Grouped by theme; tags are historical and unchanged.
 
 #### OQ6. What, exactly, is one commit?
 
-Grown from a footnote into the load-bearing question — commits, state, and guards all meet here. Much is now settled (README §11): a firing's effects are a new commit of its own, sharing the triggering commit's transaction by default (`after commit` declares otherwise); a body is one commit, never partially applied, so `then` orders within it and mutation-plus-witness atomicity holds; a cascade is the triggering transaction's set of commits, with boundaries starting new transactions. What remains:
+Grown from a footnote into the load-bearing question — commits, state, and guards all meet here. The firing/transaction side is settled (README §11); what remains:
 
 - **Is a commit a single act instance?** The one-writer check's "unrelated shapes can never coincide" holds only if two different acts can't enter the state as one commit. Nothing states this anywhere yet. If multi-instance commits exist, "can these triggers coincide?" needs a broader definition than trigger-shape overlap.
 - **Act identity.** A guard cannot dedupe *repeated acts* — two identical `Deposit` commits are two distinct firings, each exactly once (README §19's dependency). Whether acts carry identity, and what would make two commits "the same act," is unstated.
@@ -212,13 +185,13 @@ If a refusal unwinds the act (commit-refusal), what exactly unwinds, what the co
 
 #### OQ20. Is commit-refusal primitive, or derivable from reified refusal?
 
-A full validate-and-reject flow needs no transaction machinery ("Validation rejection is data," above), which raises whether the language needs commit-refusal at all above the type/trust boundary (level 1 of the invalid layering — OQ5's territory, where it's irreducible). The immutability sub-thread is **answered** (`investigate_evidence_policies.md`): a PO's "you can't edit an issued invoice" is a write-gate on a state, not an exit-gate on evidence, and the write-gate — refinement-body `frozen` (README §8, "Frozen fields") — is enforced by static writer-disjointness plus mandated act partitions: no unwind, no runtime refusal. What remains is the residue: does any business case require that a well-shaped act *not enter the state* (compliance/data-retention pressures — "we may not store this request at all")? If so, is that declared per-act-shape or per-boundary (OQ5's who-may-commit declaration being the natural home)?
+A full validate-and-reject flow needs no transaction machinery ("Validation rejection is data," above), and immutability needs no commit-refusal either (`frozen` — README §8, "Frozen fields"; derivation in `investigate_evidence_policies.md`) — which raises whether the language needs commit-refusal at all above the type/trust boundary (level 1 of the invalid layering — OQ5's territory, where it's irreducible). What remains is the residue: does any business case require that a well-shaped act *not enter the state* (compliance/data-retention pressures — "we may not store this request at all")? If so, is that declared per-act-shape or per-boundary (OQ5's who-may-commit declaration being the natural home)?
 
 ### Rule anatomy and guard ergonomics
 
 #### OQ7. Rule anatomy and timing — remaining threads
 
-The core is settled (README §11, §13, §17): the commit/tick dichotomy, entry and exit as commit-local transitions, the tick law, transient membership as per-rule policy, the `when`/`on` header with `on commit` as default. Reliability of commit-triggered firing — once this OQ's sharpest thread — is settled by the transaction model: crash windows exist only at boundaries, so a plain rule needs no guard and `after commit` obligates the apparatus (README §11, §18). Still open:
+The core anatomy — condition, trigger source, entry/exit transitions, the tick law, firing reliability under the transaction model — is settled (README §11, §13, §17, §18). Still open:
 
 - **What an exit rule may read.** README §13 is being re-derived under commit-local transitions; the settled part is the constraint — captured properties retract at the very moment a `when leaving` rule fires, so reading them is a compile error — but the full account of what the body may reference (current data, durable evidence produced during membership) needs its own pass. §13 carries a tentative marker pointing here.
 - **Latency vocabulary** — `on` expresses the evaluation *source*, not latency *requirements*. Is "immediate by default, named schedule otherwise" enough, or do deadlines ("within 24h") deserve first-class expression the compiler validates against declared cadences?

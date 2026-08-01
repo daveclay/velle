@@ -25,7 +25,7 @@ rule SendReceipt when SettledInvoice {
 }
 ```
 
-The declaration lives in exactly one place, and enforcement composes with machinery the language already has: the compiler's derived trigger sets (README §11) statically know every commit — direct or cascaded — that can move any datum `SettledInvoice`'s predicate reads, so the `VoidPayment`-two-hops-away case is caught at compile time ("Liens must see consequences," `investigate_commits.md`). That derivation is the construct's real payoff: the author declares the freeze once, on the evidence; the compiler derives the set of writers it gates, and a writer added next year is gated automatically.
+The declaration lives in exactly one place, and enforcement composes with machinery the language already has: the compiler's derived trigger sets (README §11) statically know every commit — direct or cascaded — that can move any datum `SettledInvoice`'s predicate reads, so the `VoidPayment`-two-hops-away case is caught at compile time. That derivation is the construct's real payoff: the author declares the freeze once, on the evidence; the compiler derives the set of writers it gates, and a writer added next year is gated automatically.
 
 **The tension.** `forbidden` is the *only* construct in the language that rejects a commit. Everything else treats "invalid" as data — the `ApplicableVoid`/`RefusedVoid` partition lands the act, skips the consequence, and records a refusal fact (`investigate_commits.md`, "Validation rejection is data"). `forbidden` instead unwinds a transaction, opening questions nothing else needed answered: what exactly unwinds, what the committer is told, whether rejection can be partial (OQ17), and whether commit-refusal is primitive at all or derivable from reified refusal (OQ20). The hand-written alternative — Applicable/Refused partitions on every act shape that could cause the exit — is expressible today, but requires the author to *enumerate* the exit-causing acts, which is exactly the knowledge the derived trigger sets hold and the human doesn't. The lien inverts that. This is why `forbidden` is more than sugar: dropping it doesn't reduce to spelled-out machinery, it reduces to machinery the author can't reliably spell.
 
@@ -182,7 +182,7 @@ The earlier irreducibility verdict fails on both of its legs. The enumeration ar
 
 The exit-gate residue — "reject any change that would falsify predicate P" as opposed to "reject writes to these fields" — is value-dependent, needs runtime evaluation, and no PO sentence demands it: POs freeze *things*, not truth values. The compiler knows P's read-set anyway (impact analysis read backward), so where an author reaches for predicate-protection, the diagnostic can propose the field list.
 
-**Decision: `forbidden` retires; `frozen` is the spelling.** Its natural long-term home is the `states of` partition (README §21) — "editable in Draft, frozen in Issued" as one declaration per state alongside legal transitions — and the refinement-body spelling migrates in without conflict when partitions get designed, since a partition is a set of refinements. Pending: README §13 rewrite (remove the policy clause, document `frozen`), and `frozen`'s entry in the README proper.
+**Decision: `forbidden` retires; `frozen` is the spelling.** Its natural long-term home is the `states of` partition (README §21) — "editable in Draft, frozen in Issued" as one declaration per state alongside legal transitions — and the refinement-body spelling migrates in without conflict when partitions get designed, since a partition is a set of refinements.
 
 ## Where that leaves them
 
@@ -196,10 +196,9 @@ Both keywords dissolve, and the policy-clause construct dissolves with them — 
 
 **`stands`** — with `compensate` retired and `forbidden` moved into refinement bodies, there is no policy clause left for `stands` to attach to. It was always the behavior of silence, and the `compensate` analysis already established that silence is legitimate (the bare ledger is complete and correct as written). The keyword names nothing and goes with the clause; the §21 undeclared-policy question ("default `stands`, or compile error?") dissolves rather than resolves — there is no declaration to omit.
 
-## Open questions touched (no new numbers)
+## What remains open (no new numbers; open threads live in `investigate_commits.md`)
 
-- **OQ7** — `compensate`'s desugaring-or-retirement thread is **resolved: retired**, with the evidence-subject guarded entry rule documented as the pattern (README §13, "Compensation is a pattern, not a keyword"). Still open there: whether an undeclared policy is `stands` or a compile error; the rest of §13's re-derivation under commit-local transitions — noting the re-derivation narrows `when leaving`'s necessary territory to evidence-free reactions.
-- **OQ17** — for the immutability use case, resolved by dissolution: `frozen` unwinds nothing, so there is no rejection whose scope needs defining. The question survives only for whatever genuinely commit-refusing residue OQ20 delimits.
+- **OQ7** — the rest of §13's re-derivation under commit-local transitions (what an exit rule may read), with `when leaving`'s necessary territory narrowed by this file to evidence-free reactions.
 - **OQ18** — whether mid-cascade external-effect failure may reuse the compensation pattern, or needs its own policy.
-- **OQ20** — the `forbidden` sub-thread is answered: it desugars not to derived gates plus an unwind but to static writer-disjointness plus act partitions — commit-refusal is not needed for immutability at all. What remains of OQ20 is its own residue: whether any business case requires that a well-shaped act *not enter the state* (the compliance/data-retention "we may not store this request" cases).
-- **New follow-ups created by `frozen`** (homes, not new OQs): the README §13 rewrite (drop the policy clause, document `frozen`); `frozen`'s interaction with the `states of` partition declaration when that gets designed (§21 — per-state write permissions beside legal transitions, and the field-frozen-in-every-state diagnostic).
+- **OQ20** — whether any business case requires that a well-shaped act *not enter the state* (the compliance/data-retention "we may not store this request" cases).
+- **`frozen` × `states of`** (a home, not a new OQ) — the interaction with the partition declaration when that gets designed (README §21 — per-state write permissions beside legal transitions, and the field-frozen-in-every-state diagnostic).
