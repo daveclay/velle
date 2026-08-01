@@ -6,8 +6,7 @@ The language's open questions. Settled results are promoted into `README.md` as 
 
 - **OQ21 — Record identity.** Does an instance have identity beyond its stored values? What makes a retry "the same act"?
 - **OQ16 — Order must not matter.** Can the compiler prove sibling firings commute, and that a transaction quiesces?
-- **OQ18 — External effects mid-cascade.** What does a consequence chain do when the call succeeded but a later firing failed?
-- **OQ19 — Boundary grammar and policy residue.** Mixed-list grammar, tick granularity, nesting, `tolerates loss`, `never` invariants, legibility.
+- **OQ19 — Boundary grammar and policy residue.** Mixed-list grammar, nesting, `tolerates loss`, `never` invariants, legibility.
 
 **The input boundary**
 
@@ -19,7 +18,7 @@ The language's open questions. Settled results are promoted into `README.md` as 
 **Rule anatomy and guard ergonomics**
 
 - **OQ7 — Rule anatomy, remaining threads.** What an exit rule may read; latency vocabulary; `on commit of <Shape>` narrowing.
-- **OQ13 — The `each`/multi-schedule pass.** Does the disarm proof extend to `each` bodies and multi-cadence `on` lists?
+- **OQ13 — The `each`/multi-schedule pass.** Does the disarm proof extend to `each` bodies and multi-cadence `on` lists — and is an `each` iteration its own transaction?
 - **OQ14 — Diagnostic-led guard adoption.** Is the canonical guard form pleasant enough for a compiler diagnostic to demand?
 - **OQ15 — Ordered folds and batch ordering.** No honest discharge yet exists for a batched order-dependent fold.
 
@@ -27,7 +26,7 @@ The language's open questions. Settled results are promoted into `README.md` as 
 
 ### OQ21. Record identity
 
-Spun out of OQ6 when the rest of it settled: a commit is exactly **one act instance** — an author who wants several things to arrive together declares a container shape and commits that single instance, with the parts as related shapes (README §4) — which keeps "can these triggers coincide?" answerable from trigger-shape overlap alone (the one-writer check, README §12). What the settlement exposes is identity: a guard cannot dedupe *repeated acts* — two identical `Deposit` commits are two distinct instances and two firings, each exactly once (README §19's dependency). Nothing yet says what identifies a record: whether an instance has identity beyond its stored values, whether two indistinguishable instances are one fact or two, and what would make an external submitter's retry "the same act" rather than a new one (an idempotency key as ordinary data the author declares, or something the language owes). Ties into occurrence ordering/reification (README §21, "Exit from act-entered refinements").
+Spun out of OQ6 when the rest of it settled: a commit is exactly **one act instance** — an author who wants several things to arrive together declares a container shape and commits that single instance, with the parts as related shapes (README §4) — which keeps "can these triggers coincide?" answerable from trigger-shape overlap alone (the one-writer check, README §12). What the settlement exposes is identity: a guard cannot dedupe *repeated acts* — two identical `Deposit` commits are two distinct instances and two firings, each exactly once (README §19's dependency). Nothing yet says what identifies a record: whether an instance has identity beyond its stored values, whether two indistinguishable instances are one fact or two, and what would make an external submitter's retry "the same act" rather than a new one (an idempotency key as ordinary data the author declares, or something the language owes). The same question reaches outward at reconciliation: the intent-before-effect pattern (README §11, "Transactions and `after commit`") resolves an unresolved external-effect intent by asking the processor what became of it — which means recognizing *our* attempt among the processor's records, an identity the data must carry. Ties into occurrence ordering/reification (README §21, "Exit from act-entered refinements").
 
 ### OQ16. Order must not matter — can the compiler prove it?
 
@@ -58,14 +57,9 @@ The check decomposes along familiar lines: **write-write** conflicts — two sib
 - **The analysis itself.** Commutativity/confluence checking is charted territory — term rewriting's critical pairs and Newman's lemma (local confluence + termination ⇒ confluence, which ties this proof to quiescence below), CHR confluence tests, Datalog evaluation strategies. What Velle's version is — and how coarse it can be before it rejects legitimate specs — is the work. Fail-closed is given (uncertainty errors, README §12's stance); calibration is not.
 - **Quiescence.** A transaction completes when no rule's condition is newly matched — it must quiesce, and Newman's lemma needs termination for confluence to follow from local checks. Cycles in the static condition graph are detectable (derived trigger sets), but convergence can be value-dependent (a deposit rule producing deposits) — undecidable in general. The folds precedent (README §19) applies: prove quiescence structurally (a DAG, or cycles broken by disarming guards), fail closed on the rest. Whether the disarm proof suffices is unexamined.
 
-### OQ18. External effects mid-cascade
-
-When the call succeeds and a later commit's firing fails (or the reverse), the witness records what happened — but what does the rest of the consequence chain do: halt and self-heal via backstop, compensate via the evidence-subject pattern (README §13, "The compensation pattern"), or refuse to compile without a declared policy? (The cascade example in the appendix shows the chain in question.)
-
 ### OQ19. Boundary grammar and policy residue
 
 - **Mixed-list grammar** — does `after commit, Hourly` read its preposition per-entry, or does the clause split (`after commit on Hourly`)?
-- **Tick granularity** — do all rules fired at one tick share the tick's transaction, or does each firing (or each `each` iteration) get its own? The granularity half of OQ13's pass.
 - **Nesting** — an `after commit` rule's consequences share *its* transaction by default, so a cascade is a tree of transactions, each rooted at a declared, inherent, or forced boundary. Consequences unexplored.
 - **`tolerates loss`** — the fire-and-forget escape for external effects (an analytics ping the PO shrugs about); extending the `tolerates` vocabulary beyond fold hazards (README §19) is unexamined.
 - **`never` invariants** — a spec-level declaration over refinement combinations (`never (Account where balance >= 0 and suspended)`) as *verification* of chosen boundaries: the compiler proves the written boundaries honor the stated observable-state fact. Independently valuable, README §1's consistency-checker category; where it lives is undecided.
@@ -140,7 +134,7 @@ rule SendReminder on Daily {
 }
 ```
 
-No conclusions yet; needs worked examples. (The transaction-granularity half — whether one tick's firings share a transaction — is OQ19.)
+No conclusions yet; needs worked examples. Rule-level transaction granularity is settled — each firing at a tick is its own transaction (README §17) — but whether each `each` *iteration* is likewise its own transaction is part of this pass: per-iteration guards (README §16) pull toward per-iteration transactions (one member's failure shouldn't unwind the rest of the sweep), while a body being "exactly one commit" pulls the other way.
 
 ### OQ14. Diagnostic-led guard adoption
 
@@ -156,7 +150,7 @@ Supporting examples the questions above lean on, not carried in the README.
 
 ### A cascade, concretely
 
-*Context for OQ16 (sibling firing order), OQ18 (a failure mid-chain), and OQ19 (nesting) — the transaction shape those questions reason about.*
+*Context for OQ16 (sibling firing order) and OQ19 (nesting) — the transaction shape those questions reason about.*
 
 ```
 shape Account {
@@ -237,8 +231,3 @@ rule RecordRefusal when RefusedVoid {
 
 The act lands (the request happened — audit for free: `count(RefusedVoid)`), the consequence never fires for the refused subset, the refusal lands as a fact the caller reads back (delivery is compilation's job). `ApplicableVoid`/`RefusedVoid` partition `VoidPayment`, exhaustiveness-checked — the forgotten `catch` block becomes a compile-time uncovered-subset error. Three levels of "invalid," only the first pre-commit: **(1)** can't inhabit the shape's type at all — rejected below the language, at the trust/input boundary (OQ5); **(2)** well-shaped, business-invalid — rejection-as-data, above; **(3)** well-shaped, valid, consequence forbidden — resolved as the `frozen` write-gate (README §8, "Frozen fields"; OQ20 holds the residue).
 
-### Retry budgets are data
-
-*Context for OQ18 — what the declared-policy option would have to compose with.*
-
-The full product sentence around an `after commit` rule usually includes a retry budget — "retry, but give up after three and tell someone." An attempt count is memory across transactions, so it is data (the tick law): reify each try (`SyncAttempt`), express failure outcomes as refinements (errors-are-refinements), guard the retry on `count(SyncAttempt for this) < 3`, and let a separate rule watch the exhausted state. Hand-written per "No guard sugar" (README §18).
