@@ -4,14 +4,12 @@ The language's open questions. Settled results are promoted into `README.md` as 
 
 **What one commit is**
 
-- **OQ21 — Record identity.** Does an instance have identity beyond its stored values? What makes a retry "the same act"?
 - **OQ16 — Order must not matter.** Can the compiler prove sibling firings commute, and that a transaction quiesces?
-- **OQ19 — Boundary grammar and policy residue.** Mixed-list grammar, nesting, `tolerates loss`, `never` invariants, legibility.
+- **OQ19 — Boundary grammar and policy residue.** Nesting, `tolerates loss`, `never` invariants, legibility.
 
 **The input boundary**
 
-- **OQ5 — Marking a shape as "external input".** Who may commit a shape; which fields the committer supplies vs. which are internal.
-- **OQ22 — Declaring commit metadata.** A spelling for `createdAt`/`updatedAt` as readable-never-writable facts of the commit trace.
+- **OQ5 — Marking a shape as "external input".** Who may commit a shape; which fields the committer supplies vs. which are internal — including supplied `id`s at trust/legacy boundaries.
 - **OQ17 — Rejection scope.** If a refusal unwinds the act, what exactly unwinds and what is the committer told?
 - **OQ20 — Is commit-refusal primitive?** Does any business case require that a well-shaped act not enter the state at all?
 
@@ -23,10 +21,6 @@ The language's open questions. Settled results are promoted into `README.md` as 
 - **OQ15 — Ordered folds and batch ordering.** No honest discharge yet exists for a batched order-dependent fold.
 
 ## What one commit is
-
-### OQ21. Record identity
-
-Spun out of OQ6 when the rest of it settled: a commit is exactly **one act instance** — an author who wants several things to arrive together declares a container shape and commits that single instance, with the parts as related shapes (README §4) — which keeps "can these triggers coincide?" answerable from trigger-shape overlap alone (the one-writer check, README §12). What the settlement exposes is identity: a guard cannot dedupe *repeated acts* — two identical `Deposit` commits are two distinct instances and two firings, each exactly once (README §19's dependency). Nothing yet says what identifies a record: whether an instance has identity beyond its stored values, whether two indistinguishable instances are one fact or two, and what would make an external submitter's retry "the same act" rather than a new one (an idempotency key as ordinary data the author declares, or something the language owes). The same question reaches outward at reconciliation: the intent-before-effect pattern (README §11, "Transactions and `after commit`") resolves an unresolved external-effect intent by asking the processor what became of it — which means recognizing *our* attempt among the processor's records, an identity the data must carry. Ties into occurrence ordering/reification (README §21, "Exit from act-entered refinements").
 
 ### OQ16. Order must not matter — can the compiler prove it?
 
@@ -59,7 +53,6 @@ The check decomposes along familiar lines: **write-write** conflicts — two sib
 
 ### OQ19. Boundary grammar and policy residue
 
-- **Mixed-list grammar** — does `after commit, Hourly` read its preposition per-entry, or does the clause split (`after commit on Hourly`)?
 - **Nesting** — an `after commit` rule's consequences share *its* transaction by default, so a cascade is a tree of transactions, each rooted at a declared, inherent, or forced boundary. Consequences unexplored.
 - **`tolerates loss`** — the fire-and-forget escape for external effects (an analytics ping the PO shrugs about); extending the `tolerates` vocabulary beyond fold hazards (README §19) is unexamined.
 - **`never` invariants** — a spec-level declaration over refinement combinations (`never (Account where balance >= 0 and suspended)`) as *verification* of chosen boundaries: the compiler proves the written boundaries honor the stated observable-state fact. Independently valuable, README §1's consistency-checker category; where it lives is undecided.
@@ -90,18 +83,11 @@ shape Review {
 }
 ```
 
-Committing a `Review` *is* saving the record — persistence needs no rule (README §12, "No act-level sugar"). What remains of the use case is the timestamps: `createdAt`/`updatedAt` are commit metadata, not author-maintained fields — declaring them is its own question (OQ22, below). Where the author wants a timestamp *as model data* — business rules over `submittedOn` — the spelling is `submittedOn: Date initially now` (README §5); what remains for this OQ is whether such a field can be marked internal (not committer-suppliable).
+Committing a `Review` *is* saving the record — persistence needs no rule (README §12, "No act-level sugar"). What remains of the use case is the timestamps: `createdAt`/`updatedAt` are commit metadata, declared as `timestamp on create` / `on update` fields (README §5) — inherently never committer-suppliable. Where the author wants a timestamp *as model data* — business rules over `submittedOn`, correctable later — the spelling is `submittedOn: Date initially now` (README §5); what remains for this OQ is whether such an ordinary field can be marked internal (not committer-suppliable), the way `timestamp` fields inherently are.
 
-So the boundary declaration this OQ contemplates has three parts: **(1)** who may commit the shape, **(2)** which fields the committer supplies vs. which are internal (an `initially` field is the natural candidate), and **(3)** what commit metadata is readable in predicates and derivations (→ OQ22).
+So the boundary declaration this OQ contemplates has three parts: **(1)** who may commit the shape, **(2)** which fields the committer supplies vs. which are internal (an `initially` field is the natural candidate), and **(3)** what commit metadata is readable in predicates and derivations — answered for timestamps (`timestamp` fields, README §5); whether the commit trace is queryable beyond them rides with `why`/provenance (README §21).
 
-### OQ22. Declaring commit metadata (`createdAt`/`updatedAt`)
-
-Spun out of OQ6. Every change to a record traces to a commit ("a system never does anything on its own"), so *when an instance was created* and *when it last changed* are already facts of the commit trace — and neither should be an author-maintained field:
-
-- `createdAt` can't be client-supplied (trust) and can't be `= now` (shape-body `=` is a live derivation — it would change constantly). It's a fact *about the commit*, not about the data.
-- `updatedAt` maintained by hand would mean every rule that assigns any field of the shape also assigns `updatedAt = now` — boilerplate that lies the first time a rule forgets it (though one-writer at least forces the writers' triggers disjoint).
-
-Author-maintained timestamp fields are a workaround from systems where the commit log isn't first-class; in Velle they should be **readable, never writable**. Needed: a way to declare them in a shape — a marker for a property that reads commit metadata, a fourth kind alongside stored, derived, and `initially`. Open: the spelling; which metadata exists (creation commit, last-write commit — whole-instance or per-field); and whether the commit trace is queryable in predicates and derivations beyond these (the trace `why` and impact analysis walk).
+Folded in from OQ21 (retired): **supplied vs. generated `id`.** By default the implementation generates an instance's `id` (README §5); at a trust/legacy boundary it is explicitly supplied — a legacy table's primary key, an upstream system's reference. Who may supply one, and when supplying is required, is part (2)'s declaration; the mapping-side mechanics belong to the Mapping item (TODO.md).
 
 ### OQ17. Rejection scope
 
@@ -123,18 +109,38 @@ The core anatomy — condition, trigger source, entry/exit transitions, the tick
 
 ### OQ13. The `each`/multi-schedule pass
 
-Whether the disarm proof extends cleanly beyond the simple rule shape it was settled on. Two directions to check: multi-cadence `on` lists (`ApplyDeposit ... after commit, Hourly` — the disarm proof must hold under every trigger source for the durability backstop to be safe), and `each` bodies, where the guard predicate lives inside the selector, so the proof obligation is per iterated instance, not per rule firing:
+Whether the disarm proof extends cleanly beyond the simple rule shape it was settled on, and what transaction envelope an `each` body gets. Two halves: multi-cadence `on` lists (`ApplyDeposit ... after commit, Hourly` — the disarm proof must hold under every trigger source for the durability backstop to be safe), and `each` bodies. Both show up in the two spellings of "remind overdue invoices, at most every 3 days":
 
 ```
-rule SendReminder on Daily {
-    each (OverdueInvoice where
-          not exists (Reminder where invoice == this and sentOn > today - 3 days)) {
+shape InvoiceNeedingReminder = OverdueInvoice where
+    not exists (Reminder where invoice == this and sentOn > today - 3 days)
+
+-- spelling A: entry observation — one firing per invoice that ENTERS the
+-- refinement at the tick (a commit-local transition, README §11); each
+-- firing is its own transaction (README §17)
+rule RemindOnEntry when InvoiceNeedingReminder on Daily {
+    Reminder from { invoice: this, sentOn: today }
+}
+
+-- spelling B: member quantification — the body applies to every CURRENT
+-- member at the tick, however membership arose (README §16); the guard is
+-- the refinement's own predicate, per iterated instance
+rule SweepReminders on Daily {
+    each InvoiceNeedingReminder {
         Reminder from { invoice: this, sentOn: today }
     }
 }
 ```
 
-No conclusions yet; needs worked examples. Rule-level transaction granularity is settled — each firing at a tick is its own transaction (README §17) — but whether each `each` *iteration* is likewise its own transaction is part of this pass: per-iteration guards (README §16) pull toward per-iteration transactions (one member's failure shouldn't unwind the rest of the sweep), while a body being "exactly one commit" pulls the other way.
+**Where they agree — the happy path.** Invoice #7 ages past due overnight: at Monday's tick, `due < today` flips, so #7 *enters* `InvoiceNeedingReminder` at the tick commit. A fires (it's an entrant); B fires (it's a member). The `Reminder` lands; both spellings go quiet until Thursday's tick, when `sentOn > today - 3 days` flips false and #7 re-enters — both fire again. Every clause of this predicate flips at day boundaries, so entrants and members coincide as long as nothing goes wrong.
+
+**Divergence 1 — entry at a non-tick commit.** Invoice #8 is committed at 2pm already past due (a migration, a backdated import). It enters the refinement *at that commit*. A's only trigger source is `Daily`, so the 2pm entry is unobserved — and at the next tick #8 is already a member in pre-state: no transition, no firing, stranded forever. (Adding the source back — `when InvoiceNeedingReminder on commit, Daily`, the distributive list, README §17 — closes this hole.) B doesn't care: at the next tick #8 is a member, so the body runs.
+
+**Divergence 2 — a lost firing.** Monday's firing for #7 fails; its transaction rolls back, so no `Reminder` landed. #7 never left the refinement — and therefore never re-enters it. A can never fire for #7 again: the transition it reacts to already happened and won't recur. B heals at Tuesday's tick: #7 is still a member, the body runs. This is what makes B the reconciliation form — it re-derives the work-list from current state, indifferent to history.
+
+**The open case — the poison member.** Ten thousand members at Monday's tick, and the iteration for #6,204 fails. If the whole `each` body is one transaction ("a body is exactly one commit"), everything unwinds — the 9,999 good reminders included — and the same thing happens at every future tick: the sweep never converges. If each iteration is its own transaction, 9,999 reminders stand and disarm their guards, and Tuesday's sweep retries only #6,204. The per-iteration reading requires exactly this pass's proof: the disarm obligation must hold *per iterated instance*, so a partially-completed sweep is provably safe to resume.
+
+**Where the analysis points.** Ruling iterations as per-iteration transactions makes `each` effectively "one firing per current member," converging the two spellings into a clean pair — `when` fires per *transition*, `each` fires per *member*, both with per-subject transactions — with the poison member as the argument. Not yet ruled; the disarm-per-iteration proof is what would make it sound.
 
 ### OQ14. Diagnostic-led guard adoption
 
@@ -142,7 +148,7 @@ Fold enforcement (README §19) means the compiler will be *proposing* guards to 
 
 ### OQ15. Ordered folds and batch ordering
 
-Exposed by the fold analysis (README §19): a batched order-dependent fold (a nightly streak sweep) owes a reordering obligation with no honest discharge — declared tolerance is wrong for a streak, and the two missing spellings are both grammar, not analysis: an ordering clause giving a tick-cadence batch a defined iteration order (`ordered by`?), and ordered folds in the derivation grammar (which would let a streak be a derivation over ordered history, dissolving the mutation entirely — README §21's derived-value grammar and `latest`-ordering items are adjacent). Until one exists, commit-cadence is the only fully-served spelling for order-dependent folds.
+Exposed by the fold analysis (README §19): a batched order-dependent fold (a nightly streak sweep) owes a reordering obligation with no honest discharge — declared tolerance is wrong for a streak, and the two missing spellings are both grammar, not analysis: an ordering clause giving a tick-cadence batch a defined iteration order (`ordered by`?), and ordered folds in the derivation grammar (which would let a streak be a derivation over ordered history, dissolving the mutation entirely — README §21's derived-value grammar and selector-syntax items are adjacent). Until one exists, commit-cadence is the only fully-served spelling for order-dependent folds.
 
 ## Appendix: worked notes
 
