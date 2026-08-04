@@ -1,6 +1,6 @@
 # Open Questions
 
-The language's open questions. Settled results are promoted into `README.md` as they land; supporting examples the questions lean on are collected in the appendix at the bottom. OQ tags are stable — numbers are never renumbered or reused, so existing references (`OQ5`, `OQ16`) stay valid, and gaps in the sequence are questions already settled.
+The language's open questions. Settled results are promoted into `README.md` as they land; supporting examples the questions lean on are collected in the appendix at the bottom. OQ tags are stable — numbers are never renumbered or reused, so existing references (`OQ7`, `OQ16`) stay valid, and gaps in the sequence are questions already settled.
 
 **What one commit is**
 
@@ -8,9 +8,8 @@ The language's open questions. Settled results are promoted into `README.md` as 
 
 **The input boundary**
 
-- **OQ5 — Marking a shape as "external input".** Spelling adopted: `expose <Shape> using <configured mechanism>`, over plugins wired into transpilation. Remaining: committer-supplied vs. internal fields (including supplied `id`s at trust/legacy boundaries), and who-may-commit beyond mechanism.
 - **OQ17 — Rejection scope.** If a refusal unwinds the act, what exactly unwinds and what is the committer told?
-- **OQ20 — Is commit-refusal primitive?** Largely answered: refusal is compiled boundary code sourced from `never` (README §21). Remaining: refusal conditions not expressible over the act's own data (caller identity, ambient policy) — OQ5's who-may-commit territory.
+- **OQ20 — Is commit-refusal primitive?** Largely answered: refusal is compiled boundary code sourced from `never` (README §21). Remaining: refusal conditions not expressible over the act's own data (caller identity, ambient policy) — who-may-commit territory at the `expose` boundary (README §22, "External input mechanisms").
 
 **Rule anatomy and guard ergonomics**
 
@@ -81,63 +80,13 @@ The check decomposes along familiar lines: **write-write** conflicts — two sib
 
 ## The input boundary
 
-### OQ5. Marking a shape as "external input"
-
-Mutation shapes arrive from outside the system — a user action, an API call — and nothing in a shape's own declaration says so:
-
-```
-shape CorrectEmail {        -- committed by whom? a user? another rule? an API?
-    customer: one Customer
-    corrected: text
-}
-```
-
-**Direction adopted: `expose <Shape> using <configured mechanism>`.** Velle deliberately implements no transport — REST endpoints, GraphQL, socket connections to a message bus are traditional-code territory, and the variety of mechanisms external data arrives on is open-ended. Velle doesn't compete with traditional languages there; what it owns is the **contract** between the spec's higher-level abstractions and the shape of the transpiled code. An external mechanism is a **plugin** — traditional code wired into the transpilation step — configured and named once, then referenced per shape:
-
-```
-configure DefaultRestAPI using REST {
-    ... "REST" plugin config
-}
-
-shape CorrectEmail { ... }
-expose CorrectEmail using DefaultRestAPI
-```
-
-A shorthand collapses the two declarations when a shape is exposed at its own declaration site:
-
-```
-expose shape CorrectEmail { ... } using DefaultRestAPI
-```
-
-This is inline combination of two declarations, not the sugar README §12 ("No act-level sugar") rejects — no positional invariant is spent and no decision is hidden; the standalone form remains for exposing an already-declared shape (a second mechanism, or an exposure declared elsewhere in the spec).
-
-The declaration is the marking this OQ contemplates: an exposed shape is externally committable through the named mechanism; an unexposed shape is internal — an instance can enter the state only as a rule firing's effect. Consequences fall out immediately: the trust boundary is exactly the set of `expose` declarations, so input-constrained `never` guardrails (README §21) get a concrete compilation target — the generated surface at each expose site; and reachability sharpens — an act shape with no `expose` and no producing rule is uncommittable, so a rule triggered by it is the unfireable-rule error (README §11).
-
-Plugin details are deliberately deferred: the `configure` vocabulary, the plugin API, what the generated surface looks like per mechanism. Also unaddressed: whether `expose` also names the *read* surface (querying a shape over the same mechanism) or is strictly about input.
-
-**The anchor use case** — an externally-submitted shape saved whole as a record, with `createdAt`/`updatedAt`:
-
-```
-shape Review {
-    product: one Product
-    stars: Number
-    body: text
-}
-```
-
-Committing a `Review` *is* saving the record — persistence needs no rule (README §12, "No act-level sugar"). What remains of the use case is the timestamps: `createdAt`/`updatedAt` are commit metadata, declared as `timestamp on create` / `on update` fields (README §5) — inherently never committer-suppliable. Where the author wants a timestamp *as model data* — business rules over `submittedOn`, correctable later — the spelling is `submittedOn: Date initially now` (README §5); what remains for this OQ is whether such an ordinary field can be marked internal (not committer-suppliable), the way `timestamp` fields inherently are.
-
-What remains of the original three-part boundary declaration under the adopted spelling: **(1)** who may commit — `expose` answers the mechanism half; the caller-identity/ambient-policy/rate half (OQ20's residue) presumably attaches at the expose site or its configuration, and is not designed. **(2)** which fields the committer supplies vs. which are internal (an `initially` field is the natural candidate for internal) — whether this is per-exposure policy (a body on `expose`) or a shape-side declaration is open. **(3)** what commit metadata is readable in predicates and derivations — answered for timestamps (`timestamp` fields, README §5); whether the commit trace is queryable beyond them rides with `why`/provenance (README §22).
-
-Folded in from OQ21 (retired): **supplied vs. generated `id`.** By default the implementation generates an instance's `id` (README §5); at a trust/legacy boundary it is explicitly supplied — a legacy table's primary key, an upstream system's reference. Who may supply one, and when supplying is required, is part (2)'s declaration; the mapping-side mechanics belong to the Mapping item (TODO.md).
-
 ### OQ17. Rejection scope
 
 If a refusal unwinds the act (commit-refusal), what exactly unwinds, what the committer is told, and whether rejection can be partial ("accept the deposit, refuse only the tier change") — declarable policy or always incoherent? Reified refusal ("Validation rejection is data," in the appendix) dissolves most of this — nothing unwinds and "what the committer is told" is a shape — leaving only the genuinely commit-refusing subset, which OQ20 delimits.
 
 ### OQ20. Is commit-refusal primitive, or derivable from reified refusal?
 
-A full validate-and-reject flow needs no transaction machinery ("Validation rejection is data," in the appendix), and immutability needs no commit-refusal either (`frozen` — README §8, "Frozen fields"). The `never` adoption largely answered what remained (README §21): well-shaped acts that *must not enter the state* do exist — invariant-violating ones — and their refusal is **derived boundary code**, compiled from `never` declarations, landing below the language alongside can't-inhabit-the-type. Commit-refusal is not a language primitive. The compliance/data-retention case ("we may not store this request at all") is covered wherever the refusal condition is a predicate over the act's own data — that's just a `never` over the act shape, guardrail included. What remains is narrow: refusal conditions *not* expressible as predicates over the act's data — caller identity, ambient policy, rate — which is exactly OQ5's who-may-commit declaration. This OQ is likely retired into OQ5 once that declaration is designed.
+A full validate-and-reject flow needs no transaction machinery ("Validation rejection is data," in the appendix), and immutability needs no commit-refusal either (`frozen` — README §8, "Frozen fields"). The `never` adoption largely answered what remained (README §21): well-shaped acts that *must not enter the state* do exist — invariant-violating ones — and their refusal is **derived boundary code**, compiled from `never` declarations, landing below the language alongside can't-inhabit-the-type. Commit-refusal is not a language primitive. The compliance/data-retention case ("we may not store this request at all") is covered wherever the refusal condition is a predicate over the act's own data — that's just a `never` over the act shape, guardrail included. What remains is narrow: refusal conditions *not* expressible as predicates over the act's data — caller identity, ambient policy, rate — which is who-may-commit territory at the `expose` boundary; OQ5's resolution places it at the expose site or its configuration (README §22, "External input mechanisms"). This OQ is likely retired into that construct's design once who-may-commit is designed.
 
 ## Rule anatomy and guard ergonomics
 
@@ -155,7 +104,31 @@ Fold enforcement (README §19) means the compiler will be *proposing* guards to 
 
 ### OQ15. Ordered folds and firing order at a tick
 
-Exposed by the fold analysis (README §19): a tick-cadence order-dependent fold (a nightly streak sweep) owes a reordering obligation with no honest discharge — the pending records fire separately at the tick with no defined order among the firings (README §16), declared tolerance is wrong for a streak, and the two missing spellings are both grammar, not analysis: an ordering clause giving one tick's firings a defined order (`ordered by`?), and ordered folds in the derivation grammar (which would let a streak be a derivation over ordered history, dissolving the mutation entirely — README §22's derived-value grammar and selector-syntax items are adjacent). Until one exists, commit-cadence is the only fully-served spelling for order-dependent folds.
+Exposed by the fold analysis (README §19): a tick-cadence order-dependent fold owes a reordering obligation with no honest discharge. Concretely — a nightly streak sweep that passes every settled check:
+
+```
+shape Account {
+    streak: integer initially 0
+}
+
+shape Payment {
+    account: one Account
+    onTime: boolean
+    receivedOn: timestamp on create
+    folded: boolean initially false
+}
+
+shape UnfoldedPayment = Payment where not folded
+
+rule TrackStreak when UnfoldedPayment on Nightly {
+    account.streak = if onTime then account.streak + 1 else 0
+    this.folded = true
+}
+```
+
+`streak` has one writer, the disarm proof holds (`folded` falsifies the trigger), and the guard discharges duplication — a crashed sweep re-fires only stragglers. What remains is exactly reordering. At one tick, an account with three pending payments — on-time, late, on-time by `receivedOn` — should settle at `streak == 1` (up, reset, up). But each firing at a tick is its own transaction with no defined order among the firings (README §16, §17), and every order is a different answer: fold the late payment first and the account ends at 2; fold it last and the account ends at 0. One data set, three describable outcomes — the spec describes several systems and never says which, the same incoherence OQ16 rejects for sibling firings *within* a transaction, here surfacing between the separate transactions of one tick. Declared tolerance is no discharge: `tolerates reordering` on `streak` would be a false statement rather than an accepted risk — the value is exactly order-sensitive, the case README §19 names as wrong for a streak.
+
+The two missing spellings are both grammar, not analysis, and map directly onto the example: an ordering clause giving one tick's firings a defined order (`on Nightly ordered by receivedOn`?), keeping the mutation; and ordered folds in the derivation grammar — `streak: integer = <fold over (Payment for this) ordered by receivedOn>` — dissolving the mutation entirely: no stored field, no guard, no obligation at all, the README §12 ledger stance applied to folds (README §22's derived-value grammar and selector-syntax items are adjacent). Until one exists, commit-cadence is the only fully-served spelling for order-dependent folds — the twin `when Payment` rule (README §19's showcase) buys order-safety structurally: commits are serialized, so fold order *is* commit order.
 
 ## Appendix: worked notes
 
@@ -242,5 +215,4 @@ rule RecordRefusal when RefusedVoid {
 }
 ```
 
-The act lands (the request happened — audit for free: `count(RefusedVoid)`), the consequence never fires for the refused subset, the refusal lands as a fact the caller reads back (delivery is compilation's job). `ApplicableVoid`/`RefusedVoid` partition `VoidPayment`, exhaustiveness-checked — the forgotten `catch` block becomes a compile-time uncovered-subset error. Three levels of "invalid," only the first pre-commit: **(1)** can't inhabit the shape's type at all — rejected below the language, at the trust/input boundary (OQ5); **(2)** well-shaped, business-invalid — rejection-as-data, above; **(3)** well-shaped, valid, consequence forbidden — resolved as the `frozen` write-gate (README §8, "Frozen fields"; OQ20 holds the residue).
-
+The act lands (the request happened — audit for free: `count(RefusedVoid)`), the consequence never fires for the refused subset, the refusal lands as a fact the caller reads back (delivery is compilation's job). `ApplicableVoid`/`RefusedVoid` partition `VoidPayment`, exhaustiveness-checked — the forgotten `catch` block becomes a compile-time uncovered-subset error. Three levels of "invalid," only the first pre-commit: **(1)** can't inhabit the shape's type at all — rejected below the language, at the trust/input boundary, the `expose` surface (README §22, "External input mechanisms"); **(2)** well-shaped, business-invalid — rejection-as-data, above; **(3)** well-shaped, valid, consequence forbidden — resolved as the `frozen` write-gate (README §8, "Frozen fields"; OQ20 holds the residue).

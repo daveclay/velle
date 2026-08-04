@@ -46,7 +46,7 @@ shape ChargeResponse {
 }
 ```
 
-`ChargeAttempt` is the intent-before-effect pattern (README §11) in miniature: the attempt is committed as data *before* the processor interaction, and the outcome lands later as its resolution. How `response` gets filled — an HTTP callback, another process's write — is an external-input concern (`open_questions.md`, OQ5); Velle describes only that the field exists, isn't determined yet, and that refinement membership changes when it is.
+`ChargeAttempt` is the intent-before-effect pattern (README §11) in miniature: the attempt is committed as data *before* the processor interaction, and the outcome lands later as its resolution. How `response` gets filled — an HTTP callback, another process's write — is an external-input concern (`expose ... using` — README §22, "External input mechanisms"); Velle describes only that the field exists, isn't determined yet, and that refinement membership changes when it is.
 
 ## Refinements (conditions as shapes)
 
@@ -193,7 +193,7 @@ Nothing is returned or thrown — there is no stack to throw through (README's "
 
 #### There's no internal/external distinction — the interaction is just a shape
 
-An earlier draft of this tried to distinguish "pure derivation" (like `Invoice.balance`) from "exogenous" fields filled in by something outside the system (like a payment processor's response). That distinction isn't needed. The fix: model the *interaction itself* — the attempt, before it's resolved — as its own shape, the same as everything else. A `ChargeAttempt` exists the moment the system decides to try. Whether `response` eventually gets filled in by a payment processor's HTTP callback, a DB write from another process, or a pure calculation is irrelevant to the description — that's a compiling concern (marking shapes as external input is OQ5). Velle only describes: this shape exists, it has a field that isn't determined yet, and once it is, the shape's refinement changes and rules react at that commit. `PendingChargeAttempt` vs. `CompletedChargeAttempt` is the same mechanism as `OverdueInvoice` vs. `SettledInvoice`.
+An earlier draft of this tried to distinguish "pure derivation" (like `Invoice.balance`) from "exogenous" fields filled in by something outside the system (like a payment processor's response). That distinction isn't needed. The fix: model the *interaction itself* — the attempt, before it's resolved — as its own shape, the same as everything else. A `ChargeAttempt` exists the moment the system decides to try. Whether `response` eventually gets filled in by a payment processor's HTTP callback, a DB write from another process, or a pure calculation is irrelevant to the description — that's a compiling concern (marking shapes as external input is `expose ... using` — README §22, "External input mechanisms"). Velle only describes: this shape exists, it has a field that isn't determined yet, and once it is, the shape's refinement changes and rules react at that commit. `PendingChargeAttempt` vs. `CompletedChargeAttempt` is the same mechanism as `OverdueInvoice` vs. `SettledInvoice`.
 
 ### 2. Rule-firing semantics (edge vs. level)
 
