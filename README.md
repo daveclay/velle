@@ -317,7 +317,7 @@ See `example_predicates.md` for the worked derivation of every rule above.
 A top-level reaction attached to a refinement — replaces `if`/`else` branching and imperative "then do X" sequencing for state-driven behavior. The header separates the rule's *condition* from its *trigger source*, one keyword each:
 
 ```
-rule <name> [when [leaving] <condition>] [on|after <trigger>, ...] { <effects> }
+rule <name> when [leaving] <condition> [on|after <trigger>, ...] { <effects> }
 ```
 
 ```
@@ -328,7 +328,7 @@ rule SendReceipt when SettledInvoice {
 
 `when Refinement` names *what* the rule reacts to — the condition: a refinement, entered (or left — see Exit triggers, below). `on` names the *trigger source*: `on commit` — the rule evaluates as a consequence of any commit that can affect its condition — or a named schedule (`on Daily`, see Schedule triggers, below). `after commit` swaps the preposition to start a new transaction (see "Transactions and `after commit`", below). `on commit` is the default when the clause is omitted (as above), the same single-well-defined-default category as properties being required unless marked `?`. The echo of BDD's given/when/then is deliberate: *given* the declared shapes, *when* the condition holds, *on* commit or tick, then the effects (`## then`).
 
-Neither clause says *how* detection gets implemented. Whether the underlying mechanism is a check made at write-time, an event stream, a runtime data-structure instantiation, or some mix of these for the same rule is left open by the declaration itself; the only contract that has to hold regardless of mechanism is that the effect happens if and only if the subject is or becomes a member of the refinement, exactly once per newly-satisfying instance — "newly-satisfying" is commit-relative: the commit that makes the condition become true is the occurrence the rule fires for. Picking and implementing the actual detection mechanism is a compiling concern (`## 1. Principles`), not part of what the rule means.
+Neither clause says *how* detection gets implemented. Whether the underlying mechanism is a check made at write-time, an event stream, a runtime data-structure instantiation, or some mix of these for the same rule is left open by the declaration itself; the only contract that has to hold regardless of mechanism is that the effect happens if and only if the subject is or becomes a member of the refinement, exactly once per newly-satisfying instance — "newly-satisfying" is commit-relative: the commit that makes the condition become true is the occurrence the rule fires for. The contract is per trigger source: from `on commit`, the firing subjects are the *entrants* — instances whose membership flips at the triggering commit; from a schedule source, the tick evaluates the condition against current state and every *current member* is a subject — re-checking, not transition-watching — which is why tick-cadence rules pair with guards: "already handled" across ticks must be data (`## Schedule triggers`, the tick law; `## Run-once guards`). Picking and implementing the actual detection mechanism is a compiling concern (`## 1. Principles`), not part of what the rule means.
 
 ### Rules ground in commits
 
@@ -358,7 +358,7 @@ rule SyncToCrm when UnsyncedSignup after commit, Hourly {
 }
 ```
 
-What a PO reads off a header: `on commit` — part of the act; `after commit` — follows the act, healed on the stated cadence; `on Nightly` — follows by its nature. Boundaries arise only three ways: **declared** (`after commit`); **inherent** (schedule sources — a tick is a fresh commit and any originating act's transaction is long gone, so no preposition distinction exists for schedules); **forced** (external effects — an API call happens in the world, so a rule containing one can never share the triggering transaction, and writing it plain is a compile error demanding `after commit` plus the apparatus, or an explicit acceptance of loss).
+What a PO reads off a header: `on commit` — part of the act; `after commit` — follows the act, healed on the stated cadence; `on Nightly` — follows by its nature. Boundaries arise only three ways: **declared** (`after commit`); **inherent** (schedule sources — a tick is a fresh commit and any originating act's transaction is long gone, so no preposition distinction exists for schedules); **forced** (external effects — an API call happens in the world, so a rule containing one can never share the triggering transaction, and writing it plain is a compile error demanding `after commit` plus the apparatus — or **`tolerates loss`** on the rule, the fire-and-forget escape for effects the business shrugs about (an analytics ping), signing the named hazard exactly as fold hazards are signed (`## Self-referential folds and tolerates`)). Boundaries also **nest**: an `after commit` firing's own consequences share *its* transaction by default, so a cascade is a tree of transactions — each subtree an all-or-nothing envelope rooted at a declared, inherent, or forced boundary, with the gaps between subtrees healed by each boundary's apparatus.
 
 **A boundary obligates the apparatus, and the check runs both ways** (`## Run-once guards`): an `after commit` rule without a dischargeable guard and a backstop schedule is the stranding error — "this firing can be lost at the declared boundary, and its trigger is not data"; a guard-plus-backstop on a plain rule is dead machinery — "serves no boundary; did you mean `after commit`?" — since inside a transaction there is no gap for a firing to be lost in.
 
@@ -563,38 +563,34 @@ Effects listed without `then` are unordered — the transpiler/AI-assisted codeg
 
 `then` and `from` don't compete: `then` orders *statements*, `from` is the *form* of one statement. There is no one-effect header collapse — a rule whose body is a single effect is simply a one-statement body (`## Assignment (mutation in place)`'s no-sugar stance extends here). A rule's body is exactly one commit, so `then` orders effects *within* that commit — an ordering commitment for compilation, never an observable intermediate state (`## rule`, "Transactions and `after commit`").
 
-## 16. `each`
+## 16. Sweeps: rules fire per record
 
-*Tentative in part — whether the disarm proof extends per iterated instance is under investigation (see `open_questions.md`, OQ13).*
-
-Applies a rule's effects across every member of a refined collection — the form every schedule-triggered rule takes, since a tick carries no subject of its own:
+There is no loop construct. A rule fires once per matching record — from `on commit`, once per entrant at the triggering commit; from a schedule source, once per *current member* of its condition at the tick (`## rule`). Transaction scope follows the source. A schedule firing is its own transaction (`## Schedule triggers`): one record's failure never unwinds another's handling — a poison record blocks only itself, everything else stands and disarms its guard, and the next tick retries exactly the stragglers. Commit-source firings are consequences of the triggering commit and share its transaction (`## rule`, "Transactions and `after commit`") — which is what makes a fan-out atomic when the business wants all-or-nothing: N records entering a condition at one commit yield N firings that stand or fall together with the act. A sweep is therefore just a schedule-triggered rule whose condition selects the records needing work:
 
 ```
-rule SuspendDelinquents on Nightly {
-    each (Delinquent where not suspended) {
-        this.suspended = true
-    }
+rule SuspendDelinquents when (Delinquent where not suspended) on Nightly {
+    this.suspended = true
 }
 ```
 
-No separate loop construct — `each` quantifies over current state: the body applies to every *current member*, regardless of when or how membership arose — which is what makes a sweep self-healing (a member whose handling was lost is simply still a member at the next tick). Contrast `when <Refinement> on <schedule>`, which observes *entries* — commit-local transitions at the tick (`## rule`) — and so never revisits a member whose entry it missed. When a sweep must not re-handle a member, the guard is part of the sweep's membership predicate — inline in the selector (`where not suspended`, above) or as a named refinement the selector uses — so the run-once obligation is per iterated instance, not per rule firing (`## Run-once guards`).
+`this` is the matched record. A guard against re-handling is part of the condition's own predicate (`where not suspended`, above — inline or as a named refinement; `## Run-once guards`), so the run-once obligation is per record — and because a schedule source quantifies current members, the sweep is self-healing: a record whose handling was lost is simply still a member at the next tick. Two consequences: every rule has a `when` condition — subjects come from the condition, so there are no subjectless rules — and a batch of records never needs an envelope of its own (`## State-change patterns`, "All-or-nothing batches").
 
 ## 17. Schedule triggers (`on <schedule>`)
 
 A rule can be triggered by a named schedule instead of (or in addition to) `on commit`, by naming the schedule in the header's `on` clause:
 
 ```
-rule RemindOverdue on Daily {
-    each (OverdueInvoice where
-          not exists (Reminder where invoice == this and sentOn > today - 3 days)) {
-        Reminder from { invoice: this, sentOn: today }
-    }
+rule RemindOverdue
+    when (OverdueInvoice where
+          not exists (Reminder where invoice == this and sentOn > today - 3 days))
+    on Daily {
+    Reminder from { invoice: this, sentOn: today }
 }
 ```
 
 `on` accepts a comma-separated list (`on Daily, Hourly`) for a rule that needs to run on more than one cadence — including mixed with commit (`on commit, Daily`: fire the moment the condition is entered, *and* re-check on the cadence). The list is distributive — each entry independently triggers the rule: `after commit, Hourly` declares two triggers, *fire after the commit* and *fire at the Hourly tick*. The `on`/`after` preposition is meaningful only for the `commit` entry, the one trigger source where sharing the triggering transaction is possible at all; a schedule entry's firings inherently begin their own transactions either way (`## rule`, "Transactions and `after commit`"). `Daily` is a placeholder name, not a built-in or sugar for a specific interval — what actually defines a schedule (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be provided by some cron-like scheduling framework. Only the rule-side trigger syntax is settled.
 
-A schedule trigger is the *only* way a purely time-dependent refinement (like `OverdueInvoice`, which depends on `today`) gets re-checked — nothing in Velle executes purely on the passage of time by default. A scheduled tick is conceptually a commit like any other (the same category as a `Payment` arriving or a `ChargeResponse` coming back — a tick is a commit whose changed datum is `today`), but it's referenced by name in `on`, not declared inline as a custom shape. A tick's firings inherently begin new transactions — by the time a schedule fires, any originating act's transaction is long gone (`## rule`, "Transactions and `after commit`") — and each firing at a tick is its **own** transaction: a tick is a moment, not an envelope, so one rule's failure at the nightly tick never unwinds another rule's work, and each firing's own consequences share that firing's transaction in the ordinary way. (Whether each `each` iteration is likewise its own transaction rides with the `each` pass — `open_questions.md`, OQ13.)
+A schedule trigger is the *only* way a purely time-dependent refinement (like `OverdueInvoice`, which depends on `today`) gets re-checked — nothing in Velle executes purely on the passage of time by default. A scheduled tick is conceptually a commit like any other (the same category as a `Payment` arriving or a `ChargeResponse` coming back — a tick is a commit whose changed datum is `today`), but it's referenced by name in `on`, not declared inline as a custom shape. A tick's firings inherently begin new transactions — by the time a schedule fires, any originating act's transaction is long gone (`## rule`, "Transactions and `after commit`") — and each firing at a tick is its **own** transaction: a tick is a moment, not an envelope, so one firing's failure at the nightly tick never unwinds another's work, whether the firings belong to different rules or to different records of one rule (`## Sweeps`), and each firing's own consequences share that firing's transaction in the ordinary way.
 
 **The tick law: cross-tick memory must be data.** A tick-triggered rule sees only current state — "what changed since last tick" would require persistent memory between ticks, and memory must be data. Sweeps carry their memory as witnesses, flags, or evidence: the example's "at most every 3 days" lives in the `Reminder` evidence itself, with no hidden last-run timestamp anywhere.
 
@@ -681,10 +677,8 @@ rule UpdateRating when Review {
 }
 
 -- "every night, recalculate this value": snapshot
-rule RecalculateRiskScore on Nightly {
-    each Account {
-        this.riskScore = <formula over payments, balance, history>
-    }
+rule RecalculateRiskScore when Account on Nightly {
+    this.riskScore = <formula over payments, balance, history>
 }
 ```
 
@@ -695,7 +689,7 @@ Where a fold is expressible as a recompute, the incremental spelling (`rating = 
 **The compiler never determines the algebra of `f` — it doesn't need to.** Two decidable facts replace it:
 
 - **Self-reference is syntactic.** The RHS reads the field it assigns — reliably decidable; this is what triggers the analysis.
-- **Exposure is structural, per hazard.** *Duplication exposure*: an unguarded fold can be applied twice for one commit (the crash/replay window, and trivially under a `, Hourly` backstop). A fold gated on a dischargeable state cannot. *Reordering exposure*: a commit-cadence rule folding one act at a time cannot reorder — commits are serialized, so fold order *is* commit order; a tick-cadence rule batch-folding several pending items in one firing has no defined iteration order.
+- **Exposure is structural, per hazard.** *Duplication exposure*: an unguarded fold can be applied twice for one commit (the crash/replay window, and trivially under a `, Hourly` backstop). A fold gated on a dischargeable state cannot. *Reordering exposure*: a commit-cadence rule folding one act at a time cannot reorder — commits are serialized, so fold order *is* commit order; a tick-cadence rule's pending records fire separately at the tick (`## Sweeps`) with no defined order among the firings.
 - **Insensitivity is a fail-closed whitelist, per axis** — the compiler proves safety only for known forms, along the two axes independently:
 
 | fold | duplication-safe? | order-safe? |
@@ -709,7 +703,7 @@ Where a fold is expressible as a recompute, the incremental spelling (`rating = 
 1. **Guard** — make exactly-once true (`## Run-once guards`).
 2. **Derivation twin / recompute** — make it irrelevant: the value re-derives from source records.
 3. **Reconciliation sweep** — bound the drift: the fold stays cheap and unguarded on the hot path; a periodic recompute (`viewCount = count(PageView for this)` nightly) restores truth on a cadence (`## State-change patterns`' reconciliation rung).
-4. **`tolerates <hazard>`** — accept the named risk, declared on the field:
+4. **`tolerates <hazard>`** — accept the named risk, declared where the risk lives (the field for fold hazards; the rule for `loss`):
 
 ```
 shape Article {
@@ -717,7 +711,7 @@ shape Article {
 }
 ```
 
-The vocabulary is closed and mirrors the hazards one-for-one — `tolerates duplication`, `tolerates reordering` — so checking is mechanical set-coverage: exposed hazards, minus those discharged by a guard, an ordering, a reconciliation, or a tolerance, must be empty. A dead tolerance is itself a diagnostic ("this rule cannot experience reordering — did you mean duplication?"): the author never needs the exposure model in their head; the compiler names the specific risk, and the author fixes it or signs it by name. The declaration is self-vetting because it *is* the business claim — `balance: Money tolerates duplication` is visibly absurd in exactly the way that forces the author to confront what they're signing.
+The vocabulary is closed and mirrors the hazards one-for-one — `tolerates duplication` and `tolerates reordering` on fields; `tolerates loss` on a rule whose external effect may be dropped (`## rule`, "Transactions and `after commit`") — so checking is mechanical set-coverage: exposed hazards, minus those discharged by a guard, an ordering, a reconciliation, or a tolerance, must be empty. A dead tolerance is itself a diagnostic ("this rule cannot experience reordering — did you mean duplication?"): the author never needs the exposure model in their head; the compiler names the specific risk, and the author fixes it or signs it by name. The declaration is self-vetting because it *is* the business claim — `balance: Money tolerates duplication` is visibly absurd in exactly the way that forces the author to confront what they're signing.
 
 **The showcase trio** — same trigger, same cadence, three different verdicts:
 
@@ -745,7 +739,7 @@ rule TrackStreak when Payment {
 }
 ```
 
-**Residual gap.** A *batched* order-dependent fold (a nightly streak sweep) is exposed to reordering with no honest discharge yet: no clause gives a batch an iteration order, and the derivation grammar has no ordered folds — declared tolerance is currently the only spelling, which is wrong for a streak. Until one exists, commit-cadence is the only fully-served spelling for order-dependent folds (`open_questions.md`, OQ15).
+**Residual gap.** A tick-cadence order-dependent fold (a nightly streak sweep) is exposed to reordering with no honest discharge yet: nothing orders one tick's firings, and the derivation grammar has no ordered folds — declared tolerance is currently the only spelling, which is wrong for a streak. Until one exists, commit-cadence is the only fully-served spelling for order-dependent folds (`open_questions.md`, OQ15).
 
 ## 20. State-change patterns
 
@@ -763,16 +757,12 @@ shape Account {
 
 shape Delinquent = Account where balance < 0
 
-rule SuspendDelinquents on Nightly {
-    each (Delinquent where not suspended) {
-        this.suspended = true
-    }
+rule SuspendDelinquents when (Delinquent where not suspended) on Nightly {
+    this.suspended = true
 }
 
-rule RestoreService on Nightly {
-    each (Account where suspended and balance >= 0) {
-        this.suspended = false
-    }
+rule RestoreService when (Account where suspended and balance >= 0) on Nightly {
+    this.suspended = false
 }
 ```
 
@@ -824,6 +814,36 @@ rule CloseDelinquencyEpisode when leaving Delinquent {
 
 Now `count(DelinquencyFlag where account == this) >= 3` is expressible, and any rule can guard per episode (`DelinquencyFlag where not exists ServiceSuspension for this`). Noteworthy in passing: the exit rule's singular reference `(OpenDelinquencyFlag where account == this)` is provably at-most-one *because of the entry rule's own guard* — a whole-spec singularity proof (`## Predicate expressions`' `for`-query rule, discharged by a guard elsewhere in the spec). The honest cost: three shapes and two rules of completely mechanical pattern — accepted, not sugared (`## Run-once guards`).
 
+### All-or-nothing batches
+
+There is no batch-transaction construct — and no business case has survived scrutiny that needs one. "Handle these records together, all or none" always dissolves into machinery already present, by one of these routes:
+
+- **A static multi-record effect is one body — already atomic.** Double-entry bookkeeping: debit and credit are two statements of one body — one commit, both-or-neither (`## rule`):
+
+```
+rule PostTransfer when Transfer {
+    LedgerEntry from { account: from, amount: 0 - amount }
+    LedgerEntry from { account: to,   amount: amount }
+}
+```
+
+- **A dynamic per-member effect is a fan-out — atomic when commit-driven.** "When an order is paid, reserve stock for every line item, all or none": the gate is an aggregate refinement on the parent, and the effect is a per-record rule the entering commit fires N times — every firing standing or falling with the act, because commit-source consequences share its transaction (`## Sweeps`):
+
+```
+shape FulfillableOrder = PaidOrder where count(lineItems where not InStock) == 0
+
+rule ReserveStock
+    when (LineItem where order is FulfillableOrder and not exists Reservation for this) {
+    Reservation from { lineItem: this }
+}
+```
+
+- **"All at once" over N records is one fact wearing N disguises.** "Apply the new rate to every subscription at midnight" isn't a batch: commit one `PriceSchedule` record that price derivations read, and every price changes at that commit by construction. Likewise a batch-wide status: a per-entry `submittedOn` that is equal across all entries by definition is the *batch's* one fact, derived per entry (`submittedOn: Date? = (BatchSubmission for batch)?.submittedOn`) — all N memberships flip at the witness commit.
+- **A set that must succeed or fail together is a business object.** Settlement batches, payroll runs: whenever a business says "together," the together-thing has a name — reify it (`## State and commits`' container idiom), and its handling is one record's firing: one transaction, one external act, one `id` to reconcile (intent-before-effect, `## rule`).
+- **N distinct facts arriving incrementally get a completeness gate, not an envelope.** Per-entry results from a clearing house land one commit at a time; downstream rules hang off `CompleteResponse = BatchResponse where count(results) == count(batch.entries)` — conditioned acceptance: the partial state is honest and unobserved.
+
+The principle underneath: **batches demand atomic *observation*, not atomic *writing*** — and observation is a predicate over a commit's post-state, which is already atomic. Where records "must change together," the shared thing is one fact and the N views are derivations; where facts "arrive together," a completeness refinement keeps observers off the partial set. What a direct "per member of the collection" spelling would add is ergonomics over the fan-out — sugar territory for the mapping construct (`## Open / unresolved`), not transaction machinery.
+
 ### The compiler recognizes the rungs
 
 The spectrum is not just documentation — the compiler classifies which rung each rule sits on and validates it accordingly. The classification is *derived* from what's written, never declared. Much of the machinery is already settled elsewhere: the RHS three-class split is the rung classification for assignments (`## Self-referential folds and tolerates`), obligations arise only where non-idempotence demands one, and a reconciliation sweep is recognized as a discharge. Recognition adds on top:
@@ -836,8 +856,8 @@ How this behaves against realistic specs is untested — the classification boun
 
 ## 21. Open / unresolved
 
-- **State change & rule mechanics — remaining frontier.** The core is settled — assignment and one-writer (§12), run-once guards with no sugar (§18), folds and `tolerates` (§19), the pattern spectrum and rung recognition (§20), and "what is one commit": a commit is exactly one act instance (a container shape models multi-part acts), a body is one commit, consequences share the act's transaction by default, `after commit` declares a boundary, and the irreducible world/state gap at an external effect is answered by the intent-before-effect pattern (§4, `## rule` "Transactions and `after commit`"); commit timestamps are author-declared, language-populated fields (`timestamp on create` / `on update`, §5); and every instance carries an opaque, readable `id` (§5). Still open in `open_questions.md`: marking shapes as external input — now including who may supply an instance's `id` at a trust/legacy boundary (OQ5); the order-independence/confluence and quiescence proofs, rejection scope, and boundary-grammar residue (OQ16–17, OQ19–20); remaining rule-anatomy threads including what an exit rule may read (OQ7); the `each`/multi-schedule disarm-proof pass (OQ13); whether the canonical guard form is pleasant enough to be what fold diagnostics ask authors to write (OQ14); ordered folds and batch ordering (OQ15). §§13 and 16 carry tentative markers accordingly.
-- **Mapping** (shape-to-shape translation, e.g. API DTO → domain shape) — part of the original design goals, not yet exercised in a worked example.
+- **State change & rule mechanics — remaining frontier.** The core is settled — assignment and one-writer (§12), run-once guards with no sugar (§18), folds and `tolerates` (§19), the pattern spectrum and rung recognition (§20), and "what is one commit": a commit is exactly one act instance (a container shape models multi-part acts), a body is one commit, consequences share the act's transaction by default, `after commit` declares a boundary, and the irreducible world/state gap at an external effect is answered by the intent-before-effect pattern (§4, `## rule` "Transactions and `after commit`"); commit timestamps are author-declared, language-populated fields (`timestamp on create` / `on update`, §5); every instance carries an opaque, readable `id` (§5); a rule fires once per matching record — no loop construct, transaction scope following the trigger source (§16, §17); all-or-nothing batches need no envelope construct — they dissolve into one-body effects, commit-shared fan-out, one-fact-many-readers, containers, and completeness gates (§20, "All-or-nothing batches"); cascades nest as trees of transactions; and `tolerates loss` signs fire-and-forget external effects (§11, §19). Still open in `open_questions.md`: marking shapes as external input — now including who may supply an instance's `id` at a trust/legacy boundary (OQ5); the order-independence/confluence and quiescence proofs, rejection scope, `never` invariants, and the commit-refusal residue (OQ16–17, OQ19–20); remaining rule-anatomy threads including what an exit rule may read (OQ7); whether the canonical guard form is pleasant enough to be what fold diagnostics ask authors to write (OQ14); ordered folds and firing order at a tick (OQ15). §13 carries a tentative marker accordingly.
+- **Mapping** (shape-to-shape translation, e.g. API DTO → domain shape) — part of the original design goals, not yet exercised in a worked example. Now also the natural home for a direct per-member effect spelling — "one `Reservation` per line item" — as sugar over the guard-correlated fan-out (`## State-change patterns`, "All-or-nothing batches"), whose inverted spelling gets unpleasant as correlation deepens.
 - **Schedule definition** — `on Daily` (the header's `on` clause) settles how a rule *references* a schedule; what actually defines `Daily` (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be a cron-like scheduling framework.
 - **Reversal** — resolved as a non-issue for the language itself (it's a business-policy choice, expressed via which artifact shapes a human declares — see `example_invoice_payment.md` #5), but no single canonical pattern has been adopted yet; the consolidated top-of-file example still doesn't reflect a chosen policy.
 - **Escape hatch / override syntax** — how a human marks part of a spec as intentionally hand-implemented/AI-implemented rather than declarative. Deferred; agreed to be a lesser concern until the core language settles.

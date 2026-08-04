@@ -4,8 +4,8 @@ The language's open questions. Settled results are promoted into `README.md` as 
 
 **What one commit is**
 
-- **OQ16 — Order must not matter.** Can the compiler prove sibling firings commute, and that a transaction quiesces?
-- **OQ19 — Boundary grammar and policy residue.** Nesting, `tolerates loss`, `never` invariants, legibility.
+- **OQ16 — Order must not matter.** Can the compiler prove sibling firings commute, and that a transaction quiesces? The hard cases are data-dependent — aliasing, values, termination — where fail-closed rejects legitimate specs; calibration and the discharge vocabulary are the work.
+- **OQ19 — `never` invariants.** A declared impossible configuration — verification target and proof input. Ruled: enforced at transaction end; input-constrained `never`s are enforced as *compiled guardrails* at the boundary, not language-level refusal. Under discussion: the `frozen`-playbook obligation model, spelling, and `never` as the primitive under `states of`.
 
 **The input boundary**
 
@@ -16,9 +16,8 @@ The language's open questions. Settled results are promoted into `README.md` as 
 **Rule anatomy and guard ergonomics**
 
 - **OQ7 — Rule anatomy, remaining threads.** What an exit rule may read; latency vocabulary; `on commit of <Shape>` narrowing.
-- **OQ13 — The `each`/multi-schedule pass.** Does the disarm proof extend to `each` bodies and multi-cadence `on` lists — and is an `each` iteration its own transaction?
 - **OQ14 — Diagnostic-led guard adoption.** Is the canonical guard form pleasant enough for a compiler diagnostic to demand?
-- **OQ15 — Ordered folds and batch ordering.** No honest discharge yet exists for a batched order-dependent fold.
+- **OQ15 — Ordered folds and firing order at a tick.** No honest discharge yet exists for a tick-cadence order-dependent fold.
 
 ## What one commit is
 
@@ -46,17 +45,105 @@ rule RecordTier when AccountReview {
 
 The check decomposes along familiar lines: **write-write** conflicts — two siblings assigning the same field — are one-writer (README §12) extended to transaction scope; **read-write** conflicts — one sibling writes what another reads in a body or condition — are the example above; **transition interference** — one sibling's commit enters a refinement another sibling's commit exits — makes the set of mid-transaction transitions order-dependent, so transition-watching rules would see different histories. Traversal order (depth-first vs. level-by-level) stops being a question at all: once outcomes are order-independent, every traversal is a valid compilation.
 
+**Where the analysis runs out of statics — the calibration cases.** The `tierAtReview` example is *easy*: same trigger shape, literal paths to one field. The hard cases are where the conflict's existence depends on runtime data, which static analysis cannot see. Fail-closed means none of these are ever *missed* — they are rejected — so each is a legitimate spec the author must restructure until safety is provable, and the open work is how much of that burden calibration can remove:
+
+- **Instance aliasing through relationships.** Write-write detection works on paths, but paths name *routes*, not instances:
+
+  ```
+  rule PromoteBuyer when QualifiedPurchase {
+      customer.tier = "gold"
+  }
+
+  rule PromoteReferrer when (QualifiedPurchase where customer.referrer is some) {
+      customer.referrer.tier = "advocate"
+  }
+  ```
+
+  Both fire from one purchase commit, writing `tier` of two *differently-reached* instances. They collide exactly when `customer.referrer == customer` — a customer who referred themselves. Whether that configuration can ever exist is a fact about the data, not the declarations; deciding it statically is the aliasing problem, undecidable in general. The rejection is honest, and the diagnostic can even name the collision condition — which points at the discharge below.
+
+- **Value-dependent transition interference.** Two siblings write *different* fields — one-writer is silent — but a refinement reads both: one writes `balance`, another writes `creditLimit`, and `Overextended = Account where balance > creditLimit` watches the pair. Whether the two orderings produce different mid-transaction transition histories depends on the actual numbers in flight; statically there is only "both inputs of one predicate written by unordered siblings — *potential* interference."
+
+- **Value-dependent quiescence.** The static condition graph sees only a cycle:
+
+  ```
+  rule SplitOversizedParcel when (Parcel where weight > 30) {
+      Parcel from { shipment: shipment, weight: weight / 2 }
+      Parcel from { shipment: shipment, weight: weight / 2 }
+  }
+  ```
+
+  The cascade in fact terminates — halving falls below 30 — but proving it needs an arithmetic measure argument: termination proving, the halting problem in miniature.
+
 **Open:**
 
 - **The analysis itself.** Commutativity/confluence checking is charted territory — term rewriting's critical pairs and Newman's lemma (local confluence + termination ⇒ confluence, which ties this proof to quiescence below), CHR confluence tests, Datalog evaluation strategies. What Velle's version is — and how coarse it can be before it rejects legitimate specs — is the work. Fail-closed is given (uncertainty errors, README §12's stance); calibration is not.
-- **Quiescence.** A transaction completes when no rule's condition is newly matched — it must quiesce, and Newman's lemma needs termination for confluence to follow from local checks. Cycles in the static condition graph are detectable (derived trigger sets), but convergence can be value-dependent (a deposit rule producing deposits) — undecidable in general. The folds precedent (README §19) applies: prove quiescence structurally (a DAG, or cycles broken by disarming guards), fail closed on the rest. Whether the disarm proof suffices is unexamined.
+- **Discharge vocabulary.** The aliasing case suggests OQ19's `never` invariants are not just verification but *proof inputs*: `never (Customer where referrer == this)` turns the collision condition into a proven impossibility the disjointness analysis may use — the author states a data invariant, the prover spends it. Whether declared invariants feed the confluence and one-writer analyses — and what else belongs in the discharge toolbox (conditioning one sibling on the other's outcome to make the dependency real; some not-yet-designed decreasing-measure spelling for cycles) — is calibration's concrete form.
+- **Quiescence.** A transaction completes when no rule's condition is newly matched — it must quiesce, and Newman's lemma needs termination for confluence to follow from local checks. Cycles in the static condition graph are detectable (derived trigger sets), but convergence can be value-dependent (the parcel-splitting example above) — undecidable in general. The folds precedent (README §19) applies: prove quiescence structurally (a DAG, or cycles broken by disarming guards), fail closed on the rest. Whether the disarm proof suffices is unexamined.
 
-### OQ19. Boundary grammar and policy residue
+### OQ19. `never` invariants
 
-- **Nesting** — an `after commit` rule's consequences share *its* transaction by default, so a cascade is a tree of transactions, each rooted at a declared, inherent, or forced boundary. Consequences unexplored.
-- **`tolerates loss`** — the fire-and-forget escape for external effects (an analytics ping the PO shrugs about); extending the `tolerates` vocabulary beyond fold hazards (README §19) is unexamined.
-- **`never` invariants** — a spec-level declaration over refinement combinations (`never (Account where balance >= 0 and suspended)`) as *verification* of chosen boundaries: the compiler proves the written boundaries honor the stated observable-state fact. Independently valuable, README §1's consistency-checker category; where it lives is undecided.
-- **Legibility at scale** — whether boundary-by-preposition plus apparatus stays readable in realistic specs; the calibration question rung recognition deferred to worked examples (README §20).
+The last of the boundary-grammar residue — nesting and `tolerates loss` are settled (README §11, §19), and legibility-at-scale is deferred to the realistic-examples phase (TODO.md). What remains is the construct itself: a spec-level declaration over the existing predicate grammar asserting a configuration is impossible — a refinement that is empty, always:
+
+```
+never (Account where balance >= 0 and suspended)    -- "an account in good standing is never suspended"
+never (Customer where referrer == this)             -- "no customer refers themselves"
+```
+
+Two roles identified: **verification** — the compiler proves the written rules and boundaries honor the stated fact (README §1's consistency-checker category) — and **proof input** — the author states the invariant, the prover spends it: the second `never` above is exactly what lets OQ16's aliasing case prove `PromoteBuyer`/`PromoteReferrer`'s path-reached writes disjoint (OQ16, "Instance aliasing through relationships").
+
+**Ruled: the enforcement point is transaction end.** A `never` constrains the *settled* world — every transaction's final state — never the intermediate commits inside the envelope. Concretely:
+
+```
+shape Delinquent = Account where balance < 0
+
+rule SuspendService when Delinquent {
+    this.suspended = true
+}
+
+rule RestoreService when (Account where suspended and balance >= 0) {
+    this.suspended = false
+}
+
+never (Account where balance >= 0 and suspended)
+```
+
+A $50 deposit lands against a −$20 suspended account. The deposit's commit raises `balance` to +$30 — and at that instant the account *is* `balance >= 0 and suspended`, the `never` configuration. Then `RestoreService`, matching on that commit as a consequence within the same transaction, clears the flag: the transaction settles clean, and the spec is valid. Per-commit enforcement would have rejected the deposit — or made its legality depend on sibling firing order, which OQ16 forbids anything to depend on. Mid-transaction blips are real (README §11), and transaction-end is the atomic-observation principle applied to invariants (README §20, "All-or-nothing batches"). Two consequences: a transition-watching rule *can* observe a mid-transaction pass through a `never` configuration — the invariant promises what the world settles to, not the path — and the ruling leans on OQ16's quiescence proof, since "transaction end" presupposes transactions provably end. The prover may still use the per-commit strengthening wherever it happens to hold.
+
+What verification catches, on this example: add a writer that can *end* a transaction in the configuration —
+
+```
+rule SuspendManually when AdminSuspension {
+    account.suspended = true
+}
+```
+
+— and an `AdminSuspension` against a positive-balance account settles suspended-in-good-standing, with nothing in the cascade restoring it. Whole-spec diagnostic, fail-closed, naming both sides: "`SuspendManually` can end a transaction violating `never (Account where balance >= 0 and suspended)` — condition the act, restore within the transaction, or retract the invariant."
+
+**The enforcement classes differ by who can violate.** The suspension invariant is *rule-maintained* — every datum its predicate reads is written by rules, so verification is an inductive preservation proof over known writers. The self-referral invariant is *input-constrained* — only an external act can violate it, and rejection-as-data means a well-shaped self-referral *lands*:
+
+```
+shape Referral {
+    referrer: one Customer
+    referee: one Customer
+}
+
+never (Referral where referrer == referee)    -- violated the moment such an act lands as data
+```
+
+Once the instance exists, the state contains the configuration and the invariant is false as a state assertion — so enforcement for this class cannot be spec-side at all: **it must be compiled into the boundary**. The transpiled code validates external data against the declared `never`s and rejects a violating act before it ever becomes a commit — rejection below the language, the same level as can't-inhabit-the-type (the invalid layering's level 1), and the same division of labor as everywhere else: the language declares the business fact, compilation emits the machinery (README §21's compiled-guardrails category, gaining its first invariant-sourced member). Three consequences: the discharge obligation for this class is *automatically* dischargeable — the compiler emits the guardrail rather than demanding an author-side fix; OQ20's residue shrinks to nearly nothing — commit-refusal is not a language primitive but derived boundary code, sourced from `never` declarations, with OQ5's who-may-commit clause deciding where the boundary sits; and one caveat — data arriving through a legacy Mapping wasn't born behind the guardrail, so a `never` over mapped shapes needs a migration/validation obligation at the mapping (the Mapping item, TODO.md).
+
+**Still under discussion:**
+
+- **What kind of statement is `never`?** Three candidate readings. *Verify-only*: a claim the compiler proves from the rest of the spec — but then it's a theorem, the proof-input role is empty (anything verifiable was derivable), and the input-constrained class simply fails (nothing in the spec makes self-referral impossible). *Assume-only*: the prover spends it unverified — an unchecked axiom whose truth traces to nothing, out of character. *The `frozen` playbook* (the recommended reading, named for how `frozen` already works — declare the constraint once, and the compiler demands a fix at every site that could violate it): declared once, the compiler derives a discharge obligation per potential violator — each writer of a rule-maintained invariant must provably settle its transactions outside the configuration (`SuspendManually` above gets exactly that diagnostic); an input-constrained invariant's sole possible violator is the boundary, so its obligation lands on OQ5's who-may-commit declaration — and once every obligation is discharged the invariant is *established*, neither merely checked nor merely assumed, and only then spendable as a proof input (OQ16). The residue under this reading: the discharge vocabulary (what counts as discharging, per kind of site) and whether the diagnostic-led flow stays tractable (OQ16's calibration).
+- **The OQ5/OQ20 unification** — largely clarified by the compiled-guardrail reading above: `never`s (alongside shape types) are the declarative source of boundary validation, and commit-refusal is derived boundary code rather than a language primitive. Remaining: fold this into OQ5's who-may-commit declaration design, and formally retire OQ20's residue against it.
+- **Spelling and site** — top-level `never (<predicate>)` over the existing grammar, with named-refinement emptiness (`never SuspendedInGoodStanding`) as the composable variant.
+- **`never` as the primitive underneath `states of`:**
+
+```
+states of Invoice = Draft | Issued | Paid | Voided
+-- decomposes to pairwise emptiness plus coverage:
+--   never (Draft and Issued), never (Draft and Paid), ... , and every Invoice in some arm
+```
 
 ## The input boundary
 
@@ -107,48 +194,13 @@ The core anatomy — condition, trigger source, entry/exit transitions, the tick
 - **Latency vocabulary** — `on` expresses the evaluation *source*, not latency *requirements*. Is "immediate by default, named schedule otherwise" enough, or do deadlines ("within 24h") deserve first-class expression the compiler validates against declared cadences?
 - **`on commit of <Shape>` narrowing** — "only withdrawals suspend, not fee assessments." Expressible and occasionally meaningful, but it can silently miss entry paths; per flexible-not-restrictive it would be allowed *with* the compiler reporting exactly which entry paths go unobserved. Not yet designed.
 
-### OQ13. The `each`/multi-schedule pass
-
-Whether the disarm proof extends cleanly beyond the simple rule shape it was settled on, and what transaction envelope an `each` body gets. Two halves: multi-cadence `on` lists (`ApplyDeposit ... after commit, Hourly` — the disarm proof must hold under every trigger source for the durability backstop to be safe), and `each` bodies. Both show up in the two spellings of "remind overdue invoices, at most every 3 days":
-
-```
-shape InvoiceNeedingReminder = OverdueInvoice where
-    not exists (Reminder where invoice == this and sentOn > today - 3 days)
-
--- spelling A: entry observation — one firing per invoice that ENTERS the
--- refinement at the tick (a commit-local transition, README §11); each
--- firing is its own transaction (README §17)
-rule RemindOnEntry when InvoiceNeedingReminder on Daily {
-    Reminder from { invoice: this, sentOn: today }
-}
-
--- spelling B: member quantification — the body applies to every CURRENT
--- member at the tick, however membership arose (README §16); the guard is
--- the refinement's own predicate, per iterated instance
-rule SweepReminders on Daily {
-    each InvoiceNeedingReminder {
-        Reminder from { invoice: this, sentOn: today }
-    }
-}
-```
-
-**Where they agree — the happy path.** Invoice #7 ages past due overnight: at Monday's tick, `due < today` flips, so #7 *enters* `InvoiceNeedingReminder` at the tick commit. A fires (it's an entrant); B fires (it's a member). The `Reminder` lands; both spellings go quiet until Thursday's tick, when `sentOn > today - 3 days` flips false and #7 re-enters — both fire again. Every clause of this predicate flips at day boundaries, so entrants and members coincide as long as nothing goes wrong.
-
-**Divergence 1 — entry at a non-tick commit.** Invoice #8 is committed at 2pm already past due (a migration, a backdated import). It enters the refinement *at that commit*. A's only trigger source is `Daily`, so the 2pm entry is unobserved — and at the next tick #8 is already a member in pre-state: no transition, no firing, stranded forever. (Adding the source back — `when InvoiceNeedingReminder on commit, Daily`, the distributive list, README §17 — closes this hole.) B doesn't care: at the next tick #8 is a member, so the body runs.
-
-**Divergence 2 — a lost firing.** Monday's firing for #7 fails; its transaction rolls back, so no `Reminder` landed. #7 never left the refinement — and therefore never re-enters it. A can never fire for #7 again: the transition it reacts to already happened and won't recur. B heals at Tuesday's tick: #7 is still a member, the body runs. This is what makes B the reconciliation form — it re-derives the work-list from current state, indifferent to history.
-
-**The open case — the poison member.** Ten thousand members at Monday's tick, and the iteration for #6,204 fails. If the whole `each` body is one transaction ("a body is exactly one commit"), everything unwinds — the 9,999 good reminders included — and the same thing happens at every future tick: the sweep never converges. If each iteration is its own transaction, 9,999 reminders stand and disarm their guards, and Tuesday's sweep retries only #6,204. The per-iteration reading requires exactly this pass's proof: the disarm obligation must hold *per iterated instance*, so a partially-completed sweep is provably safe to resume.
-
-**Where the analysis points.** Ruling iterations as per-iteration transactions makes `each` effectively "one firing per current member," converging the two spellings into a clean pair — `when` fires per *transition*, `each` fires per *member*, both with per-subject transactions — with the poison member as the argument. Not yet ruled; the disarm-per-iteration proof is what would make it sound.
-
 ### OQ14. Diagnostic-led guard adoption
 
 Fold enforcement (README §19) means the compiler will be *proposing* guards to authors mid-error. With guard sugar dropped, the fix-it suggestion writes the canonical form itself, so the question is now exactly this: is the canonical form pleasant enough to be what a diagnostic asks an author to write? Ergonomics and enforcement aren't separable — a required guard that's miserable to write makes enforcement hostile; one that reads as the business rule makes it a teaching moment.
 
-### OQ15. Ordered folds and batch ordering
+### OQ15. Ordered folds and firing order at a tick
 
-Exposed by the fold analysis (README §19): a batched order-dependent fold (a nightly streak sweep) owes a reordering obligation with no honest discharge — declared tolerance is wrong for a streak, and the two missing spellings are both grammar, not analysis: an ordering clause giving a tick-cadence batch a defined iteration order (`ordered by`?), and ordered folds in the derivation grammar (which would let a streak be a derivation over ordered history, dissolving the mutation entirely — README §21's derived-value grammar and selector-syntax items are adjacent). Until one exists, commit-cadence is the only fully-served spelling for order-dependent folds.
+Exposed by the fold analysis (README §19): a tick-cadence order-dependent fold (a nightly streak sweep) owes a reordering obligation with no honest discharge — the pending records fire separately at the tick with no defined order among the firings (README §16), declared tolerance is wrong for a streak, and the two missing spellings are both grammar, not analysis: an ordering clause giving one tick's firings a defined order (`ordered by`?), and ordered folds in the derivation grammar (which would let a streak be a derivation over ordered history, dissolving the mutation entirely — README §21's derived-value grammar and selector-syntax items are adjacent). Until one exists, commit-cadence is the only fully-served spelling for order-dependent folds.
 
 ## Appendix: worked notes
 
