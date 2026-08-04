@@ -5,7 +5,7 @@ The language's open questions. Settled results are promoted into `README.md` as 
 **What one commit is**
 
 - **OQ16 — Order must not matter.** Can the compiler prove sibling firings commute, and that a transaction quiesces? The hard cases are data-dependent — aliasing, values, termination — where fail-closed rejects legitimate specs; calibration and the discharge vocabulary are the work.
-- **OQ19 — `never` invariants.** A declared impossible configuration — verification target and proof input. Ruled: enforced at transaction end; input-constrained `never`s are enforced as *compiled guardrails* at the boundary, not language-level refusal. Under discussion: the `frozen`-playbook obligation model, spelling, and `never` as the primitive under `states of`.
+- **OQ19 — `never`'s establishment model.** The construct is adopted (README §21); what remains is what "established" requires between declaration and use — the discharge vocabulary under the recommended `frozen`-playbook reading.
 
 **The input boundary**
 
@@ -80,70 +80,15 @@ The check decomposes along familiar lines: **write-write** conflicts — two sib
 - **Discharge vocabulary.** The aliasing case suggests OQ19's `never` invariants are not just verification but *proof inputs*: `never (Customer where referrer == this)` turns the collision condition into a proven impossibility the disjointness analysis may use — the author states a data invariant, the prover spends it. Whether declared invariants feed the confluence and one-writer analyses — and what else belongs in the discharge toolbox (conditioning one sibling on the other's outcome to make the dependency real; some not-yet-designed decreasing-measure spelling for cycles) — is calibration's concrete form.
 - **Quiescence.** A transaction completes when no rule's condition is newly matched — it must quiesce, and Newman's lemma needs termination for confluence to follow from local checks. Cycles in the static condition graph are detectable (derived trigger sets), but convergence can be value-dependent (the parcel-splitting example above) — undecidable in general. The folds precedent (README §19) applies: prove quiescence structurally (a DAG, or cycles broken by disarming guards), fail closed on the rest. Whether the disarm proof suffices is unexamined.
 
-### OQ19. `never` invariants
+### OQ19. `never` — the establishment model
 
-The last of the boundary-grammar residue — nesting and `tolerates loss` are settled (README §11, §19), and legibility-at-scale is deferred to the realistic-examples phase (TODO.md). What remains is the construct itself: a spec-level declaration over the existing predicate grammar asserting a configuration is impossible — a refinement that is empty, always:
+The construct is adopted (README §21): a top-level keyword over the predicate grammar (named-refinement form included), enforced at transaction end, proven inductively for rule-maintained invariants, compiled into the boundary for input-constrained ones, and spendable as a proof input (OQ16). What remains is the **establishment model** — what kind of statement a `never` is between declaration and use:
 
-```
-never (Account where balance >= 0 and suspended)    -- "an account in good standing is never suspended"
-never (Customer where referrer == this)             -- "no customer refers themselves"
-```
+- *Verify-only* — a theorem the compiler proves from the rest of the spec. Fails twice: the proof-input role is empty (anything verifiable was derivable without the declaration), and the input-constrained class has nothing spec-side to verify.
+- *Assume-only* — an unchecked axiom the prover spends. Its truth traces to nothing; out of character for the language.
+- *The `frozen` playbook* (recommended) — declared once; the compiler derives a discharge obligation per potential violator: author-side fixes for rule-maintained writers (condition the act, restore within the transaction), automatically-emitted guardrails for the boundary, validation obligations at legacy mappings. Once every obligation is discharged the invariant is **established** — neither merely checked nor merely assumed — and only then spendable by other analyses.
 
-Two roles identified: **verification** — the compiler proves the written rules and boundaries honor the stated fact (README §1's consistency-checker category) — and **proof input** — the author states the invariant, the prover spends it: the second `never` above is exactly what lets OQ16's aliasing case prove `PromoteBuyer`/`PromoteReferrer`'s path-reached writes disjoint (OQ16, "Instance aliasing through relationships").
-
-**Ruled: the enforcement point is transaction end.** A `never` constrains the *settled* world — every transaction's final state — never the intermediate commits inside the envelope. Concretely:
-
-```
-shape Delinquent = Account where balance < 0
-
-rule SuspendService when Delinquent {
-    this.suspended = true
-}
-
-rule RestoreService when (Account where suspended and balance >= 0) {
-    this.suspended = false
-}
-
-never (Account where balance >= 0 and suspended)
-```
-
-A $50 deposit lands against a −$20 suspended account. The deposit's commit raises `balance` to +$30 — and at that instant the account *is* `balance >= 0 and suspended`, the `never` configuration. Then `RestoreService`, matching on that commit as a consequence within the same transaction, clears the flag: the transaction settles clean, and the spec is valid. Per-commit enforcement would have rejected the deposit — or made its legality depend on sibling firing order, which OQ16 forbids anything to depend on. Mid-transaction blips are real (README §11), and transaction-end is the atomic-observation principle applied to invariants (README §20, "All-or-nothing batches"). Two consequences: a transition-watching rule *can* observe a mid-transaction pass through a `never` configuration — the invariant promises what the world settles to, not the path — and the ruling leans on OQ16's quiescence proof, since "transaction end" presupposes transactions provably end. The prover may still use the per-commit strengthening wherever it happens to hold.
-
-What verification catches, on this example: add a writer that can *end* a transaction in the configuration —
-
-```
-rule SuspendManually when AdminSuspension {
-    account.suspended = true
-}
-```
-
-— and an `AdminSuspension` against a positive-balance account settles suspended-in-good-standing, with nothing in the cascade restoring it. Whole-spec diagnostic, fail-closed, naming both sides: "`SuspendManually` can end a transaction violating `never (Account where balance >= 0 and suspended)` — condition the act, restore within the transaction, or retract the invariant."
-
-**The enforcement classes differ by who can violate.** The suspension invariant is *rule-maintained* — every datum its predicate reads is written by rules, so verification is an inductive preservation proof over known writers. The self-referral invariant is *input-constrained* — only an external act can violate it, and rejection-as-data means a well-shaped self-referral *lands*:
-
-```
-shape Referral {
-    referrer: one Customer
-    referee: one Customer
-}
-
-never (Referral where referrer == referee)    -- violated the moment such an act lands as data
-```
-
-Once the instance exists, the state contains the configuration and the invariant is false as a state assertion — so enforcement for this class cannot be spec-side at all: **it must be compiled into the boundary**. The transpiled code validates external data against the declared `never`s and rejects a violating act before it ever becomes a commit — rejection below the language, the same level as can't-inhabit-the-type (the invalid layering's level 1), and the same division of labor as everywhere else: the language declares the business fact, compilation emits the machinery (README §21's compiled-guardrails category, gaining its first invariant-sourced member). Three consequences: the discharge obligation for this class is *automatically* dischargeable — the compiler emits the guardrail rather than demanding an author-side fix; OQ20's residue shrinks to nearly nothing — commit-refusal is not a language primitive but derived boundary code, sourced from `never` declarations, with OQ5's who-may-commit clause deciding where the boundary sits; and one caveat — data arriving through a legacy Mapping wasn't born behind the guardrail, so a `never` over mapped shapes needs a migration/validation obligation at the mapping (the Mapping item, TODO.md).
-
-**Still under discussion:**
-
-- **What kind of statement is `never`?** Three candidate readings. *Verify-only*: a claim the compiler proves from the rest of the spec — but then it's a theorem, the proof-input role is empty (anything verifiable was derivable), and the input-constrained class simply fails (nothing in the spec makes self-referral impossible). *Assume-only*: the prover spends it unverified — an unchecked axiom whose truth traces to nothing, out of character. *The `frozen` playbook* (the recommended reading, named for how `frozen` already works — declare the constraint once, and the compiler demands a fix at every site that could violate it): declared once, the compiler derives a discharge obligation per potential violator — each writer of a rule-maintained invariant must provably settle its transactions outside the configuration (`SuspendManually` above gets exactly that diagnostic); an input-constrained invariant's sole possible violator is the boundary, so its obligation lands on OQ5's who-may-commit declaration — and once every obligation is discharged the invariant is *established*, neither merely checked nor merely assumed, and only then spendable as a proof input (OQ16). The residue under this reading: the discharge vocabulary (what counts as discharging, per kind of site) and whether the diagnostic-led flow stays tractable (OQ16's calibration).
-- **The OQ5/OQ20 unification** — largely clarified by the compiled-guardrail reading above: `never`s (alongside shape types) are the declarative source of boundary validation, and commit-refusal is derived boundary code rather than a language primitive. Remaining: fold this into OQ5's who-may-commit declaration design, and formally retire OQ20's residue against it.
-- **Spelling and site** — top-level `never (<predicate>)` over the existing grammar, with named-refinement emptiness (`never SuspendedInGoodStanding`) as the composable variant.
-- **`never` as the primitive underneath `states of`:**
-
-```
-states of Invoice = Draft | Issued | Paid | Voided
--- decomposes to pairwise emptiness plus coverage:
---   never (Draft and Issued), never (Draft and Paid), ... , and every Invoice in some arm
-```
+Residue under the playbook reading: the **discharge vocabulary** — what counts as discharging, per kind of site — and whether the diagnostic-led flow stays tractable (OQ16's calibration). Also pending: formally retiring OQ20 against the compiled-guardrail ruling, folded into OQ5's boundary-declaration design.
 
 ## The input boundary
 
@@ -172,7 +117,7 @@ shape Review {
 
 Committing a `Review` *is* saving the record — persistence needs no rule (README §12, "No act-level sugar"). What remains of the use case is the timestamps: `createdAt`/`updatedAt` are commit metadata, declared as `timestamp on create` / `on update` fields (README §5) — inherently never committer-suppliable. Where the author wants a timestamp *as model data* — business rules over `submittedOn`, correctable later — the spelling is `submittedOn: Date initially now` (README §5); what remains for this OQ is whether such an ordinary field can be marked internal (not committer-suppliable), the way `timestamp` fields inherently are.
 
-So the boundary declaration this OQ contemplates has three parts: **(1)** who may commit the shape, **(2)** which fields the committer supplies vs. which are internal (an `initially` field is the natural candidate), and **(3)** what commit metadata is readable in predicates and derivations — answered for timestamps (`timestamp` fields, README §5); whether the commit trace is queryable beyond them rides with `why`/provenance (README §21).
+So the boundary declaration this OQ contemplates has three parts: **(1)** who may commit the shape, **(2)** which fields the committer supplies vs. which are internal (an `initially` field is the natural candidate), and **(3)** what commit metadata is readable in predicates and derivations — answered for timestamps (`timestamp` fields, README §5); whether the commit trace is queryable beyond them rides with `why`/provenance (README §22).
 
 Folded in from OQ21 (retired): **supplied vs. generated `id`.** By default the implementation generates an instance's `id` (README §5); at a trust/legacy boundary it is explicitly supplied — a legacy table's primary key, an upstream system's reference. Who may supply one, and when supplying is required, is part (2)'s declaration; the mapping-side mechanics belong to the Mapping item (TODO.md).
 
@@ -200,7 +145,7 @@ Fold enforcement (README §19) means the compiler will be *proposing* guards to 
 
 ### OQ15. Ordered folds and firing order at a tick
 
-Exposed by the fold analysis (README §19): a tick-cadence order-dependent fold (a nightly streak sweep) owes a reordering obligation with no honest discharge — the pending records fire separately at the tick with no defined order among the firings (README §16), declared tolerance is wrong for a streak, and the two missing spellings are both grammar, not analysis: an ordering clause giving one tick's firings a defined order (`ordered by`?), and ordered folds in the derivation grammar (which would let a streak be a derivation over ordered history, dissolving the mutation entirely — README §21's derived-value grammar and selector-syntax items are adjacent). Until one exists, commit-cadence is the only fully-served spelling for order-dependent folds.
+Exposed by the fold analysis (README §19): a tick-cadence order-dependent fold (a nightly streak sweep) owes a reordering obligation with no honest discharge — the pending records fire separately at the tick with no defined order among the firings (README §16), declared tolerance is wrong for a streak, and the two missing spellings are both grammar, not analysis: an ordering clause giving one tick's firings a defined order (`ordered by`?), and ordered folds in the derivation grammar (which would let a streak be a derivation over ordered history, dissolving the mutation entirely — README §22's derived-value grammar and selector-syntax items are adjacent). Until one exists, commit-cadence is the only fully-served spelling for order-dependent folds.
 
 ## Appendix: worked notes
 

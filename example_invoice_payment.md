@@ -143,7 +143,7 @@ What each rule demonstrates:
 - **`FlagOverdueAccounts ... on Daily`** — a sweep: the schedule source fires once per current member, each firing its own transaction (README §16), reacting to a cross-shape aggregate refinement (stress test #4) that only the tick re-checks (stress test #3); the `not exists AccountFlag for this` guard is the cross-tick memory the tick law requires.
 - **`NotifyCustomerOfFlag when AccountFlag`** — chaining through a produced fact: the flag's commit matches this rule's condition the same way an external act's would.
 
-Stress test #5 (reversal) is expressible today — both policies below — but no single canonical pattern has been adopted (README §21); the consolidated `FlagOverdueAccounts` uses the simple once-per-customer guard, which #5's Option A upgrades.
+Stress test #5 (reversal) is expressible today — both policies below — but no single canonical pattern has been adopted (README §22); the consolidated `FlagOverdueAccounts` uses the simple once-per-customer guard, which #5's Option A upgrades.
 
 ## Stress test: order with no data dependency
 
@@ -348,4 +348,4 @@ rule FlagOverdueAccounts
 
 `latest(...)` orders by `startedOn`, the shape's declared creation timestamp (README §10) — repeated grace periods over a customer's lifetime make the singular `(GracePeriod for this)` unprovable, so the selector is required, and the `exists` conjunct narrows it to non-empty.
 
-Both options reuse the same machinery — shapes, refinements, guarded sweeps, `from`-mappings — and the difference is entirely which artifact shapes the human chose to declare and what conditions they wired into `FlagOverdueAccounts`. This was never a gap where the language needed a construct for "reversal semantics": the existing vocabulary encodes either business decision explicitly, and Velle staying silent about which one is correct is the right behavior, not an omission. (Which pattern is *idiomatic* for the common case remains the open reversal item in README §21.)
+Both options reuse the same machinery — shapes, refinements, guarded sweeps, `from`-mappings — and the difference is entirely which artifact shapes the human chose to declare and what conditions they wired into `FlagOverdueAccounts`. This was never a gap where the language needed a construct for "reversal semantics": the existing vocabulary encodes either business decision explicitly, and Velle staying silent about which one is correct is the right behavior, not an omission. (Which pattern is *idiomatic* for the common case remains the open reversal item in README §22.)
