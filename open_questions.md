@@ -8,7 +8,7 @@ The language's open questions. Settled results are promoted into `README.md` as 
 
 **The input boundary**
 
-- **OQ5 — Marking a shape as "external input".** Who may commit a shape; which fields the committer supplies vs. which are internal — including supplied `id`s at trust/legacy boundaries.
+- **OQ5 — Marking a shape as "external input".** Spelling adopted: `expose <Shape> using <configured mechanism>`, over plugins wired into transpilation. Remaining: committer-supplied vs. internal fields (including supplied `id`s at trust/legacy boundaries), and who-may-commit beyond mechanism.
 - **OQ17 — Rejection scope.** If a refusal unwinds the act, what exactly unwinds and what is the committer told?
 - **OQ20 — Is commit-refusal primitive?** Largely answered: refusal is compiled boundary code sourced from `never` (README §21). Remaining: refusal conditions not expressible over the act's own data (caller identity, ambient policy) — OQ5's who-may-commit territory.
 
@@ -83,7 +83,7 @@ The check decomposes along familiar lines: **write-write** conflicts — two sib
 
 ### OQ5. Marking a shape as "external input"
 
-Mutation shapes arrive from outside the system — a user action, an API call — and nothing in the spec currently says so:
+Mutation shapes arrive from outside the system — a user action, an API call — and nothing in a shape's own declaration says so:
 
 ```
 shape CorrectEmail {        -- committed by whom? a user? another rule? an API?
@@ -92,7 +92,28 @@ shape CorrectEmail {        -- committed by whom? a user? another rule? an API?
 }
 ```
 
-An author may eventually want to declare the distinction (e.g. only externally-committed shapes cross a trust/validation boundary; a `visible to`-style clause may want to constrain who can commit one). Deferred — for now a mutation is just another shape.
+**Direction adopted: `expose <Shape> using <configured mechanism>`.** Velle deliberately implements no transport — REST endpoints, GraphQL, socket connections to a message bus are traditional-code territory, and the variety of mechanisms external data arrives on is open-ended. Velle doesn't compete with traditional languages there; what it owns is the **contract** between the spec's higher-level abstractions and the shape of the transpiled code. An external mechanism is a **plugin** — traditional code wired into the transpilation step — configured and named once, then referenced per shape:
+
+```
+configure DefaultRestAPI using REST {
+    ... "REST" plugin config
+}
+
+shape CorrectEmail { ... }
+expose CorrectEmail using DefaultRestAPI
+```
+
+A shorthand collapses the two declarations when a shape is exposed at its own declaration site:
+
+```
+expose shape CorrectEmail { ... } using DefaultRestAPI
+```
+
+This is inline combination of two declarations, not the sugar README §12 ("No act-level sugar") rejects — no positional invariant is spent and no decision is hidden; the standalone form remains for exposing an already-declared shape (a second mechanism, or an exposure declared elsewhere in the spec).
+
+The declaration is the marking this OQ contemplates: an exposed shape is externally committable through the named mechanism; an unexposed shape is internal — an instance can enter the state only as a rule firing's effect. Consequences fall out immediately: the trust boundary is exactly the set of `expose` declarations, so input-constrained `never` guardrails (README §21) get a concrete compilation target — the generated surface at each expose site; and reachability sharpens — an act shape with no `expose` and no producing rule is uncommittable, so a rule triggered by it is the unfireable-rule error (README §11).
+
+Plugin details are deliberately deferred: the `configure` vocabulary, the plugin API, what the generated surface looks like per mechanism. Also unaddressed: whether `expose` also names the *read* surface (querying a shape over the same mechanism) or is strictly about input.
 
 **The anchor use case** — an externally-submitted shape saved whole as a record, with `createdAt`/`updatedAt`:
 
@@ -106,7 +127,7 @@ shape Review {
 
 Committing a `Review` *is* saving the record — persistence needs no rule (README §12, "No act-level sugar"). What remains of the use case is the timestamps: `createdAt`/`updatedAt` are commit metadata, declared as `timestamp on create` / `on update` fields (README §5) — inherently never committer-suppliable. Where the author wants a timestamp *as model data* — business rules over `submittedOn`, correctable later — the spelling is `submittedOn: Date initially now` (README §5); what remains for this OQ is whether such an ordinary field can be marked internal (not committer-suppliable), the way `timestamp` fields inherently are.
 
-So the boundary declaration this OQ contemplates has three parts: **(1)** who may commit the shape, **(2)** which fields the committer supplies vs. which are internal (an `initially` field is the natural candidate), and **(3)** what commit metadata is readable in predicates and derivations — answered for timestamps (`timestamp` fields, README §5); whether the commit trace is queryable beyond them rides with `why`/provenance (README §22).
+What remains of the original three-part boundary declaration under the adopted spelling: **(1)** who may commit — `expose` answers the mechanism half; the caller-identity/ambient-policy/rate half (OQ20's residue) presumably attaches at the expose site or its configuration, and is not designed. **(2)** which fields the committer supplies vs. which are internal (an `initially` field is the natural candidate for internal) — whether this is per-exposure policy (a body on `expose`) or a shape-side declaration is open. **(3)** what commit metadata is readable in predicates and derivations — answered for timestamps (`timestamp` fields, README §5); whether the commit trace is queryable beyond them rides with `why`/provenance (README §22).
 
 Folded in from OQ21 (retired): **supplied vs. generated `id`.** By default the implementation generates an instance's `id` (README §5); at a trust/legacy boundary it is explicitly supplied — a legacy table's primary key, an upstream system's reference. Who may supply one, and when supplying is required, is part (2)'s declaration; the mapping-side mechanics belong to the Mapping item (TODO.md).
 
