@@ -5,13 +5,12 @@ The language's open questions. Settled results are promoted into `README.md` as 
 **What one commit is**
 
 - **OQ16 — Order must not matter.** Can the compiler prove sibling firings commute, and that a transaction quiesces? The hard cases are data-dependent — aliasing, values, termination — where fail-closed rejects legitimate specs; calibration and the discharge vocabulary are the work.
-- **OQ19 — `never`'s establishment model.** The construct is adopted (README §21); what remains is what "established" requires between declaration and use — the discharge vocabulary under the recommended `frozen`-playbook reading.
 
 **The input boundary**
 
 - **OQ5 — Marking a shape as "external input".** Who may commit a shape; which fields the committer supplies vs. which are internal — including supplied `id`s at trust/legacy boundaries.
 - **OQ17 — Rejection scope.** If a refusal unwinds the act, what exactly unwinds and what is the committer told?
-- **OQ20 — Is commit-refusal primitive?** Does any business case require that a well-shaped act not enter the state at all?
+- **OQ20 — Is commit-refusal primitive?** Largely answered: refusal is compiled boundary code sourced from `never` (README §21). Remaining: refusal conditions not expressible over the act's own data (caller identity, ambient policy) — OQ5's who-may-commit territory.
 
 **Rule anatomy and guard ergonomics**
 
@@ -77,18 +76,8 @@ The check decomposes along familiar lines: **write-write** conflicts — two sib
 **Open:**
 
 - **The analysis itself.** Commutativity/confluence checking is charted territory — term rewriting's critical pairs and Newman's lemma (local confluence + termination ⇒ confluence, which ties this proof to quiescence below), CHR confluence tests, Datalog evaluation strategies. What Velle's version is — and how coarse it can be before it rejects legitimate specs — is the work. Fail-closed is given (uncertainty errors, README §12's stance); calibration is not.
-- **Discharge vocabulary.** The aliasing case suggests OQ19's `never` invariants are not just verification but *proof inputs*: `never (Customer where referrer == this)` turns the collision condition into a proven impossibility the disjointness analysis may use — the author states a data invariant, the prover spends it. Whether declared invariants feed the confluence and one-writer analyses — and what else belongs in the discharge toolbox (conditioning one sibling on the other's outcome to make the dependency real; some not-yet-designed decreasing-measure spelling for cycles) — is calibration's concrete form.
+- **Discharge vocabulary.** The aliasing case is what showed `never` invariants (since adopted — README §21) are not just verification but *proof inputs*: `never (Customer where referrer == this)` turns the collision condition into a proven impossibility the disjointness analysis may use — the author states a data invariant, the prover spends it. Whether declared invariants feed the confluence and one-writer analyses — and what else belongs in the discharge toolbox (conditioning one sibling on the other's outcome to make the dependency real; some not-yet-designed decreasing-measure spelling for cycles) — is calibration's concrete form.
 - **Quiescence.** A transaction completes when no rule's condition is newly matched — it must quiesce, and Newman's lemma needs termination for confluence to follow from local checks. Cycles in the static condition graph are detectable (derived trigger sets), but convergence can be value-dependent (the parcel-splitting example above) — undecidable in general. The folds precedent (README §19) applies: prove quiescence structurally (a DAG, or cycles broken by disarming guards), fail closed on the rest. Whether the disarm proof suffices is unexamined.
-
-### OQ19. `never` — the establishment model
-
-The construct is adopted (README §21): a top-level keyword over the predicate grammar (named-refinement form included), enforced at transaction end, proven inductively for rule-maintained invariants, compiled into the boundary for input-constrained ones, and spendable as a proof input (OQ16). What remains is the **establishment model** — what kind of statement a `never` is between declaration and use:
-
-- *Verify-only* — a theorem the compiler proves from the rest of the spec. Fails twice: the proof-input role is empty (anything verifiable was derivable without the declaration), and the input-constrained class has nothing spec-side to verify.
-- *Assume-only* — an unchecked axiom the prover spends. Its truth traces to nothing; out of character for the language.
-- *The `frozen` playbook* (recommended) — declared once; the compiler derives a discharge obligation per potential violator: author-side fixes for rule-maintained writers (condition the act, restore within the transaction), automatically-emitted guardrails for the boundary, validation obligations at legacy mappings. Once every obligation is discharged the invariant is **established** — neither merely checked nor merely assumed — and only then spendable by other analyses.
-
-Residue under the playbook reading: the **discharge vocabulary** — what counts as discharging, per kind of site — and whether the diagnostic-led flow stays tractable (OQ16's calibration). Also pending: formally retiring OQ20 against the compiled-guardrail ruling, folded into OQ5's boundary-declaration design.
 
 ## The input boundary
 
@@ -127,7 +116,7 @@ If a refusal unwinds the act (commit-refusal), what exactly unwinds, what the co
 
 ### OQ20. Is commit-refusal primitive, or derivable from reified refusal?
 
-A full validate-and-reject flow needs no transaction machinery ("Validation rejection is data," in the appendix), and immutability needs no commit-refusal either (`frozen` — README §8, "Frozen fields") — which raises whether the language needs commit-refusal at all above the type/trust boundary (level 1 of the invalid layering — OQ5's territory, where it's irreducible). What remains is the residue: does any business case require that a well-shaped act *not enter the state* (compliance/data-retention pressures — "we may not store this request at all")? If so, is that declared per-act-shape or per-boundary (OQ5's who-may-commit declaration being the natural home)?
+A full validate-and-reject flow needs no transaction machinery ("Validation rejection is data," in the appendix), and immutability needs no commit-refusal either (`frozen` — README §8, "Frozen fields"). The `never` adoption largely answered what remained (README §21): well-shaped acts that *must not enter the state* do exist — invariant-violating ones — and their refusal is **derived boundary code**, compiled from `never` declarations, landing below the language alongside can't-inhabit-the-type. Commit-refusal is not a language primitive. The compliance/data-retention case ("we may not store this request at all") is covered wherever the refusal condition is a predicate over the act's own data — that's just a `never` over the act shape, guardrail included. What remains is narrow: refusal conditions *not* expressible as predicates over the act's data — caller identity, ambient policy, rate — which is exactly OQ5's who-may-commit declaration. This OQ is likely retired into OQ5 once that declaration is designed.
 
 ## Rule anatomy and guard ergonomics
 
@@ -153,7 +142,7 @@ Supporting examples the questions above lean on, not carried in the README.
 
 ### A cascade, concretely
 
-*Context for OQ16 (sibling firing order) and OQ19 (nesting) — the transaction shape those questions reason about.*
+*Context for OQ16 (sibling firing order) — the transaction shape the question reasons about. The nesting model itself is settled (README §11).*
 
 ```
 shape Account {
