@@ -1,21 +1,25 @@
 # Open Questions
 
-The language's open questions. Settled results are promoted into `README.md` as they land; supporting examples the questions lean on are collected in the appendix at the bottom. OQ tags are stable — numbers are never renumbered or reused, so existing references (`OQ7`, `OQ16`) stay valid, and gaps in the sequence are questions already settled.
+The language's open questions, sorted by what the current milestone needs. The milestone: get Velle to the point where a validator/transpiler can be written against it and produce an executable runtime to continue testing with. Settled results are promoted into `README.md` as they land; supporting examples the questions lean on are collected in the appendix at the bottom. OQ tags are stable — numbers are never renumbered or reused, so existing references (`OQ14`, `OQ16`) stay valid, and gaps in the sequence are questions already settled.
 
-**What one commit is**
+**Required for v0 — all settled.** The five questions that stood between the spec and an implementable validator/transpiler are closed; v0 is fully specified and the milestone is now implementation. Where each retired to: the construct set (OQ21) and the harness boundary (OQ24) into the scope statement heading README §22 — §3–§21 as written; `expose <Shape> using MockHarness` transpiling to per-shape input functions plus a generated `main`; tick and clock control as generated functions plain Kotlin calls (scheduled events and user acts are both external input); refusals naming what they violated; reading via generated typed accessors. The builtin surface (OQ23) into README §5 and §10 — Kotlin-grounded scalars, `java.time` temporals, receiver-dependent duration steps, the closed function list, `Money` as a preview of post-v0 extensible data types. The grammar (OQ22) into `grammar.md` — the normative whole-surface grammar, all nine decision points decided. And the operational semantics and check catalog (OQ25) into `evaluation.md` and `checks.md` — the evaluation model with its five signed v0 spike choices (in-memory state, synchronous FIFO `after commit`, declaration-order firing with a depth backstop, no automatic retry, transaction-end `never` tripwire), and the 23-entry validator catalog whose V14–V16 are the coarse fail-closed slices of OQ15–16 below.
 
-- **OQ16 — Order must not matter.** Can the compiler prove sibling firings commute, and that a transaction quiesces? The hard cases are data-dependent — aliasing, values, termination — where fail-closed rejects legitimate specs; calibration and the discharge vocabulary are the work.
 
-**The input boundary**
+**Deferrable past v0 — calibration and residue.** None of these block the build. OQ14–16 are precisely the questions v0 exists to answer empirically — v0 ships coarse fail-closed versions and real specs calibrate them.
 
-- **OQ17 — Rejection scope.** If a refusal unwinds the act, what exactly unwinds and what is the committer told?
-- **OQ20 — Is commit-refusal primitive?** Largely answered: refusal is compiled boundary code sourced from `never` (README §21). Remaining: refusal conditions not expressible over the act's own data (caller identity, ambient policy) — who-may-commit territory at the `expose` boundary (README §22, "External input mechanisms").
+*What one commit is*
 
-**Rule anatomy and guard ergonomics**
+- **OQ16 — Order must not matter.** Can the compiler prove sibling firings commute, and that a transaction quiesces? The hard cases are data-dependent — aliasing, values, termination — where fail-closed rejects legitimate specs; calibration and the discharge vocabulary are the work. *v0 stance: ship the easy static checks (literal-path write-write and read-write conflicts, DAG-or-disarmed-cycle quiescence), fail closed on everything else; calibration is what running v0 against realistic specs is for.*
 
-- **OQ7 — Rule anatomy, remaining threads.** What an exit rule may read; latency vocabulary; `on commit of <Shape>` narrowing.
-- **OQ14 — Diagnostic-led guard adoption.** Is the canonical guard form pleasant enough for a compiler diagnostic to demand?
-- **OQ15 — Ordered folds and firing order at a tick.** No honest discharge yet exists for a tick-cadence order-dependent fold.
+*The input boundary*
+
+- **OQ17 — Rejection scope.** If a refusal unwinds the act, what exactly unwinds and what is the committer told? *v0 stance: the settled harness boundary (README §22's scope statement) fixes a minimal answer — a refusal names the violated `never` and nothing commits; the general question stays open here.*
+- **OQ20 — Is commit-refusal primitive?** Largely answered: refusal is compiled boundary code sourced from `never` (README §21). Remaining: refusal conditions not expressible over the act's own data (caller identity, ambient policy) — who-may-commit territory at the `expose` boundary (README §22, "External input mechanisms"). *v0 stance: v0 ships `expose ... using MockHarness` (README §22's scope statement), which carries no caller identity or who-may-commit conditions; the residue stays with real mechanism design.*
+
+*Guard ergonomics and folds*
+
+- **OQ14 — Diagnostic-led guard adoption.** Is the canonical guard form pleasant enough for a compiler diagnostic to demand? *v0 stance: answered by using v0, not before it — the fold diagnostics ship writing the canonical form and authors' reactions are the data.*
+- **OQ15 — Ordered folds and firing order at a tick.** No honest discharge yet exists for a tick-cadence order-dependent fold. The derivation-side answer is a predecessor recurrence — expressible today, needing only a well-foundedness proof (stratify the definition graph, certify its cycles), not new grammar; ordering ties are the author's modeling problem, not the language's. *v0 stance: ship stratification plus the strict-descent certificate whitelist, fail closed; commit-cadence remains the served spelling for the mutation form.*
 
 ## What one commit is
 
@@ -88,15 +92,7 @@ If a refusal unwinds the act (commit-refusal), what exactly unwinds, what the co
 
 A full validate-and-reject flow needs no transaction machinery ("Validation rejection is data," in the appendix), and immutability needs no commit-refusal either (`frozen` — README §8, "Frozen fields"). The `never` adoption largely answered what remained (README §21): well-shaped acts that *must not enter the state* do exist — invariant-violating ones — and their refusal is **derived boundary code**, compiled from `never` declarations, landing below the language alongside can't-inhabit-the-type. Commit-refusal is not a language primitive. The compliance/data-retention case ("we may not store this request at all") is covered wherever the refusal condition is a predicate over the act's own data — that's just a `never` over the act shape, guardrail included. What remains is narrow: refusal conditions *not* expressible as predicates over the act's data — caller identity, ambient policy, rate — which is who-may-commit territory at the `expose` boundary; OQ5's resolution places it at the expose site or its configuration (README §22, "External input mechanisms"). This OQ is likely retired into that construct's design once who-may-commit is designed.
 
-## Rule anatomy and guard ergonomics
-
-### OQ7. Rule anatomy and timing — remaining threads
-
-The core anatomy — condition, trigger source, entry/exit transitions, the tick law, firing reliability under the transaction model — is settled (README §11, §13, §17, §18). Still open:
-
-- **What an exit rule may read.** README §13 is being re-derived under commit-local transitions; the settled part is the constraint — captured properties retract at the very moment a `when leaving` rule fires, so reading them is a compile error — but the full account of what the body may reference (current data, durable evidence produced during membership) needs its own pass. §13 carries a tentative marker pointing here.
-- **Latency vocabulary** — `on` expresses the evaluation *source*, not latency *requirements*. Is "immediate by default, named schedule otherwise" enough, or do deadlines ("within 24h") deserve first-class expression the compiler validates against declared cadences?
-- **`on commit of <Shape>` narrowing** — "only withdrawals suspend, not fee assessments." Expressible and occasionally meaningful, but it can silently miss entry paths; per flexible-not-restrictive it would be allowed *with* the compiler reporting exactly which entry paths go unobserved. Not yet designed.
+## Guard ergonomics and folds
 
 ### OQ14. Diagnostic-led guard adoption
 
@@ -128,7 +124,39 @@ rule TrackStreak when UnfoldedPayment on Nightly {
 
 `streak` has one writer, the disarm proof holds (`folded` falsifies the trigger), and the guard discharges duplication — a crashed sweep re-fires only stragglers. What remains is exactly reordering. At one tick, an account with three pending payments — on-time, late, on-time by `receivedOn` — should settle at `streak == 1` (up, reset, up). But each firing at a tick is its own transaction with no defined order among the firings (README §16, §17), and every order is a different answer: fold the late payment first and the account ends at 2; fold it last and the account ends at 0. One data set, three describable outcomes — the spec describes several systems and never says which, the same incoherence OQ16 rejects for sibling firings *within* a transaction, here surfacing between the separate transactions of one tick. Declared tolerance is no discharge: `tolerates reordering` on `streak` would be a false statement rather than an accepted risk — the value is exactly order-sensitive, the case README §19 names as wrong for a streak.
 
-The two missing spellings are both grammar, not analysis, and map directly onto the example: an ordering clause giving one tick's firings a defined order (`on Nightly ordered by receivedOn`?), keeping the mutation; and ordered folds in the derivation grammar — `streak: integer = <fold over (Payment for this) ordered by receivedOn>` — dissolving the mutation entirely: no stored field, no guard, no obligation at all, the README §12 ledger stance applied to folds (README §22's derived-value grammar and selector-syntax items are adjacent). Until one exists, commit-cadence is the only fully-served spelling for order-dependent folds — the twin `when Payment` rule (README §19's showcase) buys order-safety structurally: commits are serialized, so fold order *is* commit order.
+Two ways out, and only one of them is grammar. **Keeping the mutation** needs an ordering clause giving one tick's firings a defined order (`on Nightly ordered by receivedOn`?) — new surface, not yet designed. **Dissolving the mutation** turns out to need no new construct at all: a fold over ordered history is expressible today as a *recurrence through a derived predecessor* — self-reference one hop through a relationship (README §7), the README §12 ledger stance applied to folds:
+
+```
+shape Payment {
+    account: one Account
+    onTime: boolean
+    receivedOn: timestamp on create
+    previous: one Payment? = latest(Payment where account == this.account and receivedOn < this.receivedOn)
+    streakAfter: integer =
+        if not onTime then 0
+        else if previous is some then previous.streakAfter + 1
+        else 1
+}
+
+shape Account {
+    streak: integer = if exists Payment for this
+                      then latest(Payment for this).streakAfter
+                      else 0
+}
+```
+
+Nothing here is new mechanism: `previous` is an ordinary derived to-one (`latest` ordering by the sole `timestamp on create` — the settled default, no `by` syntax even needed), `streakAfter` is sanctioned self-reference with existing narrowing, and the current value is a selector read. No stored field, no guard, no obligation — and *more* than a fold: `streakAfter` is readable history ("the streak as of each payment"), a chain `why` can walk. A dedicated `fold over ... ordered by` construct would therefore be sugar over this recurrence, not a primitive — the incremental/recompute relationship from README §19 again (one description, two spellings; rung recognition free to point at the twin) — and since its step expression would need an accumulator binding, the closest Velle would come to a lambda, it faces the no-sugar bar (README §18) with a real burden to meet.
+
+What the recurrence still needs from the language is one proof, not grammar — **well-foundedness**, and it scopes smaller than it sounds. Velle's expression grammar cannot itself diverge: every README §10 predicate is finite text over finite data — no loop construct, no lambda, no recursive predicate mechanism — so any single expression terminates structurally. The only recursion in the language is *named definitions referencing named definitions*: a derived property's formula mentioning other derived properties, including its own one hop through a relationship (README §7), and refinements naming refinements. Evaluation is definition-unfolding, and unfolding is the one thing that can fail to bottom out — so the obligation is exactly: **the definition graph, instantiated over the data, must be well-founded**. That factors into charted territory — stratify, then certify:
+
+- **The acyclic part of the definition graph is free.** Build the static dependency graph of definitions; where it's acyclic, every unfolding chain is finite and no analysis is needed — Datalog's stratification, covering the overwhelming majority of any real spec (`balance = amount - sum(payments, amount)` threatens nothing).
+- **Each static cycle owes a certificate.** `streakAfter → previous → streakAfter` descends a strict comparison on a creation-fixed datum — provably finite. `root → parent → root` (README §7's own example) descends a stored relationship, so it needs an acyclicity guarantee, which a `never` invariant can supply (`never (Foo where parent == this)` for the direct case — an invariant spent as a proof input, README §21). No certificate is a compile error. A definitional cycle with no well-founded reading at all (`shape A = X where this is B` / `shape B = X where this is A`) is rejected by the same check — sparing the language from ever needing fixpoint semantics.
+
+This is not the halting problem taken on: the general question stays undecidable and is never attempted — the check accepts certificates from a decidable whitelist and fails closed on the rest, legit-but-unprovable included, exactly the README §19 fold stance aimed at termination (OQ16's parcel cascade names the same limit for rule cascades). What's open is the whitelist's size — strict descent plus base case is clearly in; growing it (a decreasing-measure spelling, richer invariant-fed acyclicity) is the same calibration OQ16's discharge vocabulary already owns.
+
+Ordering ties, by contrast, are **the author's problem, not the language's**. Two payments with the same `receivedOn` make `previous` (and any `latest`) ambiguous — but if the business's records can tie on the ordering datum, the *model* owes additional ordering criteria; that's a product decision, the same category as guard granularity (README §18, "No guard sugar"). The compiler's job is the usual one — fail closed where it can't prove the order total and the result depends on it — and the fix is model-side, never new machinery. `latest`/`first` are convenience helpers over the predicate grammar, not top-level language structures; whether the selector family grows richer ordering spellings is ordinary vocabulary expansion (README §22's selector-syntax item), not a problem with Velle.
+
+Until the well-foundedness proof lands, commit-cadence remains the only fully-served spelling for the *mutation* form — the twin `when Payment` rule (README §19's showcase) buys order-safety structurally: commits are serialized, so fold order *is* commit order.
 
 ## Appendix: worked notes
 

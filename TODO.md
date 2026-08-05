@@ -58,6 +58,6 @@ Split two ways, per `README.md` `## Principles`. **Language & structure** is wha
 
 ## Neither — process / research
 
-- [ ] Bigger realistic worked examples — after the language open questions settle; carries the deferred calibration questions (rung-recognition boundaries, README §20; boundary-apparatus legibility at scale, formerly OQ19)
+- [ ] Bigger realistic worked examples — after the language open questions settle; carries the deferred calibration questions (rung-recognition boundaries, README §20; boundary-apparatus legibility at scale, formerly OQ19; `when leaving R on <schedule>` tick-exit semantics — leavers at the tick commit itself, derived in `evaluation.md` "Ticks" — stress-test that reading, since a schedule-only leaving-rule observes only aging-out exits)
 
 - [ ] Prior art mining — Eve, Alloy, CUE, Datalog, SQL, named in the very first design conversation; `example_predicates.md` #8 did a first real pass on Datalog specifically, the rest remain unstudied. Now also: term rewriting (critical pairs, Newman's lemma) and CHR confluence checking, load-bearing for OQ16's order-independence proof (`open_questions.md`)
