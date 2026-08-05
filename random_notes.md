@@ -36,6 +36,10 @@ A developer will be able to provide new data types. Velle will provide an API th
 
 A developer will be able to provide new predicate functions. Velle provides an API for this in the same way. Velle's registration API should include any metadata to tell the velle validator whether it is idempotent or potentially any `tolerates` it might require/support.
 
+Same for "expose" mechanisms.
+
+These could be sharable via libraries, open source, or custom code on file that Velle can locate.
+
 This sets up an architecture:
 
 1. The Velle language + compiler + environment
