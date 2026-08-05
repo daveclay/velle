@@ -50,7 +50,7 @@ Split two ways, per `README.md` `## Principles`. **Language & structure** is wha
 - [ ] Source provenance tooling — a `why` command tracing generated/running behavior back to the Velle source construct responsible (rule/refinement/shape); compile-time/source-level, closer to a source map
 - [ ] Compiler-emitted conformance tests + generated implementation for escape-hatch contracts — the execution side of the escape-hatch language decision above
 - [ ] Given/Then spec-generation tooling — decided conceptually (`README.md` `# Testing`), no concrete generator designed
-- [x] Parser / implementation — **started** (the v0 spec settled first: `grammar.md`, `evaluation.md`, `checks.md`). Kotlin/Gradle project at the repo root: lexer + AST + recursive-descent parser written from `grammar.md`, with `billing.velle` — the first Velle spec — parsing green under test (`src/test/kotlin/velle/`). Next: the validator (`checks.md`), then the runtime + MockHarness codegen (`evaluation.md`)
+- [x] Parser / implementation — **started** (the v0 spec settled first: `grammar.md`, `evaluation.md`, `checks.md`). Kotlin/Gradle project at the repo root: lexer + AST + recursive-descent parser written from `grammar.md`, plus the coarse fail-closed validator from `checks.md` (F1–F4; V1–V8, V10, V13–V16 in v0 form; V11/V12 narrowing and at-most-one proofs still TODO) — `billing.velle` parses and validates clean, and broken-spec fixtures exercise each diagnostic (`src/test/kotlin/velle/`). Next: the runtime + MockHarness codegen (`evaluation.md`)
 
 ### Bigger, deferred on purpose
 

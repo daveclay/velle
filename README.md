@@ -82,7 +82,7 @@ shape Invoice {
 }
 ```
 
-`one`/`many` declare cardinality directly on a property. The inverse side of a relationship is inferred, not separately declared — e.g. `Customer` does not need its own `invoices: many Invoice` field for `Customer where count(invoices ...)` to work; it's derived from `Invoice.customer`.
+`one`/`many` declare cardinality directly on a property. The inverse side of a relationship is inferred, not separately declared — e.g. `Customer` does not need its own `invoices: many Invoice` field for `Customer where count(invoices ...)` to work; it's derived from `Invoice.customer`. The inferred collection's name is the related shape's name, decapitalized and pluralized with `s`: `Invoice.customer: one Customer` gives `Customer` an `invoices` collection; `LineItem.invoice: one Invoice` gives `Invoice` a `lineItems` collection. (A declared `many` field with an author-chosen name remains legal where the derived name reads badly.)
 
 ## 7. Derived properties
 
