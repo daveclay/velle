@@ -26,3 +26,10 @@ java {
 tasks.test {
     useJUnitPlatform()
 }
+
+tasks.register<JavaExec>("generate") {
+    description = "Regenerate the MockHarness typed surface from billing.velle"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("velle.GenerateKt")
+    args = listOf("billing.velle", "Billing")
+}
