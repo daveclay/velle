@@ -27,7 +27,7 @@ Casing is **enforced, not convention**: the case of a name's first letter is loa
 
 Keywords (reserved, never identifiers): `shape` `rule` `never` `expose` `using` `when` `leaving` `on` `after` `commit` `where` `and` `or` `not` `is` `exists` `for` `from` `then` `if` `else` `as` `this` `none` `some` `empty` `one` `many` `initially` `captured` `frozen` `tolerates` `timestamp` `create` `update` `true` `false` — plus the scalar type names, the duration units, `now`, and `today`. Builtin function names (`count`, `sum`, `latest`, `first`, `lowercase`, `max`, `min`) and the generator `randomUUID` are ordinary identifiers resolved as builtins, not keywords.
 
-**Statements and declarations are line-oriented** — no semicolons, no braces around individual statements; a newline ends a statement, and `then` joining two effects stands on its own line (README §15's example is already written this way). This is what keeps `then`-the-statement-connector and `then`-the-conditional-keyword unambiguous.
+**Statements and declarations are line-oriented** — no semicolons, no braces around individual statements; a newline ends a statement, and `then` joining two effects stands on its own line (README §15's example is already written this way). This is what keeps `then`-the-statement-connector and `then`-the-conditional-keyword unambiguous. Within braces, a comma is equivalent to a newline as a member separator — `{ customer: one Customer, corrected: text }` and `from { invoice: this, sentOn: now }` are the one-line spellings of the multi-line forms. Inside parentheses, newlines are insignificant (a long predicate may wrap freely).
 
 ## Spec structure
 
@@ -110,7 +110,7 @@ assignment    := path "=" valueExpr
 
 creation      := ShapeName "from" "{" fieldInit* "}"
               | ShapeName "for" valueExpr (fieldInit)*     -- the compact form: Receipt for invoice sentOn: now
-fieldInit     := Identifier ":" valueExpr                  -- one per line inside "from { }"
+fieldInit     := Identifier ":" valueExpr                  -- newline- or comma-separated inside "from { }"
 ```
 
 `from { ... }` is the general, totality-checked form; `for` populates the one type-matched field and stops applying when more than one field matches (README §14). Statements not joined by `then` are unordered (README §15).
