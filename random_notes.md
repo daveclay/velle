@@ -54,7 +54,8 @@ This sets up an architecture:
     - in the developer's workspace
     - developer owns that code
     - separate from the developer's Velle extensions (separate concerns: custom extensions won't change when the Velle spec changes. Could be a shared library, or open source extensions)
-    - produces both executable tests, and executable runtime
+    - produces executable runtime
+    - produces executable tests that verify the runtime.
 
 
 ## Typical Language Constructs

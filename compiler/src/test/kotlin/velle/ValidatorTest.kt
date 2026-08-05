@@ -14,7 +14,7 @@ class ValidatorTest {
 
     @Test
     fun `billing fixture validates with no diagnostics`() {
-        val result = Validator.validate(File("billing.velle").readText())
+        val result = Validator.validate(File("../billing.velle").readText())
         assertEquals(emptyList(), result, "expected a clean fixture, got: $result")
     }
 

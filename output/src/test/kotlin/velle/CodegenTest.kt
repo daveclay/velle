@@ -12,7 +12,7 @@ import velle.generated.BillingSystem
 class CodegenGoldenTest {
     @Test
     fun `the checked-in generated surface matches the generator`() {
-        val expected = Codegen.generate(File("billing.velle").readText(), "Billing")
+        val expected = Codegen.generate(File("../billing.velle").readText(), "Billing")
         val actual = File("src/main/kotlin/velle/generated/Billing.kt").readText()
         assertEquals(expected, actual, "generated surface drifted — run: gradle generate")
     }
