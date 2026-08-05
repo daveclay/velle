@@ -30,6 +30,29 @@ A declarative language to describe a system. It abstracts away the stack, functi
     - I'm thinking a condition is a shape that can be associated with another shape (putting conditions on relationships, for example)
 - "Compiling" Velle results in 1) validating shapes and relationships through strong types and 2) deterministic, executable spec tests that AI or human-generated code can be verified against.
 
+# Transpilation Architecture & Design
+
+A developer will be able to provide new data types. Velle will provide an API that allows the developer to write some code that tells the velle "compiler" about the data type when they execute the velle compiler.
+
+A developer will be able to provide new predicate functions. Velle provides an API for this in the same way. Velle's registration API should include any metadata to tell the velle validator whether it is idempotent or potentially any `tolerates` it might require/support.
+
+This sets up an architecture:
+
+1. The Velle language + compiler + environment
+    - the compiler/validator executable
+    - Velle looks for extensions in the developer's workspace
+2. The Velle language extension framework
+    - custom data types
+    - custom predicate functions
+    - packaged, installed options, not just custom code
+    - open source, shared (think of shared business domain extensions, like a "Velle finance extensions" library)
+3. The transpile output from Velle
+    - in the developer's workspace
+    - developer owns that code
+    - separate from the developer's Velle extensions (separate concerns: custom extensions won't change when the Velle spec changes. Could be a shared library, or open source extensions)
+    - produces both executable tests, and executable runtime
+
+
 ## Typical Language Constructs
 What makes up the definition of a system?
 
