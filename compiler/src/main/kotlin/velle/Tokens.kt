@@ -28,10 +28,14 @@ val KEYWORDS: Set<String> = setOf(
     "timestamp", "create", "update",
     "true", "false",
     "now", "today",
-    "seconds", "minutes", "hours", "days", "weeks",
     "text", "integer", "long", "decimal", "double", "boolean",
 )
 
+/**
+ * Contextual, not reserved: a unit word is recognized only immediately after an
+ * integer literal (`3 days`), the one position the grammar gives it — everywhere
+ * else `days`, `minutes`, ... are ordinary identifiers (`minutes: integer`).
+ */
 val DURATION_UNITS = setOf("seconds", "minutes", "hours", "days", "weeks")
 val SCALAR_KEYWORDS = setOf("text", "integer", "long", "decimal", "double", "boolean")
 

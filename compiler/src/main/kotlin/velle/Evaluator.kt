@@ -222,10 +222,10 @@ class Evaluator(private val system: VelleSystem) {
     private fun combinations(c: CollectionExpr, ctx: Ctx): Sequence<Ctx> {
         var ctxs = sequenceOf(ctx)
         for (b in c.bindings) {
-            ctxs = ctxs.flatMap { outer ->
-                val (scope, ids) = bindingCandidates(b, outer)
-                ids.asSequence().map { outer.push(scope, it, b.alias) }
-            }
+            // sibling bindings all resolve against the same enclosing subject
+            // (README §10) — only the shared `where` sees the pushed frames
+            val (scope, ids) = bindingCandidates(b, ctx)
+            ctxs = ctxs.flatMap { outer -> ids.asSequence().map { outer.push(scope, it, b.alias) } }
         }
         return if (c.where == null) ctxs else ctxs.filter { truthy(eval(c.where, it)) }
     }

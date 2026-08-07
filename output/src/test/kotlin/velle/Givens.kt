@@ -1,7 +1,8 @@
-package velle.generated
+package velle.generated.billing
 
 import java.math.BigDecimal
 import java.time.LocalDate
+import velle.generated.BillingSystem
 
 /**
  * The human-owned scenarios the generated specs demand (testgen.md): how to

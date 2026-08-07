@@ -57,6 +57,33 @@ This sets up an architecture:
     - produces executable runtime
     - produces executable tests that verify the runtime.
 
+## Escape Hatch
+
+Existing escape hatches in other frameworks are absolute garbage.
+
+An engineer uses framework X, it produces code, and as soon as the product owner asks for a single unsupported use case, the engineer is forced to abandoned the framework.
+
+The same problem happens with all codegen: it only works for use cases foreseen by the framework. Reality is always more complicated.
+
+Velle's codegen needs to address this.
+
+Philosophy: 
+
+## Framework or Language?
+
+Velle could be a language as a _starting_ point:
+- write velle
+- transpile into code
+- build API/db etc around it
+
+Velle could be a _framework_:
+- write an application
+- add the Velle library
+- write velle
+- initialize velle runtime using the velle spec
+- transpile into code that the app uses
+
+Either way, the "hard" part is the integration points where we have to generate code for what velle manages, and expose lower-level constructs for things like APIs and DBs.
 
 ## Typical Language Constructs
 What makes up the definition of a system?

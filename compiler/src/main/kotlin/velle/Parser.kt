@@ -423,8 +423,10 @@ class Parser(private val tokens: List<Token>) {
         return when {
             t.type == TokType.INT -> {
                 next()
+                // duration units are contextual: only a unit word directly after an
+                // integer literal reads as one (Tokens.kt, DURATION_UNITS)
                 val unit = peek()
-                if (unit.type == TokType.KW && unit.text in DURATION_UNITS) {
+                if (unit.type == TokType.LIDENT && unit.text in DURATION_UNITS) {
                     next(); DurationLit(t.text.toLong(), unit.text)
                 } else IntLit(t.text.toLong())
             }

@@ -220,6 +220,7 @@ class Validator(private val model: Model) {
 
     private fun checkCollection(c: CollectionExpr, scope: String, sumField: String? = null) {
         var element = scope
+        val introduced = mutableListOf<String>()
         for (b in c.bindings) {
             when (val src = b.source) {
                 is PathExpr ->
@@ -231,17 +232,25 @@ class Validator(private val model: Model) {
                 is ShapeForSource -> { checkExpr(src.forExpr, scope); element = src.shape }
                 else -> checkExpr(src, scope)
             }
+            // an alias names this binding's element, visible to the shared `where`
+            // and anything nested inside it (README §10, `as`)
+            b.alias?.let { aliasScopes[it] = element; introduced.add(it) }
         }
         c.where?.let { checkExpr(it, element) }
         sumField?.let {
             if (model.membersOf(element)[it] == null)
                 diags.add(Diagnostic("F1", "sum(..., $it) — '$element' has no member '$it'"))
         }
+        introduced.forEach { aliasScopes.remove(it) }
     }
+
+    /** `as`-alias → element scope, live while the binding's `where` is checked. */
+    private val aliasScopes = mutableMapOf<String, String>()
 
     private fun resolvePath(p: PathExpr, scope: String) {
         var current: String? = when {
             p.root == "this" -> scope
+            p.root in aliasScopes -> aliasScopes[p.root]
             p.root in model.shapes || p.root in model.refinements -> return // membership atom / collection source
             else -> {
                 val m = model.membersOf(scope)[p.root]
@@ -371,10 +380,12 @@ class Validator(private val model: Model) {
         conditionConjuncts(rule.condition).mapNotNull { conjunct ->
             val inner = (conjunct as? NotExpr)?.inner ?: return@mapNotNull null
             when {
-                inner is ExistsExpr && inner.shape != null -> GuardAtom.Witness(inner.shape)
+                inner is ExistsExpr && inner.shape != null ->
+                    GuardAtom.Witness(model.baseOf(inner.shape) ?: inner.shape)
                 inner is ExistsExpr && inner.collection != null ->
                     (inner.collection.bindings.firstOrNull()?.source as? PathExpr)
-                        ?.takeIf { it.root in model.shapes }?.let { GuardAtom.Witness(it.root) }
+                        ?.takeIf { it.root in model.shapes || it.root in model.refinements }
+                        ?.let { GuardAtom.Witness(model.baseOf(it.root) ?: it.root) }
                 inner is PathExpr && inner.segs.isEmpty() -> GuardAtom.Flag(inner.root)
                 else -> null
             }
@@ -395,12 +406,16 @@ class Validator(private val model: Model) {
                     (if (atoms.isEmpty()) "a dischargeable guard" else "a backstop schedule") +
                     " — this firing can be lost at the declared boundary (README §11, §18)"))
         }
-        // V2: a guarded rule that can re-evaluate (boundary or tick) must disarm its own trigger
+        // V2: a guarded rule that can re-evaluate (boundary or tick) must disarm its own
+        // trigger. Falsifying any one conjunct falsifies the conjunction, so one
+        // disarmed atom discharges the proof — the others are conditions, not guards.
         if (atoms.isNotEmpty() && (rule.preposition == "after" || schedules.isNotEmpty())) {
-            atoms.filterNot { disarmed(rule, it) }.forEach { atom ->
-                val what = when (atom) {
-                    is GuardAtom.Witness -> "produce a '${atom.shape}'"
-                    is GuardAtom.Flag -> "assign '${atom.name}'"
+            if (atoms.none { disarmed(rule, it) }) {
+                val what = atoms.joinToString(" or ") { atom ->
+                    when (atom) {
+                        is GuardAtom.Witness -> "produce a '${atom.shape}'"
+                        is GuardAtom.Flag -> "assign '${atom.name}'"
+                    }
                 }
                 diags.add(Diagnostic("V2", "rule '${rule.name}' never leaves its trigger state — its body must $what (the disarm law, README §18)"))
             }
@@ -608,7 +623,9 @@ class Validator(private val model: Model) {
                 diags.add(Diagnostic("V8", "'${w.owner}.${w.member.name}' folds its own value and can be applied twice " +
                     "(rule '${w.rule.name}') — gate it on a dischargeable state, derive it, add a reconciliation sweep, " +
                     "or declare `tolerates duplication` (README §19)"))
-            val orderSafe = assignment.value.let { it is Binary && it.op == "+" }
+            // +/- folds commute with each other ((x-a)-b == (x-b)-a); only genuinely
+            // order-dependent forms (streaks, resets) fail this
+            val orderSafe = assignment.value.let { it is Binary && it.op in setOf("+", "-") }
             if (schedules.isNotEmpty() && !orderSafe && tolerates != "reordering")
                 diags.add(Diagnostic("V8", "'${w.owner}.${w.member.name}' is an order-dependent fold on a tick cadence " +
                     "(rule '${w.rule.name}') — nothing orders one tick's firings (README §19, OQ15)"))

@@ -21,10 +21,9 @@ tasks.test {
 }
 
 tasks.register<JavaExec>("generate") {
-    description = "Regenerate the MockHarness typed surface from billing.velle"
+    description = "Regenerate the MockHarness typed surfaces and executable specs from the .velle specs"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("velle.GenerateKt")
-    args = listOf("../billing.velle", "Billing")
 }
 
 kotlin {

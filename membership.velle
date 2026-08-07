@@ -1,0 +1,312 @@
+-- Membership: a streaming-service membership system — the second Velle spec.
+-- Complements billing.velle by exercising what it doesn't: optional fields and
+-- narrowing (`is some`, `?.`), an optional self-relationship, or-composition and
+-- refinement-of-refinement chains, the ledger pattern with latest(...), the
+-- flag-witness guard, min/lowercase, `tolerates duplication`, `initially today`,
+-- `timestamp on update`, count over shape-name and inferred collections, `as`
+-- bindings with a reach-back, a sibling join, bare `frozen`, an act-sourced
+-- capture read at exit, the reconciliation latch pair, episodes as data,
+-- `then` ordering, the compact `for` creation form, `tolerates loss`, mixed
+-- `on commit, <tick>` triggers, and a pure-classification refinement (rung 1).
+
+-- ── Plans and members ────────────────────────────────────────────────────────
+
+expose shape Plan {
+    name: text
+    price: decimal
+} using MockHarness
+
+expose shape Member {
+    name: text
+    signupEmail: text
+    plan: one Plan
+    referredBy: one Member?
+    joinedOn: timestamp on create
+    lastChangedOn: timestamp on update
+    balance: decimal initially 0
+    lowestBalance: decimal initially 0
+    visitCount: long initially 0 tolerates duplication
+    suspended: boolean initially false
+    engagementScore: double initially 0
+    totalDeposited: decimal = sum(deposits, amount)
+    email: text = if exists EmailChange for this then
+                  lowercase(latest(EmailChange for this).newEmail)
+                  else lowercase(signupEmail)
+} using MockHarness
+
+-- a member never refers themselves (named-refinement never; input-constrained)
+shape SelfReferral = Member where referredBy is some and referredBy == this
+never SelfReferral
+
+-- every new member gets a welcome note: the compact `for` creation form
+shape WelcomeNote {
+    member: one Member
+    sentOn: DateTime
+}
+
+rule SendWelcome when Member {
+    WelcomeNote for this sentOn: now
+}
+
+-- ── Email changes: the ledger pattern ────────────────────────────────────────
+-- Nothing is edited; the current email is derived from the latest change,
+-- ordered by the ledger shape's sole creation timestamp.
+
+expose shape EmailChange {
+    member: one Member
+    newEmail: text
+    changedOn: timestamp on create
+} using MockHarness
+
+-- ── Visits: a tolerated fold and a fire-and-forget ping ──────────────────────
+
+expose shape Visit {
+    member: one Member
+    minutes: integer
+} using MockHarness
+
+never (Visit where minutes <= 0)
+
+-- unguarded self-referential fold on a backstopped cadence: the duplication
+-- hazard is real and signed on the field (`tolerates duplication`, README §19)
+rule CountVisit when Visit on commit, Hourly {
+    member.visitCount = member.visitCount + 1
+}
+
+-- previews the external-effect escape: the ping may be dropped, and the
+-- business shrugs (README §11, "forced boundaries")
+shape AnalyticsPing {
+    visit: one Visit
+    pingedOn: DateTime
+}
+
+rule PingAnalytics when Visit tolerates loss {
+    AnalyticsPing from { visit: this, pingedOn: now }
+}
+
+-- ── Deposits: the flag-witness guard ─────────────────────────────────────────
+
+expose shape Deposit {
+    member: one Member
+    amount: decimal
+    applied: boolean initially false
+} using MockHarness
+
+never (Deposit where amount <= 0)
+
+shape UnappliedDeposit = Deposit where not applied
+
+rule ApplyDeposit when UnappliedDeposit after commit, Hourly {
+    member.balance = member.balance + amount
+    this.applied = true
+}
+
+-- ── Renewal charges: intent before effect, evidence-witness guard ────────────
+
+shape Charge {
+    member: one Member
+    amount: decimal
+    reference: text initially randomUUID
+    requestedOn: Date initially today
+}
+
+shape ActiveMember = Member where not suspended
+
+rule RenewMembership
+    when (ActiveMember where
+          not exists (Charge where member == this and requestedOn > today - 30 days))
+    on Monthly {
+    Charge from { member: this, amount: plan.price }
+}
+
+shape ChargeApplication {
+    charge: one Charge
+    appliedOn: DateTime
+}
+
+shape UnappliedCharge = Charge where not exists ChargeApplication for this
+
+rule ApplyCharge when UnappliedCharge after commit, Hourly {
+    member.balance = member.balance - amount
+    ChargeApplication from { charge: this, appliedOn: now }
+}
+
+-- ── Delinquency: classification, latch pair, episodes as data ────────────────
+
+shape Delinquent = Member where balance < 0
+
+-- rung 1, pure classification: reported, never acted on — no rule, no machinery
+shape DeepDelinquent = Member where balance < -100
+
+-- a whitelisted fold (min): duplication- and order-insensitive, no guard owed
+rule TrackLowestBalance when Delinquent {
+    this.lowestBalance = min(this.lowestBalance, this.balance)
+}
+
+-- rung 2, the reconciliation latch pair: idempotent nightly sweeps, transient
+-- blips deliberately unobserved
+rule SuspendDelinquents when (Delinquent where not suspended) on Nightly {
+    this.suspended = true
+}
+
+rule RestoreService when (Member where suspended and balance >= 0) on Nightly {
+    this.suspended = false
+}
+
+-- rung 3, episodes as data: the flag/resolution pair makes each delinquency
+-- episode a queryable fact
+shape DelinquencyFlag {
+    member: one Member
+    flaggedOn: Date
+}
+
+shape DelinquencyResolution {
+    flag: one DelinquencyFlag
+    resolvedOn: Date
+}
+
+shape OpenDelinquencyFlag = DelinquencyFlag where not exists DelinquencyResolution for this
+
+rule OpenDelinquencyEpisode
+    when (Delinquent where not exists (OpenDelinquencyFlag where member == this)) {
+    DelinquencyFlag from { member: this, flaggedOn: today }
+}
+
+rule CloseDelinquencyEpisode when leaving Delinquent {
+    DelinquencyResolution from {
+        flag: latest(OpenDelinquencyFlag where member == this)
+        resolvedOn: today
+    }
+}
+
+-- a third episode escalates: count over a shape-name collection, a `then`
+-- ordering, and a mixed commit-plus-tick trigger
+shape ChronicDelinquent = Member where count(DelinquencyFlag where member == this) >= 3
+
+shape AuditEntry {
+    member: one Member
+    note: text
+    loggedOn: DateTime
+}
+
+shape AccountReview {
+    member: one Member
+    openedOn: DateTime
+}
+
+rule OpenAccountReview
+    when (ChronicDelinquent where not exists (AccountReview where member == this))
+    on commit, Daily {
+    AuditEntry from { member: this, note: "account review opened", loggedOn: now }
+    then
+    AccountReview from { member: this, openedOn: now }
+}
+
+-- ── Nightly engagement snapshot: the recompute rung ──────────────────────────
+
+rule ScoreEngagement when Member on Nightly {
+    this.engagementScore = count(visits)
+}
+
+-- ── Support desk: agents and tickets ─────────────────────────────────────────
+
+expose shape Agent {
+    name: text
+    email: text
+} using MockHarness
+
+expose shape Ticket {
+    member: one Member
+    subject: text
+    due: Date
+    priority: text
+    assignee: one Agent?
+    openedOn: timestamp on create
+    assigneeEmail: text? = assignee?.email
+    contact: text = if assignee is some then assignee.email else "support@velle.example"
+} using MockHarness
+
+never (Ticket where priority != "low" and priority != "normal" and priority != "high")
+
+-- ── Closing freezes the whole ticket ─────────────────────────────────────────
+
+expose shape CloseTicket {
+    ticket: one Ticket
+    closedBy: one Agent
+} using MockHarness
+
+expose shape ReopenTicket {
+    ticket: one Ticket
+} using MockHarness
+
+shape ClosedTicket = Ticket where
+    exists CloseTicket for this and not exists ReopenTicket for this {
+    frozen
+    captured closedOn: Date = today
+    captured closedBy: one Agent = latest(CloseTicket where ticket == this).closedBy
+}
+
+shape ReopenNotice {
+    ticket: one Ticket
+    reassignTo: one Agent
+    noticedOn: DateTime
+}
+
+-- the capture's last reader: the closer is notified when their ticket reopens
+rule NoticeReopen when leaving ClosedTicket {
+    ReopenNotice from { ticket: this, reassignTo: closedBy, noticedOn: now }
+}
+
+-- rejection as data: assignment partitions on the freeze
+expose shape AssignTicket {
+    ticket: one Ticket
+    agent: one Agent
+} using MockHarness
+
+shape ApplicableAssignment = AssignTicket where not ticket is ClosedTicket
+shape RefusedAssignment    = AssignTicket where ticket is ClosedTicket
+
+rule ApplyAssignment when ApplicableAssignment {
+    ticket.assignee = agent
+}
+
+shape AssignmentRefusal {
+    attempt: one AssignTicket
+    reason: text
+    refusedOn: DateTime
+}
+
+rule RecordAssignmentRefusal when RefusedAssignment {
+    AssignmentRefusal from { attempt: this, reason: "ticket is closed", refusedOn: now }
+}
+
+-- ── Attention traits: small refinements composed like traits ─────────────────
+
+shape OpenTicket     = Ticket where not this is ClosedTicket
+shape OverdueTicket  = OpenTicket where due < today
+shape HighPriority   = Ticket where priority == "high"
+shape Unassigned     = Ticket where assignee is none
+shape NeedsAttention = OverdueTicket or HighPriority
+shape UrgentQueue    = NeedsAttention and Unassigned
+
+shape Escalation {
+    ticket: one Ticket
+    raisedOn: Date
+}
+
+rule EscalateUrgent
+    when (UrgentQueue where
+          not exists (Escalation where ticket == this and raisedOn > today - 2 days))
+    on Daily {
+    Escalation from { ticket: this, raisedOn: today }
+}
+
+-- ── Cross-collection classifications ─────────────────────────────────────────
+
+-- sibling join: a ticket whose subject quotes a charge reference
+shape MemberWithDisputedCharge = Member where
+    exists (tickets as tix, charges as ch where tix.subject == ch.reference)
+
+-- `as` reach-back: an escalation raised after the ticket's own due date
+shape LateEscalatedMember = Member where
+    exists (tickets as tix where count(escalations where raisedOn > tix.due) >= 1)

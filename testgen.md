@@ -24,8 +24,11 @@ plus the rules hanging off it. One generated spec file per **story root**:
 - `never`s and act-triggered rules file under their act shape.
 - Every file opens with the **Velle it verifies, quoted verbatim** (pretty-printed
   from the AST) — reading the spec file is reading the description plus its proof.
-- A generated `SPEC_INDEX.md` lists every file and every case sentence: the
-  table of contents for "what does this system do."
+- A generated `SPEC_INDEX-<System>.md` per system lists every file and every
+  case sentence: the table of contents for "what does this system do." Each
+  system's generated output lives in its own package
+  (`velle.generated.<system>` / `.specs`), so several systems coexist in one
+  output module.
 
 ## The case catalog (what is derived, per construct kind)
 

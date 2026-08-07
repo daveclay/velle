@@ -202,6 +202,18 @@ class ExpressionTest {
     }
 
     @Test
+    fun `duration units are contextual, not reserved`() {
+        // unit position: directly after an integer literal
+        assertEquals(DurationLit(7, "days"), value("7 days"))
+        // everywhere else the same words are ordinary identifiers
+        assertEquals(PathExpr("minutes"), value("minutes"))
+        assertEquals(Binary(">", PathExpr("days"), IntLit(3)), predicate("days > 3"))
+        val shape = Parser.parse("shape Visit {\n    minutes: integer\n}").single()
+        val prop = assertIs<ShapeDecl>(shape).members.single()
+        assertEquals("minutes", assertIs<StoredProp>(prop).name)
+    }
+
+    @Test
     fun `is not empty is a single atom`() {
         val e = predicate("corrections is not empty")
         assertEquals("notEmpty", assertIs<IsExpr>(e).kind)
