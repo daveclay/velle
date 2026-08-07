@@ -18,15 +18,15 @@ class PaymentSpec : SpecSupport() {
 
     @Test
     fun `TrackLargestPayment - entering Payment fires its effects`() {
-        val subject = givens.enterTrackLargestPayment()
-        assertTrue(member(subject, "Payment"), "the given must deliver a member of 'Payment'")
+        val payment = givens.enterTrackLargestPayment()
+        assertTrue(member(payment, "Payment"), "the given must deliver a member of 'Payment'")
     }
 
     @Test
     fun `never - a Payment where amount at most 0 is refused`() {
         val invoice = givens.someInvoice()
         val before = count("Payment")
-        val result = sys.system.commit("Payment", mapOf("invoice" to invoice, "amount" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("Payment", mapOf("invoice" to invoice.id, "amount" to java.math.BigDecimal("-1")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("Payment"), "a refused act commits nothing")
     }
@@ -34,7 +34,7 @@ class PaymentSpec : SpecSupport() {
     @Test
     fun `never - a Payment with amount 1 is accepted`() {
         val invoice = givens.someInvoice()
-        val result = sys.system.commit("Payment", mapOf("invoice" to invoice, "amount" to java.math.BigDecimal("1")))
+        val result = sys.system.commit("Payment", mapOf("invoice" to invoice.id, "amount" to java.math.BigDecimal("1")))
         assertIs<CommitResult.Accepted>(result)
     }
 }

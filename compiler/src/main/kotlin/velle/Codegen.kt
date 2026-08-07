@@ -101,7 +101,7 @@ object Codegen {
 
         fun shapeView(shape: String) {
             line()
-            line("    inner class ${shape}View(val id: Long) {")
+            line("    inner class ${shape}View(override val id: Long) : View {")
             for ((memberName, m) in model.membersOf(shape)) {
                 if (memberName == "id") continue
                 line("        val $memberName: ${kotlinType(m.type)} get() = ${readExpr("system.get(id, \"$memberName\")", m.type)}")
@@ -116,7 +116,7 @@ object Codegen {
             val base = model.baseOf(ref) ?: return
             val own = model.refinements.getValue(ref).members.filterIsInstance<DerivedProp>()
             line()
-            line("    inner class ${ref}View(val id: Long) {")
+            line("    inner class ${ref}View(override val id: Long) : View {")
             line("        fun as$base() = ${base}View(id)")
             for (m in own) {
                 val t = model.typeOf(m.type)

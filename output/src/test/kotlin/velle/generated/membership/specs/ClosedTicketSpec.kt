@@ -41,41 +41,41 @@ class ClosedTicketSpec : SpecSupport() {
     @Test
     fun `NoticeReopen - leaving ClosedTicket fires the exit reaction`() {
         val beforeReopenNotice = count("ReopenNotice")
-        val subject = givens.exitNoticeReopen()
-        assertFalse(member(subject, "ClosedTicket"), "the given must cause an exit from 'ClosedTicket'")
+        val ticket = givens.exitNoticeReopen()
+        assertFalse(member(ticket, "ClosedTicket"), "the given must cause an exit from 'ClosedTicket'")
         assertEquals(beforeReopenNotice + 1, count("ReopenNotice"), "rule NoticeReopen: one 'ReopenNotice' per firing")
         val producedReopenNotice = last("ReopenNotice")
-        assertEquals(subject, field(producedReopenNotice, "ticket"), "ReopenNotice.ticket: this")
+        assertEquals(ticket.id, field(producedReopenNotice, "ticket"), "ReopenNotice.ticket: this")
     }
 
     @Test
     fun `ApplyAssignment - entering ApplicableAssignment fires its effects`() {
-        val subject = givens.enterApplyAssignment()
-        assertTrue(member(subject, "ApplicableAssignment"), "the given must deliver a member of 'ApplicableAssignment'")
-        assertEquals(field(subject, "agent"), field(ref(subject, "ticket"), "assignee"), "ticket.assignee = agent")
-        assertTrue(member(subject, "ApplicableAssignment") != member(subject, "RefusedAssignment"), "'ApplicableAssignment' and 'RefusedAssignment' partition the act")
+        val assignTicket = givens.enterApplyAssignment()
+        assertTrue(member(assignTicket, "ApplicableAssignment"), "the given must deliver a member of 'ApplicableAssignment'")
+        assertEquals(field(assignTicket, "agent"), field(ref(assignTicket, "ticket"), "assignee"), "ticket.assignee = agent")
+        assertTrue(member(assignTicket, "ApplicableAssignment") != member(assignTicket, "RefusedAssignment"), "'ApplicableAssignment' and 'RefusedAssignment' partition the act")
     }
 
     @Test
     fun `RecordAssignmentRefusal - entering RefusedAssignment fires its effects`() {
         val beforeAssignmentRefusal = count("AssignmentRefusal")
-        val subject = givens.enterRecordAssignmentRefusal()
-        assertTrue(member(subject, "RefusedAssignment"), "the given must deliver a member of 'RefusedAssignment'")
+        val assignTicket = givens.enterRecordAssignmentRefusal()
+        assertTrue(member(assignTicket, "RefusedAssignment"), "the given must deliver a member of 'RefusedAssignment'")
         assertEquals(beforeAssignmentRefusal + 1, count("AssignmentRefusal"), "rule RecordAssignmentRefusal: one 'AssignmentRefusal' per firing")
         val producedAssignmentRefusal = last("AssignmentRefusal")
-        assertEquals(subject, field(producedAssignmentRefusal, "attempt"), "AssignmentRefusal.attempt: this")
-        assertTrue(member(subject, "RefusedAssignment") != member(subject, "ApplicableAssignment"), "'RefusedAssignment' and 'ApplicableAssignment' partition the act")
+        assertEquals(assignTicket.id, field(producedAssignmentRefusal, "attempt"), "AssignmentRefusal.attempt: this")
+        assertTrue(member(assignTicket, "RefusedAssignment") != member(assignTicket, "ApplicableAssignment"), "'RefusedAssignment' and 'ApplicableAssignment' partition the act")
     }
 
     @Test
     fun `EscalateUrgent - the Daily sweep serves UrgentQueue`() {
         val beforeEscalation = count("Escalation")
-        val subject = givens.populateEscalateUrgent()
-        assertTrue(member(subject, "UrgentQueue"), "the given must deliver a member of 'UrgentQueue'")
+        val ticket = givens.populateEscalateUrgent()
+        assertTrue(member(ticket, "UrgentQueue"), "the given must deliver a member of 'UrgentQueue'")
         sys.system.tick("Daily")
         assertEquals(beforeEscalation + 1, count("Escalation"), "rule EscalateUrgent: one 'Escalation' per firing")
         val producedEscalation = last("Escalation")
-        assertEquals(subject, field(producedEscalation, "ticket"), "Escalation.ticket: this")
+        assertEquals(ticket.id, field(producedEscalation, "ticket"), "Escalation.ticket: this")
         sys.system.tick("Daily")
         assertEquals(beforeEscalation + 1, count("Escalation"), "the guard makes re-evaluation harmless")
         sys.advanceDays(3)

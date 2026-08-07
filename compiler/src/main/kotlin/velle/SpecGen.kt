@@ -27,7 +27,10 @@ object SpecGen {
         /** Per-system package so several generated systems coexist in one module. */
         val sysPkg = "velle.generated." + systemName.lowercase()
 
-        val givens = LinkedHashMap<String, String>() // method name → kdoc
+        /** A demanded given: its kdoc and the typed view it returns. */
+        data class Given(val doc: String, val viewType: String)
+
+        val givens = LinkedHashMap<String, Given>() // method name → signature
         val indexEntries = LinkedHashMap<String, MutableList<String>>() // file → sentences
         val skipped = mutableListOf<String>()
 
@@ -225,27 +228,30 @@ object SpecGen {
                 tickOnly -> { kindWord = "tick"; givenName = "populate${rule.name}" }
                 else -> { kindWord = "entry"; givenName = "enter${rule.name}" }
             }
-            demandGiven(givenName, givenDoc(rule, condName, tickOnly, schedules))
+            // the subject reads as what it is: the condition's base-shape instance
+            val base = model.baseOfExpr(rule.condition)
+            val subject = base?.replaceFirstChar { it.lowercase() } ?: "subject"
+            demandGiven(givenName, givenDoc(rule, condName, tickOnly, schedules), "${base ?: "Unknown"}View")
 
             val body = StringBuilder()
             val counts = rule.body.filterIsInstance<Creation>().map { it.shape }.distinct()
             counts.forEach { body.line(2, "val before${it} = count(\"$it\")") }
-            body.line(2, "val subject = givens.$givenName()")
+            body.line(2, "val $subject = givens.$givenName()")
 
             when {
                 rule.leaving -> condName?.let {
-                    body.line(2, "assertFalse(member(subject, \"$it\"), \"the given must cause an exit from '$it'\")")
+                    body.line(2, "assertFalse(member($subject, \"$it\"), \"the given must cause an exit from '$it'\")")
                 }
                 tickOnly -> {
                     condName?.let {
-                        body.line(2, "assertTrue(member(subject, \"$it\"), \"the given must deliver a member of '$it'\")")
+                        body.line(2, "assertTrue(member($subject, \"$it\"), \"the given must deliver a member of '$it'\")")
                     }
                     body.line(2, "sys.system.tick(\"${schedules.first()}\")")
                 }
                 else -> if (rule.preposition != "after") condName?.let {
                     // for `after commit` rules the firing has already disarmed the trigger
                     // state by the time the given returns — the disarm assert covers it
-                    body.line(2, "assertTrue(member(subject, \"$it\"), \"the given must deliver a member of '$it'\")")
+                    body.line(2, "assertTrue(member($subject, \"$it\"), \"the given must deliver a member of '$it'\")")
                 }
             }
 
@@ -256,7 +262,7 @@ object SpecGen {
                 if (thisFields.isNotEmpty()) {
                     body.line(2, "val $v = last(\"${creation.shape}\")")
                     thisFields.forEach {
-                        body.line(2, "assertEquals(subject, field($v, \"$it\"), \"${creation.shape}.$it: this\")")
+                        body.line(2, "assertEquals($subject.id, field($v, \"$it\"), \"${creation.shape}.$it: this\")")
                     }
                 }
             }
@@ -265,18 +271,18 @@ object SpecGen {
                 val rhs = a.value as? PathExpr ?: continue
                 if (rhs.segs.isNotEmpty() || rhs.root == "this") continue
                 if (a.target.segs.isEmpty()) continue
-                var read = "subject"
+                var read = subject
                 for (seg in listOf(a.target.root) + a.target.segs.dropLast(1).map { it.name }) {
                     if (seg == "this") continue
                     read = "ref($read, \"$seg\")"
                 }
                 val lastField = a.target.segs.last().name
-                body.line(2, "assertEquals(field(subject, \"${rhs.root}\"), field($read, \"$lastField\"), \"${Printer.expr(a.target)} = ${rhs.root}\")")
+                body.line(2, "assertEquals(field($subject, \"${rhs.root}\"), field($read, \"$lastField\"), \"${Printer.expr(a.target)} = ${rhs.root}\")")
             }
 
             condName?.let { cn ->
                 partitionPeer(cn)?.let { peer ->
-                    body.line(2, "assertTrue(member(subject, \"$cn\") != member(subject, \"$peer\"), \"'$cn' and '$peer' partition the act\")")
+                    body.line(2, "assertTrue(member($subject, \"$cn\") != member($subject, \"$peer\"), \"'$cn' and '$peer' partition the act\")")
                 }
             }
 
@@ -284,7 +290,7 @@ object SpecGen {
             if (rule.preposition == "after" && guarded && condName != null && model.refinements[condName]?.expr is RefName &&
                 (model.refinements.getValue(condName).expr as RefName).where != null
             ) {
-                body.line(2, "assertFalse(member(subject, \"$condName\"), \"the disarm law: the firing left its trigger state\")")
+                body.line(2, "assertFalse(member($subject, \"$condName\"), \"the disarm law: the firing left its trigger state\")")
             }
             if (guarded && (rule.preposition == "after" || schedules.isNotEmpty())) {
                 for (s in schedules) {
@@ -318,13 +324,13 @@ object SpecGen {
             val cond = condName ?: "the rule's condition"
             return when {
                 rule.leaving ->
-                    "Create a member of '$cond', then perform the commit that makes it leave (fires rule ${rule.name}); return the subject's id."
+                    "Create a member of '$cond', then perform the commit that makes it leave (fires rule ${rule.name}); return the subject."
                 tickOnly ->
-                    "Bring ONE subject into '$cond' without ticking ${schedules.joinToString("/") { "'$it'" }}; return the subject's id."
+                    "Bring ONE subject into '$cond' without ticking ${schedules.joinToString("/") { "'$it'" }}; return the subject."
                 rule.preposition == "after" ->
-                    "Perform the commit(s) that make ONE new subject enter '$cond' (rule ${rule.name} then fires after the transaction); return the trigger subject's id."
+                    "Perform the commit(s) that make ONE new subject enter '$cond' (rule ${rule.name} then fires after the transaction); return the trigger subject."
                 else ->
-                    "Perform the commit(s) that make ONE new subject enter '$cond' (fires rule ${rule.name}); return the subject's id."
+                    "Perform the commit(s) that make ONE new subject enter '$cond' (fires rule ${rule.name}); return the subject."
             }
         }
 
@@ -438,10 +444,10 @@ object SpecGen {
                     is RelType -> {
                         if (t.optional) continue
                         val given = "some${t.shape}"
-                        demandGiven(given, "Provide any committed '${t.shape}'; return its id.")
+                        demandGiven(given, "Provide any committed '${t.shape}'; return it.", "${t.shape}View")
                         val varName = p.name
                         setup.add("val $varName = givens.$given()")
-                        pairs.add(p.name to varName)
+                        pairs.add(p.name to "$varName.id")
                     }
                     is ScalarType -> {
                         if (t.optional) continue
@@ -497,8 +503,8 @@ object SpecGen {
             appendLine(s)
         }
 
-        fun demandGiven(name: String, doc: String) {
-            givens.putIfAbsent(name, doc)
+        fun demandGiven(name: String, doc: String, viewType: String) {
+            givens.putIfAbsent(name, Given(doc, viewType))
         }
 
         // ── companion outputs ────────────────────────────────────────────────
@@ -506,6 +512,8 @@ object SpecGen {
         fun requiredGivensFile(): String = buildString {
             appendLine("// GENERATED by Velle from the spec — do not edit. Regenerate with: gradle generate")
             appendLine("package $sysPkg")
+            appendLine()
+            appendLine("import velle.generated.${systemName}System")
             appendLine()
             appendLine("/**")
             appendLine(" * The scenarios the generated specs require — the human-owned half of the")
@@ -517,10 +525,10 @@ object SpecGen {
             appendLine(" * A missing given is a compile error naming exactly what the spec's tests are owed.")
             appendLine(" */")
             appendLine("interface RequiredGivens {")
-            for ((name, doc) in givens) {
+            for ((name, given) in givens) {
                 appendLine()
-                appendLine("    /** $doc */")
-                appendLine("    fun $name(): Long")
+                appendLine("    /** ${given.doc} */")
+                appendLine("    fun $name(): ${systemName}System.${given.viewType}")
             }
             appendLine("}")
         }
@@ -529,17 +537,19 @@ object SpecGen {
             appendLine("// GENERATED by Velle from the spec — do not edit. Regenerate with: gradle generate")
             appendLine("package $sysPkg.specs")
             appendLine()
+            appendLine("import velle.View")
             appendLine("import velle.generated.*")
             appendLine("import $sysPkg.*")
             appendLine()
             appendLine("abstract class SpecSupport {")
             appendLine("    val sys = ${systemName}System()")
             appendLine("    val givens: RequiredGivens = Givens(sys)")
+            appendLine("    private class Raw(override val id: Long) : View")
             appendLine("    fun count(shape: String) = sys.system.instancesOf(shape).size")
-            appendLine("    fun last(shape: String) = sys.system.instancesOf(shape).last()")
-            appendLine("    fun member(id: Long, refinement: String) = sys.system.isMember(id, refinement)")
-            appendLine("    fun field(id: Long, name: String) = sys.system.get(id, name)")
-            appendLine("    fun ref(id: Long, name: String) = sys.system.get(id, name) as Long")
+            appendLine("    fun last(shape: String): View = Raw(sys.system.instancesOf(shape).last())")
+            appendLine("    fun member(v: View, refinement: String) = sys.system.isMember(v.id, refinement)")
+            appendLine("    fun field(v: View, name: String) = sys.system.get(v.id, name)")
+            appendLine("    fun ref(v: View, name: String): View = Raw(sys.system.get(v.id, name) as Long)")
             appendLine("}")
         }
 

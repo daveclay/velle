@@ -21,12 +21,12 @@ class OverdueInvoiceSpec : SpecSupport() {
     @Test
     fun `RemindOverdue - the Weekly sweep serves ActionableOverdue`() {
         val beforeReminder = count("Reminder")
-        val subject = givens.populateRemindOverdue()
-        assertTrue(member(subject, "ActionableOverdue"), "the given must deliver a member of 'ActionableOverdue'")
+        val invoice = givens.populateRemindOverdue()
+        assertTrue(member(invoice, "ActionableOverdue"), "the given must deliver a member of 'ActionableOverdue'")
         sys.system.tick("Weekly")
         assertEquals(beforeReminder + 1, count("Reminder"), "rule RemindOverdue: one 'Reminder' per firing")
         val producedReminder = last("Reminder")
-        assertEquals(subject, field(producedReminder, "invoice"), "Reminder.invoice: this")
+        assertEquals(invoice.id, field(producedReminder, "invoice"), "Reminder.invoice: this")
         sys.system.tick("Weekly")
         assertEquals(beforeReminder + 1, count("Reminder"), "the guard makes re-evaluation harmless")
         sys.advanceDays(8)

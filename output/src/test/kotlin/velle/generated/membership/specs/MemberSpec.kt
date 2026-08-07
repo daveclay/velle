@@ -27,22 +27,22 @@ class MemberSpec : SpecSupport() {
     @Test
     fun `SendWelcome - entering Member fires its effects`() {
         val beforeWelcomeNote = count("WelcomeNote")
-        val subject = givens.enterSendWelcome()
-        assertTrue(member(subject, "Member"), "the given must deliver a member of 'Member'")
+        val member = givens.enterSendWelcome()
+        assertTrue(member(member, "Member"), "the given must deliver a member of 'Member'")
         assertEquals(beforeWelcomeNote + 1, count("WelcomeNote"), "rule SendWelcome: one 'WelcomeNote' per firing")
     }
 
     @Test
     fun `RestoreService - the Nightly sweep serves Member`() {
-        val subject = givens.populateRestoreService()
-        assertTrue(member(subject, "Member"), "the given must deliver a member of 'Member'")
+        val member = givens.populateRestoreService()
+        assertTrue(member(member, "Member"), "the given must deliver a member of 'Member'")
         sys.system.tick("Nightly")
     }
 
     @Test
     fun `ScoreEngagement - the Nightly sweep serves Member`() {
-        val subject = givens.populateScoreEngagement()
-        assertTrue(member(subject, "Member"), "the given must deliver a member of 'Member'")
+        val member = givens.populateScoreEngagement()
+        assertTrue(member(member, "Member"), "the given must deliver a member of 'Member'")
         sys.system.tick("Nightly")
     }
 }

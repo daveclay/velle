@@ -16,7 +16,7 @@ class DepositSpec : SpecSupport() {
     fun `never - a Deposit where amount at most 0 is refused`() {
         val member = givens.someMember()
         val before = count("Deposit")
-        val result = sys.system.commit("Deposit", mapOf("member" to member, "amount" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("Deposit", mapOf("member" to member.id, "amount" to java.math.BigDecimal("-1")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("Deposit"), "a refused act commits nothing")
     }
@@ -24,7 +24,7 @@ class DepositSpec : SpecSupport() {
     @Test
     fun `never - a Deposit with amount 1 is accepted`() {
         val member = givens.someMember()
-        val result = sys.system.commit("Deposit", mapOf("member" to member, "amount" to java.math.BigDecimal("1")))
+        val result = sys.system.commit("Deposit", mapOf("member" to member.id, "amount" to java.math.BigDecimal("1")))
         assertIs<CommitResult.Accepted>(result)
     }
 }

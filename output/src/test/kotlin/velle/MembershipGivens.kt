@@ -37,54 +37,54 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
         return sys.tickets().last()
     }
 
-    override fun enterSendWelcome(): Long = member().id
+    override fun enterSendWelcome(): MembershipSystem.MemberView = member()
 
-    override fun populateRestoreService(): Long = member(suspended = true).id
+    override fun populateRestoreService(): MembershipSystem.MemberView = member(suspended = true)
 
-    override fun populateScoreEngagement(): Long {
+    override fun populateScoreEngagement(): MembershipSystem.MemberView {
         val m = member()
         sys.commitVisit(m, 30)
-        return m.id
+        return m
     }
 
-    override fun enterCountVisit(): Long {
+    override fun enterCountVisit(): MembershipSystem.VisitView {
         sys.commitVisit(member(), 30)
-        return sys.visits().last().id
+        return sys.visits().last()
     }
 
-    override fun enterPingAnalytics(): Long {
+    override fun enterPingAnalytics(): MembershipSystem.VisitView {
         sys.commitVisit(member(), 45)
-        return sys.visits().last().id
+        return sys.visits().last()
     }
 
-    override fun someMember(): Long = member().id
+    override fun someMember(): MembershipSystem.MemberView = member()
 
-    override fun enterApplyDeposit(): Long {
+    override fun enterApplyDeposit(): MembershipSystem.DepositView {
         sys.commitDeposit(member(), BigDecimal("25"))
-        return sys.deposits().last().id
+        return sys.deposits().last()
     }
 
-    override fun populateRenewMembership(): Long = member().id
+    override fun populateRenewMembership(): MembershipSystem.MemberView = member()
 
-    override fun enterApplyCharge(): Long {
+    override fun enterApplyCharge(): MembershipSystem.ChargeView {
         member()
         sys.tickMonthly() // the renewal sweep mints the charge; ApplyCharge follows after commit
-        return sys.charges().last().id
+        return sys.charges().last()
     }
 
-    override fun enterTrackLowestBalance(): Long = member(balance = BigDecimal("-5")).id
+    override fun enterTrackLowestBalance(): MembershipSystem.MemberView = member(balance = BigDecimal("-5"))
 
-    override fun populateSuspendDelinquents(): Long = member(balance = BigDecimal("-5")).id
+    override fun populateSuspendDelinquents(): MembershipSystem.MemberView = member(balance = BigDecimal("-5"))
 
-    override fun enterOpenDelinquencyEpisode(): Long = member(balance = BigDecimal("-5")).id
+    override fun enterOpenDelinquencyEpisode(): MembershipSystem.MemberView = member(balance = BigDecimal("-5"))
 
-    override fun exitCloseDelinquencyEpisode(): Long {
+    override fun exitCloseDelinquencyEpisode(): MembershipSystem.MemberView {
         val m = member(balance = BigDecimal("-5")) // opens the episode at creation
         sys.commitDeposit(m, BigDecimal("10"))     // recovery closes it
-        return m.id
+        return m
     }
 
-    override fun enterOpenAccountReview(): Long {
+    override fun enterOpenAccountReview(): MembershipSystem.MemberView {
         // three delinquency episodes: born delinquent, then two renewal charges
         // each driving the recovered balance negative again
         val m = member(balance = BigDecimal("-5"))
@@ -93,28 +93,28 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
             sys.advanceDays(31)                    // reopen the 30-day renewal window
             sys.tickMonthly()                      // charge 20 drives the balance negative
         }
-        return m.id
+        return m
     }
 
-    override fun exitNoticeReopen(): Long {
+    override fun exitNoticeReopen(): MembershipSystem.TicketView {
         val t = ticket()
         sys.commitCloseTicket(t, agent())
         sys.commitReopenTicket(t)
-        return t.id
+        return t
     }
 
-    override fun enterApplyAssignment(): Long {
+    override fun enterApplyAssignment(): MembershipSystem.AssignTicketView {
         val t = ticket()
         sys.commitAssignTicket(t, agent())
-        return sys.assignTickets().last().id
+        return sys.assignTickets().last()
     }
 
-    override fun enterRecordAssignmentRefusal(): Long {
+    override fun enterRecordAssignmentRefusal(): MembershipSystem.AssignTicketView {
         val t = ticket()
         sys.commitCloseTicket(t, agent())
         sys.commitAssignTicket(t, agent())
-        return sys.assignTickets().last().id
+        return sys.assignTickets().last()
     }
 
-    override fun populateEscalateUrgent(): Long = ticket(priority = "high").id
+    override fun populateEscalateUrgent(): MembershipSystem.TicketView = ticket(priority = "high")
 }

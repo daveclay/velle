@@ -28,20 +28,20 @@ class IssuedInvoiceSpec : SpecSupport() {
 
     @Test
     fun `ApplyDueChange - entering ApplicableDueChange fires its effects`() {
-        val subject = givens.enterApplyDueChange()
-        assertTrue(member(subject, "ApplicableDueChange"), "the given must deliver a member of 'ApplicableDueChange'")
-        assertEquals(field(subject, "newDue"), field(ref(subject, "invoice"), "due"), "invoice.due = newDue")
-        assertTrue(member(subject, "ApplicableDueChange") != member(subject, "RefusedDueChange"), "'ApplicableDueChange' and 'RefusedDueChange' partition the act")
+        val changeDueDate = givens.enterApplyDueChange()
+        assertTrue(member(changeDueDate, "ApplicableDueChange"), "the given must deliver a member of 'ApplicableDueChange'")
+        assertEquals(field(changeDueDate, "newDue"), field(ref(changeDueDate, "invoice"), "due"), "invoice.due = newDue")
+        assertTrue(member(changeDueDate, "ApplicableDueChange") != member(changeDueDate, "RefusedDueChange"), "'ApplicableDueChange' and 'RefusedDueChange' partition the act")
     }
 
     @Test
     fun `RecordDueChangeRefusal - entering RefusedDueChange fires its effects`() {
         val beforeDueChangeRefusal = count("DueChangeRefusal")
-        val subject = givens.enterRecordDueChangeRefusal()
-        assertTrue(member(subject, "RefusedDueChange"), "the given must deliver a member of 'RefusedDueChange'")
+        val changeDueDate = givens.enterRecordDueChangeRefusal()
+        assertTrue(member(changeDueDate, "RefusedDueChange"), "the given must deliver a member of 'RefusedDueChange'")
         assertEquals(beforeDueChangeRefusal + 1, count("DueChangeRefusal"), "rule RecordDueChangeRefusal: one 'DueChangeRefusal' per firing")
         val producedDueChangeRefusal = last("DueChangeRefusal")
-        assertEquals(subject, field(producedDueChangeRefusal, "change"), "DueChangeRefusal.change: this")
-        assertTrue(member(subject, "RefusedDueChange") != member(subject, "ApplicableDueChange"), "'RefusedDueChange' and 'ApplicableDueChange' partition the act")
+        assertEquals(changeDueDate.id, field(producedDueChangeRefusal, "change"), "DueChangeRefusal.change: this")
+        assertTrue(member(changeDueDate, "RefusedDueChange") != member(changeDueDate, "ApplicableDueChange"), "'RefusedDueChange' and 'ApplicableDueChange' partition the act")
     }
 }

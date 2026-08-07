@@ -43,6 +43,14 @@ sealed interface CommitResult {
     data class Refused(val reason: String) : CommitResult
 }
 
+/**
+ * The common face of every generated typed view (README §5: identity as a
+ * readable value): a view is an instance reference the typed surface wraps.
+ */
+interface View {
+    val id: Long
+}
+
 class VelleRuntimeError(message: String) : Exception(message)
 private class NeverViolation(val reason: String) : Exception(reason)
 

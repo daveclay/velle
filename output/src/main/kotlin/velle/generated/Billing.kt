@@ -121,7 +121,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     fun archivedInvoices(): List<ArchivedInvoiceView> = system.instancesOf("ArchivedInvoice").map { ArchivedInvoiceView(it) }
     fun InvoiceView.isArchivedInvoice(): Boolean = system.isMember(id, "ArchivedInvoice")
 
-    inner class CustomerView(val id: Long) {
+    inner class CustomerView(override val id: Long) : View {
         val name: String get() = system.get(id, "name") as String
         val email: String get() = system.get(id, "email") as String
         val signedUpOn: Instant get() = system.get(id, "signedUpOn") as Instant
@@ -133,7 +133,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun hashCode() = id.hashCode()
     }
 
-    inner class CorrectEmailView(val id: Long) {
+    inner class CorrectEmailView(override val id: Long) : View {
         val customer: CustomerView get() = CustomerView(system.get(id, "customer") as Long)
         val corrected: String get() = system.get(id, "corrected") as String
         override fun toString() = "CorrectEmail#$id"
@@ -141,7 +141,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun hashCode() = id.hashCode()
     }
 
-    inner class InvoiceView(val id: Long) {
+    inner class InvoiceView(override val id: Long) : View {
         val customer: CustomerView get() = CustomerView(system.get(id, "customer") as Long)
         val due: LocalDate get() = system.get(id, "due") as LocalDate
         val reference: String get() = system.get(id, "reference") as String
@@ -163,7 +163,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun hashCode() = id.hashCode()
     }
 
-    inner class LineItemView(val id: Long) {
+    inner class LineItemView(override val id: Long) : View {
         val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
         val description: String get() = system.get(id, "description") as String
         val price: BigDecimal get() = system.get(id, "price") as BigDecimal
@@ -174,7 +174,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun hashCode() = id.hashCode()
     }
 
-    inner class PaymentView(val id: Long) {
+    inner class PaymentView(override val id: Long) : View {
         val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
         val amount: BigDecimal get() = system.get(id, "amount") as BigDecimal
         val receivedOn: Instant get() = system.get(id, "receivedOn") as Instant
@@ -183,7 +183,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun hashCode() = id.hashCode()
     }
 
-    inner class ReceiptView(val id: Long) {
+    inner class ReceiptView(override val id: Long) : View {
         val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
         val sentOn: Instant get() = system.get(id, "sentOn") as Instant
         val receiptEmails: List<ReceiptEmailView> get() = (system.get(id, "receiptEmails") as List<*>).map { ReceiptEmailView(it as Long) }
@@ -192,7 +192,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun hashCode() = id.hashCode()
     }
 
-    inner class ReceiptEmailView(val id: Long) {
+    inner class ReceiptEmailView(override val id: Long) : View {
         val receipt: ReceiptView get() = ReceiptView(system.get(id, "receipt") as Long)
         val queuedOn: Instant get() = system.get(id, "queuedOn") as Instant
         override fun toString() = "ReceiptEmail#$id"
@@ -200,7 +200,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun hashCode() = id.hashCode()
     }
 
-    inner class ReminderView(val id: Long) {
+    inner class ReminderView(override val id: Long) : View {
         val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
         val sentOn: LocalDate get() = system.get(id, "sentOn") as LocalDate
         override fun toString() = "Reminder#$id"
@@ -208,14 +208,14 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun hashCode() = id.hashCode()
     }
 
-    inner class IssuanceView(val id: Long) {
+    inner class IssuanceView(override val id: Long) : View {
         val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
         override fun toString() = "Issuance#$id"
         override fun equals(other: Any?) = other is IssuanceView && other.id == id
         override fun hashCode() = id.hashCode()
     }
 
-    inner class ChangeDueDateView(val id: Long) {
+    inner class ChangeDueDateView(override val id: Long) : View {
         val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
         val newDue: LocalDate get() = system.get(id, "newDue") as LocalDate
         val dueChangeRefusals: List<DueChangeRefusalView> get() = (system.get(id, "dueChangeRefusals") as List<*>).map { DueChangeRefusalView(it as Long) }
@@ -224,7 +224,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun hashCode() = id.hashCode()
     }
 
-    inner class DueChangeRefusalView(val id: Long) {
+    inner class DueChangeRefusalView(override val id: Long) : View {
         val change: ChangeDueDateView get() = ChangeDueDateView(system.get(id, "change") as Long)
         val reason: String get() = system.get(id, "reason") as String
         val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
@@ -233,21 +233,21 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun hashCode() = id.hashCode()
     }
 
-    inner class ArchiveRequestView(val id: Long) {
+    inner class ArchiveRequestView(override val id: Long) : View {
         val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
         override fun toString() = "ArchiveRequest#$id"
         override fun equals(other: Any?) = other is ArchiveRequestView && other.id == id
         override fun hashCode() = id.hashCode()
     }
 
-    inner class UnarchiveRequestView(val id: Long) {
+    inner class UnarchiveRequestView(override val id: Long) : View {
         val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
         override fun toString() = "UnarchiveRequest#$id"
         override fun equals(other: Any?) = other is UnarchiveRequestView && other.id == id
         override fun hashCode() = id.hashCode()
     }
 
-    inner class UnarchiveNoticeView(val id: Long) {
+    inner class UnarchiveNoticeView(override val id: Long) : View {
         val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
         val wasArchivedOn: LocalDate get() = system.get(id, "wasArchivedOn") as LocalDate
         val noticedOn: Instant get() = system.get(id, "noticedOn") as Instant
@@ -256,42 +256,42 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun hashCode() = id.hashCode()
     }
 
-    inner class PaidInvoiceView(val id: Long) {
+    inner class PaidInvoiceView(override val id: Long) : View {
         fun asInvoice() = InvoiceView(id)
         override fun toString() = "PaidInvoice#$id"
     }
 
-    inner class UnemailedReceiptView(val id: Long) {
+    inner class UnemailedReceiptView(override val id: Long) : View {
         fun asReceipt() = ReceiptView(id)
         override fun toString() = "UnemailedReceipt#$id"
     }
 
-    inner class OverdueInvoiceView(val id: Long) {
+    inner class OverdueInvoiceView(override val id: Long) : View {
         fun asInvoice() = InvoiceView(id)
         override fun toString() = "OverdueInvoice#$id"
     }
 
-    inner class ActionableOverdueView(val id: Long) {
+    inner class ActionableOverdueView(override val id: Long) : View {
         fun asInvoice() = InvoiceView(id)
         override fun toString() = "ActionableOverdue#$id"
     }
 
-    inner class IssuedInvoiceView(val id: Long) {
+    inner class IssuedInvoiceView(override val id: Long) : View {
         fun asInvoice() = InvoiceView(id)
         override fun toString() = "IssuedInvoice#$id"
     }
 
-    inner class ApplicableDueChangeView(val id: Long) {
+    inner class ApplicableDueChangeView(override val id: Long) : View {
         fun asChangeDueDate() = ChangeDueDateView(id)
         override fun toString() = "ApplicableDueChange#$id"
     }
 
-    inner class RefusedDueChangeView(val id: Long) {
+    inner class RefusedDueChangeView(override val id: Long) : View {
         fun asChangeDueDate() = ChangeDueDateView(id)
         override fun toString() = "RefusedDueChange#$id"
     }
 
-    inner class ArchivedInvoiceView(val id: Long) {
+    inner class ArchivedInvoiceView(override val id: Long) : View {
         fun asInvoice() = InvoiceView(id)
         val archivedOn: LocalDate get() = system.getAs(id, "ArchivedInvoice", "archivedOn") as LocalDate
         override fun toString() = "ArchivedInvoice#$id"

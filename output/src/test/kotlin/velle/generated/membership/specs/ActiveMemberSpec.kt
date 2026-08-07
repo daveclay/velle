@@ -26,12 +26,12 @@ class ActiveMemberSpec : SpecSupport() {
     @Test
     fun `RenewMembership - the Monthly sweep serves ActiveMember`() {
         val beforeCharge = count("Charge")
-        val subject = givens.populateRenewMembership()
-        assertTrue(member(subject, "ActiveMember"), "the given must deliver a member of 'ActiveMember'")
+        val member = givens.populateRenewMembership()
+        assertTrue(member(member, "ActiveMember"), "the given must deliver a member of 'ActiveMember'")
         sys.system.tick("Monthly")
         assertEquals(beforeCharge + 1, count("Charge"), "rule RenewMembership: one 'Charge' per firing")
         val producedCharge = last("Charge")
-        assertEquals(subject, field(producedCharge, "member"), "Charge.member: this")
+        assertEquals(member.id, field(producedCharge, "member"), "Charge.member: this")
         sys.system.tick("Monthly")
         assertEquals(beforeCharge + 1, count("Charge"), "the guard makes re-evaluation harmless")
         sys.advanceDays(31)
@@ -42,11 +42,11 @@ class ActiveMemberSpec : SpecSupport() {
     @Test
     fun `ApplyCharge - entering UnappliedCharge fires after the transaction`() {
         val beforeChargeApplication = count("ChargeApplication")
-        val subject = givens.enterApplyCharge()
+        val charge = givens.enterApplyCharge()
         assertEquals(beforeChargeApplication + 1, count("ChargeApplication"), "rule ApplyCharge: one 'ChargeApplication' per firing")
         val producedChargeApplication = last("ChargeApplication")
-        assertEquals(subject, field(producedChargeApplication, "charge"), "ChargeApplication.charge: this")
-        assertFalse(member(subject, "UnappliedCharge"), "the disarm law: the firing left its trigger state")
+        assertEquals(charge.id, field(producedChargeApplication, "charge"), "ChargeApplication.charge: this")
+        assertFalse(member(charge, "UnappliedCharge"), "the disarm law: the firing left its trigger state")
         sys.system.tick("Hourly")
         assertEquals(beforeChargeApplication + 1, count("ChargeApplication"), "the guard makes re-evaluation harmless")
     }

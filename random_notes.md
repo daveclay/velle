@@ -67,7 +67,14 @@ The same problem happens with all codegen: it only works for use cases foreseen 
 
 Velle's codegen needs to address this.
 
-Philosophy: 
+Velle's codegen must be _open_: allow for customization, extension. Codegen is not a blind, one-way dump. Velle should "interact" with the engineer's customizations in a structured way. 
+
+In practice, this would mean some way for an engineer to demarcate customizations/extensions that Velle can read and comprehend and maybe even validate. If an engineer's customizations are incompatible with the Velle spec, the transpiler can raise an error.
+
+## Persistence & Velle Commits
+
+Velle's concept of "commit" is an abstraction, not an implementation. Real systems use real databases, real transactions, real ORMs.
+
 
 ## Framework or Language?
 

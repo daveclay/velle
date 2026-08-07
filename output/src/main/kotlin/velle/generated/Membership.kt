@@ -174,7 +174,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     fun lateEscalatedMembers(): List<LateEscalatedMemberView> = system.instancesOf("LateEscalatedMember").map { LateEscalatedMemberView(it) }
     fun MemberView.isLateEscalatedMember(): Boolean = system.isMember(id, "LateEscalatedMember")
 
-    inner class PlanView(val id: Long) {
+    inner class PlanView(override val id: Long) : View {
         val name: String get() = system.get(id, "name") as String
         val price: BigDecimal get() = system.get(id, "price") as BigDecimal
         val members: List<MemberView> get() = (system.get(id, "members") as List<*>).map { MemberView(it as Long) }
@@ -183,7 +183,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class MemberView(val id: Long) {
+    inner class MemberView(override val id: Long) : View {
         val name: String get() = system.get(id, "name") as String
         val signupEmail: String get() = system.get(id, "signupEmail") as String
         val plan: PlanView get() = PlanView(system.get(id, "plan") as Long)
@@ -212,7 +212,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class WelcomeNoteView(val id: Long) {
+    inner class WelcomeNoteView(override val id: Long) : View {
         val member: MemberView get() = MemberView(system.get(id, "member") as Long)
         val sentOn: Instant get() = system.get(id, "sentOn") as Instant
         override fun toString() = "WelcomeNote#$id"
@@ -220,7 +220,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class EmailChangeView(val id: Long) {
+    inner class EmailChangeView(override val id: Long) : View {
         val member: MemberView get() = MemberView(system.get(id, "member") as Long)
         val newEmail: String get() = system.get(id, "newEmail") as String
         val changedOn: Instant get() = system.get(id, "changedOn") as Instant
@@ -229,7 +229,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class VisitView(val id: Long) {
+    inner class VisitView(override val id: Long) : View {
         val member: MemberView get() = MemberView(system.get(id, "member") as Long)
         val minutes: Int get() = (system.get(id, "minutes") as BigDecimal).intValueExact()
         val analyticsPings: List<AnalyticsPingView> get() = (system.get(id, "analyticsPings") as List<*>).map { AnalyticsPingView(it as Long) }
@@ -238,7 +238,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class AnalyticsPingView(val id: Long) {
+    inner class AnalyticsPingView(override val id: Long) : View {
         val visit: VisitView get() = VisitView(system.get(id, "visit") as Long)
         val pingedOn: Instant get() = system.get(id, "pingedOn") as Instant
         override fun toString() = "AnalyticsPing#$id"
@@ -246,7 +246,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class DepositView(val id: Long) {
+    inner class DepositView(override val id: Long) : View {
         val member: MemberView get() = MemberView(system.get(id, "member") as Long)
         val amount: BigDecimal get() = system.get(id, "amount") as BigDecimal
         val applied: Boolean get() = system.get(id, "applied") as Boolean
@@ -255,7 +255,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class ChargeView(val id: Long) {
+    inner class ChargeView(override val id: Long) : View {
         val member: MemberView get() = MemberView(system.get(id, "member") as Long)
         val amount: BigDecimal get() = system.get(id, "amount") as BigDecimal
         val reference: String get() = system.get(id, "reference") as String
@@ -266,7 +266,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class ChargeApplicationView(val id: Long) {
+    inner class ChargeApplicationView(override val id: Long) : View {
         val charge: ChargeView get() = ChargeView(system.get(id, "charge") as Long)
         val appliedOn: Instant get() = system.get(id, "appliedOn") as Instant
         override fun toString() = "ChargeApplication#$id"
@@ -274,7 +274,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class DelinquencyFlagView(val id: Long) {
+    inner class DelinquencyFlagView(override val id: Long) : View {
         val member: MemberView get() = MemberView(system.get(id, "member") as Long)
         val flaggedOn: LocalDate get() = system.get(id, "flaggedOn") as LocalDate
         val delinquencyResolutions: List<DelinquencyResolutionView> get() = (system.get(id, "delinquencyResolutions") as List<*>).map { DelinquencyResolutionView(it as Long) }
@@ -283,7 +283,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class DelinquencyResolutionView(val id: Long) {
+    inner class DelinquencyResolutionView(override val id: Long) : View {
         val flag: DelinquencyFlagView get() = DelinquencyFlagView(system.get(id, "flag") as Long)
         val resolvedOn: LocalDate get() = system.get(id, "resolvedOn") as LocalDate
         override fun toString() = "DelinquencyResolution#$id"
@@ -291,7 +291,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class AuditEntryView(val id: Long) {
+    inner class AuditEntryView(override val id: Long) : View {
         val member: MemberView get() = MemberView(system.get(id, "member") as Long)
         val note: String get() = system.get(id, "note") as String
         val loggedOn: Instant get() = system.get(id, "loggedOn") as Instant
@@ -300,7 +300,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class AccountReviewView(val id: Long) {
+    inner class AccountReviewView(override val id: Long) : View {
         val member: MemberView get() = MemberView(system.get(id, "member") as Long)
         val openedOn: Instant get() = system.get(id, "openedOn") as Instant
         override fun toString() = "AccountReview#$id"
@@ -308,7 +308,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class AgentView(val id: Long) {
+    inner class AgentView(override val id: Long) : View {
         val name: String get() = system.get(id, "name") as String
         val email: String get() = system.get(id, "email") as String
         val tickets: List<TicketView> get() = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) }
@@ -320,7 +320,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class TicketView(val id: Long) {
+    inner class TicketView(override val id: Long) : View {
         val member: MemberView get() = MemberView(system.get(id, "member") as Long)
         val subject: String get() = system.get(id, "subject") as String
         val due: LocalDate get() = system.get(id, "due") as LocalDate
@@ -339,7 +339,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class CloseTicketView(val id: Long) {
+    inner class CloseTicketView(override val id: Long) : View {
         val ticket: TicketView get() = TicketView(system.get(id, "ticket") as Long)
         val closedBy: AgentView get() = AgentView(system.get(id, "closedBy") as Long)
         override fun toString() = "CloseTicket#$id"
@@ -347,14 +347,14 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class ReopenTicketView(val id: Long) {
+    inner class ReopenTicketView(override val id: Long) : View {
         val ticket: TicketView get() = TicketView(system.get(id, "ticket") as Long)
         override fun toString() = "ReopenTicket#$id"
         override fun equals(other: Any?) = other is ReopenTicketView && other.id == id
         override fun hashCode() = id.hashCode()
     }
 
-    inner class ReopenNoticeView(val id: Long) {
+    inner class ReopenNoticeView(override val id: Long) : View {
         val ticket: TicketView get() = TicketView(system.get(id, "ticket") as Long)
         val reassignTo: AgentView get() = AgentView(system.get(id, "reassignTo") as Long)
         val noticedOn: Instant get() = system.get(id, "noticedOn") as Instant
@@ -363,7 +363,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class AssignTicketView(val id: Long) {
+    inner class AssignTicketView(override val id: Long) : View {
         val ticket: TicketView get() = TicketView(system.get(id, "ticket") as Long)
         val agent: AgentView get() = AgentView(system.get(id, "agent") as Long)
         val assignmentRefusals: List<AssignmentRefusalView> get() = (system.get(id, "assignmentRefusals") as List<*>).map { AssignmentRefusalView(it as Long) }
@@ -372,7 +372,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class AssignmentRefusalView(val id: Long) {
+    inner class AssignmentRefusalView(override val id: Long) : View {
         val attempt: AssignTicketView get() = AssignTicketView(system.get(id, "attempt") as Long)
         val reason: String get() = system.get(id, "reason") as String
         val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
@@ -381,7 +381,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class EscalationView(val id: Long) {
+    inner class EscalationView(override val id: Long) : View {
         val ticket: TicketView get() = TicketView(system.get(id, "ticket") as Long)
         val raisedOn: LocalDate get() = system.get(id, "raisedOn") as LocalDate
         override fun toString() = "Escalation#$id"
@@ -389,99 +389,99 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class SelfReferralView(val id: Long) {
+    inner class SelfReferralView(override val id: Long) : View {
         fun asMember() = MemberView(id)
         override fun toString() = "SelfReferral#$id"
     }
 
-    inner class UnappliedDepositView(val id: Long) {
+    inner class UnappliedDepositView(override val id: Long) : View {
         fun asDeposit() = DepositView(id)
         override fun toString() = "UnappliedDeposit#$id"
     }
 
-    inner class ActiveMemberView(val id: Long) {
+    inner class ActiveMemberView(override val id: Long) : View {
         fun asMember() = MemberView(id)
         override fun toString() = "ActiveMember#$id"
     }
 
-    inner class UnappliedChargeView(val id: Long) {
+    inner class UnappliedChargeView(override val id: Long) : View {
         fun asCharge() = ChargeView(id)
         override fun toString() = "UnappliedCharge#$id"
     }
 
-    inner class DelinquentView(val id: Long) {
+    inner class DelinquentView(override val id: Long) : View {
         fun asMember() = MemberView(id)
         override fun toString() = "Delinquent#$id"
     }
 
-    inner class DeepDelinquentView(val id: Long) {
+    inner class DeepDelinquentView(override val id: Long) : View {
         fun asMember() = MemberView(id)
         override fun toString() = "DeepDelinquent#$id"
     }
 
-    inner class OpenDelinquencyFlagView(val id: Long) {
+    inner class OpenDelinquencyFlagView(override val id: Long) : View {
         fun asDelinquencyFlag() = DelinquencyFlagView(id)
         override fun toString() = "OpenDelinquencyFlag#$id"
     }
 
-    inner class ChronicDelinquentView(val id: Long) {
+    inner class ChronicDelinquentView(override val id: Long) : View {
         fun asMember() = MemberView(id)
         override fun toString() = "ChronicDelinquent#$id"
     }
 
-    inner class ClosedTicketView(val id: Long) {
+    inner class ClosedTicketView(override val id: Long) : View {
         fun asTicket() = TicketView(id)
         val closedOn: LocalDate get() = system.getAs(id, "ClosedTicket", "closedOn") as LocalDate
         val closedBy: AgentView get() = AgentView(system.getAs(id, "ClosedTicket", "closedBy") as Long)
         override fun toString() = "ClosedTicket#$id"
     }
 
-    inner class ApplicableAssignmentView(val id: Long) {
+    inner class ApplicableAssignmentView(override val id: Long) : View {
         fun asAssignTicket() = AssignTicketView(id)
         override fun toString() = "ApplicableAssignment#$id"
     }
 
-    inner class RefusedAssignmentView(val id: Long) {
+    inner class RefusedAssignmentView(override val id: Long) : View {
         fun asAssignTicket() = AssignTicketView(id)
         override fun toString() = "RefusedAssignment#$id"
     }
 
-    inner class OpenTicketView(val id: Long) {
+    inner class OpenTicketView(override val id: Long) : View {
         fun asTicket() = TicketView(id)
         override fun toString() = "OpenTicket#$id"
     }
 
-    inner class OverdueTicketView(val id: Long) {
+    inner class OverdueTicketView(override val id: Long) : View {
         fun asTicket() = TicketView(id)
         override fun toString() = "OverdueTicket#$id"
     }
 
-    inner class HighPriorityView(val id: Long) {
+    inner class HighPriorityView(override val id: Long) : View {
         fun asTicket() = TicketView(id)
         override fun toString() = "HighPriority#$id"
     }
 
-    inner class UnassignedView(val id: Long) {
+    inner class UnassignedView(override val id: Long) : View {
         fun asTicket() = TicketView(id)
         override fun toString() = "Unassigned#$id"
     }
 
-    inner class NeedsAttentionView(val id: Long) {
+    inner class NeedsAttentionView(override val id: Long) : View {
         fun asTicket() = TicketView(id)
         override fun toString() = "NeedsAttention#$id"
     }
 
-    inner class UrgentQueueView(val id: Long) {
+    inner class UrgentQueueView(override val id: Long) : View {
         fun asTicket() = TicketView(id)
         override fun toString() = "UrgentQueue#$id"
     }
 
-    inner class MemberWithDisputedChargeView(val id: Long) {
+    inner class MemberWithDisputedChargeView(override val id: Long) : View {
         fun asMember() = MemberView(id)
         override fun toString() = "MemberWithDisputedCharge#$id"
     }
 
-    inner class LateEscalatedMemberView(val id: Long) {
+    inner class LateEscalatedMemberView(override val id: Long) : View {
         fun asMember() = MemberView(id)
         override fun toString() = "LateEscalatedMember#$id"
     }

@@ -21,10 +21,10 @@ class ArchivedInvoiceSpec : SpecSupport() {
     @Test
     fun `NoteUnarchival - leaving ArchivedInvoice fires the exit reaction`() {
         val beforeUnarchiveNotice = count("UnarchiveNotice")
-        val subject = givens.exitNoteUnarchival()
-        assertFalse(member(subject, "ArchivedInvoice"), "the given must cause an exit from 'ArchivedInvoice'")
+        val invoice = givens.exitNoteUnarchival()
+        assertFalse(member(invoice, "ArchivedInvoice"), "the given must cause an exit from 'ArchivedInvoice'")
         assertEquals(beforeUnarchiveNotice + 1, count("UnarchiveNotice"), "rule NoteUnarchival: one 'UnarchiveNotice' per firing")
         val producedUnarchiveNotice = last("UnarchiveNotice")
-        assertEquals(subject, field(producedUnarchiveNotice, "invoice"), "UnarchiveNotice.invoice: this")
+        assertEquals(invoice.id, field(producedUnarchiveNotice, "invoice"), "UnarchiveNotice.invoice: this")
     }
 }

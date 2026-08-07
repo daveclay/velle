@@ -18,7 +18,7 @@ class LineItemSpec : SpecSupport() {
     fun `never - a LineItem where quantity at most 0 is refused`() {
         val invoice = givens.someInvoice()
         val before = count("LineItem")
-        val result = sys.system.commit("LineItem", mapOf("invoice" to invoice, "description" to "sample", "price" to java.math.BigDecimal("0"), "quantity" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("LineItem", mapOf("invoice" to invoice.id, "description" to "sample", "price" to java.math.BigDecimal("0"), "quantity" to java.math.BigDecimal("-1")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("LineItem"), "a refused act commits nothing")
     }
@@ -26,7 +26,7 @@ class LineItemSpec : SpecSupport() {
     @Test
     fun `never - a LineItem with quantity 1 is accepted`() {
         val invoice = givens.someInvoice()
-        val result = sys.system.commit("LineItem", mapOf("invoice" to invoice, "description" to "sample", "price" to java.math.BigDecimal("0"), "quantity" to java.math.BigDecimal("1")))
+        val result = sys.system.commit("LineItem", mapOf("invoice" to invoice.id, "description" to "sample", "price" to java.math.BigDecimal("0"), "quantity" to java.math.BigDecimal("1")))
         assertIs<CommitResult.Accepted>(result)
     }
 
@@ -34,7 +34,7 @@ class LineItemSpec : SpecSupport() {
     fun `never - a LineItem where price below 0 is refused`() {
         val invoice = givens.someInvoice()
         val before = count("LineItem")
-        val result = sys.system.commit("LineItem", mapOf("invoice" to invoice, "description" to "sample", "price" to java.math.BigDecimal("-1"), "quantity" to java.math.BigDecimal("1")))
+        val result = sys.system.commit("LineItem", mapOf("invoice" to invoice.id, "description" to "sample", "price" to java.math.BigDecimal("-1"), "quantity" to java.math.BigDecimal("1")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("LineItem"), "a refused act commits nothing")
     }
@@ -42,7 +42,7 @@ class LineItemSpec : SpecSupport() {
     @Test
     fun `never - a LineItem with price 0 is accepted`() {
         val invoice = givens.someInvoice()
-        val result = sys.system.commit("LineItem", mapOf("invoice" to invoice, "description" to "sample", "price" to java.math.BigDecimal("0"), "quantity" to java.math.BigDecimal("1")))
+        val result = sys.system.commit("LineItem", mapOf("invoice" to invoice.id, "description" to "sample", "price" to java.math.BigDecimal("0"), "quantity" to java.math.BigDecimal("1")))
         assertIs<CommitResult.Accepted>(result)
     }
 }
