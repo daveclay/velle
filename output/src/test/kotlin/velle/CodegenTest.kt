@@ -16,6 +16,20 @@ class CodegenGoldenTest {
         val actual = File("src/main/kotlin/velle/generated/Billing.kt").readText()
         assertEquals(expected, actual, "generated surface drifted — run: gradle generate")
     }
+
+    @Test
+    fun `the checked-in generated specs match the generator`() {
+        val specs = SpecGen.generate(File("../billing.velle").readText(), "Billing")
+        val specsDir = File("src/test/kotlin/velle/generated/specs")
+        for ((name, content) in specs.specFiles) {
+            assertEquals(content, File(specsDir, name).readText(), "$name drifted — run: gradle generate")
+        }
+        assertEquals(specs.support, File(specsDir, "SpecSupport.kt").readText())
+        assertEquals(specs.requiredGivens, File("src/test/kotlin/velle/generated/RequiredGivens.kt").readText())
+        assertEquals(specs.index, File("SPEC_INDEX.md").readText())
+        assertEquals(specs.specFiles.keys + "SpecSupport.kt",
+            specsDir.listFiles()!!.map { it.name }.toSet(), "stale files in specs/")
+    }
 }
 
 /** The same billing scenarios, driven through the generated typed surface. */
