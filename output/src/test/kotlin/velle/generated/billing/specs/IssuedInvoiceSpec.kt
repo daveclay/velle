@@ -28,7 +28,8 @@ class IssuedInvoiceSpec : SpecSupport() {
 
     @Test
     fun `ApplyDueChange - entering ApplicableDueChange fires its effects`() {
-        val changeDueDate = givens.enterApplyDueChange()
+        // given: one new subject entered 'ApplicableDueChange'
+        val changeDueDate = givens.applicableDueChange()
         changeDueDate.assertIsA("ApplicableDueChange", "the given must deliver a member of 'ApplicableDueChange'")
         assertEquals(field(changeDueDate, "newDue"), field(ref(changeDueDate, "invoice"), "due"), "invoice.due = newDue")
         assertTrue(member(changeDueDate, "ApplicableDueChange") != member(changeDueDate, "RefusedDueChange"), "'ApplicableDueChange' and 'RefusedDueChange' partition the act")
@@ -37,7 +38,8 @@ class IssuedInvoiceSpec : SpecSupport() {
     @Test
     fun `RecordDueChangeRefusal - entering RefusedDueChange fires its effects`() {
         val beforeDueChangeRefusal = count("DueChangeRefusal")
-        val changeDueDate = givens.enterRecordDueChangeRefusal()
+        // given: one new subject entered 'RefusedDueChange'
+        val changeDueDate = givens.refusedDueChange()
         changeDueDate.assertIsA("RefusedDueChange", "the given must deliver a member of 'RefusedDueChange'")
         assertEquals(beforeDueChangeRefusal + 1, count("DueChangeRefusal"), "rule RecordDueChangeRefusal: one 'DueChangeRefusal' per firing")
         val producedDueChangeRefusal = last("DueChangeRefusal")

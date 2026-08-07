@@ -30,13 +30,15 @@ class DelinquentSpec : SpecSupport() {
 
     @Test
     fun `TrackLowestBalance - entering Delinquent fires its effects`() {
-        val member = givens.enterTrackLowestBalance()
+        // given: one new subject entered 'Delinquent'
+        val member = givens.delinquent()
         member.assertIsA("Delinquent", "the given must deliver a member of 'Delinquent'")
     }
 
     @Test
     fun `SuspendDelinquents - the Nightly sweep serves Delinquent`() {
-        val member = givens.populateSuspendDelinquents()
+        // given: one subject in 'Delinquent'; no 'Nightly' tick yet
+        val member = givens.memberForSuspendDelinquents()
         member.assertIsA("Delinquent", "the given must deliver a member of 'Delinquent'")
         sys.system.tick("Nightly")
         sys.system.tick("Nightly")
@@ -45,7 +47,8 @@ class DelinquentSpec : SpecSupport() {
     @Test
     fun `OpenDelinquencyEpisode - entering Delinquent fires its effects`() {
         val beforeDelinquencyFlag = count("DelinquencyFlag")
-        val member = givens.enterOpenDelinquencyEpisode()
+        // given: one new subject entered 'Delinquent'
+        val member = givens.memberForOpenDelinquencyEpisode()
         member.assertIsA("Delinquent", "the given must deliver a member of 'Delinquent'")
         assertEquals(beforeDelinquencyFlag + 1, count("DelinquencyFlag"), "rule OpenDelinquencyEpisode: one 'DelinquencyFlag' per firing")
         val producedDelinquencyFlag = last("DelinquencyFlag")
@@ -55,7 +58,8 @@ class DelinquentSpec : SpecSupport() {
     @Test
     fun `CloseDelinquencyEpisode - leaving Delinquent fires the exit reaction`() {
         val beforeDelinquencyResolution = count("DelinquencyResolution")
-        val member = givens.exitCloseDelinquencyEpisode()
+        // given: a former member of 'Delinquent' — the exit commit has just landed
+        val member = givens.formerDelinquent()
         member.assertIsNotA("Delinquent", "the given must cause an exit from 'Delinquent'")
         assertEquals(beforeDelinquencyResolution + 1, count("DelinquencyResolution"), "rule CloseDelinquencyEpisode: one 'DelinquencyResolution' per firing")
     }

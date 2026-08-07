@@ -25,7 +25,8 @@ class PaidInvoiceSpec : SpecSupport() {
     @Test
     fun `SendReceipt - entering PaidInvoice fires its effects`() {
         val beforeReceipt = count("Receipt")
-        val invoice = givens.enterSendReceipt()
+        // given: one new subject entered 'PaidInvoice'
+        val invoice = givens.paidInvoice()
         invoice.assertIsA("PaidInvoice", "the given must deliver a member of 'PaidInvoice'")
         assertEquals(beforeReceipt + 1, count("Receipt"), "rule SendReceipt: one 'Receipt' per firing")
         val producedReceipt = last("Receipt")
@@ -35,7 +36,8 @@ class PaidInvoiceSpec : SpecSupport() {
     @Test
     fun `EmailReceipt - entering UnemailedReceipt fires after the transaction`() {
         val beforeReceiptEmail = count("ReceiptEmail")
-        val receipt = givens.enterEmailReceipt()
+        // given: one new subject entered 'UnemailedReceipt', and rule EmailReceipt has fired after that transaction
+        val receipt = givens.unemailedReceipt()
         assertEquals(beforeReceiptEmail + 1, count("ReceiptEmail"), "rule EmailReceipt: one 'ReceiptEmail' per firing")
         val producedReceiptEmail = last("ReceiptEmail")
         assertEquals(receipt.id, field(producedReceiptEmail, "receipt"), "ReceiptEmail.receipt: this")

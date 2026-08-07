@@ -19,7 +19,8 @@ class UnappliedDepositSpec : SpecSupport() {
 
     @Test
     fun `ApplyDeposit - entering UnappliedDeposit fires after the transaction`() {
-        val deposit = givens.enterApplyDeposit()
+        // given: one new subject entered 'UnappliedDeposit', and rule ApplyDeposit has fired after that transaction
+        val deposit = givens.unappliedDeposit()
         deposit.assertIsNotA("UnappliedDeposit", "the disarm law: the firing left its trigger state")
         sys.system.tick("Hourly")
     }

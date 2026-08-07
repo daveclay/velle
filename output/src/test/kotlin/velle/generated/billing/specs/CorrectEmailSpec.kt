@@ -16,7 +16,8 @@ class CorrectEmailSpec : SpecSupport() {
 
     @Test
     fun `ApplyEmailCorrection - entering CorrectEmail fires its effects`() {
-        val correctEmail = givens.enterApplyEmailCorrection()
+        // given: one new subject entered 'CorrectEmail'
+        val correctEmail = givens.correctEmail()
         correctEmail.assertIsA("CorrectEmail", "the given must deliver a member of 'CorrectEmail'")
         assertEquals(field(correctEmail, "corrected"), field(ref(correctEmail, "customer"), "email"), "customer.email = corrected")
     }

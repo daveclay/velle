@@ -14,6 +14,7 @@ class DepositSpec : SpecSupport() {
 
     @Test
     fun `never - a Deposit where amount at most 0 is refused`() {
+        // given: any committed 'Member'
         val member = givens.someMember()
         val before = count("Deposit")
         val result = sys.system.commit("Deposit", mapOf("member" to member.id, "amount" to java.math.BigDecimal("-1")))
@@ -23,6 +24,7 @@ class DepositSpec : SpecSupport() {
 
     @Test
     fun `never - a Deposit with amount 1 is accepted`() {
+        // given: any committed 'Member'
         val member = givens.someMember()
         val result = sys.system.commit("Deposit", mapOf("member" to member.id, "amount" to java.math.BigDecimal("1")))
         assertIs<CommitResult.Accepted>(result)

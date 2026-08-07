@@ -21,7 +21,8 @@ class ArchivedInvoiceSpec : SpecSupport() {
     @Test
     fun `NoteUnarchival - leaving ArchivedInvoice fires the exit reaction`() {
         val beforeUnarchiveNotice = count("UnarchiveNotice")
-        val invoice = givens.exitNoteUnarchival()
+        // given: a former member of 'ArchivedInvoice' — the exit commit has just landed
+        val invoice = givens.formerArchivedInvoice()
         invoice.assertIsNotA("ArchivedInvoice", "the given must cause an exit from 'ArchivedInvoice'")
         assertEquals(beforeUnarchiveNotice + 1, count("UnarchiveNotice"), "rule NoteUnarchival: one 'UnarchiveNotice' per firing")
         val producedUnarchiveNotice = last("UnarchiveNotice")

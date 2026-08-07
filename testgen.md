@@ -49,12 +49,21 @@ reach the interesting state* is human judgment. The contract:
 - **The generator derives the whens and thens.** Effects, linkage, disarm,
   refusals, windows — everything above is mechanical.
 - **The developer owes the givens — and the generator demands them by name.**
-  It emits a `RequiredGivens` interface, one documented method per scenario the
-  spec's cases require (`enterSendReceipt(): Long` — "perform the commit that
-  makes one new subject enter PaidInvoice; return its id"; `someInvoice(): Long`).
-  The developer implements it as `class Givens(sys)` beside the generated specs;
-  a missing given is a compile error naming exactly what's owed. Human judgment
-  stays, but in one findable place, named in business language.
+  It emits a `RequiredGivens` interface, one documented method per *scenario*
+  the spec's cases require, returning the subject as a typed view. Names are
+  scenario language derived from the condition, not the rule: a bare condition
+  names the state itself (`paidInvoice(): BillingSystem.InvoiceView`,
+  `unappliedDeposit()`), and rules sharing that condition share the one given;
+  `former<State>()` is the exit scenario; a condition carrying an inline
+  `where` (or a composite) can't be named, so the rule disambiguates
+  (`memberForRestoreService()`). The developer implements it as
+  `class Givens(sys)` beside the generated specs; a missing given is a compile
+  error naming exactly what's owed. Human judgment stays, but in one findable
+  place, named in business language.
+- **Each test states its given in place.** The call site carries a
+  `// given: ...` comment describing the state the given has delivered
+  ("a former member of 'ClosedTicket' — the exit commit has just landed"), so
+  a test reads as a self-contained given/when/then without leaving the file.
 - Generated tests **sanity-check the givens** (the returned subject must actually
   be a member of the condition) so a wrong given fails loudly, not silently.
 

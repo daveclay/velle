@@ -14,57 +14,51 @@ import velle.generated.MembershipSystem
  */
 interface RequiredGivens {
 
-    /** Perform the commit(s) that make ONE new subject enter 'Member' (fires rule SendWelcome); return the subject. */
-    fun enterSendWelcome(): MembershipSystem.MemberView
+    /** Perform the commit(s) that make ONE new subject enter 'Member'; return the subject. */
+    fun member(): MembershipSystem.MemberView
 
     /** Bring ONE subject into 'Member' without ticking 'Nightly'; return the subject. */
-    fun populateRestoreService(): MembershipSystem.MemberView
+    fun memberForRestoreService(): MembershipSystem.MemberView
 
-    /** Bring ONE subject into 'Member' without ticking 'Nightly'; return the subject. */
-    fun populateScoreEngagement(): MembershipSystem.MemberView
-
-    /** Perform the commit(s) that make ONE new subject enter 'Visit' (fires rule CountVisit); return the subject. */
-    fun enterCountVisit(): MembershipSystem.VisitView
-
-    /** Perform the commit(s) that make ONE new subject enter 'Visit' (fires rule PingAnalytics); return the subject. */
-    fun enterPingAnalytics(): MembershipSystem.VisitView
+    /** Perform the commit(s) that make ONE new subject enter 'Visit'; return the subject. */
+    fun visit(): MembershipSystem.VisitView
 
     /** Provide any committed 'Member'; return it. */
     fun someMember(): MembershipSystem.MemberView
 
-    /** Perform the commit(s) that make ONE new subject enter 'UnappliedDeposit' (rule ApplyDeposit then fires after the transaction); return the trigger subject. */
-    fun enterApplyDeposit(): MembershipSystem.DepositView
+    /** Perform the commit(s) that make ONE new subject enter 'UnappliedDeposit' (the rule under test fires after that transaction); return the trigger subject. */
+    fun unappliedDeposit(): MembershipSystem.DepositView
 
     /** Bring ONE subject into 'ActiveMember' without ticking 'Monthly'; return the subject. */
-    fun populateRenewMembership(): MembershipSystem.MemberView
+    fun memberForRenewMembership(): MembershipSystem.MemberView
 
-    /** Perform the commit(s) that make ONE new subject enter 'UnappliedCharge' (rule ApplyCharge then fires after the transaction); return the trigger subject. */
-    fun enterApplyCharge(): MembershipSystem.ChargeView
+    /** Perform the commit(s) that make ONE new subject enter 'UnappliedCharge' (the rule under test fires after that transaction); return the trigger subject. */
+    fun unappliedCharge(): MembershipSystem.ChargeView
 
-    /** Perform the commit(s) that make ONE new subject enter 'Delinquent' (fires rule TrackLowestBalance); return the subject. */
-    fun enterTrackLowestBalance(): MembershipSystem.MemberView
+    /** Perform the commit(s) that make ONE new subject enter 'Delinquent'; return the subject. */
+    fun delinquent(): MembershipSystem.MemberView
 
     /** Bring ONE subject into 'Delinquent' without ticking 'Nightly'; return the subject. */
-    fun populateSuspendDelinquents(): MembershipSystem.MemberView
+    fun memberForSuspendDelinquents(): MembershipSystem.MemberView
 
-    /** Perform the commit(s) that make ONE new subject enter 'Delinquent' (fires rule OpenDelinquencyEpisode); return the subject. */
-    fun enterOpenDelinquencyEpisode(): MembershipSystem.MemberView
+    /** Perform the commit(s) that make ONE new subject enter 'Delinquent'; return the subject. */
+    fun memberForOpenDelinquencyEpisode(): MembershipSystem.MemberView
 
-    /** Create a member of 'Delinquent', then perform the commit that makes it leave (fires rule CloseDelinquencyEpisode); return the subject. */
-    fun exitCloseDelinquencyEpisode(): MembershipSystem.MemberView
+    /** Create a member of 'Delinquent', then perform the commit that makes it leave; return the subject. */
+    fun formerDelinquent(): MembershipSystem.MemberView
 
-    /** Perform the commit(s) that make ONE new subject enter 'ChronicDelinquent' (fires rule OpenAccountReview); return the subject. */
-    fun enterOpenAccountReview(): MembershipSystem.MemberView
+    /** Perform the commit(s) that make ONE new subject enter 'ChronicDelinquent'; return the subject. */
+    fun memberForOpenAccountReview(): MembershipSystem.MemberView
 
-    /** Create a member of 'ClosedTicket', then perform the commit that makes it leave (fires rule NoticeReopen); return the subject. */
-    fun exitNoticeReopen(): MembershipSystem.TicketView
+    /** Create a member of 'ClosedTicket', then perform the commit that makes it leave; return the subject. */
+    fun formerClosedTicket(): MembershipSystem.TicketView
 
-    /** Perform the commit(s) that make ONE new subject enter 'ApplicableAssignment' (fires rule ApplyAssignment); return the subject. */
-    fun enterApplyAssignment(): MembershipSystem.AssignTicketView
+    /** Perform the commit(s) that make ONE new subject enter 'ApplicableAssignment'; return the subject. */
+    fun applicableAssignment(): MembershipSystem.AssignTicketView
 
-    /** Perform the commit(s) that make ONE new subject enter 'RefusedAssignment' (fires rule RecordAssignmentRefusal); return the subject. */
-    fun enterRecordAssignmentRefusal(): MembershipSystem.AssignTicketView
+    /** Perform the commit(s) that make ONE new subject enter 'RefusedAssignment'; return the subject. */
+    fun refusedAssignment(): MembershipSystem.AssignTicketView
 
     /** Bring ONE subject into 'UrgentQueue' without ticking 'Daily'; return the subject. */
-    fun populateEscalateUrgent(): MembershipSystem.TicketView
+    fun ticketForEscalateUrgent(): MembershipSystem.TicketView
 }

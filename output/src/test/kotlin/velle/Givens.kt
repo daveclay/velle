@@ -31,45 +31,45 @@ class Givens(private val sys: BillingSystem) : RequiredGivens {
         return inv
     }
 
-    override fun enterApplyEmailCorrection(): BillingSystem.CorrectEmailView {
+    override fun correctEmail(): BillingSystem.CorrectEmailView {
         sys.commitCorrectEmail(customer(), "corrected@example.com")
         return sys.correctEmails().last()
     }
 
-    override fun enterTrackLargestPayment(): BillingSystem.PaymentView {
+    override fun payment(): BillingSystem.PaymentView {
         sys.commitPayment(invoiceWithBalance(BigDecimal("100")), BigDecimal("40"))
         return sys.payments().last()
     }
 
     override fun someInvoice(): BillingSystem.InvoiceView = invoice()
 
-    override fun enterSendReceipt(): BillingSystem.InvoiceView {
+    override fun paidInvoice(): BillingSystem.InvoiceView {
         val inv = invoiceWithBalance(BigDecimal("100"))
         sys.commitPayment(inv, BigDecimal("100")) // covering payment: newly paid
         return inv
     }
 
-    override fun enterEmailReceipt(): BillingSystem.ReceiptView {
-        enterSendReceipt()
+    override fun unemailedReceipt(): BillingSystem.ReceiptView {
+        paidInvoice()
         return sys.receipts().last()
     }
 
-    override fun populateRemindOverdue(): BillingSystem.InvoiceView =
+    override fun invoiceForRemindOverdue(): BillingSystem.InvoiceView =
         invoiceWithBalance(BigDecimal("100"), due = LocalDate.of(2025, 12, 1))
 
-    override fun enterApplyDueChange(): BillingSystem.ChangeDueDateView {
+    override fun applicableDueChange(): BillingSystem.ChangeDueDateView {
         sys.commitChangeDueDate(invoice(), LocalDate.of(2026, 3, 1)) // draft: change applies
         return sys.changeDueDates().last()
     }
 
-    override fun enterRecordDueChangeRefusal(): BillingSystem.ChangeDueDateView {
+    override fun refusedDueChange(): BillingSystem.ChangeDueDateView {
         val inv = invoice()
         sys.commitIssuance(inv) // issued: the due date is frozen
         sys.commitChangeDueDate(inv, LocalDate.of(2026, 3, 1))
         return sys.changeDueDates().last()
     }
 
-    override fun exitNoteUnarchival(): BillingSystem.InvoiceView {
+    override fun formerArchivedInvoice(): BillingSystem.InvoiceView {
         val inv = invoice()
         sys.commitArchiveRequest(inv)
         sys.commitUnarchiveRequest(inv)

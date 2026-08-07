@@ -26,7 +26,8 @@ class ActiveMemberSpec : SpecSupport() {
     @Test
     fun `RenewMembership - the Monthly sweep serves ActiveMember`() {
         val beforeCharge = count("Charge")
-        val member = givens.populateRenewMembership()
+        // given: one subject in 'ActiveMember'; no 'Monthly' tick yet
+        val member = givens.memberForRenewMembership()
         member.assertIsA("ActiveMember", "the given must deliver a member of 'ActiveMember'")
         sys.system.tick("Monthly")
         assertEquals(beforeCharge + 1, count("Charge"), "rule RenewMembership: one 'Charge' per firing")
@@ -42,7 +43,8 @@ class ActiveMemberSpec : SpecSupport() {
     @Test
     fun `ApplyCharge - entering UnappliedCharge fires after the transaction`() {
         val beforeChargeApplication = count("ChargeApplication")
-        val charge = givens.enterApplyCharge()
+        // given: one new subject entered 'UnappliedCharge', and rule ApplyCharge has fired after that transaction
+        val charge = givens.unappliedCharge()
         assertEquals(beforeChargeApplication + 1, count("ChargeApplication"), "rule ApplyCharge: one 'ChargeApplication' per firing")
         val producedChargeApplication = last("ChargeApplication")
         assertEquals(charge.id, field(producedChargeApplication, "charge"), "ChargeApplication.charge: this")

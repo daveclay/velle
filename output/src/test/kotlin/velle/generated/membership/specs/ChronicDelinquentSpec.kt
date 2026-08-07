@@ -22,7 +22,8 @@ class ChronicDelinquentSpec : SpecSupport() {
     fun `OpenAccountReview - entering ChronicDelinquent fires its effects`() {
         val beforeAuditEntry = count("AuditEntry")
         val beforeAccountReview = count("AccountReview")
-        val member = givens.enterOpenAccountReview()
+        // given: one new subject entered 'ChronicDelinquent'
+        val member = givens.memberForOpenAccountReview()
         member.assertIsA("ChronicDelinquent", "the given must deliver a member of 'ChronicDelinquent'")
         assertEquals(beforeAuditEntry + 1, count("AuditEntry"), "rule OpenAccountReview: one 'AuditEntry' per firing")
         val producedAuditEntry = last("AuditEntry")

@@ -14,30 +14,30 @@ import velle.generated.BillingSystem
  */
 interface RequiredGivens {
 
-    /** Perform the commit(s) that make ONE new subject enter 'CorrectEmail' (fires rule ApplyEmailCorrection); return the subject. */
-    fun enterApplyEmailCorrection(): BillingSystem.CorrectEmailView
+    /** Perform the commit(s) that make ONE new subject enter 'CorrectEmail'; return the subject. */
+    fun correctEmail(): BillingSystem.CorrectEmailView
 
-    /** Perform the commit(s) that make ONE new subject enter 'Payment' (fires rule TrackLargestPayment); return the subject. */
-    fun enterTrackLargestPayment(): BillingSystem.PaymentView
+    /** Perform the commit(s) that make ONE new subject enter 'Payment'; return the subject. */
+    fun payment(): BillingSystem.PaymentView
 
     /** Provide any committed 'Invoice'; return it. */
     fun someInvoice(): BillingSystem.InvoiceView
 
-    /** Perform the commit(s) that make ONE new subject enter 'PaidInvoice' (fires rule SendReceipt); return the subject. */
-    fun enterSendReceipt(): BillingSystem.InvoiceView
+    /** Perform the commit(s) that make ONE new subject enter 'PaidInvoice'; return the subject. */
+    fun paidInvoice(): BillingSystem.InvoiceView
 
-    /** Perform the commit(s) that make ONE new subject enter 'UnemailedReceipt' (rule EmailReceipt then fires after the transaction); return the trigger subject. */
-    fun enterEmailReceipt(): BillingSystem.ReceiptView
+    /** Perform the commit(s) that make ONE new subject enter 'UnemailedReceipt' (the rule under test fires after that transaction); return the trigger subject. */
+    fun unemailedReceipt(): BillingSystem.ReceiptView
 
     /** Bring ONE subject into 'ActionableOverdue' without ticking 'Weekly'; return the subject. */
-    fun populateRemindOverdue(): BillingSystem.InvoiceView
+    fun invoiceForRemindOverdue(): BillingSystem.InvoiceView
 
-    /** Perform the commit(s) that make ONE new subject enter 'ApplicableDueChange' (fires rule ApplyDueChange); return the subject. */
-    fun enterApplyDueChange(): BillingSystem.ChangeDueDateView
+    /** Perform the commit(s) that make ONE new subject enter 'ApplicableDueChange'; return the subject. */
+    fun applicableDueChange(): BillingSystem.ChangeDueDateView
 
-    /** Perform the commit(s) that make ONE new subject enter 'RefusedDueChange' (fires rule RecordDueChangeRefusal); return the subject. */
-    fun enterRecordDueChangeRefusal(): BillingSystem.ChangeDueDateView
+    /** Perform the commit(s) that make ONE new subject enter 'RefusedDueChange'; return the subject. */
+    fun refusedDueChange(): BillingSystem.ChangeDueDateView
 
-    /** Create a member of 'ArchivedInvoice', then perform the commit that makes it leave (fires rule NoteUnarchival); return the subject. */
-    fun exitNoteUnarchival(): BillingSystem.InvoiceView
+    /** Create a member of 'ArchivedInvoice', then perform the commit that makes it leave; return the subject. */
+    fun formerArchivedInvoice(): BillingSystem.InvoiceView
 }

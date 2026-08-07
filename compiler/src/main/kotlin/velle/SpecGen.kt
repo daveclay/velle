@@ -221,21 +221,27 @@ object SpecGen {
             val condName = (rule.condition as? RefName)?.name
             val schedules = rule.triggers.filter { it != "commit" }
             val tickOnly = rule.preposition != "after" && schedules.isNotEmpty() && "commit" !in rule.triggers
-            val kindWord: String
-            val givenName: String
-            when {
-                rule.leaving -> { kindWord = "leaving"; givenName = "exit${rule.name}" }
-                tickOnly -> { kindWord = "tick"; givenName = "populate${rule.name}" }
-                else -> { kindWord = "entry"; givenName = "enter${rule.name}" }
-            }
             // the subject reads as what it is: the condition's base-shape instance
             val base = model.baseOfExpr(rule.condition)
             val subject = base?.replaceFirstChar { it.lowercase() } ?: "subject"
+            // scenario-language given names, derived from the condition: a bare
+            // condition names the state itself (`unappliedDeposit()`, and rules
+            // sharing one condition share one given); an inline `where` (or a
+            // composite) can't be named, so the rule disambiguates
+            // (`memberForRestoreService()`); `former<State>` is the exit scenario
+            val bare = (rule.condition as? RefName)?.takeIf { it.where == null }
+            val givenName = when {
+                rule.leaving && bare != null -> "former${bare.name}"
+                rule.leaving -> "${subject}ForExit${rule.name}"
+                bare != null -> bare.name.replaceFirstChar { it.lowercase() }
+                else -> "${subject}For${rule.name}"
+            }
             demandGiven(givenName, givenDoc(rule, condName, tickOnly, schedules), "${base ?: "Unknown"}View")
 
             val body = StringBuilder()
             val counts = rule.body.filterIsInstance<Creation>().map { it.shape }.distinct()
             counts.forEach { body.line(2, "val before${it} = count(\"$it\")") }
+            body.line(2, "// given: ${givenComment(rule, condName, tickOnly, schedules)}")
             body.line(2, "val $subject = givens.$givenName()")
 
             when {
@@ -320,17 +326,29 @@ object SpecGen {
             return listOf(testFn(sentence, body.toString()))
         }
 
+        /** Interface kdoc: what the implementer owes. Rule-agnostic, since rules sharing a bare condition share the given. */
         fun givenDoc(rule: RuleDecl, condName: String?, tickOnly: Boolean, schedules: List<String>): String {
             val cond = condName ?: "the rule's condition"
             return when {
                 rule.leaving ->
-                    "Create a member of '$cond', then perform the commit that makes it leave (fires rule ${rule.name}); return the subject."
+                    "Create a member of '$cond', then perform the commit that makes it leave; return the subject."
                 tickOnly ->
                     "Bring ONE subject into '$cond' without ticking ${schedules.joinToString("/") { "'$it'" }}; return the subject."
                 rule.preposition == "after" ->
-                    "Perform the commit(s) that make ONE new subject enter '$cond' (rule ${rule.name} then fires after the transaction); return the trigger subject."
+                    "Perform the commit(s) that make ONE new subject enter '$cond' (the rule under test fires after that transaction); return the trigger subject."
                 else ->
-                    "Perform the commit(s) that make ONE new subject enter '$cond' (fires rule ${rule.name}); return the subject."
+                    "Perform the commit(s) that make ONE new subject enter '$cond'; return the subject."
+            }
+        }
+
+        /** In-test comment: the state the given has delivered at this point. */
+        fun givenComment(rule: RuleDecl, condName: String?, tickOnly: Boolean, schedules: List<String>): String {
+            val cond = condName ?: "the rule's condition"
+            return when {
+                rule.leaving -> "a former member of '$cond' — the exit commit has just landed"
+                tickOnly -> "one subject in '$cond'; no ${schedules.joinToString("/") { "'$it'" }} tick yet"
+                rule.preposition == "after" -> "one new subject entered '$cond', and rule ${rule.name} has fired after that transaction"
+                else -> "one new subject entered '$cond'"
             }
         }
 
@@ -446,6 +464,7 @@ object SpecGen {
                         val given = "some${t.shape}"
                         demandGiven(given, "Provide any committed '${t.shape}'; return it.", "${t.shape}View")
                         val varName = p.name
+                        setup.add("// given: any committed '${t.shape}'")
                         setup.add("val $varName = givens.$given()")
                         pairs.add(p.name to "$varName.id")
                     }

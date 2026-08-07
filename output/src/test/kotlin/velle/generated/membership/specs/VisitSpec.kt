@@ -22,14 +22,16 @@ class VisitSpec : SpecSupport() {
 
     @Test
     fun `CountVisit - entering Visit fires its effects`() {
-        val visit = givens.enterCountVisit()
+        // given: one new subject entered 'Visit'
+        val visit = givens.visit()
         visit.assertIsA("Visit", "the given must deliver a member of 'Visit'")
     }
 
     @Test
     fun `PingAnalytics - entering Visit fires its effects`() {
         val beforeAnalyticsPing = count("AnalyticsPing")
-        val visit = givens.enterPingAnalytics()
+        // given: one new subject entered 'Visit'
+        val visit = givens.visit()
         visit.assertIsA("Visit", "the given must deliver a member of 'Visit'")
         assertEquals(beforeAnalyticsPing + 1, count("AnalyticsPing"), "rule PingAnalytics: one 'AnalyticsPing' per firing")
         val producedAnalyticsPing = last("AnalyticsPing")
@@ -38,6 +40,7 @@ class VisitSpec : SpecSupport() {
 
     @Test
     fun `never - a Visit where minutes at most 0 is refused`() {
+        // given: any committed 'Member'
         val member = givens.someMember()
         val before = count("Visit")
         val result = sys.system.commit("Visit", mapOf("member" to member.id, "minutes" to java.math.BigDecimal("-1")))
@@ -47,6 +50,7 @@ class VisitSpec : SpecSupport() {
 
     @Test
     fun `never - a Visit with minutes 1 is accepted`() {
+        // given: any committed 'Member'
         val member = givens.someMember()
         val result = sys.system.commit("Visit", mapOf("member" to member.id, "minutes" to java.math.BigDecimal("1")))
         assertIs<CommitResult.Accepted>(result)
