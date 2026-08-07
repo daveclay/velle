@@ -19,7 +19,7 @@ class PaymentSpec : SpecSupport() {
     @Test
     fun `TrackLargestPayment - entering Payment fires its effects`() {
         val payment = givens.enterTrackLargestPayment()
-        assertTrue(member(payment, "Payment"), "the given must deliver a member of 'Payment'")
+        payment.assertIsA("Payment", "the given must deliver a member of 'Payment'")
     }
 
     @Test

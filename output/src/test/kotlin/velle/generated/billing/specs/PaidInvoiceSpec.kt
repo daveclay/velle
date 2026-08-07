@@ -26,7 +26,7 @@ class PaidInvoiceSpec : SpecSupport() {
     fun `SendReceipt - entering PaidInvoice fires its effects`() {
         val beforeReceipt = count("Receipt")
         val invoice = givens.enterSendReceipt()
-        assertTrue(member(invoice, "PaidInvoice"), "the given must deliver a member of 'PaidInvoice'")
+        invoice.assertIsA("PaidInvoice", "the given must deliver a member of 'PaidInvoice'")
         assertEquals(beforeReceipt + 1, count("Receipt"), "rule SendReceipt: one 'Receipt' per firing")
         val producedReceipt = last("Receipt")
         assertEquals(invoice.id, field(producedReceipt, "invoice"), "Receipt.invoice: this")
@@ -39,7 +39,7 @@ class PaidInvoiceSpec : SpecSupport() {
         assertEquals(beforeReceiptEmail + 1, count("ReceiptEmail"), "rule EmailReceipt: one 'ReceiptEmail' per firing")
         val producedReceiptEmail = last("ReceiptEmail")
         assertEquals(receipt.id, field(producedReceiptEmail, "receipt"), "ReceiptEmail.receipt: this")
-        assertFalse(member(receipt, "UnemailedReceipt"), "the disarm law: the firing left its trigger state")
+        receipt.assertIsNotA("UnemailedReceipt", "the disarm law: the firing left its trigger state")
         sys.system.tick("Hourly")
         assertEquals(beforeReceiptEmail + 1, count("ReceiptEmail"), "the guard makes re-evaluation harmless")
     }

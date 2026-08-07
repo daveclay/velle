@@ -31,13 +31,13 @@ class DelinquentSpec : SpecSupport() {
     @Test
     fun `TrackLowestBalance - entering Delinquent fires its effects`() {
         val member = givens.enterTrackLowestBalance()
-        assertTrue(member(member, "Delinquent"), "the given must deliver a member of 'Delinquent'")
+        member.assertIsA("Delinquent", "the given must deliver a member of 'Delinquent'")
     }
 
     @Test
     fun `SuspendDelinquents - the Nightly sweep serves Delinquent`() {
         val member = givens.populateSuspendDelinquents()
-        assertTrue(member(member, "Delinquent"), "the given must deliver a member of 'Delinquent'")
+        member.assertIsA("Delinquent", "the given must deliver a member of 'Delinquent'")
         sys.system.tick("Nightly")
         sys.system.tick("Nightly")
     }
@@ -46,7 +46,7 @@ class DelinquentSpec : SpecSupport() {
     fun `OpenDelinquencyEpisode - entering Delinquent fires its effects`() {
         val beforeDelinquencyFlag = count("DelinquencyFlag")
         val member = givens.enterOpenDelinquencyEpisode()
-        assertTrue(member(member, "Delinquent"), "the given must deliver a member of 'Delinquent'")
+        member.assertIsA("Delinquent", "the given must deliver a member of 'Delinquent'")
         assertEquals(beforeDelinquencyFlag + 1, count("DelinquencyFlag"), "rule OpenDelinquencyEpisode: one 'DelinquencyFlag' per firing")
         val producedDelinquencyFlag = last("DelinquencyFlag")
         assertEquals(member.id, field(producedDelinquencyFlag, "member"), "DelinquencyFlag.member: this")
@@ -56,7 +56,7 @@ class DelinquentSpec : SpecSupport() {
     fun `CloseDelinquencyEpisode - leaving Delinquent fires the exit reaction`() {
         val beforeDelinquencyResolution = count("DelinquencyResolution")
         val member = givens.exitCloseDelinquencyEpisode()
-        assertFalse(member(member, "Delinquent"), "the given must cause an exit from 'Delinquent'")
+        member.assertIsNotA("Delinquent", "the given must cause an exit from 'Delinquent'")
         assertEquals(beforeDelinquencyResolution + 1, count("DelinquencyResolution"), "rule CloseDelinquencyEpisode: one 'DelinquencyResolution' per firing")
     }
 }

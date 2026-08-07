@@ -42,7 +42,7 @@ class ClosedTicketSpec : SpecSupport() {
     fun `NoticeReopen - leaving ClosedTicket fires the exit reaction`() {
         val beforeReopenNotice = count("ReopenNotice")
         val ticket = givens.exitNoticeReopen()
-        assertFalse(member(ticket, "ClosedTicket"), "the given must cause an exit from 'ClosedTicket'")
+        ticket.assertIsNotA("ClosedTicket", "the given must cause an exit from 'ClosedTicket'")
         assertEquals(beforeReopenNotice + 1, count("ReopenNotice"), "rule NoticeReopen: one 'ReopenNotice' per firing")
         val producedReopenNotice = last("ReopenNotice")
         assertEquals(ticket.id, field(producedReopenNotice, "ticket"), "ReopenNotice.ticket: this")
@@ -51,7 +51,7 @@ class ClosedTicketSpec : SpecSupport() {
     @Test
     fun `ApplyAssignment - entering ApplicableAssignment fires its effects`() {
         val assignTicket = givens.enterApplyAssignment()
-        assertTrue(member(assignTicket, "ApplicableAssignment"), "the given must deliver a member of 'ApplicableAssignment'")
+        assignTicket.assertIsA("ApplicableAssignment", "the given must deliver a member of 'ApplicableAssignment'")
         assertEquals(field(assignTicket, "agent"), field(ref(assignTicket, "ticket"), "assignee"), "ticket.assignee = agent")
         assertTrue(member(assignTicket, "ApplicableAssignment") != member(assignTicket, "RefusedAssignment"), "'ApplicableAssignment' and 'RefusedAssignment' partition the act")
     }
@@ -60,7 +60,7 @@ class ClosedTicketSpec : SpecSupport() {
     fun `RecordAssignmentRefusal - entering RefusedAssignment fires its effects`() {
         val beforeAssignmentRefusal = count("AssignmentRefusal")
         val assignTicket = givens.enterRecordAssignmentRefusal()
-        assertTrue(member(assignTicket, "RefusedAssignment"), "the given must deliver a member of 'RefusedAssignment'")
+        assignTicket.assertIsA("RefusedAssignment", "the given must deliver a member of 'RefusedAssignment'")
         assertEquals(beforeAssignmentRefusal + 1, count("AssignmentRefusal"), "rule RecordAssignmentRefusal: one 'AssignmentRefusal' per firing")
         val producedAssignmentRefusal = last("AssignmentRefusal")
         assertEquals(assignTicket.id, field(producedAssignmentRefusal, "attempt"), "AssignmentRefusal.attempt: this")
@@ -71,7 +71,7 @@ class ClosedTicketSpec : SpecSupport() {
     fun `EscalateUrgent - the Daily sweep serves UrgentQueue`() {
         val beforeEscalation = count("Escalation")
         val ticket = givens.populateEscalateUrgent()
-        assertTrue(member(ticket, "UrgentQueue"), "the given must deliver a member of 'UrgentQueue'")
+        ticket.assertIsA("UrgentQueue", "the given must deliver a member of 'UrgentQueue'")
         sys.system.tick("Daily")
         assertEquals(beforeEscalation + 1, count("Escalation"), "rule EscalateUrgent: one 'Escalation' per firing")
         val producedEscalation = last("Escalation")

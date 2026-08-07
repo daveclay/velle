@@ -23,14 +23,14 @@ class VisitSpec : SpecSupport() {
     @Test
     fun `CountVisit - entering Visit fires its effects`() {
         val visit = givens.enterCountVisit()
-        assertTrue(member(visit, "Visit"), "the given must deliver a member of 'Visit'")
+        visit.assertIsA("Visit", "the given must deliver a member of 'Visit'")
     }
 
     @Test
     fun `PingAnalytics - entering Visit fires its effects`() {
         val beforeAnalyticsPing = count("AnalyticsPing")
         val visit = givens.enterPingAnalytics()
-        assertTrue(member(visit, "Visit"), "the given must deliver a member of 'Visit'")
+        visit.assertIsA("Visit", "the given must deliver a member of 'Visit'")
         assertEquals(beforeAnalyticsPing + 1, count("AnalyticsPing"), "rule PingAnalytics: one 'AnalyticsPing' per firing")
         val producedAnalyticsPing = last("AnalyticsPing")
         assertEquals(visit.id, field(producedAnalyticsPing, "visit"), "AnalyticsPing.visit: this")

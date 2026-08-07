@@ -20,7 +20,7 @@ class UnappliedDepositSpec : SpecSupport() {
     @Test
     fun `ApplyDeposit - entering UnappliedDeposit fires after the transaction`() {
         val deposit = givens.enterApplyDeposit()
-        assertFalse(member(deposit, "UnappliedDeposit"), "the disarm law: the firing left its trigger state")
+        deposit.assertIsNotA("UnappliedDeposit", "the disarm law: the firing left its trigger state")
         sys.system.tick("Hourly")
     }
 }

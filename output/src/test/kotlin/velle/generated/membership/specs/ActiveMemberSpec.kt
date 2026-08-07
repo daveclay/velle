@@ -27,7 +27,7 @@ class ActiveMemberSpec : SpecSupport() {
     fun `RenewMembership - the Monthly sweep serves ActiveMember`() {
         val beforeCharge = count("Charge")
         val member = givens.populateRenewMembership()
-        assertTrue(member(member, "ActiveMember"), "the given must deliver a member of 'ActiveMember'")
+        member.assertIsA("ActiveMember", "the given must deliver a member of 'ActiveMember'")
         sys.system.tick("Monthly")
         assertEquals(beforeCharge + 1, count("Charge"), "rule RenewMembership: one 'Charge' per firing")
         val producedCharge = last("Charge")
@@ -46,7 +46,7 @@ class ActiveMemberSpec : SpecSupport() {
         assertEquals(beforeChargeApplication + 1, count("ChargeApplication"), "rule ApplyCharge: one 'ChargeApplication' per firing")
         val producedChargeApplication = last("ChargeApplication")
         assertEquals(charge.id, field(producedChargeApplication, "charge"), "ChargeApplication.charge: this")
-        assertFalse(member(charge, "UnappliedCharge"), "the disarm law: the firing left its trigger state")
+        charge.assertIsNotA("UnappliedCharge", "the disarm law: the firing left its trigger state")
         sys.system.tick("Hourly")
         assertEquals(beforeChargeApplication + 1, count("ChargeApplication"), "the guard makes re-evaluation harmless")
     }

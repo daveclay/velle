@@ -23,7 +23,7 @@ class ChronicDelinquentSpec : SpecSupport() {
         val beforeAuditEntry = count("AuditEntry")
         val beforeAccountReview = count("AccountReview")
         val member = givens.enterOpenAccountReview()
-        assertTrue(member(member, "ChronicDelinquent"), "the given must deliver a member of 'ChronicDelinquent'")
+        member.assertIsA("ChronicDelinquent", "the given must deliver a member of 'ChronicDelinquent'")
         assertEquals(beforeAuditEntry + 1, count("AuditEntry"), "rule OpenAccountReview: one 'AuditEntry' per firing")
         val producedAuditEntry = last("AuditEntry")
         assertEquals(member.id, field(producedAuditEntry, "member"), "AuditEntry.member: this")

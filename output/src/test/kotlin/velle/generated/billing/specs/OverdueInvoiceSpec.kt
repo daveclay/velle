@@ -22,7 +22,7 @@ class OverdueInvoiceSpec : SpecSupport() {
     fun `RemindOverdue - the Weekly sweep serves ActionableOverdue`() {
         val beforeReminder = count("Reminder")
         val invoice = givens.populateRemindOverdue()
-        assertTrue(member(invoice, "ActionableOverdue"), "the given must deliver a member of 'ActionableOverdue'")
+        invoice.assertIsA("ActionableOverdue", "the given must deliver a member of 'ActionableOverdue'")
         sys.system.tick("Weekly")
         assertEquals(beforeReminder + 1, count("Reminder"), "rule RemindOverdue: one 'Reminder' per firing")
         val producedReminder = last("Reminder")
