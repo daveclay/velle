@@ -5,43 +5,43 @@ each case below is an executable test.
 
 ## MemberSpec.kt
 
-- SendWelcome - entering Member fires its effects
-- RestoreService - the Nightly sweep serves Member
-- ScoreEngagement - the Nightly sweep serves Member
+- SendWelcome - a new Member produces a WelcomeNote
+- RestoreService - at the Nightly tick, a Member sets suspended
+- ScoreEngagement - at the Nightly tick, a Member sets engagementScore
 
 ## VisitSpec.kt
 
-- CountVisit - entering Visit fires its effects
-- PingAnalytics - entering Visit fires its effects
+- CountVisit - a new Visit sets member.visitCount
+- PingAnalytics - a new Visit produces an AnalyticsPing
 - never - a Visit where minutes at most 0 is refused
 - never - a Visit with minutes 1 is accepted
 
 ## UnappliedDepositSpec.kt
 
-- ApplyDeposit - entering UnappliedDeposit fires after the transaction
+- ApplyDeposit - a new UnappliedDeposit sets member.balance and applied after the commit
 
 ## ActiveMemberSpec.kt
 
-- RenewMembership - the Monthly sweep serves ActiveMember
-- ApplyCharge - entering UnappliedCharge fires after the transaction
+- RenewMembership - at the Monthly tick, an ActiveMember produces a Charge
+- ApplyCharge - a new UnappliedCharge produces a ChargeApplication and sets member.balance after the commit
 
 ## DelinquentSpec.kt
 
-- TrackLowestBalance - entering Delinquent fires its effects
-- SuspendDelinquents - the Nightly sweep serves Delinquent
-- OpenDelinquencyEpisode - entering Delinquent fires its effects
-- CloseDelinquencyEpisode - leaving Delinquent fires the exit reaction
+- TrackLowestBalance - a new Delinquent sets lowestBalance
+- SuspendDelinquents - at the Nightly tick, a Delinquent sets suspended
+- OpenDelinquencyEpisode - a new Delinquent produces a DelinquencyFlag
+- CloseDelinquencyEpisode - a member that leaves Delinquent produces a DelinquencyResolution
 
 ## ChronicDelinquentSpec.kt
 
-- OpenAccountReview - entering ChronicDelinquent fires its effects
+- OpenAccountReview - a new ChronicDelinquent produces an AuditEntry and an AccountReview
 
 ## ClosedTicketSpec.kt
 
-- NoticeReopen - leaving ClosedTicket fires the exit reaction
-- ApplyAssignment - entering ApplicableAssignment fires its effects
-- RecordAssignmentRefusal - entering RefusedAssignment fires its effects
-- EscalateUrgent - the Daily sweep serves UrgentQueue
+- NoticeReopen - a ReopenTicket for a ClosedTicket produces a ReopenNotice
+- ApplyAssignment - a new ApplicableAssignment sets ticket.assignee
+- RecordAssignmentRefusal - a new RefusedAssignment produces an AssignmentRefusal
+- EscalateUrgent - at the Daily tick, an UrgentQueue produces an Escalation
 
 ## DepositSpec.kt
 

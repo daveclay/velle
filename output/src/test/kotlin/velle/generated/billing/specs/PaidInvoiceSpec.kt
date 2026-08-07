@@ -23,7 +23,7 @@ import velle.generated.billing.*
 class PaidInvoiceSpec : SpecSupport() {
 
     @Test
-    fun `SendReceipt - entering PaidInvoice fires its effects`() {
+    fun `SendReceipt - a new PaidInvoice produces a Receipt`() {
         val beforeReceipt = count("Receipt")
         // given: one new subject entered 'PaidInvoice'
         val invoice = givens.paidInvoice()
@@ -34,7 +34,7 @@ class PaidInvoiceSpec : SpecSupport() {
     }
 
     @Test
-    fun `EmailReceipt - entering UnemailedReceipt fires after the transaction`() {
+    fun `EmailReceipt - a new UnemailedReceipt produces a ReceiptEmail after the commit`() {
         val beforeReceiptEmail = count("ReceiptEmail")
         // given: one new subject entered 'UnemailedReceipt', and rule EmailReceipt has fired after that transaction
         val receipt = givens.unemailedReceipt()

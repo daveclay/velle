@@ -24,7 +24,7 @@ import velle.generated.membership.*
 class ActiveMemberSpec : SpecSupport() {
 
     @Test
-    fun `RenewMembership - the Monthly sweep serves ActiveMember`() {
+    fun `RenewMembership - at the Monthly tick an ActiveMember produces a Charge`() {
         val beforeCharge = count("Charge")
         // given: one subject in 'ActiveMember'; no 'Monthly' tick yet
         val member = givens.memberForRenewMembership()
@@ -41,7 +41,7 @@ class ActiveMemberSpec : SpecSupport() {
     }
 
     @Test
-    fun `ApplyCharge - entering UnappliedCharge fires after the transaction`() {
+    fun `ApplyCharge - a new UnappliedCharge produces a ChargeApplication and sets member balance after the commit`() {
         val beforeChargeApplication = count("ChargeApplication")
         // given: one new subject entered 'UnappliedCharge', and rule ApplyCharge has fired after that transaction
         val charge = givens.unappliedCharge()

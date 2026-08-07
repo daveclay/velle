@@ -44,14 +44,14 @@ interface RequiredGivens {
     /** Perform the commit(s) that make ONE new subject enter 'Delinquent'; return the subject. */
     fun memberForOpenDelinquencyEpisode(): MembershipSystem.MemberView
 
-    /** Create a member of 'Delinquent', then perform the commit that makes it leave; return the subject. */
-    fun formerDelinquent(): MembershipSystem.MemberView
+    /** Perform the commit that takes [member] out of 'Delinquent'. */
+    fun exitDelinquent(member: MembershipSystem.MemberView)
 
     /** Perform the commit(s) that make ONE new subject enter 'ChronicDelinquent'; return the subject. */
     fun memberForOpenAccountReview(): MembershipSystem.MemberView
 
-    /** Create a member of 'ClosedTicket', then perform the commit that makes it leave; return the subject. */
-    fun formerClosedTicket(): MembershipSystem.TicketView
+    /** Bring ONE subject into 'ClosedTicket'; return it. */
+    fun closedTicket(): MembershipSystem.TicketView
 
     /** Perform the commit(s) that make ONE new subject enter 'ApplicableAssignment'; return the subject. */
     fun applicableAssignment(): MembershipSystem.AssignTicketView

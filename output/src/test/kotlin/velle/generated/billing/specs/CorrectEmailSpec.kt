@@ -15,7 +15,7 @@ import velle.generated.billing.*
 class CorrectEmailSpec : SpecSupport() {
 
     @Test
-    fun `ApplyEmailCorrection - entering CorrectEmail fires its effects`() {
+    fun `ApplyEmailCorrection - a new CorrectEmail sets customer email`() {
         // given: one new subject entered 'CorrectEmail'
         val correctEmail = givens.correctEmail()
         correctEmail.assertIsA("CorrectEmail", "the given must deliver a member of 'CorrectEmail'")

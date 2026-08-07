@@ -27,8 +27,12 @@ object SpecGen {
         /** Per-system package so several generated systems coexist in one module. */
         val sysPkg = "velle.generated." + systemName.lowercase()
 
-        /** A demanded given: its kdoc and the typed view it returns. */
-        data class Given(val doc: String, val viewType: String)
+        /**
+         * A demanded given: its kdoc and the typed view it returns — or, for an
+         * exit action ([takesSubject]), the view it receives: the test performs
+         * the "when" visibly by handing the state-given's subject to the action.
+         */
+        data class Given(val doc: String, val viewType: String, val takesSubject: Boolean = false)
 
         val givens = LinkedHashMap<String, Given>() // method name → signature
         val indexEntries = LinkedHashMap<String, MutableList<String>>() // file → sentences
@@ -139,6 +143,74 @@ object SpecGen {
                 inner is ExistsExpr || (inner is PathExpr && inner.segs.isEmpty())
             }
 
+        /**
+         * The act whose commit provably ends membership in a leaving rule's
+         * condition: a `not exists X for this` atom over an exposed shape means
+         * the exit "when" is *derivable* — committing an X — so the test performs
+         * the real act instead of demanding an exit given. Drift exits (a value
+         * predicate like `balance < 0`) return null: which commit recovers the
+         * value is business judgment, owed by the human.
+         */
+        fun exitAct(rule: RuleDecl): ShapeDecl? =
+            conditionConjuncts(rule.condition).firstNotNullOfOrNull { c ->
+                val inner = (c as? NotExpr)?.inner as? ExistsExpr ?: return@firstNotNullOfOrNull null
+                val shape = inner.shape ?: return@firstNotNullOfOrNull null
+                if (inner.forExpr != PathExpr("this")) return@firstNotNullOfOrNull null
+                model.shapes[shape]?.takeIf { shape in model.exposed }
+            }
+
+        class ExitCommit(val setup: List<String>, val call: String)
+
+        /**
+         * Build the typed-surface call committing [act] against the subject —
+         * positional required args in declaration order, matching the generated
+         * commit function. Null (→ fall back to an exit given) if the act doesn't
+         * reference the subject's shape exactly once or a field is unconstructible.
+         */
+        fun exitCommit(act: ShapeDecl, subjectVar: String, subjectBase: String?): ExitCommit? {
+            val setup = mutableListOf<String>()
+            val args = mutableListOf<String>()
+            var subjectRefs = 0
+            for (p in act.members.filterIsInstance<StoredProp>()) {
+                if (p.initially != null) continue
+                when (val t = p.type) {
+                    is RelType -> {
+                        if (t.optional) continue
+                        if (t.shape == subjectBase) {
+                            subjectRefs++
+                            args.add(subjectVar)
+                        } else {
+                            val given = "some${t.shape}"
+                            demandGiven(given, "Provide any committed '${t.shape}'; return it.", "${t.shape}View")
+                            setup.add("val ${p.name} = givens.$given()")
+                            args.add(p.name)
+                        }
+                    }
+                    is ScalarType -> {
+                        if (t.optional) continue
+                        args.add(when (t.name) {
+                            "text" -> "\"sample\""
+                            "boolean" -> "false"
+                            "Date" -> "java.time.LocalDate.of(2026, 1, 15)"
+                            "DateTime" -> "java.time.Instant.parse(\"2026-01-15T00:00:00Z\")"
+                            else -> {
+                                val v = pickValue(act.name, p.name, null, java.math.BigDecimal.ZERO) ?: return null
+                                val plain = v.stripTrailingZeros().toPlainString()
+                                when (t.name) {
+                                    "integer" -> plain
+                                    "long" -> "${plain}L"
+                                    "double" -> "${v.toDouble()}"
+                                    else -> "java.math.BigDecimal(\"$plain\")"
+                                }
+                            }
+                        })
+                    }
+                }
+            }
+            if (subjectRefs != 1) return null
+            return ExitCommit(setup, "sys.commit${act.name}(${args.joinToString(", ")})")
+        }
+
         fun guardWindowDays(rule: RuleDecl): Long? {
             var days: Long? = null
             fun walk(x: Expr) {
@@ -228,36 +300,65 @@ object SpecGen {
             // condition names the state itself (`unappliedDeposit()`, and rules
             // sharing one condition share one given); an inline `where` (or a
             // composite) can't be named, so the rule disambiguates
-            // (`memberForRestoreService()`); `former<State>` is the exit scenario
+            // (`memberForRestoreService()`)
             val bare = (rule.condition as? RefName)?.takeIf { it.where == null }
-            val givenName = when {
-                rule.leaving && bare != null -> "former${bare.name}"
-                rule.leaving -> "${subject}ForExit${rule.name}"
-                bare != null -> bare.name.replaceFirstChar { it.lowercase() }
-                else -> "${subject}For${rule.name}"
-            }
-            demandGiven(givenName, givenDoc(rule, condName, tickOnly, schedules), "${base ?: "Unknown"}View")
+            val viewType = "${base ?: "Unknown"}View"
 
             val body = StringBuilder()
             val counts = rule.body.filterIsInstance<Creation>().map { it.shape }.distinct()
             counts.forEach { body.line(2, "val before${it} = count(\"$it\")") }
-            body.line(2, "// given: ${givenComment(rule, condName, tickOnly, schedules)}")
-            body.line(2, "val $subject = givens.$givenName()")
+            var exitActName: String? = null
 
-            when {
-                rule.leaving -> condName?.let {
-                    body.line(2, "$subject.assertIsNotA(\"$it\", \"the given must cause an exit from '$it'\")")
+            if (rule.leaving) {
+                // exit tests perform the "when" visibly and assert both sides of
+                // the transition. An act-paired exit derives the when from the
+                // predicate — the test commits the real act; only a drift exit
+                // demands a human-owned exit action beside the state-given.
+                val cond = condName ?: "the rule's condition"
+                val stateGiven =
+                    if (bare != null) bare.name.replaceFirstChar { it.lowercase() }
+                    else "${subject}For${rule.name}"
+                demandGiven(stateGiven, "Bring ONE subject into '$cond'; return it.", viewType)
+                body.line(2, "// given: a member of '$cond'")
+                body.line(2, "val $subject = givens.$stateGiven()")
+                condName?.let {
+                    body.line(2, "$subject.assertIsA(\"$it\", \"the given must deliver a member of '$it'\")")
                 }
-                tickOnly -> {
-                    condName?.let {
+                val derived = exitAct(rule)?.let { act -> exitCommit(act, subject, base)?.let { act to it } }
+                if (derived != null) {
+                    val (act, commit) = derived
+                    exitActName = act.name
+                    body.line(2, "// when: a ${act.name} for it is committed")
+                    commit.setup.forEach { body.line(2, it) }
+                    body.line(2, commit.call)
+                } else {
+                    val exitGiven = if (bare != null) "exit${bare.name}" else "exitFor${rule.name}"
+                    demandGiven(exitGiven, "Perform the commit that takes [$subject] out of '$cond'.", viewType, takesSubject = true)
+                    body.line(2, "// when: the commit that takes it out of '$cond'")
+                    body.line(2, "givens.$exitGiven($subject)")
+                }
+                condName?.let {
+                    body.line(2, "$subject.assertIsNotA(\"$it\", \"the exit commit must end the membership\")")
+                }
+            } else {
+                val givenName =
+                    if (bare != null) bare.name.replaceFirstChar { it.lowercase() }
+                    else "${subject}For${rule.name}"
+                demandGiven(givenName, givenDoc(rule, condName, tickOnly, schedules), viewType)
+                body.line(2, "// given: ${givenComment(rule, condName, tickOnly, schedules)}")
+                body.line(2, "val $subject = givens.$givenName()")
+                when {
+                    tickOnly -> {
+                        condName?.let {
+                            body.line(2, "$subject.assertIsA(\"$it\", \"the given must deliver a member of '$it'\")")
+                        }
+                        body.line(2, "sys.system.tick(\"${schedules.first()}\")")
+                    }
+                    else -> if (rule.preposition != "after") condName?.let {
+                        // for `after commit` rules the firing has already disarmed the trigger
+                        // state by the time the given returns — the disarm assert covers it
                         body.line(2, "$subject.assertIsA(\"$it\", \"the given must deliver a member of '$it'\")")
                     }
-                    body.line(2, "sys.system.tick(\"${schedules.first()}\")")
-                }
-                else -> if (rule.preposition != "after") condName?.let {
-                    // for `after commit` rules the firing has already disarmed the trigger
-                    // state by the time the given returns — the disarm assert covers it
-                    body.line(2, "$subject.assertIsA(\"$it\", \"the given must deliver a member of '$it'\")")
                 }
             }
 
@@ -316,22 +417,40 @@ object SpecGen {
                 }
             }
 
-            val sentence = when {
-                rule.leaving -> "${rule.name} - leaving ${condName ?: "its condition"} fires the exit reaction"
-                tickOnly -> "${rule.name} - the ${schedules.first()} sweep serves ${condName ?: "its condition"}"
-                rule.preposition == "after" -> "${rule.name} - entering ${condName ?: "its condition"} fires after the transaction"
-                else -> "${rule.name} - entering ${condName ?: "its condition"} fires its effects"
+            // case sentences read in the domain's vocabulary — subject, act, and
+            // consequence as the spec's own nouns — not Velle metalanguage
+            val cond = condName ?: base ?: "its condition"
+            val effects = effectsPhrase(rule)
+            val sentence = "${rule.name} - " + when {
+                rule.leaving && exitActName != null ->
+                    "${article(exitActName!!)} $exitActName for ${article(cond)} $cond $effects"
+                rule.leaving -> "${article(subject)} $subject that leaves $cond $effects"
+                tickOnly -> "at the ${schedules.first()} tick, ${article(cond)} $cond $effects"
+                rule.preposition == "after" -> "a new $cond $effects after the commit"
+                else -> "a new $cond $effects"
             }
             recordCase(sentence)
             return listOf(testFn(sentence, body.toString()))
         }
 
-        /** Interface kdoc: what the implementer owes. Rule-agnostic, since rules sharing a bare condition share the given. */
+        /** Interface kdoc: what the implementer owes. Rule-agnostic, since rules sharing a bare condition share the given. (Exit rules demand their pair inline — a state-given and an exit action.) */
+        fun article(name: String) = if (name.first().lowercaseChar() in "aeiou") "an" else "a"
+
+        /** The rule's consequences as a domain phrase: "produces a Receipt and sets customer.email". */
+        fun effectsPhrase(rule: RuleDecl): String {
+            val created = rule.body.filterIsInstance<Creation>().map { it.shape }.distinct()
+            val set = rule.body.filterIsInstance<Assignment>()
+                .map { Printer.expr(it.target).removePrefix("this.") }.distinct()
+            val parts = mutableListOf<String>()
+            if (created.isNotEmpty())
+                parts.add("produces " + created.joinToString(" and ") { "${article(it)} $it" })
+            if (set.isNotEmpty()) parts.add("sets " + set.joinToString(" and "))
+            return parts.joinToString(" and ")
+        }
+
         fun givenDoc(rule: RuleDecl, condName: String?, tickOnly: Boolean, schedules: List<String>): String {
             val cond = condName ?: "the rule's condition"
             return when {
-                rule.leaving ->
-                    "Create a member of '$cond', then perform the commit that makes it leave; return the subject."
                 tickOnly ->
                     "Bring ONE subject into '$cond' without ticking ${schedules.joinToString("/") { "'$it'" }}; return the subject."
                 rule.preposition == "after" ->
@@ -345,7 +464,6 @@ object SpecGen {
         fun givenComment(rule: RuleDecl, condName: String?, tickOnly: Boolean, schedules: List<String>): String {
             val cond = condName ?: "the rule's condition"
             return when {
-                rule.leaving -> "a former member of '$cond' — the exit commit has just landed"
                 tickOnly -> "one subject in '$cond'; no ${schedules.joinToString("/") { "'$it'" }} tick yet"
                 rule.preposition == "after" -> "one new subject entered '$cond', and rule ${rule.name} has fired after that transaction"
                 else -> "one new subject entered '$cond'"
@@ -522,8 +640,8 @@ object SpecGen {
             appendLine(s)
         }
 
-        fun demandGiven(name: String, doc: String, viewType: String) {
-            givens.putIfAbsent(name, Given(doc, viewType))
+        fun demandGiven(name: String, doc: String, viewType: String, takesSubject: Boolean = false) {
+            givens.putIfAbsent(name, Given(doc, viewType, takesSubject))
         }
 
         // ── companion outputs ────────────────────────────────────────────────
@@ -545,9 +663,15 @@ object SpecGen {
             appendLine(" */")
             appendLine("interface RequiredGivens {")
             for ((name, given) in givens) {
+                val type = "${systemName}System.${given.viewType}"
                 appendLine()
                 appendLine("    /** ${given.doc} */")
-                appendLine("    fun $name(): ${systemName}System.${given.viewType}")
+                if (given.takesSubject) {
+                    val param = given.viewType.removeSuffix("View").replaceFirstChar { it.lowercase() }
+                    appendLine("    fun $name($param: $type)")
+                } else {
+                    appendLine("    fun $name(): $type")
+                }
             }
             appendLine("}")
         }

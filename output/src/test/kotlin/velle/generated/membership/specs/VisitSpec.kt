@@ -21,14 +21,14 @@ import velle.generated.membership.*
 class VisitSpec : SpecSupport() {
 
     @Test
-    fun `CountVisit - entering Visit fires its effects`() {
+    fun `CountVisit - a new Visit sets member visitCount`() {
         // given: one new subject entered 'Visit'
         val visit = givens.visit()
         visit.assertIsA("Visit", "the given must deliver a member of 'Visit'")
     }
 
     @Test
-    fun `PingAnalytics - entering Visit fires its effects`() {
+    fun `PingAnalytics - a new Visit produces an AnalyticsPing`() {
         val beforeAnalyticsPing = count("AnalyticsPing")
         // given: one new subject entered 'Visit'
         val visit = givens.visit()

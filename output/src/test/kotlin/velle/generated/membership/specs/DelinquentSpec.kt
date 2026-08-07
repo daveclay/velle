@@ -29,14 +29,14 @@ import velle.generated.membership.*
 class DelinquentSpec : SpecSupport() {
 
     @Test
-    fun `TrackLowestBalance - entering Delinquent fires its effects`() {
+    fun `TrackLowestBalance - a new Delinquent sets lowestBalance`() {
         // given: one new subject entered 'Delinquent'
         val member = givens.delinquent()
         member.assertIsA("Delinquent", "the given must deliver a member of 'Delinquent'")
     }
 
     @Test
-    fun `SuspendDelinquents - the Nightly sweep serves Delinquent`() {
+    fun `SuspendDelinquents - at the Nightly tick a Delinquent sets suspended`() {
         // given: one subject in 'Delinquent'; no 'Nightly' tick yet
         val member = givens.memberForSuspendDelinquents()
         member.assertIsA("Delinquent", "the given must deliver a member of 'Delinquent'")
@@ -45,7 +45,7 @@ class DelinquentSpec : SpecSupport() {
     }
 
     @Test
-    fun `OpenDelinquencyEpisode - entering Delinquent fires its effects`() {
+    fun `OpenDelinquencyEpisode - a new Delinquent produces a DelinquencyFlag`() {
         val beforeDelinquencyFlag = count("DelinquencyFlag")
         // given: one new subject entered 'Delinquent'
         val member = givens.memberForOpenDelinquencyEpisode()
@@ -56,11 +56,14 @@ class DelinquentSpec : SpecSupport() {
     }
 
     @Test
-    fun `CloseDelinquencyEpisode - leaving Delinquent fires the exit reaction`() {
+    fun `CloseDelinquencyEpisode - a member that leaves Delinquent produces a DelinquencyResolution`() {
         val beforeDelinquencyResolution = count("DelinquencyResolution")
-        // given: a former member of 'Delinquent' — the exit commit has just landed
-        val member = givens.formerDelinquent()
-        member.assertIsNotA("Delinquent", "the given must cause an exit from 'Delinquent'")
+        // given: a member of 'Delinquent'
+        val member = givens.delinquent()
+        member.assertIsA("Delinquent", "the given must deliver a member of 'Delinquent'")
+        // when: the commit that takes it out of 'Delinquent'
+        givens.exitDelinquent(member)
+        member.assertIsNotA("Delinquent", "the exit commit must end the membership")
         assertEquals(beforeDelinquencyResolution + 1, count("DelinquencyResolution"), "rule CloseDelinquencyEpisode: one 'DelinquencyResolution' per firing")
     }
 }

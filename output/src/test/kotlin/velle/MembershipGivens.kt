@@ -67,10 +67,8 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
 
     override fun memberForOpenDelinquencyEpisode(): MembershipSystem.MemberView = newMember(balance = BigDecimal("-5"))
 
-    override fun formerDelinquent(): MembershipSystem.MemberView {
-        val m = newMember(balance = BigDecimal("-5")) // opens the episode at creation
-        sys.commitDeposit(m, BigDecimal("10"))        // recovery closes it
-        return m
+    override fun exitDelinquent(member: MembershipSystem.MemberView) {
+        sys.commitDeposit(member, BigDecimal("10")) // a covering deposit: the recovery commit
     }
 
     override fun memberForOpenAccountReview(): MembershipSystem.MemberView {
@@ -85,10 +83,9 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
         return m
     }
 
-    override fun formerClosedTicket(): MembershipSystem.TicketView {
+    override fun closedTicket(): MembershipSystem.TicketView {
         val t = ticket()
         sys.commitCloseTicket(t, agent())
-        sys.commitReopenTicket(t)
         return t
     }
 

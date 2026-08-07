@@ -39,18 +39,21 @@ import velle.generated.membership.*
 class ClosedTicketSpec : SpecSupport() {
 
     @Test
-    fun `NoticeReopen - leaving ClosedTicket fires the exit reaction`() {
+    fun `NoticeReopen - a ReopenTicket for a ClosedTicket produces a ReopenNotice`() {
         val beforeReopenNotice = count("ReopenNotice")
-        // given: a former member of 'ClosedTicket' — the exit commit has just landed
-        val ticket = givens.formerClosedTicket()
-        ticket.assertIsNotA("ClosedTicket", "the given must cause an exit from 'ClosedTicket'")
+        // given: a member of 'ClosedTicket'
+        val ticket = givens.closedTicket()
+        ticket.assertIsA("ClosedTicket", "the given must deliver a member of 'ClosedTicket'")
+        // when: a ReopenTicket for it is committed
+        sys.commitReopenTicket(ticket)
+        ticket.assertIsNotA("ClosedTicket", "the exit commit must end the membership")
         assertEquals(beforeReopenNotice + 1, count("ReopenNotice"), "rule NoticeReopen: one 'ReopenNotice' per firing")
         val producedReopenNotice = last("ReopenNotice")
         assertEquals(ticket.id, field(producedReopenNotice, "ticket"), "ReopenNotice.ticket: this")
     }
 
     @Test
-    fun `ApplyAssignment - entering ApplicableAssignment fires its effects`() {
+    fun `ApplyAssignment - a new ApplicableAssignment sets ticket assignee`() {
         // given: one new subject entered 'ApplicableAssignment'
         val assignTicket = givens.applicableAssignment()
         assignTicket.assertIsA("ApplicableAssignment", "the given must deliver a member of 'ApplicableAssignment'")
@@ -59,7 +62,7 @@ class ClosedTicketSpec : SpecSupport() {
     }
 
     @Test
-    fun `RecordAssignmentRefusal - entering RefusedAssignment fires its effects`() {
+    fun `RecordAssignmentRefusal - a new RefusedAssignment produces an AssignmentRefusal`() {
         val beforeAssignmentRefusal = count("AssignmentRefusal")
         // given: one new subject entered 'RefusedAssignment'
         val assignTicket = givens.refusedAssignment()
@@ -71,7 +74,7 @@ class ClosedTicketSpec : SpecSupport() {
     }
 
     @Test
-    fun `EscalateUrgent - the Daily sweep serves UrgentQueue`() {
+    fun `EscalateUrgent - at the Daily tick an UrgentQueue produces an Escalation`() {
         val beforeEscalation = count("Escalation")
         // given: one subject in 'UrgentQueue'; no 'Daily' tick yet
         val ticket = givens.ticketForEscalateUrgent()

@@ -17,7 +17,7 @@ import velle.generated.billing.*
 class PaymentSpec : SpecSupport() {
 
     @Test
-    fun `TrackLargestPayment - entering Payment fires its effects`() {
+    fun `TrackLargestPayment - a new Payment sets invoice customer largestPayment`() {
         // given: one new subject entered 'Payment'
         val payment = givens.payment()
         payment.assertIsA("Payment", "the given must deliver a member of 'Payment'")

@@ -5,31 +5,31 @@ each case below is an executable test.
 
 ## CorrectEmailSpec.kt
 
-- ApplyEmailCorrection - entering CorrectEmail fires its effects
+- ApplyEmailCorrection - a new CorrectEmail sets customer.email
 
 ## PaymentSpec.kt
 
-- TrackLargestPayment - entering Payment fires its effects
+- TrackLargestPayment - a new Payment sets invoice.customer.largestPayment
 - never - a Payment where amount at most 0 is refused
 - never - a Payment with amount 1 is accepted
 
 ## PaidInvoiceSpec.kt
 
-- SendReceipt - entering PaidInvoice fires its effects
-- EmailReceipt - entering UnemailedReceipt fires after the transaction
+- SendReceipt - a new PaidInvoice produces a Receipt
+- EmailReceipt - a new UnemailedReceipt produces a ReceiptEmail after the commit
 
 ## OverdueInvoiceSpec.kt
 
-- RemindOverdue - the Weekly sweep serves ActionableOverdue
+- RemindOverdue - at the Weekly tick, an ActionableOverdue produces a Reminder
 
 ## IssuedInvoiceSpec.kt
 
-- ApplyDueChange - entering ApplicableDueChange fires its effects
-- RecordDueChangeRefusal - entering RefusedDueChange fires its effects
+- ApplyDueChange - a new ApplicableDueChange sets invoice.due
+- RecordDueChangeRefusal - a new RefusedDueChange produces a DueChangeRefusal
 
 ## ArchivedInvoiceSpec.kt
 
-- NoteUnarchival - leaving ArchivedInvoice fires the exit reaction
+- NoteUnarchival - an UnarchiveRequest for an ArchivedInvoice produces an UnarchiveNotice
 
 ## LineItemSpec.kt
 

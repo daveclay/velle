@@ -69,10 +69,9 @@ class Givens(private val sys: BillingSystem) : RequiredGivens {
         return sys.changeDueDates().last()
     }
 
-    override fun formerArchivedInvoice(): BillingSystem.InvoiceView {
+    override fun archivedInvoice(): BillingSystem.InvoiceView {
         val inv = invoice()
         sys.commitArchiveRequest(inv)
-        sys.commitUnarchiveRequest(inv)
         return inv
     }
 }

@@ -19,11 +19,14 @@ import velle.generated.billing.*
 class ArchivedInvoiceSpec : SpecSupport() {
 
     @Test
-    fun `NoteUnarchival - leaving ArchivedInvoice fires the exit reaction`() {
+    fun `NoteUnarchival - an UnarchiveRequest for an ArchivedInvoice produces an UnarchiveNotice`() {
         val beforeUnarchiveNotice = count("UnarchiveNotice")
-        // given: a former member of 'ArchivedInvoice' — the exit commit has just landed
-        val invoice = givens.formerArchivedInvoice()
-        invoice.assertIsNotA("ArchivedInvoice", "the given must cause an exit from 'ArchivedInvoice'")
+        // given: a member of 'ArchivedInvoice'
+        val invoice = givens.archivedInvoice()
+        invoice.assertIsA("ArchivedInvoice", "the given must deliver a member of 'ArchivedInvoice'")
+        // when: a UnarchiveRequest for it is committed
+        sys.commitUnarchiveRequest(invoice)
+        invoice.assertIsNotA("ArchivedInvoice", "the exit commit must end the membership")
         assertEquals(beforeUnarchiveNotice + 1, count("UnarchiveNotice"), "rule NoteUnarchival: one 'UnarchiveNotice' per firing")
         val producedUnarchiveNotice = last("UnarchiveNotice")
         assertEquals(invoice.id, field(producedUnarchiveNotice, "invoice"), "UnarchiveNotice.invoice: this")

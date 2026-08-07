@@ -25,7 +25,7 @@ import velle.generated.membership.*
 class MemberSpec : SpecSupport() {
 
     @Test
-    fun `SendWelcome - entering Member fires its effects`() {
+    fun `SendWelcome - a new Member produces a WelcomeNote`() {
         val beforeWelcomeNote = count("WelcomeNote")
         // given: one new subject entered 'Member'
         val member = givens.member()
@@ -34,7 +34,7 @@ class MemberSpec : SpecSupport() {
     }
 
     @Test
-    fun `RestoreService - the Nightly sweep serves Member`() {
+    fun `RestoreService - at the Nightly tick a Member sets suspended`() {
         // given: one subject in 'Member'; no 'Nightly' tick yet
         val member = givens.memberForRestoreService()
         member.assertIsA("Member", "the given must deliver a member of 'Member'")
@@ -42,7 +42,7 @@ class MemberSpec : SpecSupport() {
     }
 
     @Test
-    fun `ScoreEngagement - the Nightly sweep serves Member`() {
+    fun `ScoreEngagement - at the Nightly tick a Member sets engagementScore`() {
         // given: one subject in 'Member'; no 'Nightly' tick yet
         val member = givens.member()
         member.assertIsA("Member", "the given must deliver a member of 'Member'")

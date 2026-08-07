@@ -27,7 +27,7 @@ import velle.generated.billing.*
 class IssuedInvoiceSpec : SpecSupport() {
 
     @Test
-    fun `ApplyDueChange - entering ApplicableDueChange fires its effects`() {
+    fun `ApplyDueChange - a new ApplicableDueChange sets invoice due`() {
         // given: one new subject entered 'ApplicableDueChange'
         val changeDueDate = givens.applicableDueChange()
         changeDueDate.assertIsA("ApplicableDueChange", "the given must deliver a member of 'ApplicableDueChange'")
@@ -36,7 +36,7 @@ class IssuedInvoiceSpec : SpecSupport() {
     }
 
     @Test
-    fun `RecordDueChangeRefusal - entering RefusedDueChange fires its effects`() {
+    fun `RecordDueChangeRefusal - a new RefusedDueChange produces a DueChangeRefusal`() {
         val beforeDueChangeRefusal = count("DueChangeRefusal")
         // given: one new subject entered 'RefusedDueChange'
         val changeDueDate = givens.refusedDueChange()

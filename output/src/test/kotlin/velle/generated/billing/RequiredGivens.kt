@@ -38,6 +38,6 @@ interface RequiredGivens {
     /** Perform the commit(s) that make ONE new subject enter 'RefusedDueChange'; return the subject. */
     fun refusedDueChange(): BillingSystem.ChangeDueDateView
 
-    /** Create a member of 'ArchivedInvoice', then perform the commit that makes it leave; return the subject. */
-    fun formerArchivedInvoice(): BillingSystem.InvoiceView
+    /** Bring ONE subject into 'ArchivedInvoice'; return it. */
+    fun archivedInvoice(): BillingSystem.InvoiceView
 }

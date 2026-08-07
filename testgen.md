@@ -54,12 +54,18 @@ reach the interesting state* is human judgment. The contract:
   scenario language derived from the condition, not the rule: a bare condition
   names the state itself (`paidInvoice(): BillingSystem.InvoiceView`,
   `unappliedDeposit()`), and rules sharing that condition share the one given;
-  `former<State>()` is the exit scenario; a condition carrying an inline
-  `where` (or a composite) can't be named, so the rule disambiguates
-  (`memberForRestoreService()`). The developer implements it as
-  `class Givens(sys)` beside the generated specs; a missing given is a compile
-  error naming exactly what's owed. Human judgment stays, but in one findable
-  place, named in business language.
+  a condition carrying an inline `where` (or a composite) can't be named, so
+  the rule disambiguates (`memberForRestoreService()`). An exit rule's test performs the
+  "when" itself and asserts both sides of the transition; the exit commit is
+  *derived* when the predicate names it — a `not exists X for this` atom over
+  an exposed act means the test commits the real X (`sys.commitReopenTicket(ticket)`),
+  no given owed — and only a drift exit (a value predicate like `balance < 0`)
+  demands a human-owned exit action beside the state-given
+  (`delinquent()` / `exitDelinquent(member)`), since which commit recovers
+  the value is business judgment. The developer implements it as `class Givens(sys)` beside
+  the generated specs; a missing given is a compile error naming exactly
+  what's owed. Human judgment stays, but in one findable place, named in
+  business language.
 - **Each test states its given in place.** The call site carries a
   `// given: ...` comment describing the state the given has delivered
   ("a former member of 'ClosedTicket' — the exit commit has just landed"), so

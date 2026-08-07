@@ -18,7 +18,7 @@ import velle.generated.membership.*
 class UnappliedDepositSpec : SpecSupport() {
 
     @Test
-    fun `ApplyDeposit - entering UnappliedDeposit fires after the transaction`() {
+    fun `ApplyDeposit - a new UnappliedDeposit sets member balance and applied after the commit`() {
         // given: one new subject entered 'UnappliedDeposit', and rule ApplyDeposit has fired after that transaction
         val deposit = givens.unappliedDeposit()
         deposit.assertIsNotA("UnappliedDeposit", "the disarm law: the firing left its trigger state")

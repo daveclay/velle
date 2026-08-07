@@ -19,7 +19,7 @@ import velle.generated.billing.*
 class OverdueInvoiceSpec : SpecSupport() {
 
     @Test
-    fun `RemindOverdue - the Weekly sweep serves ActionableOverdue`() {
+    fun `RemindOverdue - at the Weekly tick an ActionableOverdue produces a Reminder`() {
         val beforeReminder = count("Reminder")
         // given: one subject in 'ActionableOverdue'; no 'Weekly' tick yet
         val invoice = givens.invoiceForRemindOverdue()

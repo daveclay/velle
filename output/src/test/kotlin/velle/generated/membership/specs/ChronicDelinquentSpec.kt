@@ -19,7 +19,7 @@ import velle.generated.membership.*
 class ChronicDelinquentSpec : SpecSupport() {
 
     @Test
-    fun `OpenAccountReview - entering ChronicDelinquent fires its effects`() {
+    fun `OpenAccountReview - a new ChronicDelinquent produces an AuditEntry and an AccountReview`() {
         val beforeAuditEntry = count("AuditEntry")
         val beforeAccountReview = count("AccountReview")
         // given: one new subject entered 'ChronicDelinquent'
