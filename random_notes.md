@@ -92,6 +92,16 @@ Velle could be a _framework_:
 
 Either way, the "hard" part is the integration points where we have to generate code for what velle manages, and expose lower-level constructs for things like APIs and DBs.
 
+### Realistic Use Case
+
+No one is going to run a webserver in Velle, and in fact that goes against the concept that the language is a higher-level abstraction. There's far too many grimy nuances in the real world to support as "plugins" to some velle "runtime" framework.
+
+An engineer would choose to use Velle to capture the business logic and shapes, then create a new spring boot app for the actual runtime service.
+
+This means Velle produces an artifact that the engineer can then drop into the spring boot app.
+
+The question now is: what is that artifact? What is it's API?
+
 # Shape "Interfaces"
 
 What if a rule applies to multiple shapes that act the same? Can you declare a refinement as a union of states? Probably! Probably useful! 

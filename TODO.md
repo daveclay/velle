@@ -8,7 +8,7 @@ Actionable work only. Settled results live in `README.md` (§22 catalogs the ope
 
 ## v0 loose ends (surfaced by the implementation pass)
 
-- [ ] Reconcile `grammar.md` with README §20's episodes example: the README uses a singular where-filtered query `(OpenDelinquencyFlag where account == this)`, which `grammar.md` never adopted — the spec spells it `latest(...)`; the two docs should agree. Related: the `(Shape for expr)` singular form rejects refinement names in v0.
+- [ ] Lift v0's refinement-name restriction on `(Shape for expr)`: README §20's episodes example now spells its singular reference `(OpenDelinquencyFlag for this)` — the sanctioned proof-gated form, which v0 currently rejects when the name is a refinement. The restriction guts the form's main use case, since whole-spec singularity proofs almost always attach to guard refinements, never base shapes. Design worked out in `investigate_singular_for.md` (three layers: name resolution, evaluation, the V12 proof gate).
 - [ ] `if`'s `then` must share the condition's line — newline-discipline surprise; decide whether that's the language rule or a parser limitation to lift.
 - [ ] Author-named `many` fields have no commit story — F4 totality would demand a committer-supplied collection, and no syntax provides one; inferred inverses are the only working spelling. Decide: add syntax, or make the restriction official.
 - [ ] Validator gaps (tracked in `Validator.kt`'s header): V11 branch-sensitive narrowing, V12 at-most-one proofs beyond rejection, V14 descent certificates, and the advisory A-series.

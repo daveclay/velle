@@ -833,13 +833,13 @@ rule OpenDelinquencyEpisode
 -- leaving Delinquent closes the open episode
 rule CloseDelinquencyEpisode when leaving Delinquent {
     DelinquencyResolution from {
-        flag: (OpenDelinquencyFlag where account == this)
+        flag: (OpenDelinquencyFlag for this)
         resolvedOn: today
     }
 }
 ```
 
-Now `count(DelinquencyFlag where account == this) >= 3` is expressible, and any rule can guard per episode (`DelinquencyFlag where not exists ServiceSuspension for this`). Noteworthy in passing: the exit rule's singular reference `(OpenDelinquencyFlag where account == this)` is provably at-most-one *because of the entry rule's own guard* — a whole-spec singularity proof (`## Predicate expressions`' `for`-query rule, discharged by a guard elsewhere in the spec). The honest cost: three shapes and two rules of completely mechanical pattern — accepted, not sugared (`## Run-once guards`).
+Now `count(DelinquencyFlag where account == this) >= 3` is expressible, and any rule can guard per episode (`DelinquencyFlag where not exists ServiceSuspension for this`). Noteworthy in passing: the exit rule's singular reference `(OpenDelinquencyFlag for this)` is provably at-most-one *because of the entry rule's own guard* — a whole-spec singularity proof (`## Predicate expressions`' `for`-query rule, discharged by a guard elsewhere in the spec). The honest cost: three shapes and two rules of completely mechanical pattern — accepted, not sugared (`## Run-once guards`).
 
 ### All-or-nothing batches
 
