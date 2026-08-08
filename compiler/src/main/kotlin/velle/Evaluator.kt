@@ -189,14 +189,22 @@ class Evaluator(private val system: VelleSystem) {
         return anyCombination(e.collection!!, ctx)
     }
 
-    /** Instances of [shape] whose unique type-matched to-one field references [id]. */
+    /**
+     * Instances of [shape] whose unique type-matched to-one field references [id].
+     * A refinement name resolves to its base for the field lookup and instance
+     * scan, then filters by membership — the same resolution bindingCandidates
+     * applies to refinement roots in collection position.
+     */
     private fun instancesReferencing(shape: String, id: Long): List<Long> {
+        val base = if (shape in model.refinements) model.baseOf(shape)!! else shape
         val targetShape = system.instances.getValue(id).shape
-        val field = model.shapes.getValue(shape).members.filterIsInstance<StoredProp>()
+        val field = model.shapes.getValue(base).members.filterIsInstance<StoredProp>()
             .single { (it.type as? RelType)?.let { t -> !t.many && t.shape == targetShape } == true }
-        return system.byShape[shape].orEmpty().filter {
+        val referencing = system.byShape[base].orEmpty().filter {
             (system.instances.getValue(it).fields[field.name] as? Value.VRef)?.id == id
         }
+        return if (shape in model.refinements) referencing.filter { memberOfRefExpr(it, RefName(shape)) }
+        else referencing
     }
 
     private fun bindingCandidates(b: Binding, ctx: Ctx): Pair<String, List<Long>> = when (val src = b.source) {

@@ -102,6 +102,10 @@ This means Velle produces an artifact that the engineer can then drop into the s
 
 The question now is: what is that artifact? What is it's API?
 
+Does `expose` stay as a way to declare a shape as an argument to a function? Yeah, right? Otherwise you'd be able to commit any shape or _no_ shape. If it's just a function, why bother with `using X` since we're not trying to capture _where_ a thing came from.
+
+Oh - the idea was a separate springboot-velle libarary that would implement a default "I'll take your `expose` shapes and make REST APIs for them" and an ORM that implements a persistence layer. There's almost _assuredly_ a need to wire in custom code to a "commit" and "transaction" - calling some API or other code within a transaction committing a shape to persistence. If using this springboot-velle framework does the REST API, _where_ could an engineer wire in custom logic, since the entry point is hidden?
+
 # Shape "Interfaces"
 
 What if a rule applies to multiple shapes that act the same? Can you declare a refinement as a union of states? Probably! Probably useful! 

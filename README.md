@@ -268,7 +268,7 @@ shape CustomerWithMatchingIssue = Customer where
 
 Every binding in the list must be reachable as a relationship from the same enclosing subject (`this`, or the enclosing `as` alias) — a correlated join relative to a shared parent, not an arbitrary cross-product of any two shapes in the system. A single binding (`invoices where OverdueInvoice`, `invoices as inv where ...`) is just the one-binding case of this same rule.
 
-**`for` as a query expression** (e.g. `(NurseVerification for this).nurse`) is legal only when the compiler can prove at most one matching instance exists *and* exactly one field matches by type — because a guard refinement elsewhere in the spec proves at most one can exist (the whole-spec singularity proof — `## Run-once guards` and "Episodes as data" in `## State-change patterns`), or the relationship is to-one from the other side. Otherwise, disambiguate with `latest`/`first` over a `where`-filtered collection instead — the same fallback as the field-ambiguity case above, not a second mechanism:
+**`for` as a query expression** (e.g. `(NurseVerification for this).nurse`) is legal only when the compiler can prove at most one matching instance exists *and* exactly one field matches by type — because a guard refinement elsewhere in the spec proves at most one can exist (the whole-spec singularity proof — `## Run-once guards` and "Episodes as data" in `## State-change patterns`), or the relationship is to-one from the other side. The subject may be a refinement (`(OpenDelinquencyFlag for this)`) — at-most-one is usually a property of a *state*, not a shape; the full legality catalog, worked examples and diagnostics included, is `singular_references.md`. Otherwise, disambiguate with `latest`/`first` over a `where`-filtered collection instead — the same fallback as the field-ambiguity case above, not a second mechanism:
 
 ```
 latest(Shape for expr)
@@ -826,7 +826,7 @@ shape OpenDelinquencyFlag = DelinquencyFlag where not exists DelinquencyResoluti
 
 -- a delinquent account with no open flag starts a new episode
 rule OpenDelinquencyEpisode
-    when (Delinquent where not exists (OpenDelinquencyFlag where account == this)) {
+    when (Delinquent where not exists OpenDelinquencyFlag for this) {
     DelinquencyFlag from { account: this, flaggedOn: today }
 }
 

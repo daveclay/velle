@@ -7,8 +7,9 @@ package velle
  * confluence), v0 proves the syntactic cases and fails closed on the rest —
  * calibration against realistic specs is OQ14–16's deferred work. Not yet
  * implemented (tracked in checks.md): V11 branch-sensitive narrowing, V12
- * at-most-one proofs beyond rejection, V14 descent certificates, and the
- * advisory A-series.
+ * at-most-one proofs beyond the refinement slice (base-shape to-one-inverse
+ * proofs stay runtime-enforced), V14 descent certificates, and the advisory
+ * A-series.
  */
 class Validator(private val model: Model) {
 
@@ -37,6 +38,7 @@ class Validator(private val model: Model) {
         checkNevers()             // V10
         checkDerivedCycles()      // V14 (stratification; certificates TODO)
         checkQuiescence()         // V16
+        checkSingularProofs()     // V12 (refinement slice)
     }
 
     // ── F1/F2/F3: declarations ───────────────────────────────────────────────
@@ -166,7 +168,8 @@ class Validator(private val model: Model) {
 
     private fun typeMatchedFields(shape: String, expr: Expr, scope: String): List<String> {
         val exprShape = exprInstanceShape(expr, scope) ?: return emptyList()
-        return model.shapes[shape]?.members?.filterIsInstance<StoredProp>()
+        // a refinement's matchable to-one fields are its base's stored fields
+        return model.shapes[model.baseOf(shape) ?: shape]?.members?.filterIsInstance<StoredProp>()
             ?.filter { (it.type as? RelType)?.let { t -> !t.many && t.shape == exprShape } == true }
             ?.map { it.name } ?: emptyList()
     }
@@ -197,7 +200,8 @@ class Validator(private val model: Model) {
             is ExistsExpr -> {
                 e.forExpr?.let { checkExpr(it, scope) }
                 e.shape?.let { s ->
-                    if (s !in model.shapes) diags.add(Diagnostic("F1", "exists names unknown shape '$s'"))
+                    if (s !in model.shapes && s !in model.refinements)
+                        diags.add(Diagnostic("F1", "exists names unknown shape '$s'"))
                     else e.forExpr?.let { checkForTypeMatch(s, it, scope, "exists $s for ...") }
                 }
                 e.collection?.let { checkCollection(it, scope) }
@@ -210,7 +214,8 @@ class Validator(private val model: Model) {
             }
             is SingularFor -> {
                 checkExpr(e.forExpr, scope)
-                if (e.shape !in model.shapes) diags.add(Diagnostic("F1", "unknown shape '${e.shape}'"))
+                if (e.shape !in model.shapes && e.shape !in model.refinements)
+                    diags.add(Diagnostic("F1", "unknown shape '${e.shape}'"))
             }
             is Access -> checkExpr(e.target, scope)
             is ShapeForSource -> checkExpr(e.forExpr, scope)
@@ -275,7 +280,8 @@ class Validator(private val model: Model) {
 
     // ── writes ───────────────────────────────────────────────────────────────
 
-    private data class Write(val rule: RuleDecl, val owner: String, val member: MemberInfo, val target: PathExpr)
+    private data class Write(val rule: RuleDecl, val owner: String, val member: MemberInfo, val target: PathExpr,
+                             val value: Expr)
 
     private fun resolveWrite(rule: RuleDecl, scope: String, a: Assignment): Write? {
         var current: String? = if (a.target.root == "this") scope else {
@@ -285,7 +291,7 @@ class Validator(private val model: Model) {
                 return null
             }
             if (a.target.segs.isEmpty())
-                return Write(rule, model.baseOf(scope) ?: scope, m, a.target)
+                return Write(rule, model.baseOf(scope) ?: scope, m, a.target, a.value)
             m.type.instanceShape()
         }
         for ((i, seg) in a.target.segs.withIndex()) {
@@ -295,7 +301,7 @@ class Validator(private val model: Model) {
                 diags.add(Diagnostic("F1", "rule '${rule.name}' assigns through unknown member '${seg.name}' of '$sc'"))
                 return null
             }
-            if (i == a.target.segs.lastIndex) return Write(rule, model.baseOf(sc) ?: sc, m, a.target)
+            if (i == a.target.segs.lastIndex) return Write(rule, model.baseOf(sc) ?: sc, m, a.target, a.value)
             current = m.type.instanceShape()
         }
         return null
@@ -704,5 +710,189 @@ class Validator(private val model: Model) {
             done.add(node)
         }
         commitRules.forEach { dfs(it, emptyList()) }
+    }
+
+    // ── V12 (refinement slice): at-most-one proofs for (Refinement for expr) ─
+    //
+    // A singular reference to a refinement R is licensed by the whole-spec
+    // singularity proof (README §10; §20 "Episodes as data"): at most one
+    // member of R can reference a given subject. The proof is inductive over
+    // commits, with two legs — every producer of R's base carries the entry
+    // guard, and R's predicate is anti-monotone (membership, once lost, can't
+    // return, so members only ever appear at guarded creation). v0 proves the
+    // coarse fail-closed slice of each leg; base-shape singular references
+    // stay runtime-enforced (V12 beyond this slice is TODO, checks.md).
+
+    private fun checkSingularProofs() {
+        forEachSpecExpr { site, e ->
+            if (e !is SingularFor || e.shape !in model.refinements) return@forEachSpecExpr
+            val r = e.shape
+            val base = model.baseOf(r) ?: return@forEachSpecExpr
+            val demand = "$site — '($r for ...)' needs at-most-one"
+            if (base in model.exposed)
+                diags.add(Diagnostic("V12", "$demand, but '$base' is exposed — an external committer " +
+                    "can create a second member while one exists; use latest/first instead"))
+            antiMonotoneFailure(r, base)?.let { why ->
+                diags.add(Diagnostic("V12", "$demand, but membership in '$r' can recur — $why; " +
+                    "use latest/first instead"))
+            }
+            for (rule in model.rules.values) {
+                for (c in rule.body.filterIsInstance<Creation>()) {
+                    if (c.shape != base) continue
+                    if (!creationGuarded(rule, c, r, base))
+                        diags.add(Diagnostic("V12", "$demand, but rule '${rule.name}' creates '$base' " +
+                            "without the entry guard 'not exists $r for ...' — guard it, or use latest/first"))
+                }
+            }
+        }
+    }
+
+    /**
+     * Anti-monotone: once an instance leaves R it can never re-enter, so guarded
+     * creation bounds membership forever. v0's provable conjunct forms: `not
+     * exists ...` (facts are monotone — no delete primitive), and `not <flag>`
+     * where every writer assigns literal true (a one-way latch, checked against
+     * the same write set V1 walks). Returns null when proven, else the reason.
+     */
+    private fun antiMonotoneFailure(r: String, base: String): String? {
+        val conjuncts = refPredicateConjuncts(RefName(r))
+            ?: return "'$r' composes with or/not — v0 proves plain conjunctions only"
+        for (c in conjuncts) {
+            val inner = (c as? NotExpr)?.inner
+                ?: return "a conjunct is not of the form 'not ...' — not provably anti-monotone in v0"
+            when {
+                inner is ExistsExpr -> {}
+                inner is PathExpr && inner.segs.isEmpty() -> {
+                    val flag = inner.root
+                    val falseWriter = writes.firstOrNull {
+                        it.owner == base && it.member.name == flag && it.value != BoolLit(true)
+                    }
+                    if (falseWriter != null)
+                        return "rule '${falseWriter.rule.name}' writes '$flag' non-true, " +
+                            "re-entry by drift is possible"
+                }
+                else -> return "a conjunct is not provably anti-monotone in v0 " +
+                    "('not exists ...' and one-way latch flags are the provable forms)"
+            }
+        }
+        return null
+    }
+
+    /** Flattened conjuncts of a refinement expression's predicates; null on or/not composition (fail closed). */
+    private fun refPredicateConjuncts(e: RefExpr): List<Expr>? = when (e) {
+        is RefName -> {
+            val nested = when {
+                e.name in model.shapes -> emptyList()
+                e.name in model.refinements -> refPredicateConjuncts(model.refinements.getValue(e.name).expr)
+                else -> null
+            } ?: return null
+            nested + (e.where?.let(::conjunctsOf).orEmpty())
+        }
+        is RefAnd -> {
+            val l = refPredicateConjuncts(e.left) ?: return null
+            val r = refPredicateConjuncts(e.right) ?: return null
+            l + r
+        }
+        else -> null
+    }
+
+    private fun conjunctsOf(e: Expr): List<Expr> =
+        if (e is Binary && e.op == "and") conjunctsOf(e.left) + conjunctsOf(e.right) else listOf(e)
+
+    /**
+     * Does [rule]'s condition carry the entry guard for [r], correlated on a
+     * field this [c]reation populates with `this`? Accepted guard spellings:
+     * `not exists R for this` (correlating field resolved by type match) and
+     * `not exists (R where f == this)`.
+     */
+    private fun creationGuarded(rule: RuleDecl, c: Creation, r: String, base: String): Boolean {
+        val scope = subjectScope(rule) ?: return false
+        val thisExpr = PathExpr("this")
+        val correlated = buildSet {
+            c.fields.forEach { fi -> if (fi.value == thisExpr) add(fi.name) }
+            if (c.forExpr == thisExpr) typeMatchedFields(base, thisExpr, scope).singleOrNull()?.let { add(it) }
+        }
+        val conjuncts = refPredicateConjuncts(rule.condition) ?: return false
+        return conjuncts.any { conj ->
+            val ex = ((conj as? NotExpr)?.inner as? ExistsExpr) ?: return@any false
+            when {
+                ex.shape == r && ex.forExpr == thisExpr ->
+                    typeMatchedFields(base, thisExpr, scope).singleOrNull() in correlated
+                ex.collection != null -> {
+                    val b = ex.collection.bindings.singleOrNull()?.source as? PathExpr
+                    val w = ex.collection.where as? Binary
+                    b?.root == r && b.segs.isEmpty() && w?.op == "==" &&
+                        ((w.left as? PathExpr)?.segs?.isEmpty() == true &&
+                            w.right == thisExpr && (w.left as PathExpr).root in correlated ||
+                         (w.right as? PathExpr)?.segs?.isEmpty() == true &&
+                            w.left == thisExpr && (w.right as PathExpr).root in correlated)
+                }
+                else -> false
+            }
+        }
+    }
+
+    /** Walks every expression in the spec with a human-readable site label. */
+    private fun forEachSpecExpr(visit: (site: String, e: Expr) -> Unit) {
+        fun walk(site: String, e: Expr?) {
+            e ?: return
+            visit(site, e)
+            when (e) {
+                is UnaryMinus -> walk(site, e.inner)
+                is Binary -> { walk(site, e.left); walk(site, e.right) }
+                is NotExpr -> walk(site, e.inner)
+                is IfExpr -> { walk(site, e.condition); walk(site, e.thenExpr); walk(site, e.elseExpr) }
+                is IsExpr -> walk(site, e.subject)
+                is ExistsExpr -> {
+                    walk(site, e.forExpr)
+                    e.collection?.let { coll ->
+                        coll.bindings.forEach { walk(site, it.source) }
+                        walk(site, coll.where)
+                    }
+                }
+                is AggCall -> {
+                    e.collection.bindings.forEach { walk(site, it.source) }
+                    walk(site, e.collection.where)
+                }
+                is FunCall -> e.args.forEach { walk(site, it) }
+                is SingularFor -> walk(site, e.forExpr)
+                is ShapeForSource -> walk(site, e.forExpr)
+                is Access -> walk(site, e.target)
+                else -> {}
+            }
+        }
+        fun walkRef(site: String, e: RefExpr) {
+            when (e) {
+                is RefName -> walk(site, e.where)
+                is RefAnd -> { walkRef(site, e.left); walkRef(site, e.right) }
+                is RefOr -> { walkRef(site, e.left); walkRef(site, e.right) }
+                is RefNot -> walkRef(site, e.inner)
+            }
+        }
+        for ((name, shape) in model.shapes) shape.members.forEach { m ->
+            when (m) {
+                is StoredProp -> walk("shape '$name'", m.initially)
+                is DerivedProp -> walk("shape '$name'", m.expr)
+                else -> {}
+            }
+        }
+        for ((name, ref) in model.refinements) {
+            walkRef("shape '$name'", ref.expr)
+            ref.members.forEach { m -> if (m is DerivedProp) walk("shape '$name'", m.expr) }
+        }
+        for (rule in model.rules.values) {
+            walkRef("rule '${rule.name}'", rule.condition)
+            rule.body.forEach { item ->
+                when (item) {
+                    is Assignment -> walk("rule '${rule.name}'", item.value)
+                    is Creation -> {
+                        walk("rule '${rule.name}'", item.forExpr)
+                        item.fields.forEach { walk("rule '${rule.name}'", it.value) }
+                    }
+                    else -> {}
+                }
+            }
+        }
+        model.nevers.forEach { walkRef("never declaration", it.target) }
     }
 }

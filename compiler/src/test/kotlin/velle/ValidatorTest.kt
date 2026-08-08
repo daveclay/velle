@@ -350,4 +350,156 @@ class ValidatorTest {
         """.trimIndent()
         assertTrue(codes(src).contains("V13"), "got: ${diags(src)}")
     }
+
+    // ── V12 (refinement slice): (Refinement for expr) singularity proofs ─────
+
+    /** README §20's episodes pattern — the flagship whole-spec singularity proof. */
+    private val episodes = """
+        expose shape Account {
+            balance: decimal
+        } using MockHarness
+
+        expose shape BalanceReport {
+            account: one Account
+            reported: decimal
+        } using MockHarness
+
+        shape DelinquencyFlag {
+            account: one Account
+            flaggedOn: Date initially today
+        }
+
+        shape DelinquencyResolution {
+            flag: one DelinquencyFlag
+            resolvedOn: Date initially today
+        }
+
+        shape Delinquent = Account where balance < 0
+        shape OpenDelinquencyFlag = DelinquencyFlag where not exists DelinquencyResolution for this
+
+        rule RecordBalance when BalanceReport {
+            account.balance = reported
+        }
+
+        rule OpenDelinquencyEpisode
+            when (Delinquent where not exists OpenDelinquencyFlag for this) {
+            DelinquencyFlag from { account: this }
+        }
+
+        rule CloseDelinquencyEpisode when leaving Delinquent {
+            DelinquencyResolution from { flag: (OpenDelinquencyFlag for this) }
+        }
+    """.trimIndent()
+
+    @Test
+    fun `V12 - guarded evidence-pair episodes spec is licensed`() {
+        assertEquals(emptyList(), diags(episodes))
+    }
+
+    @Test
+    fun `V12 - exposing the base defeats the proof`() {
+        val src = episodes + "\n\nexpose DelinquencyFlag using MockHarness"
+        assertTrue(codes(src).contains("V12"), "got: ${diags(src)}")
+    }
+
+    @Test
+    fun `V12 - an unguarded producer defeats the proof`() {
+        val src = episodes + """
+
+
+            expose shape ManualFlag {
+                account: one Account
+            } using MockHarness
+
+            rule FlagManually when ManualFlag {
+                DelinquencyFlag from { account: account }
+            }
+        """.trimIndent()
+        assertTrue(codes(src).contains("V12"), "got: ${diags(src)}")
+    }
+
+    @Test
+    fun `V12 - a false-writer of the flag defeats anti-monotonicity`() {
+        val src = """
+            expose shape Account {
+                balance: decimal
+            } using MockHarness
+
+            expose shape BalanceReport {
+                account: one Account
+                reported: decimal
+            } using MockHarness
+
+            shape DelinquencyFlag {
+                account: one Account
+                resolved: boolean initially false
+            }
+
+            expose shape FlagDispute {
+                flag: one DelinquencyFlag
+            } using MockHarness
+
+            shape Delinquent = Account where balance < 0
+            shape OpenDelinquencyFlag = DelinquencyFlag where not resolved
+
+            rule RecordBalance when BalanceReport {
+                account.balance = reported
+            }
+
+            rule OpenDelinquencyEpisode
+                when (Delinquent where not exists OpenDelinquencyFlag for this) {
+                DelinquencyFlag from { account: this }
+            }
+
+            rule CloseFlag when (OpenDelinquencyFlag where not account is Delinquent) {
+                this.resolved = true
+            }
+
+            rule ReopenFlag when FlagDispute {
+                flag.resolved = false
+            }
+
+            shape Reportable = Account where (OpenDelinquencyFlag for this).resolved == false
+        """.trimIndent()
+        assertTrue(codes(src).contains("V12"), "got: ${diags(src)}")
+    }
+
+    @Test
+    fun `V12 - a one-way latch flag is as provable as the evidence pair`() {
+        val src = """
+            expose shape Account {
+                balance: decimal
+            } using MockHarness
+
+            expose shape BalanceReport {
+                account: one Account
+                reported: decimal
+            } using MockHarness
+
+            shape DelinquencyFlag {
+                account: one Account
+                resolved: boolean initially false
+            }
+
+            shape Delinquent = Account where balance < 0
+            shape OpenDelinquencyFlag = DelinquencyFlag where not resolved
+
+            rule RecordBalance when BalanceReport {
+                account.balance = reported
+            }
+
+            rule OpenDelinquencyEpisode
+                when (Delinquent where not exists OpenDelinquencyFlag for this) {
+                DelinquencyFlag from { account: this }
+            }
+
+            rule CloseFlag when (OpenDelinquencyFlag where not account is Delinquent) {
+                this.resolved = true
+            }
+
+            shape Reportable = Account where (OpenDelinquencyFlag for this).resolved == false
+        """.trimIndent()
+        val v12s = diags(src).filter { it.code == "V12" }
+        assertEquals(emptyList(), v12s, "got: ${diags(src)}")
+    }
 }

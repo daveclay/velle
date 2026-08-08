@@ -8,10 +8,9 @@ Actionable work only. Settled results live in `README.md` (§22 catalogs the ope
 
 ## v0 loose ends (surfaced by the implementation pass)
 
-- [ ] Lift v0's refinement-name restriction on `(Shape for expr)`: README §20's episodes example now spells its singular reference `(OpenDelinquencyFlag for this)` — the sanctioned proof-gated form, which v0 currently rejects when the name is a refinement. The restriction guts the form's main use case, since whole-spec singularity proofs almost always attach to guard refinements, never base shapes. Design worked out in `investigate_singular_for.md` (three layers: name resolution, evaluation, the V12 proof gate).
 - [ ] `if`'s `then` must share the condition's line — newline-discipline surprise; decide whether that's the language rule or a parser limitation to lift.
 - [ ] Author-named `many` fields have no commit story — F4 totality would demand a committer-supplied collection, and no syntax provides one; inferred inverses are the only working spelling. Decide: add syntax, or make the restriction official.
-- [ ] Validator gaps (tracked in `Validator.kt`'s header): V11 branch-sensitive narrowing, V12 at-most-one proofs beyond rejection, V14 descent certificates, and the advisory A-series.
+- [ ] Validator gaps (tracked in `Validator.kt`'s header): V11 branch-sensitive narrowing, V12 at-most-one proofs beyond the refinement slice (refinement subjects in `(Shape for expr)` are proven — see `singular_references.md`; base-shape to-one-inverse proofs stay runtime-enforced), V14 descent certificates, and the advisory A-series.
 - [ ] Spec-generation phase 2 (boundary synthesis, scenario DSL, no-refire cases) and phase 3 (the `example` construct) — `testgen.md`.
 - [ ] Dead references: `example_rules.md` and `example_predicates.md` still cite deleted files (`break_velle.md`, `example_composition_depth.md`, `discussion_hard_problems.md`).
 
