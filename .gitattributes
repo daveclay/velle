@@ -1,0 +1,4 @@
+# GitHub has no per-repo grammars; render .velle with Haskell's as the closest
+# stand-in (`--` comments, where/if/then/else, capitalized type names).
+# Swap for Lua, Elm, or SQL if that ever renders better; see editors/velle/README.md.
+*.velle linguist-language=Haskell

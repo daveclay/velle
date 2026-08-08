@@ -1,0 +1,29 @@
+{
+  "name": "velle-syntax",
+  "displayName": "Velle",
+  "description": "Syntax highlighting for the Velle language",
+  "version": "0.1.0",
+  "publisher": "velle",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.0.0"
+  },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "velle",
+        "aliases": ["Velle", "velle"],
+        "extensions": [".velle"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "velle",
+        "scopeName": "source.velle",
+        "path": "./syntaxes/velle.tmLanguage.json"
+      }
+    ]
+  }
+}

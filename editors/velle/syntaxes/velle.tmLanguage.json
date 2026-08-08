@@ -1,0 +1,153 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Velle",
+  "scopeName": "source.velle",
+  "fileTypes": ["velle"],
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#shape-declaration" },
+    { "include": "#rule-declaration" },
+    { "include": "#timestamp-property" },
+    { "include": "#tolerates-hazard" },
+    { "include": "#duration-literal" },
+    { "include": "#number" },
+    { "include": "#keyword-declaration" },
+    { "include": "#keyword-control" },
+    { "include": "#keyword-logical" },
+    { "include": "#storage-modifier" },
+    { "include": "#constant" },
+    { "include": "#this" },
+    { "include": "#builtin-function" },
+    { "include": "#scalar-type" },
+    { "include": "#cardinality" },
+    { "include": "#shape-reference" },
+    { "include": "#property-name" },
+    { "include": "#operator" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "--.*$",
+      "name": "comment.line.double-dash.velle"
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"|$",
+      "name": "string.quoted.double.velle",
+      "patterns": [
+        {
+          "match": "\\\\([\"\\\\nrt]|u[0-9A-Fa-f]{4})",
+          "name": "constant.character.escape.velle"
+        },
+        {
+          "match": "\\\\.",
+          "name": "invalid.illegal.escape.velle"
+        }
+      ]
+    },
+    "shape-declaration": {
+      "match": "\\b(shape)\\s+([A-Z][A-Za-z0-9]*)",
+      "captures": {
+        "1": { "name": "keyword.declaration.shape.velle" },
+        "2": { "name": "entity.name.type.shape.velle" }
+      }
+    },
+    "rule-declaration": {
+      "match": "\\b(rule)\\s+([A-Z][A-Za-z0-9]*)",
+      "captures": {
+        "1": { "name": "keyword.declaration.rule.velle" },
+        "2": { "name": "entity.name.function.rule.velle" }
+      }
+    },
+    "timestamp-property": {
+      "match": "\\b(timestamp)\\s+(on)\\s+(create|update)\\b",
+      "captures": {
+        "1": { "name": "storage.type.timestamp.velle" },
+        "2": { "name": "keyword.control.on.velle" },
+        "3": { "name": "storage.modifier.commit-event.velle" }
+      }
+    },
+    "tolerates-hazard": {
+      "match": "\\b(tolerates)\\s+(duplication|reordering|loss)\\b",
+      "captures": {
+        "1": { "name": "storage.modifier.tolerates.velle" },
+        "2": { "name": "constant.language.hazard.velle" }
+      }
+    },
+    "duration-literal": {
+      "match": "\\b(\\d+)\\s+(seconds|minutes|hours|days|weeks)\\b",
+      "captures": {
+        "1": { "name": "constant.numeric.duration.velle" },
+        "2": { "name": "keyword.other.unit.velle" }
+      }
+    },
+    "number": {
+      "patterns": [
+        {
+          "match": "\\b\\d+\\.\\d+\\b",
+          "name": "constant.numeric.decimal.velle"
+        },
+        {
+          "match": "\\b\\d+\\b",
+          "name": "constant.numeric.integer.velle"
+        }
+      ]
+    },
+    "keyword-declaration": {
+      "match": "\\b(shape|rule|never|expose|using)\\b",
+      "name": "keyword.declaration.velle"
+    },
+    "keyword-control": {
+      "match": "\\b(when|leaving|on|after|commit|where|from|for|then|if|else|as)\\b",
+      "name": "keyword.control.velle"
+    },
+    "keyword-logical": {
+      "match": "\\b(and|or|not|is|exists)\\b",
+      "name": "keyword.operator.logical.velle"
+    },
+    "storage-modifier": {
+      "match": "\\b(initially|captured|frozen|tolerates|timestamp)\\b",
+      "name": "storage.modifier.velle"
+    },
+    "constant": {
+      "match": "\\b(true|false|none|some|empty|now|today)\\b",
+      "name": "constant.language.velle"
+    },
+    "this": {
+      "match": "\\bthis\\b",
+      "name": "variable.language.this.velle"
+    },
+    "builtin-function": {
+      "patterns": [
+        {
+          "match": "\\b(count|sum|latest|first|lowercase|max|min)(?=\\s*\\()",
+          "name": "support.function.builtin.velle"
+        },
+        {
+          "match": "\\brandomUUID\\b",
+          "name": "support.function.generator.velle"
+        }
+      ]
+    },
+    "scalar-type": {
+      "match": "\\b(text|integer|long|decimal|double|boolean|Date|DateTime)\\b",
+      "name": "storage.type.scalar.velle"
+    },
+    "cardinality": {
+      "match": "\\b(one|many)\\b",
+      "name": "storage.modifier.cardinality.velle"
+    },
+    "shape-reference": {
+      "match": "\\b[A-Z][A-Za-z0-9]*\\b",
+      "name": "entity.name.type.velle"
+    },
+    "property-name": {
+      "match": "\\b[a-z][A-Za-z0-9]*(?=\\s*:)",
+      "name": "variable.other.member.velle"
+    },
+    "operator": {
+      "match": "==|!=|<=|>=|<|>|\\?\\.|[+\\-*/=?]",
+      "name": "keyword.operator.velle"
+    }
+  }
+}
