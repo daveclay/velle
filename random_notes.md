@@ -92,7 +92,18 @@ Velle could be a _framework_:
 
 Either way, the "hard" part is the integration points where we have to generate code for what velle manages, and expose lower-level constructs for things like APIs and DBs.
 
-## Typical Language Constructs
+# Shape "Interfaces"
+
+What if a rule applies to multiple shapes that act the same? Can you declare a refinement as a union of states? Probably! Probably useful! 
+
+shape Vehicle = Car | Truck | Bicycle | Boat
+
+rule DriveVehicle when Vehicle ... {
+    -- startedOn is shared, so valid
+    startedOn: now
+}
+
+# Typical Language Constructs
 What makes up the definition of a system?
 
 - Data - data comes in from an API or DB and then written to an API or DB. A huge amount of code is spent mapping one to the other.
