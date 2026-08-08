@@ -29,6 +29,14 @@ plus the rules hanging off it. One generated spec file per **story root**:
   system's generated output lives in its own package
   (`velle.generated.<system>` / `.specs`), so several systems coexist in one
   output module.
+- The same cases are also rendered as Gherkin, one
+  `features/<system>/<Root>.feature` per story root — **documentation, not a
+  runner**: JUnit stays the execution engine, and the feature files are
+  regenerated from the same AST in the same pass, so they can't drift from
+  what actually runs. Cucumber's sentence-matching machinery exists to keep
+  hand-written prose and hand-written glue in sync; generation from one
+  source already provides that guarantee, so executing the sentences would
+  add indirection and buy nothing.
 
 ## The case catalog (what is derived, per construct kind)
 

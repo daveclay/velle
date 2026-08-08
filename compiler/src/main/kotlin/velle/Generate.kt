@@ -39,4 +39,12 @@ private fun generateSystem(specPath: String, systemName: String) {
     println("wrote ${File(systemDir, "RequiredGivens.kt").path}")
     File("SPEC_INDEX-$systemName.md").writeText(specs.index)
     println("wrote SPEC_INDEX-$systemName.md")
+
+    val featuresDir = File("features/${systemName.lowercase()}")
+    featuresDir.deleteRecursively()
+    featuresDir.mkdirs()
+    for ((name, content) in specs.featureFiles) {
+        File(featuresDir, name).writeText(content)
+        println("wrote ${File(featuresDir, name).path}")
+    }
 }

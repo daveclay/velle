@@ -36,6 +36,12 @@ class CodegenGoldenTest {
             assertEquals(specs.index, File("SPEC_INDEX-$systemName.md").readText())
             assertEquals(specs.specFiles.keys + "SpecSupport.kt",
                 specsDir.listFiles()!!.map { it.name }.toSet(), "stale files in $systemName specs/")
+            val featuresDir = File("features/${systemName.lowercase()}")
+            for ((name, content) in specs.featureFiles) {
+                assertEquals(content, File(featuresDir, name).readText(), "$name drifted — run: gradle generate")
+            }
+            assertEquals(specs.featureFiles.keys,
+                featuresDir.listFiles()!!.map { it.name }.toSet(), "stale files in $systemName features/")
         }
     }
 }
