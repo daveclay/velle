@@ -1,6 +1,6 @@
 # Velle Validator Check Catalog (v0)
 
-Every check the v0 validator runs, one entry each: what it proves, what it reads, and the shape of its diagnostic. This consolidates obligations settled across the README; the two checks marked *coarse* are the v0 fail-closed slices of open calibration questions (`open_questions.md` OQ15, OQ16), listed here so calibration later revises entries, not the model.
+Every check the v0 validator runs, one entry each: what it proves, what it reads, and the shape of its diagnostic. This consolidates obligations settled across the README; the two checks marked *coarse* are the v0 fail-closed slices of open calibration questions (`working-docs/open_questions.md` OQ15, OQ16), listed here so calibration later revises entries, not the model.
 
 Three principles govern every entry (README §1, §12):
 

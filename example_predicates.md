@@ -1,6 +1,6 @@
 # Stress test: formalizing predicate syntax
 
-`TODO.md` flagged this as a gap with no home: the expression language used inside `where`/`requires`/`visible to ... where` — comparisons, `and`/`or`/`not`, `is`, `exists`, `count`, `sum`, relationship traversal — has only ever been used by example, never specified as its own grammar with defined precedence and semantics. Negation and disjunction surfaced as real ambiguities in `break_velle.md` #6 with nowhere to be resolved.
+`working-docs/TODO.md` flagged this as a gap with no home: the expression language used inside `where`/`requires`/`visible to ... where` — comparisons, `and`/`or`/`not`, `is`, `exists`, `count`, `sum`, relationship traversal — has only ever been used by example, never specified as its own grammar with defined precedence and semantics. Negation and disjunction surfaced as real ambiguities in `break_velle.md` #6 with nowhere to be resolved.
 
 Same method as `break_velle.md`/`example_refinements.md`: don't invent syntax speculatively, look at every predicate already written across the docs, find where it's inconsistent or silently depends on an unstated rule, and resolve each with a worked case — new mechanism only if a real case forces it.
 
@@ -9,7 +9,7 @@ Same method as `break_velle.md`/`example_refinements.md`: don't invent syntax sp
 Pulled verbatim from `LANGUAGE.md`, `example_invoice_payment.md`, `example_refinements.md`, `break_velle.md`:
 
 - Comparisons: `balance > 0`, `due < today`, `escalations >= 1`, `priority == "high"`, `response.outcome = "approved"` (note: two different equality spellings already in the wild)
-- Boolean composition: `and` (everywhere), `not` (`not exists Receipt for this`, `not (this is SettledInvoice)`) — `or` never actually appears in a worked example, despite being named in `TODO.md` as expected grammar
+- Boolean composition: `and` (everywhere), `not` (`not exists Receipt for this`, `not (this is SettledInvoice)`) — `or` never actually appears in a worked example, despite being named in `working-docs/TODO.md` as expected grammar
 - `is`: `assignee is none`, `response is some`, `corrections is not empty`, `alert is UnacknowledgedAlert`, `basedOn is SupersededLabResult`, `this is FlaggedCustomer`
 - `exists`: `exists Receipt for this`, `exists PharmacistVerification for this`, `not exists AccountFlagResolved for this`
 - Aggregates: `count(invoices where OverdueInvoice) >= 3`, `count(ward.admissions where ActiveAdmission) < ward.totalBeds`, `sum(payments, amount)`
@@ -28,7 +28,7 @@ Both spellings appear for the same thing: `priority == "high"` (`example_refinem
 
 ## 2. `or` — never actually exercised
 
-Every worked predicate so far is a conjunction. `or` is named in `TODO.md` as expected grammar but no stress test has actually forced it. Constructing one deliberately, extending the `SupportTicket` mixin set from `example_refinements.md`:
+Every worked predicate so far is a conjunction. `or` is named in `working-docs/TODO.md` as expected grammar but no stress test has actually forced it. Constructing one deliberately, extending the `SupportTicket` mixin set from `example_refinements.md`:
 
 ```
 shape SupportTicket {
@@ -391,7 +391,7 @@ shape Foo {
 
 No new keyword, no new grammar rule — `and`/`is`/dot-traversal/conditional derived properties already permit exactly this. Predicates were never disallowed from being self-referential; nothing in the language needed to change to make this legal to *write*.
 
-**What does shift, per `LANGUAGE.md` `## Principles`: correctly executing a self-referential definition becomes a compiler obligation, not a language construct.** This joins the same family already established for `produces` (safety + liveness under concurrent writers, `break_velle.md` #4) and `requires` (atomicity mechanism unspecified, human states the invariant): the human writes the declarative definition; the compiler is responsible for figuring out how to evaluate it correctly — fixed-point iteration, one-shot computation at creation, incremental materialization, whatever fits the target — without that decision ever surfacing in the spec. Termination isn't even a separate concern to bolt on: under the same capture-don't-mutate modeling discipline that makes a cycle structurally impossible (below), the chain is a finite, acyclic structure by construction, so any correct evaluation strategy necessarily terminates. The one thing worth stating as a compiler obligation explicitly (`TODO.md`'s compiled-guardrails catalog): correctly and efficiently evaluate self-referential shape/property definitions, the same way it's already obligated to realize `produces` safely and `requires` atomically.
+**What does shift, per `LANGUAGE.md` `## Principles`: correctly executing a self-referential definition becomes a compiler obligation, not a language construct.** This joins the same family already established for `produces` (safety + liveness under concurrent writers, `break_velle.md` #4) and `requires` (atomicity mechanism unspecified, human states the invariant): the human writes the declarative definition; the compiler is responsible for figuring out how to evaluate it correctly — fixed-point iteration, one-shot computation at creation, incremental materialization, whatever fits the target — without that decision ever surfacing in the spec. Termination isn't even a separate concern to bolt on: under the same capture-don't-mutate modeling discipline that makes a cycle structurally impossible (below), the chain is a finite, acyclic structure by construction, so any correct evaluation strategy necessarily terminates. The one thing worth stating as a compiler obligation explicitly (`working-docs/TODO.md`'s compiled-guardrails catalog): correctly and efficiently evaluate self-referential shape/property definitions, the same way it's already obligated to realize `produces` safely and `requires` atomically.
 
 **Cycle-freedom is a consequence of a modeling discipline, not a runtime property — this part of the earlier draft still holds.** If a human chooses to model `Foo.parent` the same way `break_velle.md` #6 modeled `LabResult.supersedes` — captured once, when the instance is created, never revised — then a cycle is a state that cannot arise from that model at all: an edge can only reference something that already existed, so no chain of `parent` references can loop back on itself. That's a structural consequence of a declared modeling choice, the same status as any other consequence of how shapes and relationships are declared — legitimately part of the spec, not a claim about execution.
 
@@ -399,7 +399,7 @@ This closes the fork the previous draft left open. It isn't "add a recursive con
 
 One small new pattern worth noting, not a problem: typing `root`/`rootFoo` as `Foo?` (or a refinement of it) rather than requiring a separate lookup follows naturally from refinements already being ordinary subtypes.
 
-**Separate loose end surfaced by the rule in Part 1, not part of the recursion question:** `via schedule escalatedTo.role.timeoutMinutes after Escalation` needs the schedule duration itself to be data-derived, not a literal like `10 minutes`. Adds to the already-open "scheduling framework mechanism" item in `TODO.md` rather than closing it.
+**Separate loose end surfaced by the rule in Part 1, not part of the recursion question:** `via schedule escalatedTo.role.timeoutMinutes after Escalation` needs the schedule duration itself to be data-derived, not a literal like `10 minutes`. Adds to the already-open "scheduling framework mechanism" item in `working-docs/TODO.md` rather than closing it.
 
 >
 
@@ -641,7 +641,7 @@ binding        := path ("as" Identifier)?
 duration       := IntegerLiteral ("seconds"|"minutes"|"hours"|"days"|"weeks")
 ```
 
-Every production is now either settled or explicitly a downstream compiling concern — nothing left as an `-- unresolved` comment. `example_predicates.md`'s job on this topic is done; what remains (correctly realizing `produces`'s safety/liveness, `requires`'s atomicity, self-referential definitions, narrowing analysis, and selector ordering) all belongs to `TODO.md`'s compiled-guardrails catalog, not here.
+Every production is now either settled or explicitly a downstream compiling concern — nothing left as an `-- unresolved` comment. `example_predicates.md`'s job on this topic is done; what remains (correctly realizing `produces`'s safety/liveness, `requires`'s atomicity, self-referential definitions, narrowing analysis, and selector ordering) all belongs to `working-docs/TODO.md`'s compiled-guardrails catalog, not here.
 
 All of #1–#14 and the grammar block above are now propagated into `LANGUAGE.md`.
 

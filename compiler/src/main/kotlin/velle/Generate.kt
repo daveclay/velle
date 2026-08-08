@@ -2,16 +2,14 @@ package velle
 
 import java.io.File
 
-/** The specs the output module is generated from. */
-private val SYSTEMS = listOf(
-    "../billing.velle" to "Billing",
-    "../membership.velle" to "Membership",
-)
-
-/** Regenerates the MockHarness surfaces and the executable specs: `gradle generate`. */
+/**
+ * Regenerates one system's MockHarness surface and executable specs, writing
+ * relative to the working directory — each example's output module registers a
+ * `generate` task passing its own spec; the root `generate` task runs them all.
+ */
 fun main(args: Array<String>) {
-    val systems = if (args.isEmpty()) SYSTEMS else listOf(args[0] to args[1])
-    systems.forEach { (specPath, systemName) -> generateSystem(specPath, systemName) }
+    require(args.size == 2) { "usage: velle.GenerateKt <spec.velle> <SystemName> (run from an output module dir)" }
+    generateSystem(args[0], args[1])
 }
 
 private fun generateSystem(specPath: String, systemName: String) {

@@ -5,12 +5,22 @@
 -- flag-witness guard, min/lowercase, `tolerates duplication`, `initially today`,
 -- `timestamp on update`, count over shape-name and inferred collections, `as`
 -- bindings with a reach-back, a sibling join, bare `frozen`, an act-sourced
--- capture read at exit, the reconciliation latch pair, episodes as data,
+-- capture read at exit, the reconciliation latch pair, episodes as data with
+-- the refinement-subject singular query (`(OpenDelinquencyFlag for this)`),
 -- `then` ordering, the compact `for` creation form, `tolerates loss`, mixed
 -- `on commit, <tick>` triggers, and a pure-classification refinement (rung 1).
+--
+-- Comment convention (as in billing.velle): plain comments tell the business
+-- story; `velle:` comments note the language machinery on show.
 
 -- ── Plans and members ────────────────────────────────────────────────────────
 
+-- A streaming service: members subscribe to a priced plan, may have been
+-- referred by another member, and carry a balance that deposits top up and
+-- renewal charges draw down. The email on file is whatever they gave us most
+-- recently, normalized to lowercase.
+-- velle: optional self-relationship, `timestamp on update`, a derived property
+-- reading the email-change ledger below
 expose shape Plan {
     name: text
     price: decimal
@@ -34,11 +44,13 @@ expose shape Member {
                   else lowercase(signupEmail)
 } using MockHarness
 
--- a member never refers themselves (named-refinement never; input-constrained)
+-- Nobody gets referral credit for referring themselves.
+-- velle: a named-refinement `never`; input-constrained, enforced at the boundary
 shape SelfReferral = Member where referredBy is some and referredBy == this
 never SelfReferral
 
--- every new member gets a welcome note: the compact `for` creation form
+-- Every new member is welcomed the moment they join.
+-- velle: the compact `for` creation form
 shape WelcomeNote {
     member: one Member
     sentOn: DateTime
@@ -48,18 +60,23 @@ rule SendWelcome when Member {
     WelcomeNote for this sentOn: now
 }
 
--- ── Email changes: the ledger pattern ────────────────────────────────────────
--- Nothing is edited; the current email is derived from the latest change,
--- ordered by the ledger shape's sole creation timestamp.
+-- ── Email changes ────────────────────────────────────────────────────────────
 
+-- Members change their email over time, and the history matters — old
+-- addresses explain old notifications. Nothing is edited: every change is
+-- kept, and the current email is simply the newest one.
+-- velle: the ledger pattern — ordered by the ledger shape's sole creation
+-- timestamp, derived `email` above selects the latest
 expose shape EmailChange {
     member: one Member
     newEmail: text
     changedOn: timestamp on create
 } using MockHarness
 
--- ── Visits: a tolerated fold and a fire-and-forget ping ──────────────────────
+-- ── Visits ───────────────────────────────────────────────────────────────────
 
+-- Every visit bumps the member's visit counter. The counter feeds
+-- recommendations, so a rare double-count is a shrug, not an incident.
 expose shape Visit {
     member: one Member
     minutes: integer
@@ -67,14 +84,17 @@ expose shape Visit {
 
 never (Visit where minutes <= 0)
 
--- unguarded self-referential fold on a backstopped cadence: the duplication
--- hazard is real and signed on the field (`tolerates duplication`, README §19)
+-- velle: unguarded self-referential fold on a backstopped cadence — the
+-- duplication hazard is real and signed on the field (`tolerates duplication`,
+-- README §19)
 rule CountVisit when Visit on commit, Hourly {
     member.visitCount = member.visitCount + 1
 }
 
--- previews the external-effect escape: the ping may be dropped, and the
--- business shrugs (README §11, "forced boundaries")
+-- Each visit also pings the analytics pipeline. If a ping goes missing,
+-- nobody minds.
+-- velle: previews the external-effect escape — the ping may be dropped
+-- (`tolerates loss`; README §11, "forced boundaries")
 shape AnalyticsPing {
     visit: one Visit
     pingedOn: DateTime
@@ -84,8 +104,11 @@ rule PingAnalytics when Visit tolerates loss {
     AnalyticsPing from { visit: this, pingedOn: now }
 }
 
--- ── Deposits: the flag-witness guard ─────────────────────────────────────────
+-- ── Deposits ─────────────────────────────────────────────────────────────────
 
+-- Members top up their balance with deposits. A deposit must land on the
+-- balance exactly once — promptly, and even if the system crashes mid-way.
+-- velle: the flag-witness guard, `after commit` with an hourly backstop
 expose shape Deposit {
     member: one Member
     amount: decimal
@@ -101,8 +124,14 @@ rule ApplyDeposit when UnappliedDeposit after commit, Hourly {
     this.applied = true
 }
 
--- ── Renewal charges: intent before effect, evidence-witness guard ────────────
+-- ── Renewal charges ──────────────────────────────────────────────────────────
 
+-- Active members are charged their plan price monthly — never more than one
+-- charge per 30 days, and suspended members are not charged at all. The
+-- charge is recorded first, then applied to the balance exactly once, so a
+-- crash can never lose track of money in flight.
+-- velle: intent before effect; a time-windowed guard on the tick; the
+-- evidence-witness guard on the apply
 shape Charge {
     member: one Member
     amount: decimal
@@ -131,20 +160,27 @@ rule ApplyCharge when UnappliedCharge after commit, Hourly {
     ChargeApplication from { charge: this, appliedOn: now }
 }
 
--- ── Delinquency: classification, latch pair, episodes as data ────────────────
+-- ── Delinquency ──────────────────────────────────────────────────────────────
 
+-- A member whose balance has gone negative is delinquent.
 shape Delinquent = Member where balance < 0
 
--- rung 1, pure classification: reported, never acted on — no rule, no machinery
+-- Deeply negative accounts are worth reporting on — but nothing acts on the
+-- classification, so it is just a question the data can answer.
+-- velle: rung 1, pure classification — no rule, no machinery
 shape DeepDelinquent = Member where balance < -100
 
--- a whitelisted fold (min): duplication- and order-insensitive, no guard owed
+-- We track the worst balance each member has ever hit.
+-- velle: a whitelisted fold (min): duplication- and order-insensitive, no guard owed
 rule TrackLowestBalance when Delinquent {
     this.lowestBalance = min(this.lowestBalance, this.balance)
 }
 
--- rung 2, the reconciliation latch pair: idempotent nightly sweeps, transient
--- blips deliberately unobserved
+-- Delinquent members lose service overnight, and get it back the night after
+-- they recover. A dip that opens and closes within the same day never
+-- matters.
+-- velle: rung 2, the reconciliation latch pair — idempotent nightly sweeps,
+-- transient blips deliberately unobserved
 rule SuspendDelinquents when (Delinquent where not suspended) on Nightly {
     this.suspended = true
 }
@@ -153,7 +189,10 @@ rule RestoreService when (Member where suspended and balance >= 0) on Nightly {
     this.suspended = false
 }
 
--- rung 3, episodes as data: the flag/resolution pair makes each delinquency
+-- Each stretch of delinquency is an episode with a beginning and an end, so
+-- the business can ask "how many times has this member gone delinquent, and
+-- for how long?" Going delinquent opens a flag; recovering closes it.
+-- velle: rung 3, episodes as data — the flag/resolution pair makes each
 -- episode a queryable fact
 shape DelinquencyFlag {
     member: one Member
@@ -168,19 +207,24 @@ shape DelinquencyResolution {
 shape OpenDelinquencyFlag = DelinquencyFlag where not exists DelinquencyResolution for this
 
 rule OpenDelinquencyEpisode
-    when (Delinquent where not exists (OpenDelinquencyFlag where member == this)) {
+    when (Delinquent where not exists OpenDelinquencyFlag for this) {
     DelinquencyFlag from { member: this, flaggedOn: today }
 }
 
+-- velle: `(OpenDelinquencyFlag for this)` is the proof-gated singular query
+-- with a refinement subject (singular_references.md): licensed because the
+-- entry rule's own guard proves at most one open flag per member
 rule CloseDelinquencyEpisode when leaving Delinquent {
     DelinquencyResolution from {
-        flag: latest(OpenDelinquencyFlag where member == this)
+        flag: (OpenDelinquencyFlag for this)
         resolvedOn: today
     }
 }
 
--- a third episode escalates: count over a shape-name collection, a `then`
--- ordering, and a mixed commit-plus-tick trigger
+-- A third episode makes a member chronic: open an account review — once,
+-- ever — writing the audit trail before the review itself.
+-- velle: count over a shape-name collection, a `then` ordering, and a mixed
+-- commit-plus-tick trigger
 shape ChronicDelinquent = Member where count(DelinquencyFlag where member == this) >= 3
 
 shape AuditEntry {
@@ -202,14 +246,21 @@ rule OpenAccountReview
     AccountReview from { member: this, openedOn: now }
 }
 
--- ── Nightly engagement snapshot: the recompute rung ──────────────────────────
+-- ── Nightly engagement snapshot ──────────────────────────────────────────────
 
+-- Each night, every member's engagement score is refreshed from their visit
+-- history — a stable overnight figure dashboards can quote all day.
+-- velle: the recompute rung — a snapshot, deliberately stable between ticks
 rule ScoreEngagement when Member on Nightly {
     this.engagementScore = count(visits)
 }
 
 -- ── Support desk: agents and tickets ─────────────────────────────────────────
 
+-- Members raise support tickets, worked by agents. A ticket may sit
+-- unassigned; its contact address falls back to the shared desk until an
+-- agent picks it up. Priority is one of low, normal, high.
+-- velle: optional to-one narrowing — `?.` propagation and `is some`-licensed `.`
 expose shape Agent {
     name: text
     email: text
@@ -230,6 +281,11 @@ never (Ticket where priority != "low" and priority != "normal" and priority != "
 
 -- ── Closing freezes the whole ticket ─────────────────────────────────────────
 
+-- A closed ticket is settled history: nothing on it may change. Reopening it
+-- notifies whoever closed it — with a suggestion to take it back — since they
+-- had the context.
+-- velle: bare `frozen`, act-sourced captures, and the capture's last reader
+-- at `when leaving`
 expose shape CloseTicket {
     ticket: one Ticket
     closedBy: one Agent
@@ -252,12 +308,13 @@ shape ReopenNotice {
     noticedOn: DateTime
 }
 
--- the capture's last reader: the closer is notified when their ticket reopens
 rule NoticeReopen when leaving ClosedTicket {
     ReopenNotice from { ticket: this, reassignTo: closedBy, noticedOn: now }
 }
 
--- rejection as data: assignment partitions on the freeze
+-- Assigning an agent to a closed ticket is refused, and the refusal is on
+-- record for the person who tried.
+-- velle: rejection as data — the assignment act partitions on the freeze
 expose shape AssignTicket {
     ticket: one Ticket
     agent: one Agent
@@ -280,8 +337,12 @@ rule RecordAssignmentRefusal when RefusedAssignment {
     AssignmentRefusal from { attempt: this, reason: "ticket is closed", refusedOn: now }
 }
 
--- ── Attention traits: small refinements composed like traits ─────────────────
+-- ── Attention traits ─────────────────────────────────────────────────────────
 
+-- What deserves attention: a ticket that is overdue or high-priority. If it
+-- is also sitting unassigned, it is urgent — and urgent tickets escalate
+-- daily, though no ticket escalates more than once every two days.
+-- velle: small trait-style refinements composed with and/or
 shape OpenTicket     = Ticket where not this is ClosedTicket
 shape OverdueTicket  = OpenTicket where due < today
 shape HighPriority   = Ticket where priority == "high"
@@ -303,10 +364,14 @@ rule EscalateUrgent
 
 -- ── Cross-collection classifications ─────────────────────────────────────────
 
--- sibling join: a ticket whose subject quotes a charge reference
+-- A member disputing a charge is spotted when one of their tickets quotes one
+-- of their charges' reference numbers in its subject.
+-- velle: a sibling join — two collections correlated against each other
 shape MemberWithDisputedCharge = Member where
     exists (tickets as tix, charges as ch where tix.subject == ch.reference)
 
--- `as` reach-back: an escalation raised after the ticket's own due date
+-- A member let down twice: a ticket that was escalated only after its own due
+-- date had already passed.
+-- velle: an `as` reach-back — the inner filter reads the middle level's field
 shape LateEscalatedMember = Member where
     exists (tickets as tix where count(escalations where raisedOn > tix.due) >= 1)

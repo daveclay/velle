@@ -106,5 +106,5 @@ A rule name may have any number of `triggerDecl`s pointing at it (inline-sugared
 ## Not yet touched by this pass
 
 - Whether `trigger` should also cover a "for each existing member of a refinement, once, immediately" bootstrap case (e.g. running `FlagOverdueAccounts` retroactively when the rule is first introduced against already-overdue accounts) — different question from ongoing triggering, not raised by any case here.
-- `requires`, `## 12`/`## 13`'s `for`/`from` overlap, and the schedule-*definition* mechanism itself (what `Daily` actually is) are all separate, already-tracked gaps in `TODO.md` — untouched here, since none of them bear on the `trigger`/`rule` split specifically.
+- `requires`, `## 12`/`## 13`'s `for`/`from` overlap, and the schedule-*definition* mechanism itself (what `Daily` actually is) are all separate, already-tracked gaps in `working-docs/TODO.md` — untouched here, since none of them bear on the `trigger`/`rule` split specifically.
 

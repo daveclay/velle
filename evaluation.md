@@ -83,7 +83,7 @@ An `after commit` firing runs as its **own transaction**, begun only after the t
 `tick(S)` is a commit whose changed datum is `today`/`now` — the clock the harness controls (README §5, §22). It does not advance the clock; clock movement is a separate harness call. Processing a tick:
 
 - **Rules naming `S` with an entry-form condition** (`when R ... on S`): one firing per **current member** of R — re-checking, not transition-watching (§11). Guards in the condition make the sweep idempotent and self-healing (§16, §18). Each firing is its **own transaction** (§17): one record's failure rolls back only itself; the rest stand and disarm their guards; the next tick retries exactly the stragglers.
-- **Rules naming `S` with `when leaving R`**: re-checking is impossible for exits (a non-member carries no trace), so the subjects are the **leavers at the tick commit itself** — instances whose membership flips false because the tick's datum changed (aging out) — the same commit-local detection as any commit, the tick being the commit (§17, "transient membership is a policy"). *Accepted for v0, but derived here rather than stated anywhere in the README — flagged for stress-testing against realistic specs (`TODO.md`): in particular, exits caused by non-tick commits between ticks are observed by `on commit` leaving-rules only, so a leaving-rule that names only a schedule sees only aging-out exits — confirm that reading survives real use cases.*
+- **Rules naming `S` with `when leaving R`**: re-checking is impossible for exits (a non-member carries no trace), so the subjects are the **leavers at the tick commit itself** — instances whose membership flips false because the tick's datum changed (aging out) — the same commit-local detection as any commit, the tick being the commit (§17, "transient membership is a policy"). *Accepted for v0, but derived here rather than stated anywhere in the README — flagged for stress-testing against realistic specs (`working-docs/TODO.md`): in particular, exits caused by non-tick commits between ticks are observed by `on commit` leaving-rules only, so a leaving-rule that names only a schedule sees only aging-out exits — confirm that reading survives real use cases.*
 - **Rules not naming `S`** are untouched: a tick serves exactly the rules that list it in `on`. This is why `when OverdueInvoice` with no schedule under-fires (never observes entry by aging) and the validator says so (V3).
 
 ## Capture lifecycle
@@ -95,7 +95,7 @@ One timeline per membership (§8, §13): **entry commit** — captured expressio
 Three distinct outcomes of an exposed call, never conflated:
 
 - **Refusal** (step 1): the act violates a type or an input-constrained `never` — named in the result; no transaction ever began. The general rejection-scope question stays open (OQ17); this minimal shape is the settled v0 answer.
-- **Rejection-as-data**: not an error at all — the act commits, the refusing fact lands, the caller reads it back (the pattern in `open_questions.md`'s appendix). The runtime does nothing special.
+- **Rejection-as-data**: not an error at all — the act commits, the refusing fact lands, the caller reads it back (the pattern in `working-docs/open_questions.md`'s appendix). The runtime does nothing special.
 - **Transaction error** (step 6): an unexpected failure mid-transaction — the whole envelope rolls back, the caller is told, and retry is the caller's re-invocation `[S4]`, which re-evaluates generators (§5).
 
 ## v0 spike choices

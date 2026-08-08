@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
 class RuntimeTest {
 
     private fun newSystem(): VelleSystem {
-        val decls = Parser.parse(File("../billing.velle").readText())
+        val decls = Parser.parse(File("../examples/billing/billing.velle").readText())
         val model = Model(decls)
         check(model.diagnostics.isEmpty()) { model.diagnostics.toString() }
         return VelleSystem(model)

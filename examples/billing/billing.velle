@@ -3,9 +3,15 @@
 -- refinements (composition, capture, frozen), guards with disarm proofs, a
 -- whitelisted fold, after-commit with a backstop, a tick sweep whose memory is
 -- data, when-leaving, rejection-as-data, and input-constrained `never`s.
+--
+-- Comment convention (here and in membership.velle): plain comments tell the
+-- business story; `velle:` comments note the language machinery on show.
 
 -- ── Customers ────────────────────────────────────────────────────────────────
 
+-- A customer signs up with a name and email. Support can fix a mistyped email
+-- on their behalf — the correction is an act of its own, so there is always a
+-- record that it happened and who asked for it.
 expose shape Customer {
     name: text
     email: text
@@ -24,6 +30,11 @@ rule ApplyEmailCorrection when CorrectEmail {
 
 -- ── Invoices and line items ──────────────────────────────────────────────────
 
+-- An invoice bills one customer for its line items. Its total, remaining
+-- balance, and status are always current — read straight off the line items
+-- and payments on record, never kept by hand.
+-- velle: derived properties over inferred inverse collections; `initially
+-- randomUUID` mints the outward-facing reference
 expose shape Invoice {
     customer: one Customer
     due: Date
@@ -42,11 +53,15 @@ expose shape LineItem {
     amount: decimal = price * quantity
 } using MockHarness
 
+-- No line item may have a zero quantity or a negative price — bad submissions
+-- are refused at the door, before they ever become data.
+-- velle: input-constrained `never`s, compiled into the commit boundary
 never (LineItem where quantity <= 0)
 never (LineItem where price < 0)
 
 -- ── Payments ─────────────────────────────────────────────────────────────────
 
+-- Payments land against an invoice; zero and negative amounts are refused.
 expose shape Payment {
     invoice: one Invoice
     amount: decimal
@@ -55,11 +70,13 @@ expose shape Payment {
 
 never (Payment where amount <= 0)
 
--- a whitelisted fold (max): duplication- and order-insensitive, so no guard owed
+-- We remember the largest single payment each customer has ever made.
+-- velle: a whitelisted fold (max): duplication- and order-insensitive, so no guard owed
 rule TrackLargestPayment when Payment {
     invoice.customer.largestPayment = max(invoice.customer.largestPayment, amount)
 }
 
+-- Paying an invoice off in full earns a receipt.
 shape PaidInvoice = Invoice where total > 0 and balance <= 0
 
 shape Receipt {
@@ -71,7 +88,10 @@ rule SendReceipt when PaidInvoice {
     Receipt from { invoice: this, sentOn: now }
 }
 
--- durable follow-up: declared boundary, canonical guard, healed hourly
+-- The receipt is then emailed — and must not be lost even if the system dies
+-- right after the payment: email immediately, and sweep hourly for any receipt
+-- that never got its email.
+-- velle: durable follow-up — declared boundary, canonical guard, healed hourly
 shape UnemailedReceipt = Receipt where not exists ReceiptEmail for this
 
 shape ReceiptEmail {
@@ -83,11 +103,14 @@ rule EmailReceipt when UnemailedReceipt after commit, Hourly {
     ReceiptEmail from { receipt: this, queuedOn: now }
 }
 
--- ── Overdue reminders: a tick sweep whose cross-tick memory is data ──────────
+-- ── Overdue reminders ────────────────────────────────────────────────────────
 
+-- Chase unpaid, past-due invoices weekly — but never nag more than once a
+-- week per invoice, and leave archived invoices alone.
+-- velle: a tick sweep whose cross-tick memory is data (the Reminder itself)
 shape OverdueInvoice = Invoice where balance > 0 and due < today
 
--- composition: overdue and not shelved away
+-- velle: composition — overdue and not shelved away
 shape ActionableOverdue = OverdueInvoice and not ArchivedInvoice
 
 shape Reminder {
@@ -104,6 +127,11 @@ rule RemindOverdue
 
 -- ── Issuance freezes the due date ────────────────────────────────────────────
 
+-- Once an invoice is issued to the customer, its due date is locked. Anyone
+-- may still *request* a change; on an issued invoice the request is refused,
+-- and the refusal is a record the requester can read back, with the reason.
+-- velle: `frozen` write-gate; rejection as data — the act partitions, the
+-- writer hangs off the applicable side
 expose shape Issuance {
     invoice: one Invoice
 } using MockHarness
@@ -117,7 +145,6 @@ expose shape ChangeDueDate {
     newDue: Date
 } using MockHarness
 
--- rejection as data: the act partitions, the writer hangs off the applicable side
 shape ApplicableDueChange = ChangeDueDate where not invoice is IssuedInvoice
 shape RefusedDueChange    = ChangeDueDate where invoice is IssuedInvoice
 
@@ -135,8 +162,12 @@ rule RecordDueChangeRefusal when RefusedDueChange {
     DueChangeRefusal from { change: this, reason: "invoice is issued", refusedOn: now }
 }
 
--- ── Archival: capture at entry, read at exit ─────────────────────────────────
+-- ── Archival ─────────────────────────────────────────────────────────────────
 
+-- Old invoices can be archived to get them out of the way, and unarchived
+-- later. Unarchiving produces a notice that records when the invoice had been
+-- archived — useful when someone asks why it disappeared from reports.
+-- velle: capture at entry (`archivedOn`), read at exit by its last reader
 expose shape ArchiveRequest {
     invoice: one Invoice
 } using MockHarness

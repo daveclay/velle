@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 /** Parses the billing.velle fixture and spot-checks the resulting AST. */
 class BillingFixtureTest {
 
-    private val decls: List<Decl> by lazy { Parser.parse(File("../billing.velle").readText()) }
+    private val decls: List<Decl> by lazy { Parser.parse(File("../examples/billing/billing.velle").readText()) }
 
     private inline fun <reified T : Decl> all(): List<T> = decls.filterIsInstance<T>()
     private fun shape(name: String) = all<ShapeDecl>().single { it.name == name }

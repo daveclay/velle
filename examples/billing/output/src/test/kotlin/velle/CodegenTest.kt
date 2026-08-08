@@ -11,7 +11,7 @@ import velle.generated.BillingSystem
 
 class CodegenGoldenTest {
 
-    private val systems = listOf("../billing.velle" to "Billing", "../membership.velle" to "Membership")
+    private val systems = listOf("../billing.velle" to "Billing")
 
     @Test
     fun `the checked-in generated surfaces match the generator`() {

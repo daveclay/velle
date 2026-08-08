@@ -189,7 +189,7 @@ rule SendReceipt when SuccessfulCharge {
 }
 ```
 
-Nothing is returned or thrown — there is no stack to throw through (README's "Validation rejection is data" stance, `open_questions.md` appendix). The attempt exists, the response lands, and whichever refinement the attempt then satisfies is what other rules react to — the same mechanism as `SettledInvoice` triggering `SendReceipt`. Reacting to failure uses the exact same machinery as reacting to success (README §18) — no `return`/`throw` distinction.
+Nothing is returned or thrown — there is no stack to throw through (README's "Validation rejection is data" stance, `working-docs/open_questions.md` appendix). The attempt exists, the response lands, and whichever refinement the attempt then satisfies is what other rules react to — the same mechanism as `SettledInvoice` triggering `SendReceipt`. Reacting to failure uses the exact same machinery as reacting to success (README §18) — no `return`/`throw` distinction.
 
 #### There's no internal/external distinction — the interaction is just a shape
 

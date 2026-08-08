@@ -9,7 +9,7 @@ class MembershipSpecTest {
 
     @Test
     fun `membership fixture validates with no diagnostics`() {
-        val result = Validator.validate(File("../membership.velle").readText())
+        val result = Validator.validate(File("../examples/membership/membership.velle").readText())
         assertEquals(emptyList(), result, "expected a clean fixture, got:\n" + result.joinToString("\n"))
     }
 }

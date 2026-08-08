@@ -17,12 +17,12 @@ import velle.generated.membership.*
  *     this.suspended = true
  * }
  *
- * rule OpenDelinquencyEpisode when (Delinquent where not (exists (OpenDelinquencyFlag where member == this))) {
+ * rule OpenDelinquencyEpisode when (Delinquent where not (exists OpenDelinquencyFlag for this)) {
  *     DelinquencyFlag from { member: this, flaggedOn: today }
  * }
  *
  * rule CloseDelinquencyEpisode when leaving Delinquent {
- *     DelinquencyResolution from { flag: latest(OpenDelinquencyFlag where member == this), resolvedOn: today }
+ *     DelinquencyResolution from { flag: (OpenDelinquencyFlag for this), resolvedOn: today }
  * }
  *
  */

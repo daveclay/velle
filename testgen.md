@@ -27,8 +27,8 @@ plus the rules hanging off it. One generated spec file per **story root**:
 - A generated `SPEC_INDEX-<System>.md` per system lists every file and every
   case sentence: the table of contents for "what does this system do." Each
   system's generated output lives in its own package
-  (`velle.generated.<system>` / `.specs`), so several systems coexist in one
-  output module.
+  (`velle.generated.<system>` / `.specs`) inside its own output module
+  (`examples/<system>/output/`).
 - The same cases are also rendered as Gherkin, one
   `features/<system>/<Root>.feature` per story root — **documentation, not a
   runner**: JUnit stays the execution engine, and the feature files are
