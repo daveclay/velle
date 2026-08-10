@@ -464,6 +464,78 @@ class ValidatorTest {
         assertTrue(codes(src).contains("V12"), "got: ${diags(src)}")
     }
 
+    // ── A4 (advisory): drift-exposed act partitions ──────────────────────────
+
+    /** The bare rejection-as-data partition: an is-refinement atom, no anchor. */
+    private val barePartition = """
+        expose shape Invoice {
+            due: Date
+        } using MockHarness
+
+        expose shape Issuance {
+            invoice: one Invoice
+        } using MockHarness
+
+        shape IssuedInvoice = Invoice where exists Issuance for this
+
+        expose shape ChangeDueDate {
+            invoice: one Invoice
+            newDue: Date
+        } using MockHarness
+
+        shape ApplicableDueChange = ChangeDueDate where not invoice is IssuedInvoice
+        shape RefusedDueChange    = ChangeDueDate where invoice is IssuedInvoice
+
+        rule ApplyDueChange when ApplicableDueChange {
+            invoice.due = newDue
+        }
+
+        shape DueChangeRefusal {
+            change: one ChangeDueDate
+            refusedOn: DateTime
+        }
+
+        rule RecordRefusal when RefusedDueChange {
+            DueChangeRefusal from { change: this, refusedOn: now }
+        }
+    """.trimIndent()
+
+    @Test
+    fun `A4 - a bare act partition on mutable state is drift-exposed`() {
+        val advisories = Validator.advisories(barePartition)
+        assertEquals(2, advisories.count { it.code == "A4" }, "got: $advisories")
+        // advisory, never a required diagnostic
+        assertEquals(emptyList(), diags(barePartition))
+    }
+
+    @Test
+    fun `A4 - the handled-once anchor silences the advisory`() {
+        val src = barePartition
+            .replace(
+                "shape ApplicableDueChange = ChangeDueDate where not invoice is IssuedInvoice",
+                """
+                shape DueChangeApplication {
+                    change: one ChangeDueDate
+                }
+
+                shape UnhandledDueChange = ChangeDueDate where
+                    not exists DueChangeApplication for this and not exists DueChangeRefusal for this
+
+                shape ApplicableDueChange = UnhandledDueChange where not invoice is IssuedInvoice
+                """.trimIndent(),
+            )
+            .replace(
+                "shape RefusedDueChange    = ChangeDueDate where invoice is IssuedInvoice",
+                "shape RefusedDueChange = UnhandledDueChange where invoice is IssuedInvoice",
+            )
+            .replace(
+                "invoice.due = newDue",
+                "invoice.due = newDue\n    DueChangeApplication from { change: this }",
+            )
+        assertEquals(emptyList(), Validator.advisories(src).filter { it.code == "A4" })
+        assertEquals(emptyList(), diags(src))
+    }
+
     @Test
     fun `V12 - a one-way latch flag is as provable as the evidence pair`() {
         val src = """

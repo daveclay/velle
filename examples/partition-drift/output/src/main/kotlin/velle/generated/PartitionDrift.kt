@@ -211,11 +211,14 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
 -- *unhandled* acts, each side anchored by the outcome evidence its own rule
 -- produces, so an act is partitioned exactly once, at its own commit.
 --
--- Note that this spec validates clean: the hazard is semantic, and v0 has no
--- diagnostic for it (a candidate advisory — see `working-docs/TODO.md`). The
--- misbehavior is demonstrated by `DriftDemonstrationTest` in this example's
--- output module. Surfaced by `payments.velle`'s address-change tests;
--- `billing.velle` and `membership.velle` still carry the bare spelling.
+-- The required checks accept this spec — the hazard is semantic, not an
+-- error — but the A4 advisory (checks.md) flags exactly the two bare-
+-- partition rules: their trigger reads mutable state and their bodies never
+-- disarm it. The handled-once family passes A4, because each rule's body
+-- produces the evidence that disarms its own side. The runtime misbehavior is
+-- demonstrated by `DriftDemonstrationTest` in this example's output module.
+-- Surfaced by `payments.velle`'s address-change tests; `billing.velle` and
+-- `membership.velle` still carry the bare spelling (and A4 flags them).
 
 -- ── A note that can be locked ────────────────────────────────────────────────
 

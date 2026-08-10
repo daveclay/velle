@@ -315,6 +315,6 @@ class ReadSummary {
     }
 }
 
-data class Diagnostic(val code: String, val message: String) {
+data class Diagnostic(val code: String, val message: String, val advisory: Boolean = false) {
     override fun toString() = "[$code] $message"
 }

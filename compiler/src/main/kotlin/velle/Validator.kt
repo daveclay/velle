@@ -8,21 +8,27 @@ package velle
  * calibration against realistic specs is OQ14–16's deferred work. Not yet
  * implemented (tracked in checks.md): V11 branch-sensitive narrowing, V12
  * at-most-one proofs beyond the refinement slice (base-shape to-one-inverse
- * proofs stay runtime-enforced), V14 descent certificates, and the advisory
- * A-series.
+ * proofs stay runtime-enforced), V14 descent certificates, and the A-series
+ * beyond A4 (drift-exposed partitions — advisory, via Validator.advisories).
  */
 class Validator(private val model: Model) {
 
     private val diags = model.diagnostics
 
     companion object {
-        fun validate(decls: List<Decl>): List<Diagnostic> {
+        private fun all(decls: List<Decl>): List<Diagnostic> {
             val model = Model(decls)
             Validator(model).run()
             return model.diagnostics.distinct()
         }
 
+        /** The required, fail-closed diagnostics (checks.md F/V series). */
+        fun validate(decls: List<Decl>): List<Diagnostic> = all(decls).filterNot { it.advisory }
+
         fun validate(source: String): List<Diagnostic> = validate(Parser.parse(source))
+
+        /** The advisory findings (checks.md A-series) — guidance, never blocking. */
+        fun advisories(source: String): List<Diagnostic> = all(Parser.parse(source)).filter { it.advisory }
     }
 
     fun run() {
@@ -39,6 +45,7 @@ class Validator(private val model: Model) {
         checkDerivedCycles()      // V14 (stratification; certificates TODO)
         checkQuiescence()         // V16
         checkSingularProofs()     // V12 (refinement slice)
+        checkDriftExposedPartitions() // A4 (advisory)
     }
 
     // ── F1/F2/F3: declarations ───────────────────────────────────────────────
@@ -829,6 +836,40 @@ class Validator(private val model: Model) {
                 }
                 else -> false
             }
+        }
+    }
+
+    // ── A4 (advisory): drift-exposed act partitions ──────────────────────────
+    //
+    // An act is data — it persists — so a refinement of an act shape over
+    // mutable state is re-evaluated at every later change to that state: an
+    // act applied long ago drifts into the refused side when the state flips
+    // (a spurious firing per flip) and drifts back when it flips again (a
+    // stale re-fire). The signature: a rule triggered by a partition of an
+    // exposed act on an `is <Refinement>` atom, whose body does not disarm
+    // its own trigger. Legitimate drift-reactive rules (the compensation
+    // pattern, windowed sweeps) pass, because they disarm — the disarm proof
+    // doubles as the anchor. Worked exhibit: examples/partition-drift/.
+
+    private fun checkDriftExposedPartitions() {
+        for (rule in model.rules.values) {
+            if (rule.leaving) continue
+            val scope = subjectScope(rule) ?: continue
+            val base = model.baseOf(scope) ?: continue
+            if (base !in model.exposed) continue
+            val conjuncts = refPredicateConjuncts(rule.condition) ?: continue
+            val stateAtom = conjuncts.firstOrNull { c ->
+                val inner = (c as? NotExpr)?.inner ?: c
+                inner is IsExpr && inner.kind == "refinement"
+            } ?: continue
+            if (guardAtoms(rule).any { disarmed(rule, it) }) continue
+            val atom = Printer.expr(stateAtom)
+            diags.add(Diagnostic("A4", "rule '${rule.name}' partitions act '$base' on mutable state " +
+                "($atom) with no handled-anchor — acts persist, so every later flip of that state " +
+                "re-partitions every '$base' ever committed: spurious firings on entry, stale re-fires " +
+                "on return. Anchor the partition with the outcome evidence the rule produces " +
+                "(scope it to unhandled acts), or accept per-flip re-firing deliberately " +
+                "(examples/partition-drift/)", advisory = true))
         }
     }
 
