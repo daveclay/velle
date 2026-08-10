@@ -73,6 +73,10 @@ Velle could be a _framework_:
 
 Either way, the "hard" part is the integration points where we have to generate code for what velle manages, and expose lower-level constructs for things like APIs and DBs.
 
+### State/Commit
+
+For velle to handle state and commit without "everything in memory" there needs to be some "resolver" hooks where engineers provide the implementation to a DB or whatever.
+
 ## Escape Hatch
 
 Existing escape hatches in other frameworks are absolute garbage.
