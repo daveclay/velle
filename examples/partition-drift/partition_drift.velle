@@ -1,0 +1,133 @@
+-- Partition drift: a deliberately defective exhibit, not a pattern to copy.
+--
+-- The rejection-as-data idiom partitions an act on the state it collides with
+-- ("applicable" / "refused") and hangs a rule off each side. This spec shows
+-- why the *bare* spelling of that partition — the state predicate alone — is
+-- broken: an act is data, it persists forever, so its partition membership is
+-- re-evaluated every time the partitioning state changes. An act applied last
+-- year drifts into the refused side the moment the state flips (recording a
+-- spurious refusal — once per flip), and drifts back when it flips again
+-- (re-firing a stale write that can clobber newer data).
+--
+-- Both spellings are here, over the same domain: `BareEdit` carries the
+-- defect; `SafeEdit` is the handled-once fix — the partition scoped to
+-- *unhandled* acts, each side anchored by the outcome evidence its own rule
+-- produces, so an act is partitioned exactly once, at its own commit.
+--
+-- Note that this spec validates clean: the hazard is semantic, and v0 has no
+-- diagnostic for it (a candidate advisory — see `working-docs/TODO.md`). The
+-- misbehavior is demonstrated by `DriftDemonstrationTest` in this example's
+-- output module. Surfaced by `payments.velle`'s address-change tests;
+-- `billing.velle` and `membership.velle` still carry the bare spelling.
+
+-- ── A note that can be locked ────────────────────────────────────────────────
+
+expose shape Note {
+    title: text
+    body: text
+    locked: boolean initially false
+} using MockHarness
+
+expose shape LockNote {
+    note: one Note
+} using MockHarness
+
+expose shape UnlockNote {
+    note: one Note
+} using MockHarness
+
+rule ApplyLock when LockNote {
+    note.locked = true
+}
+
+rule ApplyUnlock when UnlockNote {
+    note.locked = false
+}
+
+shape LockedNote = Note where locked
+
+-- An admin rename deliberately ignores the lock — a second, lock-exempt
+-- writer of `body`, here so the demonstration can put a newer value on the
+-- note for the stale re-fire to clobber.
+expose shape RenameText {
+    note: one Note
+    newText: text
+} using MockHarness
+
+rule ApplyRename when RenameText {
+    note.body = newText
+}
+
+-- ── The drift-exposed spelling (the defect on exhibit) ───────────────────────
+
+-- The partition reads only the note's current state. Nothing anchors an act
+-- to the moment it was handled, so every lock/unlock re-partitions every edit
+-- ever committed:
+--   lock   → every previously applied edit enters RefusedBareEdit
+--            (a spurious refusal is recorded for each, per lock)
+--   unlock → every one of them re-enters ApplicableBareEdit
+--            (the rule re-fires, re-writing body text that was already superseded)
+expose shape BareEdit {
+    note: one Note
+    newText: text
+} using MockHarness
+
+shape ApplicableBareEdit = BareEdit where not note is LockedNote
+shape RefusedBareEdit    = BareEdit where note is LockedNote
+
+rule ApplyBareEdit when ApplicableBareEdit {
+    note.body = newText
+}
+
+shape BareEditRefusal {
+    edit: one BareEdit
+    refusedOn: DateTime
+}
+
+rule RefuseBareEdit when RefusedBareEdit {
+    BareEditRefusal from { edit: this, refusedOn: now }
+}
+
+-- ── The handled-once spelling (the fix) ──────────────────────────────────────
+
+-- Each edit is handled exactly once, at its own commit: the outcome evidence
+-- (application or refusal) removes it from the partition forever, so later
+-- state changes re-partition nothing. Each rule's body produces the evidence
+-- that disarms its own side — the disarm proof, doing double duty as the
+-- anchor.
+--
+-- (This family edits `title`, not `body`. If it shared `body` with BareEdit,
+-- v0's one-writer check would refuse the spec — a lock flip is one commit
+-- that can drift BOTH families' acts into applicability, two writers at once.
+-- That diagnostic is the drift hazard leaking out sideways; with disjoint
+-- fields, the hazard is fully silent, which is what this exhibit shows.)
+expose shape SafeEdit {
+    note: one Note
+    newTitle: text
+} using MockHarness
+
+shape EditApplication {
+    edit: one SafeEdit
+    appliedOn: DateTime
+}
+
+shape EditRefusal {
+    edit: one SafeEdit
+    reason: text
+    refusedOn: DateTime
+}
+
+shape UnhandledSafeEdit = SafeEdit where
+    not exists EditApplication for this and not exists EditRefusal for this
+
+shape ApplicableSafeEdit = UnhandledSafeEdit where not note is LockedNote
+shape RefusedSafeEdit    = UnhandledSafeEdit where note is LockedNote
+
+rule ApplySafeEdit when ApplicableSafeEdit {
+    note.title = newTitle
+    EditApplication from { edit: this, appliedOn: now }
+}
+
+rule RefuseSafeEdit when RefusedSafeEdit {
+    EditRefusal from { edit: this, reason: "note is locked", refusedOn: now }
+}

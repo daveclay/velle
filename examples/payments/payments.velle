@@ -1,0 +1,382 @@
+-- Payments: an order-payment system charging through an external card
+-- processor — the third Velle spec, designed business-outward. Assembles the
+-- errors-are-refinements pattern end-to-end (README §2): an interaction shape
+-- whose verdict arrives as a later external commit, outcome-state dispatch
+-- with a rule per branch, compensation on the failure branch, retry with a
+-- cap, and timeouts. Also exercises surface neither earlier spec does: a
+-- derived refinement-body property, a property body on a composite reading an
+-- operand's property, freeze under composition, 3-operand composition, `or`
+-- with load-bearing grouping inside a `where`, named refinements as
+-- collection filters (filtered `sum`, refinement-rooted `exists`),
+-- `is empty` / `is not empty`, duration addition (`today + 14 days`) and a
+-- sub-day unit (`now - 15 minutes`), `first(...)`, a multi-link `?.` chain,
+-- `is some` narrowing in a predicate conjunction, a sibling join whose alias
+-- is tested against a refinement, a bare `(Shape for expr)` value read on a
+-- base shape, and a tick-driven episode closer.
+--
+-- Comment convention (as in billing.velle): plain comments tell the business
+-- story; `velle:` comments note the language machinery on show.
+
+-- ── Customers and cards ──────────────────────────────────────────────────────
+
+-- A customer may keep a card on file, and the card may carry a billing
+-- contact. Support can put a new card on file at any time.
+expose shape Contact {
+    name: text
+    email: text
+} using MockHarness
+
+expose shape Card {
+    number: text
+    expiresOn: Date
+    billingContact: one Contact?
+} using MockHarness
+
+expose shape Customer {
+    name: text
+    card: one Card?
+} using MockHarness
+
+expose shape CardUpdate {
+    customer: one Customer
+    card: one Card
+} using MockHarness
+
+rule ApplyCardUpdate when CardUpdate {
+    customer.card = card
+}
+
+-- ── Orders ───────────────────────────────────────────────────────────────────
+
+-- An order asks for a fixed amount by a due date. What has actually been paid
+-- is never stored — it is read off the successful charges minus the refunds.
+-- Receipts go to the card's billing contact when that whole chain exists.
+-- velle: filtered `sum` with a named-refinement collection filter; a
+-- multi-link `?.` chain; `first(...)` and `is empty` in a derived property
+expose shape Order {
+    customer: one Customer
+    amount: decimal
+    dueBy: Date
+    shippingAddress: text
+    placedOn: timestamp on create
+    netPaid: decimal = sum(chargeAttempts where SuccessfulCharge, amount) - sum(refunds, amount)
+    receiptEmail: text? = customer.card?.billingContact?.email
+    firstAttemptedOn: DateTime? = if chargeAttempts is empty then none
+                                  else first(chargeAttempts).requestedOn
+} using MockHarness
+
+never (Order where amount <= 0)
+
+-- An order is settled once payments net out to at least the asking amount; a
+-- settled order knows its overpayment.
+-- velle: a *derived* (non-captured) refinement-body property, live while
+-- membership holds
+shape SettledOrder = Order where netPaid >= amount {
+    surplus: decimal = netPaid - amount
+}
+
+-- Reporting vocabulary — computed, never acted on.
+-- velle: rung-1 pure classification; `is empty` / `is not empty`
+shape NeverCharged  = Order where chargeAttempts is empty
+shape UnpaidOrder   = Order where netPaid < amount
+shape RefundedOrder = Order where refunds is not empty
+
+-- An order can be charged while its customer has an unexpired card on file.
+-- velle: `is some` narrowing licensing `.` inside a predicate conjunction
+shape ChargeableOrder = Order where customer.card is some and customer.card.expiresOn >= today
+
+-- ── Charging: the interaction with the processor ─────────────────────────────
+
+-- Charging a card is an interaction with the outside world: the attempt is
+-- recorded first (intent before effect), the processor's verdict arrives
+-- later as an act of its own, and everything downstream reacts to the
+-- attempt's resulting state — there is no call that returns or throws.
+shape ChargeAttempt {
+    order: one Order
+    amount: decimal
+    attemptKey: text initially randomUUID
+    requestedOn: timestamp on create
+}
+
+-- The processor's verdict. v0 exposes shape creation only, so the verdict is
+-- its own act referencing the attempt — never a write into it.
+expose shape ChargeResponse {
+    attempt: one ChargeAttempt
+    outcome: text
+} using MockHarness
+
+never (ChargeResponse where outcome != "approved" and outcome != "declined" and outcome != "error")
+
+-- A processor that stays silent past the window is timed out by the sweep
+-- below; the timeout is a fact, so a timed-out attempt stops counting as
+-- pending and the retry path unblocks.
+shape AttemptTimeout {
+    attempt: one ChargeAttempt
+    noticedOn: DateTime
+}
+
+-- The attempt's states: pending until a verdict or a timeout lands; completed
+-- attempts split on the verdict.
+-- velle: errors-are-refinements — outcome states are refinements, not control
+-- flow; `outcome` is a derived refinement-body property the child refinements
+-- read through the chain
+shape PendingAttempt = ChargeAttempt where
+    not exists ChargeResponse for this and not exists AttemptTimeout for this
+
+shape CompletedAttempt = ChargeAttempt where exists ChargeResponse for this {
+    outcome: text = latest(ChargeResponse where attempt == this).outcome
+}
+
+shape SuccessfulCharge = CompletedAttempt where outcome == "approved"
+shape FailedCharge     = CompletedAttempt where outcome == "declined" or outcome == "error"
+shape TimedOutAttempt  = ChargeAttempt where exists AttemptTimeout for this
+
+-- ── Reserving stock ──────────────────────────────────────────────────────────
+
+-- Stock is put aside the moment an order lands, exactly once per order, and
+-- released only if charging is finally given up on.
+shape StockReservation {
+    order: one Order
+    reservedOn: DateTime
+}
+
+shape ReservationRelease {
+    reservation: one StockReservation
+    releasedOn: DateTime
+}
+
+shape ActiveReservation = StockReservation where not exists ReservationRelease for this
+
+rule ReserveStock when (Order where not exists StockReservation for this) {
+    StockReservation from { order: this, reservedOn: now }
+}
+
+-- ── The charge lifecycle ─────────────────────────────────────────────────────
+
+-- Charge a chargeable order that has never been attempted — immediately, with
+-- a daily backstop for orders whose card situation changes later.
+rule RequestInitialCharge
+    when (ChargeableOrder where not exists ChargeAttempt for this)
+    on commit, Daily {
+    ChargeAttempt from { order: this, amount: amount }
+}
+
+-- A failure or a timeout, under the cap, with nothing pending and no success:
+-- try again. Three attempts is the budget.
+-- velle: `or` with load-bearing grouping inside an `and` chain; refinement-
+-- rooted `exists` collections; the new pending attempt disarms the rule's own
+-- re-fire
+shape RetryableOrder = Order where
+    (exists (FailedCharge where order == this) or exists (TimedOutAttempt where order == this)) and
+    not exists (SuccessfulCharge where order == this) and
+    not exists (PendingAttempt where order == this) and
+    count(chargeAttempts) < 3
+
+rule RetryCharge when RetryableOrder {
+    ChargeAttempt from { order: this, amount: amount }
+}
+
+-- Silence past fifteen minutes is a timeout.
+-- velle: a sub-day duration unit; the disarming witness lives two refinement
+-- hops down (StalePendingAttempt → PendingAttempt → `not exists AttemptTimeout`)
+shape StalePendingAttempt = PendingAttempt where requestedOn < now - 15 minutes
+
+rule TimeOutStaleAttempt when StalePendingAttempt on QuarterHourly {
+    AttemptTimeout from { attempt: this, noticedOn: now }
+}
+
+-- Three failed attempts exhaust the order; exhaustion releases the reserved
+-- stock — the compensating action on the failure branch.
+-- velle: a bare `(Shape for expr)` value read on a base shape, singular
+-- because ReserveStock's guard proves one reservation per order
+shape ExhaustedOrder = Order where count(FailedCharge where order == this) >= 3
+
+rule ReleaseStockOnExhaustion
+    when (ExhaustedOrder where
+          exists StockReservation for this and
+          not exists (ReservationRelease where reservation.order == this)) {
+    ReservationRelease from { reservation: (StockReservation for this), releasedOn: now }
+}
+
+-- A successful charge earns a receipt. If the order is later refunded, the
+-- receipt already sent simply stays on record — evidence outlives its
+-- premise, and nothing needs declaring for that.
+shape Receipt {
+    attempt: one ChargeAttempt
+    sentOn: DateTime
+}
+
+rule SendReceipt when SuccessfulCharge {
+    Receipt from { attempt: this, sentOn: now }
+}
+
+-- ── Shipping ─────────────────────────────────────────────────────────────────
+
+shape ReservedOrder  = Order where exists (stockReservations where ActiveReservation)
+shape UnshippedOrder = Order where not exists Shipment for this
+
+-- Ship when settled, reserved, and not yet shipped. A ready order locks its
+-- shipping address, and knows the overpayment to return with the parcel.
+-- velle: 3-operand composition; a property body on a composite reading an
+-- operand's property (`surplus` from SettledOrder); freeze under composition
+shape ReadyToShip = SettledOrder and ReservedOrder and UnshippedOrder {
+    frozen shippingAddress
+    refundDueOnShip: decimal = surplus
+}
+
+shape Shipment {
+    order: one Order
+    shippedOn: DateTime
+}
+
+-- The warehouse ships nightly, not at the instant of settlement — which is
+-- also what makes ReadyToShip an observable state an address-change request
+-- can collide with.
+rule ShipOrder when ReadyToShip on Nightly {
+    Shipment from { order: this, shippedOn: now }
+}
+
+-- The address on a ready order can't be edited — the request is refused with
+-- the reason on record. Each request is handled exactly once, at its own
+-- commit: the outcome evidence (application or refusal) anchors it, so a
+-- request can never drift into the other partition when the order's state
+-- changes later.
+-- velle: rejection as data, partitioned on the composite's freeze — with the
+-- partition scoped to *unhandled* acts; a bare state partition would let an
+-- already-applied request drift into RefusedAddressChange the moment the
+-- order becomes ready
+expose shape ChangeShippingAddress {
+    order: one Order
+    newAddress: text
+} using MockHarness
+
+shape AddressChangeApplication {
+    change: one ChangeShippingAddress
+    appliedOn: DateTime
+}
+
+shape AddressChangeRefusal {
+    change: one ChangeShippingAddress
+    reason: text
+    refusedOn: DateTime
+}
+
+shape UnhandledAddressChange = ChangeShippingAddress where
+    not exists AddressChangeApplication for this and not exists AddressChangeRefusal for this
+
+shape ApplicableAddressChange = UnhandledAddressChange where not order is ReadyToShip
+shape RefusedAddressChange    = UnhandledAddressChange where order is ReadyToShip
+
+rule ApplyAddressChange when ApplicableAddressChange {
+    order.shippingAddress = newAddress
+    AddressChangeApplication from { change: this, appliedOn: now }
+}
+
+rule RecordAddressRefusal when RefusedAddressChange {
+    AddressChangeRefusal from { change: this, reason: "order is ready to ship", refusedOn: now }
+}
+
+-- ── Refunds ──────────────────────────────────────────────────────────────────
+
+-- A refund is an act with consequences read off the numbers: it can push a
+-- settled order back out of settlement, and the reversal is worth noticing.
+expose shape Refund {
+    order: one Order
+    amount: decimal
+    refundedOn: timestamp on create
+} using MockHarness
+
+never (Refund where amount <= 0)
+
+shape SettlementReversal {
+    order: one Order
+    noticedOn: DateTime
+}
+
+rule NoteSettlementReversal when leaving SettledOrder {
+    SettlementReversal from { order: this, noticedOn: now }
+}
+
+-- Support can force a fresh charge — say, after refunding a mistaken order —
+-- which drives a second settlement episode end-to-end.
+expose shape ManualCharge {
+    order: one Order
+} using MockHarness
+
+rule ApplyManualCharge when ManualCharge {
+    ChargeAttempt from { order: order, amount: order.amount }
+}
+
+-- A refund that landed after a failed charge deserves reconciliation review.
+-- velle: a sibling join whose alias is tested against a refinement
+shape RefundAfterFailure = Order where
+    exists (chargeAttempts as ca, refunds as rf
+        where ca is FailedCharge and rf.refundedOn > ca.requestedOn)
+
+-- ── Dunning: overdue reminders, grace periods, episodes ──────────────────────
+
+shape OverdueOrder = UnpaidOrder where dueBy < today
+
+-- Support can grant a two-week grace period; reminders go quiet while one
+-- stands.
+-- velle: duration addition (`today + 14 days`); the suppression artifact —
+-- one rule creates it, an unrelated rule's guard reads it negatively
+expose shape ExtensionRequest {
+    order: one Order
+} using MockHarness
+
+shape PaymentExtension {
+    order: one Order
+    endsOn: Date
+}
+
+rule GrantGracePeriod when ExtensionRequest {
+    PaymentExtension from { order: order, endsOn: today + 14 days }
+}
+
+shape InGracePeriod = Order where exists (paymentExtensions where endsOn >= today)
+
+shape PaymentReminder {
+    order: one Order
+    sentOn: Date
+}
+
+-- Nag overdue orders daily — at most every three days per order, and never
+-- during a grace period.
+rule RemindPayment
+    when (OverdueOrder where
+          not this is InGracePeriod and
+          not exists (PaymentReminder where order == this and sentOn > today - 3 days))
+    on Daily {
+    PaymentReminder from { order: this, sentOn: today }
+}
+
+-- Each stretch of overdue non-payment is a dunning episode: a flag opens when
+-- the order goes overdue, and the daily sweep closes it once the order has
+-- paid up — even when the recovery involved no commit to the order itself.
+-- velle: the tick-driven episode closer — the closing rule's subject is the
+-- evidence (the compensation pattern), where membership's episodes close from
+-- `when leaving`
+shape DunningFlag {
+    order: one Order
+    openedOn: Date
+}
+
+shape DunningResolution {
+    flag: one DunningFlag
+    resolvedOn: Date
+}
+
+shape OpenDunningFlag = DunningFlag where not exists DunningResolution for this
+
+rule OpenDunningEpisode
+    when (OverdueOrder where not exists OpenDunningFlag for this)
+    on commit, Daily {
+    DunningFlag from { order: this, openedOn: today }
+}
+
+shape ClosableDunningFlag = OpenDunningFlag where not order is UnpaidOrder
+
+rule CloseDunningEpisode when ClosableDunningFlag on Daily {
+    DunningResolution from { flag: this, resolvedOn: today }
+}

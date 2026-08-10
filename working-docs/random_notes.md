@@ -48,7 +48,7 @@ This sets up an architecture:
 2. The Velle language extension framework
     - custom data types
     - custom predicate functions
-    - packaged, installed options, not just custom code
+    - provide customizations as packaged libraries, not only custom code files
     - open source, shared (think of shared business domain extensions, like a "Velle finance extensions" library)
 3. The transpile output from Velle
     - in the developer's workspace
@@ -56,6 +56,22 @@ This sets up an architecture:
     - separate from the developer's Velle extensions (separate concerns: custom extensions won't change when the Velle spec changes. Could be a shared library, or open source extensions)
     - produces executable runtime
     - produces executable tests that verify the runtime.
+
+## Framework or Language?
+
+Velle could be a language as a _starting_ point:
+- write velle
+- transpile into code
+- build API/db etc around it
+
+Velle could be a _framework_:
+- write an application
+- add the Velle library
+- write velle
+- initialize velle runtime using the velle spec
+- transpile into code that the app uses
+
+Either way, the "hard" part is the integration points where we have to generate code for what velle manages, and expose lower-level constructs for things like APIs and DBs.
 
 ## Escape Hatch
 
@@ -74,23 +90,6 @@ In practice, this would mean some way for an engineer to demarcate customization
 ## Persistence & Velle Commits
 
 Velle's concept of "commit" is an abstraction, not an implementation. Real systems use real databases, real transactions, real ORMs.
-
-
-## Framework or Language?
-
-Velle could be a language as a _starting_ point:
-- write velle
-- transpile into code
-- build API/db etc around it
-
-Velle could be a _framework_:
-- write an application
-- add the Velle library
-- write velle
-- initialize velle runtime using the velle spec
-- transpile into code that the app uses
-
-Either way, the "hard" part is the integration points where we have to generate code for what velle manages, and expose lower-level constructs for things like APIs and DBs.
 
 ### Realistic Use Case
 

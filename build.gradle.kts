@@ -4,5 +4,10 @@ plugins {
 
 tasks.register("generate") {
     description = "Regenerate every example's transpiled output from its .velle spec"
-    dependsOn(":examples:billing:output:generate", ":examples:membership:output:generate")
+    dependsOn(
+        ":examples:billing:output:generate",
+        ":examples:membership:output:generate",
+        ":examples:payments:output:generate",
+        ":examples:partition-drift:output:generate",
+    )
 }

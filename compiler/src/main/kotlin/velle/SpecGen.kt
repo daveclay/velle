@@ -149,6 +149,32 @@ object SpecGen {
             }
 
         /**
+         * True when the rule's own body falsifies one of [conjuncts] — creating
+         * the witness or writing the flag — so the subject leaves that predicate
+         * within the entry transaction. Passed the *named* condition's own
+         * conjuncts (not the full condition's): a disarmed conjunct that lives
+         * only in an inline `where` leaves the named refinement's membership
+         * intact, and the membership assert is about the name.
+         */
+        fun bodyDisarms(rule: RuleDecl, conjuncts: List<Expr>): Boolean =
+            conjuncts.any { c ->
+                when (val inner = (c as? NotExpr)?.inner) {
+                    is ExistsExpr -> {
+                        val root = inner.shape
+                            ?: (inner.collection?.bindings?.singleOrNull()?.source as? PathExpr)
+                                ?.takeIf { it.segs.isEmpty() }?.root
+                        val base = root?.let { model.baseOf(it) ?: it }
+                        base != null && rule.body.filterIsInstance<Creation>().any { it.shape == base }
+                    }
+                    is PathExpr -> inner.segs.isEmpty() && rule.body.filterIsInstance<Assignment>().any {
+                        it.target.segs.lastOrNull()?.name == inner.root ||
+                            (it.target.segs.isEmpty() && it.target.root == inner.root)
+                    }
+                    else -> false
+                }
+            }
+
+        /**
          * The act whose commit provably ends membership in a leaving rule's
          * condition: a `not exists X for this` atom over an exposed shape means
          * the exit "when" is *derivable* — committing an X — so the test performs
@@ -311,7 +337,15 @@ object SpecGen {
             val viewType = "${base ?: "Unknown"}View"
 
             val body = StringBuilder()
+            // the exact per-firing count is attributable only when this rule is the
+            // shape's sole producer — reaching the trigger state may legitimately
+            // commit instances of a shared shape (a retry's setup mints the first
+            // attempt); those shapes keep only the reference asserts
             val counts = rule.body.filterIsInstance<Creation>().map { it.shape }.distinct()
+                .filter { shape ->
+                    shape !in model.exposed &&
+                        model.rules.values.count { r -> r.body.filterIsInstance<Creation>().any { it.shape == shape } } == 1
+                }
             counts.forEach { body.line(2, "val before${it} = count(\"$it\")") }
             var exitActName: String? = null
 
@@ -362,15 +396,22 @@ object SpecGen {
                     }
                     else -> if (rule.preposition != "after") condName?.let {
                         // for `after commit` rules the firing has already disarmed the trigger
-                        // state by the time the given returns — the disarm assert covers it
-                        body.line(2, "$subject.assertIsA(\"$it\", \"the given must deliver a member of '$it'\")")
+                        // state by the time the given returns — the disarm assert covers it.
+                        // A commit rule whose own body disarms the *named* condition's own
+                        // predicate has likewise left it within the entry transaction:
+                        // assert the exit instead of the membership.
+                        if (bodyDisarms(rule, conditionConjuncts(RefName(it))))
+                            body.line(2, "$subject.assertIsNotA(\"$it\", \"the disarm law: the firing left its trigger state\")")
+                        else
+                            body.line(2, "$subject.assertIsA(\"$it\", \"the given must deliver a member of '$it'\")")
                     }
                 }
             }
 
             for (creation in rule.body.filterIsInstance<Creation>()) {
                 val v = "produced${creation.shape}"
-                body.line(2, "assertEquals(before${creation.shape} + 1, count(\"${creation.shape}\"), \"rule ${rule.name}: one '${creation.shape}' per firing\")")
+                if (creation.shape in counts)
+                    body.line(2, "assertEquals(before${creation.shape} + 1, count(\"${creation.shape}\"), \"rule ${rule.name}: one '${creation.shape}' per firing\")")
                 val thisFields = creation.fields.filter { it.value == PathExpr("this") }.map { it.name }
                 if (thisFields.isNotEmpty()) {
                     body.line(2, "val $v = last(\"${creation.shape}\")")
@@ -394,7 +435,10 @@ object SpecGen {
             }
 
             condName?.let { cn ->
-                partitionPeer(cn)?.let { peer ->
+                // a handled-once partition (each side guarded by outcome evidence the
+                // firing itself produces) is exited on firing — the exactly-one-side
+                // law holds only for unhandled acts, so it can't be asserted after
+                partitionPeer(cn)?.takeIf { !bodyDisarms(rule, conditionConjuncts(RefName(cn))) }?.let { peer ->
                     body.line(2, "assertTrue(member($subject, \"$cn\") != member($subject, \"$peer\"), \"'$cn' and '$peer' partition the act\")")
                 }
             }
@@ -489,7 +533,8 @@ object SpecGen {
                 thens.add("the ${Printer.expr(a.target).removePrefix("this.")} now equals the act's \"${rhs.root}\"")
             }
             (rule.condition as? RefName)?.name?.let { cn ->
-                partitionPeer(cn)?.let { thens.add("the act is in exactly one of \"$cn\" / \"$it\"") }
+                partitionPeer(cn)?.takeIf { !bodyDisarms(rule, conditionConjuncts(RefName(cn))) }
+                    ?.let { thens.add("the act is in exactly one of \"$cn\" / \"$it\"") }
             }
             if (rule.preposition == "after" && guarded) thens.add("the $subject has left \"$cond\"")
             if (guarded && schedules.isNotEmpty() && counts.isNotEmpty())
