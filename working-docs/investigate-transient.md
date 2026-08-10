@@ -1,119 +1,26 @@
-# Investigation: `transient` acts, and what "delete" should mean
+# Investigation: transient acts — is an act part of the state after its commit?
 
-Context: the partition-drift exhibit (`examples/partition-drift/`) demonstrated that a bare act partition is drift-exposed — and the discussion that followed surfaced a deeper observation: the natural mental model for an act arriving through an API is *a request, consumed at its commit*, while Velle's model is *a fact, persisted forever*. This file works out what to do with that gap. Tracked in `working-docs/TODO.md`.
+The central question. An act arrives from outside (an API request, a message). Today, committing it makes it a permanent fact — which is what makes the drift hazard possible (`examples/partition-drift/`): the act persists, so refinements over it are re-evaluated at every later change to the state they read, and an act handled long ago drifts between partition sides forever. Two designs answer the hazard, and they disagree on the question in the title:
 
-## Why delete-after-commit cannot be the mechanism
+- **Design A — the act persists; a declared contract disciplines its handling.** Drift is *checked* (upgraded from the A4 advisory to an error for marked shapes).
+- **Design B — the act is truly transient: it exists only within its own commit's transaction.** Drift is *structurally impossible* — there is no later re-evaluation, because there is no later act.
 
-If acts were literally deleted once handled, most of the language's load-bearing idioms die, because *acts being read later is how everything works*:
+An earlier draft of this file dismissed B with a circular argument ("removal breaks the handled-once anchor" — but the anchor only exists because acts persist; B doesn't need it). This version develops both honestly. Tracked in `working-docs/TODO.md`.
 
-- **Guards** read past acts: `UnappliedDeposit = Deposit where not applied` — the `Deposit` is an act.
-- **The ledger** is acts: `EmailChange`, read forever by `latest(...)` — the act *is* the history.
-- **Episodes** are acts: `DelinquencyFlag`/`DunningFlag`, counted and measured later (`ChronicDelinquent`).
-- **Outcome records reference their act**: `BareEditRefusal.edit` would dangle the moment the edit was reaped.
-- **Captures and `why`** walk reified acts by design — "every captured value traces to data" (README §8).
-- **Audit is free** precisely because refused/handled acts persist (`count(RefusedVoid)`).
+## Shared ground
 
-Many acts are simultaneously requests *and* durable business records (`Payment`, `Deposit`, `EmailChange`). A `transient`-as-deletion marker would bifurcate the data model and break audit and provenance for whichever shapes carried it.
+Three things hold under either design:
 
-## What the instinct is actually detecting
+- **Transience cannot be the default.** Most acts are simultaneously requests and durable business records, and the language's idioms depend on reading them later: guards (`UnappliedDeposit = Deposit where not applied`), the ledger (`EmailChange` read forever by `latest`), episodes (`DelinquencyFlag`, counted by `ChronicDelinquent`), audit (`count(RefusedVoid)`), captures and `why`. Whatever the marker means, it is opt-in, per shape, and `Payment`/`EmailChange`-style acts never carry it.
+- **Boundary-only.** The marker is coherent on a produced shape but false on every produced shape worth having — pending-ness across time is exactly what produced work items exist to carry (`ChargeAttempt` is *deliberately* unresolved across the world gap). The one produced shape it would fit — a pure relay minted only to trigger same-transaction consequences — is a call graph wearing a shape costume, which idiomatic Velle already rejects (A2 territory). So the marker is a modifier on `expose`: transience is a statement about the trust boundary, the one place arrival-time discipline can't be derived statically.
+- **A4 stays regardless.** Unmarked acts keep the drift hazard, and the advisory (implemented; checks.md) keeps catching it. Its current exposed-only scope is a separate conservatism worth revisiting — an unanchored partition of a produced shape over mutable state drifts identically.
 
-An act has two aspects the language currently expresses in one shape:
+## Design A: the act persists; `handled by` declares the contract
 
-- the **occurrence** — "this request happened," a timeless fact, rightly permanent;
-- the **pending-ness** — "this request awaits handling," consumed exactly once, at its handling commit.
-
-Velle's current answer is that pending-ness is data the author writes by hand: the handled-once idiom (`UnhandledSafeEdit = SafeEdit where not exists EditApplication for this and not exists EditRefusal for this`), with each handling rule producing the evidence that disarms its own side. The drift exhibit shows what happens when the author forgets: the partition silently means "an act whose note is locked *right now*," not "an act that arrived while locked."
-
-The A4 advisory (checks.md; implemented) catches the omission after the fact. The `transient` idea is the author declaring the *intent* up front.
-
-## The sketch: `transient` as declared intent, not storage behavior
-
-> `transient expose shape BareEdit { ... } using MockHarness` — "this act must be fully handled at its own commit."
-
-Nothing is deleted and nothing changes at runtime. The marker is a static contract, upgrading A4 from advisory to **error** for this shape:
-
-- every rule triggered by a refinement of the shape must either provably fire only at the act's creation commit, or carry a handled-anchor its body disarms;
-- a drift-exposed partition over the shape is a compile error naming the rule and the mutable atom, with the handled-once rewrite as the fix-it;
-- (possibly) reading the act from tick-cadence rules without an anchor gets the same treatment.
-
-This is the same declare-intent relationship `tolerates` has with the fold analysis (README §19): the analysis runs for everyone; the declaration turns its finding from guidance into a signed contract. The machinery is already built — A4's conjunct classification and the disarm proof.
-
-## Resolved sub-questions
-
-### Scope: boundary-only
-
-The marker is coherent on a produced shape ("this shape's consequence graph settles within its creating transaction") but would be a false statement on every produced shape worth having — pending-ness across time is exactly what produced work items exist to carry (`ChargeAttempt` is *deliberately* unresolved across the world gap; guard-witnessed items span declared boundaries; episode flags reify pending-ness as the business object). The one produced shape for which it would hold — a pure relay, minted only to trigger same-transaction consequences and never read again — is a call graph wearing a shape costume, which idiomatic Velle says shouldn't exist (A2 dead-machinery territory, not a transience contract).
-
-The principled asymmetry: transience is a statement about the *trust boundary*, where the world commits on its own schedule and arrival-time handling can only be declared; inside the spec, the compiler statically sees every producer and consumer, and the equivalent guarantees are the ordinary checks.
-
-### Placement
-
-Follows from scope: a modifier on `expose` (`expose transient shape BareEdit { ... } using MockHarness`), since the contract is only meaningful where an external committer exists.
-
-## Still open
-
-### Spelling
-
-Whether the word is `transient` at all, given nothing is actually transient in storage (candidates: `handled once`, `consumed`, `settled at commit`).
-
-### Sugar: derive the apparatus, or only demand it?
-
-Worked against the exhibit's safe family. The baseline, hand-written today:
+Nothing changes about storage or evaluation. The marker is a static contract — "this act's fate is decided by producing one of these outcomes, exactly once" — with the outcome set author-declared and the anchor derived:
 
 ```
 expose shape SafeEdit {
-    note: one Note
-    newTitle: text
-} using MockHarness
-
-shape EditApplication {
-    edit: one SafeEdit
-    appliedOn: DateTime
-}
-
-shape EditRefusal {
-    edit: one SafeEdit
-    reason: text
-    refusedOn: DateTime
-}
-
--- the hand-written anchor: the part sugar would derive
-shape UnhandledSafeEdit = SafeEdit where
-    not exists EditApplication for this and not exists EditRefusal for this
-
-shape ApplicableSafeEdit = UnhandledSafeEdit where not note is LockedNote
-shape RefusedSafeEdit    = UnhandledSafeEdit where note is LockedNote
-
-rule ApplySafeEdit when ApplicableSafeEdit {
-    note.title = newTitle
-    EditApplication from { edit: this, appliedOn: now }
-}
-
-rule RefuseSafeEdit when RefusedSafeEdit {
-    EditRefusal from { edit: this, reason: "note is locked", refusedOn: now }
-}
-```
-
-**Design 1 — inferred outcomes: rejected.** No new syntax: the compiler treats as "outcomes" every shape that rules triggered off `SafeEdit` produce with a `SafeEdit`-typed field, and derives the anchor from their absence. It works — until someone adds an unrelated rule, months later, in another file:
-
-```
--- an innocent audit requirement: log every edit request on arrival
-shape EditAuditEntry {
-    edit: one SafeEdit
-    loggedOn: DateTime
-}
-
-rule AuditEdit when SafeEdit {
-    EditAuditEntry from { edit: this, loggedOn: now }
-}
-```
-
-Under inference, `EditAuditEntry` is indistinguishable from a real outcome: `AuditEdit` is a rule triggered off `SafeEdit` (criterion one), and `EditAuditEntry` carries a `SafeEdit`-typed field, `edit: one SafeEdit` (criterion two) — the same two facts that made `EditApplication` and `EditRefusal` count as outcomes. So the inferred anchor silently becomes *"no `EditApplication`, no `EditRefusal`, **and no `EditAuditEntry`** reference this act."* But `AuditEdit` fires at every edit's *creation* commit, minting an `EditAuditEntry` immediately: **every edit is born failing the third conjunct, `unhandled SafeEdit` is permanently empty, and `ApplySafeEdit`/`RefuseSafeEdit` silently never fire again.** Edits are accepted and ignored. No diagnostic anywhere — the audit rule is fine, the editing rules are untouched, and the spec still validates. This is exactly README §1's forbidden failure shape: a distant declaration silently re-resolving what an untouched construct means. Rejected.
-
-**Design 2 — declared outcomes, derived anchor: the viable form.** The author names the outcome set; the compiler derives the anchor from *that list and nothing else*:
-
-```
-expose transient shape SafeEdit {
     note: one Note
     newTitle: text
 } using MockHarness handled by EditApplication, EditRefusal
@@ -145,34 +52,76 @@ rule RefuseSafeEdit when RefusedSafeEdit {
 }
 ```
 
-Now replay the same distant addition. The audit rule is **harmless**: `EditAuditEntry` is not in the `handled by` list, so it contributes nothing to the anchor — "handled" means what the declaration says, and only editing the declaration can change it. (`AuditEdit` itself stays legal: its condition is the bare act, no mutable-state atom, so it fires once at creation and can never drift.)
-
-What the contract *does* refuse is a rule that touches the partition without playing by its rules:
+The outcome list must be *declared*, never inferred. Inference ("outcomes are whatever act-referencing shapes the act's rules produce") breaks at a distance: add an innocent audit rule —
 
 ```
--- someone adds escalation: locked-out edits should open a ticket
-rule EscalateEdit when (unhandled SafeEdit where note is LockedNote) {
-    EscalationTicket from { edit: this, openedOn: now }
+shape EditAuditEntry {
+    edit: one SafeEdit
+    loggedOn: DateTime
+}
+
+rule AuditEdit when SafeEdit {
+    EditAuditEntry from { edit: this, loggedOn: now }
 }
 ```
 
-`EscalationTicket` is not a declared outcome, so this rule never disarms its trigger — a drift-exposed partition over a `transient` act, which the marker upgrades from A4-advisory to **error**: *"rule 'EscalateEdit' handles a transient act but records no outcome — produce one of `EditApplication`/`EditRefusal`, or add `EscalationTicket` to `SafeEdit`'s `handled by` list."* Both fixes are visible, declared decisions.
+— and `EditAuditEntry` silently matches the inference criteria (produced by a rule triggered off `SafeEdit`; carries `edit: one SafeEdit`), the derived anchor silently grows a third conjunct, and since the audit fires at every edit's creation commit, every edit is born "handled": `ApplySafeEdit`/`RefuseSafeEdit` never fire again, with no diagnostic. That is README §1's forbidden schema-dependent re-resolution. With the declared list, the audit rule is harmless, and what the contract refuses instead is a rule that touches the partition without producing a declared outcome (error, with add-to-the-list as one visible fix).
 
-The derived obligations, in full — the real value of the sugar (the anchor derivation itself saves ~3 lines):
+Derived obligations: partitions of the act on mutable state must hang off `unhandled X` (A4 → error); every such rule produces exactly one declared outcome (disarm proof, specialized); an unhandled act must always be handleable (no stranding); only handling rules may produce a declared outcome shape.
 
-1. Every rule whose condition partitions the act on mutable state must hang off `unhandled X` — A4 upgraded to an error. (Rules on the bare act with no mutable atom, like `AuditEdit`, are untouched.)
-2. Every rule hanging off `unhandled X` must produce exactly one declared outcome referencing the act — the disarm proof, specialized; `EscalateEdit` above is the error case.
-3. Reachable-completeness — an unhandled act must always have some rule able to handle it, or it strands unhandled forever.
-4. Only handling rules may produce a declared outcome shape — outcomes are the handlers' signatures; an out-of-band producer of `EditRefusal` is an error naming both sites.
+**Under A, references to the act are not just legal — they're the mechanism**: the anchor conjunct is a reference from outcome to act, and audit/`why` read through it. Later reads of handled acts stay unrestricted (ledgers over acts, audit counts): the contract disciplines handling-time rules only.
 
-Payloads, state atoms, and rule bodies stay author-written.
+**Costs of A**: the act's permanence is preserved, but so is the entire hazard class it enables — every discipline is a check the author can only get right because the compiler is watching. The mental model mismatch also survives: the spec still says "this request is a permanent fact," and the author must learn why.
 
-Against §18's no-sugar bar: the anchor's correlation is always the identity case — §18's own "purely mechanical residue" — and with `transient` already naming the intent, the anchor is the contract's consequence, not a hidden decision. Lean *(revised)*: if `transient` lands, derive — declaration without derivation would leave a checked-but-hand-copied conjunction, the worst of both.
+## Design B: the act exists only within its own commit's transaction
 
-### A4's exposure scoping
+The semantics the word "transient" actually implies, taken seriously. A transient act enters, its commit's transaction runs to completion — every triggered rule fires, partitions are evaluated against the state *at that moment* — and at the transaction's close the instance leaves the state. Consequences:
 
-The drift hazard itself doesn't care about exposure: an unanchored partition of a *produced* shape over mutable state drifts identically. The advisory's current act-only scope is a conservatism worth revisiting — widen A4 to all shapes; keep the `transient` contract boundary-only.
+- **Drift is impossible by construction.** Partition refinements over the act are evaluated at exactly one moment. No anchor apparatus, no `unhandled` operator, no handled-once idiom, no A4 for marked shapes — the entire exhibit's failure mode has nothing to attach to. This is strictly stronger than any check.
+- **References to the act are forbidden; data flows forward by copy.** A durable shape holding `edit: one SafeEdit` would dangle, so it's a compile error. Outcomes copy what they need at the handling commit — which is ordinary `from { }` mapping, no new machinery:
+
+  ```
+  expose transient shape SafeEdit {
+      note: one Note
+      newTitle: text
+  } using MockHarness
+
+  shape EditRefusal {
+      note: one Note            -- durable referent: fine
+      requestedTitle: text      -- the act's payload, copied
+      reason: text
+      refusedOn: DateTime
+  }
+
+  rule RefuseSafeEdit when (SafeEdit where note is LockedNote) {
+      EditRefusal from { note: note, requestedTitle: newTitle, reason: "note is locked", refusedOn: now }
+  }
+  ```
+
+  No propagation question arises — not because references are safe, but because they don't exist; outcomes are ordinary durable shapes.
+- **Handling must complete in-transaction.** An `after commit` or tick rule can't be triggered by the act (it's gone by then), so a transient act's whole consequence graph settles within its transaction. An act whose handling needs a declared boundary or an external effect simply can't be transient — a real restriction, but a legible, declared one.
+- **Correlation needs a key, not a reference.** How does the caller match a refusal to their request? Under B the act's `id` dies with it, so correlation is a business key the act carries and outcomes copy (`requestKey: text` — the idempotency-key pattern real APIs already use). This is a genuine design demand B creates: either an id-valued copyable field kind, or the convention that transient acts carry client-supplied keys.
+- **Audit is what outcomes chose to record.** "Show me last month's refused edits" reads `EditRefusal` rows — complete exactly to the extent the outcome copied the payload. Under A the act itself is the audit record; under B the author decides what survives, per outcome.
+- **Erasure falls out for free, for the marked shapes.** A transient act's payload never persists — request-body retention (often the GDPR-sensitive part) is solved by construction, connecting to the deletion section below.
+- **The principle tension is real but answerable.** "A produced fact records something that happened, and deleting the record would make the description lie" (README §4) — B's answer is that a transient act is not a *fact of the domain* but a *message to it*: what happened, as far as the model cares, is what its outcomes recorded. §4's "committing an instance is persisting the record" becomes, for transient shapes, "committing the instance is persisting its *consequences*." Whether that refinement of the philosophy is acceptable is the heart of the open question.
+- **Provenance thins.** `why` currently walks reified acts; under B it walks outcomes, and the step from outcome back to the vanished act exists only if compilation keeps its own sub-language trace (plausible — provenance is tooling, not state — but it's a commitment).
+
+## Decision: Design B is the working direction (2026-08-10)
+
+The deciding rationale, from the project's own philosophy: *the black-box state of a system never changes until an external thing happens to it — by convention, ticks of an arbitrary scheduler, or incoming mutation from outside.* Incoming-mutation-as-shape was attractive, but Design A turns it into an awkward categorization of state around incoming-vs-state shapes: handled/unhandled isn't intuitive, and rules over incoming shapes are hard to read for what they describe. Design B gives the philosophy its missing corollary — **an incoming mutation is an input to the state, not automatically a member of it** — and the drift hazard, the anchor apparatus, and the handled/unhandled vocabulary all vanish with the premise that created them.
+
+Design A is retained above as the documented fallback: if B produces gaps or clunky specs in practice, revisit A with a more intuitive surface.
+
+**Validation plan** (the former deciders, now B's work list) — first adversarial pass done: `break-b.md` works an auction house (history acts, evidence acts, double-submit, async fraud review, external effects) against B. Results:
+
+- **B's sweet spot confirmed** — synchronous accept/refuse partitions lose the entire anchor apparatus; and the expected wall cases *dissolved*: async decisions and external effects are handled by "materialize, then decide/effect" — the handler copies the act into a durable intent within its transaction, and the boundary machinery hangs off the intent (intent-before-effect, already canonical).
+- **The one GAP: a request no rule answers.** In some reachable state, a transient act can arrive that triggers no rule — and because the act isn't kept, no record that it arrived exists anywhere afterward (under persistence it would at least sit visible as an unprocessed request). B therefore owes an **every-request-gets-a-response obligation**: the act must provably match at least one rule in every reachable state, which lands on README §8's unbuilt exhaustiveness checker (kin to `states of`). Fail closed until provable. Desirable independent of the gap — it's the compiler asking the product question "what should happen to this request in this situation?" and refusing to proceed until the spec answers. This is the make-or-break work item.
+- **TAX cases, all one idiom** — history acts, evidence acts, and idempotent ingestion each materialize a durable record and copy the payload forward; the durable/transient split becomes an explicit authoring decision. Double-submit confirms the **correlation-key design** as real work (client-supplied keys threaded through outcomes).
+- **The static ban list B must ship with** (each a one-line consequence of "not part of the state," and what makes misuse a compile error rather than misbehavior): refinements of a transient act read outside its commit; `when leaving` over them; tick or `after commit` triggers on them; inferred inverse collections; captures/derivations reading the act from state shapes; `(TransientShape for x)` beyond the act's transaction.
+- **Still open from the original plan:** respell the drift exhibit and payments' `ChangeShippingAddress` under B (expected ceremony win; measure copied-field cost); confirm outcome-mediated provenance satisfies `why`.
+
+**A question the decision raises: is transient the default?** The philosophy taken to its limit says *every* incoming mutation is a message, and durable "acts" (`EmailChange`, `Deposit`) are really messages whose handlers record facts — expressible under B by a handler copying into a durable record shape. What blocks message-as-default is ergonomics the language already leans on: today "committing a shape instance *is* persisting the record" (§12, "No act-level sugar"), so the common submission case needs no rule at all; message-default would demand a recording rule per submission — ceremony where there was none. Current position: transient is opt-in, persistence stays the default; revisit only if B-in-practice suggests otherwise.
 
 ## Deletion proper: a storage concern, tracked separately
 
-Velle's "delete has no primitive" stance (README §4) is about *description*: facts don't un-happen, and a spec that erases records lies. But real systems owe **erasure** — retention windows, right-to-be-forgotten — and that obligation is about *storage*, not description: "an edit occurred" can remain true in the model while its payload ceases to be physically retrievable. That places retention/erasure with compilation (the same layer as "which database"), plausibly as declared policy the transpiler enforces (annotations on shapes/fields; crypto-shredding or hard deletion as mechanism). What the language owes is at most the policy vocabulary — and a check that no derivation or guard depends on data the policy allows to vanish. Not designed; tracked as its own TODO item.
+Velle's "delete has no primitive" stance (README §4) is about *description*: facts don't un-happen, and a spec that erases records lies. But real systems owe **erasure** — retention windows, right-to-be-forgotten — and that obligation is about *storage*, not description: "an edit occurred" can remain true in the model while its payload ceases to be physically retrievable. That places retention/erasure with compilation (the same layer as "which database"), plausibly as declared policy the transpiler enforces (annotations on shapes/fields; crypto-shredding or hard deletion as mechanism). What the language owes is at most the policy vocabulary — and a check that no derivation or guard depends on data the policy allows to vanish. Design B above solves the *request-payload* slice of this by construction; the durable-record slice (retention on facts the model keeps) remains its own question. Not designed; tracked as its own TODO item.
