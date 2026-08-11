@@ -13,11 +13,19 @@ repositories {
 
 dependencies {
     implementation(project(":compiler"))
+    // engineer-side storage for the hydration spike app (velle/app)
+    implementation("org.xerial:sqlite-jdbc:3.47.1.0")
     testImplementation(kotlin("test"))
 }
 
 tasks.test {
     useJUnitPlatform()
+}
+
+tasks.register<JavaExec>("runApp") {
+    description = "Run the hydration spike app against a local SQLite db (billing.db)"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("velle.app.BillingAppKt")
 }
 
 tasks.register<JavaExec>("generate") {

@@ -78,6 +78,108 @@ class VelleSystem(
     internal val captures = HashMap<Pair<Long, String>, Map<String, Value>>()
 
     private var nextId = 1L
+
+    // ── hydration (investigate_runtime.md §2–3; Hydration.kt) ────────────────
+    // With a resolver connected, [instances]/[byShape] become the per-envelope
+    // working set over engineer-owned storage: each transaction opens a fresh
+    // snapshot, faults state in on demand (memoized for the envelope), and hands
+    // its mutation set to [onCommit] inside the envelope. Without one, they are
+    // the whole state, as before [S1].
+
+    private var resolver: StateResolver? = null
+    private var onCommit: CommitCallback? = null
+    /** id → shape, so a bare VRef id can be fetched from per-shape storage.
+     *  An index, not state: populated at creation, hydration, and reference
+     *  conversion; survives snapshot clears. */
+    private val idShape = HashMap<Long, String>()
+    private val fetchedAll = mutableSetOf<String>()
+    private val fetchedRefs = mutableSetOf<Triple<String, String, Long>>()
+
+    fun connect(resolver: StateResolver, onCommit: CommitCallback) {
+        this.resolver = resolver
+        this.onCommit = onCommit
+        nextId = maxOf(nextId, resolver.maxId() + 1)
+    }
+
+    /** Each transaction evaluates against one consistent snapshot: drop the
+     *  previous envelope's hydrated state so storage is re-consulted. Captures
+     *  deliberately survive — per-membership memory has no engineer-storage home
+     *  yet, a hole this spike surfaces rather than solves. */
+    private fun beginSnapshot() {
+        if (resolver == null) return
+        instances.clear()
+        byShape.clear()
+        fetchedAll.clear()
+        fetchedRefs.clear()
+    }
+
+    /** By-id read, faulting in from the resolver when absent. */
+    internal fun instance(id: Long): Instance? {
+        instances[id]?.let { return it }
+        val r = resolver ?: return null
+        val shape = idShape[id] ?: return null
+        val row = r.fetchById(shape, id) ?: return null
+        return hydrateIfAbsent(row)
+    }
+
+    /** Scan read: every current instance of [shape], faulting in the full set once per envelope. */
+    internal fun idsOf(shape: String): List<Long> {
+        val r = resolver
+        if (r != null && shape !in model.transients && fetchedAll.add(shape))
+            r.fetchAll(shape).forEach { hydrateIfAbsent(it) }
+        return byShape[shape].orEmpty().toList()
+    }
+
+    /** Join read: fault in the instances of [shape] whose [field] references [targetId]. */
+    internal fun ensureReferencing(shape: String, field: String, targetId: Long) {
+        val r = resolver ?: return
+        if (shape in model.transients || shape in fetchedAll) return
+        if (fetchedRefs.add(Triple(shape, field, targetId)))
+            r.fetchReferencing(shape, field, targetId).forEach { hydrateIfAbsent(it) }
+    }
+
+    private fun hydrateIfAbsent(row: Row): Instance {
+        instances[row.id]?.let { return it }
+        val decl = model.shapes[row.shape]
+            ?: throw VelleRuntimeError("resolver returned unknown shape '${row.shape}'")
+        val fields = mutableMapOf<String, Value>()
+        for (m in decl.members) {
+            val (name, vtype) = when (m) {
+                is StoredProp -> m.name to model.typeOf(m.type)
+                is TimestampProp -> m.name to VType.DateTimeT
+                else -> continue
+            }
+            val raw = row.fields[name] ?: continue
+            fields[name] = rawToValue(raw, vtype, "${row.shape}.$name")
+        }
+        val inst = Instance(row.id, row.shape, row.id, fields)
+        instances[row.id] = inst
+        byShape.getOrPut(row.shape) { mutableListOf() }.add(row.id)
+        idShape[row.id] = row.shape
+        return inst
+    }
+
+    private fun rawToValue(raw: Any, t: VType, at: String): Value = when (t) {
+        is VType.Optional -> rawToValue(raw, t.inner, at)
+        is VType.Inst -> {
+            val refId = (raw as? Number)?.toLong()
+                ?: throw VelleRuntimeError("hydrating $at: reference is not an id ($raw)")
+            idShape[refId] = t.shape
+            Value.VRef(refId)
+        }
+        is VType.Num -> Value.num(raw)
+        VType.Text -> Value.VText(raw as? String ?: throw VelleRuntimeError("hydrating $at: not text ($raw)"))
+        VType.Bool -> Value.VBool(
+            when (raw) {
+                is Boolean -> raw
+                is Number -> raw.toInt() != 0
+                else -> throw VelleRuntimeError("hydrating $at: not a boolean ($raw)")
+            }
+        )
+        VType.DateT -> Value.VDate(raw as? LocalDate ?: throw VelleRuntimeError("hydrating $at: not a Date ($raw)"))
+        VType.DateTimeT -> Value.VDateTime(raw as? Instant ?: throw VelleRuntimeError("hydrating $at: not a DateTime ($raw)"))
+        else -> throw VelleRuntimeError("hydrating $at: unsupported type for $raw")
+    }
     private val lastTick = HashMap<String, Instant>()
     private val startInstant = startTime
     val evaluator = Evaluator(this)
@@ -103,11 +205,19 @@ class VelleSystem(
 
     private fun <T> inTransaction(body: () -> T): Result<T> {
         check(txn == null) { "nested harness transaction" }
+        beginSnapshot()
         val t = Txn()
         txn = t
         return try {
             val out = body()
             checkNevers()
+            // the commit callback runs inside the envelope: its writes join the
+            // engineer's storage transaction, and a failure rolls the whole
+            // commit back (investigate_runtime.md §3, in-envelope failure)
+            onCommit?.let { cb ->
+                val set = buildCommitSet(t)
+                if (set.created.isNotEmpty() || set.assigned.isNotEmpty()) cb.onCommit(set)
+            }
             txn = null
             drainAfterQueue(t)
             Result.success(out)
@@ -116,6 +226,37 @@ class VelleSystem(
             txn = null
             Result.failure(e)
         }
+    }
+
+    /** The transaction's whole mutation set — creates with their final fields
+     *  (initially/generator/timestamp values included), assigns collapsed to the
+     *  final value per (instance, field). Transient acts are excluded: only
+     *  their consequences persist (README §4). */
+    private fun buildCommitSet(t: Txn): CommitSet {
+        val createdSet = t.created.toSet()
+        val created = t.created.mapNotNull { id ->
+            val inst = instances.getValue(id)
+            if (inst.shape in model.transients) return@mapNotNull null
+            val decl = model.shapes.getValue(inst.shape)
+            val fields = buildMap {
+                for (m in decl.members) when (m) {
+                    is StoredProp -> put(m.name, unwrap(inst.fields[m.name] ?: Value.VNone))
+                    is TimestampProp -> put(m.name, unwrap(inst.fields[m.name] ?: Value.VNone))
+                    else -> {}
+                }
+            }
+            Row(inst.shape, id, fields)
+        }
+        val assigned = t.oldValues.asSequence()
+            .map { (id, field, _) -> id to field }
+            .distinct()
+            .filter { (id, _) -> id !in createdSet }
+            .map { (id, field) ->
+                val inst = instances.getValue(id)
+                CommitSet.Assign(inst.shape, id, field, unwrap(inst.fields[field] ?: Value.VNone))
+            }
+            .toList()
+        return CommitSet(created, assigned)
     }
 
     private fun rollback(t: Txn) {
@@ -133,7 +274,7 @@ class VelleSystem(
     private fun drainAfterQueue(t: Txn) {
         // [S2] synchronous, FIFO, each entry its own transaction
         for ((rule, subject) in t.afterQueue) {
-            if (subject !in instances) continue
+            if (instance(subject) == null) continue
             if (!evaluator.memberOfRefExpr(subject, rule.condition)) continue
             val result = inTransaction { fire(rule, subject) }
             result.exceptionOrNull()?.let {
@@ -192,7 +333,10 @@ class VelleSystem(
     }
 
     private fun convert(raw: Any, type: TypeRef): Value? = when (type) {
-        is RelType -> (raw as? Long)?.takeIf { it in instances }?.let { Value.VRef(it) }
+        is RelType -> (raw as? Long)
+            ?.also { idShape.putIfAbsent(it, type.shape) }
+            ?.takeIf { instance(it) != null }
+            ?.let { Value.VRef(it) }
         is ScalarType -> when (type.name) {
             "text" -> (raw as? String)?.let { Value.VText(it) }
             "boolean" -> (raw as? Boolean)?.let { Value.VBool(it) }
@@ -236,7 +380,7 @@ class VelleSystem(
     }
 
     private fun memberSet(w: Watcher): Set<Long> =
-        byShape[w.base].orEmpty().filter { evaluator.memberOfRefExpr(it, w.condition) }.toSet()
+        idsOf(w.base).filter { evaluator.memberOfRefExpr(it, w.condition) }.toSet()
 
     private fun applyCommit(mutations: List<Mutation>): List<Long> {
         val t = txn ?: error("commit outside transaction")
@@ -303,6 +447,7 @@ class VelleSystem(
         val inst = Instance(id, m.shape, id, m.fields.toMutableMap())
         instances[id] = inst
         byShape.getOrPut(m.shape) { mutableListOf() }.add(id)
+        idShape[id] = m.shape
         t.created.add(id)
         for (p in decl.members.filterIsInstance<StoredProp>()) {
             if (p.name in inst.fields || p.initially == null) continue
@@ -316,7 +461,7 @@ class VelleSystem(
     }
 
     private fun applyAssign(m: Mutation.Assign, t: Txn, pre: Map<*, Set<Long>>) {
-        val inst = instances[m.id] ?: throw VelleRuntimeError("assign to missing instance ${m.id}")
+        val inst = instance(m.id) ?: throw VelleRuntimeError("assign to missing instance ${m.id}")
         // frozen-field tripwire: the validator proved this impossible; assert anyway [S5 spirit]
         for ((refName, r) in model.refinements) {
             val frozen = r.members.filterIsInstance<FrozenClause>().singleOrNull() ?: continue
@@ -387,13 +532,13 @@ class VelleSystem(
                     // leavers at the tick commit itself: member under the previous
                     // tick's clock, not a member now
                     val base = model.baseOfExpr(rule.condition) ?: continue
-                    byShape[base].orEmpty().filter {
+                    idsOf(base).filter {
                         membershipAt(previous, it, rule.condition) &&
                             !evaluator.memberOfRefExpr(it, rule.condition)
                     }
                 } else {
                     val base = model.baseOfExpr(rule.condition) ?: continue
-                    byShape[base].orEmpty().filter { evaluator.memberOfRefExpr(it, rule.condition) }
+                    idsOf(base).filter { evaluator.memberOfRefExpr(it, rule.condition) }
                 }
             for (subject in subjects) {
                 // each firing is its own transaction; a straggler blocks only itself
@@ -417,7 +562,7 @@ class VelleSystem(
     private fun checkNevers() {
         for ((i, n) in model.nevers.withIndex()) {
             val base = model.baseOfExpr(n.target) ?: continue
-            for (id in byShape[base].orEmpty()) {
+            for (id in idsOf(base)) {
                 if (evaluator.memberOfRefExpr(id, n.target))
                     throw NeverViolation("never #${i + 1} over $base is violated")
             }
@@ -427,10 +572,10 @@ class VelleSystem(
     // ── query surface (read-only; the typed-accessor codegen wraps this) ─────
 
     fun instancesOf(name: String): List<Long> = when {
-        name in model.shapes -> byShape[name].orEmpty().toList()
+        name in model.shapes -> idsOf(name)
         name in model.refinements -> {
             val base = model.baseOf(name) ?: return emptyList()
-            byShape[base].orEmpty().filter { evaluator.memberOfRefExpr(it, RefName(name)) }
+            idsOf(base).filter { evaluator.memberOfRefExpr(it, RefName(name)) }
         }
         else -> throw IllegalArgumentException("unknown shape or refinement '$name'")
     }
@@ -440,7 +585,7 @@ class VelleSystem(
 
     /** Read a field — stored, derived, timestamp, capture, or inverse collection — unwrapped. */
     fun get(id: Long, field: String): Any? {
-        val inst = instances[id] ?: throw IllegalArgumentException("no instance $id")
+        val inst = instance(id) ?: throw IllegalArgumentException("no instance $id")
         return unwrap(evaluator.readMember(id, inst.shape, field))
     }
 

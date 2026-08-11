@@ -37,7 +37,7 @@ class Evaluator(private val system: VelleSystem) {
     }
 
     private fun memberOfName(id: Long, e: RefName): Boolean {
-        val inst = system.instances[id] ?: return false
+        val inst = system.instance(id) ?: return false
         val ok = when {
             e.name in model.shapes -> inst.shape == e.name
             e.name in model.refinements -> {
@@ -60,7 +60,7 @@ class Evaluator(private val system: VelleSystem) {
     }
 
     private fun readResolved(id: Long, m: MemberInfo): Value {
-        val inst = system.instances[id] ?: throw VelleRuntimeError("missing instance $id")
+        val inst = system.instance(id) ?: throw VelleRuntimeError("missing instance $id")
         if (m.name == "id") return Value.VRef(id)
         if (m.captured) {
             val store = system.captures[id to m.owner]
@@ -75,6 +75,7 @@ class Evaluator(private val system: VelleSystem) {
             val backField = model.shapes.getValue(relShape).members
                 .filterIsInstance<StoredProp>()
                 .first { (it.type as? RelType)?.let { t -> !t.many && t.shape == inst.shape } == true }
+            system.ensureReferencing(relShape, backField.name, id)
             val ids = system.byShape[relShape].orEmpty()
                 .filter { (system.instances.getValue(it).fields[backField.name] as? Value.VRef)?.id == id }
             return Value.VColl(ids, relShape)
@@ -137,7 +138,7 @@ class Evaluator(private val system: VelleSystem) {
 
     private fun access(v: Value, seg: Seg): Value = when (v) {
         is Value.VRef -> {
-            val inst = system.instances.getValue(v.id)
+            val inst = system.instance(v.id) ?: throw VelleRuntimeError("missing instance ${v.id}")
             // scope through the instance's refinement memberships is not needed at
             // runtime: captures are read via their owner refinement in readMember
             readMemberAnyScope(v.id, inst.shape, seg.name)
@@ -197,9 +198,10 @@ class Evaluator(private val system: VelleSystem) {
      */
     private fun instancesReferencing(shape: String, id: Long): List<Long> {
         val base = if (shape in model.refinements) model.baseOf(shape)!! else shape
-        val targetShape = system.instances.getValue(id).shape
+        val targetShape = (system.instance(id) ?: throw VelleRuntimeError("missing instance $id")).shape
         val field = model.shapes.getValue(base).members.filterIsInstance<StoredProp>()
             .single { (it.type as? RelType)?.let { t -> !t.many && t.shape == targetShape } == true }
+        system.ensureReferencing(base, field.name, id)
         val referencing = system.byShape[base].orEmpty().filter {
             (system.instances.getValue(it).fields[field.name] as? Value.VRef)?.id == id
         }
@@ -210,10 +212,10 @@ class Evaluator(private val system: VelleSystem) {
     private fun bindingCandidates(b: Binding, ctx: Ctx): Pair<String, List<Long>> = when (val src = b.source) {
         is PathExpr ->
             if (src.root in model.shapes && src.segs.isEmpty())
-                src.root to system.byShape[src.root].orEmpty().toList()
+                src.root to system.idsOf(src.root)
             else if (src.root in model.refinements && src.segs.isEmpty()) {
                 val base = model.baseOf(src.root)!!
-                base to system.byShape[base].orEmpty().filter { memberOfRefExpr(it, RefName(src.root)) }
+                base to system.idsOf(base).filter { memberOfRefExpr(it, RefName(src.root)) }
             } else {
                 val v = eval(src, ctx)
                 val coll = v as? Value.VColl ?: throw VelleRuntimeError("binding is not a collection: $src")
@@ -397,7 +399,7 @@ class Evaluator(private val system: VelleSystem) {
         }
         for ((i, seg) in target.segs.withIndex()) {
             if (i == target.segs.lastIndex) return current to seg.name
-            val inst = system.instances.getValue(current)
+            val inst = system.instance(current) ?: throw VelleRuntimeError("missing instance $current")
             val v = readMemberAnyScope(current, inst.shape, seg.name)
             current = (v as? Value.VRef)?.id
                 ?: throw VelleRuntimeError("assignment route '.${seg.name}' is not an instance")

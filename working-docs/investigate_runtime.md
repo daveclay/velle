@@ -62,6 +62,25 @@ A hook around rule execution, so the engineer can be made aware of a rule's exec
 
 The one legitimate residue — "which rule produced this mutation," for debugging/tracing — is provenance, already the deferred `why` item. A cheap early version, if wanted, is rule-attribution *metadata on the commit callback payload*, not a separate hook.
 
+## 5. Spike: the hydrating runtime over SQLite
+
+Built and running (2026-08-11): `VelleSystem.connect(resolver, callback)` in the runtime, and in billing's developer-owned output module a model-driven `SqliteStore` implementing both halves plus a `BillingApp` that commits through the generated surface and reads back with its own SQL (`gradle :examples:billing:output:runApp`). With a resolver connected, the runtime's in-memory state becomes a per-envelope working set: each transaction opens a fresh snapshot, faults state in on demand — memoized for the envelope, never re-issued (§2's snapshot rule) — and hands its mutation set to the callback inside the envelope, after the `never` check. Everything is opt-in; without a resolver the v0 in-memory behavior is untouched, and the full test suite passes.
+
+What the spike confirmed:
+
+- **The three resolver questions held.** Every state read in the runtime and evaluator reduced to exactly §2's catalog — fetch by id, fetch the instances referencing X through field F, fetch all of a shape. No fourth question emerged. (The spike collapses the *per-act generated interfaces* to one generic three-method resolver driven by the compiled model; the per-act compile-error ergonomics are the next rung, unexercised.)
+- **The transaction mapping is clean.** Envelope → one SQLite transaction (a payment's commit lands the `Payment` row, the fold's assign, and the `Receipt` atomically); `after commit` firing → its own DB transaction; in-envelope callback failure → SQLite rollback plus runtime rollback, caller gets the error. §3's three decisions survived contact intact.
+- **Guards work against engineer-owned storage across processes.** Run the app twice: the second process's weekly tick sweeps an overdue invoice created by the first, and the reminder guard suppresses re-nagging by hydrating the first run's `Reminder` row — cross-tick memory as data, read from the engineer's DB.
+- **The scan cost is real, and not just for ticks.** Every commit currently hydrates the full table of every watcher's base shape (pre/post member sets) and every `never`'s base. §2 called the query IR "nearly mandatory" for ticks; empirically the static read-set derivation and pre-filter are load-bearing for *ordinary commits* too. They are what makes this viable beyond a spike, not an optimization.
+
+What the spike surfaced as gaps in the contract:
+
+- **Captures have no storage home.** Per-membership memory (`ArchivedInvoice.archivedOn`) lives only in the runtime's process; archive in one run, unarchive in the next, and the exit rule's capture read fails. The resolver/callback surface needs a capture channel — a runtime-owned table the engineer hosts, or captures re-derived at hydration — a real hole in §2/§3 as written, promoted to the open list below.
+- **A bare `id` doesn't name its table.** The runtime's references carry no shape, but engineer storage is per-shape. The spike keeps an id→shape index populated at creation, hydration, and reference conversion — workable, because every path an id enters by knows the target shape from the model — but the resolver contract should state it: by-id fetches are always shape-qualified.
+- **Id minting.** The runtime mints ids above the storage's max (`maxId()` on the resolver). Fine for the spike; the supplied-vs-generated `id` question at trust/legacy boundaries remains with the per-exposure field policy item.
+
+Not exercised, deliberately: generated per-act resolver interfaces, the query IR / SQL pre-filter, the production clock default (the app passes real time explicitly).
+
 ## Outcomes
 
 Settled enough to promote:
@@ -74,6 +93,7 @@ Settled enough to promote:
 Still open, re-homed:
 
 - Per-exposure field policy (committer-suppliable fields, supplied-vs-generated `id`) — now attaches directly to `expose` design.
+- Capture persistence (from the spike, §5): per-membership memory must survive the process for the exit-rule last-reader contract to hold over engineer-owned storage — a capture channel on the resolver/callback surface, or re-derivation at hydration. Undesigned.
 - The universal-transaction contract: the exact guarantees Velle assumes (snapshot reads, atomic writes, serialization of conflicting commits) stated precisely — the engineer realizes them however their storage requires; the confluence and one-writer proofs now rest on this contract.
 - Production clock default (real time, controllable clock as test affordance).
 - Rule-execution hook — rejected as a hook; residue folds into the `why`/provenance item.
