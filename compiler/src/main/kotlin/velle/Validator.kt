@@ -476,7 +476,7 @@ class Validator(private val model: Model) {
 
     private val commitKindsCache: List<CommitKind> by lazy {
         val kinds = mutableListOf<CommitKind>()
-        model.exposed.keys.forEach { kinds.add(CommitKind.Creates(it, source = "expose $it")) }
+        model.exposed.forEach { kinds.add(CommitKind.Creates(it, source = "expose $it")) }
         for (rule in model.rules.values) {
             rule.body.filterIsInstance<Creation>().forEach {
                 kinds.add(CommitKind.Creates(it.shape, source = "rule ${rule.name}", byRule = rule))

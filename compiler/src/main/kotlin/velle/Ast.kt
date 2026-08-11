@@ -4,11 +4,11 @@ package velle
 
 sealed interface Decl
 
-/** Base shape. `exposedVia` is set by the inline `expose shape ... using M` form. */
+/** Base shape. `exposed` is set by the inline `expose shape ...` form. */
 data class ShapeDecl(
     val name: String,
     val members: List<Member>,
-    val exposedVia: String? = null,
+    val exposed: Boolean = false,
     /** `expose transient` — an input to the state, not a member of it (README §4). */
     val transient: Boolean = false,
 ) : Decl
@@ -34,8 +34,8 @@ data class RuleDecl(
 
 data class NeverDecl(val target: RefExpr) : Decl
 
-/** Standalone `expose [transient] Shape using Mechanism`. */
-data class ExposeDecl(val shape: String, val mechanism: String, val transient: Boolean = false) : Decl
+/** Standalone `expose [transient] Shape`. */
+data class ExposeDecl(val shape: String, val transient: Boolean = false) : Decl
 
 // ── Shape / refinement members ───────────────────────────────────────────────
 

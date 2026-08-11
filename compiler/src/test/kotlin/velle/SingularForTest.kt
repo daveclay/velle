@@ -17,12 +17,12 @@ class SingularForTest {
     private val src = """
         expose shape Account {
             balance: decimal
-        } using MockHarness
+        }
 
         expose shape BalanceReport {
             account: one Account
             reported: decimal
-        } using MockHarness
+        }
 
         shape DelinquencyFlag {
             account: one Account

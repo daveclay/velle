@@ -36,7 +36,7 @@ class ValidatorTest {
             expose shape Customer {
                 name: text
                 vip: boolean initially false
-            } using MockHarness
+            }
 
             shape Odd = Customer where nonexistent == "x"
         """.trimIndent()
@@ -48,11 +48,11 @@ class ValidatorTest {
         val src = """
             expose shape Account {
                 balance: decimal = 0 + 0
-            } using MockHarness
+            }
 
             expose shape Poke {
                 account: one Account
-            } using MockHarness
+            }
 
             rule Break when Poke {
                 account.balance = 0
@@ -66,7 +66,7 @@ class ValidatorTest {
         val src = """
             expose shape Order {
                 total: decimal
-            } using MockHarness
+            }
 
             shape Receipt {
                 order: one Order
@@ -86,7 +86,7 @@ class ValidatorTest {
             expose shape Customer {
                 name: text
                 shout: text = uppercase(name)
-            } using MockHarness
+            }
         """.trimIndent()
         assertTrue(codes(src).contains("F2"), "got: ${diags(src)}")
     }
@@ -98,12 +98,12 @@ class ValidatorTest {
         val src = """
             expose shape Customer {
                 email: text
-            } using MockHarness
+            }
 
             expose shape CorrectEmail {
                 customer: one Customer
                 corrected: text
-            } using MockHarness
+            }
 
             rule Apply when CorrectEmail {
                 customer.email = corrected
@@ -122,12 +122,12 @@ class ValidatorTest {
             expose shape Customer {
                 email: text
                 locked: boolean initially false
-            } using MockHarness
+            }
 
             expose shape CorrectEmail {
                 customer: one Customer
                 corrected: text
-            } using MockHarness
+            }
 
             shape ApplicableCorrection = CorrectEmail where not customer.locked
             shape RefusedCorrection = CorrectEmail where customer.locked
@@ -153,7 +153,7 @@ class ValidatorTest {
             expose shape Deposit {
                 amount: decimal
                 applied: boolean initially false
-            } using MockHarness
+            }
 
             shape UnappliedDeposit = Deposit where not applied
 
@@ -174,7 +174,7 @@ class ValidatorTest {
         val src = """
             expose shape Order {
                 total: decimal
-            } using MockHarness
+            }
 
             shape Confirmation {
                 order: one Order
@@ -192,7 +192,7 @@ class ValidatorTest {
         val src = """
             expose shape Invoice {
                 due: Date
-            } using MockHarness
+            }
 
             shape Overdue = Invoice where due < today
 
@@ -230,11 +230,11 @@ class ValidatorTest {
         val src = """
             expose shape Invoice {
                 due: Date
-            } using MockHarness
+            }
 
             expose shape Issuance {
                 invoice: one Invoice
-            } using MockHarness
+            }
 
             shape IssuedInvoice = Invoice where exists Issuance for this {
                 frozen due
@@ -243,7 +243,7 @@ class ValidatorTest {
             expose shape ChangeDue {
                 invoice: one Invoice
                 newDue: Date
-            } using MockHarness
+            }
 
             rule Apply when ChangeDue {
                 invoice.due = newDue
@@ -257,12 +257,12 @@ class ValidatorTest {
         val src = """
             expose shape Account {
                 balance: decimal initially 0
-            } using MockHarness
+            }
 
             expose shape Deposit {
                 account: one Account
                 amount: decimal
-            } using MockHarness
+            }
 
             rule ApplyDeposit when Deposit on commit, Hourly {
                 account.balance = account.balance + amount
@@ -277,11 +277,11 @@ class ValidatorTest {
             expose shape Account {
                 balance: decimal initially 0
                 suspended: boolean initially false
-            } using MockHarness
+            }
 
             expose shape Suspend {
                 account: one Account
-            } using MockHarness
+            }
 
             rule ApplySuspend when Suspend {
                 account.suspended = true
@@ -297,7 +297,7 @@ class ValidatorTest {
         val src = """
             expose shape Ping {
                 note: text
-            } using MockHarness
+            }
 
             shape Pong {
                 ping: one Ping
@@ -319,7 +319,7 @@ class ValidatorTest {
         val src = """
             expose shape Receipt {
                 total: decimal
-            } using MockHarness
+            }
 
             shape ReceiptEmail {
                 receipt: one Receipt
@@ -339,12 +339,12 @@ class ValidatorTest {
         val src = """
             expose shape Customer {
                 name: text
-            } using MockHarness
+            }
 
             expose shape Referral {
                 referrer: one Customer
                 referee: one Customer
-            } using MockHarness
+            }
 
             shape Referrer = Customer where exists Referral for this
         """.trimIndent()
@@ -357,12 +357,12 @@ class ValidatorTest {
     private val episodes = """
         expose shape Account {
             balance: decimal
-        } using MockHarness
+        }
 
         expose shape BalanceReport {
             account: one Account
             reported: decimal
-        } using MockHarness
+        }
 
         shape DelinquencyFlag {
             account: one Account
@@ -398,7 +398,7 @@ class ValidatorTest {
 
     @Test
     fun `V12 - exposing the base defeats the proof`() {
-        val src = episodes + "\n\nexpose DelinquencyFlag using MockHarness"
+        val src = episodes + "\n\nexpose DelinquencyFlag"
         assertTrue(codes(src).contains("V12"), "got: ${diags(src)}")
     }
 
@@ -409,7 +409,7 @@ class ValidatorTest {
 
             expose shape ManualFlag {
                 account: one Account
-            } using MockHarness
+            }
 
             rule FlagManually when ManualFlag {
                 DelinquencyFlag from { account: account }
@@ -423,12 +423,12 @@ class ValidatorTest {
         val src = """
             expose shape Account {
                 balance: decimal
-            } using MockHarness
+            }
 
             expose shape BalanceReport {
                 account: one Account
                 reported: decimal
-            } using MockHarness
+            }
 
             shape DelinquencyFlag {
                 account: one Account
@@ -437,7 +437,7 @@ class ValidatorTest {
 
             expose shape FlagDispute {
                 flag: one DelinquencyFlag
-            } using MockHarness
+            }
 
             shape Delinquent = Account where balance < 0
             shape OpenDelinquencyFlag = DelinquencyFlag where not resolved
@@ -470,18 +470,18 @@ class ValidatorTest {
     private val barePartition = """
         expose shape Invoice {
             due: Date
-        } using MockHarness
+        }
 
         expose shape Issuance {
             invoice: one Invoice
-        } using MockHarness
+        }
 
         shape IssuedInvoice = Invoice where exists Issuance for this
 
         expose shape ChangeDueDate {
             invoice: one Invoice
             newDue: Date
-        } using MockHarness
+        }
 
         shape ApplicableDueChange = ChangeDueDate where not invoice is IssuedInvoice
         shape RefusedDueChange    = ChangeDueDate where invoice is IssuedInvoice
@@ -541,12 +541,12 @@ class ValidatorTest {
         val src = """
             expose shape Account {
                 balance: decimal
-            } using MockHarness
+            }
 
             expose shape BalanceReport {
                 account: one Account
                 reported: decimal
-            } using MockHarness
+            }
 
             shape DelinquencyFlag {
                 account: one Account

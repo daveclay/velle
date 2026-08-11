@@ -28,10 +28,9 @@ class BillingFixtureTest {
     }
 
     @Test
-    fun `nine shapes are exposed via MockHarness`() {
-        val exposed = all<ShapeDecl>().filter { it.exposedVia != null }
+    fun `nine shapes are exposed`() {
+        val exposed = all<ShapeDecl>().filter { it.exposed }
         assertEquals(9, exposed.size)
-        assertTrue(exposed.all { it.exposedVia == "MockHarness" })
     }
 
     @Test

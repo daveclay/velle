@@ -18,8 +18,8 @@ class Model(val decls: List<Decl>) {
     val refinements = linkedMapOf<String, RefinementDecl>()
     val rules = linkedMapOf<String, RuleDecl>()
     val nevers = mutableListOf<NeverDecl>()
-    /** shape name → mechanism, from inline and standalone expose declarations */
-    val exposed = linkedMapOf<String, String>()
+    /** externally committable shapes, from inline and standalone expose declarations */
+    val exposed = linkedSetOf<String>()
 
     /** shapes exposed `transient` — inputs to the state, not members of it (README §4) */
     val transients = mutableSetOf<String>()
@@ -29,7 +29,7 @@ class Model(val decls: List<Decl>) {
             is ShapeDecl -> {
                 if (!register(d.name)) continue
                 shapes[d.name] = d
-                d.exposedVia?.let { exposed[d.name] = it }
+                if (d.exposed) exposed.add(d.name)
                 if (d.transient) transients.add(d.name)
             }
             is RefinementDecl -> if (register(d.name)) refinements[d.name] = d
@@ -44,7 +44,7 @@ class Model(val decls: List<Decl>) {
                 d.shape !in shapes -> error("F1", "expose names unknown shape '${d.shape}'")
                 d.shape in exposed -> error("F1", "shape '${d.shape}' is exposed twice")
                 else -> {
-                    exposed[d.shape] = d.mechanism
+                    exposed.add(d.shape)
                     if (d.transient) transients.add(d.shape)
                 }
             }

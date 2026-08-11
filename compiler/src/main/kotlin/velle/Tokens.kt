@@ -18,7 +18,7 @@ data class Token(val type: TokType, val text: String, val line: Int, val col: In
 // Reserved words (grammar.md, lexical layer). Only lowercase-initial words can be
 // keywords; Date/DateTime are UIDENTs recognized in type position by the parser.
 val KEYWORDS: Set<String> = setOf(
-    "shape", "rule", "never", "expose", "transient", "using",
+    "shape", "rule", "never", "expose", "transient",
     "when", "leaving", "on", "after", "commit",
     "where", "and", "or", "not", "is", "exists", "for", "from", "then",
     "if", "else", "as", "this",

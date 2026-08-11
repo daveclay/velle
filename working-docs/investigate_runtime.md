@@ -23,7 +23,7 @@ Two things from the old mechanism design do not dissolve — they redistribute:
 
 Ticks fit the same story with zero change: schedule names already transpile to tick functions, and under this model the engineer calls them from their real scheduler (cron, Quartz, whatever). The one adjustment is the clock — the generated `System` currently has a harness-controlled clock (`setTime`/`advance`); production use wants real time as the default, with the controllable clock kept as the test affordance.
 
-## 2. Hydration: DB-authoritative, demand-hydrated evaluation
+## 2. Hydration: demand-hydrated evaluation over engineer-owned storage
 
 Three ideas that compose into one design:
 
@@ -31,7 +31,7 @@ Three ideas that compose into one design:
 - Velle already knows enough to build the SQL that fetches its data — not to *execute* it, but as a builder utility: the engineer provides ORM mappings, Velle outputs SQL (or an agnostic query object that translates to SQL).
 - Velle knows the entire rule flow, so it knows what state a commit needs to satisfy the rule chain.
 
-Together: the engineer's DB is the system of record, and Velle is a per-commit decision kernel that *demand-hydrates* the state it needs through engineer-supplied resolvers, evaluates in memory, and hands the mutation set back through the commit callback (§3). This fits the reframing better than replay did — engineers already have a database, and Velle owning a parallel system of record via a commit log would contradict "traditional-code territory Velle doesn't compete in." Replay also had real problems: unbounded log growth, boot time, and a second source of truth beside the DB the enterprise already has.
+Together: Velle is a per-commit decision kernel that *demand-hydrates* the state it needs through engineer-supplied resolvers, evaluates in memory, and hands the mutation set back through the commit callback (§3). Velle does not dictate where authority lives — it *defers* to the engineer. Behind the resolvers there may be one DB, multiple DBs, API calls, file storage, any mix; Velle never knows or cares. This fits the reframing better than replay did — engineers already have storage, and Velle owning a parallel system of record via a commit log would contradict "traditional-code territory Velle doesn't compete in." Replay also had real problems: unbounded log growth, boot time, and a second source of truth beside the storage the enterprise already has.
 
 **The resolver model is the right interface shape.** The questions Velle needs to ask during evaluation are few and typed: fetch an instance by id, fetch the instances related to X through field F (the fold/join reads), and fetch the members-or-candidates of a refinement (the scan reads). And the compiler can do better than a generic resolver interface: because the reachable read set is statically computable (below), it can generate a *per-act* resolver interface — an engineer who hasn't provided a fetch path the rule chain needs gets a compile error in *their* code. The structural-impossibility move again: you cannot wire up an act without answering every question its rule chain might ask.
 
@@ -41,8 +41,8 @@ Together: the engineer's DB is the system of record, and Velle is a per-commit d
 
 Two consequences:
 
-- **Ticks make the query IR nearly mandatory, not optional.** A tick evaluates refinement conditions against every current member — with a DB-authoritative store, that is a scan. Without the compiled pre-filter, every tick resolver is "fetch the whole table." The SQL-builder utility is load-bearing for schedules even if act commits could live on keyed lookups alone.
-- **A new open question replaces hydration: the concurrency contract.** With the runtime stateless per commit, two app instances can evaluate commits concurrently against the same DB. Velle's semantics assume the envelope is serialized against conflicting state. The engineer's DB transaction is presumably the enforcement mechanism — resolver reads and callback writes sharing one DB transaction at some stated isolation level — but what Velle *requires* (serializable? read-committed plus optimistic checks?) has to be pinned, because every confluence and one-writer proof now rests on it.
+- **Ticks make the query IR nearly mandatory, not optional.** A tick evaluates refinement conditions against every current member — with state living in engineer-owned storage, that is a scan. Without the compiled pre-filter, every tick resolver is "fetch the whole table." The SQL-builder utility is load-bearing for schedules even if act commits could live on keyed lookups alone.
+- **The universal transaction.** Velle assumes one "universal" transaction: the envelope's resolver reads see a consistent snapshot, its mutation writes land atomically, and concurrent commits are serialized against conflicting state. Under the hood, *the engineer is responsible for realizing that guarantee* — trivially with one DB transaction, or with real work when the envelope spans multiple DBs, API calls, and files (distributed-transaction territory Velle stays out of). In practice: if the low-level code hits an error, it is up to the engineer to ensure the black-box state of the Velle system stays coherent. What must be pinned in the docs is the *contract* — the exact guarantees Velle assumes of the universal transaction — because every confluence and one-writer proof rests on them; how the engineer delivers those guarantees is theirs.
 
 ## 3. Commit callbacks
 
@@ -52,7 +52,7 @@ The engineer registers callbacks that let them insert records into a real DB, ca
 
 **Failure semantics: the callback runs inside the envelope.** If the engineer's DB write throws, the whole commit rolls back and the caller gets a refusal/error — the persistence write joins the all-or-nothing envelope. This is the only stance consistent with the transition law: an after-the-fact callback that fails leaves state the DB never saw, and no sweep can find that work because the trigger was never data. The spec-level vocabulary for the other choice already exists (`after commit`, `tolerates loss`) — an engineer who wants fire-and-forget persistence of some effect gets it by the spec saying so, not by the callback being lossy.
 
-**The callback is the write half of §2's design.** Resolver reads hydrate the evaluation; the callback's writes join the same engineer-controlled DB transaction — which is also the concrete mechanism for the in-envelope failure stance above. (An earlier draft of this doc proposed commit-log-out / replay-in with the runtime authoritative; §2 overturns that.)
+**The callback is the write half of §2's design.** Resolver reads hydrate the evaluation; the callback's writes land inside the same universal transaction (§2) — which is also the concrete mechanism for the in-envelope failure stance above. (An earlier draft of this doc proposed commit-log-out / replay-in with the runtime authoritative; §2 overturns that.)
 
 One more thing the callback quietly solves: **external effects**. The intent-before-effect pattern produces intent facts as data; the engineer's callback observing "an `EmailIntent` entered state" *is* the effect-execution loop. One registration point serves both persistence and effects — worth stating in the docs so nobody goes looking for a separate effects API.
 
@@ -68,12 +68,12 @@ Settled enough to promote:
 
 - Drop `using` from `expose` — grammar (`exposeDecl`, keyword list) + README §22; the "External input mechanisms" deferred item dissolves; extension framework drops the mechanism hat.
 - Commit callback: transaction-unit payload, in-envelope failure (the callback's writes join the engineer's DB transaction).
-- Hydration: DB-authoritative, demand-hydrated evaluation via generated per-act resolver interfaces; the query IR / SQL builder is a pre-filter utility, never the authoritative evaluator; replay-in is rejected.
+- Hydration: demand-hydrated evaluation over engineer-owned storage via generated per-act resolver interfaces — Velle defers on where authority lives (one DB, many, APIs, files); the query IR / SQL builder is a pre-filter utility, never the authoritative evaluator; replay-in is rejected.
 - OQ20's who-may-commit residue retires to engineer wrapper code.
 
 Still open, re-homed:
 
 - Per-exposure field policy (committer-suppliable fields, supplied-vs-generated `id`) — now attaches directly to `expose` design.
-- The concurrency contract: what isolation Velle requires of the engineer's DB transaction (serializable? read-committed plus optimistic checks?) — the confluence and one-writer proofs now rest on it.
+- The universal-transaction contract: the exact guarantees Velle assumes (snapshot reads, atomic writes, serialization of conflicting commits) stated precisely — the engineer realizes them however their storage requires; the confluence and one-writer proofs now rest on this contract.
 - Production clock default (real time, controllable clock as test affordance).
 - Rule-execution hook — rejected as a hook; residue folds into the `why`/provenance item.

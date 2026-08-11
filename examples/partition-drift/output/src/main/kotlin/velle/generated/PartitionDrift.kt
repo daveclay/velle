@@ -248,15 +248,15 @@ expose shape Note {
     title: text
     body: text
     locked: boolean initially false
-} using MockHarness
+}
 
 expose shape LockNote {
     note: one Note
-} using MockHarness
+}
 
 expose shape UnlockNote {
     note: one Note
-} using MockHarness
+}
 
 rule ApplyLock when LockNote {
     note.locked = true
@@ -274,7 +274,7 @@ shape LockedNote = Note where locked
 expose shape RenameText {
     note: one Note
     newText: text
-} using MockHarness
+}
 
 rule ApplyRename when RenameText {
     note.body = newText
@@ -292,7 +292,7 @@ rule ApplyRename when RenameText {
 expose shape BareEdit {
     note: one Note
     newText: text
-} using MockHarness
+}
 
 shape ApplicableBareEdit = BareEdit where not note is LockedNote
 shape RefusedBareEdit    = BareEdit where note is LockedNote
@@ -326,7 +326,7 @@ rule RefuseBareEdit when RefusedBareEdit {
 expose shape SafeEdit {
     note: one Note
     newTitle: text
-} using MockHarness
+}
 
 shape EditApplication {
     edit: one SafeEdit
@@ -367,7 +367,7 @@ rule RefuseSafeEdit when RefusedSafeEdit {
 expose transient shape TransientEdit {
     note: one Note
     newTitle: text
-} using MockHarness
+}
 
 shape ApplicableTransientEdit = TransientEdit where not note is LockedNote
 shape RefusedTransientEdit    = TransientEdit where note is LockedNote

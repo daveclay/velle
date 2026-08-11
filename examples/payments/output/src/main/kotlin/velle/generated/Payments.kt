@@ -552,23 +552,23 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 expose shape Contact {
     name: text
     email: text
-} using MockHarness
+}
 
 expose shape Card {
     number: text
     expiresOn: Date
     billingContact: one Contact?
-} using MockHarness
+}
 
 expose shape Customer {
     name: text
     card: one Card?
-} using MockHarness
+}
 
 expose shape CardUpdate {
     customer: one Customer
     card: one Card
-} using MockHarness
+}
 
 rule ApplyCardUpdate when CardUpdate {
     customer.card = card
@@ -591,7 +591,7 @@ expose shape Order {
     receiptEmail: text? = customer.card?.billingContact?.email
     firstAttemptedOn: DateTime? = if chargeAttempts is empty then none
                                   else first(chargeAttempts).requestedOn
-} using MockHarness
+}
 
 never (Order where amount <= 0)
 
@@ -631,7 +631,7 @@ shape ChargeAttempt {
 expose shape ChargeResponse {
     attempt: one ChargeAttempt
     outcome: text
-} using MockHarness
+}
 
 never (ChargeResponse where outcome != "approved" and outcome != "declined" and outcome != "error")
 
@@ -776,7 +776,7 @@ rule ShipOrder when ReadyToShip on Nightly {
 expose shape ChangeShippingAddress {
     order: one Order
     newAddress: text
-} using MockHarness
+}
 
 shape AddressChangeApplication {
     change: one ChangeShippingAddress
@@ -812,7 +812,7 @@ expose shape Refund {
     order: one Order
     amount: decimal
     refundedOn: timestamp on create
-} using MockHarness
+}
 
 never (Refund where amount <= 0)
 
@@ -829,7 +829,7 @@ rule NoteSettlementReversal when leaving SettledOrder {
 -- which drives a second settlement episode end-to-end.
 expose shape ManualCharge {
     order: one Order
-} using MockHarness
+}
 
 rule ApplyManualCharge when ManualCharge {
     ChargeAttempt from { order: order, amount: order.amount }
@@ -851,7 +851,7 @@ shape OverdueOrder = UnpaidOrder where dueBy < today
 -- one rule creates it, an unrelated rule's guard reads it negatively
 expose shape ExtensionRequest {
     order: one Order
-} using MockHarness
+}
 
 shape PaymentExtension {
     order: one Order

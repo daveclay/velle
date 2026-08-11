@@ -17,7 +17,7 @@ class TransientActTest {
         expose shape Account {
             openingBalance: decimal
             balance: decimal = openingBalance - sum(withdrawals, amount)
-        } using MockHarness
+        }
 
         shape Withdrawal {
             account: one Account
@@ -29,7 +29,7 @@ class TransientActTest {
         expose transient shape WithdrawRequest {
             account: one Account
             amount: decimal
-        } using MockHarness
+        }
 
         never (WithdrawRequest where amount <= 0)
 

@@ -35,7 +35,7 @@ object Codegen {
             line()
             clock()
             ticks()
-            model.exposed.keys.forEach { commitFn(it) }
+            model.exposed.forEach { commitFn(it) }
             model.shapes.keys.forEach { shapeAccessors(it) }
             model.refinements.keys.forEach { refinementAccessors(it) }
             model.shapes.keys.forEach { shapeView(it) }
@@ -144,7 +144,7 @@ object Codegen {
             line("fun main() {")
             line("    val sys = ${name}System()")
             line("    println(\"Velle MockHarness — $name\")")
-            line("    println(\"Commits: ${model.exposed.keys.joinToString(", ") { "commit$it(...)" }}\")")
+            line("    println(\"Commits: ${model.exposed.joinToString(", ") { "commit$it(...)" }}\")")
             if (schedules.isNotEmpty())
                 line("    println(\"Ticks: ${schedules.joinToString(", ") { "tick$it()" }}\")")
             line("    println(\"Edit this main to drive the system; state prints below.\")")

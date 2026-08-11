@@ -98,7 +98,7 @@ flag: latest(DelinquencyFlag for this)    -- ✔ the honest spelling
 **An exposed base.** An external committer defeats any guard:
 
 ```
-expose DelinquencyFlag using DefaultRestAPI
+expose DelinquencyFlag
 -- ✘ V12 at every `(OpenDelinquencyFlag for this)` in the spec:
 --   "an external committer can create a second member while one exists"
 ```

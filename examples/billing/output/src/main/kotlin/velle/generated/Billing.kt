@@ -294,12 +294,12 @@ expose shape Customer {
     email: text
     signedUpOn: timestamp on create
     largestPayment: decimal initially 0
-} using MockHarness
+}
 
 expose shape CorrectEmail {
     customer: one Customer
     corrected: text
-} using MockHarness
+}
 
 rule ApplyEmailCorrection when CorrectEmail {
     customer.email = corrected
@@ -320,7 +320,7 @@ expose shape Invoice {
     total: decimal = sum(lineItems, amount)
     balance: decimal = total - sum(payments, amount)
     status: text = if balance <= 0 then "paid" else if due < today then "overdue" else "open"
-} using MockHarness
+}
 
 expose shape LineItem {
     invoice: one Invoice
@@ -328,7 +328,7 @@ expose shape LineItem {
     price: decimal
     quantity: integer
     amount: decimal = price * quantity
-} using MockHarness
+}
 
 -- No line item may have a zero quantity or a negative price — bad submissions
 -- are refused at the door, before they ever become data.
@@ -343,7 +343,7 @@ expose shape Payment {
     invoice: one Invoice
     amount: decimal
     receivedOn: timestamp on create
-} using MockHarness
+}
 
 never (Payment where amount <= 0)
 
@@ -414,7 +414,7 @@ rule RemindOverdue
 -- complement pair (P / not P) is what proves every request gets a response (V18)
 expose shape Issuance {
     invoice: one Invoice
-} using MockHarness
+}
 
 shape IssuedInvoice = Invoice where exists Issuance for this {
     frozen due
@@ -423,7 +423,7 @@ shape IssuedInvoice = Invoice where exists Issuance for this {
 expose transient shape ChangeDueDate {
     invoice: one Invoice
     newDue: Date
-} using MockHarness
+}
 
 shape ApplicableDueChange = ChangeDueDate where not invoice is IssuedInvoice
 shape RefusedDueChange    = ChangeDueDate where invoice is IssuedInvoice
@@ -451,11 +451,11 @@ rule RecordDueChangeRefusal when RefusedDueChange {
 -- velle: capture at entry (`archivedOn`), read at exit by its last reader
 expose shape ArchiveRequest {
     invoice: one Invoice
-} using MockHarness
+}
 
 expose shape UnarchiveRequest {
     invoice: one Invoice
-} using MockHarness
+}
 
 shape ArchivedInvoice = Invoice where
     exists ArchiveRequest for this and not exists UnarchiveRequest for this {

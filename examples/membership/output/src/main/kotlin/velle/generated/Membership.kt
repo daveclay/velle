@@ -476,7 +476,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
 expose shape Plan {
     name: text
     price: decimal
-} using MockHarness
+}
 
 expose shape Member {
     name: text
@@ -494,7 +494,7 @@ expose shape Member {
     email: text = if exists EmailChange for this then
                   lowercase(latest(EmailChange for this).newEmail)
                   else lowercase(signupEmail)
-} using MockHarness
+}
 
 -- Nobody gets referral credit for referring themselves.
 -- velle: a named-refinement `never`; input-constrained, enforced at the boundary
@@ -523,7 +523,7 @@ expose shape EmailChange {
     member: one Member
     newEmail: text
     changedOn: timestamp on create
-} using MockHarness
+}
 
 -- ── Visits ───────────────────────────────────────────────────────────────────
 
@@ -532,7 +532,7 @@ expose shape EmailChange {
 expose shape Visit {
     member: one Member
     minutes: integer
-} using MockHarness
+}
 
 never (Visit where minutes <= 0)
 
@@ -565,7 +565,7 @@ expose shape Deposit {
     member: one Member
     amount: decimal
     applied: boolean initially false
-} using MockHarness
+}
 
 never (Deposit where amount <= 0)
 
@@ -716,7 +716,7 @@ rule ScoreEngagement when Member on Nightly {
 expose shape Agent {
     name: text
     email: text
-} using MockHarness
+}
 
 expose shape Ticket {
     member: one Member
@@ -727,7 +727,7 @@ expose shape Ticket {
     openedOn: timestamp on create
     assigneeEmail: text? = assignee?.email
     contact: text = if assignee is some then assignee.email else "support@velle.example"
-} using MockHarness
+}
 
 never (Ticket where priority != "low" and priority != "normal" and priority != "high")
 
@@ -741,11 +741,11 @@ never (Ticket where priority != "low" and priority != "normal" and priority != "
 expose shape CloseTicket {
     ticket: one Ticket
     closedBy: one Agent
-} using MockHarness
+}
 
 expose shape ReopenTicket {
     ticket: one Ticket
-} using MockHarness
+}
 
 shape ClosedTicket = Ticket where
     exists CloseTicket for this and not exists ReopenTicket for this {
@@ -775,7 +775,7 @@ rule NoticeReopen when leaving ClosedTicket {
 expose transient shape AssignTicket {
     ticket: one Ticket
     agent: one Agent
-} using MockHarness
+}
 
 never (AssignTicket where ticket is ClosedTicket)
 

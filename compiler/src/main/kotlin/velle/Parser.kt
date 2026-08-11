@@ -260,13 +260,9 @@ class Parser(private val tokens: List<Token>) {
         if (peek().isKw("shape")) {
             val decl = parseShapeOrRefinement()
             if (decl !is ShapeDecl) fail("only base shapes can be exposed inline", peek())
-            expectKw("using")
-            val mechanism = expect(TokType.UIDENT).text
-            return (decl as ShapeDecl).copy(exposedVia = mechanism, transient = transient)
+            return (decl as ShapeDecl).copy(exposed = true, transient = transient)
         }
-        val shape = expect(TokType.UIDENT).text
-        expectKw("using")
-        return ExposeDecl(shape, expect(TokType.UIDENT).text, transient)
+        return ExposeDecl(expect(TokType.UIDENT).text, transient)
     }
 
     // ── refinement expressions ───────────────────────────────────────────────
