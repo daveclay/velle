@@ -45,6 +45,7 @@ class Validator(private val model: Model) {
         checkDerivedCycles()      // V14 (stratification; certificates TODO)
         checkQuiescence()         // V16
         checkSingularProofs()     // V12 (refinement slice)
+        checkTransients()         // V17 isolation, V18 totality
         checkDriftExposedPartitions() // A4 (advisory)
     }
 
@@ -546,6 +547,10 @@ class Validator(private val model: Model) {
     /** Does this commit kind possibly affect the rule's condition? */
     private fun affects(k: CommitKind, rule: RuleDecl): Boolean {
         val base = model.baseOfExpr(rule.condition) ?: return false
+        // a transient act's refinements are evaluated exactly once, at its
+        // creation commit — no other commit can ever fire the rule (README §4)
+        if (base in model.transients)
+            return k is CommitKind.Creates && k.shape == base
         val cond = conditionSummary(rule)
         return when (k) {
             is CommitKind.Creates ->
@@ -839,6 +844,101 @@ class Validator(private val model: Model) {
         }
     }
 
+    // ── V17/V18: transient acts (README §4, "Transient acts") ────────────────
+    //
+    // A transient act exists only within its own commit's transaction — an
+    // input to the state, not a member of it. V17 (isolation): nothing durable
+    // or later may depend on it. V18 (totality): every request gets a response
+    // — an act no rule answers would be ignored with no record it ever
+    // arrived; v0 proves the coarse slice (a bare-shape rule, or a syntactic
+    // complement pair) and fails closed otherwise.
+
+    private fun checkTransients() {
+        if (model.transients.isEmpty()) return
+
+        // V17: no property anywhere may be typed to a transient shape
+        fun checkMembers(owner: String, members: List<Member>) {
+            for (m in members) {
+                val (mName, type) = when (m) {
+                    is StoredProp -> m.name to m.type
+                    is DerivedProp -> m.name to m.type
+                    else -> continue
+                }
+                val rel = type as? RelType ?: continue
+                if (rel.shape in model.transients)
+                    diags.add(Diagnostic("V17", "'$owner.$mName' references transient act '${rel.shape}' — " +
+                        "a transient act exists only within its own commit's transaction, so nothing durable " +
+                        "may point at it; copy the fields the outcome needs instead"))
+            }
+        }
+        model.shapes.forEach { (name, s) -> checkMembers(name, s.members) }
+        model.refinements.forEach { (name, r) -> checkMembers(name, r.members) }
+
+        // V17: the transient shape's name may appear in no expression — even
+        // from its own refinement family, that is a read across acts
+        forEachSpecExpr { site, e ->
+            val mentioned = when (e) {
+                is PathExpr -> e.root.takeIf { it in model.transients }
+                is ExistsExpr -> e.shape?.takeIf { it in model.transients }
+                    ?: (e.collection?.bindings?.firstOrNull()?.source as? PathExpr)?.root?.takeIf { it in model.transients }
+                is SingularFor -> e.shape.takeIf { it in model.transients }
+                is ShapeForSource -> e.shape.takeIf { it in model.transients }
+                is IsExpr -> e.refinement?.takeIf { (model.baseOf(it) ?: it) in model.transients }
+                else -> null
+            } ?: return@forEachSpecExpr
+            diags.add(Diagnostic("V17", "$site reads transient act '$mentioned' — " +
+                "the act is not kept after its commit, so no expression may query it; " +
+                "read the durable outcomes its rules produced instead"))
+        }
+
+        // V17: only the boundary commits a transient act — a rule-created
+        // instance would persist, contradicting the marker
+        for (rule in model.rules.values) {
+            rule.body.filterIsInstance<Creation>().filter { it.shape in model.transients }.forEach {
+                diags.add(Diagnostic("V17", "rule '${rule.name}' creates transient act '${it.shape}' — " +
+                    "a transient act is an input at the boundary, never a rule's effect"))
+            }
+        }
+
+        // V17: rules over a transient act fire only at its one commit
+        for (rule in model.rules.values) {
+            val base = subjectScope(rule)?.let { model.baseOf(it) } ?: continue
+            if (base !in model.transients) continue
+            if (rule.leaving)
+                diags.add(Diagnostic("V17", "rule '${rule.name}' — 'when leaving' over transient act '$base' " +
+                    "is meaningless: the act's refinements are evaluated exactly once, at its commit; there are no exits"))
+            if (rule.preposition == "after" || rule.triggers.any { it != "commit" })
+                diags.add(Diagnostic("V17", "rule '${rule.name}' — transient act '$base' is gone before any " +
+                    "'after commit' firing or tick runs; handle it at its commit, and hang asynchronous work " +
+                    "off a durable intent the handling rule creates"))
+        }
+
+        // V18: every request gets a response
+        for (t in model.transients) {
+            val handlers = model.rules.values.filter {
+                !it.leaving && subjectScope(it)?.let { s -> model.baseOf(s) } == t
+            }
+            val bare = handlers.any { (it.condition as? RefName)?.let { c -> c.name == t && c.where == null } == true }
+            val complementPair = handlers.any { a ->
+                handlers.any { b ->
+                    a !== b &&
+                        refPredicateConjuncts(a.condition)?.singleOrNull()?.let { p ->
+                            refPredicateConjuncts(b.condition)?.singleOrNull()?.let { q ->
+                                p == NotExpr(q) || q == NotExpr(p)
+                            }
+                        } == true
+                }
+            }
+            if (!bare && !complementPair)
+                diags.add(Diagnostic("V18", "a '$t' can arrive that no rule provably answers. '$t' is transient — " +
+                    "it is not kept after its commit — so an unanswered '$t' would be ignored, and no record " +
+                    "that it arrived would exist anywhere. v0 proves coverage for a rule on the bare shape or a " +
+                    "complementary pair of conditions (P / not P); add a catch-all rule, or restructure the " +
+                    "partitions as complements (per-reason refusals go in one complement rule with a " +
+                    "conditional reason value)"))
+        }
+    }
+
     // ── A4 (advisory): drift-exposed act partitions ──────────────────────────
     //
     // An act is data — it persists — so a refinement of an act shape over
@@ -857,6 +957,7 @@ class Validator(private val model: Model) {
             val scope = subjectScope(rule) ?: continue
             val base = model.baseOf(scope) ?: continue
             if (base !in model.exposed) continue
+            if (base in model.transients) continue // evaluated once, at the act's commit: drift cannot exist
             val conjuncts = refPredicateConjuncts(rule.condition) ?: continue
             val stateAtom = conjuncts.firstOrNull { c ->
                 val inner = (c as? NotExpr)?.inner ?: c
@@ -867,9 +968,10 @@ class Validator(private val model: Model) {
             diags.add(Diagnostic("A4", "rule '${rule.name}' partitions act '$base' on mutable state " +
                 "($atom) with no handled-anchor — acts persist, so every later flip of that state " +
                 "re-partitions every '$base' ever committed: spurious firings on entry, stale re-fires " +
-                "on return. Anchor the partition with the outcome evidence the rule produces " +
-                "(scope it to unhandled acts), or accept per-flip re-firing deliberately " +
-                "(examples/partition-drift/)", advisory = true))
+                "on return. Mark the act `expose transient` (the partition then evaluates once, at its " +
+                "commit), anchor the partition with the outcome evidence the rule produces (scope it to " +
+                "unhandled acts), or accept per-flip re-firing deliberately (examples/partition-drift/)",
+                advisory = true))
         }
     }
 

@@ -130,8 +130,11 @@ rule RemindOverdue
 -- Once an invoice is issued to the customer, its due date is locked. Anyone
 -- may still *request* a change; on an issued invoice the request is refused,
 -- and the refusal is a record the requester can read back, with the reason.
--- velle: `frozen` write-gate; rejection as data — the act partitions, the
--- writer hangs off the applicable side
+-- The request itself is a message, not a record: it is decided at its own
+-- commit and not kept — the refusal copies what it needs.
+-- velle: `frozen` write-gate; rejection as data over a `transient` act — the
+-- partition evaluates exactly once, at the act's commit (README §4); the
+-- complement pair (P / not P) is what proves every request gets a response (V18)
 expose shape Issuance {
     invoice: one Invoice
 } using MockHarness
@@ -140,7 +143,7 @@ shape IssuedInvoice = Invoice where exists Issuance for this {
     frozen due
 }
 
-expose shape ChangeDueDate {
+expose transient shape ChangeDueDate {
     invoice: one Invoice
     newDue: Date
 } using MockHarness
@@ -153,13 +156,14 @@ rule ApplyDueChange when ApplicableDueChange {
 }
 
 shape DueChangeRefusal {
-    change: one ChangeDueDate
+    invoice: one Invoice
+    requestedDue: Date
     reason: text
     refusedOn: DateTime
 }
 
 rule RecordDueChangeRefusal when RefusedDueChange {
-    DueChangeRefusal from { change: this, reason: "invoice is issued", refusedOn: now }
+    DueChangeRefusal from { invoice: invoice, requestedDue: newDue, reason: "invoice is issued", refusedOn: now }
 }
 
 -- ── Archival ─────────────────────────────────────────────────────────────────

@@ -94,8 +94,6 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     fun reminder(id: Long) = ReminderView(id)
     fun issuances(): List<IssuanceView> = system.instancesOf("Issuance").map { IssuanceView(it) }
     fun issuance(id: Long) = IssuanceView(id)
-    fun changeDueDates(): List<ChangeDueDateView> = system.instancesOf("ChangeDueDate").map { ChangeDueDateView(it) }
-    fun changeDueDate(id: Long) = ChangeDueDateView(id)
     fun dueChangeRefusals(): List<DueChangeRefusalView> = system.instancesOf("DueChangeRefusal").map { DueChangeRefusalView(it) }
     fun dueChangeRefusal(id: Long) = DueChangeRefusalView(id)
     fun archiveRequests(): List<ArchiveRequestView> = system.instancesOf("ArchiveRequest").map { ArchiveRequestView(it) }
@@ -114,10 +112,6 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     fun InvoiceView.isActionableOverdue(): Boolean = system.isMember(id, "ActionableOverdue")
     fun issuedInvoices(): List<IssuedInvoiceView> = system.instancesOf("IssuedInvoice").map { IssuedInvoiceView(it) }
     fun InvoiceView.isIssuedInvoice(): Boolean = system.isMember(id, "IssuedInvoice")
-    fun applicableDueChanges(): List<ApplicableDueChangeView> = system.instancesOf("ApplicableDueChange").map { ApplicableDueChangeView(it) }
-    fun ChangeDueDateView.isApplicableDueChange(): Boolean = system.isMember(id, "ApplicableDueChange")
-    fun refusedDueChanges(): List<RefusedDueChangeView> = system.instancesOf("RefusedDueChange").map { RefusedDueChangeView(it) }
-    fun ChangeDueDateView.isRefusedDueChange(): Boolean = system.isMember(id, "RefusedDueChange")
     fun archivedInvoices(): List<ArchivedInvoiceView> = system.instancesOf("ArchivedInvoice").map { ArchivedInvoiceView(it) }
     fun InvoiceView.isArchivedInvoice(): Boolean = system.isMember(id, "ArchivedInvoice")
 
@@ -154,7 +148,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         val receipts: List<ReceiptView> get() = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) }
         val reminders: List<ReminderView> get() = (system.get(id, "reminders") as List<*>).map { ReminderView(it as Long) }
         val issuances: List<IssuanceView> get() = (system.get(id, "issuances") as List<*>).map { IssuanceView(it as Long) }
-        val changeDueDates: List<ChangeDueDateView> get() = (system.get(id, "changeDueDates") as List<*>).map { ChangeDueDateView(it as Long) }
+        val dueChangeRefusals: List<DueChangeRefusalView> get() = (system.get(id, "dueChangeRefusals") as List<*>).map { DueChangeRefusalView(it as Long) }
         val archiveRequests: List<ArchiveRequestView> get() = (system.get(id, "archiveRequests") as List<*>).map { ArchiveRequestView(it as Long) }
         val unarchiveRequests: List<UnarchiveRequestView> get() = (system.get(id, "unarchiveRequests") as List<*>).map { UnarchiveRequestView(it as Long) }
         val unarchiveNotices: List<UnarchiveNoticeView> get() = (system.get(id, "unarchiveNotices") as List<*>).map { UnarchiveNoticeView(it as Long) }
@@ -215,17 +209,9 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun hashCode() = id.hashCode()
     }
 
-    inner class ChangeDueDateView(override val id: Long) : View {
-        val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
-        val newDue: LocalDate get() = system.get(id, "newDue") as LocalDate
-        val dueChangeRefusals: List<DueChangeRefusalView> get() = (system.get(id, "dueChangeRefusals") as List<*>).map { DueChangeRefusalView(it as Long) }
-        override fun toString() = "ChangeDueDate#$id"
-        override fun equals(other: Any?) = other is ChangeDueDateView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
     inner class DueChangeRefusalView(override val id: Long) : View {
-        val change: ChangeDueDateView get() = ChangeDueDateView(system.get(id, "change") as Long)
+        val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
+        val requestedDue: LocalDate get() = system.get(id, "requestedDue") as LocalDate
         val reason: String get() = system.get(id, "reason") as String
         val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
         override fun toString() = "DueChangeRefusal#$id"
@@ -279,16 +265,6 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     inner class IssuedInvoiceView(override val id: Long) : View {
         fun asInvoice() = InvoiceView(id)
         override fun toString() = "IssuedInvoice#$id"
-    }
-
-    inner class ApplicableDueChangeView(override val id: Long) : View {
-        fun asChangeDueDate() = ChangeDueDateView(id)
-        override fun toString() = "ApplicableDueChange#$id"
-    }
-
-    inner class RefusedDueChangeView(override val id: Long) : View {
-        fun asChangeDueDate() = ChangeDueDateView(id)
-        override fun toString() = "RefusedDueChange#$id"
     }
 
     inner class ArchivedInvoiceView(override val id: Long) : View {
@@ -431,8 +407,11 @@ rule RemindOverdue
 -- Once an invoice is issued to the customer, its due date is locked. Anyone
 -- may still *request* a change; on an issued invoice the request is refused,
 -- and the refusal is a record the requester can read back, with the reason.
--- velle: `frozen` write-gate; rejection as data — the act partitions, the
--- writer hangs off the applicable side
+-- The request itself is a message, not a record: it is decided at its own
+-- commit and not kept — the refusal copies what it needs.
+-- velle: `frozen` write-gate; rejection as data over a `transient` act — the
+-- partition evaluates exactly once, at the act's commit (README §4); the
+-- complement pair (P / not P) is what proves every request gets a response (V18)
 expose shape Issuance {
     invoice: one Invoice
 } using MockHarness
@@ -441,7 +420,7 @@ shape IssuedInvoice = Invoice where exists Issuance for this {
     frozen due
 }
 
-expose shape ChangeDueDate {
+expose transient shape ChangeDueDate {
     invoice: one Invoice
     newDue: Date
 } using MockHarness
@@ -454,13 +433,14 @@ rule ApplyDueChange when ApplicableDueChange {
 }
 
 shape DueChangeRefusal {
-    change: one ChangeDueDate
+    invoice: one Invoice
+    requestedDue: Date
     reason: text
     refusedOn: DateTime
 }
 
 rule RecordDueChangeRefusal when RefusedDueChange {
-    DueChangeRefusal from { change: this, reason: "invoice is issued", refusedOn: now }
+    DueChangeRefusal from { invoice: invoice, requestedDue: newDue, reason: "invoice is issued", refusedOn: now }
 }
 
 -- ── Archival ─────────────────────────────────────────────────────────────────
@@ -513,7 +493,6 @@ fun main() {
     println("ReceiptEmail: " + sys.receiptEmails().size)
     println("Reminder: " + sys.reminders().size)
     println("Issuance: " + sys.issuances().size)
-    println("ChangeDueDate: " + sys.changeDueDates().size)
     println("DueChangeRefusal: " + sys.dueChangeRefusals().size)
     println("ArchiveRequest: " + sys.archiveRequests().size)
     println("UnarchiveRequest: " + sys.unarchiveRequests().size)

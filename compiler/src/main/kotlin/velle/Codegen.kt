@@ -89,17 +89,20 @@ object Codegen {
         }
 
         fun shapeAccessors(shape: String) {
+            if (shape in model.transients) return // an input to the state, never readable after its commit
             line("    fun ${plural(shape)}(): List<${shape}View> = system.instancesOf(\"$shape\").map { ${shape}View(it) }")
             line("    fun ${decap(shape)}(id: Long) = ${shape}View(id)")
         }
 
         fun refinementAccessors(ref: String) {
             val base = model.baseOf(ref) ?: return
+            if (base in model.transients) return
             line("    fun ${plural(ref)}(): List<${ref}View> = system.instancesOf(\"$ref\").map { ${ref}View(it) }")
             line("    fun ${base}View.is$ref(): Boolean = system.isMember(id, \"$ref\")")
         }
 
         fun shapeView(shape: String) {
+            if (shape in model.transients) return
             line()
             line("    inner class ${shape}View(override val id: Long) : View {")
             for ((memberName, m) in model.membersOf(shape)) {
@@ -114,6 +117,7 @@ object Codegen {
 
         fun refinementView(ref: String) {
             val base = model.baseOf(ref) ?: return
+            if (base in model.transients) return
             val own = model.refinements.getValue(ref).members.filterIsInstance<DerivedProp>()
             line()
             line("    inner class ${ref}View(override val id: Long) : View {")
@@ -147,7 +151,7 @@ object Codegen {
             line()
             line("    // <your scenario here>")
             line()
-            model.shapes.keys.forEach {
+            model.shapes.keys.filterNot { it in model.transients }.forEach {
                 line("    println(\"$it: \" + sys.${plural(it)}().size)")
             }
             line("}")

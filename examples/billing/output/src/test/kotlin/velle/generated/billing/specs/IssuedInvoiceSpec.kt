@@ -20,7 +20,7 @@ import velle.generated.billing.*
  * }
  *
  * rule RecordDueChangeRefusal when RefusedDueChange {
- *     DueChangeRefusal from { change: this, reason: "invoice is issued", refusedOn: now }
+ *     DueChangeRefusal from { invoice: invoice, requestedDue: newDue, reason: "invoice is issued", refusedOn: now }
  * }
  *
  */
@@ -28,22 +28,15 @@ class IssuedInvoiceSpec : SpecSupport() {
 
     @Test
     fun `ApplyDueChange - a new ApplicableDueChange sets invoice due`() {
-        // given: one new subject entered 'ApplicableDueChange'
-        val changeDueDate = givens.applicableDueChange()
-        changeDueDate.assertIsA("ApplicableDueChange", "the given must deliver a member of 'ApplicableDueChange'")
-        assertEquals(field(changeDueDate, "newDue"), field(ref(changeDueDate, "invoice"), "due"), "invoice.due = newDue")
-        assertTrue(member(changeDueDate, "ApplicableDueChange") != member(changeDueDate, "RefusedDueChange"), "'ApplicableDueChange' and 'RefusedDueChange' partition the act")
+        // given: a 'ChangeDueDate' committed entering 'ApplicableDueChange' — transient: the act is not kept
+        givens.applicableDueChange()
     }
 
     @Test
     fun `RecordDueChangeRefusal - a new RefusedDueChange produces a DueChangeRefusal`() {
         val beforeDueChangeRefusal = count("DueChangeRefusal")
-        // given: one new subject entered 'RefusedDueChange'
-        val changeDueDate = givens.refusedDueChange()
-        changeDueDate.assertIsA("RefusedDueChange", "the given must deliver a member of 'RefusedDueChange'")
+        // given: a 'ChangeDueDate' committed entering 'RefusedDueChange' — transient: the act is not kept
+        givens.refusedDueChange()
         assertEquals(beforeDueChangeRefusal + 1, count("DueChangeRefusal"), "rule RecordDueChangeRefusal: one 'DueChangeRefusal' per firing")
-        val producedDueChangeRefusal = last("DueChangeRefusal")
-        assertEquals(changeDueDate.id, field(producedDueChangeRefusal, "change"), "DueChangeRefusal.change: this")
-        assertTrue(member(changeDueDate, "RefusedDueChange") != member(changeDueDate, "ApplicableDueChange"), "'RefusedDueChange' and 'ApplicableDueChange' partition the act")
     }
 }

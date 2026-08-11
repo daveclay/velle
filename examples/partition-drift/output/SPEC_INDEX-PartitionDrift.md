@@ -21,3 +21,5 @@ each case below is an executable test.
 - RefuseBareEdit - a new RefusedBareEdit produces a BareEditRefusal
 - ApplySafeEdit - a new ApplicableSafeEdit produces an EditApplication and sets note.title
 - RefuseSafeEdit - a new RefusedSafeEdit produces an EditRefusal
+- ApplyTransientEdit - a new ApplicableTransientEdit sets note.title
+- RefuseTransientEdit - a new RefusedTransientEdit produces a TransientEditRefusal

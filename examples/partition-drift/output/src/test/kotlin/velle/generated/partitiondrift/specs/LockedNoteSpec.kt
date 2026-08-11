@@ -34,6 +34,18 @@ import velle.generated.partitiondrift.*
  *     EditRefusal from { edit: this, reason: "note is locked", refusedOn: now }
  * }
  *
+ * shape ApplicableTransientEdit = TransientEdit where not (note is LockedNote)
+ *
+ * shape RefusedTransientEdit = TransientEdit where note is LockedNote
+ *
+ * rule ApplyTransientEdit when ApplicableTransientEdit {
+ *     note.title = newTitle
+ * }
+ *
+ * rule RefuseTransientEdit when RefusedTransientEdit {
+ *     TransientEditRefusal from { note: note, requestedTitle: newTitle, reason: "note is locked", refusedOn: now }
+ * }
+ *
  */
 class LockedNoteSpec : SpecSupport() {
 
@@ -79,5 +91,19 @@ class LockedNoteSpec : SpecSupport() {
         assertEquals(beforeEditRefusal + 1, count("EditRefusal"), "rule RefuseSafeEdit: one 'EditRefusal' per firing")
         val producedEditRefusal = last("EditRefusal")
         assertEquals(safeEdit.id, field(producedEditRefusal, "edit"), "EditRefusal.edit: this")
+    }
+
+    @Test
+    fun `ApplyTransientEdit - a new ApplicableTransientEdit sets note title`() {
+        // given: a 'TransientEdit' committed entering 'ApplicableTransientEdit' — transient: the act is not kept
+        givens.applicableTransientEdit()
+    }
+
+    @Test
+    fun `RefuseTransientEdit - a new RefusedTransientEdit produces a TransientEditRefusal`() {
+        val beforeTransientEditRefusal = count("TransientEditRefusal")
+        // given: a 'TransientEdit' committed entering 'RefusedTransientEdit' — transient: the act is not kept
+        givens.refusedTransientEdit()
+        assertEquals(beforeTransientEditRefusal + 1, count("TransientEditRefusal"), "rule RefuseTransientEdit: one 'TransientEditRefusal' per firing")
     }
 }

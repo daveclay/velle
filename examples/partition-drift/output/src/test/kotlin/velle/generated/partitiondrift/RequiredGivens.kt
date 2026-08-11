@@ -34,4 +34,10 @@ interface RequiredGivens {
 
     /** Perform the commit(s) that make ONE new subject enter 'RefusedSafeEdit'; return the subject. */
     fun refusedSafeEdit(): PartitionDriftSystem.SafeEditView
+
+    /** Commit ONE new 'TransientEdit' that enters 'ApplicableTransientEdit' at its commit. The act is transient — nothing to return. */
+    fun applicableTransientEdit()
+
+    /** Commit ONE new 'TransientEdit' that enters 'RefusedTransientEdit' at its commit. The act is transient — nothing to return. */
+    fun refusedTransientEdit()
 }

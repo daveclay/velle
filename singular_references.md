@@ -137,6 +137,8 @@ flag: (OpenDelinquencyFlag for this)                  -- ✔ where the proof hol
 flag: latest(OpenDelinquencyFlag where account == this)  -- ✔ always
 ```
 
+**A transient act as the subject.** `(TransientShape for x)` is illegal everywhere outside the act's own transaction — a transient act is not kept after its commit, so there is no instance to select (check V17; README §4, "Transient acts"). Read the durable outcomes its rules produced instead.
+
 ## `exists` needs no proof
 
 The same refinement subjects work in the `exists` sugar with no singularity proof at all — existence doesn't care how many:

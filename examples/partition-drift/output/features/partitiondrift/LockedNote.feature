@@ -27,3 +27,15 @@ Feature: LockedNote
     When a commit brings one new safeEdit into "RefusedSafeEdit"
     Then one more "EditRefusal" exists
     And that EditRefusal's "edit" is the safeEdit
+
+  # rule ApplyTransientEdit
+  Scenario: A new ApplicableTransientEdit sets note.title
+    When a commit brings one new transientEdit into "ApplicableTransientEdit"
+    Then the note.title now equals the act's "newTitle"
+    And the act is in exactly one of "ApplicableTransientEdit" / "RefusedTransientEdit"
+
+  # rule RefuseTransientEdit
+  Scenario: A new RefusedTransientEdit produces a TransientEditRefusal
+    When a commit brings one new transientEdit into "RefusedTransientEdit"
+    Then one more "TransientEditRefusal" exists
+    And the act is in exactly one of "RefusedTransientEdit" / "ApplicableTransientEdit"

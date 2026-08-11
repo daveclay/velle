@@ -86,4 +86,38 @@ class DriftDemonstrationTest {
             assertTrue(sys.safeEdits().none { it.isUnhandledSafeEdit() }, "every act handled exactly once")
         }
     }
+
+    // ── the transient spelling ───────────────────────────────────────────────
+
+    @Test
+    fun `transient partition - the same story, with no acts left to drift`() {
+        val sys = PartitionDriftSystem()
+        sys.commitNote("minutes", "v1")
+        val note = sys.notes().single()
+
+        // the editor's edit, applied while open — and then the act is gone:
+        // an input to the state, not a member of it
+        sys.commitTransientEdit(note, "agenda-by-editor")
+        assertEquals("agenda-by-editor", note.title)
+
+        // the lock re-partitions nothing — there is no act in the state to
+        // re-partition, so no refusal can be minted for old edits, ever
+        sys.commitLockNote(note)
+        assertEquals(0, sys.transientEditRefusals().size)
+
+        // an edit attempted *during* the lock is refused, once, with the
+        // payload copied into the refusal (the act itself can't be referenced)
+        sys.commitTransientEdit(note, "vandalism")
+        assertEquals(1, sys.transientEditRefusals().size)
+        assertEquals("vandalism", sys.transientEditRefusals().single().requestedTitle)
+        assertEquals("agenda-by-editor", note.title)
+
+        // unlocking resurrects nothing — same reason: nothing is there
+        sys.commitUnlockNote(note)
+        assertEquals("agenda-by-editor", note.title)
+        assertEquals(1, sys.transientEditRefusals().size)
+
+        sys.commitLockNote(note)
+        assertEquals(1, sys.transientEditRefusals().size) // no per-lock refusals, ever
+    }
 }

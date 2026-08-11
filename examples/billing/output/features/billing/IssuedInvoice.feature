@@ -12,5 +12,4 @@ Feature: IssuedInvoice
   Scenario: A new RefusedDueChange produces a DueChangeRefusal
     When a commit brings one new changeDueDate into "RefusedDueChange"
     Then one more "DueChangeRefusal" exists
-    And that DueChangeRefusal's "change" is the changeDueDate
     And the act is in exactly one of "RefusedDueChange" / "ApplicableDueChange"

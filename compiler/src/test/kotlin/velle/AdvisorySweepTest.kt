@@ -3,13 +3,13 @@ package velle
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /**
- * Where the A4 advisory currently stands across the example specs: payments
- * uses the handled-once idiom and is clean; billing and membership still carry
- * the bare partition (working-docs/TODO.md tracks converting them — this test
- * is the inventory of exactly what that item owes).
+ * The A4 inventory across the example specs: every act partition in the corpus
+ * is now drift-free — payments anchors with the handled-once idiom, and
+ * billing/membership mark their request acts `expose transient` (the partition
+ * then evaluates once, at the act's commit). The exhibit's deliberately broken
+ * bare family is asserted separately (PartitionDriftSpecTest).
  */
 class AdvisorySweepTest {
 
@@ -22,16 +22,12 @@ class AdvisorySweepTest {
     }
 
     @Test
-    fun `billing still carries the bare due-change partition`() {
-        val hits = a4("../examples/billing/billing.velle")
-        assertEquals(2, hits.size, "got: $hits")
-        assertTrue(hits.any { "ApplyDueChange" in it } && hits.any { "RecordDueChangeRefusal" in it }, "got: $hits")
+    fun `billing's due-change act is transient - no A4`() {
+        assertEquals(emptyList(), a4("../examples/billing/billing.velle"))
     }
 
     @Test
-    fun `membership still carries the bare assignment partition`() {
-        val hits = a4("../examples/membership/membership.velle")
-        assertEquals(2, hits.size, "got: $hits")
-        assertTrue(hits.any { "ApplyAssignment" in it } && hits.any { "RecordAssignmentRefusal" in it }, "got: $hits")
+    fun `membership's assignment act is transient - no A4`() {
+        assertEquals(emptyList(), a4("../examples/membership/membership.velle"))
     }
 }

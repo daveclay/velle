@@ -25,7 +25,7 @@ DurationLiteral := IntegerLiteral ("seconds" | "minutes" | "hours" | "days" | "w
 
 Casing is **enforced, not convention**: the case of a name's first letter is load-bearing for parsing — `invoices where OverdueInvoice` reads a lowercase name as a path and an uppercase name as a refinement-membership test, and no other signal distinguishes them.
 
-Keywords (reserved, never identifiers): `shape` `rule` `never` `expose` `using` `when` `leaving` `on` `after` `commit` `where` `and` `or` `not` `is` `exists` `for` `from` `then` `if` `else` `as` `this` `none` `some` `empty` `one` `many` `initially` `captured` `frozen` `tolerates` `timestamp` `create` `update` `true` `false` — plus the scalar type names, `now`, and `today`. The duration units (`seconds` `minutes` `hours` `days` `weeks`) are **contextual**, not reserved: a unit word reads as a unit only immediately after an integer literal (`3 days`), the one position DurationLiteral gives it; everywhere else it is an ordinary identifier, so `minutes: integer` is a legal property. Builtin function names (`count`, `sum`, `latest`, `first`, `lowercase`, `max`, `min`) and the generator `randomUUID` are ordinary identifiers resolved as builtins, not keywords.
+Keywords (reserved, never identifiers): `shape` `rule` `never` `expose` `transient` `using` `when` `leaving` `on` `after` `commit` `where` `and` `or` `not` `is` `exists` `for` `from` `then` `if` `else` `as` `this` `none` `some` `empty` `one` `many` `initially` `captured` `frozen` `tolerates` `timestamp` `create` `update` `true` `false` — plus the scalar type names, `now`, and `today`. The duration units (`seconds` `minutes` `hours` `days` `weeks`) are **contextual**, not reserved: a unit word reads as a unit only immediately after an integer literal (`3 days`), the one position DurationLiteral gives it; everywhere else it is an ordinary identifier, so `minutes: integer` is a legal property. Builtin function names (`count`, `sum`, `latest`, `first`, `lowercase`, `max`, `min`) and the generator `randomUUID` are ordinary identifiers resolved as builtins, not keywords.
 
 **Statements and declarations are line-oriented** — no semicolons, no braces around individual statements; a newline ends a statement, and `then` joining two effects stands on its own line (README §15's example is already written this way). This is what keeps `then`-the-statement-connector and `then`-the-conditional-keyword unambiguous. Within braces, a comma is equivalent to a newline as a member separator — `{ customer: one Customer, corrected: text }` and `from { invoice: this, sentOn: now }` are the one-line spellings of the multi-line forms. Inside parentheses, newlines are insignificant (a long predicate may wrap freely).
 
@@ -126,12 +126,12 @@ Same operand shapes as a rule's condition — a named refinement or an inline on
 ## `expose` declarations
 
 ```
-exposeDecl    := "expose" ShapeName "using" MechanismName          -- standalone
-              | "expose" shapeDecl "using" MechanismName           -- inline at the shape's declaration
+exposeDecl    := "expose" "transient"? ShapeName "using" MechanismName   -- standalone
+              | "expose" "transient"? shapeDecl "using" MechanismName    -- inline at the shape's declaration
 MechanismName := ShapeName        -- v0: "MockHarness" is the only mechanism (README §22's scope statement)
 ```
 
-An exposed shape is externally committable via the named mechanism; an unexposed act shape enters state only as a rule's effect (README §22, "External input mechanisms"). `MockHarness` transpiles each exposed shape to a function taking that shape as input; `configure` blocks and mechanism plugins are post-v0 and not in this grammar. `expose` and `using` join the keyword list.
+An exposed shape is externally committable via the named mechanism; an unexposed act shape enters state only as a rule's effect (README §22, "External input mechanisms"). `transient` marks the act as an input to the state rather than a member of it — the instance exists only within its own commit's transaction (README §4, "Transient acts"; semantics in `evaluation.md`; the isolation and totality obligations are checks V17–V18). `MockHarness` transpiles each exposed shape to a function taking that shape as input; `configure` blocks and mechanism plugins are post-v0 and not in this grammar. `expose`, `transient`, and `using` join the keyword list.
 
 ## Value expressions
 

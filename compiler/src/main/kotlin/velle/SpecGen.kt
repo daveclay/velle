@@ -335,6 +335,10 @@ object SpecGen {
             // (`memberForRestoreService()`)
             val bare = (rule.condition as? RefName)?.takeIf { it.where == null }
             val viewType = "${base ?: "Unknown"}View"
+            // a transient act is not kept after its commit (README §4): the given
+            // performs the commit and returns nothing; the spec asserts only the
+            // durable outcomes — there is no subject to hold, test, or read
+            val transientSubject = base != null && base in model.transients
 
             val body = StringBuilder()
             // the exact per-firing count is attributable only when this rule is the
@@ -380,6 +384,14 @@ object SpecGen {
                 condName?.let {
                     body.line(2, "$subject.assertIsNotA(\"$it\", \"the exit commit must end the membership\")")
                 }
+            } else if (transientSubject) {
+                val givenName =
+                    if (bare != null) bare.name.replaceFirstChar { it.lowercase() }
+                    else "${subject}For${rule.name}"
+                demandGiven(givenName, "Commit ONE new '$base' that enters '${condName ?: base}' at its commit. " +
+                    "The act is transient — nothing to return.", "")
+                body.line(2, "// given: a '$base' committed entering '${condName ?: base}' — transient: the act is not kept")
+                body.line(2, "givens.$givenName()")
             } else {
                 val givenName =
                     if (bare != null) bare.name.replaceFirstChar { it.lowercase() }
@@ -413,7 +425,7 @@ object SpecGen {
                 if (creation.shape in counts)
                     body.line(2, "assertEquals(before${creation.shape} + 1, count(\"${creation.shape}\"), \"rule ${rule.name}: one '${creation.shape}' per firing\")")
                 val thisFields = creation.fields.filter { it.value == PathExpr("this") }.map { it.name }
-                if (thisFields.isNotEmpty()) {
+                if (thisFields.isNotEmpty() && !transientSubject) {
                     body.line(2, "val $v = last(\"${creation.shape}\")")
                     thisFields.forEach {
                         body.line(2, "assertEquals($subject.id, field($v, \"$it\"), \"${creation.shape}.$it: this\")")
@@ -422,6 +434,7 @@ object SpecGen {
             }
 
             for (a in rule.body.filterIsInstance<Assignment>()) {
+                if (transientSubject) break // the act's fields are unreadable after the commit
                 val rhs = a.value as? PathExpr ?: continue
                 if (rhs.segs.isNotEmpty() || rhs.root == "this") continue
                 if (a.target.segs.isEmpty()) continue
@@ -438,7 +451,7 @@ object SpecGen {
                 // a handled-once partition (each side guarded by outcome evidence the
                 // firing itself produces) is exited on firing — the exactly-one-side
                 // law holds only for unhandled acts, so it can't be asserted after
-                partitionPeer(cn)?.takeIf { !bodyDisarms(rule, conditionConjuncts(RefName(cn))) }?.let { peer ->
+                partitionPeer(cn)?.takeIf { !transientSubject && !bodyDisarms(rule, conditionConjuncts(RefName(cn))) }?.let { peer ->
                     body.line(2, "assertTrue(member($subject, \"$cn\") != member($subject, \"$peer\"), \"'$cn' and '$peer' partition the act\")")
                 }
             }
@@ -810,14 +823,15 @@ object SpecGen {
             appendLine(" */")
             appendLine("interface RequiredGivens {")
             for ((name, given) in givens) {
-                val type = "${systemName}System.${given.viewType}"
                 appendLine()
                 appendLine("    /** ${given.doc} */")
-                if (given.takesSubject) {
-                    val param = given.viewType.removeSuffix("View").replaceFirstChar { it.lowercase() }
-                    appendLine("    fun $name($param: $type)")
-                } else {
-                    appendLine("    fun $name(): $type")
+                when {
+                    given.viewType.isEmpty() -> appendLine("    fun $name()") // transient act: nothing to return
+                    given.takesSubject -> {
+                        val param = given.viewType.removeSuffix("View").replaceFirstChar { it.lowercase() }
+                        appendLine("    fun $name($param: ${systemName}System.${given.viewType})")
+                    }
+                    else -> appendLine("    fun $name(): ${systemName}System.${given.viewType}")
                 }
             }
             appendLine("}")

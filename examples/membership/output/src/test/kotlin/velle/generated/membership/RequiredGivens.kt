@@ -53,11 +53,11 @@ interface RequiredGivens {
     /** Bring ONE subject into 'ClosedTicket'; return it. */
     fun closedTicket(): MembershipSystem.TicketView
 
-    /** Perform the commit(s) that make ONE new subject enter 'ApplicableAssignment'; return the subject. */
-    fun applicableAssignment(): MembershipSystem.AssignTicketView
+    /** Commit ONE new 'AssignTicket' that enters 'ApplicableAssignment' at its commit. The act is transient — nothing to return. */
+    fun applicableAssignment()
 
-    /** Perform the commit(s) that make ONE new subject enter 'RefusedAssignment'; return the subject. */
-    fun refusedAssignment(): MembershipSystem.AssignTicketView
+    /** Commit ONE new 'AssignTicket' that enters 'RefusedAssignment' at its commit. The act is transient — nothing to return. */
+    fun refusedAssignment()
 
     /** Bring ONE subject into 'UrgentQueue' without ticking 'Daily'; return the subject. */
     fun ticketForEscalateUrgent(): MembershipSystem.TicketView

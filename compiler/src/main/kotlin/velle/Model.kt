@@ -21,12 +21,16 @@ class Model(val decls: List<Decl>) {
     /** shape name → mechanism, from inline and standalone expose declarations */
     val exposed = linkedMapOf<String, String>()
 
+    /** shapes exposed `transient` — inputs to the state, not members of it (README §4) */
+    val transients = mutableSetOf<String>()
+
     init {
         for (d in decls) when (d) {
             is ShapeDecl -> {
                 if (!register(d.name)) continue
                 shapes[d.name] = d
                 d.exposedVia?.let { exposed[d.name] = it }
+                if (d.transient) transients.add(d.name)
             }
             is RefinementDecl -> if (register(d.name)) refinements[d.name] = d
             is RuleDecl ->
@@ -39,7 +43,10 @@ class Model(val decls: List<Decl>) {
             when {
                 d.shape !in shapes -> error("F1", "expose names unknown shape '${d.shape}'")
                 d.shape in exposed -> error("F1", "shape '${d.shape}' is exposed twice")
-                else -> exposed[d.shape] = d.mechanism
+                else -> {
+                    exposed[d.shape] = d.mechanism
+                    if (d.transient) transients.add(d.shape)
+                }
             }
         }
     }
@@ -108,8 +115,11 @@ class Model(val decls: List<Decl>) {
         }
         shapes[scope]?.let { shape ->
             shape.members.forEach { add(scope, it) }
-            // inferred inverse collections (README §6)
+            // inferred inverse collections (README §6) — none from a transient
+            // act: the collection would be a read of instances that are not
+            // kept (README §4, "Transient acts")
             for ((otherName, other) in shapes) {
+                if (otherName in transients) continue
                 for (m in other.members) {
                     if (m is StoredProp && m.type is RelType && !m.type.many && m.type.shape == scope) {
                         val inverse = otherName.replaceFirstChar { it.lowercase() } + "s"

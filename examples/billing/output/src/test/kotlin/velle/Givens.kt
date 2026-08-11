@@ -57,16 +57,14 @@ class Givens(private val sys: BillingSystem) : RequiredGivens {
     override fun invoiceForRemindOverdue(): BillingSystem.InvoiceView =
         invoiceWithBalance(BigDecimal("100"), due = LocalDate.of(2025, 12, 1))
 
-    override fun applicableDueChange(): BillingSystem.ChangeDueDateView {
+    override fun applicableDueChange() {
         sys.commitChangeDueDate(invoice(), LocalDate.of(2026, 3, 1)) // draft: change applies
-        return sys.changeDueDates().last()
     }
 
-    override fun refusedDueChange(): BillingSystem.ChangeDueDateView {
+    override fun refusedDueChange() {
         val inv = invoice()
         sys.commitIssuance(inv) // issued: the due date is frozen
         sys.commitChangeDueDate(inv, LocalDate.of(2026, 3, 1))
-        return sys.changeDueDates().last()
     }
 
     override fun archivedInvoice(): BillingSystem.InvoiceView {

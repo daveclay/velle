@@ -155,7 +155,20 @@ class VelleSystem(
 
         val result = inTransaction { applyCommit(listOf(Mutation.Create(shape, converted))).single() }
         return result.fold(
-            onSuccess = { CommitResult.Accepted(it) },
+            onSuccess = { id ->
+                // a transient act is an input to the state, not a member of it: at
+                // the close of its transaction the instance is removed — only its
+                // consequences persist (README §4 "Transient acts"; evaluation.md).
+                // Removing after the transaction (nevers checked, after-queue
+                // drained) is observably equivalent to removing at its close: V17
+                // bans every read of the act from anything that runs later.
+                if (shape in model.transients) {
+                    instances.remove(id)
+                    byShape[shape]?.remove(id)
+                    captures.keys.removeIf { it.first == id }
+                }
+                CommitResult.Accepted(id)
+            },
             onFailure = { e ->
                 if (e is NeverViolation) CommitResult.Refused(e.reason) else throw e
             }
@@ -265,9 +278,13 @@ class VelleSystem(
             if (rule.preposition != "after" && "commit" !in rule.triggers && rule.preposition != null) continue
             if (rule.preposition == null || "commit" in rule.triggers) {
                 val w = watchers.first { it.key == "rule:${rule.name}" }
-                val subjects =
+                var subjects =
                     if (rule.leaving) pre.getValue(w) - post.getValue(w)
                     else post.getValue(w) - pre.getValue(w)
+                // a transient act's partitions are decided exactly once, at its
+                // creation commit — consequence commits within the transaction
+                // never re-partition it (README §4, "Transient acts")
+                if (w.base in model.transients) subjects = subjects intersect createdIds.toSet()
                 for (subject in subjects) {
                     if (rule.preposition == "after") t.afterQueue.add(rule to subject)
                     else fire(rule, subject)

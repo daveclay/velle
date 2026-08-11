@@ -26,7 +26,7 @@ import velle.generated.membership.*
  * }
  *
  * rule RecordAssignmentRefusal when RefusedAssignment {
- *     AssignmentRefusal from { attempt: this, reason: "ticket is closed", refusedOn: now }
+ *     AssignmentRefusal from { ticket: ticket, agent: agent, reason: "ticket is closed", refusedOn: now }
  * }
  *
  * shape UrgentQueue = NeedsAttention and Unassigned
@@ -54,23 +54,16 @@ class ClosedTicketSpec : SpecSupport() {
 
     @Test
     fun `ApplyAssignment - a new ApplicableAssignment sets ticket assignee`() {
-        // given: one new subject entered 'ApplicableAssignment'
-        val assignTicket = givens.applicableAssignment()
-        assignTicket.assertIsA("ApplicableAssignment", "the given must deliver a member of 'ApplicableAssignment'")
-        assertEquals(field(assignTicket, "agent"), field(ref(assignTicket, "ticket"), "assignee"), "ticket.assignee = agent")
-        assertTrue(member(assignTicket, "ApplicableAssignment") != member(assignTicket, "RefusedAssignment"), "'ApplicableAssignment' and 'RefusedAssignment' partition the act")
+        // given: a 'AssignTicket' committed entering 'ApplicableAssignment' — transient: the act is not kept
+        givens.applicableAssignment()
     }
 
     @Test
     fun `RecordAssignmentRefusal - a new RefusedAssignment produces an AssignmentRefusal`() {
         val beforeAssignmentRefusal = count("AssignmentRefusal")
-        // given: one new subject entered 'RefusedAssignment'
-        val assignTicket = givens.refusedAssignment()
-        assignTicket.assertIsA("RefusedAssignment", "the given must deliver a member of 'RefusedAssignment'")
+        // given: a 'AssignTicket' committed entering 'RefusedAssignment' — transient: the act is not kept
+        givens.refusedAssignment()
         assertEquals(beforeAssignmentRefusal + 1, count("AssignmentRefusal"), "rule RecordAssignmentRefusal: one 'AssignmentRefusal' per firing")
-        val producedAssignmentRefusal = last("AssignmentRefusal")
-        assertEquals(assignTicket.id, field(producedAssignmentRefusal, "attempt"), "AssignmentRefusal.attempt: this")
-        assertTrue(member(assignTicket, "RefusedAssignment") != member(assignTicket, "ApplicableAssignment"), "'RefusedAssignment' and 'ApplicableAssignment' partition the act")
     }
 
     @Test

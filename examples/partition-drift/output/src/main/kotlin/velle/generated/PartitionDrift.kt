@@ -52,6 +52,12 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
             put("newTitle", newTitle)
         })
 
+    fun commitTransientEdit(note: NoteView, newTitle: String): CommitResult =
+        system.commit("TransientEdit", buildMap {
+            put("note", note.id)
+            put("newTitle", newTitle)
+        })
+
     fun notes(): List<NoteView> = system.instancesOf("Note").map { NoteView(it) }
     fun note(id: Long) = NoteView(id)
     fun lockNotes(): List<LockNoteView> = system.instancesOf("LockNote").map { LockNoteView(it) }
@@ -70,6 +76,8 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
     fun editApplication(id: Long) = EditApplicationView(id)
     fun editRefusals(): List<EditRefusalView> = system.instancesOf("EditRefusal").map { EditRefusalView(it) }
     fun editRefusal(id: Long) = EditRefusalView(id)
+    fun transientEditRefusals(): List<TransientEditRefusalView> = system.instancesOf("TransientEditRefusal").map { TransientEditRefusalView(it) }
+    fun transientEditRefusal(id: Long) = TransientEditRefusalView(id)
     fun lockedNotes(): List<LockedNoteView> = system.instancesOf("LockedNote").map { LockedNoteView(it) }
     fun NoteView.isLockedNote(): Boolean = system.isMember(id, "LockedNote")
     fun applicableBareEdits(): List<ApplicableBareEditView> = system.instancesOf("ApplicableBareEdit").map { ApplicableBareEditView(it) }
@@ -92,6 +100,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         val renameTexts: List<RenameTextView> get() = (system.get(id, "renameTexts") as List<*>).map { RenameTextView(it as Long) }
         val bareEdits: List<BareEditView> get() = (system.get(id, "bareEdits") as List<*>).map { BareEditView(it as Long) }
         val safeEdits: List<SafeEditView> get() = (system.get(id, "safeEdits") as List<*>).map { SafeEditView(it as Long) }
+        val transientEditRefusals: List<TransientEditRefusalView> get() = (system.get(id, "transientEditRefusals") as List<*>).map { TransientEditRefusalView(it as Long) }
         override fun toString() = "Note#$id"
         override fun equals(other: Any?) = other is NoteView && other.id == id
         override fun hashCode() = id.hashCode()
@@ -163,6 +172,16 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         override fun hashCode() = id.hashCode()
     }
 
+    inner class TransientEditRefusalView(override val id: Long) : View {
+        val note: NoteView get() = NoteView(system.get(id, "note") as Long)
+        val requestedTitle: String get() = system.get(id, "requestedTitle") as String
+        val reason: String get() = system.get(id, "reason") as String
+        val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
+        override fun toString() = "TransientEditRefusal#$id"
+        override fun equals(other: Any?) = other is TransientEditRefusalView && other.id == id
+        override fun hashCode() = id.hashCode()
+    }
+
     inner class LockedNoteView(override val id: Long) : View {
         fun asNote() = NoteView(id)
         override fun toString() = "LockedNote#$id"
@@ -206,19 +225,22 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
 -- spurious refusal — once per flip), and drifts back when it flips again
 -- (re-firing a stale write that can clobber newer data).
 --
--- Both spellings are here, over the same domain: `BareEdit` carries the
--- defect; `SafeEdit` is the handled-once fix — the partition scoped to
--- *unhandled* acts, each side anchored by the outcome evidence its own rule
--- produces, so an act is partitioned exactly once, at its own commit.
+-- Three spellings are here, over one domain. `BareEdit` carries the defect.
+-- `SafeEdit` is the handled-once fix for a *persistent* act — the partition
+-- scoped to *unhandled* acts, each side anchored by the outcome evidence its
+-- own rule produces. `TransientEdit` is the language answer (README §4,
+-- "Transient acts"): the act is an input to the state, not a member of it —
+-- its partition evaluates exactly once, at its only commit, and drift has
+-- nothing left to attach to.
 --
--- The required checks accept this spec — the hazard is semantic, not an
--- error — but the A4 advisory (checks.md) flags exactly the two bare-
+-- The required checks accept the bare spelling — the hazard is semantic, not
+-- an error — but the A4 advisory (checks.md) flags exactly the two bare-
 -- partition rules: their trigger reads mutable state and their bodies never
--- disarm it. The handled-once family passes A4, because each rule's body
--- produces the evidence that disarms its own side. The runtime misbehavior is
--- demonstrated by `DriftDemonstrationTest` in this example's output module.
--- Surfaced by `payments.velle`'s address-change tests; `billing.velle` and
--- `membership.velle` still carry the bare spelling (and A4 flags them).
+-- disarm it. The handled-once family passes A4 because each rule disarms its
+-- own side; the transient family is exempt by construction. The runtime
+-- misbehavior (and both fixes behaving) is demonstrated by
+-- `DriftDemonstrationTest` in this example's output module. Surfaced by
+-- `payments.velle`'s address-change tests.
 
 -- ── A note that can be locked ────────────────────────────────────────────────
 
@@ -331,6 +353,39 @@ rule ApplySafeEdit when ApplicableSafeEdit {
 rule RefuseSafeEdit when RefusedSafeEdit {
     EditRefusal from { edit: this, reason: "note is locked", refusedOn: now }
 }
+
+-- ── The transient spelling (the language answer) ─────────────────────────────
+
+-- The act is an input to the state, not a member of it: its partition is
+-- evaluated exactly once, at its only commit, so there is nothing for a later
+-- lock flip to re-partition — no anchor apparatus needed at all. The refusal
+-- copies the payload it wants to report (a transient act cannot be
+-- referenced), and the complement pair of conditions is what proves every
+-- edit gets a response (V18).
+-- This family edits the note's `title`, like SafeEdit — compare the two:
+-- same behavior, and the transient spelling needs no Unhandled scaffolding.
+expose transient shape TransientEdit {
+    note: one Note
+    newTitle: text
+} using MockHarness
+
+shape ApplicableTransientEdit = TransientEdit where not note is LockedNote
+shape RefusedTransientEdit    = TransientEdit where note is LockedNote
+
+rule ApplyTransientEdit when ApplicableTransientEdit {
+    note.title = newTitle
+}
+
+shape TransientEditRefusal {
+    note: one Note
+    requestedTitle: text
+    reason: text
+    refusedOn: DateTime
+}
+
+rule RefuseTransientEdit when RefusedTransientEdit {
+    TransientEditRefusal from { note: note, requestedTitle: newTitle, reason: "note is locked", refusedOn: now }
+}
 """
     }
 }
@@ -338,7 +393,7 @@ rule RefuseSafeEdit when RefusedSafeEdit {
 fun main() {
     val sys = PartitionDriftSystem()
     println("Velle MockHarness — PartitionDrift")
-    println("Commits: commitNote(...), commitLockNote(...), commitUnlockNote(...), commitRenameText(...), commitBareEdit(...), commitSafeEdit(...)")
+    println("Commits: commitNote(...), commitLockNote(...), commitUnlockNote(...), commitRenameText(...), commitBareEdit(...), commitSafeEdit(...), commitTransientEdit(...)")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>
@@ -352,4 +407,5 @@ fun main() {
     println("SafeEdit: " + sys.safeEdits().size)
     println("EditApplication: " + sys.editApplications().size)
     println("EditRefusal: " + sys.editRefusals().size)
+    println("TransientEditRefusal: " + sys.transientEditRefusals().size)
 }

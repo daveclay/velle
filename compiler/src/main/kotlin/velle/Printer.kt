@@ -5,7 +5,7 @@ object Printer {
 
     fun print(d: Decl): String = when (d) {
         is ShapeDecl -> buildString {
-            if (d.exposedVia != null) append("expose ")
+            if (d.exposedVia != null) append(if (d.transient) "expose transient " else "expose ")
             append("shape ${d.name} {\n")
             d.members.forEach { append("    ${member(it)}\n") }
             append("}")
@@ -36,7 +36,7 @@ object Printer {
             append("}")
         }
         is NeverDecl -> "never ${condition(d.target)}"
-        is ExposeDecl -> "expose ${d.shape} using ${d.mechanism}"
+        is ExposeDecl -> "expose ${if (d.transient) "transient " else ""}${d.shape} using ${d.mechanism}"
     }
 
     private fun condition(e: RefExpr): String =

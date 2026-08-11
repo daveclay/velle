@@ -9,6 +9,8 @@ data class ShapeDecl(
     val name: String,
     val members: List<Member>,
     val exposedVia: String? = null,
+    /** `expose transient` — an input to the state, not a member of it (README §4). */
+    val transient: Boolean = false,
 ) : Decl
 
 /** `shape Name = refExpr { members }` */
@@ -32,8 +34,8 @@ data class RuleDecl(
 
 data class NeverDecl(val target: RefExpr) : Decl
 
-/** Standalone `expose Shape using Mechanism`. */
-data class ExposeDecl(val shape: String, val mechanism: String) : Decl
+/** Standalone `expose [transient] Shape using Mechanism`. */
+data class ExposeDecl(val shape: String, val mechanism: String, val transient: Boolean = false) : Decl
 
 // ── Shape / refinement members ───────────────────────────────────────────────
 

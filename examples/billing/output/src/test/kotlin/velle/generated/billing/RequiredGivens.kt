@@ -32,11 +32,11 @@ interface RequiredGivens {
     /** Bring ONE subject into 'ActionableOverdue' without ticking 'Weekly'; return the subject. */
     fun invoiceForRemindOverdue(): BillingSystem.InvoiceView
 
-    /** Perform the commit(s) that make ONE new subject enter 'ApplicableDueChange'; return the subject. */
-    fun applicableDueChange(): BillingSystem.ChangeDueDateView
+    /** Commit ONE new 'ChangeDueDate' that enters 'ApplicableDueChange' at its commit. The act is transient — nothing to return. */
+    fun applicableDueChange()
 
-    /** Perform the commit(s) that make ONE new subject enter 'RefusedDueChange'; return the subject. */
-    fun refusedDueChange(): BillingSystem.ChangeDueDateView
+    /** Commit ONE new 'ChangeDueDate' that enters 'RefusedDueChange' at its commit. The act is transient — nothing to return. */
+    fun refusedDueChange()
 
     /** Bring ONE subject into 'ArchivedInvoice'; return it. */
     fun archivedInvoice(): BillingSystem.InvoiceView

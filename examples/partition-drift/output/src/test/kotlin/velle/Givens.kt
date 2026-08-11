@@ -50,4 +50,12 @@ class Givens(private val sys: PartitionDriftSystem) : RequiredGivens {
         sys.commitSafeEdit(lockedNote(), "agenda")
         return sys.safeEdits().last()
     }
+
+    override fun applicableTransientEdit() {
+        sys.commitTransientEdit(note(), "agenda")
+    }
+
+    override fun refusedTransientEdit() {
+        sys.commitTransientEdit(lockedNote(), "agenda")
+    }
 }

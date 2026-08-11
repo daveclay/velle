@@ -70,6 +70,12 @@ Recursion terminates because the validator proved quiescence — the condition g
 
 Ordering within step 6 is **never observable in a valid spec**: the validator rejected any pair of sibling firings that could conflict (V16). Where one firing's commit satisfies another rule's condition, ordering is causality — the recursion structure provides it.
 
+### Transient acts (`expose transient`)
+
+A shape exposed `transient` is an **input to the state, not a member of it** (README §4, "Transient acts"): its instance exists only within its own commit's transaction. The exposed-call algorithm changes in two places. Step 7 additionally **removes the act instance from the state** (it never becomes durable; only its consequences do). And in step 5's firing selection, **the act's partitions are decided exactly once, at C0**: consequence commits within the transaction never re-partition it — without this, an act whose own effects flip the partitioning state would drift into the other side mid-transaction (apply a withdrawal, go overdrawn, and be refused *by the same request*). Everything else is unchanged: the instance is fully present while its transaction runs, so its refinements evaluate normally at C0, its handling rules fire and read its fields, and the transaction-end `never` check sees a consistent world. By the time the after-commit queue drains (step 8), the act is gone — which is consistent, because the validator bans `after commit` and schedule triggers on transient-act conditions (checks catalog, V17): nothing that runs after the transaction may depend on the act.
+
+Rollback needs no special case — an error rolls back the whole transaction, act included, exactly as for ordinary acts. `CommitResult.Accepted.id` remains an opaque receipt; the id names an instance that no longer exists, and since `id` supports only `==`, nothing can be asked of it.
+
 ### Entry and exit are commit-local
 
 "Newly-satisfying" is always relative to one commit's pre/post states (§11) — the runtime never stores membership, never diffs history, and never needs to: both states are transiently available while processing C, and that is the only place transitions exist (the transition law, §11). September's re-entry is a new entering commit and fires entry rules again — episodes are free at commit granularity (§11); durability across boundaries is the guard apparatus's job, visible in the spec (§18).

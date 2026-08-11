@@ -313,9 +313,12 @@ rule NoticeReopen when leaving ClosedTicket {
 }
 
 -- Assigning an agent to a closed ticket is refused, and the refusal is on
--- record for the person who tried.
--- velle: rejection as data — the assignment act partitions on the freeze
-expose shape AssignTicket {
+-- record for the person who tried. The assignment request is a message, not
+-- a record: decided at its own commit, not kept — the refusal copies what it
+-- needs.
+-- velle: rejection as data over a `transient` act, partitioned on the freeze;
+-- the complement pair proves every request gets a response (V18)
+expose transient shape AssignTicket {
     ticket: one Ticket
     agent: one Agent
 } using MockHarness
@@ -328,13 +331,14 @@ rule ApplyAssignment when ApplicableAssignment {
 }
 
 shape AssignmentRefusal {
-    attempt: one AssignTicket
+    ticket: one Ticket
+    agent: one Agent
     reason: text
     refusedOn: DateTime
 }
 
 rule RecordAssignmentRefusal when RefusedAssignment {
-    AssignmentRefusal from { attempt: this, reason: "ticket is closed", refusedOn: now }
+    AssignmentRefusal from { ticket: ticket, agent: agent, reason: "ticket is closed", refusedOn: now }
 }
 
 -- ── Attention traits ─────────────────────────────────────────────────────────
