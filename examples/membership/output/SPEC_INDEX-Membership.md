@@ -40,7 +40,6 @@ each case below is an executable test.
 
 - NoticeReopen - a ReopenTicket for a ClosedTicket produces a ReopenNotice
 - ApplyAssignment - a new ApplicableAssignment sets ticket.assignee
-- RecordAssignmentRefusal - a new RefusedAssignment produces an AssignmentRefusal
 - EscalateUrgent - at the Daily tick, an UrgentQueue produces an Escalation
 
 ## DepositSpec.kt
@@ -51,7 +50,11 @@ each case below is an executable test.
 ## TicketSpec.kt
 
 
+## AssignTicketSpec.kt
+
+
 ## Not yet generated
 
 - never #1: never over a refinement
 - never #4: multi-conjunct predicate
+- never #5: non-comparison predicate

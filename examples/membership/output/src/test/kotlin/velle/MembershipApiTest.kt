@@ -51,6 +51,14 @@ class MembershipApiTest {
         assertEquals("grace@velle.example", ticket.assigneeEmail)
         assertEquals("grace@velle.example", ticket.contact)
         assertTrue(!sys.system.isMember(ticket.id, "UrgentQueue"), "assigned drops out of the queue")
+
+        // assigning a closed ticket is pure validation: the transient act is
+        // refused at the door (`never`), the caller gets the message, and
+        // nothing is kept — no act, no refusal record, no change
+        sys.commitCloseTicket(ticket, grace)
+        val refused = sys.commitAssignTicket(ticket, grace)
+        assertIs<CommitResult.Refused>(refused)
+        assertEquals("grace@velle.example", ticket.assigneeEmail, "the settled world is untouched")
     }
 
     @Test

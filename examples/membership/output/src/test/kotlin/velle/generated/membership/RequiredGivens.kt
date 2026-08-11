@@ -56,9 +56,6 @@ interface RequiredGivens {
     /** Commit ONE new 'AssignTicket' that enters 'ApplicableAssignment' at its commit. The act is transient — nothing to return. */
     fun applicableAssignment()
 
-    /** Commit ONE new 'AssignTicket' that enters 'RefusedAssignment' at its commit. The act is transient — nothing to return. */
-    fun refusedAssignment()
-
     /** Bring ONE subject into 'UrgentQueue' without ticking 'Daily'; return the subject. */
     fun ticketForEscalateUrgent(): MembershipSystem.TicketView
 }

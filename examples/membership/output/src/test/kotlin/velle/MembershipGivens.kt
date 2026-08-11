@@ -93,11 +93,5 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
         sys.commitAssignTicket(ticket(), agent())
     }
 
-    override fun refusedAssignment() {
-        val t = ticket()
-        sys.commitCloseTicket(t, agent())
-        sys.commitAssignTicket(t, agent())
-    }
-
     override fun ticketForEscalateUrgent(): MembershipSystem.TicketView = ticket(priority = "high")
 }

@@ -14,13 +14,6 @@ Feature: ClosedTicket
   Scenario: A new ApplicableAssignment sets ticket.assignee
     When a commit brings one new assignTicket into "ApplicableAssignment"
     Then the ticket.assignee now equals the act's "agent"
-    And the act is in exactly one of "ApplicableAssignment" / "RefusedAssignment"
-
-  # rule RecordAssignmentRefusal
-  Scenario: A new RefusedAssignment produces an AssignmentRefusal
-    When a commit brings one new assignTicket into "RefusedAssignment"
-    Then one more "AssignmentRefusal" exists
-    And the act is in exactly one of "RefusedAssignment" / "ApplicableAssignment"
 
   # rule EscalateUrgent
   Scenario: At the Daily tick, an UrgentQueue produces an Escalation

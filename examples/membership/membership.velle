@@ -312,33 +312,25 @@ rule NoticeReopen when leaving ClosedTicket {
     ReopenNotice from { ticket: this, reassignTo: closedBy, noticedOn: now }
 }
 
--- Assigning an agent to a closed ticket is refused, and the refusal is on
--- record for the person who tried. The assignment request is a message, not
--- a record: decided at its own commit, not kept — the refusal copies what it
--- needs.
--- velle: rejection as data over a `transient` act, partitioned on the freeze;
--- the complement pair proves every request gets a response (V18)
+-- Assigning an agent to a closed ticket is refused at the door: the caller is
+-- told, and nothing is kept — not the request, and no refusal record either.
+-- Pure validation. (Contrast billing's due-date change, where the refusal IS
+-- a business record: which to keep is a product decision, made per act.)
+-- velle: a `never` over a `transient` act — the boundary refusal is the
+-- response, and it counts as an answer for V18's every-request-gets-a-response
+-- proof: the rule takes `not ticket is ClosedTicket`, the `never` takes its
+-- complement
 expose transient shape AssignTicket {
     ticket: one Ticket
     agent: one Agent
 } using MockHarness
 
+never (AssignTicket where ticket is ClosedTicket)
+
 shape ApplicableAssignment = AssignTicket where not ticket is ClosedTicket
-shape RefusedAssignment    = AssignTicket where ticket is ClosedTicket
 
 rule ApplyAssignment when ApplicableAssignment {
     ticket.assignee = agent
-}
-
-shape AssignmentRefusal {
-    ticket: one Ticket
-    agent: one Agent
-    reason: text
-    refusedOn: DateTime
-}
-
-rule RecordAssignmentRefusal when RefusedAssignment {
-    AssignmentRefusal from { ticket: ticket, agent: agent, reason: "ticket is closed", refusedOn: now }
 }
 
 -- ── Attention traits ─────────────────────────────────────────────────────────

@@ -129,8 +129,6 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     fun reopenTicket(id: Long) = ReopenTicketView(id)
     fun reopenNotices(): List<ReopenNoticeView> = system.instancesOf("ReopenNotice").map { ReopenNoticeView(it) }
     fun reopenNotice(id: Long) = ReopenNoticeView(id)
-    fun assignmentRefusals(): List<AssignmentRefusalView> = system.instancesOf("AssignmentRefusal").map { AssignmentRefusalView(it) }
-    fun assignmentRefusal(id: Long) = AssignmentRefusalView(id)
     fun escalations(): List<EscalationView> = system.instancesOf("Escalation").map { EscalationView(it) }
     fun escalation(id: Long) = EscalationView(id)
     fun selfReferrals(): List<SelfReferralView> = system.instancesOf("SelfReferral").map { SelfReferralView(it) }
@@ -308,7 +306,6 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         val tickets: List<TicketView> get() = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) }
         val closeTickets: List<CloseTicketView> get() = (system.get(id, "closeTickets") as List<*>).map { CloseTicketView(it as Long) }
         val reopenNotices: List<ReopenNoticeView> get() = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) }
-        val assignmentRefusals: List<AssignmentRefusalView> get() = (system.get(id, "assignmentRefusals") as List<*>).map { AssignmentRefusalView(it as Long) }
         override fun toString() = "Agent#$id"
         override fun equals(other: Any?) = other is AgentView && other.id == id
         override fun hashCode() = id.hashCode()
@@ -326,7 +323,6 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         val closeTickets: List<CloseTicketView> get() = (system.get(id, "closeTickets") as List<*>).map { CloseTicketView(it as Long) }
         val reopenTickets: List<ReopenTicketView> get() = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) }
         val reopenNotices: List<ReopenNoticeView> get() = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) }
-        val assignmentRefusals: List<AssignmentRefusalView> get() = (system.get(id, "assignmentRefusals") as List<*>).map { AssignmentRefusalView(it as Long) }
         val escalations: List<EscalationView> get() = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) }
         override fun toString() = "Ticket#$id"
         override fun equals(other: Any?) = other is TicketView && other.id == id
@@ -354,16 +350,6 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         val noticedOn: Instant get() = system.get(id, "noticedOn") as Instant
         override fun toString() = "ReopenNotice#$id"
         override fun equals(other: Any?) = other is ReopenNoticeView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class AssignmentRefusalView(override val id: Long) : View {
-        val ticket: TicketView get() = TicketView(system.get(id, "ticket") as Long)
-        val agent: AgentView get() = AgentView(system.get(id, "agent") as Long)
-        val reason: String get() = system.get(id, "reason") as String
-        val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
-        override fun toString() = "AssignmentRefusal#$id"
-        override fun equals(other: Any?) = other is AssignmentRefusalView && other.id == id
         override fun hashCode() = id.hashCode()
     }
 
@@ -778,33 +764,25 @@ rule NoticeReopen when leaving ClosedTicket {
     ReopenNotice from { ticket: this, reassignTo: closedBy, noticedOn: now }
 }
 
--- Assigning an agent to a closed ticket is refused, and the refusal is on
--- record for the person who tried. The assignment request is a message, not
--- a record: decided at its own commit, not kept — the refusal copies what it
--- needs.
--- velle: rejection as data over a `transient` act, partitioned on the freeze;
--- the complement pair proves every request gets a response (V18)
+-- Assigning an agent to a closed ticket is refused at the door: the caller is
+-- told, and nothing is kept — not the request, and no refusal record either.
+-- Pure validation. (Contrast billing's due-date change, where the refusal IS
+-- a business record: which to keep is a product decision, made per act.)
+-- velle: a `never` over a `transient` act — the boundary refusal is the
+-- response, and it counts as an answer for V18's every-request-gets-a-response
+-- proof: the rule takes `not ticket is ClosedTicket`, the `never` takes its
+-- complement
 expose transient shape AssignTicket {
     ticket: one Ticket
     agent: one Agent
 } using MockHarness
 
+never (AssignTicket where ticket is ClosedTicket)
+
 shape ApplicableAssignment = AssignTicket where not ticket is ClosedTicket
-shape RefusedAssignment    = AssignTicket where ticket is ClosedTicket
 
 rule ApplyAssignment when ApplicableAssignment {
     ticket.assignee = agent
-}
-
-shape AssignmentRefusal {
-    ticket: one Ticket
-    agent: one Agent
-    reason: text
-    refusedOn: DateTime
-}
-
-rule RecordAssignmentRefusal when RefusedAssignment {
-    AssignmentRefusal from { ticket: ticket, agent: agent, reason: "ticket is closed", refusedOn: now }
 }
 
 -- ── Attention traits ─────────────────────────────────────────────────────────
@@ -876,6 +854,5 @@ fun main() {
     println("CloseTicket: " + sys.closeTickets().size)
     println("ReopenTicket: " + sys.reopenTickets().size)
     println("ReopenNotice: " + sys.reopenNotices().size)
-    println("AssignmentRefusal: " + sys.assignmentRefusals().size)
     println("Escalation: " + sys.escalations().size)
 }

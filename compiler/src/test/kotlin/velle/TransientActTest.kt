@@ -88,6 +88,36 @@ class TransientActTest {
         assertTrue(Validator.validate(src).any { it.code == "V18" }, "got: ${Validator.validate(src)}")
     }
 
+    /** Rung 3: the refusal side is a `never` — pure validation, nothing kept. */
+    private val neverSpec = spec
+        .substringBefore("shape WithdrawalRefusal")
+        .trimEnd() + "\n\nnever (WithdrawRequest where account is OverdrawnAccount)"
+
+    @Test
+    fun `V18 - a never over the act counts as the answer`() {
+        assertEquals(emptyList(), Validator.validate(neverSpec))
+    }
+
+    @Test
+    fun `a never-refused request commits nothing and the caller is told`() {
+        val model = Model(Parser.parse(neverSpec))
+        check(Validator.validate(neverSpec).isEmpty())
+        val sys = VelleSystem(model)
+        val acct = (sys.commit("Account", mapOf("openingBalance" to BigDecimal("10"))) as CommitResult.Accepted).id
+        assertIs<CommitResult.Accepted>(sys.commit("WithdrawRequest", mapOf("account" to acct, "amount" to BigDecimal("5"))))
+        assertEquals(1, sys.instancesOf("Withdrawal").size)
+
+        // a `never` constrains the SETTLED transaction (§21): the rule's C0
+        // partition let this request through, its withdrawal overdrew the
+        // account, and the whole transaction — act, withdrawal, everything —
+        // was refused. Stronger than the record-refusal spelling: the act
+        // that would create the forbidden configuration is refused too.
+        val refused = sys.commit("WithdrawRequest", mapOf("account" to acct, "amount" to BigDecimal("50")))
+        assertIs<CommitResult.Refused>(refused) // the message is the response
+        assertEquals(1, sys.instancesOf("Withdrawal").size) // nothing else moved
+        assertEquals(0, sys.instancesOf("WithdrawRequest").size)
+    }
+
     // ── runtime ───────────────────────────────────────────────────────────────
 
     private fun newSystem(): VelleSystem {

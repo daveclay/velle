@@ -913,29 +913,36 @@ class Validator(private val model: Model) {
                     "off a durable intent the handling rule creates"))
         }
 
-        // V18: every request gets a response
+        // V18: every request gets a response — either a rule fires, or the
+        // boundary refuses. A `never` over the act is an answer too: the
+        // refused configuration gets its response as the commit's refusal,
+        // with nothing kept (README §4; §21).
         for (t in model.transients) {
             val handlers = model.rules.values.filter {
                 !it.leaving && subjectScope(it)?.let { s -> model.baseOf(s) } == t
             }
-            val bare = handlers.any { (it.condition as? RefName)?.let { c -> c.name == t && c.where == null } == true }
-            val complementPair = handlers.any { a ->
-                handlers.any { b ->
-                    a !== b &&
-                        refPredicateConjuncts(a.condition)?.singleOrNull()?.let { p ->
-                            refPredicateConjuncts(b.condition)?.singleOrNull()?.let { q ->
-                                p == NotExpr(q) || q == NotExpr(p)
-                            }
-                        } == true
+            val refusals = model.nevers.filter { model.baseOfExpr(it.target) == t }
+            val answers: List<List<Expr>?> =
+                handlers.map { refPredicateConjuncts(it.condition) } +
+                    refusals.map { refPredicateConjuncts(it.target) }
+            val bare =
+                handlers.any { (it.condition as? RefName)?.let { c -> c.name == t && c.where == null } == true } ||
+                    refusals.any { (it.target as? RefName)?.let { c -> c.name == t && c.where == null } == true }
+            val complementPair = answers.any { a ->
+                answers.any { b ->
+                    a !== b && a?.singleOrNull()?.let { p ->
+                        b?.singleOrNull()?.let { q -> p == NotExpr(q) || q == NotExpr(p) }
+                    } == true
                 }
             }
             if (!bare && !complementPair)
-                diags.add(Diagnostic("V18", "a '$t' can arrive that no rule provably answers. '$t' is transient — " +
+                diags.add(Diagnostic("V18", "a '$t' can arrive that nothing provably answers. '$t' is transient — " +
                     "it is not kept after its commit — so an unanswered '$t' would be ignored, and no record " +
-                    "that it arrived would exist anywhere. v0 proves coverage for a rule on the bare shape or a " +
-                    "complementary pair of conditions (P / not P); add a catch-all rule, or restructure the " +
-                    "partitions as complements (per-reason refusals go in one complement rule with a " +
-                    "conditional reason value)"))
+                    "that it arrived would exist anywhere. v0 proves coverage for an answer on the bare shape " +
+                    "or a complementary pair (P / not P), where an answer is a rule's condition or a `never` " +
+                    "over the act (the boundary refusal is the response); add a catch-all rule, refuse the " +
+                    "remainder with a `never`, or restructure the partitions as complements (per-reason " +
+                    "refusals go in one complement rule with a conditional reason value)"))
         }
     }
 

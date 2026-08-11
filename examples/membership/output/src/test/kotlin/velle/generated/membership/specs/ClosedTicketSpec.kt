@@ -19,14 +19,8 @@ import velle.generated.membership.*
  *
  * shape ApplicableAssignment = AssignTicket where not (ticket is ClosedTicket)
  *
- * shape RefusedAssignment = AssignTicket where ticket is ClosedTicket
- *
  * rule ApplyAssignment when ApplicableAssignment {
  *     ticket.assignee = agent
- * }
- *
- * rule RecordAssignmentRefusal when RefusedAssignment {
- *     AssignmentRefusal from { ticket: ticket, agent: agent, reason: "ticket is closed", refusedOn: now }
  * }
  *
  * shape UrgentQueue = NeedsAttention and Unassigned
@@ -56,14 +50,6 @@ class ClosedTicketSpec : SpecSupport() {
     fun `ApplyAssignment - a new ApplicableAssignment sets ticket assignee`() {
         // given: a 'AssignTicket' committed entering 'ApplicableAssignment' — transient: the act is not kept
         givens.applicableAssignment()
-    }
-
-    @Test
-    fun `RecordAssignmentRefusal - a new RefusedAssignment produces an AssignmentRefusal`() {
-        val beforeAssignmentRefusal = count("AssignmentRefusal")
-        // given: a 'AssignTicket' committed entering 'RefusedAssignment' — transient: the act is not kept
-        givens.refusedAssignment()
-        assertEquals(beforeAssignmentRefusal + 1, count("AssignmentRefusal"), "rule RecordAssignmentRefusal: one 'AssignmentRefusal' per firing")
     }
 
     @Test
