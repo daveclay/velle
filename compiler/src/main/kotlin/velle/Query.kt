@@ -393,3 +393,98 @@ class QueryCompiler(private val model: Model, private val today: LocalDate, priv
 }
 
 private fun VType.strip(): VType = if (this is VType.Optional) inner else this
+
+/**
+ * One store question's filter with its evaluation-moment constants abstracted
+ * to *holes* — the machinery behind the generated typed store interface
+ * (investigate_runtime.md §10): a `remindOverdueCandidates(dueBefore,
+ * sentOnAfter)` method is this template with its holes as parameters.
+ *
+ * Holes are found by construction, not annotation: the condition is compiled
+ * under two different clocks, and every constant that differs between the two
+ * compiles is time-derived (`today`/`now` and their duration arithmetic —
+ * the only constants that vary per evaluation moment). [match] recognizes an
+ * incoming filter as this question and extracts its hole values; [instantiate]
+ * rebuilds a concrete filter from hole values. Both walk in deterministic
+ * pre-order, so hole positions are stable.
+ */
+class QTemplate private constructor(
+    val base: String,
+    internal val a: QF,
+    internal val b: QF,
+) {
+    companion object {
+        private val TODAY_A = java.time.LocalDate.of(1873, 1, 2)
+        private val TODAY_B = java.time.LocalDate.of(1954, 6, 7)
+        private val NOW_A = Instant.parse("1873-01-02T03:04:05Z")
+        private val NOW_B = Instant.parse("1954-06-07T08:09:10Z")
+
+        fun of(model: Model, base: String, cond: RefExpr): QTemplate = QTemplate(
+            base,
+            QueryCompiler(model, TODAY_A, NOW_A).filterFor(cond),
+            QueryCompiler(model, TODAY_B, NOW_B).filterFor(cond),
+        )
+    }
+
+    /** A filter with nothing testable: no method is generated for it. */
+    val isTrivial: Boolean get() = a == QF.True
+
+    /** One hole: where in the comparison it sits, and its constant kind. */
+    data class Hole(val field: String, val op: String, val sample: QConst)
+
+    val holes: List<Hole> by lazy {
+        val out = mutableListOf<Hole>()
+        visit(a, b) { x, y -> if (x.value != y.value) out.add(Hole(x.field, x.op, x.value)); true }
+        out
+    }
+
+    /** Hole values of [incoming] if it is an instance of this template, else null. */
+    fun match(incoming: QF): List<QConst>? {
+        val values = mutableListOf<QConst>()
+        var ok = true
+        fun walk(x: QF, y: QF, inc: QF): Boolean = when {
+            x is QF.Cmp && y is QF.Cmp && inc is QF.Cmp -> {
+                if (x.field != inc.field || x.op != inc.op) false
+                else if (x.value == y.value) x.value == inc.value
+                else (x.value::class == inc.value::class).also { if (it) values.add(inc.value) }
+            }
+            x is QF.And && y is QF.And && inc is QF.And -> walk(x.l, y.l, inc.l) && walk(x.r, y.r, inc.r)
+            x is QF.Or && y is QF.Or && inc is QF.Or -> walk(x.l, y.l, inc.l) && walk(x.r, y.r, inc.r)
+            x is QF.Not && y is QF.Not && inc is QF.Not -> walk(x.inner, y.inner, inc.inner)
+            x is QF.Exists && y is QF.Exists && inc is QF.Exists ->
+                x.shape == inc.shape && x.refField == inc.refField && walk(x.inner, y.inner, inc.inner)
+            x is QF.RelPred && y is QF.RelPred && inc is QF.RelPred ->
+                x.field == inc.field && x.shape == inc.shape && walk(x.inner, y.inner, inc.inner)
+            else -> x == inc // True/False leaves
+        }
+        ok = walk(a, b, incoming)
+        return if (ok) values else null
+    }
+
+    /** A concrete filter from hole values, in [holes] order. */
+    fun instantiate(values: List<QConst>): QF {
+        require(values.size == holes.size) { "expected ${holes.size} hole values, got ${values.size}" }
+        val it = values.iterator()
+        fun build(x: QF, y: QF): QF = when {
+            x is QF.Cmp && y is QF.Cmp -> if (x.value == y.value) x else x.copy(value = it.next())
+            x is QF.And && y is QF.And -> QF.And(build(x.l, y.l), build(x.r, y.r))
+            x is QF.Or && y is QF.Or -> QF.Or(build(x.l, y.l), build(x.r, y.r))
+            x is QF.Not && y is QF.Not -> QF.Not(build(x.inner, y.inner))
+            x is QF.Exists && y is QF.Exists -> QF.Exists(x.shape, x.refField, build(x.inner, y.inner))
+            x is QF.RelPred && y is QF.RelPred -> QF.RelPred(x.field, x.shape, build(x.inner, y.inner))
+            else -> x
+        }
+        return build(a, b)
+    }
+
+    /** Pre-order visit of paired Cmp leaves; [onCmp] returns false to abort. */
+    private fun visit(x: QF, y: QF, onCmp: (QF.Cmp, QF.Cmp) -> Boolean): Boolean = when {
+        x is QF.Cmp && y is QF.Cmp -> onCmp(x, y)
+        x is QF.And && y is QF.And -> visit(x.l, y.l, onCmp) && visit(x.r, y.r, onCmp)
+        x is QF.Or && y is QF.Or -> visit(x.l, y.l, onCmp) && visit(x.r, y.r, onCmp)
+        x is QF.Not && y is QF.Not -> visit(x.inner, y.inner, onCmp)
+        x is QF.Exists && y is QF.Exists -> visit(x.inner, y.inner, onCmp)
+        x is QF.RelPred && y is QF.RelPred -> visit(x.inner, y.inner, onCmp)
+        else -> true
+    }
+}

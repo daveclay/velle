@@ -23,6 +23,10 @@ private fun generateSystem(specPath: String, systemName: String) {
     surface.writeText(Codegen.generate(spec, systemName))
     println("wrote ${surface.path}")
 
+    val store = File("src/main/kotlin/velle/generated/${systemName}Store.kt")
+    store.writeText(StoreGen.generate(spec, systemName))
+    println("wrote ${store.path}")
+
     val specs = SpecGen.generate(spec, systemName)
     val systemDir = File("src/test/kotlin/velle/generated/${systemName.lowercase()}")
     val specsDir = File(systemDir, "specs")

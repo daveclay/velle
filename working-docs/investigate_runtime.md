@@ -68,7 +68,7 @@ Built and running (2026-08-11): `VelleSystem.connect(resolver, callback)` in the
 
 What the spike confirmed:
 
-- **The three resolver questions held.** Every state read in the runtime and evaluator reduced to exactly §2's catalog — fetch by id, fetch the instances referencing X through field F, fetch all of a shape. No fourth question emerged. (The spike collapses the *per-act generated interfaces* to one generic three-method resolver driven by the compiled model; the per-act compile-error ergonomics are the next rung, unexercised.)
+- **The three resolver questions held.** Every state read in the runtime and evaluator reduced to exactly §2's catalog — fetch by id, fetch the instances referencing X through field F, fetch all of a shape. No fourth question emerged. (The spike collapses the *per-act generated interfaces* to one generic three-method resolver driven by the compiled model; the per-act compile-error ergonomics are deferred follow-on work, unexercised.)
 - **The transaction mapping is clean.** Envelope → one SQLite transaction (a payment's commit lands the `Payment` row, the fold's assign, and the `Receipt` atomically); `after commit` firing → its own DB transaction; in-envelope callback failure → SQLite rollback plus runtime rollback, caller gets the error. §3's three decisions survived contact intact.
 - **Guards work against engineer-owned storage across processes.** Run the app twice: the second process's weekly tick sweeps an overdue invoice created by the first, and the reminder guard suppresses re-nagging by hydrating the first run's `Reminder` row — cross-tick memory as data, read from the engineer's DB.
 - **The scan cost is real, and not just for ticks.** Every commit currently hydrates the full table of every watcher's base shape (pre/post member sets) and every `never`'s base. §2 called the query IR "nearly mandatory" for ticks; empirically the static read-set derivation and pre-filter are load-bearing for *ordinary commits* too. They are what makes this viable beyond a spike, not an optimization.
@@ -81,20 +81,45 @@ What the spike surfaced as gaps in the contract:
 
 Not exercised, deliberately: generated per-act resolver interfaces, the query IR / SQL pre-filter, the production clock default (the app passes real time explicitly).
 
-## 6. Second rung: read-set relevance and the candidate pre-filter
+## 6. Stop reading whole tables on every commit
 
-Built and running (2026-08-12), directly on §5's "the scan cost is real" finding. Two mechanisms, both conservative:
+The problem, plainly: at each commit the runtime must answer "did any instance just enter or leave a condition some rule watches?", and the spike answered by loading the entire table behind every watched condition and every `never` — on every commit, and worse at ticks. This section is the two fixes, built and running (2026-08-12).
+
+The model in one sentence: for every read, Velle is in one of three situations — **it knows which rows to fetch** (the keyed reads: a reference names its row, a join read names the rows referencing it — with the important extreme that sometimes the answer is provably *no rows at all*, and the question is skipped outright); **it knows which rows *not* to fetch** (the pre-filter: a compiled query trusted only for *exclusion* — everything it filters out provably can't match, everything it passes is merely "maybe," decided by the authoritative in-memory check); or **it must scan**. And "must scan" has three distinct causes, only the first of which is genuine ignorance: the condition reads derived values, so there is no column to test (*can't express it*); mid-commit, the store hasn't seen the envelope's own writes, so its answer is stale (*can't trust it right now* — the self-containment rule below); or the store's encoding can't compare faithfully and it legally over-returns (*the store can't execute it*). The open reverse-path item at the bottom is a promotion from "must scan" to "knows which rows": at a payment commit, the committed `Payment` names the one `Invoice` whose paid-ness can have changed — the runtime just doesn't walk that path backward yet.
+
+The two mechanisms, both conservative:
 
 - **Relevance gating** — the runtime sibling of README §11's derived trigger set. Every watched condition (commit-triggered rule, capture-carrying refinement) and every `never` carries its static read summary (the Model's predicate summaries, extended to record inverse-collection consults, aggregate-selected fields, timestamp reads, and a fail-open `opaque` flag for anything the walker can't attribute). A commit evaluates pre/post member sets only for watchers its mutation footprint can affect; a `never` re-checks only when the envelope wrote something it reads, or it reads the clock (time moves between envelopes). Soundness leans on the universal-transaction contract: state changes only through commits, so an untouched invariant that held at the last transaction end still holds. Tick-only rules dropped out of commit watching entirely — their subjects come from the tick's member scan, never from a commit diff.
 - **The candidate pre-filter** — predicates compile to a small query IR (`QF`: column comparisons, null checks, correlated EXISTS, forward joins), *polarity-dual*: anything inexpressible degrades to TRUE in positive position and FALSE under an odd number of negations, so the filter is always implied by the authoritative predicate — candidate superset guaranteed, evaluation stays in one place, §2's hard line intact. `today`/`now` fold to constants at compile time, so a filter is built per evaluation moment, never cached across clock changes. The resolver grows the question §2 always described as "members-or-**candidates**": `fetchCandidates(shape, filter)`, with a `fetchAll` default — implementing it is a performance choice, never a correctness one. `SqliteStore` renders `QF` to a SQL WHERE, degrading (again by polarity) the comparisons its column encoding can't do faithfully (decimal/double and DateTime live as non-collating TEXT).
+
+Worked examples, all from billing:
+
+- **A commit nobody watches.** `commitCustomer("Ada", …)` creates one `Customer` row. Hold that against what each watched condition reads: `SendReceipt` watches `PaidInvoice = Invoice where total > 0 and balance <= 0`, whose derivations read `LineItem.price`, `LineItem.quantity`, `Payment.amount` — no `Customer` data anywhere; `TrackLargestPayment` watches bare `Payment`; the boundary `never`s read `LineItem` and `Payment` columns. Nothing in the spec reads what this commit writes, so the commit evaluates zero conditions and issues zero fetches beyond its own insert.
+
+- **A commit that is watched — by exactly the right things.** `commitPayment(inv, 1300)` creates a `Payment`. The overlap test lights up precisely: `PaidInvoice` reads `Payment.amount` through `balance`, so `SendReceipt` gets its member sets; `TrackLargestPayment`'s condition *is* `Payment`; `never (Payment where amount <= 0)` reads a shape the commit created. Everything watching customers, reminders, or archives stays dark.
+
+- **The tick's shortlist.** `RemindOverdue`'s condition is `ActionableOverdue where not exists (Reminder where invoice == this and sentOn > today - 7 days)`. Its testable parts render into the candidate query:
+
+  ```sql
+  SELECT t0.* FROM "Invoice" t0
+  WHERE t0."due" < '2026-08-12'
+    AND NOT (EXISTS (SELECT 1 FROM "ArchiveRequest" t1 WHERE t1."invoice" = t0.id)
+             AND NOT EXISTS (SELECT 1 FROM "UnarchiveRequest" t2 WHERE t2."invoice" = t0.id))
+    AND NOT EXISTS (SELECT 1 FROM "Reminder" t3
+                    WHERE t3."invoice" = t0.id AND t3."sentOn" > '2026-08-05')
+  ```
+
+  `balance > 0` is a derivation, not a column, so it silently drops out of the query — over-returning is always legal — and the runtime applies it in memory to the shortlist. Note the once-a-week guard travels *into* the SQL: an invoice reminded five days ago never even leaves the database.
+
+- **Why the shortlist is only sometimes safe during a commit.** The payment envelope above makes an *untouched* `Invoice` row paid — but the database won't hold that `Payment` until the envelope closes, so asking it "which invoices are paid?" mid-envelope answers from stale state and could miss the entrant. `PaidInvoice` therefore takes the full-scan path at commit time (once per envelope). Contrast `never (LineItem where quantity <= 0)`: it reads nothing beyond the row's own columns, so any row whose answer changed was necessarily written by this envelope and is already in the runtime's hands — the shortlist can't miss anyone, and the check goes to the store as `WHERE "quantity" <= 0`.
 
 Where each fetch now lands: **ticks and the query surface** use the filter with no caveat — selection runs against settled state and every subject is re-checked in memory (RemindOverdue's whole guard, the correlated NOT EXISTS with its 7-day window, renders into the candidate SQL; cross-run suppression happens in the query itself). **Commit-time watcher scans** use the filter only where it is provably sound mid-envelope: a *self-contained* condition — one reading nothing beyond the base shape's own columns — cannot be flipped on an untouched row, because any instance whose membership this envelope changed was itself written and is already in the working set; everything else still scans, memoized per envelope. Two adjacent fixes fell out: the evaluator's general-form exists (`exists (Reminder where invoice == this and ...)`) now fetches *keyed* when a correlation conjunct is extractable — §2's three questions were sufficient all along, the fetch was just using the wrong one — and a tick opens a fresh snapshot before selecting subjects, since the previous envelope's working set is not a substitute for settled storage once another process may have written.
 
 Observed on billing over SQLite (`HydrationCandidatesTest`): a commit nothing watches (a bare `Customer`) issues zero scans; the payment cascade never scans `Customer` (the fold reads by id); the `LineItem` boundary `never`s arrive as filtered candidate queries; the weekly tick's only storage scan is the compiled candidate query over `Invoice`, with guard and archive facts hydrating as keyed joins.
 
-What this rung leaves open:
+What this leaves open:
 
-- **Reverse-path candidate narrowing.** A non-self-contained commit watcher (`PaidInvoice` reads `Payment` rows) still scans its base once per envelope. The right fix derives the affected instances from the mutation itself — the committed `Payment` names its `invoice` — impact analysis applied per commit, walking the predicate's read *paths* (not just its read sets) backward. That path machinery is the next rung.
+- **Reverse-path candidate narrowing.** A non-self-contained commit watcher (`PaidInvoice` reads `Payment` rows) still scans its base once per envelope. The right fix derives the affected instances from the mutation itself — the committed `Payment` names its `invoice` — impact analysis applied per commit, walking the predicate's read *paths* (not just its read sets) backward. That path machinery is the natural follow-on.
 - **Bare-shape conditions** (`when Payment`) scan their own table only to diff entrants that are, by construction, exactly the commit's creates. Trivial to special-case; not done.
 - **Aggregate pre-filters** — `count(...) == 0` as NOT EXISTS, sums as aggregation subqueries (§2 anticipated both; the IR doesn't carry them yet).
 - **Encoding** — the spike's TEXT encodings cost decimal and DateTime their SQL comparisons. An engineer-side choice the renderer already degrades around; a store that wants them orders its columns (epoch integers, scaled integers) and extends its renderer.
@@ -135,6 +160,22 @@ The resolution: **no implicit ordering source exists.** `latest`/`first` carry a
 
 What this deliberately leaves: the within-transaction case now fails at runtime when observed, but the *static* obligation — proving a selector's candidates can't collide per transaction, or demanding a discriminating datum at compile time — is OQ15/OQ16 calibration territory, not a v0 check.
 
+## 10. The typed store surface
+
+Built and running (2026-08-12). The generic five-question resolver is *correct* for a store implementor but not *legible*: shape names as strings, fields as maps, and a filter tree to interpret. The fix is a generated, per-spec typed layer — with the crucial property that it changes the engineer's experience without changing the runtime's contract.
+
+**Two layers, one wire protocol.** The generic `StateResolver`/`CommitCallback` protocol remains what the runtime speaks, permanently — spec-agnostic, model-driven, no business name in it. That is what a framework (`springboot-velle` mapping shapes onto Hibernate/JPA) implements once for all specs; `SqliteStore` is the existence proof, containing zero billing names. On top, the transpiler now emits `<Name>Store.kt` — developer-owned output, like everything generated:
+
+- **`<Name>Store`** — the strict interface: typed rows per shape (references as `Ref.Persisted`, scalars as real Kotlin types), typed capture records, keyed reads, join reads per to-one field, and one **named candidate method per condition with a testable part** — `remindOverdueCandidates(dueBefore: LocalDate, sentOnAfter: LocalDate)`, its kdoc naming the rule it serves and the superset contract it enjoys. Implementing the interface *is* answering every question the spec can ask; a spec edit that adds a question lands as a new abstract method — a compile error in the store naming exactly what is now owed. The read-set enumeration stopped being an internal optimization and became the contract.
+- **`<Name>StoreOverGeneric`** — every method defaulted onto any generic backend. The Spring posture: run the framework for everything, override the one hot question with hand-tuned SQL, whose parameters arrive as already-folded dates — no filter tree on the engineer's side of the line.
+- **`<Name>StoreResolver`** — the bridge: recognizes an incoming candidate filter as its named question and calls the typed method with extracted parameters; unrecognized filters fall back to the scan floor.
+
+**Question recognition is by construction, not annotation** (`QTemplate`): each condition is compiled under two different clocks, and every constant that differs between the compiles is evaluation-moment-derived (`today`/`now` arithmetic — nothing else varies). Those positions are the *holes*: the typed method's parameters, extracted on match, substituted on instantiate. Conditions whose filters compile to nothing testable get no method (the scan floor covers them); two conditions with the same template share one method, kdoc listing both.
+
+Exercised (`TypedStoreTest`): SqliteStore as the untouched generic backend, `BillingStoreOverGeneric` defaults serving the whole payment cascade, one override (`remindOverdueCandidates`) in hand-written SQL — the weekly tick routes to it with `(2026-01-01, 2025-12-25)` extracted from the live filter, and the reminder guard suppresses the second sweep through the same override.
+
+The dependency arrows that keep the springboot-velle future clean: runtime → generic protocol only; framework → generic protocol only; the typed layer → both, regenerated with the spec. Business names appear exactly where they should — in the developer-owned generated output and any hand-written store, never in the framework or the runtime contract.
+
 ## Outcomes
 
 Settled enough to promote:
@@ -143,10 +184,11 @@ Settled enough to promote:
 - Commit callback: transaction-unit payload, in-envelope failure (the callback's writes join the engineer's DB transaction).
 - Hydration: demand-hydrated evaluation over engineer-owned storage via generated per-act resolver interfaces — Velle defers on where authority lives (one DB, many, APIs, files); the query IR / SQL builder is a pre-filter utility, never the authoritative evaluator; replay-in is rejected.
 - OQ20's who-may-commit residue retires to engineer wrapper code.
-- The pre-filter rung (§6): relevance gating over static read summaries; the `QF` query IR under the superset contract (`fetchCandidates`, default `fetchAll`); polarity-dual compilation; self-containment as the commit-time soundness criterion; keyed fetches for correlated general-form exists; fresh snapshot per tick.
+- Pre-filtering (§6): relevance gating over static read summaries; the `QF` query IR under the superset contract (`fetchCandidates`, default `fetchAll`); polarity-dual compilation; self-containment as the commit-time soundness criterion; keyed fetches for correlated general-form exists; fresh snapshot per tick.
 - Capture persistence (§7): `captured` means persisted — per-membership rows the store hosts under whatever subtype-state mapping it picks; the `CommitSet` capture channel (upsert/retraction as end-state), abstract `fetchCaptures` (the deliberate asymmetry with defaulted `fetchCandidates`), `Model.captureSchemas` as the problem statement; retraction as the contract's one sanctioned delete.
 - Identity is the store's (§8): Velle mints no persisted ids — session-local handles behind a typed-ref bimap, `Ref.Persisted`/`Ref.Pending` crossing the boundary as objects, the callback returning store-assigned keys, `Accepted.storeKey` + `handleFor` as the application's two doorways, `maxId` deleted. Retires the supplied-vs-generated-`id` question (a legacy key simply *is* the store key) and the id-minting item (nothing is minted for persistence); committer-side identity needs are business identifiers — ordinary fields — never `id`.
 - Selector ordering (§9): `latest`/`first` take a mandatory, typechecked `by` clause — the author's ordering statement; no implicit source, no minted tiebreak, undiscriminated selections fail loudly. Promoted to README §10/grammar.md/checks.md; the §22 explicit-ordering item resolved as required.
+- The typed store surface (§10): generated `<Name>Store` (strict, per-question, typed both directions), `OverGeneric` defaults for the framework-plus-overrides posture, and the `StoreResolver` bridge with `QTemplate` question recognition — the generic protocol stays the wire contract, so a spec-agnostic framework (springboot-velle) and the strongly-typed hand-written store coexist by construction. Resolves §2's "per-act resolver interfaces" as per-*question* interfaces.
 
 Still open, re-homed:
 
@@ -155,4 +197,4 @@ Still open, re-homed:
 - The universal-transaction contract: the exact guarantees Velle assumes (snapshot reads, atomic writes, serialization of conflicting commits) stated precisely — the engineer realizes them however their storage requires; the confluence and one-writer proofs now rest on this contract.
 - Production clock default (real time, controllable clock as test affordance).
 - Rule-execution hook — rejected as a hook; residue folds into the `why`/provenance item.
-- Reverse-path candidate narrowing (from §6): non-self-contained commit watchers still scan their base per envelope; deriving the affected instances from the mutation's own references — per-watcher read *paths*, walked backward — is the next rung. Bare-shape entrant diffs and aggregate pre-filters ride with it.
+- Reverse-path candidate narrowing (from §6): non-self-contained commit watchers still scan their base per envelope; deriving the affected instances from the mutation's own references — per-watcher read *paths*, walked backward — is the follow-on. Bare-shape entrant diffs and aggregate pre-filters ride with it.

@@ -19,6 +19,9 @@ class CodegenGoldenTest {
             val expected = Codegen.generate(File(specPath).readText(), systemName)
             val actual = File("src/main/kotlin/velle/generated/$systemName.kt").readText()
             assertEquals(expected, actual, "$systemName surface drifted — run: gradle generate")
+            val expectedStore = StoreGen.generate(File(specPath).readText(), systemName)
+            val actualStore = File("src/main/kotlin/velle/generated/${systemName}Store.kt").readText()
+            assertEquals(expectedStore, actualStore, "${systemName}Store surface drifted — run: gradle generate")
         }
     }
 
