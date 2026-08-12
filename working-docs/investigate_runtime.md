@@ -81,6 +81,24 @@ What the spike surfaced as gaps in the contract:
 
 Not exercised, deliberately: generated per-act resolver interfaces, the query IR / SQL pre-filter, the production clock default (the app passes real time explicitly).
 
+## 6. Second rung: read-set relevance and the candidate pre-filter
+
+Built and running (2026-08-12), directly on §5's "the scan cost is real" finding. Two mechanisms, both conservative:
+
+- **Relevance gating** — the runtime sibling of README §11's derived trigger set. Every watched condition (commit-triggered rule, capture-carrying refinement) and every `never` carries its static read summary (the Model's predicate summaries, extended to record inverse-collection consults, aggregate-selected fields, timestamp reads, and a fail-open `opaque` flag for anything the walker can't attribute). A commit evaluates pre/post member sets only for watchers its mutation footprint can affect; a `never` re-checks only when the envelope wrote something it reads, or it reads the clock (time moves between envelopes). Soundness leans on the universal-transaction contract: state changes only through commits, so an untouched invariant that held at the last transaction end still holds. Tick-only rules dropped out of commit watching entirely — their subjects come from the tick's member scan, never from a commit diff.
+- **The candidate pre-filter** — predicates compile to a small query IR (`QF`: column comparisons, null checks, correlated EXISTS, forward joins), *polarity-dual*: anything inexpressible degrades to TRUE in positive position and FALSE under an odd number of negations, so the filter is always implied by the authoritative predicate — candidate superset guaranteed, evaluation stays in one place, §2's hard line intact. `today`/`now` fold to constants at compile time, so a filter is built per evaluation moment, never cached across clock changes. The resolver grows the question §2 always described as "members-or-**candidates**": `fetchCandidates(shape, filter)`, with a `fetchAll` default — implementing it is a performance choice, never a correctness one. `SqliteStore` renders `QF` to a SQL WHERE, degrading (again by polarity) the comparisons its column encoding can't do faithfully (decimal/double and DateTime live as non-collating TEXT).
+
+Where each fetch now lands: **ticks and the query surface** use the filter with no caveat — selection runs against settled state and every subject is re-checked in memory (RemindOverdue's whole guard, the correlated NOT EXISTS with its 7-day window, renders into the candidate SQL; cross-run suppression happens in the query itself). **Commit-time watcher scans** use the filter only where it is provably sound mid-envelope: a *self-contained* condition — one reading nothing beyond the base shape's own columns — cannot be flipped on an untouched row, because any instance whose membership this envelope changed was itself written and is already in the working set; everything else still scans, memoized per envelope. Two adjacent fixes fell out: the evaluator's general-form exists (`exists (Reminder where invoice == this and ...)`) now fetches *keyed* when a correlation conjunct is extractable — §2's three questions were sufficient all along, the fetch was just using the wrong one — and a tick opens a fresh snapshot before selecting subjects, since the previous envelope's working set is not a substitute for settled storage once another process may have written.
+
+Observed on billing over SQLite (`HydrationCandidatesTest`): a commit nothing watches (a bare `Customer`) issues zero scans; the payment cascade never scans `Customer` (the fold reads by id); the `LineItem` boundary `never`s arrive as filtered candidate queries; the weekly tick's only storage scan is the compiled candidate query over `Invoice`, with guard and archive facts hydrating as keyed joins.
+
+What this rung leaves open:
+
+- **Reverse-path candidate narrowing.** A non-self-contained commit watcher (`PaidInvoice` reads `Payment` rows) still scans its base once per envelope. The right fix derives the affected instances from the mutation itself — the committed `Payment` names its `invoice` — impact analysis applied per commit, walking the predicate's read *paths* (not just its read sets) backward. That path machinery is the next rung.
+- **Bare-shape conditions** (`when Payment`) scan their own table only to diff entrants that are, by construction, exactly the commit's creates. Trivial to special-case; not done.
+- **Aggregate pre-filters** — `count(...) == 0` as NOT EXISTS, sums as aggregation subqueries (§2 anticipated both; the IR doesn't carry them yet).
+- **Encoding** — the spike's TEXT encodings cost decimal and DateTime their SQL comparisons. An engineer-side choice the renderer already degrades around; a store that wants them orders its columns (epoch integers, scaled integers) and extends its renderer.
+
 ## Outcomes
 
 Settled enough to promote:
@@ -89,6 +107,7 @@ Settled enough to promote:
 - Commit callback: transaction-unit payload, in-envelope failure (the callback's writes join the engineer's DB transaction).
 - Hydration: demand-hydrated evaluation over engineer-owned storage via generated per-act resolver interfaces — Velle defers on where authority lives (one DB, many, APIs, files); the query IR / SQL builder is a pre-filter utility, never the authoritative evaluator; replay-in is rejected.
 - OQ20's who-may-commit residue retires to engineer wrapper code.
+- The pre-filter rung (§6): relevance gating over static read summaries; the `QF` query IR under the superset contract (`fetchCandidates`, default `fetchAll`); polarity-dual compilation; self-containment as the commit-time soundness criterion; keyed fetches for correlated general-form exists; fresh snapshot per tick.
 
 Still open, re-homed:
 
@@ -97,3 +116,4 @@ Still open, re-homed:
 - The universal-transaction contract: the exact guarantees Velle assumes (snapshot reads, atomic writes, serialization of conflicting commits) stated precisely — the engineer realizes them however their storage requires; the confluence and one-writer proofs now rest on this contract.
 - Production clock default (real time, controllable clock as test affordance).
 - Rule-execution hook — rejected as a hook; residue folds into the `why`/provenance item.
+- Reverse-path candidate narrowing (from §6): non-self-contained commit watchers still scan their base per envelope; deriving the affected instances from the mutation's own references — per-watcher read *paths*, walked backward — is the next rung. Bare-shape entrant diffs and aggregate pre-filters ride with it.

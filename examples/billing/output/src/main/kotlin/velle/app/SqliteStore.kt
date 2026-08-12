@@ -3,6 +3,8 @@ package velle.app
 import velle.CommitCallback
 import velle.CommitSet
 import velle.Model
+import velle.QConst
+import velle.QF
 import velle.Row
 import velle.StateResolver
 import velle.StoredProp
@@ -74,6 +76,87 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
 
     override fun fetchReferencing(shape: String, field: String, targetId: Long): List<Row> =
         select(shape, """WHERE "$field" = ?""") { it.setLong(1, targetId) }
+
+    /**
+     * The pre-filter, rendered to a WHERE clause. Two rules keep this sound
+     * against the superset contract:
+     *
+     * - Comparisons this store's column encoding can't order or equate in SQL
+     *   (decimal/double and DateTime, both stored as non-collating TEXT) degrade
+     *   *by polarity*: TRUE in positive position, FALSE under an odd number of
+     *   NOTs — always widening the result set, never narrowing it.
+     * - An absent column satisfies `!=` (NULL-inclusive rendering) and fails
+     *   `==`/ordered comparisons — matching the runtime's in-memory semantics
+     *   (QF's contract in Query.kt).
+     */
+    override fun fetchCandidates(shape: String, filter: QF): List<Row> {
+        val r = WhereRenderer()
+        val where = r.render(filter, shape, "t0", positive = true)
+        if (where == "1") return fetchAll(shape)
+        val cols = columnsOf(shape)
+        return conn.prepareStatement("""SELECT t0.* FROM "$shape" t0 WHERE $where""").use { ps ->
+            r.binds.forEachIndexed { i, b -> ps.setObject(i + 1, b) }
+            ps.executeQuery().use { rs ->
+                buildList { while (rs.next()) add(readRow(shape, cols, rs)) }
+            }
+        }
+    }
+
+    private inner class WhereRenderer {
+        val binds = mutableListOf<Any?>()
+        private var nextAlias = 1
+
+        fun render(f: QF, shape: String, alias: String, positive: Boolean): String = when (f) {
+            QF.True -> "1"
+            QF.False -> "0"
+            is QF.And -> "(${render(f.l, shape, alias, positive)} AND ${render(f.r, shape, alias, positive)})"
+            is QF.Or -> "(${render(f.l, shape, alias, positive)} OR ${render(f.r, shape, alias, positive)})"
+            is QF.Not -> "NOT (${render(f.inner, shape, alias, !positive)})"
+            is QF.NullCheck -> """$alias."${f.field}" IS ${if (f.isNull) "" else "NOT "}NULL"""
+            is QF.Cmp -> renderCmp(f, shape, alias, positive)
+            is QF.Exists -> {
+                val a = "t${nextAlias++}"
+                val corr = f.refField?.let { """$a."$it" = $alias.id AND """ } ?: ""
+                """EXISTS (SELECT 1 FROM "${f.shape}" $a WHERE $corr${render(f.inner, f.shape, a, positive)})"""
+            }
+            is QF.RelPred -> {
+                val a = "t${nextAlias++}"
+                """EXISTS (SELECT 1 FROM "${f.shape}" $a WHERE $a.id = $alias."${f.field}" AND ${render(f.inner, f.shape, a, positive)})"""
+            }
+        }
+
+        private fun renderCmp(f: QF.Cmp, shape: String, alias: String, positive: Boolean): String {
+            val colType = columnsOf(shape).find { it.name == f.field }?.type
+                ?: return degrade(positive)
+            val encoded = encode(f.value, colType) ?: return degrade(positive)
+            val col = """$alias."${f.field}""""
+            binds.add(encoded)
+            return when (f.op) {
+                "==" -> "$col = ?"
+                "!=" -> "($col IS NULL OR $col != ?)"
+                else -> "$col ${f.op} ?"
+            }
+        }
+
+        private fun degrade(positive: Boolean): String = if (positive) "1" else "0"
+
+        /** SQL-comparable encoding for this store, or null where the encoding
+         *  can't compare faithfully (decimal/double, DateTime — TEXT columns
+         *  whose lexicographic order isn't the value order). */
+        private fun encode(c: QConst, t: VType): Any? {
+            val bare = if (t is VType.Optional) t.inner else t
+            return when (c) {
+                is QConst.QNum ->
+                    if (bare is VType.Num && (bare.name == "integer" || bare.name == "long"))
+                        runCatching { c.v.longValueExact() }.getOrNull()
+                    else null
+                is QConst.QText -> (c.v).takeIf { bare == VType.Text }
+                is QConst.QBool -> (if (c.v) 1 else 0).takeIf { bare == VType.Bool }
+                is QConst.QDate -> c.v.toString().takeIf { bare == VType.DateT }
+                is QConst.QDateTime -> null
+            }
+        }
+    }
 
     private fun select(shape: String, where: String, bind: (PreparedStatement) -> Unit = {}): List<Row> {
         val cols = columnsOf(shape)

@@ -33,6 +33,19 @@ interface StateResolver {
 
     /** The join read: instances of [shape] whose to-one [field] references [targetId]. */
     fun fetchReferencing(shape: String, field: String, targetId: Long): List<Row>
+
+    /**
+     * The filtered scan read: rows of [shape] that may satisfy [filter] — the
+     * compiled pre-filter for a refinement condition (Query.kt). The contract is
+     * superset-only: return at least every row matching the filter; returning
+     * more is always legal (this default returns everything), because the
+     * runtime re-checks the authoritative predicate in memory on what comes
+     * back. A store may translate the filter to its query language wholesale,
+     * partially (weakening the parts its encoding can't compare — see
+     * SqliteStore's renderer for the polarity rule that keeps that sound), or
+     * not at all — a performance choice, never a correctness one.
+     */
+    fun fetchCandidates(shape: String, filter: QF): List<Row> = fetchAll(shape)
 }
 
 /**

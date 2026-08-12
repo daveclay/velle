@@ -209,13 +209,14 @@ class Evaluator(private val system: VelleSystem) {
         else referencing
     }
 
-    private fun bindingCandidates(b: Binding, ctx: Ctx): Pair<String, List<Long>> = when (val src = b.source) {
+    private fun bindingCandidates(b: Binding, ctx: Ctx, where: Expr? = null): Pair<String, List<Long>> = when (val src = b.source) {
         is PathExpr ->
             if (src.root in model.shapes && src.segs.isEmpty())
-                src.root to system.idsOf(src.root)
+                src.root to (keyedCandidates(src.root, where, ctx) ?: system.idsOf(src.root))
             else if (src.root in model.refinements && src.segs.isEmpty()) {
                 val base = model.baseOf(src.root)!!
-                base to system.idsOf(base).filter { memberOfRefExpr(it, RefName(src.root)) }
+                base to (keyedCandidates(src.root, where, ctx) ?: system.idsOf(base))
+                    .filter { memberOfRefExpr(it, RefName(src.root)) }
             } else {
                 val v = eval(src, ctx)
                 val coll = v as? Value.VColl ?: throw VelleRuntimeError("binding is not a collection: $src")
@@ -229,12 +230,53 @@ class Evaluator(private val system: VelleSystem) {
         else -> throw VelleRuntimeError("unsupported binding source")
     }
 
+    /**
+     * A bare-shape binding quantifies over the whole shape — but when its
+     * `where` carries a correlation conjunct `field == <outer ref>`, only rows
+     * referencing that instance can survive the filter, so the fetch may be
+     * keyed (the join read) instead of a scan. Purely a fetch narrowing: the
+     * `where` still runs over what comes back, and any failure here just falls
+     * back to the scan. Applied only to single-binding collections, where a
+     * bare conjunct name unambiguously means this binding's element.
+     */
+    private fun keyedCandidates(shapeOrRef: String, where: Expr?, ctx: Ctx): List<Long>? {
+        if (where == null) return null
+        val base = if (shapeOrRef in model.refinements) model.baseOf(shapeOrRef)!! else shapeOrRef
+        for (conjunct in conjunctsOf(where)) {
+            val cmp = conjunct as? Binary ?: continue
+            if (cmp.op != "==") continue
+            for ((fieldSide, refSide) in listOf(cmp.left to cmp.right, cmp.right to cmp.left)) {
+                val p = fieldSide as? PathExpr ?: continue
+                if (p.segs.isNotEmpty() || p.root == "this" || p.root in ctx.aliases) continue
+                val m = model.membersOf(base)[p.root] ?: continue
+                val fieldShape = m.type.instanceShape() ?: continue
+                if (!m.stored) continue
+                // the ref side must resolve in the *outer* scope: this- or alias-rooted
+                val refRoot = (refSide as? PathExpr)?.root ?: continue
+                if (refRoot != "this" && refRoot !in ctx.aliases) continue
+                val target = runCatching { eval(refSide, ctx) }.getOrNull() as? Value.VRef ?: continue
+                if (system.instance(target.id)?.shape != fieldShape) continue
+                system.ensureReferencing(base, p.root, target.id)
+                return system.byShape[base].orEmpty().filter {
+                    (system.instances.getValue(it).fields[p.root] as? Value.VRef)?.id == target.id
+                }
+            }
+        }
+        return null
+    }
+
+    private fun conjunctsOf(e: Expr): List<Expr> =
+        if (e is Binary && e.op == "and") conjunctsOf(e.left) + conjunctsOf(e.right) else listOf(e)
+
     private fun combinations(c: CollectionExpr, ctx: Ctx): Sequence<Ctx> {
         var ctxs = sequenceOf(ctx)
+        // the keyed-fetch narrowing needs bare names in the where to mean this
+        // one binding's element — only unambiguous for single-binding collections
+        val keyableWhere = c.where.takeIf { c.bindings.size == 1 }
         for (b in c.bindings) {
             // sibling bindings all resolve against the same enclosing subject
             // (README §10) — only the shared `where` sees the pushed frames
-            val (scope, ids) = bindingCandidates(b, ctx)
+            val (scope, ids) = bindingCandidates(b, ctx, keyableWhere)
             ctxs = ctxs.flatMap { outer -> ids.asSequence().map { outer.push(scope, it, b.alias) } }
         }
         return if (c.where == null) ctxs else ctxs.filter { truthy(eval(c.where, it)) }

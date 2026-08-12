@@ -94,6 +94,7 @@ class VelleSystem(
     private val idShape = HashMap<Long, String>()
     private val fetchedAll = mutableSetOf<String>()
     private val fetchedRefs = mutableSetOf<Triple<String, String, Long>>()
+    private val fetchedFilters = mutableSetOf<Pair<String, QF>>()
 
     fun connect(resolver: StateResolver, onCommit: CommitCallback) {
         this.resolver = resolver
@@ -111,6 +112,7 @@ class VelleSystem(
         byShape.clear()
         fetchedAll.clear()
         fetchedRefs.clear()
+        fetchedFilters.clear()
     }
 
     /** By-id read, faulting in from the resolver when absent. */
@@ -129,6 +131,26 @@ class VelleSystem(
             r.fetchAll(shape).forEach { hydrateIfAbsent(it) }
         return byShape[shape].orEmpty().toList()
     }
+
+    /**
+     * Filtered scan read: candidates of a condition over [shape], faulting in the
+     * resolver's candidate superset for [filter] instead of the whole table. The
+     * return is everything of [shape] in the working set — candidates unioned
+     * with rows this envelope already touched — and the caller re-checks the
+     * authoritative predicate in memory on all of it (investigate_runtime.md §2:
+     * the filter is a pre-filter, never the evaluation).
+     */
+    internal fun idsOfCandidates(shape: String, filter: QF): List<Long> {
+        val r = resolver
+        if (r == null || shape in model.transients || shape in fetchedAll || filter == QF.True)
+            return idsOf(shape)
+        if (fetchedFilters.add(shape to filter))
+            r.fetchCandidates(shape, filter).forEach { hydrateIfAbsent(it) }
+        return byShape[shape].orEmpty().toList()
+    }
+
+    /** Filters fold `today`/`now` to constants, so a compiler is built per evaluation moment. */
+    private fun queryCompiler() = QueryCompiler(model, effectiveToday, effectiveNow)
 
     /** Join read: fault in the instances of [shape] whose [field] references [targetId]. */
     internal fun ensureReferencing(shape: String, field: String, targetId: Long) {
@@ -199,6 +221,10 @@ class VelleSystem(
         val oldValues = mutableListOf<Triple<Long, String, Value?>>()
         val afterQueue = mutableListOf<Pair<RuleDecl, Long>>()
         var depth = 0
+
+        /** Cumulative footprint of every commit in the envelope (never gating). */
+        val createdShapes = mutableSetOf<String>()
+        val assignedFields = mutableSetOf<Pair<String, String>>()
     }
 
     private var txn: Txn? = null
@@ -210,7 +236,7 @@ class VelleSystem(
         txn = t
         return try {
             val out = body()
-            checkNevers()
+            checkNevers(t)
             // the commit callback runs inside the envelope: its writes join the
             // engineer's storage transaction, and a failure rolls the whole
             // commit back (investigate_runtime.md §3, in-envelope failure)
@@ -361,33 +387,111 @@ class VelleSystem(
         data class Assign(val id: Long, val field: String, val value: Value) : Mutation
     }
 
-    /** Watched conditions: every commit-triggered rule plus capture-carrying refinements. */
-    private data class Watcher(val key: String, val condition: RefExpr, val base: String)
+    /**
+     * A watched condition: a commit-triggered rule's condition or a
+     * capture-carrying refinement, with its static read summary. [sensShapes]
+     * is the shape-granular sensitivity set (existence/collection consults,
+     * base-normalized); [selfContained] means the predicate reads nothing
+     * beyond the base shape's own columns — the criterion under which a
+     * storage-side pre-filter is sound mid-envelope (any instance whose
+     * membership the envelope changed was itself written, so it is already in
+     * the working set; every untouched instance's row still matches its
+     * in-memory state).
+     */
+    private class Watcher(
+        val key: String,
+        val condition: RefExpr,
+        val base: String,
+        val summary: ReadSummary,
+        val sensShapes: Set<String>,
+        val selfContained: Boolean,
+    )
 
+    private fun watcherOf(key: String, condition: RefExpr, base: String): Watcher {
+        val s = model.summaryOfRefExpr(condition)
+        val sens = (s.existsShapes + s.collShapes).mapNotNull { model.baseOf(it) }.toSet()
+        val selfContained = !s.opaque && sens.isEmpty() &&
+            (s.fields + s.collFields).all { it.first == base }
+        return Watcher(key, condition, base, s, sens, selfContained)
+    }
+
+    /** Watched conditions: every commit-triggered rule plus capture-carrying
+     *  refinements. Schedule-only rules are deliberately absent — their subjects
+     *  come from the tick's own member scan, never from a commit diff (§16/§17). */
     private val watchers: List<Watcher> by lazy {
         val ws = mutableListOf<Watcher>()
         for (r in model.rules.values) {
+            if (!(r.preposition == null || "commit" in r.triggers)) continue
             val base = model.baseOfExpr(r.condition) ?: continue
-            ws.add(Watcher("rule:${r.name}", r.condition, base))
+            ws.add(watcherOf("rule:${r.name}", r.condition, base))
         }
         for ((name, r) in model.refinements) {
             if (r.members.any { it is DerivedProp && it.captured }) {
                 val base = model.baseOf(name) ?: continue
-                ws.add(Watcher("capture:$name", RefName(name), base))
+                ws.add(watcherOf("capture:$name", RefName(name), base))
             }
         }
         ws
     }
 
-    private fun memberSet(w: Watcher): Set<Long> =
-        idsOf(w.base).filter { evaluator.memberOfRefExpr(it, w.condition) }.toSet()
+    private val watcherByKey: Map<String, Watcher> by lazy { watchers.associateBy { it.key } }
+
+    /** The mutation footprint of one commit: what it creates and writes. */
+    private class Footprint {
+        val created = mutableSetOf<String>()
+        val assigned = mutableSetOf<Pair<String, String>>()
+    }
+
+    private fun footprintOf(mutations: List<Mutation>): Footprint {
+        val f = Footprint()
+        for (m in mutations) when (m) {
+            is Mutation.Create -> f.created.add(m.shape)
+            is Mutation.Assign -> {
+                val shape = instance(m.id)?.shape ?: continue
+                f.assigned.add(shape to m.field)
+                // any stored write also advances the shape's `on update` timestamps
+                model.shapes[shape]?.members?.filterIsInstance<TimestampProp>()
+                    ?.filter { it.on == "update" }
+                    ?.forEach { f.assigned.add(shape to it.name) }
+            }
+        }
+        return f
+    }
+
+    /**
+     * Can this commit change the watcher's member set? The runtime sibling of
+     * the compiler's derived trigger set (README §11, "Rules ground in
+     * commits"): membership flips only when data the predicate reads changes,
+     * and the footprint says exactly what changed. `today`/`now` are constant
+     * within an envelope, so time reads never make a commit relevant here —
+     * entry by aging belongs to ticks.
+     */
+    private fun relevant(w: Watcher, fp: Footprint): Boolean {
+        if (w.summary.opaque) return true
+        if (fp.created.any { it == w.base || it in w.sensShapes }) return true
+        return fp.assigned.any { (sh, f) ->
+            sh in w.sensShapes || (sh to f) in w.summary.fields || (sh to f) in w.summary.collFields
+        }
+    }
+
+    private fun memberSet(w: Watcher): Set<Long> {
+        val ids = if (w.selfContained) idsOfCandidates(w.base, queryCompiler().filterFor(w.condition))
+        else idsOf(w.base)
+        return ids.filter { evaluator.memberOfRefExpr(it, w.condition) }.toSet()
+    }
 
     private fun applyCommit(mutations: List<Mutation>): List<Long> {
         val t = txn ?: error("commit outside transaction")
         if (t.depth++ > maxDepth)
             throw VelleRuntimeError("cascade depth exceeded $maxDepth — quiescence backstop [S3]")
 
-        val pre = watchers.associateWith { memberSet(it) }
+        val fp = footprintOf(mutations)
+        t.createdShapes.addAll(fp.created)
+        t.assignedFields.addAll(fp.assigned)
+        // only watchers this commit's footprint can affect get their member
+        // sets evaluated — for the rest, no membership can have flipped
+        val active = watchers.filter { relevant(it, fp) }
+        val pre = active.associateWith { memberSet(it) }
 
         val createdIds = mutableListOf<Long>()
         var wroteStored = mutableSetOf<Long>()
@@ -403,11 +507,11 @@ class VelleSystem(
                 ?.forEach { setField(inst, it.name, Value.VDateTime(now), t) }
         }
 
-        val post = watchers.associateWith { memberSet(it) }
+        val post = active.associateWith { memberSet(it) }
 
         // captures: evaluate at entry, mark leavers for retraction at close
         val retractions = mutableListOf<Pair<Long, String>>()
-        for (w in watchers.filter { it.key.startsWith("capture:") }) {
+        for (w in active.filter { it.key.startsWith("capture:") }) {
             val refName = w.key.removePrefix("capture:")
             val props = model.refinements.getValue(refName).members
                 .filterIsInstance<DerivedProp>().filter { it.captured }
@@ -419,20 +523,19 @@ class VelleSystem(
 
         // firings: entrants for `when R`, leavers for `when leaving R`
         for (rule in model.rules.values) {
-            if (rule.preposition != "after" && "commit" !in rule.triggers && rule.preposition != null) continue
-            if (rule.preposition == null || "commit" in rule.triggers) {
-                val w = watchers.first { it.key == "rule:${rule.name}" }
-                var subjects =
-                    if (rule.leaving) pre.getValue(w) - post.getValue(w)
-                    else post.getValue(w) - pre.getValue(w)
-                // a transient act's partitions are decided exactly once, at its
-                // creation commit — consequence commits within the transaction
-                // never re-partition it (README §4, "Transient acts")
-                if (w.base in model.transients) subjects = subjects intersect createdIds.toSet()
-                for (subject in subjects) {
-                    if (rule.preposition == "after") t.afterQueue.add(rule to subject)
-                    else fire(rule, subject)
-                }
+            if (!(rule.preposition == null || "commit" in rule.triggers)) continue
+            val w = watcherByKey["rule:${rule.name}"] ?: continue
+            if (w !in active) continue // this commit provably cannot flip its condition
+            var subjects =
+                if (rule.leaving) pre.getValue(w) - post.getValue(w)
+                else post.getValue(w) - pre.getValue(w)
+            // a transient act's partitions are decided exactly once, at its
+            // creation commit — consequence commits within the transaction
+            // never re-partition it (README §4, "Transient acts")
+            if (w.base in model.transients) subjects = subjects intersect createdIds.toSet()
+            for (subject in subjects) {
+                if (rule.preposition == "after") t.afterQueue.add(rule to subject)
+                else fire(rule, subject)
             }
         }
 
@@ -501,7 +604,7 @@ class VelleSystem(
                 item.forExpr?.let { forE ->
                     val ref = evaluator.eval(forE, ctx) as? Value.VRef
                         ?: throw VelleRuntimeError("'for' target is not an instance")
-                    val target = instances.getValue(ref.id).shape
+                    val target = (instance(ref.id) ?: throw VelleRuntimeError("missing instance ${ref.id}")).shape
                     val matched = model.shapes.getValue(item.shape).members
                         .filterIsInstance<StoredProp>()
                         .single { (it.type as? RelType)?.let { t -> !t.many && t.shape == target } == true }
@@ -524,6 +627,9 @@ class VelleSystem(
     // ── ticks (evaluation.md, "Ticks") ───────────────────────────────────────
 
     fun tick(schedule: String) {
+        // a tick is a new evaluation moment: select subjects against settled
+        // storage, not the previous envelope's leftover working set
+        beginSnapshot()
         val previous = lastTick[schedule] ?: startInstant
         for (rule in model.rules.values) {
             if (schedule !in rule.triggers) continue
@@ -537,8 +643,13 @@ class VelleSystem(
                             !evaluator.memberOfRefExpr(it, rule.condition)
                     }
                 } else {
+                    // subject selection runs against settled state (each firing is
+                    // its own later transaction), so the pre-filter is sound with
+                    // no self-containment caveat: the resolver's candidate superset
+                    // is re-checked by the authoritative predicate right here
                     val base = model.baseOfExpr(rule.condition) ?: continue
-                    idsOf(base).filter { evaluator.memberOfRefExpr(it, rule.condition) }
+                    idsOfCandidates(base, queryCompiler().filterFor(rule.condition))
+                        .filter { evaluator.memberOfRefExpr(it, rule.condition) }
                 }
             for (subject in subjects) {
                 // each firing is its own transaction; a straggler blocks only itself
@@ -559,12 +670,33 @@ class VelleSystem(
 
     // ── never enforcement at transaction end [S5] ────────────────────────────
 
-    private fun checkNevers() {
+    /** Never targets with their read summaries, index-aligned with model.nevers. */
+    private val neverWatchers: List<Watcher?> by lazy {
+        model.nevers.map { n ->
+            model.baseOfExpr(n.target)?.let { base -> watcherOf("never", n.target, base) }
+        }
+    }
+
+    /**
+     * A `never` constrains every transaction's *final* state (README §21), and
+     * state changes only through commits — so an invariant reading nothing this
+     * envelope wrote (and not reading the clock, which moves between envelopes)
+     * held at the last transaction end and still holds. The relevance test is
+     * [relevant] over the envelope's cumulative footprint, plus time reads.
+     */
+    private fun checkNevers(t: Txn) {
+        val fp = Footprint().apply {
+            created.addAll(t.createdShapes)
+            assigned.addAll(t.assignedFields)
+        }
         for ((i, n) in model.nevers.withIndex()) {
-            val base = model.baseOfExpr(n.target) ?: continue
-            for (id in idsOf(base)) {
+            val w = neverWatchers[i] ?: continue
+            if (!w.summary.readsTime && !relevant(w, fp)) continue
+            val ids = if (w.selfContained) idsOfCandidates(w.base, queryCompiler().filterFor(n.target))
+            else idsOf(w.base)
+            for (id in ids) {
                 if (evaluator.memberOfRefExpr(id, n.target))
-                    throw NeverViolation("never #${i + 1} over $base is violated")
+                    throw NeverViolation("never #${i + 1} over ${w.base} is violated")
             }
         }
     }
@@ -575,7 +707,8 @@ class VelleSystem(
         name in model.shapes -> idsOf(name)
         name in model.refinements -> {
             val base = model.baseOf(name) ?: return emptyList()
-            idsOf(base).filter { evaluator.memberOfRefExpr(it, RefName(name)) }
+            idsOfCandidates(base, queryCompiler().filterFor(RefName(name)))
+                .filter { evaluator.memberOfRefExpr(it, RefName(name)) }
         }
         else -> throw IllegalArgumentException("unknown shape or refinement '$name'")
     }
