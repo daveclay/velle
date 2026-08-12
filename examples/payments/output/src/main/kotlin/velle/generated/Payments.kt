@@ -259,6 +259,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     inner class ChargeResponseView(override val id: Long) : View {
         val attempt: ChargeAttemptView get() = ChargeAttemptView(system.get(id, "attempt") as Long)
         val outcome: String get() = system.get(id, "outcome") as String
+        val respondedOn: Instant get() = system.get(id, "respondedOn") as Instant
         override fun toString() = "ChargeResponse#$id"
         override fun equals(other: Any?) = other is ChargeResponseView && other.id == id
         override fun hashCode() = id.hashCode()
@@ -590,7 +591,7 @@ expose shape Order {
     netPaid: decimal = sum(chargeAttempts where SuccessfulCharge, amount) - sum(refunds, amount)
     receiptEmail: text? = customer.card?.billingContact?.email
     firstAttemptedOn: DateTime? = if chargeAttempts is empty then none
-                                  else first(chargeAttempts).requestedOn
+                                  else first(chargeAttempts by requestedOn).requestedOn
 }
 
 never (Order where amount <= 0)
@@ -631,6 +632,7 @@ shape ChargeAttempt {
 expose shape ChargeResponse {
     attempt: one ChargeAttempt
     outcome: text
+    respondedOn: timestamp on create
 }
 
 never (ChargeResponse where outcome != "approved" and outcome != "declined" and outcome != "error")
@@ -652,7 +654,7 @@ shape PendingAttempt = ChargeAttempt where
     not exists ChargeResponse for this and not exists AttemptTimeout for this
 
 shape CompletedAttempt = ChargeAttempt where exists ChargeResponse for this {
-    outcome: text = latest(ChargeResponse where attempt == this).outcome
+    outcome: text = latest(ChargeResponse where attempt == this by respondedOn).outcome
 }
 
 shape SuccessfulCharge = CompletedAttempt where outcome == "approved"

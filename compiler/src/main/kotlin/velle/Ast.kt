@@ -118,8 +118,15 @@ data class ExistsExpr(
     val collection: CollectionExpr? = null,
 ) : Expr
 
-/** count/sum/latest/first. `field` is sum's second argument. */
-data class AggCall(val name: String, val collection: CollectionExpr, val field: String? = null) : Expr
+/** count/sum/latest/first. `field` is sum's second argument; `orderBy` is the
+ *  selectors' mandatory `by` list — the author's ordering statement (README §10):
+ *  no implicit ordering source exists. */
+data class AggCall(
+    val name: String,
+    val collection: CollectionExpr,
+    val field: String? = null,
+    val orderBy: List<String> = emptyList(),
+) : Expr
 
 /** Builtin function call from the closed list: lowercase, max, min. */
 data class FunCall(val name: String, val args: List<Expr>) : Expr

@@ -300,27 +300,33 @@ class Evaluator(private val system: VelleSystem) {
             val all = combinations(e.collection, ctx).map { it.innermost() }.toList()
             if (all.isEmpty()) Value.VNone
             else {
-                val ordered = all.sortedWith(
-                    compareBy({ orderingKey(it.first, it.second).first }, { orderingKey(it.first, it.second).second })
-                )
+                // ordering is the author's declared `by` datums, nothing else —
+                // no creation-order fallback, no minted tiebreak (README §10)
+                val keyed = all.map { (scope, id) ->
+                    Triple(scope, id, e.orderBy.map { d -> readMember(id, scope, d) })
+                }
+                val ordered = keyed.sortedWith { a, b -> compareDatums(a.third, b.third) }
                 val chosen = if (e.name == "latest") ordered.last() else ordered.first()
+                // a tie at the winning position means the model is underspecified:
+                // the declared datums do not discriminate — fail loud, never pick
+                val tied = keyed.count { compareDatums(it.third, chosen.third) == 0 }
+                if (tied > 1)
+                    throw VelleRuntimeError(
+                        "${e.name}(... by ${e.orderBy.joinToString(", ")}) does not discriminate: " +
+                            "$tied instances share the ordering datum — declare a further criterion (README §10)"
+                    )
                 Value.VRef(chosen.second)
             }
         }
         else -> throw VelleRuntimeError("unknown aggregate '${e.name}'")
     }
 
-    /**
-     * Selector ordering: the element shape's sole `timestamp on create`, else creation
-     * order; creation sequence breaks timestamp ties (one shape orders consistently
-     * by one mode, so the two scales never mix within a selector).
-     */
-    private fun orderingKey(scope: String, id: Long): Pair<Long, Long> {
-        val inst = system.instances.getValue(id)
-        val tsProp = model.shapes[inst.shape]?.members?.filterIsInstance<TimestampProp>()
-            ?.singleOrNull { it.on == "create" }
-        val ts = tsProp?.let { (inst.fields[it.name] as? Value.VDateTime)?.v }
-        return (ts?.toEpochMilli() ?: 0L) to inst.seq
+    private fun compareDatums(a: List<Value>, b: List<Value>): Int {
+        for (i in a.indices) {
+            val c = compareValues(a[i], b[i])
+            if (c != 0) return c
+        }
+        return 0
     }
 
     private fun evalFun(e: FunCall, ctx: Ctx): Value = when (e.name) {

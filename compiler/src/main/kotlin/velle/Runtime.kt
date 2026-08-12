@@ -39,7 +39,10 @@ class Instance(
 )
 
 sealed interface CommitResult {
-    data class Accepted(val id: Long) : CommitResult
+    /** [id] is the session-local handle (what typed views wrap); [storeKey] is
+     *  the store-assigned row key when a store is connected and the act
+     *  persisted — what the application's own queries key on. */
+    data class Accepted(val id: Long, val storeKey: Any? = null) : CommitResult
     data class Refused(val reason: String) : CommitResult
 }
 
@@ -92,6 +95,16 @@ class VelleSystem(
      *  An index, not state: populated at creation, hydration, and reference
      *  conversion; survives snapshot clears. */
     private val idShape = HashMap<Long, String>()
+
+    // Identity is the store's (investigate_runtime.md §8): rows are keyed by
+    // whatever the store assigned, and the runtime's instance ids are
+    // session-local handles that never persist. This bimap is the translation
+    // at the boundary; like idShape it is an index, surviving snapshot clears.
+    // Keys are only unique per shape (a table's rowids restart at 1), so the
+    // handle side keys on the full typed ref, never the bare key.
+    private val keyOf = HashMap<Long, StoreKey>()
+    private val handleOf = HashMap<Ref.Persisted, Long>()
+
     private val fetchedAll = mutableSetOf<String>()
     private val fetchedRefs = mutableSetOf<Triple<String, String, Long>>()
     private val fetchedFilters = mutableSetOf<Pair<String, QF>>()
@@ -99,7 +112,19 @@ class VelleSystem(
     fun connect(resolver: StateResolver, onCommit: CommitCallback) {
         this.resolver = resolver
         this.onCommit = onCommit
-        nextId = maxOf(nextId, resolver.maxId() + 1)
+    }
+
+    /** The session-local handle for a store row — how an application enters
+     *  Velle from its own storage side (a key it read with its own SQL). */
+    fun handleFor(shape: String, key: Any): Long = handleForRef(Ref.Persisted(shape, StoreKey(key)))
+
+    private fun handleForRef(ref: Ref.Persisted): Long {
+        handleOf[ref]?.let { return it }
+        val h = nextId++
+        handleOf[ref] = h
+        keyOf[h] = ref.key
+        idShape[h] = ref.shape
+        return h
     }
 
     /** Each transaction evaluates against one consistent snapshot: drop the
@@ -129,8 +154,9 @@ class VelleSystem(
         captures[id to refinement]?.let { return it }
         val r = resolver ?: return null
         if ((id to refinement) in captureMisses) return null
-        val base = model.baseOf(refinement) ?: return null
-        val raw = r.fetchCaptures(base, id, refinement)
+        val key = keyOf[id] ?: return null // unpersisted: no membership storage could hold
+        val shape = idShape[id] ?: model.baseOf(refinement) ?: return null
+        val raw = r.fetchCaptures(Ref.Persisted(shape, key), refinement)
         if (raw == null) {
             captureMisses.add(id to refinement)
             return null
@@ -146,12 +172,13 @@ class VelleSystem(
         return values
     }
 
-    /** By-id read, faulting in from the resolver when absent. */
+    /** By-handle read, faulting in from the resolver via the store's key. */
     internal fun instance(id: Long): Instance? {
         instances[id]?.let { return it }
         val r = resolver ?: return null
         val shape = idShape[id] ?: return null
-        val row = r.fetchById(shape, id) ?: return null
+        val key = keyOf[id] ?: return null // no key: never persisted (rolled back, or another session's handle)
+        val row = r.fetchByKey(shape, key) ?: return null
         return hydrateIfAbsent(row)
     }
 
@@ -187,12 +214,17 @@ class VelleSystem(
     internal fun ensureReferencing(shape: String, field: String, targetId: Long) {
         val r = resolver ?: return
         if (shape in model.transients || shape in fetchedAll) return
+        // an unpersisted target (created this envelope) can't be referenced by
+        // anything storage holds — nothing to fetch
+        val key = keyOf[targetId] ?: return
+        val targetShape = idShape[targetId] ?: return
         if (fetchedRefs.add(Triple(shape, field, targetId)))
-            r.fetchReferencing(shape, field, targetId).forEach { hydrateIfAbsent(it) }
+            r.fetchReferencing(shape, field, Ref.Persisted(targetShape, key)).forEach { hydrateIfAbsent(it) }
     }
 
     private fun hydrateIfAbsent(row: Row): Instance {
-        instances[row.id]?.let { return it }
+        val handle = handleForRef(Ref.Persisted(row.shape, row.key))
+        instances[handle]?.let { return it }
         val decl = model.shapes[row.shape]
             ?: throw VelleRuntimeError("resolver returned unknown shape '${row.shape}'")
         val fields = mutableMapOf<String, Value>()
@@ -205,20 +237,18 @@ class VelleSystem(
             val raw = row.fields[name] ?: continue
             fields[name] = rawToValue(raw, vtype, "${row.shape}.$name")
         }
-        val inst = Instance(row.id, row.shape, row.id, fields)
-        instances[row.id] = inst
-        byShape.getOrPut(row.shape) { mutableListOf() }.add(row.id)
-        idShape[row.id] = row.shape
+        val inst = Instance(handle, row.shape, handle, fields)
+        instances[handle] = inst
+        byShape.getOrPut(row.shape) { mutableListOf() }.add(handle)
         return inst
     }
 
     private fun rawToValue(raw: Any, t: VType, at: String): Value = when (t) {
         is VType.Optional -> rawToValue(raw, t.inner, at)
         is VType.Inst -> {
-            val refId = (raw as? Number)?.toLong()
-                ?: throw VelleRuntimeError("hydrating $at: reference is not an id ($raw)")
-            idShape[refId] = t.shape
-            Value.VRef(refId)
+            val ref = raw as? Ref.Persisted
+                ?: throw VelleRuntimeError("hydrating $at: reference is not a Ref.Persisted ($raw)")
+            Value.VRef(handleForRef(ref))
         }
         is VType.Num -> Value.num(raw)
         VType.Text -> Value.VText(raw as? String ?: throw VelleRuntimeError("hydrating $at: not text ($raw)"))
@@ -282,12 +312,25 @@ class VelleSystem(
             checkNevers(t)
             // the commit callback runs inside the envelope: its writes join the
             // engineer's storage transaction, and a failure rolls the whole
-            // commit back (investigate_runtime.md §3, in-envelope failure)
+            // commit back (investigate_runtime.md §3, in-envelope failure).
+            // The store assigns row identity and reports it back (§8) — the
+            // returned keys bind this session's handles to storage.
             onCommit?.let { cb ->
-                val set = buildCommitSet(t)
+                val pending = buildCommitSet(t)
+                val set = pending.set
                 if (set.created.isNotEmpty() || set.assigned.isNotEmpty() ||
                     set.captured.isNotEmpty() || set.retracted.isNotEmpty()
-                ) cb.onCommit(set)
+                ) {
+                    val keys = cb.onCommit(set)
+                    if (keys.size != set.created.size)
+                        throw VelleRuntimeError(
+                            "commit callback returned ${keys.size} keys for ${set.created.size} created rows"
+                        )
+                    pending.createdHandles.forEachIndexed { i, h ->
+                        keyOf[h] = keys[i]
+                        handleOf[Ref.Persisted(idShape.getValue(h), keys[i])] = h
+                    }
+                }
             }
             txn = null
             drainAfterQueue(t)
@@ -299,24 +342,38 @@ class VelleSystem(
         }
     }
 
+    private class PendingCommit(val set: CommitSet, val createdHandles: List<Long>)
+
     /** The transaction's whole mutation set — creates with their final fields
-     *  (initially/generator/timestamp values included), assigns collapsed to the
-     *  final value per (instance, field). Transient acts are excluded: only
-     *  their consequences persist (README §4). */
-    private fun buildCommitSet(t: Txn): CommitSet {
+     *  (initially/generator/timestamp values included) in creation order, so
+     *  pending refs point backward; assigns collapsed to the final value per
+     *  (instance, field). References cross as typed [Ref]s: persisted rows by
+     *  their store key, same-set creates as [Ref.Pending] indices. Transient
+     *  acts are excluded: only their consequences persist (README §4). */
+    private fun buildCommitSet(t: Txn): PendingCommit {
         val createdSet = t.created.toSet()
-        val created = t.created.mapNotNull { id ->
+        val createdHandles = t.created.filter { instances.getValue(it).shape !in model.transients }
+        val indexOfHandle = createdHandles.withIndex().associate { (i, h) -> h to i }
+
+        fun refOf(handle: Long): Ref {
+            keyOf[handle]?.let { return Ref.Persisted(idShape.getValue(handle), it) }
+            indexOfHandle[handle]?.let { return Ref.Pending(idShape.getValue(handle), it) }
+            throw VelleRuntimeError("reference to unpersisted instance $handle escapes the commit set")
+        }
+
+        fun storeValue(v: Value): Any? = if (v is Value.VRef) refOf(v.id) else unwrap(v)
+
+        val created = createdHandles.map { id ->
             val inst = instances.getValue(id)
-            if (inst.shape in model.transients) return@mapNotNull null
             val decl = model.shapes.getValue(inst.shape)
             val fields = buildMap {
                 for (m in decl.members) when (m) {
-                    is StoredProp -> put(m.name, unwrap(inst.fields[m.name] ?: Value.VNone))
-                    is TimestampProp -> put(m.name, unwrap(inst.fields[m.name] ?: Value.VNone))
+                    is StoredProp -> put(m.name, storeValue(inst.fields[m.name] ?: Value.VNone))
+                    is TimestampProp -> put(m.name, storeValue(inst.fields[m.name] ?: Value.VNone))
                     else -> {}
                 }
             }
-            Row(inst.shape, id, fields)
+            CommitSet.Creation(inst.shape, fields)
         }
         val assigned = t.oldValues.asSequence()
             .map { (id, field, _) -> id to field }
@@ -324,11 +381,14 @@ class VelleSystem(
             .filter { (id, _) -> id !in createdSet }
             .map { (id, field) ->
                 val inst = instances.getValue(id)
-                CommitSet.Assign(inst.shape, id, field, unwrap(inst.fields[field] ?: Value.VNone))
+                val target = refOf(id) as? Ref.Persisted
+                    ?: throw VelleRuntimeError("assign targets unpersisted instance $id")
+                CommitSet.Assign(target, field, storeValue(inst.fields[field] ?: Value.VNone))
             }
             .toList()
         // capture channel: net end-state per touched membership — present at
-        // envelope close is an upsert, absent a retraction (delete)
+        // envelope close is an upsert, absent a retraction (delete); a
+        // create-then-exit inside one envelope persisted nothing and nets out
         val capturedOps = mutableListOf<CommitSet.Capture>()
         val retractedOps = mutableListOf<CommitSet.Retraction>()
         for ((id, refName) in t.captureOld.map { it.first }.distinct()) {
@@ -336,10 +396,13 @@ class VelleSystem(
             if (base in model.transients) continue
             val values = captures[id to refName]
             if (values != null)
-                capturedOps.add(CommitSet.Capture(base, id, refName, values.mapValues { unwrap(it.value) }))
-            else retractedOps.add(CommitSet.Retraction(base, id, refName))
+                capturedOps.add(CommitSet.Capture(refOf(id), refName, values.mapValues { storeValue(it.value) }))
+            else {
+                val key = keyOf[id] ?: continue
+                retractedOps.add(CommitSet.Retraction(Ref.Persisted(idShape.getValue(id), key), refName))
+            }
         }
-        return CommitSet(created, assigned, capturedOps, retractedOps)
+        return PendingCommit(CommitSet(created, assigned, capturedOps, retractedOps), createdHandles)
     }
 
     private fun rollback(t: Txn) {
@@ -394,7 +457,7 @@ class VelleSystem(
                     byShape[shape]?.remove(id)
                     captures.keys.removeIf { it.first == id }
                 }
-                CommitResult.Accepted(id)
+                CommitResult.Accepted(id, keyOf[id]?.value)
             },
             onFailure = { e ->
                 if (e is NeverViolation) CommitResult.Refused(e.reason) else throw e

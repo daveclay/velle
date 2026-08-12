@@ -250,11 +250,11 @@ class Model(val decls: List<Decl>) {
         if (name in refinements) s.absorb(predicateSummary(name))
     }
 
-    /** Collects an aggregate's reads (collection, and sum's selected field);
-     *  returns the collection's element scope, null when unresolvable. */
+    /** Collects an aggregate's reads (collection, sum's selected field, and the
+     *  selectors' `by` datums); returns the element scope, null when unresolvable. */
     private fun collectAgg(e: AggCall, subject: String, s: ReadSummary, aliases: Map<String, String>): String? {
         val elem = collectCollection(e.collection, subject, s, aliases)
-        e.field?.let { f ->
+        for (f in listOfNotNull(e.field) + e.orderBy) {
             val m = elem?.let { membersOf(it)[f] }
             if (m != null) record(elem, m, s) else s.opaque = true
         }

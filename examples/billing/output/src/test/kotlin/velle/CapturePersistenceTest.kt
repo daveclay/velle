@@ -51,18 +51,22 @@ class CapturePersistenceTest {
         // `captured archivedOn: Date = today` fixed at the entry moment
         val first = system(Instant.parse("2026-01-01T09:00:00Z"))
         val cust = first.customer(accept(first.commitCustomer("Ada", "ada@x.com")))
-        val invId = accept(first.commitInvoice(cust, due = java.time.LocalDate.of(2026, 2, 1)))
-        accept(first.commitArchiveRequest(first.invoice(invId)))
+        val invRes = assertIs<CommitResult.Accepted>(first.commitInvoice(cust, due = java.time.LocalDate.of(2026, 2, 1)))
+        val invKey = assertIs<Long>(invRes.storeKey, "store key expected on a persisted accept")
+        accept(first.commitArchiveRequest(first.invoice(invRes.id)))
 
-        assertEquals("2026-01-01", scalar("""SELECT archivedOn FROM "capture_ArchivedInvoice" WHERE id = ?""", invId))
+        assertEquals("2026-01-01", scalar("""SELECT archivedOn FROM "capture_ArchivedInvoice" WHERE id = ?""", invKey))
 
-        // process two, five days later: unarchive. The exit rule hydrates the
-        // capture from storage — the notice carries the *entry* date, not today
+        // process two, five days later: unarchive. Handles are session-local —
+        // the second process enters from its own storage side, by store key.
+        // The exit rule hydrates the capture — the notice carries the *entry*
+        // date, not the second process's today
         val second = system(Instant.parse("2026-01-06T09:00:00Z"))
-        accept(second.commitUnarchiveRequest(second.invoice(invId)))
+        val invHandle = second.system.handleFor("Invoice", invKey)
+        accept(second.commitUnarchiveRequest(second.invoice(invHandle)))
 
         assertEquals(1L, scalar("""SELECT COUNT(*) FROM "UnarchiveNotice""""))
-        assertEquals("2026-01-01", scalar("""SELECT wasArchivedOn FROM "UnarchiveNotice" WHERE invoice = ?""", invId))
+        assertEquals("2026-01-01", scalar("""SELECT wasArchivedOn FROM "UnarchiveNotice" WHERE invoice = ?""", invKey))
         // retraction landed in the same envelope: the membership's memory is gone
         assertEquals(0L, scalar("""SELECT COUNT(*) FROM "capture_ArchivedInvoice""""))
     }

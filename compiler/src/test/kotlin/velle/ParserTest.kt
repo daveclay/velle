@@ -3,6 +3,7 @@ package velle
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -179,12 +180,18 @@ class ExpressionTest {
     }
 
     @Test
-    fun `selectors take shape-for collections and accessors`() {
-        val e = value("latest(EmailCorrection for this).corrected")
+    fun `selectors take shape-for collections, a mandatory by, and accessors`() {
+        val e = value("latest(EmailCorrection for this by correctedOn).corrected")
         val access = assertIs<Access>(e)
         val latest = assertIs<AggCall>(access.target)
         val source = assertIs<ShapeForSource>(latest.collection.bindings.single().source)
         assertEquals("EmailCorrection", source.shape)
+        assertEquals(listOf("correctedOn"), latest.orderBy)
+    }
+
+    @Test
+    fun `a selector without by is a parse error - ordering is never implicit`() {
+        assertFailsWith<VelleSyntaxError> { value("latest(EmailCorrection for this).corrected") }
     }
 
     @Test

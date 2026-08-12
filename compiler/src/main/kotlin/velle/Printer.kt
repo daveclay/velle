@@ -104,7 +104,8 @@ object Printer {
         is ExistsExpr ->
             if (e.shape != null) "exists ${e.shape} for ${expr(e.forExpr!!)}"
             else "exists (${collection(e.collection!!)})"
-        is AggCall -> "${e.name}(${collection(e.collection)}${e.field?.let { ", $it" } ?: ""})"
+        is AggCall -> "${e.name}(${collection(e.collection)}${e.field?.let { ", $it" } ?: ""}" +
+            (if (e.orderBy.isEmpty()) "" else " by ${e.orderBy.joinToString(", ")}") + ")"
         is FunCall -> "${e.name}(${e.args.joinToString(", ") { expr(it) }})"
         is SingularFor -> "(${e.shape} for ${expr(e.forExpr)})"
         is Access -> operand(e.target) + e.segs.joinToString("") { (if (it.viaQdot) "?." else ".") + it.name }

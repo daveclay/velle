@@ -35,12 +35,17 @@ fun main() {
         println()
 
         // ── the scenario: ordinary application code calling generated commits ──
-        val cust = billing.customer(accept(billing.commitCustomer("Ada Lovelace", "ada@example.com")))
-        val inv = billing.invoice(accept(billing.commitInvoice(cust, due = today().plusDays(30))))
+        // Accepted.id is this session's handle (what the typed views wrap);
+        // Accepted.storeKey is the store-assigned row key — what the app's own
+        // SQL below keys on (identity is the store's, investigate_runtime.md §8)
+        val custRes = accept(billing.commitCustomer("Ada Lovelace", "ada@example.com"))
+        val cust = billing.customer(custRes.id)
+        val invRes = accept(billing.commitInvoice(cust, due = today().plusDays(30)))
+        val inv = billing.invoice(invRes.id)
         accept(billing.commitLineItem(inv, "Design work", BigDecimal("1200.00"), 1))
         accept(billing.commitLineItem(inv, "Hosting", BigDecimal("50.00"), 2))
         accept(billing.commitIssuance(inv))
-        println("committed customer #${cust.id}, invoice #${inv.id} with two line items, issued")
+        println("committed customer #${custRes.storeKey}, invoice #${invRes.storeKey} with two line items, issued")
 
         // typed reads: derived properties computed by demand-hydrating rows from SQLite
         println("   invoice.total=${inv.total}  balance=${inv.balance}  status=${inv.status}")
@@ -57,11 +62,12 @@ fun main() {
         println()
 
         // an already-overdue invoice, then the weekly tick sweeps it — the tick's
-        // scan read hydrates every invoice from SQLite to find current members
-        val overdue = billing.invoice(accept(billing.commitInvoice(cust, due = today().minusDays(10))))
+        // candidate query brings back overdue invoices from SQLite
+        val overdueRes = accept(billing.commitInvoice(cust, due = today().minusDays(10)))
+        val overdue = billing.invoice(overdueRes.id)
         accept(billing.commitLineItem(overdue, "Old work", BigDecimal("99.00"), 1))
         billing.tickWeekly()
-        println("committed overdue invoice #${overdue.id}, ran the weekly tick")
+        println("committed overdue invoice #${overdueRes.storeKey}, ran the weekly tick")
         println()
 
         // ── the engineer's own SQL against their own DB ──
@@ -90,8 +96,8 @@ fun main() {
 
 private fun today(): LocalDate = LocalDate.now(ZoneOffset.UTC) // the system's declared zone (UTC)
 
-private fun accept(r: CommitResult): Long = when (r) {
-    is CommitResult.Accepted -> r.id
+private fun accept(r: CommitResult): CommitResult.Accepted = when (r) {
+    is CommitResult.Accepted -> r
     is CommitResult.Refused -> error("refused: ${r.reason}")
 }
 

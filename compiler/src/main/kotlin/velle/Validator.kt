@@ -214,7 +214,10 @@ class Validator(private val model: Model) {
                 }
                 e.collection?.let { checkCollection(it, scope) }
             }
-            is AggCall -> checkCollection(e.collection, scope, sumField = e.field)
+            is AggCall -> checkCollection(
+                e.collection, scope, sumField = e.field,
+                orderBy = e.orderBy.takeIf { e.name == "latest" || e.name == "first" }
+            )
             is FunCall -> {
                 if (e.name !in setOf("lowercase", "max", "min"))
                     diags.add(Diagnostic("F2", "unknown function '${e.name}' — the builtin list is closed (README §5)"))
@@ -231,7 +234,12 @@ class Validator(private val model: Model) {
         }
     }
 
-    private fun checkCollection(c: CollectionExpr, scope: String, sumField: String? = null) {
+    private fun checkCollection(
+        c: CollectionExpr,
+        scope: String,
+        sumField: String? = null,
+        orderBy: List<String>? = null,
+    ) {
         var element = scope
         val introduced = mutableListOf<String>()
         for (b in c.bindings) {
@@ -253,6 +261,19 @@ class Validator(private val model: Model) {
         sumField?.let {
             if (model.membersOf(element)[it] == null)
                 diags.add(Diagnostic("F1", "sum(..., $it) — '$element' has no member '$it'"))
+        }
+        // selectors' `by` datums: each must be an orderable member of the
+        // element — the author's ordering statement, typechecked (F2, README §10)
+        orderBy?.forEach { d ->
+            val m = model.membersOf(element)[d]
+            if (m == null)
+                diags.add(Diagnostic("F2", "selector 'by $d' — '$element' has no member '$d'"))
+            else {
+                val t = (m.type as? VType.Optional)?.inner ?: m.type
+                val orderable = t is VType.Num || t == VType.Text || t == VType.DateT || t == VType.DateTimeT
+                if (!orderable)
+                    diags.add(Diagnostic("F2", "selector 'by $d' — $element.$d is not orderable (README §10)"))
+            }
         }
         introduced.forEach { aliasScopes.remove(it) }
     }

@@ -62,7 +62,7 @@ expose shape Order {
     netPaid: decimal = sum(chargeAttempts where SuccessfulCharge, amount) - sum(refunds, amount)
     receiptEmail: text? = customer.card?.billingContact?.email
     firstAttemptedOn: DateTime? = if chargeAttempts is empty then none
-                                  else first(chargeAttempts).requestedOn
+                                  else first(chargeAttempts by requestedOn).requestedOn
 }
 
 never (Order where amount <= 0)
@@ -103,6 +103,7 @@ shape ChargeAttempt {
 expose shape ChargeResponse {
     attempt: one ChargeAttempt
     outcome: text
+    respondedOn: timestamp on create
 }
 
 never (ChargeResponse where outcome != "approved" and outcome != "declined" and outcome != "error")
@@ -124,7 +125,7 @@ shape PendingAttempt = ChargeAttempt where
     not exists ChargeResponse for this and not exists AttemptTimeout for this
 
 shape CompletedAttempt = ChargeAttempt where exists ChargeResponse for this {
-    outcome: text = latest(ChargeResponse where attempt == this).outcome
+    outcome: text = latest(ChargeResponse where attempt == this by respondedOn).outcome
 }
 
 shape SuccessfulCharge = CompletedAttempt where outcome == "approved"

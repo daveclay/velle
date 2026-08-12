@@ -332,6 +332,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     inner class CloseTicketView(override val id: Long) : View {
         val ticket: TicketView get() = TicketView(system.get(id, "ticket") as Long)
         val closedBy: AgentView get() = AgentView(system.get(id, "closedBy") as Long)
+        val closedOn: Instant get() = system.get(id, "closedOn") as Instant
         override fun toString() = "CloseTicket#$id"
         override fun equals(other: Any?) = other is CloseTicketView && other.id == id
         override fun hashCode() = id.hashCode()
@@ -492,7 +493,7 @@ expose shape Member {
     engagementScore: double initially 0
     totalDeposited: decimal = sum(deposits, amount)
     email: text = if exists EmailChange for this then
-                  lowercase(latest(EmailChange for this).newEmail)
+                  lowercase(latest(EmailChange for this by changedOn).newEmail)
                   else lowercase(signupEmail)
 }
 
@@ -741,6 +742,7 @@ never (Ticket where priority != "low" and priority != "normal" and priority != "
 expose shape CloseTicket {
     ticket: one Ticket
     closedBy: one Agent
+    closedOn: timestamp on create
 }
 
 expose shape ReopenTicket {
@@ -751,7 +753,7 @@ shape ClosedTicket = Ticket where
     exists CloseTicket for this and not exists ReopenTicket for this {
     frozen
     captured closedOn: Date = today
-    captured closedBy: one Agent = latest(CloseTicket where ticket == this).closedBy
+    captured closedBy: one Agent = latest(CloseTicket where ticket == this by closedOn).closedBy
 }
 
 shape ReopenNotice {

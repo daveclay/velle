@@ -447,7 +447,18 @@ class Parser(private val tokens: List<Token>) {
         if (!at(TokType.LPAREN)) return PathExpr(name)
         next() // consume '('
         val result = when (name) {
-            "count", "latest", "first" -> AggCall(name, parseCollectionExpr())
+            "count" -> AggCall(name, parseCollectionExpr())
+            "latest", "first" -> {
+                // selectors carry their ordering as an explicit author statement —
+                // `by` is contextual (an identifier elsewhere), required here
+                val coll = parseCollectionExpr()
+                if (!(at(TokType.LIDENT) && peek().text == "by"))
+                    fail("$name(...) requires 'by <property>' — the ordering datum is the author's statement, never implicit (README §10)", peek())
+                next() // consume 'by'
+                val order = mutableListOf(expect(TokType.LIDENT).text)
+                while (at(TokType.COMMA)) { next(); order.add(expect(TokType.LIDENT).text) }
+                AggCall(name, coll, orderBy = order)
+            }
             "sum" -> {
                 // sum's collection is the single-binding form; its second argument
                 // is the summed field (grammar.md, aggregateCall)

@@ -5,8 +5,10 @@ import velle.CommitSet
 import velle.Model
 import velle.QConst
 import velle.QF
+import velle.Ref
 import velle.Row
 import velle.StateResolver
+import velle.StoreKey
 import velle.StoredProp
 import velle.TimestampProp
 import velle.VType
@@ -73,26 +75,24 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
         else -> "TEXT"
     }
 
-    // ── the resolver: the three read questions (investigate_runtime.md §2) ───
+    // ── the resolver: the typed read questions (investigate_runtime.md §2, §8) ──
+    // Identity is this store's: rows key on the table's INTEGER PRIMARY KEY
+    // (SQLite's rowid), minted at insert and reported back from onCommit.
 
-    override fun maxId(): Long = persistedShapes.maxOf { shape ->
-        conn.prepareStatement("""SELECT COALESCE(MAX(id), 0) FROM "$shape"""").use { ps ->
-            ps.executeQuery().use { rs -> rs.getLong(1) }
-        }
-    }
+    private fun keyLong(key: StoreKey): Long = key.value as Long
 
-    override fun fetchById(shape: String, id: Long): Row? =
-        select(shape, """WHERE id = ?""") { it.setLong(1, id) }.singleOrNull()
+    override fun fetchByKey(shape: String, key: StoreKey): Row? =
+        select(shape, """WHERE id = ?""") { it.setLong(1, keyLong(key)) }.singleOrNull()
 
     override fun fetchAll(shape: String): List<Row> = select(shape, "")
 
-    override fun fetchReferencing(shape: String, field: String, targetId: Long): List<Row> =
-        select(shape, """WHERE "$field" = ?""") { it.setLong(1, targetId) }
+    override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> =
+        select(shape, """WHERE "$field" = ?""") { it.setLong(1, keyLong(target.key)) }
 
-    override fun fetchCaptures(shape: String, id: Long, refinement: String): Map<String, Any?>? {
+    override fun fetchCaptures(instance: Ref.Persisted, refinement: String): Map<String, Any?>? {
         val cs = model.captureSchemas.find { it.refinement == refinement } ?: return null
         return conn.prepareStatement("""SELECT * FROM "${captureTable(refinement)}" WHERE id = ?""").use { ps ->
-            ps.setLong(1, id)
+            ps.setLong(1, keyLong(instance.key))
             ps.executeQuery().use { rs ->
                 if (!rs.next()) null
                 else buildMap {
@@ -203,12 +203,13 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
                 put(c.name, readColumn(c.type, c.name, rs))
             }
         }
-        return Row(shape, rs.getLong("id"), fields)
+        return Row(shape, StoreKey(rs.getLong("id")), fields)
     }
 
     private fun readColumn(t: VType, name: String, rs: ResultSet): Any = when (t) {
         is VType.Optional -> readColumn(t.inner, name, rs)
-        is VType.Inst -> rs.getLong(name)
+        // references leave the store as typed refs — target shape from the model
+        is VType.Inst -> Ref.Persisted(t.shape, StoreKey(rs.getLong(name)))
         is VType.Num ->
             if (t.name == "integer" || t.name == "long") rs.getLong(name)
             else BigDecimal(rs.getString(name))
@@ -224,15 +225,22 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
      * Runs inside the runtime's envelope: everything the transaction created or
      * assigned lands in one SQLite transaction, and a failure here rolls the
      * whole Velle commit back (in-envelope failure, investigate_runtime.md §3).
+     *
+     * Identity is minted here (§8): each created row gets its table's next
+     * INTEGER PRIMARY KEY, and the assigned keys return in creation order.
+     * Creates arrive with pending refs pointing backward, so inserting in list
+     * order always has the referenced key already minted.
      */
-    override fun onCommit(commit: CommitSet) {
+    override fun onCommit(commit: CommitSet): List<StoreKey> {
         conn.autoCommit = false
         try {
-            for (row in commit.created) insert(row)
-            for (a in commit.assigned) update(a)
-            for (c in commit.captured) upsertCapture(c)
+            val minted = mutableListOf<StoreKey>()
+            for (c in commit.created) minted.add(insert(c, minted))
+            for (a in commit.assigned) update(a, minted)
+            for (c in commit.captured) upsertCapture(c, minted)
             for (r in commit.retracted) deleteCapture(r)
             conn.commit()
+            return minted
         } catch (e: Exception) {
             conn.rollback()
             throw e
@@ -241,50 +249,59 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
         }
     }
 
-    private fun upsertCapture(c: CommitSet.Capture) {
+    /** A reference value as this store's key column: persisted refs carry
+     *  their key, pending refs resolve against the keys minted so far. */
+    private fun refKey(v: Any, minted: List<StoreKey>): Long = when (v) {
+        is Ref.Persisted -> keyLong(v.key)
+        is Ref.Pending -> keyLong(minted[v.index])
+        else -> throw IllegalArgumentException("reference value is not a Ref: $v")
+    }
+
+    private fun insert(c: CommitSet.Creation, minted: List<StoreKey>): StoreKey {
+        val cols = columnsOf(c.shape)
+        val sql = """INSERT INTO "${c.shape}" (${cols.joinToString(", ") { "\"${it.name}\"" }}) """ +
+            """VALUES (${cols.joinToString(", ") { "?" }})"""
+        conn.prepareStatement(sql).use { ps ->
+            cols.forEachIndexed { i, col -> ps.setObject(i + 1, writeColumn(col.type, c.fields[col.name], minted)) }
+            ps.executeUpdate()
+        }
+        return conn.prepareStatement("SELECT last_insert_rowid()").use { ps ->
+            ps.executeQuery().use { rs -> rs.next(); StoreKey(rs.getLong(1)) }
+        }
+    }
+
+    private fun update(a: CommitSet.Assign, minted: List<StoreKey>) {
+        val col = columnsOf(a.target.shape).first { it.name == a.field }
+        conn.prepareStatement("""UPDATE "${a.target.shape}" SET "${a.field}" = ? WHERE id = ?""").use { ps ->
+            ps.setObject(1, writeColumn(col.type, a.value, minted))
+            ps.setLong(2, keyLong(a.target.key))
+            ps.executeUpdate()
+        }
+    }
+
+    private fun upsertCapture(c: CommitSet.Capture, minted: List<StoreKey>) {
         val cs = model.captureSchemas.first { it.refinement == c.refinement }
         val names = listOf("id") + cs.props.map { it.name }
         val sql = """INSERT OR REPLACE INTO "${captureTable(c.refinement)}" """ +
             """(${names.joinToString(", ") { "\"$it\"" }}) VALUES (${names.joinToString(", ") { "?" }})"""
         conn.prepareStatement(sql).use { ps ->
-            ps.setLong(1, c.id)
-            cs.props.forEachIndexed { i, p -> ps.setObject(i + 2, writeColumn(p.type, c.values[p.name])) }
+            ps.setLong(1, refKey(c.instance, minted))
+            cs.props.forEachIndexed { i, p -> ps.setObject(i + 2, writeColumn(p.type, c.values[p.name], minted)) }
             ps.executeUpdate()
         }
     }
 
     private fun deleteCapture(r: CommitSet.Retraction) {
         conn.prepareStatement("""DELETE FROM "${captureTable(r.refinement)}" WHERE id = ?""").use { ps ->
-            ps.setLong(1, r.id)
+            ps.setLong(1, keyLong(r.instance.key))
             ps.executeUpdate()
         }
     }
 
-    private fun insert(row: Row) {
-        val cols = columnsOf(row.shape)
-        val names = listOf("id") + cols.map { it.name }
-        val sql = """INSERT INTO "${row.shape}" (${names.joinToString(", ") { "\"$it\"" }}) """ +
-            """VALUES (${names.joinToString(", ") { "?" }})"""
-        conn.prepareStatement(sql).use { ps ->
-            ps.setLong(1, row.id)
-            cols.forEachIndexed { i, c -> ps.setObject(i + 2, writeColumn(c.type, row.fields[c.name])) }
-            ps.executeUpdate()
-        }
-    }
-
-    private fun update(a: CommitSet.Assign) {
-        val col = columnsOf(a.shape).first { it.name == a.field }
-        conn.prepareStatement("""UPDATE "${a.shape}" SET "${a.field}" = ? WHERE id = ?""").use { ps ->
-            ps.setObject(1, writeColumn(col.type, a.value))
-            ps.setLong(2, a.id)
-            ps.executeUpdate()
-        }
-    }
-
-    private fun writeColumn(t: VType, v: Any?): Any? = when {
+    private fun writeColumn(t: VType, v: Any?, minted: List<StoreKey>): Any? = when {
         v == null -> null
-        t is VType.Optional -> writeColumn(t.inner, v)
-        t is VType.Inst -> v as Long
+        t is VType.Optional -> writeColumn(t.inner, v, minted)
+        t is VType.Inst -> refKey(v, minted)
         t is VType.Num ->
             if (t.name == "integer" || t.name == "long") (v as BigDecimal).longValueExact()
             else (v as BigDecimal).toPlainString()
