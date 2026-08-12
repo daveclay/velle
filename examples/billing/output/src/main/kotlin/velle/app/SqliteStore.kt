@@ -50,8 +50,20 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
                 val cols = columnsOf(shape).joinToString("") { ", \"${it.name}\" ${sqlType(it.type)}" }
                 st.execute("""CREATE TABLE IF NOT EXISTS "$shape" (id INTEGER PRIMARY KEY$cols)""")
             }
+            // Capture persistence: per-membership memory for each capture-carrying
+            // refinement (Model.captureSchemas states exactly what must survive).
+            // This store picks a table per refinement — one row per current
+            // membership, deleted on exit; nullable columns on the base table or
+            // a discriminator would do equally, the mapping is the store's call
+            // (investigate_runtime.md §7).
+            for (cs in model.captureSchemas) {
+                val cols = cs.props.joinToString("") { ", \"${it.name}\" ${sqlType(it.type)}" }
+                st.execute("""CREATE TABLE IF NOT EXISTS "${captureTable(cs.refinement)}" (id INTEGER PRIMARY KEY$cols)""")
+            }
         }
     }
+
+    private fun captureTable(refinement: String) = "capture_$refinement"
 
     private fun sqlType(t: VType): String = when (t) {
         is VType.Optional -> sqlType(t.inner)
@@ -76,6 +88,22 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
 
     override fun fetchReferencing(shape: String, field: String, targetId: Long): List<Row> =
         select(shape, """WHERE "$field" = ?""") { it.setLong(1, targetId) }
+
+    override fun fetchCaptures(shape: String, id: Long, refinement: String): Map<String, Any?>? {
+        val cs = model.captureSchemas.find { it.refinement == refinement } ?: return null
+        return conn.prepareStatement("""SELECT * FROM "${captureTable(refinement)}" WHERE id = ?""").use { ps ->
+            ps.setLong(1, id)
+            ps.executeQuery().use { rs ->
+                if (!rs.next()) null
+                else buildMap {
+                    for (p in cs.props) {
+                        if (rs.getObject(p.name) == null) continue
+                        put(p.name, readColumn(p.type, p.name, rs))
+                    }
+                }
+            }
+        }
+    }
 
     /**
      * The pre-filter, rendered to a WHERE clause. Two rules keep this sound
@@ -202,12 +230,33 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
         try {
             for (row in commit.created) insert(row)
             for (a in commit.assigned) update(a)
+            for (c in commit.captured) upsertCapture(c)
+            for (r in commit.retracted) deleteCapture(r)
             conn.commit()
         } catch (e: Exception) {
             conn.rollback()
             throw e
         } finally {
             conn.autoCommit = true
+        }
+    }
+
+    private fun upsertCapture(c: CommitSet.Capture) {
+        val cs = model.captureSchemas.first { it.refinement == c.refinement }
+        val names = listOf("id") + cs.props.map { it.name }
+        val sql = """INSERT OR REPLACE INTO "${captureTable(c.refinement)}" """ +
+            """(${names.joinToString(", ") { "\"$it\"" }}) VALUES (${names.joinToString(", ") { "?" }})"""
+        conn.prepareStatement(sql).use { ps ->
+            ps.setLong(1, c.id)
+            cs.props.forEachIndexed { i, p -> ps.setObject(i + 2, writeColumn(p.type, c.values[p.name])) }
+            ps.executeUpdate()
+        }
+    }
+
+    private fun deleteCapture(r: CommitSet.Retraction) {
+        conn.prepareStatement("""DELETE FROM "${captureTable(r.refinement)}" WHERE id = ?""").use { ps ->
+            ps.setLong(1, r.id)
+            ps.executeUpdate()
         }
     }
 

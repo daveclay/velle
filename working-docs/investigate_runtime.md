@@ -75,7 +75,7 @@ What the spike confirmed:
 
 What the spike surfaced as gaps in the contract:
 
-- **Captures have no storage home.** Per-membership memory (`ArchivedInvoice.archivedOn`) lives only in the runtime's process; archive in one run, unarchive in the next, and the exit rule's capture read fails. The resolver/callback surface needs a capture channel — a runtime-owned table the engineer hosts, or captures re-derived at hydration — a real hole in §2/§3 as written, promoted to the open list below.
+- **Captures have no storage home.** Per-membership memory (`ArchivedInvoice.archivedOn`) lives only in the runtime's process; archive in one run, unarchive in the next, and the exit rule's capture read fails. The resolver/callback surface needs a capture channel — a runtime-owned table the engineer hosts, or captures re-derived at hydration — a real hole in §2/§3 as written. (Closed by §7.)
 - **A bare `id` doesn't name its table.** The runtime's references carry no shape, but engineer storage is per-shape. The spike keeps an id→shape index populated at creation, hydration, and reference conversion — workable, because every path an id enters by knows the target shape from the model — but the resolver contract should state it: by-id fetches are always shape-qualified.
 - **Id minting.** The runtime mints ids above the storage's max (`maxId()` on the resolver). Fine for the spike; the supplied-vs-generated `id` question at trust/legacy boundaries remains with the per-exposure field policy item.
 
@@ -99,6 +99,22 @@ What this rung leaves open:
 - **Aggregate pre-filters** — `count(...) == 0` as NOT EXISTS, sums as aggregation subqueries (§2 anticipated both; the IR doesn't carry them yet).
 - **Encoding** — the spike's TEXT encodings cost decimal and DateTime their SQL comparisons. An engineer-side choice the renderer already degrades around; a store that wants them orders its columns (epoch integers, scaled integers) and extends its renderer.
 
+## 7. Captures: per-membership memory is the store's problem, stated explicitly
+
+Built and running (2026-08-12), closing §5's capture hole. The design question first: could `captured` mean a *calculated* field rather than persistence? No — and not merely because the contract says so. A capture is *the expression evaluated at the entry commit, fixed for the membership's duration* (README §8), and its inputs are free to drift afterward; recomputing it at read time needs the state as of a past moment, which current state cannot reconstruct — the same argument that grounds the transition law. Re-deriving past evaluations from retained history is replay, rejected in §2. There is a narrow slice that looks re-derivable (a capture reading only immutable evidence, on an entry-by-act refinement), but it collapses on `captured archivedOn = today` unless entry-today provably equals the evidence's creation timestamp — a per-capture theorem a spec edit anywhere can silently invalidate. Fail-closed: **captured means persisted.**
+
+So refinements bifurcate, and cleanly: a predicate-only refinement (frozen clauses included — a freeze is a write-gate, not storage) is a pure read-only view, which is what let §6 compile them to candidate queries; a capture-carrying refinement is a view *plus rows* — per-membership storage keyed by (instance, refinement), created at the entry commit, deleted at the exit commit's close. That retraction is the one sanctioned deletion in the whole contract, legal precisely because a capture is memory, not a record of something that happened in the world — a business wanting history was always supposed to reify occurrence facts.
+
+The gap is solved store-side. This is not a new problem class — it is subtype-state mapping, and stores have always had the catalog: a table per refinement, nullable columns on the base table, a discriminator. The runtime's job is to state the problem so an implementor cannot miss it:
+
+- **`CommitSet` grows the capture channel** — declarative end-state, one op per membership the envelope touched: a `Capture` upsert ("this membership now holds these values") or a `Retraction` delete ("no current membership"). It rides the same transaction-unit payload, so the universal transaction covers its atomicity with nothing new; enter-and-exit within one envelope nets to a harmless delete.
+- **`StateResolver.fetchCaptures` is deliberately abstract, not defaulted** — the asymmetry with `fetchCandidates` is the contract encoding what each costs: ignoring the pre-filter costs performance; ignoring captures costs correctness (the exit-rule last-reader contract, README §13). A store facing a capture-carrying spec gets a compile error naming its problem; a store for a capture-less spec discharges it with `= null`.
+- **`Model.captureSchemas` enumerates the problems** — refinement, base shape, typed properties: the complete statement of what must survive, so the store's schema can be model-driven whatever mapping it picks.
+
+Runtime-side, the in-process capture map became what `instances` became in §5: a per-envelope cache over the store — hydrated on demand, rollback-tracked inside the envelope, net end-state emitted at close. The last-reader contract now holds across processes: the exit envelope hydrates the capture, the exit rule reads it, and the retraction lands in that same envelope's commit set. Nothing more is owed — capture-reading exit rules were already compile-barred from `after commit` and schedules, so in-envelope readability is the entire obligation.
+
+Exercised (`CapturePersistenceTest`): archive an invoice in one system on Jan 1 (`capture_ArchivedInvoice` row lands with the entry date), unarchive in a *second* system five days later — the `UnarchiveNotice` carries Jan 1, not the second process's today, and the capture row is gone after the exit. SqliteStore demonstrates the table-per-refinement mapping in a handful of lines, with the alternatives noted where the choice is made.
+
 ## Outcomes
 
 Settled enough to promote:
@@ -108,11 +124,11 @@ Settled enough to promote:
 - Hydration: demand-hydrated evaluation over engineer-owned storage via generated per-act resolver interfaces — Velle defers on where authority lives (one DB, many, APIs, files); the query IR / SQL builder is a pre-filter utility, never the authoritative evaluator; replay-in is rejected.
 - OQ20's who-may-commit residue retires to engineer wrapper code.
 - The pre-filter rung (§6): relevance gating over static read summaries; the `QF` query IR under the superset contract (`fetchCandidates`, default `fetchAll`); polarity-dual compilation; self-containment as the commit-time soundness criterion; keyed fetches for correlated general-form exists; fresh snapshot per tick.
+- Capture persistence (§7): `captured` means persisted — per-membership rows the store hosts under whatever subtype-state mapping it picks; the `CommitSet` capture channel (upsert/retraction as end-state), abstract `fetchCaptures` (the deliberate asymmetry with defaulted `fetchCandidates`), `Model.captureSchemas` as the problem statement; retraction as the contract's one sanctioned delete.
 
 Still open, re-homed:
 
 - Per-exposure field policy (committer-suppliable fields, supplied-vs-generated `id`) — now attaches directly to `expose` design.
-- Capture persistence (from the spike, §5): per-membership memory must survive the process for the exit-rule last-reader contract to hold over engineer-owned storage — a capture channel on the resolver/callback surface, or re-derivation at hydration. Undesigned.
 - The universal-transaction contract: the exact guarantees Velle assumes (snapshot reads, atomic writes, serialization of conflicting commits) stated precisely — the engineer realizes them however their storage requires; the confluence and one-writer proofs now rest on this contract.
 - Production clock default (real time, controllable clock as test affordance).
 - Rule-execution hook — rejected as a hook; residue folds into the `why`/provenance item.

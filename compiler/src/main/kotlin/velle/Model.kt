@@ -145,6 +145,17 @@ class Model(val decls: List<Decl>) {
         is RefOr -> collectOperandScopes(expr.left) + collectOperandScopes(expr.right)
     }
 
+    /** The capture-persistence problems this spec poses a store, one per
+     *  capture-carrying refinement (CaptureSchema's kdoc states the contract). */
+    val captureSchemas: List<CaptureSchema> by lazy {
+        refinements.mapNotNull { (name, r) ->
+            val props = r.members.filterIsInstance<DerivedProp>().filter { it.captured }
+            if (props.isEmpty()) return@mapNotNull null
+            val base = baseOf(name) ?: return@mapNotNull null
+            CaptureSchema(name, base, props.map { CaptureSchema.Prop(it.name, typeOf(it.type)) })
+        }
+    }
+
     fun typeOf(t: TypeRef): VType = when (t) {
         is ScalarType -> when (t.name) {
             "text" -> VType.Text

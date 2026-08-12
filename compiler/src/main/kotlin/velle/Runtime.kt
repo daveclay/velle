@@ -104,8 +104,9 @@ class VelleSystem(
 
     /** Each transaction evaluates against one consistent snapshot: drop the
      *  previous envelope's hydrated state so storage is re-consulted. Captures
-     *  deliberately survive — per-membership memory has no engineer-storage home
-     *  yet, a hole this spike surfaces rather than solves. */
+     *  included — with a resolver connected they are a cache over the store's
+     *  capture channel (investigate_runtime.md §7), hydrated on demand like
+     *  rows; without one, the map is the store and survives. */
     private fun beginSnapshot() {
         if (resolver == null) return
         instances.clear()
@@ -113,6 +114,36 @@ class VelleSystem(
         fetchedAll.clear()
         fetchedRefs.clear()
         fetchedFilters.clear()
+        captures.clear()
+        captureMisses.clear()
+    }
+
+    private val captureMisses = mutableSetOf<Pair<Long, String>>()
+
+    /**
+     * Capture read, faulting in from the resolver's capture channel when the
+     * envelope hasn't seen this membership yet. Null means no current
+     * membership anywhere — the caller's "read outside membership" error path.
+     */
+    internal fun captureValues(id: Long, refinement: String): Map<String, Value>? {
+        captures[id to refinement]?.let { return it }
+        val r = resolver ?: return null
+        if ((id to refinement) in captureMisses) return null
+        val base = model.baseOf(refinement) ?: return null
+        val raw = r.fetchCaptures(base, id, refinement)
+        if (raw == null) {
+            captureMisses.add(id to refinement)
+            return null
+        }
+        val props = model.refinements.getValue(refinement).members
+            .filterIsInstance<DerivedProp>().filter { it.captured }
+        val values = props.associate { p ->
+            val v = raw[p.name]
+            p.name to if (v == null) Value.VNone
+            else rawToValue(v, model.typeOf(p.type), "$refinement.${p.name} (capture)")
+        }
+        captures[id to refinement] = values
+        return values
     }
 
     /** By-id read, faulting in from the resolver when absent. */
@@ -225,6 +256,18 @@ class VelleSystem(
         /** Cumulative footprint of every commit in the envelope (never gating). */
         val createdShapes = mutableSetOf<String>()
         val assignedFields = mutableSetOf<Pair<String, String>>()
+
+        /** (id, refinement) → prior values, recorded before each capture write
+         *  or retraction — rollback restores them, buildCommitSet reads the
+         *  touched keys' end state. */
+        val captureOld = mutableListOf<Pair<Pair<Long, String>, Map<String, Value>?>>()
+    }
+
+    /** The one writer of the capture map inside a transaction. */
+    private fun setCapture(key: Pair<Long, String>, values: Map<String, Value>?, t: Txn) {
+        t.captureOld.add(key to captures[key])
+        if (values == null) captures.remove(key) else captures[key] = values
+        captureMisses.remove(key)
     }
 
     private var txn: Txn? = null
@@ -242,7 +285,9 @@ class VelleSystem(
             // commit back (investigate_runtime.md §3, in-envelope failure)
             onCommit?.let { cb ->
                 val set = buildCommitSet(t)
-                if (set.created.isNotEmpty() || set.assigned.isNotEmpty()) cb.onCommit(set)
+                if (set.created.isNotEmpty() || set.assigned.isNotEmpty() ||
+                    set.captured.isNotEmpty() || set.retracted.isNotEmpty()
+                ) cb.onCommit(set)
             }
             txn = null
             drainAfterQueue(t)
@@ -282,13 +327,28 @@ class VelleSystem(
                 CommitSet.Assign(inst.shape, id, field, unwrap(inst.fields[field] ?: Value.VNone))
             }
             .toList()
-        return CommitSet(created, assigned)
+        // capture channel: net end-state per touched membership — present at
+        // envelope close is an upsert, absent a retraction (delete)
+        val capturedOps = mutableListOf<CommitSet.Capture>()
+        val retractedOps = mutableListOf<CommitSet.Retraction>()
+        for ((id, refName) in t.captureOld.map { it.first }.distinct()) {
+            val base = model.baseOf(refName) ?: continue
+            if (base in model.transients) continue
+            val values = captures[id to refName]
+            if (values != null)
+                capturedOps.add(CommitSet.Capture(base, id, refName, values.mapValues { unwrap(it.value) }))
+            else retractedOps.add(CommitSet.Retraction(base, id, refName))
+        }
+        return CommitSet(created, assigned, capturedOps, retractedOps)
     }
 
     private fun rollback(t: Txn) {
         for ((id, field, old) in t.oldValues.asReversed()) {
             if (old == null) instances[id]?.fields?.remove(field)
             else instances[id]?.fields?.put(field, old)
+        }
+        for ((key, old) in t.captureOld.asReversed()) {
+            if (old == null) captures.remove(key) else captures[key] = old
         }
         for (id in t.created.asReversed()) {
             val inst = instances.remove(id) ?: continue
@@ -516,7 +576,7 @@ class VelleSystem(
             val props = model.refinements.getValue(refName).members
                 .filterIsInstance<DerivedProp>().filter { it.captured }
             for (id in post.getValue(w) - pre.getValue(w))
-                captures[id to refName] = props.associate { it.name to evaluator.evalMember(id, refName, it) }
+                setCapture(id to refName, props.associate { it.name to evaluator.evalMember(id, refName, it) }, t)
             for (id in pre.getValue(w) - post.getValue(w))
                 retractions.add(id to refName)
         }
@@ -540,7 +600,7 @@ class VelleSystem(
         }
 
         // close of the commit: leaver captures retract (exit rules were their last readers)
-        retractions.forEach { captures.remove(it) }
+        retractions.forEach { setCapture(it, null, t) }
         return createdIds
     }
 

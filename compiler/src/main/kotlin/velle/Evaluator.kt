@@ -63,7 +63,7 @@ class Evaluator(private val system: VelleSystem) {
         val inst = system.instance(id) ?: throw VelleRuntimeError("missing instance $id")
         if (m.name == "id") return Value.VRef(id)
         if (m.captured) {
-            val store = system.captures[id to m.owner]
+            val store = system.captureValues(id, m.owner)
                 ?: throw VelleRuntimeError("capture '${m.owner}.${m.name}' read outside membership")
             return store.getValue(m.name)
         }
@@ -155,7 +155,7 @@ class Evaluator(private val system: VelleSystem) {
         for ((refName, r) in model.refinements) {
             if (model.baseOf(refName) != shape) continue
             val m = r.members.filterIsInstance<DerivedProp>().find { it.name == name } ?: continue
-            if (m.captured) system.captures[id to refName]?.let { return it.getValue(name) }
+            if (m.captured) system.captureValues(id, refName)?.let { return it.getValue(name) }
             else if (memberOfRefExpr(id, RefName(refName))) return eval(m.expr, Ctx(refName, id))
         }
         throw VelleRuntimeError("'$name' is not readable on '$shape' instance $id")
