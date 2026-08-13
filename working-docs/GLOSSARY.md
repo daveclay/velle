@@ -26,7 +26,7 @@ Coined terms used across the working docs, one line each, with the pointer that 
 ## Proofs and checks
 
 - **fail-closed** — when the prover can't decide, the spec is rejected, never silently accepted; calibration then grows the provable set.
-- **calibration** — the post-v0 work of running realistic specs to learn how coarse the fail-closed checks can stay before they reject too much (OQ14–OQ16).
+- **calibration** — the post-v0 work of running realistic specs to learn how coarse the fail-closed checks can stay before they reject too much (OQ15–OQ16).
 - **one-writer** — every stored field has provably one writing rule per coincidence class (README §12; check V1).
 - **disarm proof** — showing a rule's effects falsify its own trigger condition, breaking a re-fire cycle (check V2).
 - **confluence** — sibling firings commute: every firing order yields the same outcome (OQ16; check V15).

@@ -6,11 +6,10 @@ One line per question here; the discussion lives in `questions/OQ<n>-*.md`, wher
 
 **Lifecycle:** opened (tag + file) → discussion accumulates in the file → settled → the result promotes to the README or normative docs, the file is deleted, and the entry moves to the settled table with a pointer to where it retired.
 
-The current milestone is calibrating v0 against realistic specs. Nothing here blocks the build; OQ14–16 are precisely the questions v0 exists to answer empirically.
+The current milestone is calibrating v0 against realistic specs. Nothing here blocks the build; OQ15–16 are precisely the questions v0 exists to answer empirically.
 
 ## Open
 
-- **[OQ14](questions/OQ14-guard-adoption.md)** — is the canonical guard form pleasant enough for diagnostics to demand? · calibration, answered by using v0
 - **[OQ15](questions/OQ15-ordered-folds.md)** — ordered folds: what makes an order-dependent fold at a tick safe? · calibration; recurrence spelling exists, certificate whitelist grows
 - **[OQ16](questions/OQ16-order-independence.md)** — can the compiler prove sibling firing order never matters? · calibration; coarse V15/V16 shipped, fail-closed
 - **[OQ17](questions/OQ17-rejection-scope.md)** — rejection scope: what unwinds, what is the caller told, can refusal be partial? · minimal v0 answer settled
@@ -36,6 +35,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 | OQ1–4, 6, 8–13, 18 | settled before this index existed; results live in the README |
 | OQ5 — external input | README §22 "External input (`expose`)" |
 | OQ7 — exit reads | README §13; two residual threads became §22 items (latency vocabulary; `on commit of` narrowing) |
+| OQ14 — guard adoption | resolved by author judgment: the canonical guard form (README §18) stands as what fold diagnostics (§19) demand — no sugar added |
 | OQ19 — boundary/apparatus legibility | became a calibration rider on the spec-writing item (TODO.md) |
 | OQ20 — commit-refusal | not a primitive: refusal is compiled boundary code from `never` (README §21); the who-may-commit residue retired to engineer wrapper code (README §22; `investigate_runtime.md` §1) |
 | OQ21 — construct set · OQ24 — harness boundary | README §22's scope statement |

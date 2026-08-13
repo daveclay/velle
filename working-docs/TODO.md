@@ -4,7 +4,7 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## Now: calibrate v0 against realistic specs
 
-- [ ] Write more realistic specs against the v0 pipeline (three exist: `billing`, `membership`, `payments`) — the empirical answers to OQ14–OQ16.
+- [ ] Write more realistic specs against the v0 pipeline (three exist: `billing`, `membership`, `payments`) — the empirical answers to OQ15–OQ16.
 - [ ] While spec-writing, exercise the calibration riders: rung-recognition boundaries (README §20), boundary/apparatus legibility at scale (formerly OQ19), and `when leaving R on <schedule>` tick-exit semantics (`evaluation.md` "Ticks" — derived, unexercised).
 - [ ] Convert `billing.velle` (`ApplyDueChange`/`RecordDueChangeRefusal`) and `membership.velle` (`ApplyAssignment`/`RecordAssignmentRefusal`) to the anchored handled-once spelling — A4 flags them; `AdvisorySweepTest` inventories the debt. *(Superseded if those acts stay `transient` — both were migrated; confirm and close.)*
 - [ ] Update README §8's "Frozen fields" fix text and `patterns.md` "Validation rejection is data" to the anchored spelling.
