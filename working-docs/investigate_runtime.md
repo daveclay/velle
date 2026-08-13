@@ -1,6 +1,7 @@
 # Investigation: how Velle is used at runtime
 
-**Status: in discussion.** Reframes the transpile target and dissolves the mechanism-plugin design. Settled outcomes promote to README §22; this doc records the reasoning.
+**Status:** decided and built through §10 (2026-08-11 → 2026-08-12). Reframed the transpile target, dissolved the mechanism-plugin design, and landed the hydrating runtime over engineer-owned storage; the settled outcomes are listed at the bottom and promoted to README §22/§10, `grammar.md`, and `checks.md`. This doc records the reasoning.
+**Residue:** [OQ31](questions/OQ31-committer-suppliable-fields.md) committer-suppliable fields · [OQ36](questions/OQ36-universal-transaction.md) the universal-transaction contract · TODO.md: reverse-path candidate narrowing, production clock default, static selector-discrimination check.
 
 ## The reframing
 
@@ -190,11 +191,11 @@ Settled enough to promote:
 - Selector ordering (§9): `latest`/`first` take a mandatory, typechecked `by` clause — the author's ordering statement; no implicit source, no minted tiebreak, undiscriminated selections fail loudly. Promoted to README §10/grammar.md/checks.md; the §22 explicit-ordering item resolved as required.
 - The typed store surface (§10): generated `<Name>Store` (strict, per-question, typed both directions), `OverGeneric` defaults for the framework-plus-overrides posture, and the `StoreResolver` bridge with `QTemplate` question recognition — the generic protocol stays the wire contract, so a spec-agnostic framework (springboot-velle) and the strongly-typed hand-written store coexist by construction. Resolves §2's "per-act resolver interfaces" as per-*question* interfaces.
 
-Still open, re-homed:
+Still open, re-homed (details live at the pointers):
 
-- Committer-suppliable fields — which fields the generated commit function accepts vs. which are internal: whether an ordinary `initially` field can be marked not-committer-suppliable the way `timestamp` fields inherently are (README §5). Determines the generated function's *signature*; pure `expose` design. (Its former siblings — supplied-vs-generated `id` and id minting — retired with §8: identity is the store's, and Velle mints nothing persisted.)
-- Static selector-discrimination check (from §9): the runtime now fails loudly when a selection's declared datums tie at the winning position; proving statically that a selector's candidates cannot collide per transaction — or demanding a discriminating datum at compile time — rides OQ15/OQ16's calibration.
-- The universal-transaction contract: the exact guarantees Velle assumes (snapshot reads, atomic writes, serialization of conflicting commits) stated precisely — the engineer realizes them however their storage requires; the confluence and one-writer proofs now rest on this contract.
-- Production clock default (real time, controllable clock as test affordance).
-- Rule-execution hook — rejected as a hook; residue folds into the `why`/provenance item.
-- Reverse-path candidate narrowing (from §6): non-self-contained commit watchers still scan their base per envelope; deriving the affected instances from the mutation's own references — per-watcher read *paths*, walked backward — is the follow-on. Bare-shape entrant diffs and aggregate pre-filters ride with it.
+- Committer-suppliable fields → [OQ31](questions/OQ31-committer-suppliable-fields.md).
+- The universal-transaction contract, stated precisely → [OQ36](questions/OQ36-universal-transaction.md).
+- Static selector-discrimination check (from §9) → TODO.md; rides OQ15/OQ16's calibration.
+- Production clock default (real time; controllable clock as test affordance) → TODO.md.
+- Reverse-path candidate narrowing, bare-shape entrant diffs, aggregate pre-filters (from §6) → TODO.md.
+- Rule-execution hook — rejected as a hook (§4); residue folds into the `why`/provenance item (README §22).

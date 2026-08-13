@@ -1,4 +1,8 @@
-# Velle
+# Velle — original notes
+
+**Status:** pre-README brainstorm, kept as a historical record; most of it is superseded by the README and `investigate_runtime.md`. Still live: the open-codegen/escape-hatch demands ("Escape Hatch", "Codegen/Modifying Velle output" — partially ratified by the developer-owned-output decision; the regeneration/override contract is undesigned and tracked nowhere else), the union sketch under "Shape 'Interfaces'" (feeds [OQ29](questions/OQ29-sum-types.md)), and the visualization question. Mine those into proper homes, then delete (TODO.md, doc chores).
+
+---
 
 A declarative language to describe a system. It abstracts away the stack, functions, variables, scope, closures in favor of shapes, relationships, and rules.
 

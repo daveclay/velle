@@ -151,4 +151,4 @@ Only the *singular value* position demands the at-most-one proof.
 
 ## The fail-closed residue
 
-The compiler proves the forms above and rejects the rest — including legitimate specs it can't yet see into: a producer whose condition *implies* the guard without literally containing it, predicates over values (`where balance < 0` can recur by arithmetic drift), aliasing. In every such case `latest`/`first` remains expressible and honest; growing the provable set is calibration work (`working-docs/open_questions.md`, OQ16's discharge vocabulary).
+The compiler proves the forms above and rejects the rest — including legitimate specs it can't yet see into: a producer whose condition *implies* the guard without literally containing it, predicates over values (`where balance < 0` can recur by arithmetic drift), aliasing. In every such case `latest`/`first` remains expressible and honest; growing the provable set is calibration work (`working-docs/QUESTIONS.md`, OQ16's discharge vocabulary).

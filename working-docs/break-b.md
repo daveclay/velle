@@ -1,5 +1,10 @@
 # Breaking Design B: an auction house
 
+**Status:** complete — first adversarial pass; findings fed the Design B decision (`investigate-transient.md`) and shaped checks V17–V18. Scorecard at the bottom.
+**Residue:** [OQ26](questions/OQ26-correlation-keys.md) correlation keys (Case 4) · V18 growth beyond the complement slice once V9's exhaustiveness engine exists (Case 1; TODO.md).
+
+---
+
 Adversarial validation of the transient-acts decision (`investigate-transient.md`, Design B: *a transient act exists only within its own commit's transaction — an input to the state, not a member of it*). Method as in the retired `break_velle.md`: a real domain, worked case by case, each case chosen to attack a specific weak point. The domain is an auction house because nearly everything about it is B-hostile: bids need history, closing is evidence, settlement is asynchronous, and clients double-submit.
 
 Uses B's proposed syntax (`expose transient shape ... using ...`), which is not implemented — nothing here runs; verdicts are by analysis. Verdict scale: **HOLDS** (B handles it, ceremony win), **TAX** (B handles it at a cost), **GAP** (B needs a new obligation or fails).
@@ -160,7 +165,7 @@ rule AcceptBid when (PlaceBid where ... and not exists (BidRecord where requestK
 }
 ```
 
-Workable — the idempotency-key pattern real APIs already use — but note what returned: key threading through act and outcomes, and a guard conjunct per handling rule. Some of the ceremony B removed comes back wherever ingestion must be idempotent. Also the correlation question sharpens: `requestKey` needs uniqueness the client controls, and a duplicate arriving *while both copies are in flight* is two transactions — last-in-wins on the guard, fine here, but the general story belongs to the correlation-key design item.
+Workable — the idempotency-key pattern real APIs already use — but note what returned: key threading through act and outcomes, and a guard conjunct per handling rule. Some of the ceremony B removed comes back wherever ingestion must be idempotent. Also the correlation question sharpens: `requestKey` needs uniqueness the client controls, and a duplicate arriving *while both copies are in flight* is two transactions — last-in-wins on the guard, fine here, but the general story belongs to the correlation-key design item (OQ26).
 
 **Verdict: TAX**, concentrated exactly where the validation plan predicted (correlation keys).
 

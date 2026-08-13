@@ -1,36 +1,51 @@
 # TODO
 
-Actionable work only. Settled results live in `README.md` (§22 catalogs the open language items); open-question discussion lives in `open_questions.md` (OQ14–17, OQ20, each with a v0 stance). This file tracks work neither of those carries.
+Actions only, one line each, verb-first. Context lives behind the links: open questions in `QUESTIONS.md` → `questions/`, decisions and reasoning in the investigation docs, worked examples in `patterns.md`, coined terms in `GLOSSARY.md`. If an item here needs a paragraph, the paragraph belongs in one of those and the item links to it.
 
 ## Now: calibrate v0 against realistic specs
 
-- [ ] Write bigger realistic specs against the v0 pipeline — three exist (`billing`, `membership`, and `payments`, the first written business-outward: the errors-are-refinements interaction pattern end-to-end, retries, timeouts, compensation, the handled-once act partition). Continuing this is what answers OQ14–16 empirically, and it carries the deferred calibration riders: rung-recognition boundaries (README §20), boundary/apparatus legibility at scale (formerly OQ19), and `when leaving R on <schedule>` tick-exit semantics — a schedule-only leaving-rule observes only aging-out exits (derived in `evaluation.md` "Ticks"); still unexercised by any spec.
-- [ ] Apply the handled-once act partition to the older specs and the README pattern text — a bare state partition over acts is **drift-exposed**: an already-applied act drifts into the refused side when the partitioning state changes later (a spurious refusal per flip), and drifts back to re-fire a stale write. Worked exhibit: `examples/partition-drift/`; the fix idiom (partition scoped to *unhandled* acts, each side anchored by its own rule's outcome evidence) is live in `payments.velle` and the exhibit's safe family. The **A4 advisory now flags the hazard** (checks.md; `Validator.advisories`); `AdvisorySweepTest` inventories what this item owes: convert `billing.velle` (`ApplyDueChange`/`RecordDueChangeRefusal`) and `membership.velle` (`ApplyAssignment`/`RecordAssignmentRefusal`), and update README §8's "Frozen fields" fix text plus `open_questions.md`'s "Validation rejection is data" appendix to the anchored spelling. (Coarseness note kept: when two such families write one field, V1 correctly refuses the spec — the hazard leaks out sideways only in that special case.)
-- [ ] Transient acts — **implemented in v0** (`expose transient`; README §4 "Transient acts", `evaluation.md`, checks V17–V18): the act exists only within its own commit's transaction; V17 isolates it (no references — outcomes copy; no reads; no ticks/`after commit`/`when leaving`; no rule-created instances; no inferred inverses), V18 demands every request get a response (coarse slice: bare-shape rule or complement pair; per-reason refusals go in one complement rule with a conditional reason value), the runtime removes the instance at its transaction's close, and A4 skips transient shapes (and suggests the marker). Migrated: billing's `ChangeDueDate`, membership's `AssignTicket`, and the exhibit's new `TransientEdit` family (`DriftDemonstrationTest` proves all three spellings side by side); payments' `UnhandledAddressChange` deliberately kept as the persistent-act handled-once idiom. Two implementation findings recorded in `investigate-transient.md`. **Also done:** V18 counts a `never` over the act as an answer — the pure-validation rung (refuse at the door, tell the caller, keep nothing): membership's `AssignTicket` is the worked example; the corpus now shows the full ladder (payments: persistent + handled-once; billing: transient + refusal record; membership: transient + `never`). **Remaining:** the correlation-key design (`break-b.md` Case 4 — client-supplied keys work today, ergonomics undesigned); an author-supplied refusal message on `never` (today the refusal names the violated `never`); confirm outcome-mediated provenance satisfies `why` when that lands; grow V18 beyond the complement slice once V9's exhaustiveness engine exists.
-- [ ] Deletion/erasure — Velle needs a real erasure story (retention windows, right-to-be-forgotten) without breaking "delete has no primitive": erasure is a *storage* obligation, not a description change — plausibly declared retention policy the transpiler enforces, plus a check that no derivation or guard reads data the policy allows to vanish. Framed in `investigate-transient.md`'s closing section; not designed.
-- [ ] Small-construct coverage, remaining after payments: a self-referential derived property (`root = parent?.root` — blocked until V14 grows descent certificates; today it's rejected as an uncertified cycle); a declared `many` field (blocked on the commit-story item below); 3+-binding sibling joins; per-hop freeze depth (`LockedLineItem = LineItem where order is SettledOrder { frozen ... }`).
+- [ ] Write more realistic specs against the v0 pipeline (three exist: `billing`, `membership`, `payments`) — the empirical answers to OQ14–OQ16.
+- [ ] While spec-writing, exercise the calibration riders: rung-recognition boundaries (README §20), boundary/apparatus legibility at scale (formerly OQ19), and `when leaving R on <schedule>` tick-exit semantics (`evaluation.md` "Ticks" — derived, unexercised).
+- [ ] Convert `billing.velle` (`ApplyDueChange`/`RecordDueChangeRefusal`) and `membership.velle` (`ApplyAssignment`/`RecordAssignmentRefusal`) to the anchored handled-once spelling — A4 flags them; `AdvisorySweepTest` inventories the debt. *(Superseded if those acts stay `transient` — both were migrated; confirm and close.)*
+- [ ] Update README §8's "Frozen fields" fix text and `patterns.md` "Validation rejection is data" to the anchored spelling.
+- [ ] Cover the remaining small constructs: 3+-binding sibling joins · per-hop freeze depth (`LockedLineItem = LineItem where order is SettledOrder { frozen ... }`) · self-referential derived property (blocked on V14 descent certificates) · declared `many` field (blocked on OQ30).
 
-## v0 loose ends (surfaced by the implementation pass)
+## Transient acts — Design B residue (`investigate-transient.md`)
 
-- [ ] `if`'s `then` must share the condition's line — newline-discipline surprise; decide whether that's the language rule or a parser limitation to lift.
-- [ ] Author-named `many` fields have no commit story — F4 totality would demand a committer-supplied collection, and no syntax provides one; inferred inverses are the only working spelling. Same family: a collection-valued field init from a filtered traversal (`basedOn: (this.invoices where OverdueInvoice)`, from the retired `example_rules.md`) appears in no grammar production. Decide: add syntax, or make the restrictions official.
-- [ ] Validator gaps (tracked in `Validator.kt`'s header): V11 branch-sensitive narrowing, V12 at-most-one proofs beyond the refinement slice (refinement subjects in `(Shape for expr)` are proven — see `singular_references.md`; base-shape to-one-inverse proofs stay runtime-enforced), V14 descent certificates, and the A-series beyond A4 (A4 drift-exposed partitions is implemented, surfaced via `Validator.advisories`).
+- [ ] Design correlation keys — OQ26.
+- [ ] Decide an author-supplied refusal message on `never` (today a refusal names the violated `never`).
+- [ ] Confirm outcome-mediated provenance satisfies `why` when provenance lands (README §22's `why` item).
+- [ ] Grow V18 beyond the complement slice once V9's exhaustiveness engine exists.
+
+## Runtime follow-ons (`investigate_runtime.md`)
+
+- [ ] Pin the universal-transaction contract in the normative docs — OQ36.
+- [ ] Build reverse-path candidate narrowing (per-watcher read paths walked backward from the mutation); bare-shape entrant diffs and aggregate pre-filters ride with it (§6).
+- [ ] Switch the generated `System` to real time by default, controllable clock as the test affordance (§1).
+- [ ] Design committer-suppliable fields — OQ31 (determines generated commit-function signatures).
+
+## v0 loose ends
+
+- [ ] Decide: `if ... then` sharing the condition's line — language rule, or parser limitation to lift?
+- [ ] Decide the author-named `many` commit story — OQ30.
+- [ ] Close validator gaps (tracked in `Validator.kt`'s header): V11 branch-sensitive narrowing · V12 at-most-one beyond the refinement slice (`singular_references.md`) · V14 descent certificates · A-series beyond A4.
+- [ ] Add the static selector-discrimination check (selectors fail loudly at runtime today; the static proof rides OQ15/OQ16 calibration — `investigate_runtime.md` §9).
 - [ ] Spec-generation phase 2 (boundary synthesis, scenario DSL, no-refire cases) and phase 3 (the `example` construct) — `testgen.md`.
 
-## Open language questions inherited from the retired example docs
+## Language questions awaiting design
 
-- [ ] Bootstrap/backfill triggers — "for each *existing* member, once, immediately" when a rule is added to a live system; deferred by the retired `example_rules.md` and tracked nowhere else. Adjacent to schedule definition and the tick law, but distinct: it is about first deployment against pre-existing state, where entry commits already happened before the rule existed.
-- [ ] Sum types — a field anchored to *either* of two shapes (an `Escalation` chaining from an `Alert` or a prior `Escalation`); left open by the retired `example_predicates.md`'s Datalog comparison. Today's workaround is two optional fields plus a `never` xor-invariant; whether that is the idiom or a union construct is warranted is undecided.
+- [ ] Bootstrap/backfill triggers — OQ28.
+- [ ] Sum types / union shapes — OQ29.
+- [ ] Erasure and retention — OQ27.
 
 ## Post-v0 re-derivations
 
-Cut from the spec by the v0 scope statement (README §22; `grammar.md` names the same list) — each re-enters through its own design pass, re-derived rather than restored from the old notes.
-
-- [ ] `requires` — re-derive the rule-modifier keyword, distinct from `where`, and sync into the README. Its atomicity mechanism (lock, transaction, optimistic retry) stays a compiling concern, left to whatever fits the target.
-- [ ] `visible to Role, Role` — re-derive field-level visibility. Carries its open sub-questions: how a `Role` (e.g. `PatientRole`) is defined as a predicate over an implicit `viewer` — with external-RBAC integration as the compiling-side alternative; and whether an undeclared-visibility field is fail-closed by default (language decision), plus enforcing that (compiling).
-- [ ] Schedule definition — README §22 has the item, but two details live only here: event-anchored timeouts (working sketch: `via schedule <duration> after <Shape>`) and data-derived, not just literal, durations (`escalatedTo.role.timeoutMinutes`) — the grammar position must accept an expression.
-- [ ] Cross-shape structural mixins — README §9 points at "Open/unresolved" but §22 has no such item; restore the item there (or take on the design: a trait like `Overdue` reusable across unrelated shapes).
+- [ ] `requires` — OQ32 · `visible to` — OQ33 · schedule definition — OQ34 · cross-shape mixins — OQ35 (restore its README §22 item).
 
 ## Research
 
-- [ ] Prior art mining — Eve, Alloy, CUE, SQL still unstudied. Datalog got a first real pass while the predicate grammar was derived: stratified negation became V14's stratification, recursive predicates resolved as ordinary self-reference, and the sum-types question above is its remaining residue. Now load-bearing: term rewriting (critical pairs, Newman's lemma) and CHR confluence checking, for OQ16's order-independence proof.
+- [ ] Mine prior art: Eve, Alloy, CUE, SQL still unstudied; term rewriting (critical pairs, Newman's lemma) and CHR confluence checking are now load-bearing for OQ16. (Datalog's first pass landed: stratification → V14, recursive predicates → self-reference; its residue is OQ29.)
+
+## Doc chores
+
+- [ ] Mine `random_notes.md`'s still-live bits (open-codegen/escape-hatch demands, visualization question) into proper homes, then delete it.
