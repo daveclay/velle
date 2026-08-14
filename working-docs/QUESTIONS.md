@@ -20,6 +20,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **[OQ30](questions/OQ30-many-fields.md)** — author-named `many` fields: the commit story · decide syntax vs official restriction
 - **[OQ31](questions/OQ31-committer-suppliable-fields.md)** — committer-suppliable fields (commit-function signatures) · `expose`-construct detail
 - **[OQ36](questions/OQ36-universal-transaction.md)** — the universal-transaction contract, stated precisely · proofs rest on it
+- **[OQ37](questions/OQ37-delete.md)** — delete as a described mutation: statement, existence-dependency check, gating, referential completeness · investigation open (`investigate-delete.md`)
 
 ## Deferred — post-v0 re-derivations (README §22's list)
 

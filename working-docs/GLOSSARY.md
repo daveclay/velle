@@ -31,7 +31,8 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **disarm proof** — showing a rule's effects falsify its own trigger condition, breaking a re-fire cycle (check V2).
 - **confluence** — sibling firings commute: every firing order yields the same outcome (OQ16; check V15).
 - **quiescence** — a transaction terminates: eventually no rule's condition is newly matched (OQ16; check V16).
-- **discharge / spent invariant** — an established `never` used as a proof input by other analyses ("the author states the invariant; the prover spends it," README §21).
+- **discharge** — satisfy a derived proof obligation; standard proof-theory usage, throughout README §18–§21. "The disarm proof discharges" = the compiler completes the required proof (the body provably falsifies its trigger); a "dischargeable state" is a trigger state the rule's own effects provably exit; an "undischarged obligation" is a compile error.
+- **spent invariant** — an established `never` used as a proof input by other analyses ("the author states the invariant; the prover spends it," README §21); only a fully-discharged invariant is spendable.
 - **check IDs** — V1–V18 are validator errors, A-series are advisories (A4 = drift-exposed partition), F-series are type/form checks; all cataloged in `checks.md`.
 - **OQ tags** — stable open-question numbers; index in `QUESTIONS.md`.
 
