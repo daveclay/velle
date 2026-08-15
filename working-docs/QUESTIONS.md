@@ -14,7 +14,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **[OQ16](questions/OQ16-order-independence.md)** — can the compiler prove sibling firing order never matters? · calibration; coarse V15/V16 shipped, fail-closed
 - **[OQ17](questions/OQ17-rejection-scope.md)** — rejection scope: what unwinds, what is the caller told, can refusal be partial? · minimal v0 answer settled
 - **[OQ26](questions/OQ26-correlation-keys.md)** — correlation keys for transient acts · works by convention; ergonomics undesigned
-- **[OQ27](questions/OQ27-erasure.md)** — erasure and retention (right-to-be-forgotten) · framed, not designed
+- **[OQ27](questions/OQ27-erasure.md)** — erasure and retention (right-to-be-forgotten) · language-side resolved via OQ37-R10 (`? initially required` + ordinary `= none` rules); residue: compilation's unretrievability guarantee
 - **[OQ28](questions/OQ28-bootstrap-backfill.md)** — bootstrap/backfill: a new rule against pre-existing state · not designed
 - **[OQ29](questions/OQ29-sum-types.md)** — sum types / union shapes · workaround exists (two optionals + xor `never`)
 - **[OQ30](questions/OQ30-many-fields.md)** — author-named `many` fields: the commit story · decide syntax vs official restriction

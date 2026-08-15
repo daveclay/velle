@@ -32,6 +32,11 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 - [ ] Add the static selector-discrimination check (selectors fail loudly at runtime today; the static proof rides OQ15/OQ16 calibration — `investigate_runtime.md` §9).
 - [ ] Spec-generation phase 2 (boundary synthesis, scenario DSL, no-refire cases) and phase 3 (the `example` construct) — `testgen.md`.
 
+## Delete investigation (`investigate-delete.md`, OQ37)
+
+- [ ] Resolve the two remaining opens: exit-rules-at-deletion; the `delete` statement's edge cases.
+- [ ] Stress-test rulings R1–R10 with adversarial use cases; anything that breaks reopens in the investigation doc.
+
 ## Language questions awaiting design
 
 - [ ] Bootstrap/backfill triggers — OQ28.

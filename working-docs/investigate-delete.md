@@ -1,10 +1,27 @@
 # Investigation: delete — can removing an instance be a described mutation?
 
-**Status:** open (2026-08-14) — framed and developed from discussion. Rulings so far: **`undeletable` accepted** (2026-08-14) — the state-scoped deletion gate, a `frozen`-sibling refinement-body clause; crux resolved at the leaning level (2026-08-14) — **absorbing references plus per-field copies**, with **`one <Shape> unless deleted` accepted as the working syntax** (2026-08-14); identity-surviving variant rejected — deletion is pure removal, no deletion-memory; the built-in tombstone set aside as sugar at most — a deletion record is an explicitly modeled outcome shape, never minted for free; guard re-arming **ruled not `tolerates`-signable** (2026-08-14) — intentional re-triggering is reversal-as-data, cleanup is provable disjointness or OQ27 retention. Everything else undecided.
+**Status:** open (2026-08-15) — rulings R1–R10 below (R4 superseded by R10); still open: exit-rules-at-deletion ("Refinements recalculate"), the delete statement's edge cases ("The statement"). Follow-up actions (remaining opens, the stress-test pass) tracked in `TODO.md`.
 **Question tag:** [OQ37](questions/OQ37-delete.md) — the index entry; this doc holds the discussion
 **See:** README §4 (no delete primitive; transient acts) · §12 (assignment) · §8 "Frozen fields" · §13 (the last-reader rule) · §18 (run-once guards) · `evaluation.md` "Transient acts" (the step-7 removal) · [OQ27](questions/OQ27-erasure.md) (erasure/retention — the storage-policy face of what may be the same primitive)
 
 ---
+
+## Rulings
+
+The decisions this investigation has made; cite by tag (`R5` here, `OQ37-R5` from other docs). The stress-test pass over these lives in `TODO.md`, not here.
+
+| tag | date | ruling |
+|---|---|---|
+| R1 | 2026-08-14 | `undeletable`: state-scoped deletion gate, a `frozen`-sibling refinement-body clause |
+| R2 | 2026-08-14 | deletion is not a "write": bare `frozen` does not imply undeletable — separate clauses, separate business sentences |
+| R3 | 2026-08-14 | the crux: absorbing references plus per-field copies — reference serves the living target, copied fields survive it |
+| R4 | 2026-08-14 | marker syntax: `one <Shape> unless deleted`; required on create/update, reads optional-shaped via existing `is none`/`?.` machinery — *superseded by R10* |
+| R5 | 2026-08-14 | identity-surviving references and `is deleted` rejected: deletion is pure removal — no deletion-memory anywhere |
+| R6 | 2026-08-14 | built-in tombstone rejected as sugar at most: deletion records are explicitly modeled outcome shapes, never minted for free |
+| R7 | 2026-08-14 | guard re-arming is not `tolerates`-signable: intentional re-triggering is reversal-as-data; false positives are never signed |
+| R8 | 2026-08-14 | existence-dependency coarseness is conservative: the shared refinement-overlap prover, nothing finer; disjointness written into predicates; sharpening is a backward-compatible relaxation (rides OQ16) |
+| R9 | 2026-08-14 | deletion gate polarity is negative — no second polarity; positive-exhaustive sentences ride the state partition declaration |
+| R10 | 2026-08-15 | `? initially required` supersedes cause-specific markers: read-side optionality and creation-side requiredness are orthogonal declarations; absence causes are ordinary spec (a deleter of the target; a rule assigning `none` — which is how a field is cleared, OQ27's erasure case) — no `clear` statement, no `unless deleted`/`unless cleared`; a field nothing can make absent is dead-optionality advisory |
 
 The central question. Businesses delete records — not as retention compliance (that's OQ27) but as ordinary domain behavior: remove the draft, discard the duplicate, take down the listing. `expose transient` is not this — transience is a statement about the trust boundary (a request that was never a member of the state), not a mechanism for removing something that *was*. The frame under investigation: **delete is a special kind of general mutation** — instance-granularity where assignment is field-granularity — with the statement declarative ("this instance ceases to be part of the state") and the storage realization (hard delete, tombstone, crypto-shred) left to compilation, the same way GraphQL abstracts the mutation's mechanics to the implementor. Velle's difference from GraphQL is the usual one: the rules *about* the delete — who may, when, what must happen around it — are describable and checked.
 
@@ -50,7 +67,7 @@ The good news: this has the same shape as every existing check. Static paths mea
 
 > "`PurgeApplications` deletes `DepositApplication`, which re-arms `ApplyDeposit`'s guard — the fold double-applies. Restructure the guard, condition the deleter, or [sign the hazard]."
 
-Two riders on this check: guard re-arming is **not `tolerates`-signable** (ruled 2026-08-14 — its section, below), and prover coarseness remains the open thread (below).
+Both riders on this check are ruled (2026-08-14, sections below): guard re-arming is **not `tolerates`-signable**, and coarseness is **conservative** — the check reuses the shared refinement-overlap disjointness prover, nothing finer.
 
 ## Semantics of the deleting commit — nothing new, by construction
 
@@ -85,7 +102,7 @@ A delete is a commit; drift is commit-mediated (§11); every predicate reading t
   Same static check (can this deleter's trigger coincide with membership?), same fail-closed disjointness proof, same connected diagnostic. Deletion is deliberately **not** a "write" for bare `frozen`'s purposes — "you can't edit an issued invoice" and "you can't delete one" are different business sentences, and bundling them would hide the second inside the first.
 - **The fix-it idiom:** the partition — `DeletableListing = DraftListing where ...`, hang the deleting rule off the deletable subset, refusal lands as data (`patterns.md`, "Validation rejection is data"). The diagnostic for a gate violation points here, mirroring how `frozen` and rejection-as-data already pair.
 
-The gate's polarity for positive-exhaustive sentences ("deletable only if draft") is an open thread — top-level section, below.
+The gate's polarity is ruled: negative, no second polarity — positive-exhaustive sentences ride the state partition declaration ("Ruled — the gate stays negative," below).
 
 ## Cascade — resist SQL's shape; it's a completeness check
 
@@ -122,24 +139,24 @@ A moderation takedown deletes the listing; the report is audit evidence that mus
 
 ### The resolution — references that absorb their target's deletion, plus per-field copies
 
-The problem, focused: how a reference field declares *required on create/update, but none after the target's deletion*. A declared marker on the referencing field carries exactly that contract:
+The problem, focused: how a reference field declares *required on creation, but possibly absent later*. The adopted spelling (R10, 2026-08-15, superseding R4's `unless deleted` marker) decomposes it into two orthogonal declarations — `?` for the read side, `initially required` for the creation side:
 
 ```
 shape Listing {
     title: text
-    seller: one Seller unless deleted     -- accepted working syntax (2026-08-14)
+    seller: one Seller? initially required   -- adopted syntax (2026-08-15, R10)
     isDraft: boolean initially true
 }
 ```
 
-Required at creation and at every assignment — never committable or assignable as absent — but reads are optional-shaped, using the existing machinery wholesale: `is none`, `is some` narrowing, `?.` propagation. No new atom is needed, because the contract itself disambiguates: never-set is impossible (creation required presence), so **`is none` unambiguously means the target was deleted**:
+`initially` already marks creation-moment-only semantics (`initially false`, `initially now`, `initially randomUUID`) — those forms *supply* a creation value; `initially required` *demands* one, from the committer or from a creating rule's totality-checked mapping. Reads are optional-shaped using the existing machinery wholesale: `is none`, `is some` narrowing, `?.` propagation. No new atom is needed, because the contract disambiguates: never-set is impossible (creation required presence), so **`is none` means "was present, now gone"** — and the possible causes (the target's deletion; a rule assigning `none`) are derivable, since every deleter and every writer is a static path:
 
 ```
 -- traversal is gated: narrowing or ?., existing machinery
 sellerName: text? = seller?.name
 ```
 
-**The read discipline, and its idiom (2026-08-14).** The marker is deliberately load-bearing at every read site: traversal over an `unless deleted` reference without acknowledgment of absence is the same compile error as unnarrowed `.` on any optional. The spec-wide `?` tax is answered by the existing narrowing idiom, not new machinery — one named refinement asserts presence, and everything downstream references it with plain `.` licensed by its predicate:
+**The read discipline, and its idiom (2026-08-14).** The optional type is deliberately load-bearing at every read site: traversal over an `? initially required` reference without acknowledgment of absence is the same compile error as unnarrowed `.` on any optional. The spec-wide `?` tax is answered by the existing narrowing idiom, not new machinery — one named refinement asserts presence, and everything downstream references it with plain `.` licensed by its predicate:
 
 ```
 shape ListingWithSeller = Listing where seller is some
@@ -151,9 +168,9 @@ shape PremiumListing = ListingWithSeller where seller.tier == "premium"
 rule ReassignOrphan when OrphanedListing { ... }
 ```
 
-This converts scattered absence-handling into a named partition of the shape — and the orphan side is the point, not a residue: "what does the business do with a listing whose seller is deleted?" is a real product question the refinement pair makes visible, where `?.` everywhere would have silently propagated it away. The seller's deletion is the commit that flips membership, so `OrphanedListing` entry is ordinary drift and rules react to it — or repair it, the reference being assignable (to a present seller only) as ever. Note also that the marker is what makes `is some`/`is none` *meaningful* on the field: on a plain `one` the check would be trivially true — dead-machinery territory — so presence-testing a reference is itself a signal the reference should be (or is) marked.
+This converts scattered absence-handling into a named partition of the shape — and the orphan side is the point, not a residue: "what does the business do with a listing whose seller is deleted?" is a real product question the refinement pair makes visible, where `?.` everywhere would have silently propagated it away. The seller's deletion is the commit that flips membership, so `OrphanedListing` entry is ordinary drift and rules react to it — or repair it, the reference being assignable as ever: to a new seller, or, being optional-typed, to `none` — which is how a field is *deliberately* cleared, the erasure case OQ27 now rides (an ordinary sweep rule assigning `none`; no `clear` statement exists). Note also that presence-testing is *meaningful* only on an optional-typed field: on a plain `one` the check would be trivially true — dead-machinery territory — so `is some` on a reference is itself a signal it should be (or is) `? initially required`.
 
-**Not `?`.** The tempting spelling `seller: one Seller?` cannot carry this: optional means "may be absent, at creation included," where the contract is required-on-create — plain `?` structurally can't say it, which is the argument that this is a genuine reference kind rather than sugar over optionality. And unlike SQL's `ON DELETE SET NULL`, no write occurs anywhere: the field's read surface changes because the target is gone, and whether storage physically nulls the cell is compilation's business — no silent write, no hidden writer, and no never-set/deleted conflation (never-set can't happen).
+**Why the decomposition, not a reference kind (2026-08-15, R10).** Bare `?` cannot carry the contract — optional means "may be absent, at creation included," where the business requires presence at commit. R4's first answer was a cause-specific marker (`unless deleted`), but the clearing case (OQ27) immediately demanded a second (`unless cleared`), and the pair revealed the real primitive: **read-side optionality and creation-side requiredness are orthogonal**, and absence *causes* are ordinary spec — a deleter of the target, a rule assigning `none` — visible and derivable, never marker vocabulary. One modifier replaces every cause-specific marker and generalizes beyond references to any field. The SQL comparison stands as before: unlike `ON DELETE SET NULL`, the target's deletion writes nothing — the read surface degrades because the target is gone, storage mechanics are compilation's — no silent write, no hidden writer, no never-set conflation (never-set can't happen).
 
 **Rejected variant — the identity-surviving reference (2026-08-14).** An earlier sketch had the reference permanently holding the target's `id`, with a distinct narrowing atom (`listing is deleted`) gating traversal while `==` correlation stayed sound forever. Rejected: a surface form that *names* deletion implies the system remembers deletions — records of deleted records, unscalable and against the point of deleting — and the atom is redundant anyway: with creation-required presence there are only two states, and `is none` already carries the meaning. Deletion must be pure removal; the runtime needs to know nothing.
 
@@ -161,7 +178,7 @@ This converts scattered absence-handling into a named partition of the shape —
 
 ```
 shape ListingReport {
-    listing: one Listing unless deleted   -- correlation and traversal while the listing lives
+    listing: one Listing? initially required   -- correlation and traversal while the listing lives
     listingTitle: text                    -- copied at creation: the slice that survives it
     reason: text
     reportedOn: timestamp on create
@@ -170,9 +187,9 @@ shape ListingReport {
 
 A guard that must hold across the subject's deletion was always keyed on a business datum, not an identity.
 
-**The marker is referential completeness's third discharge.** A deleter of `Seller` plus a plain `one Seller` reference is the completeness error (above), and the fixes become exactly three: delete the referrer in the same commit (cascade, spelled), restructure to copies (the copy half, above), or mark the reference — "this reference absorbs its target's deletion by going absent." The converse diagnostic completes it, dead-tolerance-style: the marker on a reference whose target no rule deletes is dead machinery — "no deleter of `Seller`; did you mean `one Seller`?"
+**The optional-typed reference is referential completeness's third discharge.** A deleter of `Seller` plus a plain `one Seller` reference is the completeness error (above), and the fixes become exactly three: delete the referrer in the same commit (cascade, spelled), restructure to copies (the copy half, above), or make the reference `? initially required` — "this reference absorbs its target's deletion by going absent." The converse diagnostic completes it, dead-tolerance-style: an `? initially required` field that nothing can ever make absent — no deleter of its target, no rule assigning `none` — is dead optionality, advisory: "did you mean `one Seller`?"
 
-*Preserves:* referential completeness discharged declaratively, with nothing required of the deleting commit; no new evaluation semantics and no new predicate forms — the read surface is the existing optional/narrowing machinery. *Breaks:* traversal after deletion (by design) and post-deletion identity correlation (answered by per-field copies). *Costs:* splits `one` into two kinds — the visible, declared fact that this reference may outlive its target — plus the per-field copy discipline wherever survival is needed.
+*Preserves:* referential completeness discharged declaratively, with nothing required of the deleting commit; no new evaluation semantics and no new predicate forms — the read surface is the existing optional/narrowing machinery. *Breaks:* traversal after deletion (by design) and post-deletion identity correlation (answered by per-field copies). *Costs:* one new modifier (`initially required`) in `initially`'s existing position, plus the per-field copy discipline wherever survival is needed; the declaration no longer names the absence cause — the compiler derives it, and `why`/impact analysis reports it.
 
 ### Separated: the built-in tombstone — sugar at most, not a resolution
 
@@ -228,7 +245,7 @@ rule ApplyPurge when PurgeApplication {
 }
 ```
 
-The fixture's deleter is ambiguous on its face — it reads as an author *intentionally* setting up re-application of the deposit, and the language cannot tell that intent from a mistake. It never needs to: the check fails closed and demands a stated policy, the fold-obligation stance (§19) — legit and mistaken get the same diagnostic; only the legit author has an answer to give. What settles the leaning is that both legitimate intents decompose into spellings that need no signature:
+The fixture's deleter is ambiguous on its face — it reads as an author *intentionally* setting up re-application of the deposit, and the language cannot tell that intent from a mistake. It never needs to: the check fails closed and demands a stated policy, the fold-obligation stance (§19) — legit and mistaken get the same diagnostic; only the legit author has an answer to give. What settles the ruling is that both legitimate intents decompose into spellings that need no signature:
 
 - *Intentional re-application* is **reversal, and reversal is data** (README §22; the Receipt/ReceiptVoid pairing). Pair the witness with a reversing occurrence and let the guard read the pair — the application record persists as history, and re-application fires by ordinary drift entry when the reversal lands. No delete anywhere:
 
@@ -244,17 +261,17 @@ The fixture's deleter is ambiguous on its face — it reads as an author *intent
   ```
 
   Deleting-to-retrigger is a call graph wearing a delete costume — the intent "apply it again" is a business event, and events are committed, not simulated by erasing witnesses.
-- *Cleanup deletion* (pruning old records) is either provably harmless — the coarseness rider's territory, below — or retention policy, which is OQ27's compiled-erasure face, not a business delete.
+- *Cleanup deletion* (pruning old records) is either dischargeable under the coarseness ruling — disjointness written into the predicates, or the guard restructured (below) — or retention policy, which is OQ27's compiled-erasure face, not a business delete.
 
 With both constituencies served elsewhere, `tolerates re-arming` signs nothing legitimate, and the diagnostic's fix-it list is complete without it: condition the deleter, restructure the guard, or — for intentional re-triggering — model the reversal as data. Ruled: no escape.
 
-**The conservative false positive does not reopen this (2026-08-14).** The coarseness thread's prune case errors under a conservative prover despite having no actual hazard — and that is a second, independent reason tolerance stays unavailable, not a crack in the ruling: `tolerates` signs *real* hazards the business accepts (the streak really breaks under replay; the ping really can be lost), never prover limitations. A signature on a rule that cannot re-arm would be a false statement whose falseness the signature outlives — sign the prune today at 90-vs-3 days, widen the rate-limit window to 120 days next year, and the prune now *genuinely* re-arms with the hazard already signed away: no diagnostic, the effects-at-a-distance failure manufactured by hand. The fold precedent ("legit-but-unprovable gets `tolerates`") doesn't apply — there the hazard was real and only the safety unprovable; here the hazard is absent. A false positive's discharges are restructure (the field-witness fix, available today) or a sharper prover (the open thread) — the same line one-writer already holds: fail-closed, no signature, restructure until provable.
+**The conservative false positive does not reopen this (2026-08-14).** The coarseness thread's prune case errors under a conservative prover despite having no actual hazard — and that is a second, independent reason tolerance stays unavailable, not a crack in the ruling: `tolerates` signs *real* hazards the business accepts (the streak really breaks under replay; the ping really can be lost), never prover limitations. A signature on a rule that cannot re-arm would be a false statement whose falseness the signature outlives — sign the prune today at 90-vs-3 days, widen the rate-limit window to 120 days next year, and the prune now *genuinely* re-arms with the hazard already signed away: no diagnostic, the effects-at-a-distance failure manufactured by hand. The fold precedent ("legit-but-unprovable gets `tolerates`") doesn't apply — there the hazard was real and only the safety unprovable; here the hazard is absent. A false positive's discharges are restructure (the field-witness fix, available today) or a future prover sharpening (a backward-compatible relaxation — the coarseness ruling, below) — the same line one-writer already holds: fail-closed, no signature, restructure until provable.
 
-## Open thread — coarseness of the existence-dependency check
+## Ruled — coarseness: the check is conservative (2026-08-14)
 
-**Leaning: conservative (2026-08-14, unratified)** — the error stands even for provably-harmless deletes, with the field-witness restructure as the discharge; the worked catalog (below) is the study set for ratifying where exactly the line falls. Conservative: *any* deleter of a shape *any* guard reads is the error. Path-sensitive: only deleters whose trigger can coincide with the guarded instance's active lifetime fail. One case each way, both over the fixture family above. First, a cleanup sweep a path-sensitive prover clears outright — the disjointness is in the predicates:
+The existence-dependency check reuses **the disjointness prover the language already has** — the refinement-overlap machinery behind one-writer, `frozen`, and `undeletable` — **and nothing finer**: no window arithmetic, no lifetime analysis, no bespoke reasoning for deletes. A deleter is legal exactly when that prover shows its trigger disjoint from every proof-bearing read's scope; anything unprovable errors, fail-closed, and the discharge is restructure — never a signature (ruled above), never hoping a finer prover finds the proof. The false positive this accepts is deliberate: a sharper prover is a **backward-compatible relaxation** — it only ever removes errors, never adds them — so path-sensitivity can ride OQ16's calibration later without blocking any spec written today. Two exhibits below: the accepted false positive with its restructure discharge, and a true positive the prover rightly refuses.
 
-The context that trips the check is the rate limit's guard itself — the §17 spelling, whose cross-tick memory is the `Reminder` **evidence**: the guard's `exists` reads `Reminder`, so `Reminder` records are load-bearing, and any deleter of them is in the check's sights:
+**Exhibit 1 — the accepted false positive.** The context that trips the check is the rate limit's guard itself — the §17 spelling, whose cross-tick memory is the `Reminder` **evidence**: the guard's `exists` reads `Reminder`, so `Reminder` records are load-bearing, and any deleter of them is in the check's sights:
 
 ```
 rule RemindOverdue
@@ -265,14 +282,14 @@ rule RemindOverdue
 }
 
 rule PruneOldReminders when (Reminder where sentOn < today - 90 days) on Monthly {
-    delete this    -- conservative: error — a deleter of Reminder exists, and RemindOverdue's
-                   -- guard reads Reminder's existence.
-                   -- path-sensitive: legal — a reminder with sentOn < today - 90 days provably
-                   -- never satisfies the guard's sentOn > today - 3 days window; nothing re-arms.
+    delete this    -- error: RemindOverdue's guard reads Reminder's existence, and the
+                   -- disjointness (90-day condition vs 3-day window) is interval arithmetic
+                   -- over sentOn — beyond the refinement-overlap prover. A human can see
+                   -- nothing re-arms; the ruling accepts the false positive.
 }
 ```
 
-Under the conservative slice, the author still achieves the prune — via the diagnostic's "restructure the guard" fix. **The prune rule doesn't change at all**; the fix is to the *guard*: move the rate limit's memory off the prunable evidence onto a **field witness** (§18's witness-grain choice, date grain), so no guard reads `Reminder`'s existence:
+The author still achieves the prune — via the diagnostic's "restructure the guard" fix. **The prune rule doesn't change at all**; the fix is to the *guard*: move the rate limit's memory off the prunable evidence onto a **field witness** (§18's witness-grain choice, date grain), so no guard reads `Reminder`'s existence:
 
 ```
 shape Invoice {
@@ -292,9 +309,9 @@ rule PruneOldReminders when (Reminder where sentOn < today - 90 days) on Monthly
 }
 ```
 
-The disarm proof still discharges (`= today` falsifies `<= today - 3 days`), one-writer holds, and `Reminder` becomes what this design arguably always meant it to be — optional history the business may keep, prune, or never write — rather than the rate limit's load-bearing memory. The general consequence is worth naming: **§18's witness-grain choice now has a delete-side face.** An evidence witness makes its records load-bearing — undeletable until path-sensitivity clears the window or the guard is restructured; a field witness leaves the evidence free to prune. Choosing the guard's grain is also choosing the evidence's prunability, and the connected diagnostic is what makes that choice visible instead of latent.
+The disarm proof still discharges (`= today` falsifies `<= today - 3 days`), one-writer holds, and `Reminder` becomes what this design arguably always meant it to be — optional history the business may keep, prune, or never write — rather than the rate limit's load-bearing memory. The general consequence is worth naming: **§18's witness-grain choice now has a delete-side face.** An evidence witness makes its records load-bearing — undeletable until the guard is restructured or the disjointness is written into the predicates; a field witness leaves the evidence free to prune. Choosing the guard's grain is also choosing the evidence's prunability, and the connected diagnostic is what makes that choice visible instead of latent.
 
-Second, a sweep the same prover rightly *cannot* clear, because the guard's own predicate doesn't carry the disjointness:
+**Exhibit 2 — a true positive.** A sweep the prover rightly refuses, because the guard's own predicate doesn't carry the disjointness:
 
 ```
 shape ArchivableApplication = DepositApplication where deposit.account is ClosedAccount
@@ -304,11 +321,11 @@ rule PurgeClosedApplications when ArchivableApplication on Monthly {
 }
 ```
 
-Conservative verdict: error — a deleter of `DepositApplication` exists. The path-sensitive hope — "closed accounts' deposits are done; purging is safe" — is *not yet provable*, because `UnappliedDeposit`'s predicate never mentions account state: the re-armed deposit re-enters it regardless, and the Hourly tick re-folds. The purge becomes legal only when the guard itself excludes the purged scope (`UnappliedDeposit = Deposit where not exists ... and account is OpenAccount`) or a spent `never` proves the scopes disjoint — which is the right outcome, but how much of that proof burden the prover carries vs. demands rides with the OQ16 calibration, like every other coarseness question.
+Error — and correctly: the hope "closed accounts' deposits are done; purging is safe" is not true as written, because `UnappliedDeposit`'s predicate never mentions account state — the re-armed deposit re-enters it regardless, and the Hourly tick re-folds. The purge becomes legal exactly when the guard's own predicates carry the disjointness in refinement-overlap terms — `UnappliedDeposit = Deposit where not exists ... and account is OpenAccount` makes deleter scope (`ClosedAccount`) and guard scope (`OpenAccount`) complementary, which the shared prover clears (the same complementary-predicate power that clears C8's conditioned deleter in the catalog, below). The ruling's demand is precisely this: disjointness must be *written into the predicates*, where a reader sees it — never inferred from arithmetic a reader would have to re-derive.
 
 ## When a delete errors — the worked catalog
 
-**Leaning: conservative — the error stands wherever a proof-bearing read exists (2026-08-14, unratified; this catalog is the study set for ratifying exactly where the line falls.)** The boundary principle: *a delete errors when it can break something the spec proves or declares — never merely because state changes.* Recalculation is not a hazard: memberships flipping and rules firing at the deleting commit is drift, the design working. Errors come from five sources; the cases below put one example on each side of each line.
+**Ruled: conservative (2026-08-14) — the error stands wherever a proof-bearing read exists and the shared disjointness prover cannot clear the deleter; this catalog is the normative exhibit set.** The boundary principle: *a delete errors when it can break something the spec proves or declares — never merely because state changes.* Recalculation is not a hazard: memberships flipping and rules firing at the deleting commit is drift, the design working. Errors come from five sources; the cases below put one example on each side of each line.
 
 ### No error — recalculation and discharged references
 
@@ -324,7 +341,7 @@ rule ApplyDiscard when DiscardDraft {
 
 **C2 — derivations recalculate, even startlingly.** Deleting a `Payment` raises the derived `balance`, and the invoice may re-enter `OverdueInvoice` and be reminded again — *correct*: it is overdue again. Aggregates and derivations are current-state computations, not proofs of once-ness; no error from this check (whether `Payment` — an occurrence fact — *should* be deletable is the author's call, spelled as `undeletable` or a conditioned deleter, not this check's business).
 
-**C3 — completeness discharged by the marker.** Deleting a `Seller` with `Listing.seller: one Seller unless deleted` referrers: the reference absorbs; no error.
+**C3 — completeness discharged by the optional-typed reference.** Deleting a `Seller` with `Listing.seller: one Seller? initially required` referrers: the reference absorbs by going absent; no error.
 
 **C4 — completeness discharged by same-commit cascade.** `delete invoice` and `delete`s of its line items in one body: every referrer resolved at the commit; no error.
 
@@ -334,9 +351,9 @@ rule ApplyDiscard when DiscardDraft {
 
 **C6 — guard witness (existence-dependency).** The fixture: deleting `DepositApplication` re-arms `ApplyDeposit`; the backstop double-folds. Error naming deleter and guard; fixes are conditioning the deleter, restructuring the guard's witness grain, or — for intentional re-triggering — reversal-as-data (ruled not signable, above).
 
-**C7 — guard witness, provably-disjoint window.** `PruneOldReminders` (coarseness thread, above): no actual hazard, but under the conservative lean, still the same error as C6 — the discharge is the field-witness restructure, never a signature. This is the case the conservative/path-sensitive calibration decides; the lean accepts the false positive to keep the check simple and the restructure honest.
+**C7 — guard witness, humanly-provable window.** `PruneOldReminders` (coarseness ruling, above): no actual hazard, but the window disjointness is interval arithmetic — beyond the shared prover — so the same error as C6. The accepted false positive; the discharge is the field-witness restructure, never a signature.
 
-**C8 — singularity proof.** The episode pattern's exit rule reads `(OpenDelinquencyFlag for this)`, provably at-most-one *and present* because the entry rule's guard maintains exactly one open flag per delinquent account. A deleter of `DelinquencyFlag` can remove the open flag mid-episode, stranding the exit rule's singular reference: error naming deleter and reference. Fix: condition the deleter on the episode being closed (`DelinquencyFlag where exists DelinquencyResolution for this`).
+**C8 — singularity proof.** The episode pattern's exit rule reads `(OpenDelinquencyFlag for this)`, provably at-most-one *and present* because the entry rule's guard maintains exactly one open flag per delinquent account. A deleter of `DelinquencyFlag` can remove the open flag mid-episode, stranding the exit rule's singular reference: error naming deleter and reference. Fix: condition the deleter on the episode being closed (`DelinquencyFlag where exists DelinquencyResolution for this`) — complementary predicates, which the shared prover clears; this is what the coarseness ruling's conservative prover *can* do.
 
 **C9 — `never` maintenance.** Deleters join writers in every invariant's inductive proof:
 
@@ -355,11 +372,11 @@ Fix: condition the act (`ItemRemoval where count(lineItem.order.lineItems) > 1`)
 
 **C11 — transaction stranding.** An `after commit` or schedule-triggered rule reading the deleted instance: error in the stranding family (the V17 mirror, "Semantics of the deleting commit" above) — nothing after the deleting transaction's close may read it; durable reactions read the outcome record the deleting commit produced.
 
-The catalog's shape to validate against realistic specs: C1–C4 confirm that ordinary modeling stays untaxed; C5, C9, C10, C11 are structural and uncontroversial; C6–C8 are the existence-dependency family where the conservative lean bites, and C7 is its calibration pivot.
+The catalog's shape to validate against realistic specs: C1–C4 confirm that ordinary modeling stays untaxed; C5, C9, C10, C11 are structural and uncontroversial; C6–C8 are the existence-dependency family where the conservative ruling bites — C8 shows what the shared prover clears, C7 its accepted false positive. If realistic specs show C7-shaped restructures dominating, that is the evidence for the backward-compatible prover sharpening, not for reopening the ruling.
 
-## Open thread — polarity of the deletion gate
+## Ruled — the gate stays negative (2026-08-14)
 
-Raised 2026-08-14 via "deletable only if `isDraft`." The gate is negative and state-scoped: "deletable only while draft" is spelled as `undeletable` on the *complement*, exactly as "editable only while draft" is spelled as a freeze on the issued state — the permission-denying clause lives on the state where the permission is denied, and with a boolean the complement is exact, so the disjointness check covers the sentence fully:
+Raised 2026-08-14 via "deletable only if `isDraft`"; resolved same day: **the negative gate is the design — no second polarity.** The gate is negative and state-scoped: "deletable only while draft" is spelled as `undeletable` on the *complement*, exactly as "editable only while draft" is spelled as a freeze on the issued state — the permission-denying clause lives on the state where the permission is denied, and with a boolean the complement is exact, so the disjointness check covers the sentence fully:
 
 ```
 shape Draft            = Listing where isDraft
@@ -381,9 +398,9 @@ shape Archived  = Listing where status == "archived"
 -- no diagnostic fires: the effects-at-a-distance hazard, unreported.
 ```
 
-Two candidate answers, neither adopted:
+Two candidate answers were weighed:
 
-1. **The state partition declaration's business** (README §22, `states of`) — once a partition is declared, per-state deletion permission sits beside per-state write permission, "deletable only in Draft" is checkably exhaustive, and a new state is born undeletable unless the declaration grants:
+1. **The state partition declaration's business** (README §22, `states of`) — **adopted as the ruling's second half**: once a partition is declared, per-state deletion permission sits beside per-state write permission, "deletable only in Draft" is checkably exhaustive, and a new state is born undeletable unless the declaration grants:
 
    ```
    states of Listing = Draft | Submitted | Published | Archived   -- candidate construct, not designed
@@ -391,7 +408,7 @@ Two candidate answers, neither adopted:
                                                                   -- adding Archived changed nothing
    ```
 
-2. **A positive `deletable` grant** with shape-level default-undeletable — a second polarity, cutting against the `frozen` precedent, justified only if positive-exhaustive sentences turn out to be the common case:
+2. **A positive `deletable` grant** with shape-level default-undeletable — **rejected**: a second polarity cutting against the `frozen` precedent, retained below as the road not taken:
 
    ```
    shape Listing {
@@ -404,7 +421,7 @@ Two candidate answers, neither adopted:
    }
    ```
 
-Current lean: (1) — the negative gate stands as accepted, sufficient for the boolean complement today, and the exhaustive sentence rides with the partition declaration rather than motivating a second polarity. Unratified.
+Ruled: the negative gate stands — sufficient for the boolean complement today — and the positive-exhaustive sentence rides with the state partition declaration (§22's `states of` item inherits it as a requirement: per-state deletion permission beside per-state write permission), rather than motivating a second polarity. Until that construct lands, richer-state "only if" sentences are spelled as N `undeletable` declarations, and the under-coverage hazard above is the documented, accepted gap.
 
 ## Relationship to OQ27
 
