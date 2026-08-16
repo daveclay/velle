@@ -50,16 +50,21 @@ initializer   := valueExpr | GeneratorName          -- generator: bare name, no 
 foldHazard    := "duplication" | "reordering"       -- README §19; "loss" is rule-position only
 
 derivedProp   := Identifier ":" propType "=" valueExpr
+              | Identifier ":" "many" (ShapeName | scalarType) "=" setExpr
+                                                    -- derived collection: a view (README §6, "Renamed and
+                                                    -- derived collections"); setExpr only in this position
+setExpr       := "(" ShapeName ("where" predicate)? ")"
 
 timestampProp := Identifier ":" "timestamp" "on" ("create" | "update")
 
 propType      := scalarType "?"?
-              | "one" ShapeName "?"?                -- to-one relationship; "?" marks it optional
-              | "many" ShapeName                    -- to-many; no "?" (an empty collection is the absence)
+              | "one" ShapeName "?"?                -- owned to-one side; "?" marks it optional
+              | "many" ShapeName                    -- owned edge set (m2m); no "?" (empty collection is the absence)
+              | "many" scalarType                   -- owned collection of values; no "?"
 scalarType    := "text" | "integer" | "long" | "decimal" | "double" | "boolean" | "Date" | "DateTime"
 ```
 
-Relationships always carry `one`/`many` — a bare shape name is not a type (README §7's examples are normalized to `parent: one Foo?`). One keyword, one meaning: the cardinality is always visible, and the parser never guesses whether `Foo` is a forgotten scalar or a relationship.
+Relationships always carry `one`/`many` — a bare shape name is not a type (README §7's examples are normalized to `parent: one Foo?`). One keyword, one meaning: the cardinality is always visible, and the parser never guesses whether `Foo` is a forgotten scalar or a relationship. The descriptors declare *ownership of the relationship*, not direction (README §6): a declared `one` is the stored side of a one-to-many, a bare declared `many` is the stored edge set of a many-to-many; the inverse side is always inferred, and declaring both sides of one relationship is a validator error (checks catalog, V19), not a grammar concern.
 
 `initially` attaches to any stored property, relationships included (README §5). It cannot attach to `derivedProp` or `timestampProp` — not grammar's doing; those properties' own rules exclude it (nothing stored to initialize; commit metadata is never author-supplied).
 
@@ -107,6 +112,9 @@ thenLine      := "then"                  -- on its own line, between two stateme
 statement     := assignment | creation
 
 assignment    := path "=" valueExpr
+                 -- the target may traverse at most one `many` hop (fan-out assignment: one write per
+                 -- member, `this.invoices.customer = ...`); depth and target legality are validator
+                 -- rules (checks catalog, V20), not grammar
 
 creation      := ShapeName "from" "{" fieldInit* "}"
               | ShapeName "for" valueExpr (fieldInit)*     -- the compact form: Receipt for invoice sentOn: now
@@ -148,6 +156,7 @@ unaryExpr   := "-"? primary
 
 primary     := IntegerLiteral | DecimalLiteral | TextLiteral | BooleanLiteral | DurationLiteral
             | "none" | "now" | "today"
+            | "empty"                    -- the empty collection; types only where a `many` is expected
             | path                       -- README §10: pathRoot (accessor Identifier)*, aggregates, selectors,
                                          -- the sugared ("Shape" "for" expr) singular query
             | funcCall
@@ -160,7 +169,7 @@ The conditional is **`if p then a else b`**, always fully spelled — `else` is 
 
 Narrowing is shared with predicates and branch-sensitive (README §10): inside a `then` branch, the governing predicate's `is some` / `is none` / `is Refinement` checks license `.` exactly as they do within a conjunction; `?.` remains the no-narrowing escape.
 
-Type rules ride on the Kotlin grounding (README §5): arithmetic over the numeric scalars, `+`/`-` between `Date`/`DateTime` and a duration (calendar step on `Date`, exact time on `DateTime`), `+` as text concatenation only if we ever admit it — currently **not** admitted; no operator is overloaded beyond the duration case.
+Type rules ride on the Kotlin grounding (README §5): arithmetic over the numeric scalars, `+`/`-` between `Date`/`DateTime` and a duration (calendar step on `Date`, exact time on `DateTime`), and `+`/`-` on a declared `many` as set union and removal (element or collection on the right; README §6, "Committing and assigning collections"). `+` as text concatenation only if we ever admit it — currently **not** admitted; the duration and collection cases are the only operator overloads.
 
 ## Predicates
 

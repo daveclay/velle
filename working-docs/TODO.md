@@ -8,7 +8,7 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 - [ ] While spec-writing, exercise the calibration riders: rung-recognition boundaries (README §20), boundary/apparatus legibility at scale (formerly OQ19), and `when leaving R on <schedule>` tick-exit semantics (`evaluation.md` "Ticks" — derived, unexercised).
 - [ ] Convert `billing.velle` (`ApplyDueChange`/`RecordDueChangeRefusal`) and `membership.velle` (`ApplyAssignment`/`RecordAssignmentRefusal`) to the anchored handled-once spelling — A4 flags them; `AdvisorySweepTest` inventories the debt. *(Superseded if those acts stay `transient` — both were migrated; confirm and close.)*
 - [ ] Update README §8's "Frozen fields" fix text and `patterns.md` "Validation rejection is data" to the anchored spelling.
-- [ ] Cover the remaining small constructs: 3+-binding sibling joins · per-hop freeze depth (`LockedLineItem = LineItem where order is SettledOrder { frozen ... }`) · self-referential derived property (blocked on V14 descent certificates) · declared `many` field (blocked on OQ30).
+- [ ] Cover the remaining small constructs: 3+-binding sibling joins · per-hop freeze depth (`LockedLineItem = LineItem where order is SettledOrder { frozen ... }`) · self-referential derived property (blocked on V14 descent certificates) · declared `many` field (OQ30 settled — README §6; exercised by `examples/enrollment/`).
 
 ## Transient acts — Design B residue (`investigate-transient.md`)
 
@@ -27,7 +27,6 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 ## v0 loose ends
 
 - [ ] Decide: `if ... then` sharing the condition's line — language rule, or parser limitation to lift?
-- [ ] Decide the author-named `many` commit story — OQ30.
 - [ ] Close validator gaps (tracked in `Validator.kt`'s header): V11 branch-sensitive narrowing · V12 at-most-one beyond the refinement slice (`singular_references.md`) · V14 descent certificates · A-series beyond A4.
 - [ ] Add the static selector-discrimination check (selectors fail loudly at runtime today; the static proof rides OQ15/OQ16 calibration — `investigate_runtime.md` §9).
 - [ ] Spec-generation phase 2 (boundary synthesis, scenario DSL, no-refire cases) and phase 3 (the `example` construct) — `testgen.md`.

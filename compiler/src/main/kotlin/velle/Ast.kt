@@ -60,7 +60,9 @@ data class TimestampProp(val name: String, val on: String) : Member // "create" 
 data class FrozenClause(val fields: List<String>) : Member
 
 sealed interface TypeRef
-data class ScalarType(val name: String, val optional: Boolean) : TypeRef
+/** `many` marks an owned collection of values (`tags: many text`) — never optional (README §6). */
+data class ScalarType(val name: String, val optional: Boolean, val many: Boolean = false) : TypeRef
+/** `many` here is the owned edge set of a many-to-many; `one` the owned side of a one-to-many (README §6). */
 data class RelType(val many: Boolean, val shape: String, val optional: Boolean) : TypeRef
 
 // ── Refinement expressions (grammar.md, "Refinement declarations") ───────────
@@ -97,7 +99,13 @@ data class BoolLit(val value: Boolean) : Expr
 data object NoneLit : Expr
 data object NowLit : Expr
 data object TodayLit : Expr
+/** The empty collection — the one collection literal (README §6); types only where a `many` is expected. */
+data object EmptyLit : Expr
 data class DurationLit(val amount: Long, val unit: String) : Expr
+
+/** Set denotation as a value: `(Shape where pred)` / `(this.invoices where Overdue)` —
+ *  legal in `many`-typed derived-property position and collection-valued contexts (README §6). */
+data class SetExpr(val collection: CollectionExpr) : Expr
 
 data class Seg(val name: String, val viaQdot: Boolean)
 /** `this.a?.b`, `invoice.customer`, or a bare name / ShapeName root. */

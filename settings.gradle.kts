@@ -9,4 +9,5 @@ include(
     "examples:membership:output",
     "examples:payments:output",
     "examples:partition-drift:output",
+    "examples:enrollment:output",
 )

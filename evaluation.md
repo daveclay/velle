@@ -9,7 +9,7 @@ The input/output surface (exposed commit functions, tick and clock functions, ty
 The state is the set of all shape instances and their stored fields (README §4). Per instance, the runtime holds:
 
 - **`id`** — opaque identity, fixed at creation, `==` only (§5).
-- **Stored fields** — scalar values and to-one references. `many` sides are derived from the inverse `one` (§6) and need no storage of their own.
+- **Stored fields** — scalar values, to-one references, and declared `many` collections (a many-to-many's edge set as a set of references; a `many <scalar>`'s set of values — §6, ownership). *Inferred* `many` sides are derived from the declared side and need no storage of their own; derived collections (`= (Shape where ...)`) are computed on read like any derived property.
 - **Timestamp fields** — `on create` fixed at the creation commit; `on update` advanced by every commit that writes a stored field of the instance, creation included (§5).
 - **Captures** — per-membership memory: for each refinement membership currently held that declares captured properties, the values fixed at entry (§8; lifecycle below).
 
@@ -23,8 +23,10 @@ A **commit** is one mutation entering state at a discrete moment: an exposed act
 
 ```
 commitAct(actInstance):
-  1. boundary validation: the input-constrained `never` guardrails compiled to this
-     expose site (§21) — violation → refusal naming the violated `never`; nothing begins
+  1. boundary validation: type-level checks first — a duplicate reference in a `many`
+     field is refused here (collections are sets; multiplicity that matters is data on
+     an edge shape, §6) — then the input-constrained `never` guardrails compiled to
+     this expose site (§21) — violation → refusal naming what was violated; nothing begins
   2. begin transaction T
   3. C0 := apply the act commit — insert the instance; evaluate `initially`
      expressions and generators; stamp `timestamp on create`/`on update`

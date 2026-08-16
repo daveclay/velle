@@ -206,6 +206,7 @@ object SpecGen {
                 if (p.initially != null) continue
                 when (val t = p.type) {
                     is RelType -> {
+                        if (t.many) return null // collection-valued act fields: exit given, not a derived commit
                         if (t.optional) continue
                         if (t.shape == subjectBase) {
                             subjectRefs++
@@ -218,6 +219,7 @@ object SpecGen {
                         }
                     }
                     is ScalarType -> {
+                        if (t.many) return null
                         if (t.optional) continue
                         args.add(when (t.name) {
                             "text" -> "\"sample\""
@@ -438,6 +440,7 @@ object SpecGen {
                 val rhs = a.value as? PathExpr ?: continue
                 if (rhs.segs.isNotEmpty() || rhs.root == "this") continue
                 if (a.target.segs.isEmpty()) continue
+                if (traversesCollection(a.target, base)) continue // fan-out/whole-set: no scalar assert
                 var read = subject
                 for (seg in listOf(a.target.root) + a.target.segs.dropLast(1).map { it.name }) {
                     if (seg == "this") continue
@@ -495,6 +498,20 @@ object SpecGen {
             recordCase(sentence)
             recordScenario(rule, sentence, cond, subject, tickOnly, schedules, exitActName, guarded, counts)
             return listOf(testFn(sentence, body.toString()))
+        }
+
+        /** True when an assignment target reads a collection anywhere on its route or writes one —
+         *  the generated scalar-equality assert would misread it (README §6). */
+        fun traversesCollection(target: PathExpr, base: String?): Boolean {
+            var scope = base ?: return true
+            val segs = (listOf(target.root) + target.segs.map { it.name }).filterNot { it == "this" }
+            for ((i, seg) in segs.withIndex()) {
+                val m = model.membersOf(scope)[seg] ?: return true
+                if (m.type is VType.Coll || m.type is VType.CollS) return true
+                if (i == segs.lastIndex) return false
+                scope = m.type.instanceShape() ?: return true
+            }
+            return false
         }
 
         /** Interface kdoc: what the implementer owes. Rule-agnostic, since rules sharing a bare condition share the given. (Exit rules demand their pair inline — a state-given and an exit action.) */
@@ -730,6 +747,7 @@ object SpecGen {
                 if (p.initially != null) continue
                 when (val t = p.type) {
                     is RelType -> {
+                        if (t.many) return null // collection-valued act fields are not synthesized
                         if (t.optional) continue
                         val given = "some${t.shape}"
                         demandGiven(given, "Provide any committed '${t.shape}'; return it.", "${t.shape}View")
@@ -739,6 +757,7 @@ object SpecGen {
                         pairs.add(p.name to "$varName.id")
                     }
                     is ScalarType -> {
+                        if (t.many) return null
                         if (t.optional) continue
                         val expr = when (t.name) {
                             "text" -> "\"sample\""

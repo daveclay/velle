@@ -1,0 +1,79 @@
+-- enrollment.velle — the collection constructs of README §6 exercised end-to-end:
+-- a declared m2m `many` (the owned edge set) with its inferred inverse, `many <scalar>`,
+-- reference-set act fields, whole-set replacement, `+`/`-` union and removal, fan-out
+-- assignment through a one-to-many, `initially empty`, derived collection views
+-- (the renamed inverse), and the boundary's duplicate refusal.
+
+expose shape Advisor {
+    name: text
+    -- the renamed-inverse spelling: a derived collection view over the declared side
+    advisees: many Student = (Student where advisor == this)
+}
+
+expose shape Course {
+    title: text
+    capacity: integer
+}
+
+expose shape Student {
+    name: text
+    advisor: one Advisor?             -- declared side of a one-to-many (child pointer)
+    tags: many text initially empty   -- owned collection of values
+    courses: many Course              -- declared side of the many-to-many: the edge set
+}
+-- inferred inverses: Course.students (from Student.courses, the m2m view) and
+-- Advisor.students (from Student.advisor, the one-to-many view)
+
+shape Overloaded = Student where count(courses) > 2
+shape Untagged = Student where tags is empty
+
+-- whole-set replacement: the edge set becomes exactly the committed reference set
+expose transient shape SetEnrollment {
+    student: one Student
+    courses: many Course
+}
+
+rule ApplyEnrollmentSet when SetEnrollment {
+    this.student.courses = this.courses
+}
+
+-- incremental edits: `+` union and `-` removal (set semantics: quiet edge cases)
+expose transient shape Enroll {
+    student: one Student
+    course: one Course
+}
+
+rule ApplyEnroll when Enroll {
+    this.student.courses = this.student.courses + this.course
+}
+
+expose transient shape Drop {
+    student: one Student
+    course: one Course
+}
+
+rule ApplyDrop when Drop {
+    this.student.courses = this.student.courses - this.course
+}
+
+expose transient shape Tag {
+    student: one Student
+    tag: text
+}
+
+rule ApplyTag when Tag {
+    this.student.tags = this.student.tags + this.tag
+}
+
+-- fan-out assignment: the act's collection selects the children; one write per
+-- member of the stored pointer (`this.students.advisor`), one hop only
+expose transient shape AssignAdvisor {
+    advisor: one Advisor
+    students: many Student
+}
+
+rule ApplyAdvisor when AssignAdvisor {
+    this.students.advisor = this.advisor
+}
+
+never (Course where capacity < 0)

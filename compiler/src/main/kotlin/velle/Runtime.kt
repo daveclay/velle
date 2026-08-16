@@ -15,6 +15,10 @@ sealed interface Value {
     data class VDateTime(val v: Instant) : Value
     data class VRef(val id: Long) : Value
     data class VColl(val ids: List<Long>, val shape: String) : Value
+    /** An owned collection of scalar values (`many text`) — a set (README §6). */
+    data class VVals(val values: List<Value>) : Value
+    /** The `empty` literal before its collection kind is known; coerced at the write site. */
+    data object VEmpty : Value
     data class VDuration(val amount: Long, val unit: String) : Value
     data object VNone : Value
 
@@ -261,7 +265,28 @@ class VelleSystem(
         )
         VType.DateT -> Value.VDate(raw as? LocalDate ?: throw VelleRuntimeError("hydrating $at: not a Date ($raw)"))
         VType.DateTimeT -> Value.VDateTime(raw as? Instant ?: throw VelleRuntimeError("hydrating $at: not a DateTime ($raw)"))
+        is VType.Coll -> Value.VColl(
+            (raw as? List<*> ?: throw VelleRuntimeError("hydrating $at: not a collection ($raw)"))
+                .map { el ->
+                    val ref = el as? Ref.Persisted
+                        ?: throw VelleRuntimeError("hydrating $at: collection element is not a Ref.Persisted ($el)")
+                    handleForRef(ref)
+                },
+            t.shape,
+        )
+        is VType.CollS -> Value.VVals(
+            (raw as? List<*> ?: throw VelleRuntimeError("hydrating $at: not a collection ($raw)"))
+                .map { el -> rawToValue(el ?: throw VelleRuntimeError("hydrating $at: null element"), scalarVType(t.name), at) }
+        )
         else -> throw VelleRuntimeError("hydrating $at: unsupported type for $raw")
+    }
+
+    private fun scalarVType(name: String): VType = when (name) {
+        "text" -> VType.Text
+        "boolean" -> VType.Bool
+        "Date" -> VType.DateT
+        "DateTime" -> VType.DateTimeT
+        else -> VType.Num(name)
     }
     private val lastTick = HashMap<String, Instant>()
     private val startInstant = startTime
@@ -361,7 +386,12 @@ class VelleSystem(
             throw VelleRuntimeError("reference to unpersisted instance $handle escapes the commit set")
         }
 
-        fun storeValue(v: Value): Any? = if (v is Value.VRef) refOf(v.id) else unwrap(v)
+        fun storeValue(v: Value): Any? = when (v) {
+            is Value.VRef -> refOf(v.id)
+            is Value.VColl -> v.ids.map { refOf(it) }
+            is Value.VVals -> v.values.map { unwrap(it) }
+            else -> unwrap(v)
+        }
 
         val created = createdHandles.map { id ->
             val inst = instances.getValue(id)
@@ -440,6 +470,18 @@ class VelleSystem(
         if (shape !in model.exposed)
             return CommitResult.Refused("type: shape '$shape' is not exposed — it enters state only as a rule's effect")
 
+        // a committed collection is a set: a duplicate is a caller bug or a
+        // multiplicity claim `many` cannot express — refused, with the fix named
+        // (multiplicity that matters is data on an edge shape; README §6)
+        for (m in decl.members.filterIsInstance<StoredProp>()) {
+            val isMany = (m.type as? RelType)?.many == true || (m.type as? ScalarType)?.many == true
+            if (!isMany) continue
+            val raw = suppliedFields[m.name] as? List<*> ?: continue
+            if (raw.size != raw.distinct().size)
+                return CommitResult.Refused("type: duplicate in '$shape.${m.name}' — a `many` is a set; " +
+                    "if multiplicity is meaningful, it is data on an edge shape (README §6)")
+        }
+
         val converted = convertFields(decl, suppliedFields)
             ?: return CommitResult.Refused(typeFailure(decl, suppliedFields))
 
@@ -470,8 +512,15 @@ class VelleSystem(
         for (m in decl.members.filterIsInstance<StoredProp>()) {
             val raw = supplied[m.name]
             if (raw == null) {
-                if (m.initially == null && (m.type as? ScalarType)?.optional != true &&
-                    (m.type as? RelType)?.optional != true) return null
+                // an absent `many` is the empty collection — the absence (README §6)
+                when {
+                    (m.type as? RelType)?.many == true ->
+                        out[m.name] = Value.VColl(emptyList(), (m.type as RelType).shape)
+                    (m.type as? ScalarType)?.many == true ->
+                        out[m.name] = Value.VVals(emptyList())
+                    m.initially == null && (m.type as? ScalarType)?.optional != true &&
+                        (m.type as? RelType)?.optional != true -> return null
+                }
                 continue
             }
             out[m.name] = convert(raw, m.type) ?: return null
@@ -482,22 +531,38 @@ class VelleSystem(
     }
 
     private fun convert(raw: Any, type: TypeRef): Value? = when (type) {
-        is RelType -> (raw as? Long)
-            ?.also { idShape.putIfAbsent(it, type.shape) }
-            ?.takeIf { instance(it) != null }
-            ?.let { Value.VRef(it) }
-        is ScalarType -> when (type.name) {
-            "text" -> (raw as? String)?.let { Value.VText(it) }
-            "boolean" -> (raw as? Boolean)?.let { Value.VBool(it) }
-            "Date" -> (raw as? LocalDate)?.let { Value.VDate(it) }
-            "DateTime" -> (raw as? Instant)?.let { Value.VDateTime(it) }
-            else -> runCatching { Value.num(raw) }.getOrNull()
-        }
+        is RelType ->
+            if (type.many) (raw as? List<*>)
+                ?.map { el ->
+                    (el as? Long)
+                        ?.also { idShape.putIfAbsent(it, type.shape) }
+                        ?.takeIf { instance(it) != null } ?: return null
+                }
+                ?.let { Value.VColl(it, type.shape) }
+            else (raw as? Long)
+                ?.also { idShape.putIfAbsent(it, type.shape) }
+                ?.takeIf { instance(it) != null }
+                ?.let { Value.VRef(it) }
+        is ScalarType ->
+            if (type.many) (raw as? List<*>)
+                ?.map { el -> el?.let { convertScalar(it, type.name) } ?: return null }
+                ?.let { Value.VVals(it) }
+            else convertScalar(raw, type.name)
+    }
+
+    private fun convertScalar(raw: Any, name: String): Value? = when (name) {
+        "text" -> (raw as? String)?.let { Value.VText(it) }
+        "boolean" -> (raw as? Boolean)?.let { Value.VBool(it) }
+        "Date" -> (raw as? LocalDate)?.let { Value.VDate(it) }
+        "DateTime" -> (raw as? Instant)?.let { Value.VDateTime(it) }
+        else -> runCatching { Value.num(raw) }.getOrNull()
     }
 
     private fun typeFailure(decl: ShapeDecl, supplied: Map<String, Any?>): String {
         val required = decl.members.filterIsInstance<StoredProp>()
-            .filter { it.initially == null }.map { it.name }
+            .filter { it.initially == null }
+            .filterNot { (it.type as? RelType)?.many == true || (it.type as? ScalarType)?.many == true }
+            .map { it.name }
         val missing = required - supplied.keys
         return if (missing.isNotEmpty()) "type: '${decl.name}' requires $missing"
         else "type: unacceptable fields for '${decl.name}'"
@@ -676,10 +741,19 @@ class VelleSystem(
         idShape[id] = m.shape
         t.created.add(id)
         for (p in decl.members.filterIsInstance<StoredProp>()) {
-            if (p.name in inst.fields || p.initially == null) continue
+            if (p.name in inst.fields) {
+                inst.fields[p.name] = coerceCollection(inst.fields.getValue(p.name), p.type)
+                continue
+            }
+            if (p.initially == null) {
+                // an unsupplied `many` starts empty — the empty collection is the absence (README §6)
+                coerceCollection(Value.VEmpty, p.type).takeIf { it != Value.VEmpty }
+                    ?.let { inst.fields[p.name] = it }
+                continue
+            }
             inst.fields[p.name] =
                 if (p.initially == PathExpr("randomUUID")) Value.VText(UUID.randomUUID().toString())
-                else evaluator.eval(p.initially, Evaluator.Ctx(m.shape, id))
+                else coerceCollection(evaluator.eval(p.initially, Evaluator.Ctx(m.shape, id)), p.type)
         }
         for (p in decl.members.filterIsInstance<TimestampProp>())
             inst.fields[p.name] = Value.VDateTime(now) // create and update both start here
@@ -711,6 +785,19 @@ class VelleSystem(
         inst.fields[field] = value
     }
 
+    /** Fit a collection value to its declared field type: type the bare `empty`
+     *  literal, and dedupe — a `many` is a set (README §6). Non-collections pass through. */
+    internal fun coerceCollection(v: Value, type: TypeRef): Value = when {
+        v == Value.VEmpty && type is RelType && type.many -> Value.VColl(emptyList(), type.shape)
+        v == Value.VEmpty && type is ScalarType && type.many -> Value.VVals(emptyList())
+        v is Value.VColl -> Value.VColl(v.ids.distinct(), v.shape)
+        v is Value.VVals -> Value.VVals(v.values.distinct())
+        else -> v
+    }
+
+    private fun fieldTypeOf(shape: String, field: String): TypeRef? =
+        model.shapes[shape]?.members?.filterIsInstance<StoredProp>()?.find { it.name == field }?.type
+
     // ── firing a rule ────────────────────────────────────────────────────────
 
     private fun fire(rule: RuleDecl, subject: Long) {
@@ -719,8 +806,15 @@ class VelleSystem(
         val mutations = mutableListOf<Mutation>()
         for (item in rule.body) when (item) {
             is Assignment -> {
-                val (targetId, field) = evaluator.resolveTarget(item.target, ctx)
-                mutations.add(Mutation.Assign(targetId, field, evaluator.eval(item.value, ctx)))
+                // a collection path fans out: one write per member, the same value
+                // (README §6, "fan-out assignment"); a plain path is one target
+                val (targetIds, field) = evaluator.resolveTargets(item.target, ctx)
+                val value = evaluator.eval(item.value, ctx)
+                for (targetId in targetIds) {
+                    val shape = instance(targetId)?.shape
+                    val coerced = shape?.let { fieldTypeOf(it, field) }?.let { coerceCollection(value, it) } ?: value
+                    mutations.add(Mutation.Assign(targetId, field, coerced))
+                }
             }
             is Creation -> {
                 val fields = mutableMapOf<String, Value>()
@@ -857,6 +951,8 @@ class VelleSystem(
         is Value.VDateTime -> v.v
         is Value.VRef -> v.id
         is Value.VColl -> v.ids
+        is Value.VVals -> v.values.map { unwrap(it) }
+        Value.VEmpty -> emptyList<Any?>()
         is Value.VDuration -> v.amount to v.unit
         Value.VNone -> null
     }

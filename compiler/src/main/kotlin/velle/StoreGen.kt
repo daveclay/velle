@@ -42,7 +42,9 @@ object StoreGen {
             model.shapes.getValue(shape).members.mapNotNull { m ->
                 when (m) {
                     is StoredProp -> model.typeOf(m.type)
-                        .takeIf { it !is VType.Coll } // declared `many` has no commit story (TODO.md)
+                        // collection persistence (declared `many` / `many <scalar>`, README §6)
+                        // is store-side design the v0 store surface doesn't carry yet
+                        .takeIf { it !is VType.Coll && it !is VType.CollS }
                         ?.let { RowField(m.name, it) }
                     is TimestampProp -> RowField(m.name, VType.DateTimeT)
                     else -> null

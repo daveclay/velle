@@ -68,18 +68,25 @@ class Evaluator(private val system: VelleSystem) {
             return store.getValue(m.name)
         }
         m.derived?.let { return eval(it.expr, Ctx(m.owner, id)) }
-        if (m.type is VType.Coll) {
-            // inferred inverse collection: instances of the related shape whose
-            // unique to-one field references this instance
-            val relShape = (m.type as VType.Coll).shape
-            val backField = model.shapes.getValue(relShape).members
-                .filterIsInstance<StoredProp>()
-                .first { (it.type as? RelType)?.let { t -> !t.many && t.shape == inst.shape } == true }
-            system.ensureReferencing(relShape, backField.name, id)
-            val ids = system.byShape[relShape].orEmpty()
-                .filter { (system.instances.getValue(it).fields[backField.name] as? Value.VRef)?.id == id }
-            return Value.VColl(ids, relShape)
+        m.inverse?.let { inv ->
+            // inferred inverse collection: a view over the declared side (README §6)
+            return if (!inv.many) {
+                // one-to-many: children whose stored pointer references this instance
+                system.ensureReferencing(inv.shape, inv.field, id)
+                val ids = system.byShape[inv.shape].orEmpty()
+                    .filter { (system.instances.getValue(it).fields[inv.field] as? Value.VRef)?.id == id }
+                Value.VColl(ids, inv.shape)
+            } else {
+                // many-to-many: owners whose declared edge set contains this instance
+                val ids = system.idsOf(inv.shape)
+                    .filter { (system.instances.getValue(it).fields[inv.field] as? Value.VColl)?.ids?.contains(id) == true }
+                Value.VColl(ids, inv.shape)
+            }
         }
+        if (m.stored && m.type is VType.Coll)
+            return inst.fields[m.name] ?: Value.VColl(emptyList(), (m.type as VType.Coll).shape)
+        if (m.stored && m.type is VType.CollS)
+            return inst.fields[m.name] ?: Value.VVals(emptyList())
         return inst.fields[m.name] ?: Value.VNone
     }
 
@@ -94,6 +101,7 @@ class Evaluator(private val system: VelleSystem) {
         is TextLit -> Value.VText(e.value)
         is BoolLit -> Value.VBool(e.value)
         NoneLit -> Value.VNone
+        EmptyLit -> Value.VEmpty
         NowLit -> Value.VDateTime(system.effectiveNow)
         TodayLit -> Value.VDate(system.effectiveToday)
         is DurationLit -> Value.VDuration(e.amount, e.unit)
@@ -115,7 +123,19 @@ class Evaluator(private val system: VelleSystem) {
             for (seg in e.segs) v = access(v, seg)
             v
         }
+        is SetExpr -> evalSetExpr(e, ctx)
         is ShapeForSource -> throw VelleRuntimeError("shape-for is a collection source, not a value")
+    }
+
+    /** `(Shape where pred)` / `(path where pred)` as a collection value (README §6). */
+    private fun evalSetExpr(e: SetExpr, ctx: Ctx): Value {
+        val b = e.collection.bindings.single()
+        val (scope, ids) = bindingCandidates(b, ctx)
+        val kept = ids.filter { id ->
+            e.collection.where?.let { truthy(eval(it, ctx.push(scope, id, b.alias))) } ?: true
+        }
+        val base = if (scope in model.refinements) model.baseOf(scope) ?: scope else scope
+        return Value.VColl(kept.distinct(), base)
     }
 
     private fun evalPath(p: PathExpr, ctx: Ctx): Value {
@@ -167,9 +187,9 @@ class Evaluator(private val system: VelleSystem) {
             when (e.kind) {
                 "none" -> v == Value.VNone
                 "some" -> v != Value.VNone
-                "empty" -> (v as? Value.VColl)?.ids?.isEmpty()
+                "empty" -> collectionSize(v)?.let { it == 0 }
                     ?: throw VelleRuntimeError("'is empty' on non-collection")
-                "notEmpty" -> (v as? Value.VColl)?.ids?.isNotEmpty()
+                "notEmpty" -> collectionSize(v)?.let { it > 0 }
                     ?: throw VelleRuntimeError("'is not empty' on non-collection")
                 "refinement" -> {
                     val ref = v as? Value.VRef ?: return Value.VBool(false)
@@ -217,10 +237,10 @@ class Evaluator(private val system: VelleSystem) {
                 val base = model.baseOf(src.root)!!
                 base to (keyedCandidates(src.root, where, ctx) ?: system.idsOf(base))
                     .filter { memberOfRefExpr(it, RefName(src.root)) }
-            } else {
-                val v = eval(src, ctx)
-                val coll = v as? Value.VColl ?: throw VelleRuntimeError("binding is not a collection: $src")
-                coll.shape to coll.ids
+            } else when (val v = eval(src, ctx)) {
+                is Value.VColl -> v.shape to v.ids
+                Value.VEmpty -> "" to emptyList()
+                else -> throw VelleRuntimeError("binding is not a collection: $src")
             }
         is ShapeForSource -> {
             val target = eval(src.forExpr, ctx) as? Value.VRef
@@ -387,9 +407,45 @@ class Evaluator(private val system: VelleSystem) {
         }
     }
 
+    private fun collectionSize(v: Value): Int? = when (v) {
+        is Value.VColl -> v.ids.size
+        is Value.VVals -> v.values.size
+        Value.VEmpty -> 0
+        else -> null
+    }
+
     private fun arith(op: String, l: Value, r: Value): Value {
         if (l is Value.VNum && r is Value.VNum)
             return Value.VNum(if (op == "+") l.v.add(r.v) else l.v.subtract(r.v))
+        // set union (`+`) and removal (`-`) over a declared `many` (README §6):
+        // element or collection on the right; present-`+` and absent-`-` are no-ops
+        if (l is Value.VColl || l is Value.VVals || l == Value.VEmpty) {
+            if (l is Value.VColl || (l == Value.VEmpty && (r is Value.VColl || r is Value.VRef))) {
+                val ids = (l as? Value.VColl)?.ids ?: emptyList()
+                val shape = (l as? Value.VColl)?.shape ?: (r as? Value.VColl)?.shape
+                    ?: (r as? Value.VRef)?.let { system.instance(it.id)?.shape } ?: ""
+                val rhs = when (r) {
+                    is Value.VRef -> listOf(r.id)
+                    is Value.VColl -> r.ids
+                    Value.VEmpty -> emptyList()
+                    else -> throw VelleRuntimeError("'$op' on a collection and $r")
+                }
+                return Value.VColl(if (op == "+") (ids + rhs).distinct() else ids - rhs.toSet(), shape)
+            }
+            val values = (l as? Value.VVals)?.values ?: emptyList()
+            val rhs = when (r) {
+                is Value.VVals -> r.values
+                Value.VEmpty -> emptyList()
+                else -> listOf(r)
+            }
+            return Value.VVals(
+                if (op == "+") (values + rhs).fold(mutableListOf()) { acc, v ->
+                    if (acc.none { valueEquals(it, v) }) acc.add(v)
+                    acc
+                }
+                else values.filterNot { v -> rhs.any { valueEquals(v, it) } }
+            )
+        }
         if (r is Value.VDuration) {
             val sign = if (op == "+") 1L else -1L
             return when (l) {
@@ -434,6 +490,38 @@ class Evaluator(private val system: VelleSystem) {
         (v as? Value.VBool)?.v ?: throw VelleRuntimeError("non-boolean in predicate position: $v")
 
     // ── assignment targets ───────────────────────────────────────────────────
+
+    /**
+     * Resolve an assignment target to its instances and field. A plain path
+     * yields one target; a path through a `many` (one hop, README §6) fans out —
+     * one write per member of the collection at that hop.
+     */
+    fun resolveTargets(target: PathExpr, ctx: Ctx): Pair<List<Long>, String> {
+        if (target.segs.size >= 2) {
+            // check whether the penultimate hop reads a collection
+            val routeEnd = target.segs.size - 2
+            var current: Value = if (target.root == "this") Value.VRef(ctx.subjectId)
+            else readMember(ctx.subjectId, ctx.subjectScope, target.root)
+            for (i in 0..routeEnd) {
+                val seg = target.segs[i]
+                current = when (current) {
+                    is Value.VRef -> {
+                        val inst = system.instance(current.id) ?: throw VelleRuntimeError("missing instance")
+                        readMemberAnyScope(current.id, inst.shape, seg.name)
+                    }
+                    else -> throw VelleRuntimeError("assignment route '.${seg.name}' is not an instance")
+                }
+            }
+            (current as? Value.VColl)?.let { coll ->
+                return coll.ids to target.segs.last().name
+            }
+        } else if (target.segs.size == 1 && target.root != "this") {
+            val v = readMember(ctx.subjectId, ctx.subjectScope, target.root)
+            (v as? Value.VColl)?.let { return it.ids to target.segs.last().name }
+        }
+        val (id, field) = resolveTarget(target, ctx)
+        return listOf(id) to field
+    }
 
     /** Resolve `a.b.c` to (instance holding c, "c"). */
     fun resolveTarget(target: PathExpr, ctx: Ctx): Pair<Long, String> {

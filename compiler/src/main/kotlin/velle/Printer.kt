@@ -65,7 +65,7 @@ object Printer {
     }
 
     fun type(t: TypeRef): String = when (t) {
-        is ScalarType -> t.name + if (t.optional) "?" else ""
+        is ScalarType -> (if (t.many) "many " else "") + t.name + if (t.optional) "?" else ""
         is RelType -> (if (t.many) "many " else "one ") + t.shape + if (t.optional) "?" else ""
     }
 
@@ -87,6 +87,7 @@ object Printer {
         is TextLit -> "\"${e.value}\""
         is BoolLit -> e.value.toString()
         NoneLit -> "none"
+        EmptyLit -> "empty"
         NowLit -> "now"
         TodayLit -> "today"
         is DurationLit -> "${e.amount} ${e.unit}"
@@ -108,6 +109,7 @@ object Printer {
             (if (e.orderBy.isEmpty()) "" else " by ${e.orderBy.joinToString(", ")}") + ")"
         is FunCall -> "${e.name}(${e.args.joinToString(", ") { expr(it) }})"
         is SingularFor -> "(${e.shape} for ${expr(e.forExpr)})"
+        is SetExpr -> "(${collection(e.collection)})"
         is Access -> operand(e.target) + e.segs.joinToString("") { (if (it.viaQdot) "?." else ".") + it.name }
         is ShapeForSource -> "${e.shape} for ${expr(e.forExpr)}"
     }

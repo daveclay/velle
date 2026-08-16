@@ -161,15 +161,19 @@ object Codegen {
 
         fun isOptional(t: TypeRef) = (t as? ScalarType)?.optional == true || (t as? RelType)?.optional == true
 
-        /** Parameter type for a commit function (relationships take views). */
+        /** Parameter type for a commit function (relationships take views; `many` takes lists). */
         fun paramType(t: TypeRef): String = when (t) {
-            is RelType -> "${t.shape}View" + if (t.optional) "?" else ""
-            is ScalarType -> scalarKotlin(t.name) + if (t.optional) "?" else ""
+            is RelType ->
+                if (t.many) "List<${t.shape}View>"
+                else "${t.shape}View" + if (t.optional) "?" else ""
+            is ScalarType ->
+                if (t.many) "List<${scalarKotlin(t.name)}>"
+                else scalarKotlin(t.name) + if (t.optional) "?" else ""
         }
 
         /** Convert a parameter back to the raw value the runtime accepts. */
         fun rawExpr(expr: String, t: TypeRef): String = when (t) {
-            is RelType -> "$expr.id"
+            is RelType -> if (t.many) "$expr.map { it.id }" else "$expr.id"
             is ScalarType -> expr
         }
 
@@ -193,6 +197,7 @@ object Codegen {
             VType.DateTimeT -> "Instant"
             is VType.Inst -> "${t.shape}View"
             is VType.Coll -> "List<${t.shape}View>"
+            is VType.CollS -> "List<${scalarKotlin(t.name)}>"
             is VType.Optional -> kotlinType(t.inner) + "?"
             VType.Id, VType.Unknown -> "Any"
         }
@@ -211,6 +216,13 @@ object Codegen {
             VType.DateTimeT -> "$call as Instant"
             is VType.Inst -> "${t.shape}View($call as Long)"
             is VType.Coll -> "($call as List<*>).map { ${t.shape}View(it as Long) }"
+            is VType.CollS -> when (t.name) {
+                "integer" -> "($call as List<*>).map { (it as BigDecimal).intValueExact() }"
+                "long" -> "($call as List<*>).map { (it as BigDecimal).longValueExact() }"
+                "double" -> "($call as List<*>).map { (it as BigDecimal).toDouble() }"
+                "decimal" -> "($call as List<*>).map { it as BigDecimal }"
+                else -> "($call as List<*>).map { it as ${scalarKotlin(t.name)} }"
+            }
             is VType.Optional -> when (val inner = t.inner) {
                 is VType.Inst -> "($call as Long?)?.let { ${inner.shape}View(it) }"
                 else -> "$call as ${kotlinType(t)}"

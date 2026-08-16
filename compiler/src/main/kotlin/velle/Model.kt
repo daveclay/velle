@@ -115,17 +115,22 @@ class Model(val decls: List<Decl>) {
         }
         shapes[scope]?.let { shape ->
             shape.members.forEach { add(scope, it) }
-            // inferred inverse collections (README §6) — none from a transient
-            // act: the collection would be a read of instances that are not
-            // kept (README §4, "Transient acts")
+            // inferred inverse collections (README §6) — from the declared side's
+            // `one` (a one-to-many's child pointer) or bare `many` (an m2m edge
+            // set). None from a transient act: the collection would be a read of
+            // instances that are not kept (README §4, "Transient acts"). Two
+            // declared sides at the same target make the decapitalize-and-
+            // pluralize name ambiguous — no inverse is inferred, and use sites
+            // demand declared derived views (README §6; the `Transfer` example).
             for ((otherName, other) in shapes) {
                 if (otherName in transients) continue
-                for (m in other.members) {
-                    if (m is StoredProp && m.type is RelType && !m.type.many && m.type.shape == scope) {
-                        val inverse = otherName.replaceFirstChar { it.lowercase() } + "s"
-                        out.putIfAbsent(inverse, MemberInfo(inverse, scope, VType.Coll(otherName), stored = false))
-                    }
-                }
+                val targeting = other.members.filterIsInstance<StoredProp>()
+                    .filter { (it.type as? RelType)?.shape == scope }
+                if (targeting.size != 1) continue
+                val f = targeting.single()
+                val inverse = otherName.replaceFirstChar { it.lowercase() } + "s"
+                out.putIfAbsent(inverse, MemberInfo(inverse, scope, VType.Coll(otherName), stored = false,
+                    inverse = InverseInfo(otherName, f.name, (f.type as RelType).many)))
             }
             out["id"] = MemberInfo("id", scope, VType.Id, stored = false)
             return out
@@ -157,7 +162,7 @@ class Model(val decls: List<Decl>) {
     }
 
     fun typeOf(t: TypeRef): VType = when (t) {
-        is ScalarType -> when (t.name) {
+        is ScalarType -> if (t.many) VType.CollS(t.name) else when (t.name) {
             "text" -> VType.Text
             "integer", "long", "decimal", "double" -> VType.Num(t.name)
             "boolean" -> VType.Bool
@@ -239,6 +244,7 @@ class Model(val decls: List<Decl>) {
                 walkSegs(start, e.segs, s)
             }
             is ShapeForSource -> { consultShape(e.shape, s); collectExpr(e.forExpr, subject, s, aliases) }
+            is SetExpr -> collectCollection(e.collection, subject, s, aliases)
             else -> {}
         }
     }
@@ -358,7 +364,12 @@ data class MemberInfo(
     val derived: DerivedProp? = null,
     val captured: Boolean = false,
     val timestamp: Boolean = false,
+    /** Set on an inferred inverse collection: the declared side it is a view of (README §6). */
+    val inverse: InverseInfo? = null,
 )
+
+/** The declared side an inferred inverse reads: [shape].[field], to-one or an m2m `many`. */
+data class InverseInfo(val shape: String, val field: String, val many: Boolean)
 
 sealed interface VType {
     data class Num(val name: String) : VType
@@ -369,6 +380,8 @@ sealed interface VType {
     data object Id : VType
     data class Inst(val shape: String) : VType
     data class Coll(val shape: String) : VType
+    /** An owned collection of scalar values (`many text`, README §6). */
+    data class CollS(val name: String) : VType
     data class Optional(val inner: VType) : VType
     data object Unknown : VType
 

@@ -100,11 +100,97 @@ Every instance carries **`id`** — identity as a readable value, present with n
 ```
 shape Invoice {
     customer: one Customer
-    payments: many Payment
+}
+
+shape Payment {
+    invoice: one Invoice
 }
 ```
 
-`one`/`many` declare cardinality directly on a property. The inverse side of a relationship is inferred, not separately declared — e.g. `Customer` does not need its own `invoices: many Invoice` field for `Customer where count(invoices ...)` to work; it's derived from `Invoice.customer`. The inferred collection's name is the related shape's name, decapitalized and pluralized with `s`: `Invoice.customer: one Customer` gives `Customer` an `invoices` collection; `LineItem.invoice: one Invoice` gives `Invoice` a `lineItems` collection. (A declared `many` field with an author-chosen name remains legal where the derived name reads badly.)
+`one`/`many` declare **ownership of the relationship, not its direction**. The declaring shape owns the relationship: the declared property is its stored side — the side rules assign and committers supply — and its cardinality says how many the *owner* points at. The inverse side is never declared and never chosen: it is inferred — derived, unassignable — and its cardinality is structural fallout from the declared side. `Invoice.customer: one Customer` gives `Customer` an inferred `invoices` collection with no declaration on `Customer` (`Customer where count(invoices ...)` just works); the inferred name is the related shape's name, decapitalized and pluralized with `s` (`Payment.invoice: one Invoice` gives `Invoice` a `payments` collection — the `sum(payments, amount)` of `## Derived properties`).
+
+Cardinality reads off the declared side alone:
+
+- **`one` declared** — each owner points at one target; nothing constrains how many owners point at the same target, so the relationship is **one-to-many**, declared from the "many-of" side. This is the only spelling of one-to-many, deliberately: the pointer on that side makes "exactly one per member" structurally impossible to violate, where declaring a collection on the other side would degrade the same invariant to a checked global disjointness constraint (no member in two collections, none in zero) — and structural impossibility beats checked discipline (`## 4`, "Transient acts", makes the same trade).
+- **`many` declared** — the owner holds an edge set, and nothing constrains how many owners' sets a target appears in, so the relationship is **many-to-many**, with no intermediary join shape required. A declared `many` is exactly the *data-free* edge set: the moment an edge carries data (when it was made, by whom, a grade), it is a business fact wanting its own shape — a graduation point, never ceremony. `many` also takes a scalar (`tags: many text`) — an owned collection of values, since scalars have no identity to reference. The commit and assignment story for collections is below.
+
+Direction is not encoded because it would carry no information: inference means both sides always traverse. The traditional parent/child framing conflates three separate things, and these descriptors take exactly one of them — traversal direction (symmetric and free, per the above), **write ownership** (what `one`/`many` declare), and lifecycle dependency ("children die with the parent" — no part of the relationship descriptor; existence-dependency is delete territory, `working-docs/QUESTIONS.md`, OQ37). "Invoice has payments" and "payment belongs to invoice" were never two directions of one arrow: only the second is a declaration.
+
+One consequence is an ambiguity rule: because a bare declared `many` *means* an owned many-to-many edge set, declaring **both** sides of one relationship (`Payment.invoice: one Invoice` *and* `Invoice.payments: many Payment`) is not a restatement — it is either two distinct relationships between the same shapes or two owners of one edge set, and the compiler refuses to guess (`## 1. Principles`): a compile error demanding intent. Renaming an inferred inverse where the derived name reads badly is therefore *not* spelled as a bare stored `many`; a renamed inverse is a view, not owned data, and its spelling is the derived form below ("Renamed and derived collections").
+
+### Committing and assigning collections
+
+On an exposed act, `many X` is the plural of what `one X` already means there: the committer names several existing instances by reference (`ChangeDueDate.invoice: one Invoice` names one; `courses: many Course` names several). `many <scalar>` on an act supplies the values themselves. The generated commit function (§22, "External input") takes the collection; supplying it — possibly empty — satisfies mapping totality (F4), and the empty collection *is* the absence, which is why `many` takes no `?`.
+
+A collection is a **set**: unordered, duplicate-free. Ordering comes from declared data, never from position (§5, selectors) — a positional list would smuggle in an ordering with no datum behind it. A duplicate reference in a committed collection is refused at the boundary, a type-level refusal like any other: it is either a caller bug or a multiplicity claim `many` cannot express, and multiplicity that matters is data on an edge shape — the graduation point; the diagnostic says so. (Whether a multiplicity-bearing collection deserves its own declaration is `working-docs/QUESTIONS.md`, OQ38.)
+
+What a rule may do with a collection follows one sentence — **you may only assign what is stored, and a statement assigns exactly the field it names** — met by the two relationship kinds:
+
+- **Whole-set replacement.** A declared `many` is stored, so it is assignable as a value; the edge set becomes exactly the right-hand side:
+
+  ```
+  expose transient shape SetEnrollment {
+      student: one Student
+      courses: many Course
+  }
+
+  rule SetEnrollment {
+      this.student.courses = this.courses
+  }
+  ```
+
+  Replacement is well-defined because m2m edges are free-standing: removal just deletes edges, and nothing else moves. Concurrent replacement needs no special rule — acts serialize as commits, so two full-set replacements are last-in-wins, exactly as two assignments to a scalar field are.
+
+- **Fan-out assignment.** A one-to-many's collection side is inferred — a view over the children's stored pointers — and a view is never an assignment target: "setting" it is really a per-child write of the stored field, spelled *through* the collection:
+
+  ```
+  expose transient shape ReassignInvoices {
+      customer: one Customer
+      invoices: many Invoice       -- a selector: which children get this parent
+  }
+
+  rule ReassignInvoices {
+      this.invoices.customer = this.customer
+  }
+  ```
+
+  One write per member, the mutated field named in the statement. **One hop only**: a collection path assigns a field *of* the members, never through them (`this.invoices.customer`, never `this.invoices.customer.tier`) — the same instinct as the derived-property self-reference rule (§7). The act's collection selects; nothing is removed, so totality is trivial — removal is its own explicit act, spelled on the child (reassignment, or `none` where the pointer is optional). For one-writer analysis a collection-path write counts as a write to that field on *every* instance of the member shape — the coarse fail-closed rule (checks catalog, V1); refining it with disjointness proofs is post-v0 calibration.
+
+- **Incremental edits.** `+` and `-` on a declared `many` are union and removal — `this.student.courses = this.student.courses + this.course` — element or collection on the right. Set semantics keep the edges quiet: adding a present member and removing an absent one are no-ops. This and the duration case are the only operator overloads (`grammar.md`, value expressions).
+
+- **`empty`.** The empty collection, legal wherever a `many` value is expected: `tags: many text initially empty`; `courses: empty` as a `from { ... }` entry. There are no collection literals — composing a collection out of elements in-spec is the same territory as composing text out of data (`grammar.md`, TextLiteral): collections enter from the boundary, from traversals (`this.invoices where OverdueInvoice`), or start `empty`.
+
+### Renamed and derived collections
+
+An inferred inverse under an author-chosen name is a **derived `many` property with a set-denotation formula** — visibly a view over the declared side:
+
+```
+shape Person {
+    employer: one Company
+}
+
+shape Company {
+    employees: many Person = (Person where employer == this)
+}
+```
+
+`many` is the type in both stored and derived positions — the type word says what the value *is*, and `=` says where it comes from, exactly as `applied: boolean initially false` vs `applied: boolean = false` (§5). The misread this could invite — forgetting the `=` and declaring an owned edge set — is structurally caught: a renamed inverse's other side is declared by definition, so the omission trips the both-sides error above, and the diagnostic suggests the `=` form.
+
+Renaming is *necessary*, not cosmetic, when two declared sides share a target: the decapitalized-pluralized name would be ambiguous (which fields feed `Account.transfers`?), so no inverse is inferred and the spec declares its views — ambiguity is a compile error (§1):
+
+```
+shape Transfer {
+    source: one Account
+    target: one Account
+}
+
+shape Account {
+    outgoing: many Transfer = (Transfer where source == this)
+    incoming: many Transfer = (Transfer where target == this)
+}
+```
+
+Derived `many <scalar>` collections use the same form. A derived collection is a view like any derived property: computed on read, never stored, never assigned (§7).
 
 ## 7. Derived properties
 
@@ -919,7 +1005,7 @@ never SuspendedInGoodStanding                       -- the same statement over a
 
 ## 22. Open / unresolved
 
-**Current milestone — the v0 validator/transpiler (scope settled).** v0 implements §3–§21 as written — plus one construct adopted after the original scope statement from the transient-acts investigation (`expose transient`, §4 "Transient acts"; decision record `working-docs/investigate-transient.md`) — validated and transpiled to an executable runtime driven through a test-harness boundary, itself fully settled. Input enters through the `expose` construct: `expose <Shape>` transpiles to a function taking that shape as input — the thing the engineer's own transport code calls to submit a mutation — plus a generated `main`-style entry point for driving the system manually. The declaration names no mechanism; transport, persistence, and serialization are the engineer's code, outside the spec (the external-input item below; decision record `working-docs/investigate_runtime.md`). A call returns acceptance or a refusal naming what was violated — the type-level failure or the specific `never` — and on refusal nothing commits. Ticks enter the same way — each schedule name transpiles to a tick function the harness calls, since scheduled events and user acts are both external input (§4, §17) — so schedule definition is not needed; when that construct lands, it defines *when* the tick functions are called, never what they do. Reading is **generated typed accessors**, not a generic query API: per shape and refinement, the transpiled surface exposes read-only access to instances, their properties (derived included), refinement membership, and produced facts — the assertion surface for tests; querying is "read" in §4's sense and commits nothing. Deferred past v0, with their items below: Mapping, schedule definition, the `expose` construct's remaining details, the state partition declaration, extensible data types, and `why`/provenance — plus `requires` and `visible to ... where`, removed from §10 until re-derived and synced (tracked in `working-docs/TODO.md`). Nothing cut is exercised by any current example, and each re-enters post-v0 through its own item. The whole-language grammar is settled and normative in `grammar.md` — value expressions included, closing the formalization gap `## Predicate expressions` once left open for derived-property formulas. The operational semantics and the validator's check catalog are settled and normative in `evaluation.md` and `checks.md` — the evaluation model an implementer follows (with its five signed v0 spike choices and the transient-act removal semantics) and the check catalog the validator runs, the coarse fail-closed slices of the open calibration questions included. The v0 implementation lives in this repo, split along the architecture's seam ("The extension framework," below): `compiler/` holds the lexer/parser from `grammar.md`, the validator from `checks.md`, the runtime from `evaluation.md`, and the harness codegen; each example under `examples/<system>/` pairs its spec with its own transpiled, developer-owned `output/` module (`gradle generate`) and the tests that drive it — with `examples/billing/billing.velle` as the first spec, parsed, validated, executed, and exercised through its generated typed surface, and `examples/membership/membership.velle` as the second, written to exercise the surface area billing leaves untouched (optionals and narrowing, or-composition, the ledger with `latest`, flag-witness guards, episodes as data, sibling joins and `as` reach-backs, bare `frozen`, act-sourced captures, the reconciliation latch pair, `tolerates`), and `examples/payments/payments.velle` as the third — the first written business-outward — assembling the errors-are-refinements interaction pattern end-to-end (async processor verdicts as later external commits, outcome-state dispatch, retries under a cap, timeouts, compensation on exhaustion) plus the handled-once act partition, derived refinement-body properties, composite bodies with freezes, and duration addition. What remains in `working-docs/QUESTIONS.md` is calibration that running realistic specs will answer.
+**Current milestone — the v0 validator/transpiler (scope settled).** v0 implements §3–§21 as written — plus one construct adopted after the original scope statement from the transient-acts investigation (`expose transient`, §4 "Transient acts"; decision record `working-docs/investigate-transient.md`) — validated and transpiled to an executable runtime driven through a test-harness boundary, itself fully settled. Input enters through the `expose` construct: `expose <Shape>` transpiles to a function taking that shape as input — the thing the engineer's own transport code calls to submit a mutation — plus a generated `main`-style entry point for driving the system manually. The declaration names no mechanism; transport, persistence, and serialization are the engineer's code, outside the spec (the external-input item below; decision record `working-docs/investigate_runtime.md`). A call returns acceptance or a refusal naming what was violated — the type-level failure or the specific `never` — and on refusal nothing commits. Ticks enter the same way — each schedule name transpiles to a tick function the harness calls, since scheduled events and user acts are both external input (§4, §17) — so schedule definition is not needed; when that construct lands, it defines *when* the tick functions are called, never what they do. Reading is **generated typed accessors**, not a generic query API: per shape and refinement, the transpiled surface exposes read-only access to instances, their properties (derived included), refinement membership, and produced facts — the assertion surface for tests; querying is "read" in §4's sense and commits nothing. Deferred past v0, with their items below: Mapping, schedule definition, the `expose` construct's remaining details, the state partition declaration, extensible data types, and `why`/provenance — plus `requires` and `visible to ... where`, removed from §10 until re-derived and synced (tracked in `working-docs/TODO.md`). Nothing cut is exercised by any current example, and each re-enters post-v0 through its own item. The whole-language grammar is settled and normative in `grammar.md` — value expressions included, closing the formalization gap `## Predicate expressions` once left open for derived-property formulas. The operational semantics and the validator's check catalog are settled and normative in `evaluation.md` and `checks.md` — the evaluation model an implementer follows (with its five signed v0 spike choices and the transient-act removal semantics) and the check catalog the validator runs, the coarse fail-closed slices of the open calibration questions included. The v0 implementation lives in this repo, split along the architecture's seam ("The extension framework," below): `compiler/` holds the lexer/parser from `grammar.md`, the validator from `checks.md`, the runtime from `evaluation.md`, and the harness codegen; each example under `examples/<system>/` pairs its spec with its own transpiled, developer-owned `output/` module (`gradle generate`) and the tests that drive it — with `examples/billing/billing.velle` as the first spec, parsed, validated, executed, and exercised through its generated typed surface, and `examples/membership/membership.velle` as the second, written to exercise the surface area billing leaves untouched (optionals and narrowing, or-composition, the ledger with `latest`, flag-witness guards, episodes as data, sibling joins and `as` reach-backs, bare `frozen`, act-sourced captures, the reconciliation latch pair, `tolerates`), and `examples/payments/payments.velle` as the third — the first written business-outward — assembling the errors-are-refinements interaction pattern end-to-end (async processor verdicts as later external commits, outcome-state dispatch, retries under a cap, timeouts, compensation on exhaustion) plus the handled-once act partition, derived refinement-body properties, composite bodies with freezes, and duration addition, and `examples/enrollment/enrollment.velle` as the fourth, exercising §6's collection constructs end-to-end (a declared m2m `many` with its inferred inverse, `many <scalar>`, reference-set act fields, whole-set replacement, `+`/`-` union and removal, fan-out assignment, `initially empty`, derived collection views, and the boundary's duplicate refusal). What remains in `working-docs/QUESTIONS.md` is calibration that running realistic specs will answer.
 
 - **State change & rule mechanics — remaining frontier.** The core is settled — assignment and one-writer (§12), run-once guards with no sugar (§18), folds and `tolerates` (§19), the pattern spectrum and rung recognition (§20), and "what is one commit": a commit is exactly one act instance (a container shape models multi-part acts), a body is one commit, consequences share the act's transaction by default, `after commit` declares a boundary, and the irreducible world/state gap at an external effect is answered by the intent-before-effect pattern (§4, `## rule` "Transactions and `after commit`"); commit timestamps are author-declared, language-populated fields (`timestamp on create` / `on update`, §5); every instance carries an opaque, readable `id` (§5); a rule fires once per matching record — no loop construct, transaction scope following the trigger source (§16, §17); all-or-nothing batches need no envelope construct — they dissolve into one-body effects, commit-shared fan-out, one-fact-many-readers, containers, and completeness gates (§20, "All-or-nothing batches"); cascades nest as trees of transactions; `tolerates loss` signs fire-and-forget external effects (§11, §19); and `never` declares impossible configurations — transaction-end enforced, proven for rule-maintained invariants, compiled into the boundary for input-constrained ones (§21); and shapes are marked externally committable by `expose` declarations — the trust boundary — with the construct's remaining details deferred ("External input," below; resolves OQ5); and an exit rule is the last reader of the leaving refinement's captures — retraction lands at the exit commit's close, full pre-state access is rejected, and capture-reading rules are transaction-bound (§13; resolves OQ7's exit-read thread, with its two remaining threads moved below). Still open in `working-docs/QUESTIONS.md`: the order-independence/confluence and quiescence proofs and rejection scope (OQ16–17; the commit-refusal residue, OQ20, settled — refusal is compiled boundary code from `never`, §21, and who-may-commit lives in engineer wrapper code, "External input" below); ordered folds and firing order at a tick (OQ15). Whether the canonical guard form is pleasant enough to be what fold diagnostics ask authors to write was OQ14, settled: it is — the canonical form stands as the diagnostics' fix-it spelling, no sugar added (§18).
 - **Mapping** (shape-to-shape translation, e.g. API DTO → domain shape) — part of the original design goals, not yet exercised in a worked example. Now also the natural home for a direct per-member effect spelling — "one `Reservation` per line item" — as sugar over the guard-correlated fan-out (`## State-change patterns`, "All-or-nothing batches"), whose inverted spelling gets unpleasant as correlation deepens.

@@ -23,6 +23,13 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **ledger / episode** — history patterns: an append-only record read via `latest` · a bounded occurrence fact counted later (README §12, §20).
 - **rung / rung recognition** — a spelling's position on the pattern spectrum (e.g. incremental vs. recompute — one description, two spellings); diagnostics point at the twin rung (README §19–§20).
 
+## Relationships and collections
+
+- **ownership (of a relationship)** — what `one`/`many` declare: the declaring shape's property is the stored side — rules assign it, committers supply it — and the inverse is inferred, derived, unassignable; direction is not encoded because inference makes both sides traverse (README §6).
+- **graduation point** — the moment an edge carries data (when, who, a grade, a quantity), it stops being a bare `many` edge and becomes a business fact with its own shape; join shapes are never ceremony, only facts (README §6).
+- **fan-out assignment** — a collection-path assignment (`this.invoices.customer = ...`): one write per member of the collection, one `many` hop only, the mutated field named in the statement (README §6; checks V20, V1's coarse extension).
+- **input closure** — the transport-level input to a generated commit function for a multi-part act: the act plus the inline part values that ride with it; whether that closure is "one instance" is OQ39's question.
+
 ## Proofs and checks
 
 - **fail-closed** — when the prover can't decide, the spec is rejected, never silently accepted; calibration then grows the provable set.

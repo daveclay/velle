@@ -119,10 +119,24 @@ class Parser(private val tokens: List<Token>) {
         return when {
             t.isKw("one") || t.isKw("many") -> {
                 next()
+                val many = t.isKw("many")
+                val target = peek()
+                // `many` also takes a scalar — an owned collection of values (README §6)
+                val scalar = when {
+                    target.type == TokType.KW && target.text in SCALAR_KEYWORDS -> target.text
+                    target.type == TokType.UIDENT && (target.text == "Date" || target.text == "DateTime") -> target.text
+                    else -> null
+                }
+                if (scalar != null) {
+                    if (!many) fail("'one' takes a shape — a scalar field needs no cardinality", target)
+                    next()
+                    if (consumeIf(TokType.QMARK)) fail("a 'many' takes no '?' — the empty collection is the absence", target)
+                    return ScalarType(scalar, optional = false, many = true)
+                }
                 val shape = expect(TokType.UIDENT).text
                 val optional = consumeIf(TokType.QMARK)
-                if (t.isKw("many") && optional) fail("'many' relationships take no '?'", t)
-                RelType(many = t.isKw("many"), shape = shape, optional = optional)
+                if (many && optional) fail("a 'many' takes no '?' — the empty collection is the absence", t)
+                RelType(many = many, shape = shape, optional = optional)
             }
             t.type == TokType.KW && t.text in SCALAR_KEYWORDS -> {
                 next(); ScalarType(t.text, consumeIf(TokType.QMARK))
@@ -432,6 +446,7 @@ class Parser(private val tokens: List<Token>) {
             t.isKw("true") -> { next(); BoolLit(true) }
             t.isKw("false") -> { next(); BoolLit(false) }
             t.isKw("none") -> { next(); NoneLit }
+            t.isKw("empty") -> { next(); EmptyLit }
             t.isKw("now") -> { next(); NowLit }
             t.isKw("today") -> { next(); TodayLit }
             t.isKw("this") -> { next(); PathExpr("this") }
@@ -490,6 +505,15 @@ class Parser(private val tokens: List<Token>) {
             return SingularFor(shape, e)
         }
         val inner = parsePredicate()
+        // set denotation: `(Shape where pred)` / `(this.invoices where Overdue)` (README §6)
+        if (peek().isKw("where")) {
+            val p = inner as? PathExpr
+                ?: fail("a set denotation filters a shape name or relationship path", peek())
+            next(); skipNewlines()
+            val where = parsePredicate()
+            expect(TokType.RPAREN)
+            return SetExpr(CollectionExpr(listOf(Binding(p)), where))
+        }
         expect(TokType.RPAREN)
         return inner
     }

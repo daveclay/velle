@@ -33,6 +33,7 @@ class Validator(private val model: Model) {
 
     fun run() {
         checkShapeDeclarations()
+        checkRelationshipCoherence() // V19
         checkRefinementDeclarations()
         model.rules.values.forEach { checkRuleNamesAndBody(it) }
         checkOneWriter()          // V1 (+ same-commit read-write, V15 coarse)
@@ -67,6 +68,37 @@ class Validator(private val model: Model) {
                 }
                 is DerivedProp -> checkExpr(m.expr, name)
                 else -> {}
+            }
+        }
+    }
+
+    // ── V19: relationship declaration coherence (README §6) ──────────────────
+    //
+    // The declared side owns a relationship; the inverse is inferred. A bare
+    // declared `many` *means* an owned m2m edge set, so declaring both sides of
+    // one relationship — a `many B` on A while B declares any side back at A —
+    // is either two distinct relationships or two owners of one edge set, and
+    // the compiler refuses to guess. (Ambiguous inference — two same-target
+    // declared sides on one shape — is handled by not inferring the inverse;
+    // use sites then demand declared derived views, README §6's Transfer case.)
+
+    private fun checkRelationshipCoherence() {
+        for ((aName, a) in model.shapes) {
+            for (f in a.members.filterIsInstance<StoredProp>()) {
+                val t = f.type as? RelType ?: continue
+                if (!t.many) continue
+                val b = model.shapes[t.shape] ?: continue
+                for (g in b.members.filterIsInstance<StoredProp>()) {
+                    val bt = g.type as? RelType ?: continue
+                    if (bt.shape != aName) continue
+                    if (aName == t.shape && f === g) continue // a self-referential edge set is one side
+                    if (bt.many && aName > t.shape) continue  // symmetric case: report once
+                    diags.add(Diagnostic("V19", "'$aName.${f.name}: many ${t.shape}' and " +
+                        "'${t.shape}.${g.name}: ${if (bt.many) "many" else "one"} $aName' declare both sides — " +
+                        "two owners of one edge set, or two distinct relationships; drop one side " +
+                        "(the inverse is inferred), or make the collection a derived view " +
+                        "(`${f.name}: many ${t.shape} = (...)`), README §6"))
+                }
             }
         }
     }
@@ -124,13 +156,21 @@ class Validator(private val model: Model) {
     private fun checkAssignment(rule: RuleDecl, scope: String, a: Assignment) {
         val resolved = resolveWrite(rule, scope, a) ?: return
         if (!resolved.member.stored) {
-            val kind = when {
-                resolved.member.timestamp -> "a timestamp field (commit metadata)"
-                resolved.member.name == "id" -> "'id'"
-                resolved.member.captured -> "a captured property"
-                else -> "a derived property"
+            // V20: an inferred inverse or derived collection is a view, never a
+            // target — you may only assign what is stored (README §6)
+            if (resolved.member.inverse != null || resolved.member.type is VType.Coll) {
+                diags.add(Diagnostic("V20", "rule '${rule.name}' assigns ${resolved.owner}.${resolved.member.name} — " +
+                    "a collection view is never an assignment target: assign the declared side " +
+                    "(whole-set replacement) or write through it (fan-out), README §6"))
+            } else {
+                val kind = when {
+                    resolved.member.timestamp -> "a timestamp field (commit metadata)"
+                    resolved.member.name == "id" -> "'id'"
+                    resolved.member.captured -> "a captured property"
+                    else -> "a derived property"
+                }
+                diags.add(Diagnostic("F3", "rule '${rule.name}' assigns ${resolved.owner}.${resolved.member.name} — $kind is never assignable"))
             }
-            diags.add(Diagnostic("F3", "rule '${rule.name}' assigns ${resolved.owner}.${resolved.member.name} — $kind is never assignable"))
         }
         checkExpr(a.value, scope)
     }
@@ -230,6 +270,7 @@ class Validator(private val model: Model) {
             }
             is Access -> checkExpr(e.target, scope)
             is ShapeForSource -> checkExpr(e.forExpr, scope)
+            is SetExpr -> checkCollection(e.collection, scope)
             else -> {}
         }
     }
@@ -310,9 +351,38 @@ class Validator(private val model: Model) {
     // ── writes ───────────────────────────────────────────────────────────────
 
     private data class Write(val rule: RuleDecl, val owner: String, val member: MemberInfo, val target: PathExpr,
-                             val value: Expr)
+                             val value: Expr,
+                             /** the target traverses a `many` hop: one write per member (README §6);
+                              *  one-writer treats it as a write to the field on every instance (V1, coarse) */
+                             val fanOut: Boolean = false)
 
     private fun resolveWrite(rule: RuleDecl, scope: String, a: Assignment): Write? {
+        var fanOut = false
+        fun stepThrough(m: MemberInfo, sc: String, atPenultimate: Boolean): String? {
+            val coll = m.type as? VType.Coll
+            if (coll != null) {
+                // V20: a collection path fans out exactly at the penultimate hop —
+                // it writes a field *of* the members, never through them (README §6)
+                if (!atPenultimate) {
+                    diags.add(Diagnostic("V20", "rule '${rule.name}' assigns through '$sc.${m.name}' and onward — " +
+                        "a collection path writes a field of the collection's members, never through them; " +
+                        "the deeper write is its own rule on the shape that owns the field (README §6)"))
+                    return null
+                }
+                if (fanOut) {
+                    diags.add(Diagnostic("V20", "rule '${rule.name}' assigns through two `many` hops — " +
+                        "a fan-out traverses exactly one (README §6)"))
+                    return null
+                }
+                fanOut = true
+                return coll.shape
+            }
+            if (m.type is VType.CollS) {
+                diags.add(Diagnostic("V20", "rule '${rule.name}' assigns through scalar collection '$sc.${m.name}'"))
+                return null
+            }
+            return m.type.instanceShape()
+        }
         var current: String? = if (a.target.root == "this") scope else {
             val m = model.membersOf(scope)[a.target.root]
             if (m == null) {
@@ -321,7 +391,7 @@ class Validator(private val model: Model) {
             }
             if (a.target.segs.isEmpty())
                 return Write(rule, model.baseOf(scope) ?: scope, m, a.target, a.value)
-            m.type.instanceShape()
+            stepThrough(m, model.baseOf(scope) ?: scope, atPenultimate = a.target.segs.size == 1)
         }
         for ((i, seg) in a.target.segs.withIndex()) {
             val sc = current ?: return null
@@ -330,8 +400,8 @@ class Validator(private val model: Model) {
                 diags.add(Diagnostic("F1", "rule '${rule.name}' assigns through unknown member '${seg.name}' of '$sc'"))
                 return null
             }
-            if (i == a.target.segs.lastIndex) return Write(rule, model.baseOf(sc) ?: sc, m, a.target, a.value)
-            current = m.type.instanceShape()
+            if (i == a.target.segs.lastIndex) return Write(rule, model.baseOf(sc) ?: sc, m, a.target, a.value, fanOut)
+            current = stepThrough(m, sc, atPenultimate = i == a.target.segs.lastIndex - 1)
         }
         return null
     }
@@ -1029,6 +1099,10 @@ class Validator(private val model: Model) {
                 is SingularFor -> walk(site, e.forExpr)
                 is ShapeForSource -> walk(site, e.forExpr)
                 is Access -> walk(site, e.target)
+                is SetExpr -> {
+                    e.collection.bindings.forEach { walk(site, it.source) }
+                    walk(site, e.collection.where)
+                }
                 else -> {}
             }
         }
