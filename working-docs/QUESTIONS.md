@@ -18,7 +18,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **[OQ28](questions/OQ28-bootstrap-backfill.md)** — bootstrap/backfill: a new rule against pre-existing state · not designed
 - **[OQ29](questions/OQ29-sum-types.md)** — sum types / union shapes · workaround exists (two optionals + xor `never`)
 - **[OQ31](questions/OQ31-committer-suppliable-fields.md)** — committer-suppliable fields (commit-function signatures) · `expose`-construct detail
-- **[OQ36](questions/OQ36-universal-transaction.md)** — the universal-transaction contract, stated precisely · proofs rest on it
+- **[OQ36](questions/OQ36-universal-transaction.md)** — the universal-transaction contract, stated precisely · proofs rest on it · draft U1–U5 in file, pending review
 - **[OQ37](questions/OQ37-delete.md)** — delete as a described mutation: statement, existence-dependency check, gating, referential completeness · investigation open (`investigate-delete.md`)
 - **[OQ38](questions/OQ38-bag-relationships.md)** — duplicates in a relationship: a multiplicity-bearing `many`? · born from OQ30-R5; edge-shape-with-quantity may be the whole answer
 - **[OQ39](questions/OQ39-inline-part-creation.md)** — inline part creation: multi-part acts through the generated commit function · born from OQ30-R7; the input-closure question
