@@ -1,7 +1,7 @@
 # Investigation: how Velle is used at runtime
 
 **Status:** decided and built through §10 (2026-08-11 → 2026-08-12). Reframed the transpile target, dissolved the mechanism-plugin design, and landed the hydrating runtime over engineer-owned storage; the settled outcomes are listed at the bottom and promoted to README §22/§10, `grammar.md`, and `checks.md`. This doc records the reasoning.
-**Residue:** [OQ31](questions/OQ31-committer-suppliable-fields.md) committer-suppliable fields · [OQ36](questions/OQ36-universal-transaction.md) the universal-transaction contract · TODO.md: reverse-path candidate narrowing, production clock default, static selector-discrimination check.
+**Residue:** [OQ31](questions/OQ31-committer-suppliable-fields.md) committer-suppliable fields · TODO.md: reverse-path candidate narrowing, production clock default, static selector-discrimination check. (The universal-transaction contract, OQ36, settled 2026-08-16 → `evaluation.md`, "The universal transaction" U1–U5; its serialization-scope refinement is [OQ40](questions/OQ40-serialization-domains.md).)
 
 ## The reframing
 
@@ -194,7 +194,7 @@ Settled enough to promote:
 Still open, re-homed (details live at the pointers):
 
 - Committer-suppliable fields → [OQ31](questions/OQ31-committer-suppliable-fields.md).
-- The universal-transaction contract, stated precisely → [OQ36](questions/OQ36-universal-transaction.md).
+- The universal-transaction contract, stated precisely → settled (OQ36): `evaluation.md`, "The universal transaction" (U1–U5); the serialization-domain refinement continues as [OQ40](questions/OQ40-serialization-domains.md).
 - Static selector-discrimination check (from §9) → TODO.md; rides OQ15/OQ16's calibration.
 - Production clock default (real time; controllable clock as test affordance) → TODO.md.
 - Reverse-path candidate narrowing, bare-shape entrant diffs, aggregate pre-filters (from §6) → TODO.md.

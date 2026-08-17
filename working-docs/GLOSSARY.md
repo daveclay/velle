@@ -46,7 +46,8 @@ Coined terms used across the working docs, one line each, with the pointer that 
 ## Runtime and storage (`investigate_runtime.md`)
 
 - **envelope** — one act's transaction: the act's commit plus every consequence commit, all-or-nothing.
-- **universal transaction** — the guarantee set Velle assumes of the engineer's storage per envelope (snapshot reads, atomic writes, serialized conflicting commits); the engineer realizes it (OQ36).
+- **universal transaction** — the five-clause contract (U1 snapshot, U2 atomicity, U3 serialization, U4 permanence, U5 no side doors) the engineer's storage must honor per envelope; normative in `evaluation.md` (settled OQ36); U3's lock-key derivation is OQ40.
+- **serialization domain** — the compiler-computed key set an envelope revolves around, expressed as paths from the act (`{this.account}` for a deposit): two envelopes conflict iff their domains intersect, so the domain is exactly what an implementation locks/serializes on — derived from the envelope's footprint, never declared (OQ40).
 - **hydration / resolver** — the runtime demand-fetches the state an envelope needs through engineer-implemented storage questions: by key, by reference, by shape, captures (§2, §5).
 - **candidate pre-filter / superset contract** — a compiled query trusted only for *exclusion*: it may over-return, never under-return; the authoritative predicate check stays in one evaluator, in memory (§6).
 - **polarity-dual** — how the pre-filter compiler keeps the superset contract: inexpressible predicate parts degrade to TRUE in positive position, FALSE under an odd number of negations (§6).
