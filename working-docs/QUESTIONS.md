@@ -21,7 +21,8 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **[OQ37](questions/OQ37-delete.md)** — delete as a described mutation: statement, existence-dependency check, gating, referential completeness · investigation open (`investigate-delete.md`)
 - **[OQ38](questions/OQ38-bag-relationships.md)** — duplicates in a relationship: a multiplicity-bearing `many`? · born from OQ30-R5; edge-shape-with-quantity may be the whole answer
 - **[OQ39](questions/OQ39-inline-part-creation.md)** — inline part creation: multi-part acts through the generated commit function · born from OQ30-R7; the input-closure question
-- **[OQ40](questions/OQ40-serialization-domains.md)** — serialization domains: what must serialize, what may parallelize, who says · born from OQ36-U3; the derived lock key; OQ16's cross-transaction sibling
+- **[OQ40](questions/OQ40-serialization-domains.md)** — serialization domains: what must serialize, what may parallelize, who says · born from OQ36-U3; the derived queue key; OQ16's cross-transaction sibling · lean: derived queue keys + contention map; wide domains discharge via correlation, cadence, or `tolerates contention` (error-vs-advisory dial open)
+- **[OQ41](questions/OQ41-compilation-artifacts.md)** — the compilation-artifact family: class diagrams, state-flow, contention map, sequence diagrams · born from OQ40's reframe; worked deposit/lending-cap sequence diagrams; tests and diagrams are one derivation rendered twice
 
 ## Deferred — post-v0 re-derivations (README §22's list)
 
@@ -39,7 +40,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 | OQ7 — exit reads | README §13; two residual threads became §22 items (latency vocabulary; `on commit of` narrowing) |
 | OQ14 — guard adoption | resolved by author judgment: the canonical guard form (README §18) stands as what fold diagnostics (§19) demand — no sugar added |
 | OQ19 — boundary/apparatus legibility | became a calibration rider on the spec-writing item (TODO.md) |
-| OQ36 — the universal-transaction contract | `evaluation.md`, "The universal transaction" (U1–U5: snapshot, atomicity, serialization, permanence, no side doors — precise guarantee + in-practice prose per clause, the proof-spends table, the exclusions); pointers in README §11/§22; glossary updated. U3's serialization-domain refinement (the derived lock key) spun off as OQ40 |
+| OQ36 — the universal-transaction contract | `evaluation.md`, "The universal transaction" (U1–U5: snapshot, atomicity, serialization, permanence, no side doors — precise guarantee + in-practice prose per clause, the proof-spends table, the exclusions); pointers in README §11/§22; glossary updated. U3's serialization-domain refinement (the derived queue key) spun off as OQ40 |
 | OQ30 — author-named `many` fields: the commit story | README §6 (ownership frame; "Committing and assigning collections"; "Renamed and derived collections"), `grammar.md` (propType, `empty`, setExpr, assignment note, operator line), `checks.md` (V19–V20; F2/F4/V1 extensions), `evaluation.md` (stored edge sets; boundary duplicate refusal). Residue rulings OQ30-R1–R6 promoted with it; R5 spun off OQ38 (bags), R7 spun off OQ39 (inline part creation) |
 | OQ20 — commit-refusal | not a primitive: refusal is compiled boundary code from `never` (README §21); the who-may-commit residue retired to engineer wrapper code (README §22; `investigate_runtime.md` §1) |
 | OQ21 — construct set · OQ24 — harness boundary | README §22's scope statement |
