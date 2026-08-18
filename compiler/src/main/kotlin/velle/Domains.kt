@@ -362,12 +362,128 @@ class DomainAnalysis(private val model: Model) {
 
     /** Can any reader correlate rows of [shape] on [field]? True when the
      *  target shape carries the inferred inverse of this field, or when some
-     *  watcher's condition correlates through it — the cases where a write to
-     *  such a row must also key the referenced instance. */
+     *  watcher's condition — or any rule body — correlates through it: the
+     *  cases where a write to such a row must also key the referenced
+     *  instance. */
     private fun correlatable(shape: String, field: String, target: String): Boolean =
         model.membersOf(target).values.any {
             it.inverse?.let { inv -> inv.shape == shape && inv.field == field && !inv.many } == true
-        } || watchers.any { (shape to field) in correlationFields(it) }
+        } || (shape to field) in bodyCorrelationFields ||
+            watchers.any { (shape to field) in correlationFields(it) }
+
+    /**
+     * Body-side correlation routes: (shape, to-one field) pairs through which
+     * some rule *body* — or a derived property or refinement a body reaches —
+     * consults that shape correlated to a specific instance: `exists T for x`
+     * / `(T for x)` on any x, an inverse-collection read along a path, or a
+     * scan filtered by `f == <path>`. The per-watcher collection above stays
+     * subject-linked because [subjectAnchors] needs the route *back* to the
+     * subject; [correlatable] only asks whether anyone correlates through the
+     * field at all, so bodies contribute one anchorless union. A route missed
+     * here would *narrow* a writer's keys — the unsound direction, unlike the
+     * condition collector's misses — so a `for` whose target type cannot be
+     * resolved routes every to-one field of the consulted shape: wide, never
+     * wrong.
+     */
+    private val bodyCorrelationFields: Set<Pair<String, String>> by lazy {
+        val out = mutableSetOf<Pair<String, String>>()
+        val seen = mutableSetOf<String>()
+        for (r in model.rules.values) {
+            val scope = conditionScope(r.condition)
+            for (item in r.body) when (item) {
+                is Assignment -> { bodyPath(item.target, scope, out, seen); bodyCorr(item.value, scope, out, seen) }
+                is Creation -> {
+                    item.forExpr?.let { bodyCorr(it, scope, out, seen) }
+                    for (f in item.fields) bodyCorr(f.value, scope, out, seen)
+                }
+                ThenMarker -> {}
+            }
+        }
+        out
+    }
+
+    private fun bodyCorr(e: Expr, scope: String, out: MutableSet<Pair<String, String>>, seen: MutableSet<String>) {
+        fun refRoutes(name: String) {
+            if (name in model.refinements) collectCorrelations(RefName(name), out, seen)
+        }
+        fun forAny(shape: String?, forExpr: Expr?) {
+            if (shape == null) return
+            refRoutes(shape)
+            forExpr?.let { bodyCorr(it, scope, out, seen) }
+            val base = model.baseOf(shape) ?: return
+            val toOnes = model.shapes[base]?.members?.filterIsInstance<StoredProp>()
+                ?.filter { (it.type as? RelType)?.many == false } ?: return
+            val tbase = (forExpr as? PathExpr)
+                ?.let { model.pathElementShape(it, scope) }?.let { model.baseOf(it) }
+            val matched = tbase?.let { t ->
+                toOnes.singleOrNull { p -> (p.type as RelType).shape.let { model.baseOf(it) ?: it } == t }
+            }
+            if (matched != null) out.add(base to matched.name)
+            else toOnes.forEach { out.add(base to it.name) }
+        }
+        fun collection(c: CollectionExpr) {
+            for (b in c.bindings) when (val src = b.source) {
+                is PathExpr ->
+                    if ((src.root in model.shapes || src.root in model.refinements) && src.segs.isEmpty()) {
+                        refRoutes(src.root)
+                        val base = model.baseOf(src.root) ?: continue
+                        for (conj in conjuncts(c.where ?: continue)) {
+                            val cmp = conj as? Binary ?: continue
+                            if (cmp.op != "==") continue
+                            for ((l, r) in listOf(cmp.left to cmp.right, cmp.right to cmp.left)) {
+                                val f = (l as? PathExpr)?.takeIf { it.segs.isEmpty() && it.root != "this" }?.root ?: continue
+                                val m = model.membersOf(base)[f] ?: continue
+                                if (!m.stored || m.type.instanceShape() == null) continue
+                                if (r is PathExpr) out.add(base to f)
+                            }
+                        }
+                    } else bodyPath(src, scope, out, seen)
+                is ShapeForSource -> forAny(src.shape, src.forExpr)
+                else -> bodyCorr(src, scope, out, seen)
+            }
+            c.where?.let { bodyCorr(it, scope, out, seen) }
+        }
+        when (e) {
+            is PathExpr -> bodyPath(e, scope, out, seen)
+            is Binary -> { bodyCorr(e.left, scope, out, seen); bodyCorr(e.right, scope, out, seen) }
+            is NotExpr -> bodyCorr(e.inner, scope, out, seen)
+            is UnaryMinus -> bodyCorr(e.inner, scope, out, seen)
+            is IfExpr -> { bodyCorr(e.condition, scope, out, seen); bodyCorr(e.thenExpr, scope, out, seen); bodyCorr(e.elseExpr, scope, out, seen) }
+            is IsExpr -> { bodyCorr(e.subject, scope, out, seen); e.refinement?.let { refRoutes(it) } }
+            is ExistsExpr -> {
+                if (e.shape != null) forAny(e.shape, e.forExpr)
+                e.collection?.let { collection(it) }
+            }
+            is SingularFor -> forAny(e.shape, e.forExpr)
+            is ShapeForSource -> forAny(e.shape, e.forExpr)
+            is AggCall -> collection(e.collection)
+            is SetExpr -> collection(e.collection)
+            is FunCall -> e.args.forEach { bodyCorr(it, scope, out, seen) }
+            is Access -> bodyCorr(e.target, scope, out, seen)
+            else -> {}
+        }
+    }
+
+    /** Walk a body path for routes: an inverse-collection member read anywhere
+     *  along it correlates, derived members expand, and a refinement-named
+     *  root contributes its predicate's routes. */
+    private fun bodyPath(p: PathExpr, scope: String, out: MutableSet<Pair<String, String>>, seen: MutableSet<String>) {
+        fun step(sc: String?, name: String): String? {
+            val m = model.membersOf(sc ?: return null)[name] ?: return null
+            m.inverse?.let { inv -> if (!inv.many) out.add(inv.shape to inv.field) }
+            m.derived?.let { d -> if (seen.add("d:${m.owner}.${m.name}")) bodyCorr(d.expr, m.owner, out, seen) }
+            return m.type.instanceShape() ?: (m.type as? VType.Coll)?.shape
+        }
+        var sc: String? = when {
+            p.root == "this" -> scope
+            p.root in model.shapes || p.root in model.refinements -> {
+                if (p.root in model.refinements) collectCorrelations(RefName(p.root), out, seen)
+                model.baseOf(p.root)
+            }
+            else -> step(scope, p.root)
+        }
+        for (seg in p.segs) sc = step(sc, seg.name)
+    }
 
     // ── the derivation driver ────────────────────────────────────────────────
 

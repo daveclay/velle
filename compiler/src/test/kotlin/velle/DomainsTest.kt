@@ -322,6 +322,55 @@ class DomainsTest {
         assertFalse(change.wide, "got: ${change.widenings}")
     }
 
+    // ── body-side correlation: a reader in a rule body still keys the writer ─
+
+    private val audits = """
+        shape Account {
+            balance: decimal initially 0
+        }
+        expose Account
+
+        expose shape Transfer {
+            source: one Account
+            target: one Account
+            amount: decimal
+        }
+
+        expose shape AuditRequest {
+            account: one Account
+        }
+
+        shape AuditReport {
+            request: one AuditRequest
+            outbound: decimal
+        }
+
+        rule ReportAudit when AuditRequest {
+            AuditReport from { request: this, outbound: sum(Transfer where source == this.account, amount) }
+        }
+    """.trimIndent()
+
+    @Test
+    fun `a correlated read in a rule body keys the writer - the transfer keys its source`() {
+        // Account infers no `transfers` collection (two Transfer fields target
+        // it), and no watcher *condition* consults Transfer — the only
+        // correlated reader is ReportAudit's body. The transfer commit must
+        // still key the source row, or the audit's sum and a concurrent
+        // transfer to the same account race (OQ42 item 2).
+        val a = analysis(audits)
+        val d = a.actDomains.getValue("Transfer")
+        assertEquals(listOf("transfer.source"), keys(d, "transfer"), "got: ${d.paths}")
+        assertFalse(d.wide, "unexpected widenings: ${d.widenings}")
+    }
+
+    @Test
+    fun `the audit keys the account it snapshots`() {
+        val a = analysis(audits)
+        val d = a.actDomains.getValue("AuditRequest")
+        assertEquals(listOf("auditRequest.account"), keys(d, "auditRequest"))
+        assertFalse(d.wide)
+    }
+
     // ── the contention map renders both audiences' view ──────────────────────
 
     @Test

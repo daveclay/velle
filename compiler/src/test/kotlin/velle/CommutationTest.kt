@@ -235,6 +235,66 @@ class CommutationTest {
         assertEquals(fingerprint(ab2), fingerprint(ba2))
     }
 
+    // ── body-side correlation: the audit and the transfer meet on the account ─
+
+    private val audits = """
+        shape Account {
+            balance: decimal initially 0
+        }
+        expose Account
+
+        expose shape Transfer {
+            source: one Account
+            target: one Account
+            amount: decimal
+        }
+
+        expose shape AuditRequest {
+            account: one Account
+        }
+
+        shape AuditReport {
+            request: one AuditRequest
+            outbound: decimal
+        }
+
+        rule ReportAudit when AuditRequest {
+            AuditReport from { request: this, outbound: sum(Transfer where source == this.account, amount) }
+        }
+    """.trimIndent()
+
+    @Test
+    fun `a body-only correlated read conflicts with the writer - and disjoint accounts commute`() {
+        // the only reader correlating Transfer to an account lives in
+        // ReportAudit's *body* (no `transfers` inverse exists — two Transfer
+        // fields target Account). Same account: the orders visibly differ
+        // (the report snapshots 0 or 10), and the derivation must call the
+        // pair conflicting — before body-side collection (OQ42 item 2) it
+        // called them disjoint, a soundness bug this pair would have caught.
+        val accts = mutableListOf<Long>()
+        fun setup(sys: VelleSystem) {
+            accts.clear()
+            repeat(2) { accts.add(sys.mustCommit("Account")) }
+        }
+        val (ab, ba) = bothOrders(
+            audits,
+            setup = ::setup,
+            a = { it.mustCommit("Transfer", "source" to accts[0], "target" to accts[1], "amount" to BigDecimal("10")) },
+            b = { it.mustCommit("AuditRequest", "account" to accts[0]) },
+        )
+        assertNotEquals(ab, ba, "the same-account pair must be distinguishable — it conflicts")
+
+        // audit a different account: the derivation calls the pair disjoint,
+        // so the orders must agree
+        val (ab2, ba2) = bothOrders(
+            audits,
+            setup = ::setup,
+            a = { it.mustCommit("Transfer", "source" to accts[0], "target" to accts[1], "amount" to BigDecimal("10")) },
+            b = { it.mustCommit("AuditRequest", "account" to accts[1]) },
+        )
+        assertEquals(ab2, ba2)
+    }
+
     // ── act-vs-tick: the sweep and the commit share the account key ──────────
 
     @Test

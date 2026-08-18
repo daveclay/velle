@@ -31,7 +31,7 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## OQ42 — trusting the domain derivation (OQ40 settled 2026-08-18 → `evaluation.md` U3, `checks.md` A5)
 
-- [ ] Work [OQ42](questions/OQ42-domain-derivation-trust.md): audit the symmetric-evaluation argument per-construct, extend `correlatable` to body-side correlations, grow `CommutationTest` into a property-style sweep, and re-check the A5 advisory-vs-required dial — all riding the OQ15/OQ16 calibration campaign.
+- [ ] Work [OQ42](questions/OQ42-domain-derivation-trust.md): audit the symmetric-evaluation argument per-construct, grow `CommutationTest` into a property-style sweep, and re-check the A5 advisory-vs-required dial — all riding the OQ15/OQ16 calibration campaign. (Body-side `correlatable` done 2026-08-18.)
 - [ ] Spec-generation phase 2 (boundary synthesis, scenario DSL, no-refire cases) and phase 3 (the `example` construct) — `testgen.md`.
 
 ## Delete investigation (`investigate-delete.md`, OQ37)
