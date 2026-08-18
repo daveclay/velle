@@ -1,7 +1,7 @@
 package velle
 
 /**
- * State-flow emission (working-docs/questions/OQ41): one section per base
+ * State-flow emission (diagrams.md): one section per base
  * shape that has refinements, one Mermaid state diagram per membership *axis*.
  *
  * A state is membership in a refinement — and memberships overlap (an Invoice

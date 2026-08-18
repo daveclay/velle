@@ -1,7 +1,7 @@
 package velle
 
 /**
- * Class-diagram emission (working-docs/questions/OQ41): one Mermaid class
+ * Class-diagram emission (diagrams.md): one Mermaid class
  * diagram of the whole spec — shapes with their properties, declared
  * relationships as edges (labeled with the field, and the inferred inverse
  * collection where one exists), and refinements attached to their base with

@@ -43,6 +43,13 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **check IDs** — V1–V18 are validator errors, A-series are advisories (A4 = drift-exposed partition), F-series are type/form checks; all cataloged in `checks.md`.
 - **OQ tags** — stable open-question numbers; index in `QUESTIONS.md`.
 
+## Generated artifacts (`diagrams.md`, `testgen.md`)
+
+- **projection principle** — every generated artifact (runtime, tests, diagrams) is a deterministic projection of the one authored spec: same spec in, same artifact out, regenerated at every compile — nothing is hand-maintained, so nothing can drift or disagree with a sibling (`diagrams.md`).
+- **may-fire / may-cause** — the artifacts' over-approximation stance, matching the runtime's relevance gating: omitting a possible consequence lies, showing an unreachable one merely hedges. Proofs sharpen the picture (one-way arrows, pruned edges, exclusive diamonds); missing proofs weaken it honestly ("may flip"), never guess.
+- **membership axis** — one independently varying dimension of refinement membership on a shape; state-flow diagrams render one small machine per axis, grouping refinements onto a shared axis only when their predicates are provably disjoint (`diagrams.md`).
+- **rule graph** — the whole system's cause map on one page: acts and rules as nodes, "this commit's writes can change that rule's condition" as edges, guards on the edges, decision diamonds only where exclusivity is proven (`diagrams.md`).
+
 ## Runtime and storage (`investigate_runtime.md`)
 
 - **envelope** — one act's transaction: the act's commit plus every consequence commit, all-or-nothing.

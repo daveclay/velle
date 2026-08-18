@@ -1,7 +1,7 @@
 package velle
 
 /**
- * Rule-graph emission (working-docs/questions/OQ41): the whole system's cause
+ * Rule-graph emission (diagrams.md): the whole system's cause
  * graph as one Mermaid flowchart — nodes are the exposed acts and the rules,
  * and an edge means "this commit's writes can change that rule's condition".
  * It is the sequence diagrams' may-fire derivation rendered once, globally:

@@ -22,7 +22,6 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **[OQ38](questions/OQ38-bag-relationships.md)** — duplicates in a relationship: a multiplicity-bearing `many`? · born from OQ30-R5; edge-shape-with-quantity may be the whole answer
 - **[OQ39](questions/OQ39-inline-part-creation.md)** — inline part creation: multi-part acts through the generated commit function · born from OQ30-R7; the input-closure question
 - **[OQ40](questions/OQ40-serialization-domains.md)** — serialization domains: what must serialize, what may parallelize, who says · born from OQ36-U3; the derived queue key; OQ16's cross-transaction sibling · lean: derived queue keys + contention map; wide domains discharge via correlation, cadence, or `tolerates contention` (error-vs-advisory dial open)
-- **[OQ41](questions/OQ41-compilation-artifacts.md)** — the compilation-artifact family: class diagrams, state-flow, contention map, sequence diagrams · born from OQ40's reframe; tests and diagrams are one derivation rendered twice · sequence, class, state-flow, and rule-graph diagrams built (`DiagramGen.kt`, `ClassDiagramGen.kt`, `StateFlowGen.kt`, `RuleGraphGen.kt`, `--diagrams`; billing's `DIAGRAMS-Billing.md`); state-flow and the rule graph prove arrow directions from monotone `exists` and sign-pinned folds — surfacing billing's archive-once-only latent fact and pruning impossible cause edges (a payment can never arm RemindOverdue)
 
 ## Deferred — post-v0 re-derivations (README §22's list)
 
@@ -47,3 +46,4 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 | OQ22 — grammar | `grammar.md` (normative) |
 | OQ23 — builtin surface | README §5, §10 |
 | OQ25 — operational semantics & check catalog | `evaluation.md`, `checks.md` (normative) |
+| OQ41 — the compilation-artifact family | `diagrams.md` (normative): the projection principle, the four built members (class, state-flow, rule graph, sequence — `--diagrams`, billing's `DIAGRAMS-Billing.md`) with their proof-backed mappings, the tier ladder, notation (Mermaid default, PlantUML designated opt-in); README pointers in the opening and §22's architecture; glossary "Generated artifacts" section. Residue rides existing homes: tier 2 on `example` (`testgen.md` phase 3), tier 3 on provenance (§22), the contention map stays OQ40's, the timing-diagram kind on the episode machinery |

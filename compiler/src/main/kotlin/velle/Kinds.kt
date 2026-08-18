@@ -1,8 +1,8 @@
 package velle
 
 /**
- * The commit-kind vocabulary shared by the diagram generators (working-docs/
- * questions/OQ41): every observable change in a running Velle system is a
+ * The commit-kind vocabulary shared by the diagram generators (diagrams.md):
+ * every observable change in a running Velle system is a
  * creation, a rule's field write, or the passage of time (`today`/`now`
  * advancing, schedule ticks). Each generator asks the same two questions —
  * which kinds can this spec produce, and can a given kind change what a given

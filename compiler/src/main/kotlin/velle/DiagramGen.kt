@@ -1,7 +1,7 @@
 package velle
 
 /**
- * Diagram emission (working-docs/questions/OQ41): a markdown document of
+ * Diagram emission (diagrams.md): a markdown document of
  * Mermaid fences, derived from the same model the validator checks — a
  * deterministic projection of the spec, never authored by hand. Three family
  * members render here: the class diagram (ClassDiagramGen), the state-flow
