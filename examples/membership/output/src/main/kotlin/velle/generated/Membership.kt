@@ -23,12 +23,24 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     fun tickNightly() = system.tick("Nightly")
     fun tickDaily() = system.tick("Daily")
 
+    /** Queue keys: none — this commit contends with no other work.
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitPlan(name: String, price: BigDecimal): CommitResult =
         system.commit("Plan", buildMap {
             put("name", name)
             put("price", price)
         })
 
+    /** Queue keys: [member.plan], [member.referredBy] — plus system-wide width below.
+     *  System-wide over Member — reads Member.balance with no path back to any key (unexamined (A5)).
+     *  System-wide over DelinquencyFlag — consults OpenDelinquencyFlag through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over DelinquencyResolution — consults DelinquencyResolution through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over DelinquencyFlag — consults DelinquencyFlag correlated through 'member' (unexamined (A5)).
+     *  System-wide over AccountReview — consults AccountReview correlated through 'member' (unexamined (A5)).
+     *  System-wide over AuditEntry — creates AuditEntry referencing an instance the derivation cannot key (unexamined (A5)).
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitMember(name: String, signupEmail: String, plan: PlanView, referredBy: MemberView? = null, balance: BigDecimal? = null, lowestBalance: BigDecimal? = null, visitCount: Long? = null, suspended: Boolean? = null, engagementScore: Double? = null): CommitResult =
         system.commit("Member", buildMap {
             put("name", name)
@@ -42,18 +54,33 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
             engagementScore?.let { put("engagementScore", it) }
         })
 
+    /** Queue key: [emailChange.member].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitEmailChange(member: MemberView, newEmail: String): CommitResult =
         system.commit("EmailChange", buildMap {
             put("member", member.id)
             put("newEmail", newEmail)
         })
 
+    /** Queue keys: [visit.member], [visit.member.plan], [visit.member.referredBy].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitVisit(member: MemberView, minutes: Int): CommitResult =
         system.commit("Visit", buildMap {
             put("member", member.id)
             put("minutes", minutes)
         })
 
+    /** Queue keys: [deposit.member], [deposit.member.plan], [deposit.member.referredBy] — plus system-wide width below.
+     *  System-wide over Member — reads Member.balance with no path back to any key (unexamined (A5)).
+     *  System-wide over DelinquencyFlag — consults OpenDelinquencyFlag through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over DelinquencyResolution — consults DelinquencyResolution through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over DelinquencyFlag — consults DelinquencyFlag correlated through 'member' (unexamined (A5)).
+     *  System-wide over AccountReview — consults AccountReview correlated through 'member' (unexamined (A5)).
+     *  System-wide over AuditEntry — creates AuditEntry referencing an instance the derivation cannot key (unexamined (A5)).
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitDeposit(member: MemberView, amount: BigDecimal, applied: Boolean? = null): CommitResult =
         system.commit("Deposit", buildMap {
             put("member", member.id)
@@ -61,12 +88,19 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
             applied?.let { put("applied", it) }
         })
 
+    /** Queue keys: none — this commit contends with no other work.
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitAgent(name: String, email: String): CommitResult =
         system.commit("Agent", buildMap {
             put("name", name)
             put("email", email)
         })
 
+    /** Queue keys: [ticket.assignee], [ticket.member] — plus system-wide width below.
+     *  System-wide over ReopenNotice — creates ReopenNotice referencing an instance the derivation cannot key (unexamined (A5)).
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitTicket(member: MemberView, subject: String, due: LocalDate, priority: String, assignee: AgentView? = null): CommitResult =
         system.commit("Ticket", buildMap {
             put("member", member.id)
@@ -76,17 +110,26 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
             assignee?.let { put("assignee", it.id) }
         })
 
+    /** Queue keys: [closeTicket.closedBy], [closeTicket.ticket], [closeTicket.ticket.closedBy].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitCloseTicket(ticket: TicketView, closedBy: AgentView): CommitResult =
         system.commit("CloseTicket", buildMap {
             put("ticket", ticket.id)
             put("closedBy", closedBy.id)
         })
 
+    /** Queue keys: [reopenTicket.ticket], [reopenTicket.ticket.closedBy].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitReopenTicket(ticket: TicketView): CommitResult =
         system.commit("ReopenTicket", buildMap {
             put("ticket", ticket.id)
         })
 
+    /** Queue keys: [assignTicket.ticket], [assignTicket.ticket.assignee], [assignTicket.ticket.member].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitAssignTicket(ticket: TicketView, agent: AgentView): CommitResult =
         system.commit("AssignTicket", buildMap {
             put("ticket", ticket.id)

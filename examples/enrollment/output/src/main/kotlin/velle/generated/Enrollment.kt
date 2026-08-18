@@ -17,17 +17,26 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     fun advanceDays(days: Long) = system.advanceDays(days)
     fun setTime(t: Instant) = system.setTime(t)
 
+    /** Queue keys: none — this commit contends with no other work.
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitAdvisor(name: String): CommitResult =
         system.commit("Advisor", buildMap {
             put("name", name)
         })
 
+    /** Queue keys: none — this commit contends with no other work.
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitCourse(title: String, capacity: Int): CommitResult =
         system.commit("Course", buildMap {
             put("title", title)
             put("capacity", capacity)
         })
 
+    /** Queue key: [student.advisor].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitStudent(name: String, courses: List<CourseView>, advisor: AdvisorView? = null, tags: List<String>? = null): CommitResult =
         system.commit("Student", buildMap {
             put("name", name)
@@ -36,30 +45,46 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
             tags?.let { put("tags", it) }
         })
 
+    /** Queue keys: [setEnrollment.student], [setEnrollment.student.advisor].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitSetEnrollment(student: StudentView, courses: List<CourseView>): CommitResult =
         system.commit("SetEnrollment", buildMap {
             put("student", student.id)
             put("courses", courses.map { it.id })
         })
 
+    /** Queue keys: [enroll.student], [enroll.student.advisor].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitEnroll(student: StudentView, course: CourseView): CommitResult =
         system.commit("Enroll", buildMap {
             put("student", student.id)
             put("course", course.id)
         })
 
+    /** Queue keys: [drop.student], [drop.student.advisor].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitDrop(student: StudentView, course: CourseView): CommitResult =
         system.commit("Drop", buildMap {
             put("student", student.id)
             put("course", course.id)
         })
 
+    /** Queue keys: [tag.student], [tag.student.advisor].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitTag(student: StudentView, tag: String): CommitResult =
         system.commit("Tag", buildMap {
             put("student", student.id)
             put("tag", tag)
         })
 
+    /** Queue: system-wide.
+     *  System-wide over Student — writes a Student whose 'advisor' reference the derivation cannot key (unexamined (A5)).
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitAssignAdvisor(advisor: AdvisorView, students: List<StudentView>): CommitResult =
         system.commit("AssignAdvisor", buildMap {
             put("advisor", advisor.id)

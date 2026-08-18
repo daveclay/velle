@@ -30,9 +30,17 @@ data class RuleDecl(
     val triggers: List<String>,
     val toleratesLoss: Boolean,
     val body: List<BodyItem>,
+    /** `tolerates contention` — the author accepts the wide serialization domain
+     *  this rule's condition creates (OQ40; advisory A5). */
+    val toleratesContention: Boolean = false,
 ) : Decl
 
-data class NeverDecl(val target: RefExpr) : Decl
+data class NeverDecl(
+    val target: RefExpr,
+    /** `tolerates contention` — the author accepts the wide serialization domain
+     *  this invariant's read creates (OQ40; advisory A5). */
+    val toleratesContention: Boolean = false,
+) : Decl
 
 /** Standalone `expose [transient] Shape`. */
 data class ExposeDecl(val shape: String, val transient: Boolean = false) : Decl

@@ -21,6 +21,9 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     fun tickHourly() = system.tick("Hourly")
     fun tickWeekly() = system.tick("Weekly")
 
+    /** Queue keys: none — this commit contends with no other work.
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitCustomer(name: String, email: String, largestPayment: BigDecimal? = null): CommitResult =
         system.commit("Customer", buildMap {
             put("name", name)
@@ -28,12 +31,18 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
             largestPayment?.let { put("largestPayment", it) }
         })
 
+    /** Queue key: [correctEmail.customer].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitCorrectEmail(customer: CustomerView, corrected: String): CommitResult =
         system.commit("CorrectEmail", buildMap {
             put("customer", customer.id)
             put("corrected", corrected)
         })
 
+    /** Queue key: [invoice.customer].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitInvoice(customer: CustomerView, due: LocalDate, reference: String? = null): CommitResult =
         system.commit("Invoice", buildMap {
             put("customer", customer.id)
@@ -41,6 +50,9 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
             reference?.let { put("reference", it) }
         })
 
+    /** Queue key: [lineItem.invoice].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitLineItem(invoice: InvoiceView, description: String, price: BigDecimal, quantity: Int): CommitResult =
         system.commit("LineItem", buildMap {
             put("invoice", invoice.id)
@@ -49,28 +61,43 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
             put("quantity", quantity)
         })
 
+    /** Queue keys: [payment.invoice], [payment.invoice.customer].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitPayment(invoice: InvoiceView, amount: BigDecimal): CommitResult =
         system.commit("Payment", buildMap {
             put("invoice", invoice.id)
             put("amount", amount)
         })
 
+    /** Queue key: [issuance.invoice].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitIssuance(invoice: InvoiceView): CommitResult =
         system.commit("Issuance", buildMap {
             put("invoice", invoice.id)
         })
 
+    /** Queue keys: [changeDueDate.invoice], [changeDueDate.invoice.customer].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitChangeDueDate(invoice: InvoiceView, newDue: LocalDate): CommitResult =
         system.commit("ChangeDueDate", buildMap {
             put("invoice", invoice.id)
             put("newDue", newDue)
         })
 
+    /** Queue key: [archiveRequest.invoice].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitArchiveRequest(invoice: InvoiceView): CommitResult =
         system.commit("ArchiveRequest", buildMap {
             put("invoice", invoice.id)
         })
 
+    /** Queue key: [unarchiveRequest.invoice].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitUnarchiveRequest(invoice: InvoiceView): CommitResult =
         system.commit("UnarchiveRequest", buildMap {
             put("invoice", invoice.id)

@@ -22,12 +22,61 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun tickQuarterHourly() = system.tick("QuarterHourly")
     fun tickNightly() = system.tick("Nightly")
 
+    /** Queue keys: none — this commit contends with no other work.
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitContact(name: String, email: String): CommitResult =
         system.commit("Contact", buildMap {
             put("name", name)
             put("email", email)
         })
 
+    /** Queue keys: [card.billingContact] — plus system-wide width below.
+     *  System-wide over Order — reads Order.customer with no path back to any key (unexamined (A5)).
+     *  System-wide over Customer — reads Customer.card with no path back to any key (unexamined (A5)).
+     *  System-wide over Card — reads Card.expiresOn with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — consults AttemptTimeout through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over StockReservation — consults StockReservation through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
+     *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
+     *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over SettlementReversal — creates SettlementReversal referencing an instance the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over DunningFlag — consults OpenDunningFlag through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over DunningResolution — consults DunningResolution through a path the derivation cannot key (unexamined (A5)).
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitCard(number: String, expiresOn: LocalDate, billingContact: ContactView? = null): CommitResult =
         system.commit("Card", buildMap {
             put("number", number)
@@ -35,18 +84,99 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
             billingContact?.let { put("billingContact", it.id) }
         })
 
+    /** Queue keys: [customer.card] — plus system-wide width below.
+     *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
+     *  System-wide over StockReservation — reads StockReservation.order with no path back to any key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
+     *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
+     *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitCustomer(name: String, card: CardView? = null): CommitResult =
         system.commit("Customer", buildMap {
             put("name", name)
             card?.let { put("card", it.id) }
         })
 
+    /** Queue keys: [cardUpdate.card], [cardUpdate.customer], [cardUpdate.customer.card] — plus system-wide width below.
+     *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
+     *  System-wide over StockReservation — reads StockReservation.order with no path back to any key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
+     *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
+     *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitCardUpdate(customer: CustomerView, card: CardView): CommitResult =
         system.commit("CardUpdate", buildMap {
             put("customer", customer.id)
             put("card", card.id)
         })
 
+    /** Queue keys: [order.customer], [order.customer.card] — plus system-wide width below.
+     *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
+     *  System-wide over StockReservation — reads StockReservation.order with no path back to any key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
+     *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
+     *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitOrder(customer: CustomerView, amount: BigDecimal, dueBy: LocalDate, shippingAddress: String): CommitResult =
         system.commit("Order", buildMap {
             put("customer", customer.id)
@@ -55,29 +185,131 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
             put("shippingAddress", shippingAddress)
         })
 
+    /** Queue keys: [chargeResponse.attempt] — plus system-wide width below.
+     *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AttemptTimeout — consults AttemptTimeout through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over StockReservation — consults StockReservation through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
+     *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
+     *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over SettlementReversal — creates SettlementReversal referencing an instance the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over DunningFlag — consults OpenDunningFlag through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over DunningResolution — consults DunningResolution through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Order — reads Order.customer with no path back to any key (unexamined (A5)).
+     *  System-wide over Customer — reads Customer.card with no path back to any key (unexamined (A5)).
+     *  System-wide over Card — reads Card.expiresOn with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through a path the derivation cannot key (unexamined (A5)).
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitChargeResponse(attempt: ChargeAttemptView, outcome: String): CommitResult =
         system.commit("ChargeResponse", buildMap {
             put("attempt", attempt.id)
             put("outcome", outcome)
         })
 
+    /** Queue keys: [changeShippingAddress.order], [changeShippingAddress.order.customer].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitChangeShippingAddress(order: OrderView, newAddress: String): CommitResult =
         system.commit("ChangeShippingAddress", buildMap {
             put("order", order.id)
             put("newAddress", newAddress)
         })
 
+    /** Queue keys: [refund.order] — plus system-wide width below.
+     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
+     *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
+     *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitRefund(order: OrderView, amount: BigDecimal): CommitResult =
         system.commit("Refund", buildMap {
             put("order", order.id)
             put("amount", amount)
         })
 
+    /** Queue keys: [manualCharge.order], [manualCharge.order.customer], [manualCharge.order.customer.card] — plus system-wide width below.
+     *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
+     *  System-wide over StockReservation — reads StockReservation.order with no path back to any key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
+     *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt through 'chargeAttempts' with no keyable owner (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Refund — consults Refund through 'refunds' with no keyable owner (unexamined (A5)).
+     *  System-wide over Order — reads Order.amount with no path back to any key (unexamined (A5)).
+     *  System-wide over StockReservation — consults StockReservation through 'stockReservations' with no keyable owner (unexamined (A5)).
+     *  System-wide over ReservationRelease — consults ReservationRelease through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
+     *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
+     *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitManualCharge(order: OrderView): CommitResult =
         system.commit("ManualCharge", buildMap {
             put("order", order.id)
         })
 
+    /** Queue key: [extensionRequest.order].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitExtensionRequest(order: OrderView): CommitResult =
         system.commit("ExtensionRequest", buildMap {
             put("order", order.id)

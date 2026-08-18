@@ -27,6 +27,8 @@ object Codegen {
         val schedules: List<String> = model.rules.values
             .flatMap { it.triggers }.filter { it != "commit" }.distinct()
 
+        val domains = DomainAnalysis(model)
+
         fun emit(): String {
             header()
             line("class ${name}System(startTime: Instant = Instant.parse(\"2026-01-01T09:00:00Z\")) {")
@@ -75,6 +77,7 @@ object Codegen {
         }
 
         fun commitFn(shape: String) {
+            queueKeyDoc(shape)
             val stored = model.shapes.getValue(shape).members.filterIsInstance<StoredProp>()
             val required = stored.filter { it.initially == null && !isOptional(it.type) }
             val optional = stored.filter { it.initially != null || isOptional(it.type) }
@@ -86,6 +89,28 @@ object Codegen {
             optional.forEach { line("            ${it.name}?.let { put(\"${it.name}\", ${rawExpr("it", it.type)}) }") }
             line("        })")
             line()
+        }
+
+        /** The serialization contract (OQ40): the queue keys this commit's work
+         *  joins, stated on the generated surface so the engineer reads them
+         *  off the contract instead of re-deriving them from the rule graph. */
+        fun queueKeyDoc(shape: String) {
+            val domain = domains.actDomains[shape] ?: return
+            val keys = domain.renderKeys(shape.replaceFirstChar { it.lowercase() })
+            line("    /** ${queueKeyLead(domain, keys)}")
+            for (w in domain.widenings) {
+                val status = if (w.tolerated) "tolerated by ${w.declaration}" else "unexamined (A5)"
+                line("     *  System-wide over ${w.shape} — ${w.cause} ($status).")
+            }
+            line("     *  Commits sharing a queue key are handled one at a time, in arrival")
+            line("     *  order (U3); commits whose keys are disjoint run in parallel. */")
+        }
+
+        fun queueKeyLead(domain: SerializationDomain, keys: List<String>): String = when {
+            domain.wide && keys.isEmpty() -> "Queue: system-wide."
+            domain.wide -> "Queue keys: ${keys.joinToString(", ") { "[$it]" }} — plus system-wide width below."
+            keys.isEmpty() -> "Queue keys: none — this commit contends with no other work."
+            else -> "Queue ${if (keys.size == 1) "key" else "keys"}: ${keys.joinToString(", ") { "[$it]" }}."
         }
 
         fun shapeAccessors(shape: String) {

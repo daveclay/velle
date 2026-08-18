@@ -93,8 +93,10 @@ The `Base where predicate` form and composition are one grammar: `shape OverdueI
 ruleDecl      := "rule" ShapeName
                  "when" "leaving"? condition
                  triggerClause?
-                 ("tolerates" "loss")?
+                 ("tolerates" ruleTolerance ("," ruleTolerance)*)?
                  "{" ruleBody "}"
+
+ruleTolerance := "loss" | "contention"   -- contention: OQ40's width acceptance (advisory A5)
 
 condition     := ShapeName
               | "(" refExpr ")"          -- inline refinement, e.g. (Delinquent where not suspended)
@@ -126,7 +128,7 @@ fieldInit     := Identifier ":" valueExpr                  -- newline- or comma-
 ## `never` declarations
 
 ```
-neverDecl := "never" (ShapeName | "(" refExpr ")")
+neverDecl := "never" (ShapeName | "(" refExpr ")") ("tolerates" "contention")?
 ```
 
 Same operand shapes as a rule's condition — a named refinement or an inline one (README §21).

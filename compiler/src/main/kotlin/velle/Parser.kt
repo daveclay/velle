@@ -170,15 +170,21 @@ class Parser(private val tokens: List<Token>) {
             skipNewlines()
         }
         var toleratesLoss = false
+        var toleratesContention = false
         if (peek().isKw("tolerates")) {
             next()
-            val w = expect(TokType.LIDENT)
-            if (w.text != "loss") fail("a rule signs 'tolerates loss'; field hazards live on the field", w)
-            toleratesLoss = true
+            do {
+                val w = expect(TokType.LIDENT)
+                when (w.text) {
+                    "loss" -> toleratesLoss = true
+                    "contention" -> toleratesContention = true
+                    else -> fail("a rule signs 'tolerates loss' or 'tolerates contention'; field hazards live on the field", w)
+                }
+            } while (at(TokType.COMMA).also { if (it) next() })
             skipNewlines()
         }
         val body = parseRuleBody()
-        return RuleDecl(name, leaving, condition, preposition, triggers, toleratesLoss, body)
+        return RuleDecl(name, leaving, condition, preposition, triggers, toleratesLoss, body, toleratesContention)
     }
 
     private fun parseCondition(): RefExpr = when {
@@ -265,7 +271,15 @@ class Parser(private val tokens: List<Token>) {
 
     private fun parseNever(): NeverDecl {
         expectKw("never")
-        return NeverDecl(parseCondition())
+        val target = parseCondition()
+        var toleratesContention = false
+        if (peek().isKw("tolerates")) {
+            next()
+            val w = expect(TokType.LIDENT)
+            if (w.text != "contention") fail("a never signs 'tolerates contention' only (OQ40)", w)
+            toleratesContention = true
+        }
+        return NeverDecl(target, toleratesContention)
     }
 
     private fun parseExpose(): Decl {

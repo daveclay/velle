@@ -17,6 +17,9 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
     fun advanceDays(days: Long) = system.advanceDays(days)
     fun setTime(t: Instant) = system.setTime(t)
 
+    /** Queue keys: none — this commit contends with no other work.
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitNote(title: String, body: String, locked: Boolean? = null): CommitResult =
         system.commit("Note", buildMap {
             put("title", title)
@@ -24,34 +27,52 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
             locked?.let { put("locked", it) }
         })
 
+    /** Queue key: [lockNote.note].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitLockNote(note: NoteView): CommitResult =
         system.commit("LockNote", buildMap {
             put("note", note.id)
         })
 
+    /** Queue key: [unlockNote.note].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitUnlockNote(note: NoteView): CommitResult =
         system.commit("UnlockNote", buildMap {
             put("note", note.id)
         })
 
+    /** Queue key: [renameText.note].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitRenameText(note: NoteView, newText: String): CommitResult =
         system.commit("RenameText", buildMap {
             put("note", note.id)
             put("newText", newText)
         })
 
+    /** Queue key: [bareEdit.note].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitBareEdit(note: NoteView, newText: String): CommitResult =
         system.commit("BareEdit", buildMap {
             put("note", note.id)
             put("newText", newText)
         })
 
+    /** Queue key: [safeEdit.note].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitSafeEdit(note: NoteView, newTitle: String): CommitResult =
         system.commit("SafeEdit", buildMap {
             put("note", note.id)
             put("newTitle", newTitle)
         })
 
+    /** Queue key: [transientEdit.note].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitTransientEdit(note: NoteView, newTitle: String): CommitResult =
         system.commit("TransientEdit", buildMap {
             put("note", note.id)

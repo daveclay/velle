@@ -23,7 +23,11 @@ object Printer {
             if (d.leaving) append("leaving ")
             append(condition(d.condition))
             if (d.preposition != null) append(" ${d.preposition} ${d.triggers.joinToString(", ")}")
-            if (d.toleratesLoss) append(" tolerates loss")
+            if (d.toleratesLoss || d.toleratesContention) append(
+                " tolerates " + listOfNotNull(
+                    "loss".takeIf { d.toleratesLoss }, "contention".takeIf { d.toleratesContention }
+                ).joinToString(", ")
+            )
             append(" {\n")
             d.body.forEach {
                 when (it) {
@@ -34,7 +38,8 @@ object Printer {
             }
             append("}")
         }
-        is NeverDecl -> "never ${condition(d.target)}"
+        is NeverDecl -> "never ${condition(d.target)}" +
+            if (d.toleratesContention) " tolerates contention" else ""
         is ExposeDecl -> "expose ${if (d.transient) "transient " else ""}${d.shape}"
     }
 

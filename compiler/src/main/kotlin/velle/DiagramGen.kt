@@ -42,6 +42,7 @@ object DiagramGen {
             append(ClassDiagramGen.render(model))
             append(StateFlowGen.render(model, catalog))
             append(RuleGraphGen.render(model, catalog))
+            append(ContentionMapGen.render(model))
             appendLine("## Sequence diagrams")
             appendLine()
             appendLine(

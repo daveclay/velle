@@ -259,6 +259,24 @@ flowchart LR
 
 - **RemindOverdue** fires when ActionableOverdue where not (exists (Reminder where (invoice == this) and (sentOn > (today - 7 days))))
 
+## Contention map
+
+Where the system can work in parallel and where work must wait its turn. Work sharing a **queue key** is handled one item at a time in arrival order (U3), like any queue; work whose keys differ runs independently. A key is evaluated per call — `deposit.account` names the row that call's work queues on. Two envelopes contend iff their key sets intersect: path keys by the row they evaluate to, value keys by equal committed values, and a system-wide row with anything touching its shape. Derived from the spec's own read and write paths — no author declares a queue key.
+
+| envelope | queues on | notes |
+|---|---|---|
+| commitCustomer | nothing — contends with no other work |  |
+| commitCorrectEmail | `correctEmail.customer` | work with equal keys takes turns; different keys run at the same time |
+| commitInvoice | `invoice.customer` | work with equal keys takes turns; different keys run at the same time |
+| commitLineItem | `lineItem.invoice` | work with equal keys takes turns; different keys run at the same time |
+| commitPayment | `payment.invoice`, `payment.invoice.customer` | work with equal keys takes turns; different keys run at the same time |
+| commitIssuance | `issuance.invoice` | work with equal keys takes turns; different keys run at the same time |
+| commitChangeDueDate | `changeDueDate.invoice`, `changeDueDate.invoice.customer` | work with equal keys takes turns; different keys run at the same time |
+| commitArchiveRequest | `archiveRequest.invoice` | work with equal keys takes turns; different keys run at the same time |
+| commitUnarchiveRequest | `unarchiveRequest.invoice` | work with equal keys takes turns; different keys run at the same time |
+| EmailReceipt (each Hourly firing) | `this` | work with equal keys takes turns; different keys run at the same time |
+| RemindOverdue (each Weekly firing) | `this` | work with equal keys takes turns; different keys run at the same time |
+
 ## Sequence diagrams
 
 One diagram per exposed act. Each diagram is **may-fire**: a rule appears wherever the commit could affect its condition, with the condition shown as a note — whether it actually fires depends on the data at that commit. Frames (`critical`) are transaction envelopes: everything inside one frame stands or falls together.

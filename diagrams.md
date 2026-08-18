@@ -218,8 +218,13 @@ so a spec edit surfaces as a readable diagram diff in review.
   artifact may imply wall-clock timing.
 - **Branch explosion** in deep cascades is real for tier 1; tier 2
   (example-grounded) is the answer, not more compact notation.
-- **The contention map** (OQ40, open) is the family's *between*-envelope
+- **The contention map** (OQ40, built — `ContentionMapGen.kt`, emitted in
+  `DIAGRAMS-<System>.md` after the rule graph) is the family's *between*-envelope
   member: which acts queue on which keys, and where a system-wide queue forms.
+  Per exposed act and per schedule-fired rule, it states the derived queue keys
+  in business words, marks an unexamined system-wide width ⚠ (the A5 advisory's
+  row), and shows a tolerated width as accepted, naming the declaration that
+  carries `tolerates contention`.
   A sequence diagram is the *within*-envelope view; together they answer "what
   does this system do when things happen," and neither substitutes for the
   other.

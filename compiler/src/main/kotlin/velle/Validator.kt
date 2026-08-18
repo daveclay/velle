@@ -48,6 +48,7 @@ class Validator(private val model: Model) {
         checkSingularProofs()     // V12 (refinement slice)
         checkTransients()         // V17 isolation, V18 totality
         checkDriftExposedPartitions() // A4 (advisory)
+        checkContention()             // A5 (advisory, OQ40)
     }
 
     // ── F1/F2/F3: declarations ───────────────────────────────────────────────
@@ -1070,6 +1071,48 @@ class Validator(private val model: Model) {
                 "commit), anchor the partition with the outcome evidence the rule produces (scope it to " +
                 "unhandled acts), or accept per-flip re-firing deliberately (examples/partition-drift/)",
                 advisory = true))
+        }
+    }
+
+    // ── A5 (advisory): contention width (OQ40) ───────────────────────────────
+    //
+    // The serialization-domain derivation (Domains.kt) attributes every read
+    // and write of every envelope to a queue key; where a read has no path
+    // back to any key, the domain honestly widens to the whole shape — every
+    // commit touching that shape joins a single queue. "Unintentionally
+    // single-threaded" is as legitimate a failure as a wrong value, so the
+    // width demands a stated policy: correlate the read (a model fact — a
+    // relationship the model was missing), move the rule to a schedule (the
+    // read then runs once per tick instead of inside every commit), or
+    // declare `tolerates contention` on the declaration carrying the read.
+    // Severity ruling 2026-08-18: advisory, not a compile error — the failure
+    // a wide domain causes is throughput, not a wrong value. A tolerance
+    // covering no width is dead and flagged, like an impossible `reordering`.
+
+    private fun checkContention() {
+        val byDecl = DomainAnalysis(model).commitWidenings()
+        for ((decl, widenings) in byDecl) {
+            for (w in widenings.filterNot { it.tolerated }.distinctBy { it.shape }) {
+                val cadence = if (decl.startsWith("rule "))
+                    "\n    - move the rule to a schedule (`on <Schedule>`) — the read then runs once per tick instead of inside every commit, or"
+                else ""
+                diags.add(Diagnostic("A5", "every commit touching ${w.shape} joins a single queue. " +
+                    "${w.cause.replaceFirstChar { it.uppercase() }} ($decl), so any two such commits conflict. " +
+                    "State the policy:\n    - correlate the read (relate ${w.shape} to the shape that partitions it), or" +
+                    cadence +
+                    "\n    - declare `tolerates contention` on the $decl (OQ40)",
+                    advisory = true))
+            }
+        }
+        // dead tolerance: a declared `tolerates contention` covering no width
+        val tolerantDecls = buildList {
+            model.rules.values.filter { it.toleratesContention }.forEach { add("rule ${it.name}") }
+            model.nevers.forEachIndexed { i, n -> if (n.toleratesContention) add("never #${i + 1}") }
+        }
+        for (decl in tolerantDecls) {
+            if (byDecl[decl].isNullOrEmpty())
+                diags.add(Diagnostic("A5", "$decl declares `tolerates contention` but causes no " +
+                    "contention beyond its queue keys — remove the tolerance (OQ40)", advisory = true))
         }
     }
 
