@@ -8,11 +8,13 @@ import java.io.File
  * `generate` task passing its own spec; the root `generate` task runs them all.
  */
 fun main(args: Array<String>) {
-    require(args.size == 2) { "usage: velle.GenerateKt <spec.velle> <SystemName> (run from an output module dir)" }
-    generateSystem(args[0], args[1])
+    require(args.size in 2..3 && (args.size == 2 || args[2] == "--diagrams")) {
+        "usage: velle.GenerateKt <spec.velle> <SystemName> [--diagrams] (run from an output module dir)"
+    }
+    generateSystem(args[0], args[1], diagrams = args.size == 3)
 }
 
-private fun generateSystem(specPath: String, systemName: String) {
+private fun generateSystem(specPath: String, systemName: String, diagrams: Boolean) {
     val spec = File(specPath).readText()
 
     val diagnostics = Validator.validate(spec)
@@ -41,6 +43,11 @@ private fun generateSystem(specPath: String, systemName: String) {
     println("wrote ${File(systemDir, "RequiredGivens.kt").path}")
     File("SPEC_INDEX-$systemName.md").writeText(specs.index)
     println("wrote SPEC_INDEX-$systemName.md")
+
+    if (diagrams) {
+        File("DIAGRAMS-$systemName.md").writeText(DiagramGen.generate(spec, systemName))
+        println("wrote DIAGRAMS-$systemName.md")
+    }
 
     val featuresDir = File("features/${systemName.lowercase()}")
     featuresDir.deleteRecursively()

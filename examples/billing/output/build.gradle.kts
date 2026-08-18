@@ -29,10 +29,11 @@ tasks.register<JavaExec>("runApp") {
 }
 
 tasks.register<JavaExec>("generate") {
-    description = "Regenerate the Billing typed surface and executable specs from billing.velle"
+    description = "Regenerate the Billing typed surface, executable specs, and sequence diagrams from billing.velle"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("velle.GenerateKt")
-    args("../billing.velle", "Billing")
+    // --diagrams opts this module into DIAGRAMS-Billing.md (mermaid sequence diagrams, OQ41)
+    args("../billing.velle", "Billing", "--diagrams")
 }
 
 kotlin {
