@@ -8,18 +8,19 @@ import kotlin.test.assertTrue
 class DiagramGenTest {
 
     private val doc = DiagramGen.generate(File("../examples/billing/billing.velle").readText(), "Billing")
+    private val sequences = doc.substringAfter("## Sequence diagrams")
 
     @Test
     fun `one mermaid diagram per exposed act`() {
         val model = Model(Parser.parse(File("../examples/billing/billing.velle").readText()))
-        for (act in model.exposed) assertTrue("## commit$act" in doc, "missing section for $act")
-        assertEquals(model.exposed.size, Regex("```mermaid").findAll(doc).count())
-        assertEquals(model.exposed.size, Regex("sequenceDiagram").findAll(doc).count())
+        for (act in model.exposed) assertTrue("### commit$act" in sequences, "missing section for $act")
+        assertEquals(model.exposed.size, Regex("```mermaid").findAll(sequences).count())
+        assertEquals(model.exposed.size, Regex("sequenceDiagram").findAll(sequences).count())
     }
 
     @Test
     fun `payment cascade shows in-envelope firings, the boundary, and the backstop`() {
-        val payment = doc.substringAfter("## commitPayment").substringBefore("\n## ")
+        val payment = sequences.substringAfter("### commitPayment").substringBefore("\n### ")
         // in-envelope: the fold and the receipt share the payment's transaction
         assertTrue("TrackLargestPayment" in payment)
         assertTrue("SendReceipt" in payment)
@@ -34,7 +35,7 @@ class DiagramGenTest {
 
     @Test
     fun `transient act notes removal and shows both partitions`() {
-        val change = doc.substringAfter("## commitChangeDueDate").substringBefore("\n## ")
+        val change = sequences.substringAfter("### commitChangeDueDate").substringBefore("\n### ")
         assertTrue("transient act" in change)
         assertTrue("ApplyDueChange" in change)
         assertTrue("RecordDueChangeRefusal" in change)
@@ -42,7 +43,7 @@ class DiagramGenTest {
 
     @Test
     fun `tick-only rules the commit affects appear as tick notes`() {
-        val lineItem = doc.substringAfter("## commitLineItem").substringBefore("\n## ")
+        val lineItem = sequences.substringAfter("### commitLineItem").substringBefore("\n### ")
         assertTrue("RemindOverdue" in lineItem, "a LineItem commit affects OverdueInvoice's balance read")
         assertTrue("Weekly tick" in lineItem)
     }

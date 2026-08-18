@@ -1,6 +1,6 @@
 # OQ41 — The compilation-artifact family: what compiling produces for humans
 
-**Status:** open — tier-1 sequence diagrams built (2026-08-18): `compiler/src/main/kotlin/velle/DiagramGen.kt` emits a markdown document of Mermaid fences, one may-fire cascade diagram per exposed act (envelope as `critical` frame, in-envelope firings with conditions as notes, `after commit` as async arrows into their own frames, backstop and tick-sweep notes, transaction-end `never` checks). Opt-in via a `--diagrams` flag on the generate entry point; billing opts in (`examples/billing/output/DIAGRAMS-Billing.md`), the other examples don't — covered by `DiagramGenTest`
+**Status:** open — four family members built. Tier-1 sequence diagrams (2026-08-18): `compiler/src/main/kotlin/velle/DiagramGen.kt` emits a markdown document of Mermaid fences, one may-fire cascade diagram per exposed act (envelope as `critical` frame, in-envelope firings with conditions as notes, `after commit` as async arrows into their own frames, backstop and tick-sweep notes, transaction-end `never` checks). Class diagram, state-flow diagrams, and the rule graph (2026-08-18): `ClassDiagramGen.kt`, `StateFlowGen.kt`, and `RuleGraphGen.kt` render into the same document (see "State flow: the mapping" and "Rule graph: the mapping" below for what they prove). Opt-in via a `--diagrams` flag on the generate entry point; billing opts in (`examples/billing/output/DIAGRAMS-Billing.md`), the other examples don't — covered by `DiagramGenTest`, `ClassDiagramGenTest`, `StateFlowGenTest`, `RuleGraphGenTest`
 **In plain terms:** compiling Velle should produce more than runnable code and tests — diagrams and reports that let an engineer or a product owner *see* the system: its shapes (class diagrams), its states and rules (state-flow diagrams), where work queues (the contention map, OQ40), and what happens when an act arrives (sequence diagrams). Which artifacts, derived from what the compiler already knows, and how concrete can each one get?
 **Opened by:** OQ40's contention-map reframe and the sequence-diagram discussion, 2026-08-17
 
@@ -13,6 +13,7 @@ The README's opening already promises Product-Owner-facing artifacts (design spe
 - **Class diagrams** — shapes and relationships; near-mechanical (UML's bread and butter), with inferred inverses and derived properties visually distinguished from stored fields.
 - **State-flow diagrams** — refinements as states, entry/exit rules as transitions; the state-partition declaration (README §22) would sharpen these into proper statecharts ("an invoice is always in exactly one of Draft, Issued, Paid, Voided").
 - **The contention map** (OQ40) — the *between*-envelope view: which acts queue on which keys, and where a single system-wide queue forms.
+- **The rule graph** (2026-08-18) — the whole system's cause map on one page: acts and rules as nodes, "this commit can change that condition" as edges, with guards on the edges and decision diamonds only where exclusivity is proven.
 - **Sequence diagrams** (this file's main content) — the *within*-envelope view: what one act's arrival causes, in what causal order, across which transactions.
 
 Three principles anchor the family. Two carry over from OQ40: the author writes business facts in intuitive syntax, and comprehension is served by artifacts *derived from* the spec, never by annotations added to it; and **generated tests and diagrams are the same derivation rendered twice** — a test scenario can emit its own sequence diagram, so a product owner reviews as pictures exactly what the test suite executes as assertions.
@@ -139,6 +140,32 @@ caller            runtime                    L-9           Institution
 ```
 
 The refusal branch reads straight off the frame: had the new total exceeded the $1,000,000 cap, the `never` check fails, the *entire* frame rolls back — `LoanApproval` and `ComplianceAlert` both, since a frame is one atomic unit — and the caller receives a refusal naming the violated invariant. In the static (tier 1) rendering that branch appears as the `alt` fragment's other arm; the concrete scenario collapses it away.
+
+## State flow: the mapping (built 2026-08-18)
+
+A state is membership in a refinement — and Velle memberships overlap (an invoice can be Issued *and* Overdue *and* Archived at once), so the honest rendering is not one flat state machine but one small machine per **axis** of membership. Refinements share an axis only when the compiler can prove their predicates disjoint (whole-expression complements, or complementary comparisons on the same reads — `balance <= 0` against `balance > 0`); everything else gets its own two-state axis. That is the may-fire stance carried over: where a proof is missing, the diagram gets weaker, never wrong. The author-declared state partition (README §22) is the future sharpener — it would name the else-state and turn proved-disjoint axes into declared ones.
+
+Arrow directions are proven, not guessed, from three sources:
+
+- **Monotone `exists` atoms.** `exists X for this` can only be satisfied, never unsatisfied — v0 has no delete (OQ37) — so a refinement guarded by one is a one-way state (IssuedInvoice), a negated one is born-a-member with a one-way exit (UnemailedReceipt), and a conjunction of a positive and a negated atom is a **once-through chain**: never a member → member → out permanently, with the terminal state drawn explicitly.
+- **Sign-pinned folds.** `never (Payment where amount <= 0)` proves every payment amount positive, so `sum(payments, amount)` only grows and `balance` only falls — the input-constrained refusal is what licenses drawing the Payment arrow toward Paid and never away. Where the senses conflict (a LineItem raises `total` toward Paid's first conjunct and raises `balance` away from its second), the edge honestly says *may flip* and is drawn in both directions.
+- **Time as a commit kind.** A predicate reading `today` gets a "time passes" edge in the direction the clock can move it — `due < today` can only be satisfied by time, never unsatisfied.
+
+Entry and exit decorate the states: `when X` rules as entry actions, `when leaving X` as exit actions, `captured` fields as entry captures, `frozen` as a property of being in the state. A transient act renders as UML's choice pseudostate — partitions decided once, at the commit, the final state being the instance's removal — and when the partition guards are complements the diagram states the totality outright: every commit takes exactly one branch, V18 as a picture.
+
+The build immediately demonstrated the family's value as an analysis, not an illustration: the once-through classifier noticed that billing's `ArchivedInvoice = exists ArchiveRequest for this and not exists UnarchiveRequest for this` has a **terminal** third state — once unarchived, `not exists UnarchiveRequest` is false forever, so no later ArchiveRequest can ever re-archive the invoice. A latent spec fact (arguably a bug in the billing example) that no sequence view could surface, found by the projection.
+
+## Rule graph: the mapping (built 2026-08-18)
+
+The fourth member answers "what causes what" on one page: a Mermaid flowchart whose nodes are the exposed acts and the rules, where an edge means "this commit's writes can change that rule's condition" — the sequence diagrams' may-fire derivation rendered once, globally, instead of per act. Velle has no control flow, so it is deliberately *not* a flowchart of steps; the notation is bent to the semantics:
+
+- **Fan-out is conjunctive, never a choice.** Every outgoing edge whose guard holds fires, in no order — so guards ride the edges as labels ("when PaidInvoice"), and no diamond is drawn for them. Classic flowcharts only have exclusive branching; drawing Velle's fan-out that way would fabricate a decision nobody makes.
+- **A diamond is a claim of exclusivity, drawn only where proven.** Two places qualify: the accept/refuse split an input-constrained `never` compiles to (a `never` targeting the exposed act and reading only its own stored fields becomes a boundary diamond — violated means refused, nothing begins), and a transient act's partitions when their guards are provably exclusive (complements get a yes/no diamond annotated "exactly one branch").
+- **Edge style is transaction structure.** Solid fires inside the same envelope; dotted crosses a boundary — `after commit`, or armed now and swept at the labeled tick.
+- **The direction proofs prune impossible edges.** Reusing the state-flow analyses: a write that provably moves a condition toward false cannot arm the rule (a Payment only lowers `balance`, so no edge from the payment envelope to `RemindOverdue` — a payment quiets reminders, never causes them), a creation moving a membership toward true cannot fire a `when leaving` rule (no edge from `commitArchiveRequest` to `NoteUnarchival`), and a condition provably false at birth drops the birth edge (`commitInvoice` is inert — a new invoice wakes no rule, visibly).
+- **Guard-disarm is a labeled self-loop.** A rule whose own write provably moves its own condition toward false gets a self-edge reading "disarms its own guard" — the canonical-guard pattern (README §13) made visible as negative feedback, for both the after-commit disarm (`EmailReceipt`) and the sweep-with-memory (`RemindOverdue`'s reminder quieting itself).
+
+Conditions too long for an edge label truncate to their refinement head with the full predicate in a legend under the fence. Like the rest of the family, tier 2 sharpens this: an `example`-grounded rendering collapses every diamond and guard to the branch actually taken.
 
 ## Limits
 
