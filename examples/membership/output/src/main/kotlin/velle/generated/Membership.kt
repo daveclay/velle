@@ -127,7 +127,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
             put("ticket", ticket.id)
         })
 
-    /** Queue keys: [assignTicket.ticket], [assignTicket.ticket.assignee], [assignTicket.ticket.member].
+    /** Queue keys: [assignTicket.agent], [assignTicket.ticket], [assignTicket.ticket.assignee], [assignTicket.ticket.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commitAssignTicket(ticket: TicketView, agent: AgentView): CommitResult =

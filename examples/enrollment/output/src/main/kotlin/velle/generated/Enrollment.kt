@@ -81,7 +81,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
             put("tag", tag)
         })
 
-    /** Queue: system-wide.
+    /** Queue keys: [assignAdvisor.advisor] — plus system-wide width below.
      *  System-wide over Student — writes a Student whose 'advisor' reference the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */

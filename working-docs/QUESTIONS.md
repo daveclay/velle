@@ -21,7 +21,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **[OQ37](questions/OQ37-delete.md)** — delete as a described mutation: statement, existence-dependency check, gating, referential completeness · investigation open (`investigate-delete.md`)
 - **[OQ38](questions/OQ38-bag-relationships.md)** — duplicates in a relationship: a multiplicity-bearing `many`? · born from OQ30-R5; edge-shape-with-quantity may be the whole answer
 - **[OQ39](questions/OQ39-inline-part-creation.md)** — inline part creation: multi-part acts through the generated commit function · born from OQ30-R7; the input-closure question
-- **[OQ42](questions/OQ42-domain-derivation-trust.md)** — trusting the domain derivation: soundness audit (the symmetric-evaluation argument; body-side `correlatable` done 2026-08-18), the property-style commutation sweep, the A5 advisory-vs-required dial · born from the serialization-domain settlement (2026-08-18); rides the OQ15/OQ16 calibration campaign
+- **[OQ42](questions/OQ42-domain-derivation-trust.md)** — trusting the domain derivation: the symmetric-evaluation audit done 2026-08-19 (`working-docs/audit-symmetric-evaluation.md` — reassignment hole found+fixed; R1 resolved: captures readable at admission, U3 clause added); body-side `correlatable` done 2026-08-18; the commutation sweep built 2026-08-19 (`CommutationSweepTest`/`DomainKeys.kt`; randomized values and tick pairs remain); the A5 dial resolved advisory 2026-08-18 → `docs/concurrency.md` (stress test follows OQ15/OQ16) · born from the serialization-domain settlement (2026-08-18); rides the OQ15/OQ16 calibration campaign
 
 ## Deferred — post-v0 re-derivations (README §22's list)
 

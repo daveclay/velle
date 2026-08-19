@@ -833,7 +833,7 @@ class DomainAnalysis(private val model: Model) {
         // ── rule bodies: the write side ──────────────────────────────────────
 
         fun walkAssignment(a: Assignment, ctx: Ctx, events: MutableList<Event>) {
-            walkExpr(a.value, ctx)
+            val value = walkExpr(a.value, ctx)
             // resolve the route to the written field; a collection at the
             // penultimate hop fans out — memberScope keys the collection's
             // owner and yields the correlated element scope, so the final
@@ -857,6 +857,13 @@ class DomainAnalysis(private val model: Model) {
                         ?.forEach { p ->
                             acc.key(extend(sc.anchor, p.name), owner,
                                 "writes a $owner whose '${p.name}' reference the derivation cannot key", decl, tolerated)
+                            // reassigning the correlated field itself: the
+                            // pre-state extension above keys the row the field
+                            // *leaves*; correlated readers also meet at the row
+                            // it now names, so the incoming value keys too
+                            if (p.name == name)
+                                acc.key(value?.anchor ?: Anchor.Unknown, owner,
+                                    "assigns $owner.$name a reference the derivation cannot key", decl, tolerated)
                         }
                     events.add(Event.Assign(owner, name, sc.anchor))
                     // any stored write also advances the shape's `on update` timestamps
