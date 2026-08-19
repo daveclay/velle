@@ -29,10 +29,10 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 - [ ] Close validator gaps (tracked in `Validator.kt`'s header): V11 branch-sensitive narrowing · V12 at-most-one beyond the refinement slice (`singular_references.md`) · V14 descent certificates · A-series beyond A4.
 - [ ] Add the static selector-discrimination check (selectors fail loudly at runtime today; the static proof rides OQ15/OQ16 calibration — `investigate_runtime.md` §9).
 
-## OQ42 — trusting the domain derivation (OQ40 settled 2026-08-18 → `evaluation.md` U3, `checks.md` A5)
+## Serialization domains (OQ40/OQ42 settled → `evaluation.md` U3, `checks.md` A5, `audit-symmetric-evaluation.md`)
 
-- [ ] Close [OQ42](questions/OQ42-domain-derivation-trust.md): all four items carry closed records (audit + R1 capture ruling + sweep 2026-08-19; body-side `correlatable` + A5 dial 2026-08-18) — decide whether the sweep extensions (randomized values, tick-firing pairs, triples) ride the question or spin off, then settle it.
-- [ ] Precision follow-ups from the audit (sound today, wider than necessary): element-scoped `this.` paths going opaque (P2), condition collector not expanding refinement filters / `is` atoms (P3), multi-hop route composition — payments' `ChargeResponse` width (P4).
+- [ ] Commutation-sweep extensions (`CommutationSweepTest`, OQ42 item 3's noted residue): randomized value exploration (value-boundary bugs the fixed small worlds miss), commit-versus-tick-firing pairs over `scheduledRuleDomains`, and triples.
+- [ ] Precision follow-ups from the symmetric-evaluation audit (sound today, wider than necessary — `audit-symmetric-evaluation.md` P2–P4): element-scoped `this.` paths going opaque (P2), condition collector not expanding refinement filters / `is` atoms (P3), multi-hop route composition — payments' `ChargeResponse` width (P4).
 - [ ] Stress-test the A5 advisory ruling against realistic specs once the OQ15/OQ16 calibration questions resolve (`docs/concurrency.md`, "Why the width warning is an advisory").
 - [ ] Spec-generation phase 2 (boundary synthesis, scenario DSL, no-refire cases) and phase 3 (the `example` construct) — `testgen.md`.
 
