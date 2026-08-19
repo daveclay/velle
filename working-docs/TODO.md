@@ -12,7 +12,6 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## Transient acts — Design B residue (`investigate-transient.md`)
 
-- [ ] Design correlation keys — OQ26.
 - [ ] Decide an author-supplied refusal message on `never` (today a refusal names the violated `never`).
 - [ ] Confirm outcome-mediated provenance satisfies `why` when provenance lands (README §22's `why` item).
 - [ ] Grow V18 beyond the complement slice once V9's exhaustiveness engine exists.

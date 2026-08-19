@@ -1,7 +1,7 @@
 # Breaking Design B: an auction house
 
 **Status:** complete — first adversarial pass; findings fed the Design B decision (`investigate-transient.md`) and shaped checks V17–V18. Scorecard at the bottom.
-**Residue:** [OQ26](questions/OQ26-correlation-keys.md) correlation keys (Case 4) · V18 growth beyond the complement slice once V9's exhaustiveness engine exists (Case 1; TODO.md).
+**Residue:** OQ26 correlation keys (Case 4; settled 2026-08-19 → README §4 "Transient acts": the client-supplied-key idiom stays informal) · V18 growth beyond the complement slice once V9's exhaustiveness engine exists (Case 1; TODO.md).
 
 ---
 
@@ -165,7 +165,7 @@ rule AcceptBid when (PlaceBid where ... and not exists (BidRecord where requestK
 }
 ```
 
-Workable — the idempotency-key pattern real APIs already use — but note what returned: key threading through act and outcomes, and a guard conjunct per handling rule. Some of the ceremony B removed comes back wherever ingestion must be idempotent. Also the correlation question sharpens: `requestKey` needs uniqueness the client controls, and a duplicate arriving *while both copies are in flight* is two transactions — last-in-wins on the guard, fine here, but the general story belongs to the correlation-key design item (OQ26).
+Workable — the idempotency-key pattern real APIs already use — but note what returned: key threading through act and outcomes, and a guard conjunct per handling rule. Some of the ceremony B removed comes back wherever ingestion must be idempotent. Also the correlation question sharpens: `requestKey` needs uniqueness the client controls, and a duplicate arriving *while both copies are in flight* is two transactions — last-in-wins on the guard, fine here, but the general story belonged to the correlation-key design item (OQ26 — since settled: the idiom as written here stays the whole design, README §4).
 
 **Verdict: TAX**, concentrated exactly where the validation plan predicted (correlation keys).
 

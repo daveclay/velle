@@ -9,7 +9,7 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **drift / drift-exposed partition** — a partition of a *persistent* act over mutable state is re-evaluated at every later change to that state, so a long-handled act "drifts" between sides: a spurious refusal per flip, a stale re-fired write per flip back. Worked exhibit: `examples/partition-drift/`; flagged by advisory A4.
 - **handled-once act partition** — the fix idiom for drift under persistence: the partition is scoped to *unhandled* acts, each side anchored by its own rule's outcome evidence. Live in `payments.velle`.
 - **anchor / anchored spelling** — the outcome-evidence conjunct (`... where not exists EditApplication for this`) that pins an already-handled act out of its partition.
-- **correlation key** — a client-supplied business key (the idempotency-key pattern) a transient act carries and its outcomes copy, so callers can match responses to requests (OQ26).
+- **correlation key** — a client-supplied business key (the idempotency-key pattern) a transient act carries and its outcomes copy, so callers can match responses to requests and duplicate submissions can be recognized (OQ26, settled 2026-08-19 → README §4 "Transient acts"): a documented idiom, deliberately not language machinery — the key's uniqueness is the client's to own, the dedup guard the author's to write.
 - **C0 pinning** — a transient act's partitions are evaluated against the state at its arrival commit and never re-evaluated by its own consequences (`evaluation.md`, "Transient acts").
 - **HOLDS / TAX / GAP** — break-doc verdicts: the design handles the case · handles it at a cost · needs a new obligation or fails (`break-b.md`).
 
