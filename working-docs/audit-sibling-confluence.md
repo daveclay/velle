@@ -6,7 +6,22 @@
 
 Throughout this document, **sibling firings** (shortened to "siblings") means: two rule firings triggered by the same commit, where neither firing caused the other — so the runtime is free to run them in either order. "Sibling" never refers to a data relationship. (Defined in `GLOSSARY.md`.)
 
-Method, per the OQ42 precedent (`audit-symmetric-evaluation.md`): enumerate the divergence channels from the step relation, then **pin every verdict with an executable probe**. The runtime gained a test-only ordering knob (`VelleSystem.firingOrder`, applied to step 6's firing list and to the after-commit queue's drain) so each probe runs the same scenario under two orders and diffs an id-insensitive fingerprint — captures and recorded failures included. A divergence on a spec the validator accepts is a soundness bug by definition. Probes live in `compiler/src/test/kotlin/velle/SiblingConfluenceAuditTest.kt` (channels A–J); the whole-corpus leg re-grows every example spec's world under a reversed order and demands identical fingerprints (`CommutationSweepTest`, "every example world is firing-order independent").
+Method, per the OQ42 precedent (`audit-symmetric-evaluation.md`): enumerate the divergence channels from the step relation, then **pin every verdict with an executable probe**. The runtime gained a test-only ordering knob (`VelleSystem.firingOrder`, applied to step 6's firing list and to the after-commit queue's drain) so each probe runs the same scenario under two orders and diffs an id-insensitive fingerprint — captures and recorded failures included. A divergence on a spec the validator accepts is a soundness bug by definition. Probes live in `compiler/src/test/kotlin/velle/SiblingConfluenceAuditTest.kt`, one letter per probe; the roster below is the complete list, and every "probe X" mention in this document resolves here. The whole-corpus leg re-grows every example spec's world under a reversed order and demands identical fingerprints (`CommutationSweepTest`, "every example world is firing-order independent").
+
+**The probe roster** (each probe is a standalone minimal spec; "diverges" means the two firing orders produce different final states, which the validator must therefore reject; "confluent" means both orders produce the same final state, which the validator must accept; V15 is the confluence check, cataloged in `checks.md`):
+
+| Probe | Scenario | Result | Appears in |
+|-------|----------|--------|------------|
+| A | a rule body reads a field a sibling assigns | diverges; rejected (V15) | channel 2 |
+| B | a rule body reads, through a derived property, whether a sibling-created instance exists | diverges; rejected (V15) | channel 3 |
+| C | a rule body aggregates over instances a sibling creates, through an inferred inverse collection | diverges; rejected (V15) | channel 4 |
+| D | a rule body reads an `on update` timestamp that a sibling's write advances | diverges; rejected (V15) | channel 5 |
+| E | a captured value's expression reads a field a sibling assigns | diverges; rejected (V15) | channel 11 |
+| F | two after-commit followers of one commit, one reading a field the other writes | diverges; rejected (V15) | channel 12 |
+| G | a sibling's creation flips a watched refinement's predicate | diverges; rejected (V15) | channel 9 |
+| H | a rule's *condition* (not its body) reads a field a sibling writes | confluent; accepted | channels 7, 13 |
+| I | two siblings write two different fields — the independent baseline | confluent; accepted | baseline only, no channel row |
+| J | finding C1 distilled: an in-transaction compensating release racing a pinned refusal (two tests: the pre-fix spelling diverges and is rejected with V15; the ratified `after commit` spelling is confluent and accepted) | both, see scenario | finding C1; §1 |
 
 **The step relation** (pinned from `evaluation.md` and `Runtime.applyCommit`): a state is the store mid-transaction plus the pending firings; a step is one firing's commit. Two facts carry the whole analysis. **Subjects are pinned**: each commit's entrant/leaver sets are computed from one pre/post diff before any sibling runs, so a sibling's write cannot change who fires at this commit — the flip it causes fires rules at its own commit, which is causality, not a race. **Bodies read the evolving state**: a sibling's earlier write is visible to a later sibling's body, which is what makes every channel below real rather than a snapshot artifact.
 

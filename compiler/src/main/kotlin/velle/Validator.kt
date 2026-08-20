@@ -1565,8 +1565,9 @@ class Validator(private val model: Model) {
                     diags.add(Diagnostic("V15", "'${a.name}' (${fmt(fa.keys)}) and sibling '${b.name}' (${fmt(fb.keys)}) " +
                         "each affect membership in '$refName', and $observer: whether the transaction passes " +
                         "through '$refName' between the two effects depends on their unstated order; " +
-                        "state the intent — condition one rule on the other's outcome, or move both effects " +
-                        "into one rule (OQ16)"))
+                        "state the intent — condition one rule on the other's outcome, move both effects " +
+                        "into one rule, or move one rule to `after commit` so it runs as its own " +
+                        "transaction and sees the other's outcome already settled (OQ16)"))
                 }
                 // one sibling causes the entry, the other writes what the
                 // captured expressions read: the captured value depends on order
