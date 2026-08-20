@@ -3,6 +3,9 @@
 Feature: ExhaustedOrder
 
   # rule ReleaseStockOnExhaustion
-  Scenario: A new ExhaustedOrder produces a ReservationRelease
+  Scenario: A new ExhaustedOrder produces a ReservationRelease after the commit
     When a commit brings one new order into "ExhaustedOrder"
-    Then one more "ReservationRelease" exists
+    Then the rule has fired after that transaction
+    And one more "ReservationRelease" exists
+    And the order has left "ExhaustedOrder"
+    And another "Nightly" tick produces nothing more

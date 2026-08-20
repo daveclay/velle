@@ -35,7 +35,7 @@ interface RequiredGivens {
     /** Perform the commit(s) that make ONE new subject enter 'RetryableOrder'; return the subject. */
     fun retryableOrder(): PaymentsSystem.OrderView
 
-    /** Perform the commit(s) that make ONE new subject enter 'ExhaustedOrder'; return the subject. */
+    /** Perform the commit(s) that make ONE new subject enter 'ExhaustedOrder' (the rule under test fires after that transaction); return the trigger subject. */
     fun orderForReleaseStockOnExhaustion(): PaymentsSystem.OrderView
 
     /** Bring ONE subject into 'ReadyToShip' without ticking 'Nightly'; return the subject. */

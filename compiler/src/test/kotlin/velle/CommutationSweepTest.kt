@@ -106,6 +106,29 @@ class CommutationSweepTest {
             "derivation-disjoint pairs failed to commute:\n" + violations.joinToString("\n"))
     }
 
+    /** The sibling-confluence audit's whole-corpus leg (OQ16;
+     *  `working-docs/audit-sibling-confluence.md`): every validated spec's
+     *  world, rebuilt under a reversed step-6 firing order and a reversed
+     *  after-commit drain order, must fingerprint identically — evaluation.md's
+     *  "ordering within step 6 is never observable in a valid spec", executed. */
+    @Test
+    fun `every example world is firing-order independent`() {
+        val corpus = listOf("deposits" to deposits, "audits" to audits, "uniqueness" to uniqueness) +
+            exampleSpecs()
+        val violations = mutableListOf<String>()
+        for ((name, src) in corpus) {
+            val decls = Parser.parse(src)
+            if (Validator.validate(decls).isNotEmpty()) continue // only the claim's domain: valid specs
+            val model = Model(decls)
+            val pools = textPools(decls)
+            val plain = fingerprint(grown(model, pools), model)
+            val reversed = fingerprint(grown(model, pools) { it.reversed() }, model)
+            if (plain != reversed)
+                violations.add("$name: firing order is observable\n  declared: $plain\n  reversed: $reversed")
+        }
+        assertTrue(violations.isEmpty(), violations.joinToString("\n"))
+    }
+
     private fun exampleSpecs(): List<Pair<String, String>> {
         var dir: Path? = Path.of("").toAbsolutePath()
         while (dir != null && !Files.isDirectory(dir.resolve("examples"))) dir = dir.parent
@@ -217,8 +240,13 @@ class CommutationSweepTest {
      *  target only exists once an earlier act's rules ran) fill in by the
      *  later passes. Deterministic — ids and values are identical on every
      *  rebuild, which is what lets verdicts transfer to the order-runs. */
-    private fun grown(model: Model, pools: Map<String, List<String>>): VelleSystem {
+    private fun grown(
+        model: Model,
+        pools: Map<String, List<String>>,
+        firingOrder: ((List<Pair<RuleDecl, Long>>) -> List<Pair<RuleDecl, Long>>)? = null,
+    ): VelleSystem {
         val sys = VelleSystem(model)
+        sys.firingOrder = firingOrder
         var salt = 0
         repeat(3) {
             for (act in model.exposed) for (variant in 0..1) {

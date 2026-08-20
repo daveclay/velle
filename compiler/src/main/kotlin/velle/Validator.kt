@@ -431,18 +431,422 @@ class Validator(private val model: Model) {
                         "${field.first}.${field.second} and their triggers are not provably disjoint"))
             }
         }
-        // coarse V15: same-commit siblings must not read what a sibling writes
+        checkSiblingReadWrite()
+    }
+
+    // ── coarse V15, read-write legs (sibling-confluence audit, channels A–D, F) ─
+    //
+    // On-commit siblings: subjects are pinned from one pre/post diff before
+    // any sibling runs (evaluation.md step 5), so a condition-only read of a
+    // sibling's write is safe — the flip it causes fires rules at its own
+    // commit, which is causality, not a race (probe H). What diverges is the
+    // BODY: bodies read the evolving state, so a body read of anything a
+    // sibling writes — a field, a shape's instance set (existence, aggregate),
+    // a timestamp any write advances — depends on the unstated order.
+    //
+    // After-commit followers of one commit are independent transactions in
+    // unspecified relative order (the queue's append order was itself a
+    // step-6 choice), and their conditions RE-CHECK at drain — so for
+    // after/after pairs, condition reads matter too (full summary).
+
+    private fun checkSiblingReadWrite() {
         val commitRules = model.rules.values.filter { it.preposition != "after" && firesOnCommit(it) }
         for (a in commitRules) for (b in commitRules) {
-            if (a === b || provablyDisjoint(a, b) || !canShareCommit(a, b)) continue
-            val aWrites = writes.filter { it.rule === a }.map { it.owner to it.member.name }.toSet()
-            val bReads = ruleReads(b).fields
-            (aWrites intersect bReads).forEach { (s, f) ->
-                diags.add(Diagnostic("V15", "'${a.rule()}' writes $s.$f, which sibling '${b.rule()}' reads — " +
+            if (a === b || provablyDisjoint(a, b) || !canCoFire(a, b) || enterLeaveExclusive(a, b)) continue
+            for (what in readConflicts(a, bodyReads(b)))
+                diags.add(Diagnostic("V15", "'${a.name}' writes $what, which sibling '${b.name}' reads in its body — " +
                     "outcome depends on unstated order; state the intent (OQ16)"))
-            }
+        }
+        val afterRules = model.rules.values.filter { it.preposition == "after" }
+        for (a in afterRules) for (b in afterRules) {
+            if (a === b || provablyDisjoint(a, b) || !canCoFire(a, b) || enterLeaveExclusive(a, b)) continue
+            for (what in readConflicts(a, ruleReads(b).reads))
+                diags.add(Diagnostic("V15", "'${a.name}' and '${b.name}' follow the same commit as independent " +
+                    "after-commit transactions in unspecified relative order, and '${b.name}' reads $what, " +
+                    "which '${a.name}' writes — outcome depends on that order; state the intent (OQ16)"))
         }
     }
+
+    // ── can two rules fire from one commit? ──────────────────────────────────
+    //
+    // Sharper than [canShareCommit] ("some commit kind affects both
+    // conditions"): a rule gains a subject at a commit only when the commit
+    // can flip its condition in the firing direction — TOWARD membership for
+    // an entry rule, AWAY for a leaving rule. A creation moves a predicate
+    // only in the polarity the predicate consults the shape at (creating a
+    // `StockReservation` can only satisfy `exists StockReservation for this`
+    // and only falsify `not exists StockReservation for this`), a field write
+    // is value-dependent (either direction), a freshly created base instance
+    // can never LEAVE anything (it was a member of nothing), and a fresh
+    // instance cannot satisfy a positive `exists ... for this` over a shape
+    // the same commit does not create (nothing can reference it yet).
+
+    private fun canCoFire(a: RuleDecl, b: RuleDecl): Boolean =
+        commitKinds().any { k -> canGainSubject(k, a) && canGainSubject(k, b) }
+
+    private fun canGainSubject(k: CommitKind, rule: RuleDecl): Boolean {
+        val base = model.baseOfExpr(rule.condition) ?: return false
+        if (base in model.transients)
+            return k is CommitKind.Creates && k.shape == base && !rule.leaving
+        val cond = conditionSummary(rule)
+        if (cond.opaque) return true
+        return when (k) {
+            is CommitKind.Creates -> {
+                val coCreated = k.byRule?.body?.filterIsInstance<Creation>()?.map { it.shape }?.toSet()
+                    ?: setOf(k.shape) // an exposed commit carries exactly the act
+                if (k.shape == base) {
+                    if (rule.leaving) return false // a fresh instance was never a member
+                    return positiveCorrelatedExistsTargets(conditionConjuncts(rule.condition))
+                        .none { it !in coCreated }
+                }
+                // a creation flips the condition only through a consult a
+                // fresh instance can satisfy, and only in that consult's polarity
+                val pol = conditionPolarities(rule).map
+                pol.keys.filter { model.baseOf(it) == k.shape }
+                    .filter { it in model.shapes || !freshCannotEnter(it, coCreated) }
+                    .any { n -> pol.getValue(n).let { p -> if (rule.leaving) p <= 0 else p >= 0 } }
+            }
+            is CommitKind.Assigns -> affects(k, rule) // value-dependent: either direction
+        }
+    }
+
+    // ── entrant/leaver exclusivity ───────────────────────────────────────────
+    //
+    // The episodes discharge: [a] fires on ENTRY into a condition whose
+    // conjuncts include every conjunct of the condition [b] LEAVES. One
+    // instance cannot do both at one commit — a's post-state makes the shared
+    // conjuncts true, b's makes them false. Different instances at one commit
+    // are ruled out when every commit kind that could fire both is a write to
+    // the shared base's own columns, read only through the instance's own
+    // fields (no exists or aggregate over the base, no relationship hop back
+    // onto it) — then the only instance whose membership the write can flip
+    // is the written one, on both sides.
+
+    private fun enterLeaveExclusive(a: RuleDecl, b: RuleDecl): Boolean {
+        val (enter, leave) = when {
+            !a.leaving && b.leaving -> a to b
+            a.leaving && !b.leaving -> b to a
+            else -> return false
+        }
+        val base = model.baseOfExpr(enter.condition) ?: return false
+        if (base != model.baseOfExpr(leave.condition)) return false
+        val ce = conditionConjuncts(enter.condition)
+        val cl = conditionConjuncts(leave.condition)
+        if (cl.isEmpty() || !ce.containsAll(cl)) return false
+        val shared = commitKinds().filter { canGainSubject(it, enter) && canGainSubject(it, leave) }
+        return shared.all { k ->
+            k is CommitKind.Assigns && k.shape == base &&
+                ownColumnOnly(cl, base, k.field) &&
+                (ce - cl.toSet()).none { conj -> conjunctReads(conj, base, k.field) }
+        }
+    }
+
+    /** Every conjunct reading ([base], [field]) does so through the subject's
+     *  own columns only: seg-free or `this`-rooted single-segment paths. */
+    private fun ownColumnOnly(conjuncts: List<Expr>, base: String, field: String): Boolean =
+        conjuncts.all { conj ->
+            if (!conjunctReads(conj, base, field)) return@all true
+            var own = true
+            fun walk(e: Expr?) {
+                when (e) {
+                    null -> {}
+                    is PathExpr -> if (!(e.segs.isEmpty() || (e.root == "this" && e.segs.size == 1))) own = false
+                    is UnaryMinus -> walk(e.inner)
+                    is Binary -> { walk(e.left); walk(e.right) }
+                    is NotExpr -> walk(e.inner)
+                    is IfExpr -> { walk(e.condition); walk(e.thenExpr); walk(e.elseExpr) }
+                    is IsExpr -> walk(e.subject)
+                    is FunCall -> e.args.forEach { walk(it) }
+                    // exists/aggregates/selectors reach other instances
+                    is ExistsExpr, is AggCall, is SingularFor, is ShapeForSource, is SetExpr, is Access -> own = false
+                    else -> {} // literals
+                }
+            }
+            walk(conj)
+            own
+        }
+
+    private fun conjunctReads(conj: Expr, base: String, field: String): Boolean {
+        val s = ReadSummary()
+        model.collectExpr(conj, base, s)
+        return s.opaque || (base to field) in s.fields || (base to field) in s.collFields
+    }
+
+    // ── signed consults: which way can a creation move this condition? ──────
+    //
+    // +1: creating an instance of the shape can only move the predicate
+    // toward true; -1: only toward false; 0: both directions (or unknown).
+    // Signs come from `exists` polarity under negation, refinement absorption,
+    // and count comparisons; everything else (sums, selectors, branches)
+    // stays 0 — coarse, and only ever coarser than the truth.
+
+    /** Creation-sensitive consults of a predicate, RAW-named and signed. A
+     *  name appears only where creating an instance of its base can move the
+     *  predicate: quantified consults (`exists`, collection sources and their
+     *  refinement-atom filters, selectors). Membership tests on a *reference*
+     *  (`order is ReadyToShip`, refinement composition) contribute their
+     *  internals but not their own name — a fresh instance is unreferenced,
+     *  so creating one never flips a reference-scoped membership. [complete]
+     *  false means the walk could not attribute every consult; consumers must
+     *  then treat the summary's unattributed entries as moving both ways. */
+    private class Polarities(val map: Map<String, Int>, val complete: Boolean)
+
+    private class PolAcc {
+        val out = mutableMapOf<String, Int>()
+        var incomplete = false
+    }
+
+    private fun conditionPolarities(rule: RuleDecl): Polarities =
+        polarityCache.getOrPut("rule:${rule.name}") {
+            val base = model.baseOfExpr(rule.condition)
+            val acc = PolAcc()
+            if (base != null) signedRefExpr(rule.condition, base, +1, acc, mutableSetOf())
+            val s = conditionSummary(rule)
+            if (s.opaque) acc.incomplete = true
+            if (acc.incomplete) (s.existsShapes + s.collShapes).forEach { acc.out.putIfAbsent(it, 0) }
+            Polarities(acc.out, !acc.incomplete)
+        }
+
+    private fun refinementPolarities(name: String): Polarities =
+        polarityCache.getOrPut("ref:$name") {
+            val acc = PolAcc()
+            val r = model.refinements[name]
+            val base = model.baseOf(name)
+            if (r != null && base != null) {
+                signedRefExpr(r.expr, base, +1, acc, mutableSetOf(name))
+                val s = model.predicateSummary(name)
+                if (s.opaque) acc.incomplete = true
+                if (acc.incomplete) (s.existsShapes + s.collShapes).forEach { acc.out.putIfAbsent(it, 0) }
+            }
+            Polarities(acc.out, !acc.incomplete)
+        }
+
+    private val polarityCache = mutableMapOf<String, Polarities>()
+
+    private fun merge(acc: PolAcc, name: String?, sign: Int) {
+        val s = name ?: return
+        acc.out[s] = if (acc.out.containsKey(s) && acc.out.getValue(s) != sign) 0 else sign
+    }
+
+    private fun absorb(acc: PolAcc, name: String, sign: Int, visiting: MutableSet<String>, mergeName: Boolean) {
+        if (mergeName) merge(acc, name, sign)
+        if (name in model.refinements && visiting.add(name)) {
+            val p = refinementPolarities(name)
+            if (!p.complete) acc.incomplete = true
+            p.map.forEach { (sh, pol) -> merge(acc, sh, if (pol == 0) 0 else pol * sign) }
+        }
+    }
+
+    private fun signedRefExpr(e: RefExpr, scope: String, sign: Int, acc: PolAcc, visiting: MutableSet<String>) {
+        when (e) {
+            is RefName -> {
+                // composition: the operand's internals, not its name — an
+                // instance's membership here never flips by base creation alone
+                if (e.name in model.refinements) absorb(acc, e.name, sign, visiting, mergeName = false)
+                e.where?.let { signedExpr(it, e.name.takeIf { n -> n in model.shapes || n in model.refinements } ?: scope, sign, acc, visiting) }
+            }
+            is RefNot -> signedRefExpr(e.inner, scope, -sign, acc, visiting)
+            is RefAnd -> { signedRefExpr(e.left, scope, sign, acc, visiting); signedRefExpr(e.right, scope, sign, acc, visiting) }
+            is RefOr -> { signedRefExpr(e.left, scope, sign, acc, visiting); signedRefExpr(e.right, scope, sign, acc, visiting) }
+        }
+    }
+
+    private fun signedExpr(e: Expr?, scope: String, sign: Int, acc: PolAcc, visiting: MutableSet<String>) {
+        when (e) {
+            null -> {}
+            is NotExpr -> signedExpr(e.inner, scope, -sign, acc, visiting)
+            is Binary -> when {
+                e.op == "and" || e.op == "or" -> { signedExpr(e.left, scope, sign, acc, visiting); signedExpr(e.right, scope, sign, acc, visiting) }
+                e.op in setOf("<", "<=", ">", ">=", "==", "!=") -> {
+                    val (agg, dir) = when {
+                        e.left is AggCall -> e.left as AggCall to (if (e.op == ">" || e.op == ">=") sign else if (e.op == "<" || e.op == "<=") -sign else 0)
+                        e.right is AggCall -> e.right as AggCall to (if (e.op == "<" || e.op == "<=") sign else if (e.op == ">" || e.op == ">=") -sign else 0)
+                        else -> null to 0
+                    }
+                    if (agg != null && agg.name == "count") signedCollection(agg.collection, scope, dir, acc, visiting)
+                    else { signedExpr(e.left, scope, 0, acc, visiting); signedExpr(e.right, scope, 0, acc, visiting) }
+                }
+                else -> { signedExpr(e.left, scope, 0, acc, visiting); signedExpr(e.right, scope, 0, acc, visiting) }
+            }
+            is ExistsExpr -> {
+                e.shape?.let { absorb(acc, it, sign, visiting, mergeName = true) } // quantifies
+                e.collection?.let { signedCollection(it, scope, sign, acc, visiting) }
+            }
+            is IsExpr -> {
+                // a membership test on a reference or the subject: internals
+                // only — a fresh instance is unreferenced and not the subject
+                e.refinement?.let { absorb(acc, it, sign, visiting, mergeName = false) }
+                signedExpr(e.subject, scope, 0, acc, visiting)
+            }
+            is PathExpr -> {
+                if (e.root in model.refinements && e.segs.isEmpty()) absorb(acc, e.root, sign, visiting, mergeName = false)
+                else if (e.root in model.shapes && e.segs.isEmpty()) merge(acc, e.root, sign)
+                else followPath(e, scope, acc, visiting)
+            }
+            is IfExpr -> { signedExpr(e.condition, scope, 0, acc, visiting); signedExpr(e.thenExpr, scope, 0, acc, visiting); signedExpr(e.elseExpr, scope, 0, acc, visiting) }
+            is UnaryMinus -> signedExpr(e.inner, scope, 0, acc, visiting)
+            is AggCall -> signedCollection(e.collection, scope, 0, acc, visiting)
+            is FunCall -> e.args.forEach { signedExpr(it, scope, 0, acc, visiting) }
+            is SingularFor -> { absorb(acc, e.shape, 0, visiting, mergeName = true); signedExpr(e.forExpr, scope, 0, acc, visiting) } // selects across instances
+            is ShapeForSource -> { absorb(acc, e.shape, 0, visiting, mergeName = true); signedExpr(e.forExpr, scope, 0, acc, visiting) }
+            is Access -> signedExpr(e.target, scope, 0, acc, visiting)
+            is SetExpr -> signedCollection(e.collection, scope, 0, acc, visiting)
+            else -> {}
+        }
+    }
+
+    /** Member paths hide consults behind derived properties (`netPaid >=
+     *  amount` consults `SuccessfulCharge` through `netPaid`'s sum): resolve
+     *  the path and walk each derived member's formula, at sign 0 — a consult
+     *  reached through a value read moves the predicate both ways. */
+    private fun followPath(p: PathExpr, scope: String, acc: PolAcc, visiting: MutableSet<String>) {
+        val steps: List<String> = if (p.root == "this") p.segs.map { it.name } else listOf(p.root) + p.segs.map { it.name }
+        var sc: String? = scope
+        for (name in steps) {
+            val m = sc?.let { model.membersOf(it)[name] }
+            if (m == null) { acc.incomplete = true; return } // alias or unresolvable: fills cover it
+            m.derived?.let { d ->
+                if (visiting.add("prop:${m.owner}.${m.name}"))
+                    signedExpr(d.expr, m.owner, 0, acc, visiting)
+            }
+            (m.type as? VType.Coll)?.let { merge(acc, it.shape, 0) }
+            sc = m.type.instanceShape() ?: (m.type as? VType.Coll)?.shape
+        }
+    }
+
+    private fun signedCollection(c: CollectionExpr, scope: String, sign: Int, acc: PolAcc, visiting: MutableSet<String>) {
+        var element = scope
+        // a `where` that is exactly one refinement-membership atom gates fresh
+        // rows behind that refinement: the consult is the refinement (name
+        // merged — a fresh element enters through it or not at all), never
+        // the collection's bare element shape
+        val atomFilter = (c.where as? PathExpr)?.takeIf { it.segs.isEmpty() && it.root in model.refinements }
+        for (b in c.bindings) {
+            when (val src = b.source) {
+                is PathExpr ->
+                    if ((src.root in model.shapes || src.root in model.refinements) && src.segs.isEmpty()) {
+                        absorb(acc, src.root, sign, visiting, mergeName = true)
+                        element = src.root
+                    } else {
+                        val el = model.pathElementShape(src, scope)
+                        if (el == null) acc.incomplete = true
+                        else {
+                            if (atomFilter == null) merge(acc, el, sign)
+                            element = el
+                        }
+                    }
+                is ShapeForSource -> {
+                    absorb(acc, src.shape, sign, visiting, mergeName = true)
+                    signedExpr(src.forExpr, scope, 0, acc, visiting)
+                    element = src.shape
+                }
+                else -> { acc.incomplete = true; signedExpr(src, scope, 0, acc, visiting) }
+            }
+        }
+        atomFilter?.let { absorb(acc, it.root, sign, visiting, mergeName = true) }
+            ?: c.where?.let { signedExpr(it, element, sign, acc, visiting) }
+    }
+
+    /** What of [a]'s effects does a summary of [reads] consult? Human-readable
+     *  conflict descriptions; empty means provably no read-write conflict. */
+    private fun readConflicts(a: RuleDecl, reads: ReadSummary): List<String> {
+        val (assigned, created) = ruleEffects(a)
+        if (reads.opaque)
+            return if (assigned.isEmpty() && created.isEmpty()) emptyList()
+            else listOf("state its summary cannot attribute (opaque — treated as reading anything)")
+        val out = mutableListOf<String>()
+        (assigned intersect reads.fields).forEach { out.add("${it.first}.${it.second}") }
+        (assigned intersect reads.collFields).forEach { out.add("${it.first}.${it.second} (a timestamp its write advances)") }
+        // a created instance changes an existence/aggregate read only where a
+        // fresh instance can actually satisfy what the read consults
+        val readNames = reads.existsShapes + reads.collShapes
+        for (s in created) {
+            val touched = readNames.filter { model.baseOf(it) == s }
+                .any { it in model.shapes || !freshCannotEnter(it, created) }
+            if (touched) out.add("instances of '$s' (existence or an aggregate)")
+        }
+        return out
+    }
+
+    /** Can a freshly created base instance be a member of [refinement] at its
+     *  own creation commit? Not if the predicate carries a positive `exists`
+     *  conjunct correlated to the subject over a shape the same commit does
+     *  not create — nothing can reference the fresh instance yet (the V12/V18
+     *  family's fresh-instance argument, aimed at consult analysis). */
+    private fun freshCannotEnter(refinement: String, coCreated: Set<String>): Boolean {
+        if (refinement !in model.refinements) return false
+        return positiveCorrelatedExistsTargets(conditionConjuncts(RefName(refinement)))
+            .any { it !in coCreated }
+    }
+
+    /** Targets of positive `exists T for this` / `exists (T where f == this)`
+     *  conjuncts — memberships a fresh, not-yet-referencable instance cannot
+     *  have. */
+    private fun positiveCorrelatedExistsTargets(conjuncts: List<Expr>): List<String> {
+        fun comparesToThis(e: Expr): Boolean = when {
+            e is Binary && e.op == "and" -> comparesToThis(e.left) || comparesToThis(e.right)
+            e is Binary -> e.op == "==" && (e.left == PathExpr("this") || e.right == PathExpr("this"))
+            else -> false
+        }
+        return conjuncts.mapNotNull { c ->
+            val ex = c as? ExistsExpr ?: return@mapNotNull null // positive only: `not exists` is a NotExpr
+            val correlated = ex.forExpr == PathExpr("this") ||
+                ex.collection?.where?.let { comparesToThis(it) } == true
+            if (!correlated) return@mapNotNull null
+            ex.shape?.let { model.baseOf(it) }
+                ?: (ex.collection?.bindings?.firstOrNull()?.source as? PathExpr)
+                    ?.takeIf { it.segs.isEmpty() }?.root?.let { model.baseOf(it) }
+        }
+    }
+
+    /** [a]'s effects: fields assigned — `on update` timestamps those writes
+     *  advance included — and shapes created. */
+    private fun ruleEffects(a: RuleDecl): Pair<Set<Pair<String, String>>, Set<String>> =
+        effectsCache.getOrPut(a.name) {
+            val assigned = mutableSetOf<Pair<String, String>>()
+            writes.filter { it.rule === a }.forEach { w ->
+                assigned.add(w.owner to w.member.name)
+                updateTimestamps(w.owner).forEach { assigned.add(w.owner to it) }
+            }
+            val created = a.body.filterIsInstance<Creation>().map { it.shape }.toSet()
+            assigned to created
+        }
+
+    private val effectsCache = mutableMapOf<String, Pair<Set<Pair<String, String>>, Set<String>>>()
+
+    private fun updateTimestamps(shape: String): Set<String> = updateTsCache.getOrPut(shape) {
+        model.shapes[shape]?.members?.filterIsInstance<TimestampProp>()
+            ?.filter { it.on == "update" }?.map { it.name }?.toSet() ?: emptySet()
+    }
+
+    private val updateTsCache = mutableMapOf<String, Set<String>>()
+
+    /** Reads of a rule's body only — assignment values and their target
+     *  routes, creation field values and `for` expressions. Condition reads
+     *  are deliberately absent: subjects are pinned per commit (above). */
+    private fun bodyReads(rule: RuleDecl): ReadSummary = bodySummaries.getOrPut(rule.name) {
+        val s = ReadSummary()
+        val scope = subjectScope(rule)
+        if (scope != null) {
+            rule.body.forEach { item ->
+                when (item) {
+                    is Assignment -> {
+                        model.collectExpr(item.value, scope, s)
+                        if (item.target.segs.isNotEmpty())
+                            model.collectExpr(PathExpr(item.target.root, item.target.segs.dropLast(1)), scope, s)
+                    }
+                    is Creation -> {
+                        item.forExpr?.let { model.collectExpr(it, scope, s) }
+                        item.fields.forEach { model.collectExpr(it.value, scope, s) }
+                    }
+                    ThenMarker -> {}
+                }
+            }
+        }
+        s
+    }
+
+    private val bodySummaries = mutableMapOf<String, ReadSummary>()
 
     // ── spent invariants: `never`s as proof inputs (README §21, checks.md V10) ─
     //
@@ -699,7 +1103,12 @@ class Validator(private val model: Model) {
     private val ruleSummaries = mutableMapOf<String, RuleSummary>()
     private val ruleConditionSummaries = mutableMapOf<String, ReadSummary>()
 
-    /** Does this commit kind possibly affect the rule's condition? */
+    /** Does this commit kind possibly affect the rule's condition? Widened by
+     *  the sibling-confluence audit to the summary's full read vocabulary:
+     *  consulted shapes base-normalized (a refinement name in `existsShapes`
+     *  never matched a created base shape), collection consults, timestamp
+     *  reads (any write to the shape advances its `on update` stamps), and
+     *  `opaque` as affects-everything — the summary's own soundness contract. */
     private fun affects(k: CommitKind, rule: RuleDecl): Boolean {
         val base = model.baseOfExpr(rule.condition) ?: return false
         // a transient act's refinements are evaluated exactly once, at its
@@ -707,13 +1116,24 @@ class Validator(private val model: Model) {
         if (base in model.transients)
             return k is CommitKind.Creates && k.shape == base
         val cond = conditionSummary(rule)
+        if (cond.opaque) return true
         return when (k) {
             is CommitKind.Creates ->
-                k.shape == base || k.shape in cond.existsShapes
+                k.shape == base || k.shape in consultedShapes(rule)
             is CommitKind.Assigns ->
-                (k.shape to k.field) in cond.fields
+                (k.shape to k.field) in cond.fields ||
+                    (k.shape to k.field) in cond.collFields ||
+                    cond.collFields.any { it.first == k.shape && it.second in updateTimestamps(k.shape) }
         }
     }
+
+    /** Base shapes whose instance sets the rule's condition consults. */
+    private fun consultedShapes(rule: RuleDecl): Set<String> = consultedCache.getOrPut(rule.name) {
+        val cond = conditionSummary(rule)
+        (cond.existsShapes + cond.collShapes).mapNotNull { model.baseOf(it) }.toSet()
+    }
+
+    private val consultedCache = mutableMapOf<String, Set<String>>()
 
     private fun checkReachability(rule: RuleDecl) {
         val schedules = rule.triggers.filter { it != "commit" }
@@ -1061,41 +1481,101 @@ class Validator(private val model: Model) {
 
     // ── V15 (third leg): transition interference ─────────────────────────────
     //
-    // Two unordered siblings each write a different input of one refinement's
-    // predicate. Whether the mid-transaction membership history has a
+    // Two unordered siblings can each flip one refinement's membership — by
+    // assigning a field its predicate reads, or by creating an instance of a
+    // shape it consults. Whether the mid-transaction membership history has a
     // transition at all — does the instance pass through the refinement
-    // between the two writes? — then depends on which sibling fired first,
-    // and any rule watching the refinement sees different histories under
-    // different orders (checks.md V15; OQ16's value-dependent interference
-    // case, fail-closed: statically there is only "both inputs written by
-    // unordered siblings"). Unwatched refinements are skipped — with no
-    // observer, the mid-transaction history is not part of the outcome.
+    // between the two effects? — then depends on which sibling fired first
+    // (checks.md V15; OQ16's value-dependent interference case, fail-closed:
+    // statically there is only "both inputs affected by unordered siblings").
+    // An unobserved refinement is skipped — with no observer, the
+    // mid-transaction history is not part of the outcome. Observers are rules
+    // whose conditions depend on the refinement (transitively), and the
+    // refinement's own captures: a capture evaluates at the entry commit and
+    // persists, so it observes the history with no rule involved. Captures
+    // add a channel of their own (probe E): the captured VALUE reads fields —
+    // a sibling assigning one while another causes the entry makes the
+    // captured value depend on their order.
 
     private fun checkTransitionInterference() {
         val commitRules = model.rules.values.filter { it.preposition != "after" && firesOnCommit(it) }
         if (commitRules.size < 2) return
         val watchers = mutableMapOf<String, RuleDecl>()
         for (rule in model.rules.values) watchedRefinements(rule).forEach { watchers.putIfAbsent(it, rule) }
-        if (watchers.isEmpty()) return
-        val writesByRule = commitRules.associateWith { r ->
-            writes.filter { it.rule === r }.map { it.owner to it.member.name }.toSet()
-        }
-        fun fmt(fs: Set<Pair<String, String>>) = fs.joinToString(", ") { "${it.first}.${it.second}" }
-        for ((refName, watcher) in watchers) {
-            val inputs = model.predicateSummary(refName).fields
-            if (inputs.isEmpty()) continue
-            for (i in commitRules.indices) for (j in i + 1 until commitRules.size) {
+        fun fmt(tokens: Set<String>) = tokens.joinToString(", ")
+        for ((refName, r) in model.refinements) {
+            val captured = r.members.filterIsInstance<DerivedProp>().filter { it.captured }
+            val watcher = watchers[refName]
+            if (watcher == null && captured.isEmpty()) continue
+            val observer = watcher?.let { "rule '${it.name}' watches it" }
+                ?: "its captures record the entry"
+
+            val pr = model.predicateSummary(refName)
+            val base = model.baseOf(refName)
+            val polarities = refinementPolarities(refName).map
+
+            /** How this rule can flip membership in [refName]: token → sign
+             *  (+1 toward membership, -1 away, 0 both ways). Field writes are
+             *  value-dependent (0). A creation flips only through a consult a
+             *  fresh instance can satisfy, at that consult's polarity — and
+             *  creating the base shape itself is entry (+) unless the
+             *  predicate provably excludes fresh instances. */
+            fun flips(rule: RuleDecl): Map<String, Int> {
+                val (assigned, created) = ruleEffects(rule)
+                if (pr.opaque)
+                    return (assigned.map { "${it.first}.${it.second}" } +
+                        created.map { "creates '$it'" }).associateWith { 0 }
+                val fieldTokens = assigned.intersect(pr.fields + pr.collFields)
+                    .associate { "${it.first}.${it.second}" to 0 }
+                val createTokens = mutableMapOf<String, Int>()
+                for (s in created) {
+                    if (s == base && !freshCannotEnter(refName, created)) {
+                        createTokens["creates '$s'"] = +1
+                        continue
+                    }
+                    val signs = polarities.keys.filter { model.baseOf(it) == s }
+                        .filter { it in model.shapes || !freshCannotEnter(it, created) }
+                        .map { polarities.getValue(it) }
+                    if (signs.isEmpty()) continue
+                    createTokens["creates '$s'"] = signs.toSet().singleOrNull()?.takeIf { it != 0 } ?: 0
+                }
+                return fieldTokens + createTokens
+            }
+
+            val capturedReads = ReadSummary().also { s ->
+                captured.forEach { model.collectExpr(it.expr, refName, s) }
+            }
+
+            for (i in commitRules.indices) for (j in commitRules.indices) {
+                if (i == j) continue
                 val a = commitRules[i]
                 val b = commitRules[j]
-                if (provablyDisjoint(a, b) || !canShareCommit(a, b)) continue
-                val fa = writesByRule.getValue(a) intersect inputs
-                val fb = writesByRule.getValue(b) intersect inputs
-                if (fa.isEmpty() || fb.isEmpty() || (fa + fb).size < 2) continue
-                diags.add(Diagnostic("V15", "'${a.name}' writes ${fmt(fa)} and sibling '${b.name}' writes ${fmt(fb)} — " +
-                    "both inputs of '$refName', which rule '${watcher.name}' watches: whether the transaction " +
-                    "passes through '$refName' between the two writes depends on their unstated order; " +
-                    "state the intent — condition one rule on the other's outcome, or move both writes " +
-                    "into one rule (OQ16)"))
+                if (provablyDisjoint(a, b) || !canCoFire(a, b) || enterLeaveExclusive(a, b)) continue
+                val fa = flips(a)
+                val fb = flips(b)
+                // Both siblings can flip membership, and not provably in the
+                // same direction: whether the transaction passes through the
+                // refinement depends on their order. Same-direction effects
+                // are safe — the flip lands at whichever effect completes the
+                // predicate, in both orders (two prerequisites of one
+                // conjunction never race each other).
+                val signs = (fa.values + fb.values).toSet()
+                val sameDirection = signs.size == 1 && signs.single() != 0
+                if (i < j && fa.isNotEmpty() && fb.isNotEmpty() && (fa.keys + fb.keys).size >= 2 && !sameDirection) {
+                    diags.add(Diagnostic("V15", "'${a.name}' (${fmt(fa.keys)}) and sibling '${b.name}' (${fmt(fb.keys)}) " +
+                        "each affect membership in '$refName', and $observer: whether the transaction passes " +
+                        "through '$refName' between the two effects depends on their unstated order; " +
+                        "state the intent — condition one rule on the other's outcome, or move both effects " +
+                        "into one rule (OQ16)"))
+                }
+                // one sibling causes the entry, the other writes what the
+                // captured expressions read: the captured value depends on order
+                if (captured.isNotEmpty() && fa.isNotEmpty()) {
+                    for (what in readConflicts(b, capturedReads))
+                        diags.add(Diagnostic("V15", "'${a.name}' can cause entry into '$refName', whose captures " +
+                            "read $what, which sibling '${b.name}' writes — the captured value depends on " +
+                            "their unstated order; state the intent (OQ16)"))
+                }
             }
         }
     }

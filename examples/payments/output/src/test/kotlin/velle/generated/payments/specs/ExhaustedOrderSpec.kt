@@ -9,7 +9,7 @@ import velle.generated.payments.*
 /**
  * shape ExhaustedOrder = Order where count(FailedCharge where order == this) >= 3
  *
- * rule ReleaseStockOnExhaustion when (ExhaustedOrder where (exists StockReservation for this) and (not (exists (ReservationRelease where reservation.order == this)))) {
+ * rule ReleaseStockOnExhaustion when (ExhaustedOrder where (exists StockReservation for this) and (not (exists (ReservationRelease where reservation.order == this)))) after commit, Nightly {
  *     ReservationRelease from { reservation: (StockReservation for this), releasedOn: now }
  * }
  *
@@ -17,11 +17,12 @@ import velle.generated.payments.*
 class ExhaustedOrderSpec : SpecSupport() {
 
     @Test
-    fun `ReleaseStockOnExhaustion - a new ExhaustedOrder produces a ReservationRelease`() {
+    fun `ReleaseStockOnExhaustion - a new ExhaustedOrder produces a ReservationRelease after the commit`() {
         val beforeReservationRelease = count("ReservationRelease")
-        // given: one new subject entered 'ExhaustedOrder'
+        // given: one new subject entered 'ExhaustedOrder', and rule ReleaseStockOnExhaustion has fired after that transaction
         val order = givens.orderForReleaseStockOnExhaustion()
-        order.assertIsA("ExhaustedOrder", "the given must deliver a member of 'ExhaustedOrder'")
         assertEquals(beforeReservationRelease + 1, count("ReservationRelease"), "rule ReleaseStockOnExhaustion: one 'ReservationRelease' per firing")
+        sys.system.tick("Nightly")
+        assertEquals(beforeReservationRelease + 1, count("ReservationRelease"), "the guard makes re-evaluation harmless")
     }
 }

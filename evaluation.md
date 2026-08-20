@@ -70,7 +70,7 @@ process(C):
 
 Recursion terminates because the validator proved quiescence — the condition graph is a DAG or its cycles are broken by disarming guards (checks catalog, V16); v0 additionally enforces a cascade-depth backstop that errors the transaction if exceeded `[S3]`.
 
-Ordering within step 6 is **never observable in a valid spec**: the validator rejected any pair of sibling firings that could conflict (V1, V15). Where one firing's commit satisfies another rule's condition, ordering is causality — the recursion structure provides it.
+Ordering within step 6 is **never observable in a valid spec**: the validator rejected any pair of sibling firings that could conflict (V1, V15). The claim is audited and executable — every example world is rebuilt under a reversed firing order on every build and must fingerprint identically (`working-docs/audit-sibling-confluence.md`). Where one firing's commit satisfies another rule's condition, ordering is causality — the recursion structure provides it.
 
 ### Transient acts (`expose transient`)
 

@@ -1,0 +1,166 @@
+-- Loyalty: a climbing club with referrals, monthly dues, and gear purchases —
+-- the fifth Velle spec, written to put the prover's vocabulary on display in
+-- business terms. Every construct here that LOOKS like it could race or
+-- recurse forever is accepted because a stated fact about the data proves it
+-- safe: a `never` the compiler spends as a proof input (README §21), a
+-- predecessor recurrence whose ordering lives in a datum rather than in
+-- firing order (README §19), sibling rules whose effects provably push one
+-- way, and a condition-only read the commit semantics pin (evaluation.md,
+-- "Processing one commit").
+--
+-- Comment convention (as in payments.velle): plain comments tell the business
+-- story; `velle:` comments note the language machinery on show.
+
+-- ── Members and referrals ────────────────────────────────────────────────────
+
+-- Members join by referral. Nobody recruits themselves — the club says so
+-- once, as a fact about the data, and the compiler spends that fact twice
+-- below: it is what makes the referral chain provably finite (the
+-- foundingReferrer recurrence) and what proves the two promotion rules write
+-- two different people (the tier rules).
+expose shape Member {
+    name: text
+    referrer: one Member?
+    tier: text initially "basic"
+
+    -- Who brought this whole branch in: walk the referral chain to its end.
+    -- Self-reference one hop through a relationship (README §7) — legal
+    -- because the walk provably bottoms out, and the proof input is the
+    -- `never` below: no member's referrer can point back at them, so the
+    -- chain descends and the base case (`referrer is none`) is reached.
+    -- velle: a definition-graph cycle (foundingReferrer -> referrer ->
+    -- foundingReferrer) certified by a spendable `never` — checks.md V14,
+    -- the acyclicity certificate
+    foundingReferrer: one Member? =
+        if referrer is none then none
+        else if referrer.foundingReferrer is none then referrer
+        else referrer.foundingReferrer
+
+    -- The member's current on-time streak: a selector read off the dues
+    -- history (the recurrence below), never a stored counter.
+    streak: integer =
+        if exists DuesPayment for this then latest(DuesPayment for this by paidOn).streakAfter
+        else 0
+}
+
+never (Member where referrer == this)
+
+-- ── Monthly dues and the on-time streak ──────────────────────────────────────
+
+-- Dues arrive month by month. Whether a payment was on time is read off its
+-- own dates, and the streak — consecutive on-time payments — is DERIVED
+-- HISTORY, not a stored counter: each payment knows the streak as of itself,
+-- by asking its predecessor. The order comes from `paidOn`, a business datum,
+-- so a payment that arrives late (posted today, dated last month) slots into
+-- its true position and every later payment's streak re-derives to the truth.
+-- A stored streak counter updated per arrival would have folded the late
+-- payment last and kept the wrong answer (README §19, "Order-dependent folds
+-- at a tick: the predecessor recurrence").
+-- velle: the predecessor recurrence — a derived to-one `previous` whose
+-- selector strictly descends a datum fixed at creation (checks.md V14, the
+-- strict-descent certificate); `streakAfter` as readable history; the current
+-- value as a selector read
+expose shape DuesPayment {
+    member: one Member
+    coveredMonth: text
+    dueBy: Date
+    paidOn: Date initially today
+    onTime: boolean = if paidOn <= dueBy then true else false
+    previous: one DuesPayment? =
+        latest(DuesPayment where member == this.member and paidOn < this.paidOn by paidOn)
+    streakAfter: integer =
+        if not onTime then 0
+        else if previous is some then previous.streakAfter + 1
+        else 1
+}
+
+-- ── Gear purchases and tier promotions ───────────────────────────────────────
+
+-- A big purchase promotes the buyer to gold, and thanks the referrer with
+-- advocate status. Both rules fire from the same purchase and both write
+-- `tier` — legal only because they provably write two DIFFERENT members:
+-- the routes differ by the `referrer` hop, and the `never` above says the
+-- hop can't point home. The compiler spends the invariant; without it, this
+-- pair is the one-writer error.
+-- velle: the instance-aliasing discharge — two writers of one field whose
+-- target routes differ by a to-one self-hop, discharged by a spent `never`
+-- (checks.md V1/V15; OQ16's PromoteBuyer/PromoteReferrer case)
+expose shape Purchase {
+    member: one Member
+    amount: decimal
+}
+
+never (Purchase where amount <= 0)
+
+shape QualifiedPurchase = Purchase where amount >= 100
+
+rule PromoteBuyer when QualifiedPurchase {
+    member.tier = "gold"
+}
+
+rule PromoteReferrer when (QualifiedPurchase where member.referrer is some) {
+    member.referrer.tier = "advocate"
+}
+
+-- A gold member's purchases earn a thank-you note, each purchase thanked
+-- once. ThankVip's CONDITION reads the tier PromoteBuyer writes, and the two
+-- are siblings of one purchase commit — safe, because a commit's firing set
+-- is pinned before any sibling runs: the purchase that makes its buyer gold
+-- is not yet a gold member's purchase at its own commit; the promotion's
+-- commit is where membership flips, and rules react there, in order, as
+-- causality. Only a BODY read of a sibling's write would race (checks.md
+-- V15), and this body reads nothing the siblings touch.
+-- velle: a condition-only read of a sibling's write — accepted; the
+-- handled-once anchor (`not exists ThankYouNote for this`) keeps old
+-- purchases from re-firing when the member's tier flips later
+shape VipPurchase = Purchase where member.tier == "gold"
+
+shape ThankYouNote {
+    purchase: one Purchase
+}
+
+rule ThankVip when (VipPurchase where not exists ThankYouNote for this) {
+    ThankYouNote from { purchase: this }
+}
+
+-- ── Certification: waiver plus orientation, then a keycard ───────────────────
+
+-- Enrolling files the safety waiver and books the orientation in one act —
+-- two sibling rules, each producing one prerequisite of certification. The
+-- siblings are safe in ANY order because both effects push the same way:
+-- each is a prerequisite of the same conjunction, so certification lands at
+-- whichever effect completes it, in both orders — two prerequisites never
+-- race each other (checks.md V15, transition interference: opposite-direction
+-- effects are the hazard, same-direction effects are not).
+-- velle: same-direction sibling creations under a watched conjunctive
+-- refinement — accepted by the polarity analysis
+expose shape Enrollment {
+    member: one Member
+}
+
+shape SafetyWaiver {
+    member: one Member
+}
+
+shape OrientationRecord {
+    member: one Member
+}
+
+rule FileWaiver when Enrollment {
+    SafetyWaiver from { member: member }
+}
+
+rule BookOrientation when Enrollment {
+    OrientationRecord from { member: member }
+}
+
+shape CertifiedMember = Member where
+    exists SafetyWaiver for this and exists OrientationRecord for this
+
+shape Keycard {
+    member: one Member
+}
+
+rule IssueKeycard when (CertifiedMember where not exists Keycard for this) {
+    Keycard from { member: this }
+}

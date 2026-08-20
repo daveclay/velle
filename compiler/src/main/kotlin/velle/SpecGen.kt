@@ -460,8 +460,11 @@ object SpecGen {
             }
 
             val guarded = guardConjuncts(rule).isNotEmpty()
-            if (rule.preposition == "after" && guarded && condName != null && model.refinements[condName]?.expr is RefName &&
-                (model.refinements.getValue(condName).expr as RefName).where != null
+            // the membership assert is about the NAME: only a disarm that
+            // falsifies the named refinement's own conjuncts ends membership —
+            // a guard living in the rule's inline `where` leaves it intact
+            if (rule.preposition == "after" && guarded && condName != null &&
+                bodyDisarms(rule, conditionConjuncts(RefName(condName)))
             ) {
                 body.line(2, "$subject.assertIsNotA(\"$condName\", \"the disarm law: the firing left its trigger state\")")
             }

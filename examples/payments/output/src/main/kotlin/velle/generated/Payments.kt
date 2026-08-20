@@ -948,15 +948,23 @@ rule TimeOutStaleAttempt when StalePendingAttempt on QuarterHourly {
 }
 
 -- Three failed attempts exhaust the order; exhaustion releases the reserved
--- stock — the compensating action on the failure branch.
+-- stock — the compensating action on the failure branch. The release follows
+-- the exhausting commit as its own transaction (`after commit`, hourly-healed
+-- by the nightly backstop) rather than inside it: releasing flips the order
+-- out of ReadyToShip, and V15 showed that doing so as an in-transaction
+-- sibling can race a pinned address-change refusal — one order refuses the
+-- change, the other applies it at the flip and then refuses it too. As a
+-- boundary of its own, the release sees the refusal already on record.
 -- velle: a bare `(Shape for expr)` value read on a base shape, singular
--- because ReserveStock's guard proves one reservation per order
+-- because ReserveStock's guard proves one reservation per order; `after
+-- commit` chosen to make a sibling interference structurally impossible
 shape ExhaustedOrder = Order where count(FailedCharge where order == this) >= 3
 
 rule ReleaseStockOnExhaustion
     when (ExhaustedOrder where
           exists StockReservation for this and
-          not exists (ReservationRelease where reservation.order == this)) {
+          not exists (ReservationRelease where reservation.order == this))
+    after commit, Nightly {
     ReservationRelease from { reservation: (StockReservation for this), releasedOn: now }
 }
 

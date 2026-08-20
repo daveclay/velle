@@ -450,9 +450,24 @@ class VelleSystem(
         }
     }
 
+    /**
+     * Test-only ordering strategy for the choices evaluation.md leaves open:
+     * step 6's "in any order" [S3] and the after-commit queue's append order
+     * [S2] (FIFO of an order that was itself a step-6 choice). Production
+     * leaves it null — declaration order, one arbitrary valid choice. The
+     * sibling-confluence audit re-runs scenarios under different strategies
+     * and diffs outcomes: a difference on a validated spec is a soundness bug
+     * (evaluation.md: "Ordering within step 6 is never observable in a valid
+     * spec").
+     */
+    internal var firingOrder: ((List<Pair<RuleDecl, Long>>) -> List<Pair<RuleDecl, Long>>)? = null
+
+    private fun ordered(pending: List<Pair<RuleDecl, Long>>): List<Pair<RuleDecl, Long>> =
+        firingOrder?.invoke(pending) ?: pending
+
     private fun drainAfterQueue(t: Txn) {
         // [S2] synchronous, FIFO, each entry its own transaction
-        for ((rule, subject) in t.afterQueue) {
+        for ((rule, subject) in ordered(t.afterQueue)) {
             if (instance(subject) == null) continue
             if (!evaluator.memberOfRefExpr(subject, rule.condition)) continue
             val result = inTransaction { fire(rule, subject) }
@@ -709,7 +724,11 @@ class VelleSystem(
                 retractions.add(id to refName)
         }
 
-        // firings: entrants for `when R`, leavers for `when leaving R`
+        // firings: entrants for `when R`, leavers for `when leaving R` — the
+        // whole firing set is pinned from this commit's pre/post diff before
+        // any sibling runs (evaluation.md step 5), then executed in an order
+        // the spec must not observe (step 6, [S3])
+        val pending = mutableListOf<Pair<RuleDecl, Long>>()
         for (rule in model.rules.values) {
             if (!(rule.preposition == null || "commit" in rule.triggers)) continue
             val w = watcherByKey["rule:${rule.name}"] ?: continue
@@ -723,9 +742,10 @@ class VelleSystem(
             if (w.base in model.transients) subjects = subjects intersect createdIds.toSet()
             for (subject in subjects) {
                 if (rule.preposition == "after") t.afterQueue.add(rule to subject)
-                else fire(rule, subject)
+                else pending.add(rule to subject)
             }
         }
+        for ((rule, subject) in ordered(pending)) fire(rule, subject)
 
         // close of the commit: leaver captures retract (exit rules were their last readers)
         retractions.forEach { setCapture(it, null, t) }

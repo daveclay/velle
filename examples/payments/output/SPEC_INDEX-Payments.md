@@ -25,7 +25,7 @@ each case below is an executable test.
 
 ## ExhaustedOrderSpec.kt
 
-- ReleaseStockOnExhaustion - a new ExhaustedOrder produces a ReservationRelease
+- ReleaseStockOnExhaustion - a new ExhaustedOrder produces a ReservationRelease after the commit
 
 ## SettledOrderSpec.kt
 
