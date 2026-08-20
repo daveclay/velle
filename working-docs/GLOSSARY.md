@@ -38,6 +38,7 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **calibration** — the post-v0 work of running realistic specs to learn how coarse the fail-closed checks can stay before they reject too much (OQ16, which also carries the V14 certificate whitelist since OQ15 settled).
 - **one-writer** — every stored field has provably one writing rule per coincidence class (README §12; check V1).
 - **disarm proof** — showing a rule's effects falsify its own trigger condition, breaking a re-fire cycle (check V2).
+- **sibling firings / siblings** — two rule firings triggered by the same commit, where neither firing caused the other, so the runtime may run them in either order (`evaluation.md`, "Processing one commit" step 6). "Sibling" in these docs always means sibling rule firings, never a data relationship.
 - **confluence** — sibling firings commute: every firing order yields the same outcome (OQ16; check V15).
 - **quiescence** — a transaction terminates: eventually no rule's condition is newly matched (OQ16; check V16).
 - **discharge** — satisfy a derived proof obligation; standard proof-theory usage, throughout README §18–§21. "The disarm proof discharges" = the compiler completes the required proof (the body provably falsifies its trigger); a "dischargeable state" is a trigger state the rule's own effects provably exit; an "undischarged obligation" is a compile error.

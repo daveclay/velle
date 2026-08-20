@@ -438,4 +438,107 @@ class SiblingConfluenceAuditTest {
         assertEquals(ab, ba, "independent siblings must commute")
         assertEquals(emptyList(), Validator.validate(independent))
     }
+
+    // ── J. finding C1 — a compensating rule racing a pinned refusal ──────────
+    //
+    // The audit's one genuine order-dependence, found in
+    // `examples/payments/payments.velle` (rule ReleaseStockOnExhaustion vs
+    // rule RecordAddressRefusal) and fixed there by moving the release to
+    // `after commit, Nightly`. This probe distills that spec's mechanism into
+    // a standalone spec: a reservation arriving for an already-given-up order
+    // pins two rules at one commit — the release (the reservation should not
+    // stand) and the refusal (the order just became ready, so the pending
+    // address change is refused). Release-first, the order leaves ReadyOrder
+    // mid-transaction, the still-unhandled change enters ApplicableChange at
+    // the release's own commit, and ApplyChange fires — while the pinned
+    // refusal still lands: the change is applied AND refused. Refusal-first
+    // refuses only. The ratified fix runs the release as its own transaction
+    // after the commit; by then the refusal is on record, so the change can
+    // never re-enter ApplicableChange.
+
+    private fun releaseSpec(cadence: String) = """
+        expose shape Order {
+            address: text
+            givenUp: boolean = if exists GiveUp for this then true else false
+            reserved: boolean = if exists Reservation for this then true else false
+        }
+
+        expose shape GiveUp {
+            order: one Order
+        }
+
+        expose shape Reservation {
+            order: one Order
+        }
+
+        shape ReservationRelease {
+            reservation: one Reservation
+        }
+
+        shape ActiveReservation = Reservation where not exists ReservationRelease for this
+
+        shape ReadyOrder = Order where exists (ActiveReservation where order == this)
+
+        expose shape ChangeAddress {
+            order: one Order
+            newAddress: text
+        }
+
+        shape ChangeApplication {
+            change: one ChangeAddress
+        }
+
+        shape ChangeRefusal {
+            change: one ChangeAddress
+        }
+
+        shape UnhandledChange = ChangeAddress where
+            not exists ChangeApplication for this and not exists ChangeRefusal for this
+
+        shape TriagedChange = UnhandledChange where order.reserved
+
+        shape ApplicableChange = TriagedChange where not order is ReadyOrder
+        shape RefusedChange    = TriagedChange where order is ReadyOrder
+
+        rule ApplyChange when ApplicableChange {
+            order.address = newAddress
+            ChangeApplication from { change: this }
+        }
+
+        rule RecordRefusal when RefusedChange {
+            ChangeRefusal from { change: this }
+        }
+
+        rule ReleaseOnGiveUp when (ActiveReservation where order.givenUp)$cadence {
+            ReservationRelease from { reservation: this }
+        }
+    """.trimIndent()
+
+    /** The pre-fix spelling: the release fires inside the same transaction. */
+    private val releaseRace = releaseSpec("")
+
+    /** The ratified fix: the release follows the commit as its own transaction. */
+    private val releaseResolved = releaseSpec(" after commit, Nightly")
+
+    private val releaseScenario: (VelleSystem) -> Unit = { sys ->
+        val order = accepted(sys.commit("Order", mapOf("address" to "old")))
+        accepted(sys.commit("GiveUp", mapOf("order" to order)))
+        accepted(sys.commit("ChangeAddress", mapOf("order" to order, "newAddress" to "new")))
+        accepted(sys.commit("Reservation", mapOf("order" to order)))
+    }
+
+    @Test
+    fun `J - C1, an in-transaction release racing a pinned refusal diverges, and V15 rejects it`() {
+        val (ab, ba) = bothOrders(releaseRace, releaseScenario)
+        assertNotEquals(ab, ba, "channel J (finding C1) must be a real divergence")
+        assertTrue(validate(releaseRace).contains("V15"), "got: ${Validator.validate(releaseRace)}")
+    }
+
+    @Test
+    fun `J - C1 resolved, the release as its own after-commit transaction is confluent, and accepted`() {
+        val (ab, ba) = bothOrders(releaseResolved, releaseScenario)
+        assertEquals(ab, ba, "the ratified spelling must be firing-order independent")
+        assertEquals(emptyList(), Validator.validate(releaseResolved),
+            "the ratified spelling must validate clean")
+    }
 }
