@@ -16,7 +16,7 @@ class EnrollmentFlowTest {
     private val sys = EnrollmentSystem()
 
     private fun student(name: String = "Ada"): EnrollmentSystem.StudentView {
-        assertIs<CommitResult.Accepted>(sys.commitStudent(name, courses = emptyList()))
+        assertIs<CommitResult.Accepted>(sys.commitStudent(name, tags = emptyList(), courses = emptyList()))
         return sys.students().last()
     }
 

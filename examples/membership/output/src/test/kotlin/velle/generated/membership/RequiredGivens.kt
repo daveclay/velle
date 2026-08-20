@@ -14,20 +14,8 @@ import velle.generated.MembershipSystem
  */
 interface RequiredGivens {
 
-    /** Perform the commit(s) that make ONE new subject enter 'Member'; return the subject. */
-    fun member(): MembershipSystem.MemberView
-
-    /** Bring ONE subject into 'Member' without ticking 'Nightly'; return the subject. */
-    fun memberForRestoreService(): MembershipSystem.MemberView
-
-    /** Perform the commit(s) that make ONE new subject enter 'Visit'; return the subject. */
-    fun visit(): MembershipSystem.VisitView
-
-    /** Provide any committed 'Member'; return it. */
-    fun someMember(): MembershipSystem.MemberView
-
-    /** Perform the commit(s) that make ONE new subject enter 'UnappliedDeposit' (the rule under test fires after that transaction); return the trigger subject. */
-    fun unappliedDeposit(): MembershipSystem.DepositView
+    /** Commit ONE new 'SignUp' that enters 'SignUp' at its commit. The act is transient — nothing to return. */
+    fun signUp()
 
     /** Bring ONE subject into 'ActiveMember' without ticking 'Monthly'; return the subject. */
     fun memberForRenewMembership(): MembershipSystem.MemberView
@@ -50,6 +38,30 @@ interface RequiredGivens {
     /** Perform the commit(s) that make ONE new subject enter 'ChronicDelinquent'; return the subject. */
     fun memberForOpenAccountReview(): MembershipSystem.MemberView
 
+    /** Perform the commit(s) that make ONE new subject enter 'Member'; return the subject. */
+    fun member(): MembershipSystem.MemberView
+
+    /** Bring ONE subject into 'Member' without ticking 'Nightly'; return the subject. */
+    fun memberForRestoreService(): MembershipSystem.MemberView
+
+    /** Commit ONE new 'ChangeEmail' that enters 'ChangeEmail' at its commit. The act is transient — nothing to return. */
+    fun changeEmail()
+
+    /** Perform the commit(s) that make ONE new subject enter 'Visit'; return the subject. */
+    fun visit(): MembershipSystem.VisitView
+
+    /** Provide any committed 'Member'; return it. */
+    fun someMember(): MembershipSystem.MemberView
+
+    /** Commit ONE new 'MakeDeposit' that enters 'MakeDeposit' at its commit. The act is transient — nothing to return. */
+    fun makeDeposit()
+
+    /** Perform the commit(s) that make ONE new subject enter 'UnappliedDeposit' (the rule under test fires after that transaction); return the trigger subject. */
+    fun unappliedDeposit(): MembershipSystem.DepositView
+
+    /** Commit ONE new 'RaiseTicket' that enters 'RaiseTicket' at its commit. The act is transient — nothing to return. */
+    fun raiseTicket()
+
     /** Bring ONE subject into 'ClosedTicket'; return it. */
     fun closedTicket(): MembershipSystem.TicketView
 
@@ -58,4 +70,7 @@ interface RequiredGivens {
 
     /** Bring ONE subject into 'UrgentQueue' without ticking 'Daily'; return the subject. */
     fun ticketForEscalateUrgent(): MembershipSystem.TicketView
+
+    /** Commit ONE new 'CloseTicket' that enters 'CloseTicket' at its commit. The act is transient — nothing to return. */
+    fun closeTicket()
 }

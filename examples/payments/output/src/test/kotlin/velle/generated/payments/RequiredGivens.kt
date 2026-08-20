@@ -17,26 +17,23 @@ interface RequiredGivens {
     /** Perform the commit(s) that make ONE new subject enter 'CardUpdate'; return the subject. */
     fun cardUpdate(): PaymentsSystem.CardUpdateView
 
-    /** Perform the commit(s) that make ONE new subject enter 'Order'; return the subject. */
-    fun orderForReserveStock(): PaymentsSystem.OrderView
-
-    /** Provide any committed 'Customer'; return it. */
-    fun someCustomer(): PaymentsSystem.CustomerView
+    /** Commit ONE new 'PlaceOrder' that enters 'PlaceOrder' at its commit. The act is transient — nothing to return. */
+    fun placeOrder()
 
     /** Perform the commit(s) that make ONE new subject enter 'ChargeableOrder'; return the subject. */
     fun orderForRequestInitialCharge(): PaymentsSystem.OrderView
 
-    /** Bring ONE subject into 'StalePendingAttempt' without ticking 'QuarterHourly'; return the subject. */
-    fun stalePendingAttempt(): PaymentsSystem.ChargeAttemptView
-
-    /** Perform the commit(s) that make ONE new subject enter 'SuccessfulCharge'; return the subject. */
-    fun successfulCharge(): PaymentsSystem.ChargeAttemptView
-
     /** Perform the commit(s) that make ONE new subject enter 'RetryableOrder'; return the subject. */
     fun retryableOrder(): PaymentsSystem.OrderView
 
+    /** Bring ONE subject into 'StalePendingAttempt' without ticking 'QuarterHourly'; return the subject. */
+    fun stalePendingAttempt(): PaymentsSystem.ChargeAttemptView
+
     /** Perform the commit(s) that make ONE new subject enter 'ExhaustedOrder' (the rule under test fires after that transaction); return the trigger subject. */
     fun orderForReleaseStockOnExhaustion(): PaymentsSystem.OrderView
+
+    /** Perform the commit(s) that make ONE new subject enter 'SuccessfulCharge'; return the subject. */
+    fun successfulCharge(): PaymentsSystem.ChargeAttemptView
 
     /** Bring ONE subject into 'ReadyToShip' without ticking 'Nightly'; return the subject. */
     fun readyToShip(): PaymentsSystem.OrderView
@@ -53,12 +50,6 @@ interface RequiredGivens {
     /** Perform the commit that takes [order] out of 'SettledOrder'. */
     fun exitSettledOrder(order: PaymentsSystem.OrderView)
 
-    /** Perform the commit(s) that make ONE new subject enter 'ManualCharge'; return the subject. */
-    fun manualCharge(): PaymentsSystem.ManualChargeView
-
-    /** Perform the commit(s) that make ONE new subject enter 'ExtensionRequest'; return the subject. */
-    fun extensionRequest(): PaymentsSystem.ExtensionRequestView
-
     /** Bring ONE subject into 'OverdueOrder' without ticking 'Daily'; return the subject. */
     fun orderForRemindPayment(): PaymentsSystem.OrderView
 
@@ -68,6 +59,24 @@ interface RequiredGivens {
     /** Bring ONE subject into 'ClosableDunningFlag' without ticking 'Daily'; return the subject. */
     fun closableDunningFlag(): PaymentsSystem.DunningFlagView
 
+    /** Provide any committed 'Customer'; return it. */
+    fun someCustomer(): PaymentsSystem.CustomerView
+
+    /** Commit ONE new 'ProcessorVerdict' that enters 'ProcessorVerdict' at its commit. The act is transient — nothing to return. */
+    fun processorVerdict()
+
+    /** Perform the commit(s) that make ONE new subject enter 'Order'; return the subject. */
+    fun orderForReserveStock(): PaymentsSystem.OrderView
+
+    /** Commit ONE new 'IssueRefund' that enters 'IssueRefund' at its commit. The act is transient — nothing to return. */
+    fun issueRefund()
+
     /** Provide any committed 'Order'; return it. */
     fun someOrder(): PaymentsSystem.OrderView
+
+    /** Perform the commit(s) that make ONE new subject enter 'ManualCharge'; return the subject. */
+    fun manualCharge(): PaymentsSystem.ManualChargeView
+
+    /** Perform the commit(s) that make ONE new subject enter 'ExtensionRequest'; return the subject. */
+    fun extensionRequest(): PaymentsSystem.ExtensionRequestView
 }

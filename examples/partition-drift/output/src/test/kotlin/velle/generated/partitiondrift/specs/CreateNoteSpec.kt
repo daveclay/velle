@@ -7,7 +7,9 @@ import velle.generated.*
 import velle.generated.partitiondrift.*
 
 /**
- * shape LockedNote = Note where locked
+ * rule MaterializeNote when CreateNote {
+ *     Note from { title: title, body: body }
+ * }
  *
  * shape ApplicableBareEdit = BareEdit where not (note is LockedNote)
  *
@@ -47,7 +49,15 @@ import velle.generated.partitiondrift.*
  * }
  *
  */
-class LockedNoteSpec : SpecSupport() {
+class CreateNoteSpec : SpecSupport() {
+
+    @Test
+    fun `MaterializeNote - a new CreateNote produces a Note`() {
+        val beforeNote = count("Note")
+        // given: a 'CreateNote' committed entering 'CreateNote' — transient: the act is not kept
+        givens.createNote()
+        assertEquals(beforeNote + 1, count("Note"), "rule MaterializeNote: one 'Note' per firing")
+    }
 
     @Test
     fun `ApplyBareEdit - a new ApplicableBareEdit sets note body`() {

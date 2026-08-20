@@ -31,7 +31,7 @@ class Givens(private val sys: PaymentsSystem) : RequiredGivens {
         amount: BigDecimal = BigDecimal("100"),
         dueBy: LocalDate = LocalDate.of(2026, 2, 1),
     ): PaymentsSystem.OrderView {
-        sys.commitOrder(customer(withCard), amount, dueBy, "12 Loop Ave")
+        sys.commitPlaceOrder(customer(withCard), amount, dueBy, "12 Loop Ave")
         return sys.orders().last()
     }
 
@@ -41,7 +41,7 @@ class Givens(private val sys: PaymentsSystem) : RequiredGivens {
     }
 
     private fun respond(attempt: PaymentsSystem.ChargeAttemptView, outcome: String) {
-        sys.commitChargeResponse(attempt, outcome)
+        sys.commitProcessorVerdict(attempt, outcome)
     }
 
     override fun cardUpdate(): PaymentsSystem.CardUpdateView {
@@ -103,7 +103,7 @@ class Givens(private val sys: PaymentsSystem) : RequiredGivens {
     }
 
     override fun exitSettledOrder(order: PaymentsSystem.OrderView) {
-        sys.commitRefund(order, BigDecimal("40")) // the refund breaks settlement
+        sys.commitIssueRefund(order, BigDecimal("40")) // the refund breaks settlement
     }
 
     override fun manualCharge(): PaymentsSystem.ManualChargeView {
@@ -133,4 +133,16 @@ class Givens(private val sys: PaymentsSystem) : RequiredGivens {
     }
 
     override fun someOrder(): PaymentsSystem.OrderView = order(withCard = false)
+
+    override fun placeOrder() {
+        order(withCard = false)
+    }
+
+    override fun processorVerdict() {
+        respond(pendingAttempt(), "approved")
+    }
+
+    override fun issueRefund() {
+        sys.commitIssueRefund(settledOrder(), BigDecimal("40"))
+    }
 }

@@ -24,11 +24,10 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCustomer(name: String, email: String, largestPayment: BigDecimal? = null): CommitResult =
-        system.commit("Customer", buildMap {
+    fun commitSignUp(name: String, email: String): CommitResult =
+        system.commit("SignUp", buildMap {
             put("name", name)
             put("email", email)
-            largestPayment?.let { put("largestPayment", it) }
         })
 
     /** Queue key: [correctEmail.customer].
@@ -40,14 +39,13 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
             put("corrected", corrected)
         })
 
-    /** Queue key: [invoice.customer].
+    /** Queue key: [billCustomer.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitInvoice(customer: CustomerView, due: LocalDate, reference: String? = null): CommitResult =
-        system.commit("Invoice", buildMap {
+    fun commitBillCustomer(customer: CustomerView, due: LocalDate): CommitResult =
+        system.commit("BillCustomer", buildMap {
             put("customer", customer.id)
             put("due", due)
-            reference?.let { put("reference", it) }
         })
 
     /** Queue key: [lineItem.invoice].
@@ -61,11 +59,11 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
             put("quantity", quantity)
         })
 
-    /** Queue keys: [payment.invoice], [payment.invoice.customer].
+    /** Queue keys: [submitPayment.invoice], [submitPayment.invoice.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPayment(invoice: InvoiceView, amount: BigDecimal): CommitResult =
-        system.commit("Payment", buildMap {
+    fun commitSubmitPayment(invoice: InvoiceView, amount: BigDecimal): CommitResult =
+        system.commit("SubmitPayment", buildMap {
             put("invoice", invoice.id)
             put("amount", amount)
         })
@@ -313,14 +311,25 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
 -- ── Customers ────────────────────────────────────────────────────────────────
 
--- A customer signs up with a name and email. Support can fix a mistyped email
--- on their behalf — the correction is an act of its own, so there is always a
--- record that it happened and who asked for it.
-expose shape Customer {
+-- A customer signs up with a name and email. The sign-up is the input; the
+-- customer record is what the system keeps about it, with its own system-
+-- maintained fields — an exposed shape carries only committer fields (V21).
+-- Support can fix a mistyped email on their behalf — the correction is an act
+-- of its own, so there is always a record that it happened and who asked for it.
+expose transient shape SignUp {
+    name: text
+    email: text
+}
+
+shape Customer {
     name: text
     email: text
     signedUpOn: timestamp on create
     largestPayment: decimal initially 0
+}
+
+rule AdmitCustomer when SignUp {
+    Customer from { name: name, email: email }
 }
 
 expose shape CorrectEmail {
@@ -338,8 +347,14 @@ rule ApplyEmailCorrection when CorrectEmail {
 -- balance, and status are always current — read straight off the line items
 -- and payments on record, never kept by hand.
 -- velle: derived properties over inferred inverse collections; `initially
--- randomUUID` mints the outward-facing reference
-expose shape Invoice {
+-- randomUUID` mints the outward-facing reference at the record's creation —
+-- on the unexposed record, where no committer exists to supply it
+expose transient shape BillCustomer {
+    customer: one Customer
+    due: Date
+}
+
+shape Invoice {
     customer: one Customer
     due: Date
     reference: text initially randomUUID
@@ -347,6 +362,10 @@ expose shape Invoice {
     total: decimal = sum(lineItems, amount)
     balance: decimal = total - sum(payments, amount)
     status: text = if balance <= 0 then "paid" else if due < today then "overdue" else "open"
+}
+
+rule OpenInvoice when BillCustomer {
+    Invoice from { customer: customer, due: due }
 }
 
 expose shape LineItem {
@@ -365,14 +384,24 @@ never (LineItem where price < 0)
 
 -- ── Payments ─────────────────────────────────────────────────────────────────
 
--- Payments land against an invoice; zero and negative amounts are refused.
-expose shape Payment {
+-- Payments land against an invoice; zero and negative amounts are refused at
+-- the door, before anything is kept.
+expose transient shape SubmitPayment {
+    invoice: one Invoice
+    amount: decimal
+}
+
+never (SubmitPayment where amount <= 0)
+
+shape Payment {
     invoice: one Invoice
     amount: decimal
     receivedOn: timestamp on create
 }
 
-never (Payment where amount <= 0)
+rule RecordPayment when SubmitPayment {
+    Payment from { invoice: invoice, amount: amount }
+}
 
 -- We remember the largest single payment each customer has ever made.
 -- velle: a whitelisted fold (max): duplication- and order-insensitive, so no guard owed
@@ -505,7 +534,7 @@ rule NoteUnarchival when leaving ArchivedInvoice {
 fun main() {
     val sys = BillingSystem()
     println("Velle MockHarness — Billing")
-    println("Commits: commitCustomer(...), commitCorrectEmail(...), commitInvoice(...), commitLineItem(...), commitPayment(...), commitIssuance(...), commitChangeDueDate(...), commitArchiveRequest(...), commitUnarchiveRequest(...)")
+    println("Commits: commitSignUp(...), commitCorrectEmail(...), commitBillCustomer(...), commitLineItem(...), commitSubmitPayment(...), commitIssuance(...), commitChangeDueDate(...), commitArchiveRequest(...), commitUnarchiveRequest(...)")
     println("Ticks: tickHourly(), tickWeekly()")
     println("Edit this main to drive the system; state prints below.")
 

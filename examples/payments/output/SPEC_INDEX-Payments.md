@@ -7,32 +7,37 @@ each case below is an executable test.
 
 - ApplyCardUpdate - a new CardUpdate sets customer.card
 
-## OrderSpec.kt
+## PlaceOrderSpec.kt
 
-- ReserveStock - a new Order produces a StockReservation
-- never - a Order where amount at most 0 is refused
-- never - a Order with amount 1 is accepted
-
-## ChargeableOrderSpec.kt
-
+- AcceptOrder - a new PlaceOrder produces an Order
 - RequestInitialCharge - a new ChargeableOrder produces a ChargeAttempt
-- TimeOutStaleAttempt - at the QuarterHourly tick, a StalePendingAttempt produces an AttemptTimeout
-- SendReceipt - a new SuccessfulCharge produces a Receipt
-
-## RetryableOrderSpec.kt
-
 - RetryCharge - a new RetryableOrder produces a ChargeAttempt
-
-## ExhaustedOrderSpec.kt
-
+- TimeOutStaleAttempt - at the QuarterHourly tick, a StalePendingAttempt produces an AttemptTimeout
 - ReleaseStockOnExhaustion - a new ExhaustedOrder produces a ReservationRelease after the commit
-
-## SettledOrderSpec.kt
-
+- SendReceipt - a new SuccessfulCharge produces a Receipt
 - ShipOrder - at the Nightly tick, a ReadyToShip produces a Shipment
 - ApplyAddressChange - a new ApplicableAddressChange produces an AddressChangeApplication and sets order.shippingAddress
 - RecordAddressRefusal - a new RefusedAddressChange produces an AddressChangeRefusal
 - NoteSettlementReversal - an order that leaves SettledOrder produces a SettlementReversal
+- RemindPayment - at the Daily tick, an OverdueOrder produces a PaymentReminder
+- OpenDunningEpisode - a new OverdueOrder produces a DunningFlag
+- CloseDunningEpisode - at the Daily tick, a ClosableDunningFlag produces a DunningResolution
+- never - a PlaceOrder where amount at most 0 is refused
+- never - a PlaceOrder with amount 1 is accepted
+
+## ProcessorVerdictSpec.kt
+
+- RecordVerdict - a new ProcessorVerdict produces a ChargeResponse
+
+## OrderSpec.kt
+
+- ReserveStock - a new Order produces a StockReservation
+
+## IssueRefundSpec.kt
+
+- RecordRefund - a new IssueRefund produces a Refund
+- never - a IssueRefund where amount at most 0 is refused
+- never - a IssueRefund with amount 1 is accepted
 
 ## ManualChargeSpec.kt
 
@@ -41,20 +46,6 @@ each case below is an executable test.
 ## ExtensionRequestSpec.kt
 
 - GrantGracePeriod - a new ExtensionRequest produces a PaymentExtension
-
-## UnpaidOrderSpec.kt
-
-- RemindPayment - at the Daily tick, an OverdueOrder produces a PaymentReminder
-- OpenDunningEpisode - a new OverdueOrder produces a DunningFlag
-- CloseDunningEpisode - at the Daily tick, a ClosableDunningFlag produces a DunningResolution
-
-## ChargeResponseSpec.kt
-
-
-## RefundSpec.kt
-
-- never - a Refund where amount at most 0 is refused
-- never - a Refund with amount 1 is accepted
 
 ## Not yet generated
 

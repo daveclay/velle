@@ -37,12 +37,12 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     /** Queue key: [student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitStudent(name: String, courses: List<CourseView>, advisor: AdvisorView? = null, tags: List<String>? = null): CommitResult =
+    fun commitStudent(name: String, tags: List<String>, courses: List<CourseView>, advisor: AdvisorView? = null): CommitResult =
         system.commit("Student", buildMap {
             put("name", name)
+            put("tags", tags)
             put("courses", courses.map { it.id })
             advisor?.let { put("advisor", it.id) }
-            tags?.let { put("tags", it) }
         })
 
     /** Queue keys: [setEnrollment.student], [setEnrollment.student.advisor].
@@ -145,8 +145,8 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
 -- enrollment.velle — the collection constructs of README §6 exercised end-to-end:
 -- a declared m2m `many` (the owned edge set) with its inferred inverse, `many <scalar>`,
 -- reference-set act fields, whole-set replacement, `+`/`-` union and removal, fan-out
--- assignment through a one-to-many, `initially empty`, derived collection views
--- (the renamed inverse), and the boundary's duplicate refusal.
+-- assignment through a one-to-many, derived collection views (the renamed inverse),
+-- and the boundary's duplicate refusal.
 
 expose shape Advisor {
     name: text
@@ -162,7 +162,8 @@ expose shape Course {
 expose shape Student {
     name: text
     advisor: one Advisor?             -- declared side of a one-to-many (child pointer)
-    tags: many text initially empty   -- owned collection of values
+    tags: many text                   -- owned collection of values; the committer
+                                      -- supplies the set, possibly empty (§6)
     courses: many Course              -- declared side of the many-to-many: the edge set
 }
 -- inferred inverses: Course.students (from Student.courses, the m2m view) and

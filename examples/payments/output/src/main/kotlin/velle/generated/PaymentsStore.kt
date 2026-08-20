@@ -321,15 +321,6 @@ interface PaymentsStore {
     /** Serves rule OpenDunningEpisode — `OverdueOrder where not (exists OpenDunningFlag for this)`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun openDunningEpisodeCandidates(dueByBefore: LocalDate): List<OrderRow>
-    /** Serves never #1 — `Order where amount <= 0`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never1Candidates(): List<OrderRow>
-    /** Serves never #2 — `ChargeResponse where ((outcome != "approved") and (outcome != "declined")) and (outcome != "error")`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never2Candidates(): List<ChargeResponseRow>
-    /** Serves never #3 — `Refund where amount <= 0`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never3Candidates(): List<RefundRow>
 }
 
 /** The candidate questions as recognizable templates (QTemplate). */
@@ -353,9 +344,6 @@ class PaymentsStoreQuestions(model: Model) {
     val releaseStockOnExhaustionCandidates = QTemplate.of(model, "Order", model.rules.getValue("ReleaseStockOnExhaustion").condition)
     val remindPaymentCandidates = QTemplate.of(model, "Order", model.rules.getValue("RemindPayment").condition)
     val openDunningEpisodeCandidates = QTemplate.of(model, "Order", model.rules.getValue("OpenDunningEpisode").condition)
-    val never1Candidates = QTemplate.of(model, "Order", model.nevers[0].target)
-    val never2Candidates = QTemplate.of(model, "ChargeResponse", model.nevers[1].target)
-    val never3Candidates = QTemplate.of(model, "Refund", model.nevers[2].target)
 }
 
 /**
@@ -538,18 +526,6 @@ open class PaymentsStoreOverGeneric(
     override fun openDunningEpisodeCandidates(dueByBefore: LocalDate): List<OrderRow> =
         backend.fetchCandidates("Order", questions.openDunningEpisodeCandidates.instantiate(listOf(QConst.QDate(dueByBefore))))
             .map { it.toOrderRow() }
-
-    override fun never1Candidates(): List<OrderRow> =
-        backend.fetchCandidates("Order", questions.never1Candidates.instantiate(listOf()))
-            .map { it.toOrderRow() }
-
-    override fun never2Candidates(): List<ChargeResponseRow> =
-        backend.fetchCandidates("ChargeResponse", questions.never2Candidates.instantiate(listOf()))
-            .map { it.toChargeResponseRow() }
-
-    override fun never3Candidates(): List<RefundRow> =
-        backend.fetchCandidates("Refund", questions.never3Candidates.instantiate(listOf()))
-            .map { it.toRefundRow() }
 }
 
 /** The bridge the runtime speaks through: generic protocol in, typed store out. */
@@ -679,12 +655,6 @@ class PaymentsStoreResolver(
             questions.remindPaymentCandidates.match(filter)?.let { h -> return store.remindPaymentCandidates(h.date(0), h.date(1)).map { it.toRow() } }
         if (shape == "Order")
             questions.openDunningEpisodeCandidates.match(filter)?.let { h -> return store.openDunningEpisodeCandidates(h.date(0)).map { it.toRow() } }
-        if (shape == "Order")
-            questions.never1Candidates.match(filter)?.let { h -> return store.never1Candidates().map { it.toRow() } }
-        if (shape == "ChargeResponse")
-            questions.never2Candidates.match(filter)?.let { h -> return store.never2Candidates().map { it.toRow() } }
-        if (shape == "Refund")
-            questions.never3Candidates.match(filter)?.let { h -> return store.never3Candidates().map { it.toRow() } }
         return fetchAll(shape) // unrecognized filters fall back to the scan floor
     }
 

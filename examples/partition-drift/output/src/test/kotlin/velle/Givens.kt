@@ -5,8 +5,12 @@ import velle.generated.PartitionDriftSystem
 /** The human-owned scenarios the generated partition-drift specs demand. */
 class Givens(private val sys: PartitionDriftSystem) : RequiredGivens {
 
+    override fun createNote() {
+        sys.commitCreateNote("minutes", "v1")
+    }
+
     private fun note(): PartitionDriftSystem.NoteView {
-        sys.commitNote("minutes", "v1")
+        sys.commitCreateNote("minutes", "v1")
         return sys.notes().last()
     }
 

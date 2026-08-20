@@ -55,10 +55,10 @@ class GeneratedApiTest {
     @Test
     fun `the typed surface drives the payment cascade`() {
         val sys = BillingSystem()
-        assertIs<CommitResult.Accepted>(sys.commitCustomer("Ada", "a@x.com"))
+        assertIs<CommitResult.Accepted>(sys.commitSignUp("Ada", "a@x.com"))
         val ada = sys.customers().single()
 
-        assertIs<CommitResult.Accepted>(sys.commitInvoice(ada, LocalDate.of(2026, 2, 1)))
+        assertIs<CommitResult.Accepted>(sys.commitBillCustomer(ada, LocalDate.of(2026, 2, 1)))
         val invoice = sys.invoices().single()
         assertIs<CommitResult.Accepted>(
             sys.commitLineItem(invoice, "widgets", BigDecimal("100"), 2))
@@ -68,7 +68,7 @@ class GeneratedApiTest {
         assertEquals(2, invoice.lineItems.single().quantity)
         assertEquals("Ada", invoice.customer.name)
 
-        assertIs<CommitResult.Accepted>(sys.commitPayment(invoice, BigDecimal("200")))
+        assertIs<CommitResult.Accepted>(sys.commitSubmitPayment(invoice, BigDecimal("200")))
         with(sys) { assertTrue(invoice.isPaidInvoice()) }
         assertEquals("paid", invoice.status)
         assertEquals(1, sys.receipts().size)
@@ -80,9 +80,9 @@ class GeneratedApiTest {
     @Test
     fun `refusals surface through the typed commits`() {
         val sys = BillingSystem()
-        sys.commitCustomer("Ada", "a@x.com")
-        sys.commitInvoice(sys.customers().single(), LocalDate.of(2026, 2, 1))
-        val refused = sys.commitPayment(sys.invoices().single(), BigDecimal.ZERO)
+        sys.commitSignUp("Ada", "a@x.com")
+        sys.commitBillCustomer(sys.customers().single(), LocalDate.of(2026, 2, 1))
+        val refused = sys.commitSubmitPayment(sys.invoices().single(), BigDecimal.ZERO)
         assertIs<CommitResult.Refused>(refused)
         assertEquals(0, sys.payments().size)
     }
@@ -90,8 +90,8 @@ class GeneratedApiTest {
     @Test
     fun `refinement views expose captures`() {
         val sys = BillingSystem()
-        sys.commitCustomer("Ada", "a@x.com")
-        sys.commitInvoice(sys.customers().single(), LocalDate.of(2026, 2, 1))
+        sys.commitSignUp("Ada", "a@x.com")
+        sys.commitBillCustomer(sys.customers().single(), LocalDate.of(2026, 2, 1))
         val invoice = sys.invoices().single()
 
         sys.commitArchiveRequest(invoice)
@@ -108,8 +108,8 @@ class GeneratedApiTest {
     @Test
     fun `ticks drive the sweep through the typed surface`() {
         val sys = BillingSystem()
-        sys.commitCustomer("Ada", "a@x.com")
-        sys.commitInvoice(sys.customers().single(), LocalDate.of(2025, 12, 1))
+        sys.commitSignUp("Ada", "a@x.com")
+        sys.commitBillCustomer(sys.customers().single(), LocalDate.of(2025, 12, 1))
         sys.commitLineItem(sys.invoices().single(), "widgets", BigDecimal("50"), 1)
 
         with(sys) { assertTrue(invoices().single().isOverdueInvoice()) }

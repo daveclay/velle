@@ -21,13 +21,13 @@ class MembershipApiTest {
     fun `the ledger derives the current email`() {
         val sys = MembershipSystem()
         assertIs<CommitResult.Accepted>(sys.commitPlan("Standard", BigDecimal("20")))
-        assertIs<CommitResult.Accepted>(sys.commitMember("Ada", "Ada@Example.com", sys.plans().single()))
+        assertIs<CommitResult.Accepted>(sys.commitSignUp("Ada", "Ada@Example.com", sys.plans().single()))
         val ada = sys.members().single()
 
         assertEquals("ada@example.com", ada.email, "no changes: lowercased signup email")
         assertEquals(1, sys.welcomeNotes().size, "the compact-for creation fired on entry")
 
-        sys.commitEmailChange(ada, "New@Example.com")
+        sys.commitChangeEmail(ada, "New@Example.com")
         assertEquals("new@example.com", ada.email, "the latest ledger entry wins, lowercased")
     }
 
@@ -35,12 +35,12 @@ class MembershipApiTest {
     fun `optional narrowing and composed attention traits`() {
         val sys = MembershipSystem()
         sys.commitPlan("Standard", BigDecimal("20"))
-        sys.commitMember("Ada", "ada@example.com", sys.plans().single())
+        sys.commitSignUp("Ada", "ada@example.com", sys.plans().single())
         val ada = sys.members().single()
         sys.commitAgent("Grace", "grace@velle.example")
         val grace = sys.agents().single()
 
-        sys.commitTicket(ada, "playback stutters", LocalDate.of(2026, 2, 1), "high")
+        sys.commitRaiseTicket(ada, "playback stutters", LocalDate.of(2026, 2, 1), "high")
         val ticket = sys.tickets().single()
 
         assertNull(ticket.assigneeEmail, "?. short-circuits on the absent assignee")
@@ -65,19 +65,19 @@ class MembershipApiTest {
     fun `cross-collection classifications join and reach back`() {
         val sys = MembershipSystem()
         sys.commitPlan("Standard", BigDecimal("20"))
-        sys.commitMember("Ada", "ada@example.com", sys.plans().single())
+        sys.commitSignUp("Ada", "ada@example.com", sys.plans().single())
         val ada = sys.members().single()
 
         sys.tickMonthly() // renewal mints the charge with its generated reference
         val reference = sys.charges().single().reference
-        sys.commitTicket(ada, reference, LocalDate.of(2026, 3, 1), "low")
+        sys.commitRaiseTicket(ada, reference, LocalDate.of(2026, 3, 1), "low")
         assertTrue(
             sys.system.isMember(ada.id, "MemberWithDisputedCharge"),
             "sibling join: a ticket subject quoting a charge reference",
         )
 
         // an already-overdue urgent ticket gets escalated after its due date
-        sys.commitTicket(ada, "old issue", LocalDate.of(2025, 12, 1), "normal")
+        sys.commitRaiseTicket(ada, "old issue", LocalDate.of(2025, 12, 1), "normal")
         sys.tickDaily()
         assertTrue(
             sys.system.isMember(ada.id, "LateEscalatedMember"),
@@ -89,11 +89,11 @@ class MembershipApiTest {
     fun `closing captures the closer and the reopen notice reads it on the way out`() {
         val sys = MembershipSystem()
         sys.commitPlan("Standard", BigDecimal("20"))
-        sys.commitMember("Ada", "ada@example.com", sys.plans().single())
+        sys.commitSignUp("Ada", "ada@example.com", sys.plans().single())
         val ada = sys.members().single()
         sys.commitAgent("Grace", "grace@velle.example")
         val grace = sys.agents().single()
-        sys.commitTicket(ada, "billing question", LocalDate.of(2026, 3, 1), "normal")
+        sys.commitRaiseTicket(ada, "billing question", LocalDate.of(2026, 3, 1), "normal")
         val ticket = sys.tickets().single()
 
         sys.commitCloseTicket(ticket, grace)
@@ -110,10 +110,10 @@ class MembershipApiTest {
     fun `deposits and charges fold the balance from disjoint writers`() {
         val sys = MembershipSystem()
         sys.commitPlan("Standard", BigDecimal("20"))
-        sys.commitMember("Ada", "ada@example.com", sys.plans().single())
+        sys.commitSignUp("Ada", "ada@example.com", sys.plans().single())
         val ada = sys.members().single()
 
-        sys.commitDeposit(ada, BigDecimal("30"))
+        sys.commitMakeDeposit(ada, BigDecimal("30"))
         assertEquals(0, ada.balance.compareTo(BigDecimal("30")), "the deposit folded in after commit")
         assertTrue(sys.deposits().single().applied, "the flag witness disarmed the guard")
 

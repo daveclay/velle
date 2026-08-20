@@ -7,10 +7,14 @@ import velle.generated.*
 import velle.generated.membership.*
 
 /**
- * shape ClosedTicket = Ticket where (exists CloseTicket for this) and (not (exists ReopenTicket for this)) {
+ * rule FileTicket when RaiseTicket {
+ *     Ticket from { member: member, subject: subject, due: due, priority: priority, assignee: assignee }
+ * }
+ *
+ * shape ClosedTicket = Ticket where (exists TicketClosure for this) and (not (exists ReopenTicket for this)) {
  *     frozen
  *     captured closedOn: Date = today
- *     captured closedBy: one Agent = latest(CloseTicket where ticket == this by closedOn).closedBy
+ *     captured closedBy: one Agent = latest(TicketClosure where ticket == this by closedOn).closedBy
  * }
  *
  * rule NoticeReopen when leaving ClosedTicket {
@@ -29,8 +33,18 @@ import velle.generated.membership.*
  *     Escalation from { ticket: this, raisedOn: today }
  * }
  *
+ * never (RaiseTicket where ((priority != "low") and (priority != "normal")) and (priority != "high"))
+ *
  */
-class ClosedTicketSpec : SpecSupport() {
+class RaiseTicketSpec : SpecSupport() {
+
+    @Test
+    fun `FileTicket - a new RaiseTicket produces a Ticket`() {
+        val beforeTicket = count("Ticket")
+        // given: a 'RaiseTicket' committed entering 'RaiseTicket' — transient: the act is not kept
+        givens.raiseTicket()
+        assertEquals(beforeTicket + 1, count("Ticket"), "rule FileTicket: one 'Ticket' per firing")
+    }
 
     @Test
     fun `NoticeReopen - a ReopenTicket for a ClosedTicket produces a ReopenNotice`() {

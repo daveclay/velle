@@ -10,7 +10,7 @@ import velle.generated.EnrollmentSystem
 class Givens(private val sys: EnrollmentSystem) : RequiredGivens {
 
     private fun student(): EnrollmentSystem.StudentView {
-        sys.commitStudent("Ada", courses = emptyList())
+        sys.commitStudent("Ada", tags = emptyList(), courses = emptyList())
         return sys.students().last()
     }
 

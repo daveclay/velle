@@ -20,11 +20,10 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitNote(title: String, body: String, locked: Boolean? = null): CommitResult =
-        system.commit("Note", buildMap {
+    fun commitCreateNote(title: String, body: String): CommitResult =
+        system.commit("CreateNote", buildMap {
             put("title", title)
             put("body", body)
-            locked?.let { put("locked", it) }
         })
 
     /** Queue key: [lockNote.note].
@@ -265,10 +264,22 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
 
 -- ── A note that can be locked ────────────────────────────────────────────────
 
-expose shape Note {
+-- The note's `locked` flag is system-maintained (the lock/unlock acts below
+-- write it), so it lives on the unexposed record (V21); creating a note is
+-- its own input act.
+expose transient shape CreateNote {
+    title: text
+    body: text
+}
+
+shape Note {
     title: text
     body: text
     locked: boolean initially false
+}
+
+rule MaterializeNote when CreateNote {
+    Note from { title: title, body: body }
 }
 
 expose shape LockNote {
@@ -414,7 +425,7 @@ rule RefuseTransientEdit when RefusedTransientEdit {
 fun main() {
     val sys = PartitionDriftSystem()
     println("Velle MockHarness — PartitionDrift")
-    println("Commits: commitNote(...), commitLockNote(...), commitUnlockNote(...), commitRenameText(...), commitBareEdit(...), commitSafeEdit(...), commitTransientEdit(...)")
+    println("Commits: commitCreateNote(...), commitLockNote(...), commitUnlockNote(...), commitRenameText(...), commitBareEdit(...), commitSafeEdit(...), commitTransientEdit(...)")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>

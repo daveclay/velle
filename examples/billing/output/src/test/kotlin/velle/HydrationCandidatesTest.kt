@@ -66,7 +66,7 @@ class HydrationCandidatesTest {
     fun `a commit nothing watches scans no tables at all`() {
         val (billing, store) = connect()
         store.reset()
-        accept(billing.commitCustomer("Ada", "ada@x.com"))
+        accept(billing.commitSignUp("Ada", "ada@x.com"))
         // no watcher's condition and no never reads Customer data — the
         // relevance gate leaves every table untouched
         assertEquals(emptyList(), store.fetchAlls)
@@ -76,12 +76,14 @@ class HydrationCandidatesTest {
     @Test
     fun `the payment cascade never scans customers, and never checks arrive filtered`() {
         val (billing, store) = connect()
-        val cust = billing.customer(accept(billing.commitCustomer("Ada", "ada@x.com")))
-        val inv = billing.invoice(accept(billing.commitInvoice(cust, due = today().plusDays(30))))
+        accept(billing.commitSignUp("Ada", "ada@x.com"))
+        val cust = billing.customers().last()
+        accept(billing.commitBillCustomer(cust, due = today().plusDays(30)))
+        val inv = billing.invoices().last()
         store.reset()
 
         accept(billing.commitLineItem(inv, "Design", BigDecimal("1200.00"), 1))
-        accept(billing.commitPayment(inv, BigDecimal("1200.00")))
+        accept(billing.commitSubmitPayment(inv, BigDecimal("1200.00")))
 
         assertEquals("paid", billing.invoice(inv.id).status)
         assertEquals(1, sqlCount("Receipt"))
@@ -99,8 +101,10 @@ class HydrationCandidatesTest {
     @Test
     fun `the weekly tick prefilters invoices and reads guards keyed`() {
         val (billing, store) = connect()
-        val cust = billing.customer(accept(billing.commitCustomer("Ada", "ada@x.com")))
-        val overdue = billing.invoice(accept(billing.commitInvoice(cust, due = today().minusDays(10))))
+        accept(billing.commitSignUp("Ada", "ada@x.com"))
+        val cust = billing.customers().last()
+        accept(billing.commitBillCustomer(cust, due = today().minusDays(10)))
+        val overdue = billing.invoices().last()
         accept(billing.commitLineItem(overdue, "Old work", BigDecimal("99.00"), 1))
         store.reset()
 
@@ -122,8 +126,10 @@ class HydrationCandidatesTest {
     @Test
     fun `cross-process guard memory flows through the candidate query`() {
         val (first, _) = connect()
-        val cust = first.customer(accept(first.commitCustomer("Ada", "ada@x.com")))
-        val overdue = first.invoice(accept(first.commitInvoice(cust, due = today().minusDays(10))))
+        accept(first.commitSignUp("Ada", "ada@x.com"))
+        val cust = first.customers().last()
+        accept(first.commitBillCustomer(cust, due = today().minusDays(10)))
+        val overdue = first.invoices().last()
         accept(first.commitLineItem(overdue, "Old work", BigDecimal("99.00"), 1))
         first.tickWeekly()
         assertEquals(1, sqlCount("Reminder"))

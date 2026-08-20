@@ -50,10 +50,12 @@ class CapturePersistenceTest {
         // process one, Jan 1: archive the invoice — ArchivedInvoice entered,
         // `captured archivedOn: Date = today` fixed at the entry moment
         val first = system(Instant.parse("2026-01-01T09:00:00Z"))
-        val cust = first.customer(accept(first.commitCustomer("Ada", "ada@x.com")))
-        val invRes = assertIs<CommitResult.Accepted>(first.commitInvoice(cust, due = java.time.LocalDate.of(2026, 2, 1)))
-        val invKey = assertIs<Long>(invRes.storeKey, "store key expected on a persisted accept")
-        accept(first.commitArchiveRequest(first.invoice(invRes.id)))
+        accept(first.commitSignUp("Ada", "ada@x.com"))
+        val cust = first.customers().last()
+        accept(first.commitBillCustomer(cust, due = java.time.LocalDate.of(2026, 2, 1)))
+        val inv = first.invoices().last()
+        val invKey = assertIs<Long>(scalar("""SELECT id FROM "Invoice""""), "store key expected for the persisted invoice")
+        accept(first.commitArchiveRequest(inv))
 
         assertEquals("2026-01-01", scalar("""SELECT archivedOn FROM "capture_ArchivedInvoice" WHERE id = ?""", invKey))
 

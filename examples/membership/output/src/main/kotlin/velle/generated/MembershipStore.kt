@@ -136,8 +136,8 @@ data class TicketRow(
     val openedOn: Instant,
 )
 
-/** One stored CloseTicket row; references arrive as typed [Ref.Persisted]. */
-data class CloseTicketRow(
+/** One stored TicketClosure row; references arrive as typed [Ref.Persisted]. */
+data class TicketClosureRow(
     val key: StoreKey,
     val ticket: Ref.Persisted,
     val closedBy: Ref.Persisted,
@@ -194,7 +194,7 @@ interface MembershipStore {
     fun accountReview(key: StoreKey): AccountReviewRow?
     fun agent(key: StoreKey): AgentRow?
     fun ticket(key: StoreKey): TicketRow?
-    fun closeTicket(key: StoreKey): CloseTicketRow?
+    fun ticketClosure(key: StoreKey): TicketClosureRow?
     fun reopenTicket(key: StoreKey): ReopenTicketRow?
     fun reopenNotice(key: StoreKey): ReopenNoticeRow?
     fun escalation(key: StoreKey): EscalationRow?
@@ -215,7 +215,7 @@ interface MembershipStore {
     fun allAccountReviews(): List<AccountReviewRow>
     fun allAgents(): List<AgentRow>
     fun allTickets(): List<TicketRow>
-    fun allCloseTickets(): List<CloseTicketRow>
+    fun allTicketClosures(): List<TicketClosureRow>
     fun allReopenTickets(): List<ReopenTicketRow>
     fun allReopenNotices(): List<ReopenNoticeRow>
     fun allEscalations(): List<EscalationRow>
@@ -236,8 +236,8 @@ interface MembershipStore {
     fun accountReviewsByMember(target: Ref.Persisted): List<AccountReviewRow>
     fun ticketsByMember(target: Ref.Persisted): List<TicketRow>
     fun ticketsByAssignee(target: Ref.Persisted): List<TicketRow>
-    fun closeTicketsByTicket(target: Ref.Persisted): List<CloseTicketRow>
-    fun closeTicketsByClosedBy(target: Ref.Persisted): List<CloseTicketRow>
+    fun ticketClosuresByTicket(target: Ref.Persisted): List<TicketClosureRow>
+    fun ticketClosuresByClosedBy(target: Ref.Persisted): List<TicketClosureRow>
     fun reopenTicketsByTicket(target: Ref.Persisted): List<ReopenTicketRow>
     fun reopenNoticesByTicket(target: Ref.Persisted): List<ReopenNoticeRow>
     fun reopenNoticesByReassignTo(target: Ref.Persisted): List<ReopenNoticeRow>
@@ -298,12 +298,6 @@ interface MembershipStore {
     /** Serves never #2 — `Visit where minutes <= 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never2Candidates(): List<VisitRow>
-    /** Serves never #3 — `Deposit where amount <= 0`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never3Candidates(): List<DepositRow>
-    /** Serves never #4 — `Ticket where ((priority != "low") and (priority != "normal")) and (priority != "high")`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never4Candidates(): List<TicketRow>
 
     // ── capture memory: null when no current membership (README §13) ──
     fun closedTicketCapture(instance: Ref.Persisted): ClosedTicketCapture?
@@ -329,8 +323,6 @@ class MembershipStoreQuestions(model: Model) {
     val openAccountReviewCandidates = QTemplate.of(model, "Member", model.rules.getValue("OpenAccountReview").condition)
     val escalateUrgentCandidates = QTemplate.of(model, "Ticket", model.rules.getValue("EscalateUrgent").condition)
     val never2Candidates = QTemplate.of(model, "Visit", model.nevers[1].target)
-    val never3Candidates = QTemplate.of(model, "Deposit", model.nevers[2].target)
-    val never4Candidates = QTemplate.of(model, "Ticket", model.nevers[3].target)
 }
 
 /**
@@ -358,7 +350,7 @@ open class MembershipStoreOverGeneric(
     override fun accountReview(key: StoreKey): AccountReviewRow? = backend.fetchByKey("AccountReview", key)?.toAccountReviewRow()
     override fun agent(key: StoreKey): AgentRow? = backend.fetchByKey("Agent", key)?.toAgentRow()
     override fun ticket(key: StoreKey): TicketRow? = backend.fetchByKey("Ticket", key)?.toTicketRow()
-    override fun closeTicket(key: StoreKey): CloseTicketRow? = backend.fetchByKey("CloseTicket", key)?.toCloseTicketRow()
+    override fun ticketClosure(key: StoreKey): TicketClosureRow? = backend.fetchByKey("TicketClosure", key)?.toTicketClosureRow()
     override fun reopenTicket(key: StoreKey): ReopenTicketRow? = backend.fetchByKey("ReopenTicket", key)?.toReopenTicketRow()
     override fun reopenNotice(key: StoreKey): ReopenNoticeRow? = backend.fetchByKey("ReopenNotice", key)?.toReopenNoticeRow()
     override fun escalation(key: StoreKey): EscalationRow? = backend.fetchByKey("Escalation", key)?.toEscalationRow()
@@ -378,7 +370,7 @@ open class MembershipStoreOverGeneric(
     override fun allAccountReviews(): List<AccountReviewRow> = backend.fetchAll("AccountReview").map { it.toAccountReviewRow() }
     override fun allAgents(): List<AgentRow> = backend.fetchAll("Agent").map { it.toAgentRow() }
     override fun allTickets(): List<TicketRow> = backend.fetchAll("Ticket").map { it.toTicketRow() }
-    override fun allCloseTickets(): List<CloseTicketRow> = backend.fetchAll("CloseTicket").map { it.toCloseTicketRow() }
+    override fun allTicketClosures(): List<TicketClosureRow> = backend.fetchAll("TicketClosure").map { it.toTicketClosureRow() }
     override fun allReopenTickets(): List<ReopenTicketRow> = backend.fetchAll("ReopenTicket").map { it.toReopenTicketRow() }
     override fun allReopenNotices(): List<ReopenNoticeRow> = backend.fetchAll("ReopenNotice").map { it.toReopenNoticeRow() }
     override fun allEscalations(): List<EscalationRow> = backend.fetchAll("Escalation").map { it.toEscalationRow() }
@@ -413,10 +405,10 @@ open class MembershipStoreOverGeneric(
         backend.fetchReferencing("Ticket", "member", target).map { it.toTicketRow() }
     override fun ticketsByAssignee(target: Ref.Persisted): List<TicketRow> =
         backend.fetchReferencing("Ticket", "assignee", target).map { it.toTicketRow() }
-    override fun closeTicketsByTicket(target: Ref.Persisted): List<CloseTicketRow> =
-        backend.fetchReferencing("CloseTicket", "ticket", target).map { it.toCloseTicketRow() }
-    override fun closeTicketsByClosedBy(target: Ref.Persisted): List<CloseTicketRow> =
-        backend.fetchReferencing("CloseTicket", "closedBy", target).map { it.toCloseTicketRow() }
+    override fun ticketClosuresByTicket(target: Ref.Persisted): List<TicketClosureRow> =
+        backend.fetchReferencing("TicketClosure", "ticket", target).map { it.toTicketClosureRow() }
+    override fun ticketClosuresByClosedBy(target: Ref.Persisted): List<TicketClosureRow> =
+        backend.fetchReferencing("TicketClosure", "closedBy", target).map { it.toTicketClosureRow() }
     override fun reopenTicketsByTicket(target: Ref.Persisted): List<ReopenTicketRow> =
         backend.fetchReferencing("ReopenTicket", "ticket", target).map { it.toReopenTicketRow() }
     override fun reopenNoticesByTicket(target: Ref.Persisted): List<ReopenNoticeRow> =
@@ -498,14 +490,6 @@ open class MembershipStoreOverGeneric(
         backend.fetchCandidates("Visit", questions.never2Candidates.instantiate(listOf()))
             .map { it.toVisitRow() }
 
-    override fun never3Candidates(): List<DepositRow> =
-        backend.fetchCandidates("Deposit", questions.never3Candidates.instantiate(listOf()))
-            .map { it.toDepositRow() }
-
-    override fun never4Candidates(): List<TicketRow> =
-        backend.fetchCandidates("Ticket", questions.never4Candidates.instantiate(listOf()))
-            .map { it.toTicketRow() }
-
     override fun closedTicketCapture(instance: Ref.Persisted): ClosedTicketCapture? =
         backend.fetchCaptures(instance, "ClosedTicket")?.toClosedTicketCapture()
 }
@@ -533,7 +517,7 @@ class MembershipStoreResolver(
         "AccountReview" -> store.accountReview(key)?.toRow()
         "Agent" -> store.agent(key)?.toRow()
         "Ticket" -> store.ticket(key)?.toRow()
-        "CloseTicket" -> store.closeTicket(key)?.toRow()
+        "TicketClosure" -> store.ticketClosure(key)?.toRow()
         "ReopenTicket" -> store.reopenTicket(key)?.toRow()
         "ReopenNotice" -> store.reopenNotice(key)?.toRow()
         "Escalation" -> store.escalation(key)?.toRow()
@@ -556,7 +540,7 @@ class MembershipStoreResolver(
         "AccountReview" -> store.allAccountReviews().map { it.toRow() }
         "Agent" -> store.allAgents().map { it.toRow() }
         "Ticket" -> store.allTickets().map { it.toRow() }
-        "CloseTicket" -> store.allCloseTickets().map { it.toRow() }
+        "TicketClosure" -> store.allTicketClosures().map { it.toRow() }
         "ReopenTicket" -> store.allReopenTickets().map { it.toRow() }
         "ReopenNotice" -> store.allReopenNotices().map { it.toRow() }
         "Escalation" -> store.allEscalations().map { it.toRow() }
@@ -579,8 +563,8 @@ class MembershipStoreResolver(
         shape == "AccountReview" && field == "member" -> store.accountReviewsByMember(target).map { it.toRow() }
         shape == "Ticket" && field == "member" -> store.ticketsByMember(target).map { it.toRow() }
         shape == "Ticket" && field == "assignee" -> store.ticketsByAssignee(target).map { it.toRow() }
-        shape == "CloseTicket" && field == "ticket" -> store.closeTicketsByTicket(target).map { it.toRow() }
-        shape == "CloseTicket" && field == "closedBy" -> store.closeTicketsByClosedBy(target).map { it.toRow() }
+        shape == "TicketClosure" && field == "ticket" -> store.ticketClosuresByTicket(target).map { it.toRow() }
+        shape == "TicketClosure" && field == "closedBy" -> store.ticketClosuresByClosedBy(target).map { it.toRow() }
         shape == "ReopenTicket" && field == "ticket" -> store.reopenTicketsByTicket(target).map { it.toRow() }
         shape == "ReopenNotice" && field == "ticket" -> store.reopenNoticesByTicket(target).map { it.toRow() }
         shape == "ReopenNotice" && field == "reassignTo" -> store.reopenNoticesByReassignTo(target).map { it.toRow() }
@@ -625,10 +609,6 @@ class MembershipStoreResolver(
             questions.escalateUrgentCandidates.match(filter)?.let { h -> return store.escalateUrgentCandidates(h.date(0), h.date(1)).map { it.toRow() } }
         if (shape == "Visit")
             questions.never2Candidates.match(filter)?.let { h -> return store.never2Candidates().map { it.toRow() } }
-        if (shape == "Deposit")
-            questions.never3Candidates.match(filter)?.let { h -> return store.never3Candidates().map { it.toRow() } }
-        if (shape == "Ticket")
-            questions.never4Candidates.match(filter)?.let { h -> return store.never4Candidates().map { it.toRow() } }
         return fetchAll(shape) // unrecognized filters fall back to the scan floor
     }
 
@@ -844,14 +824,14 @@ fun TicketRow.toRow(): Row = Row("Ticket", key, buildMap {
     put("openedOn", openedOn)
 })
 
-fun Row.toCloseTicketRow(): CloseTicketRow = CloseTicketRow(
+fun Row.toTicketClosureRow(): TicketClosureRow = TicketClosureRow(
     key = key,
     ticket = fields["ticket"] as Ref.Persisted,
     closedBy = fields["closedBy"] as Ref.Persisted,
     closedOn = fields["closedOn"] as Instant,
 )
 
-fun CloseTicketRow.toRow(): Row = Row("CloseTicket", key, buildMap {
+fun TicketClosureRow.toRow(): Row = Row("TicketClosure", key, buildMap {
     put("ticket", ticket)
     put("closedBy", closedBy)
     put("closedOn", closedOn)

@@ -11,8 +11,6 @@ import velle.generated.payments.*
  *     StockReservation from { order: this, reservedOn: now }
  * }
  *
- * never (Order where amount <= 0)
- *
  */
 class OrderSpec : SpecSupport() {
 
@@ -25,23 +23,5 @@ class OrderSpec : SpecSupport() {
         assertEquals(beforeStockReservation + 1, count("StockReservation"), "rule ReserveStock: one 'StockReservation' per firing")
         val producedStockReservation = last("StockReservation")
         assertEquals(order.id, field(producedStockReservation, "order"), "StockReservation.order: this")
-    }
-
-    @Test
-    fun `never - a Order where amount at most 0 is refused`() {
-        // given: any committed 'Customer'
-        val customer = givens.someCustomer()
-        val before = count("Order")
-        val result = sys.system.commit("Order", mapOf("customer" to customer.id, "amount" to java.math.BigDecimal("-1"), "dueBy" to java.time.LocalDate.of(2026, 1, 15), "shippingAddress" to "sample"))
-        assertIs<CommitResult.Refused>(result)
-        assertEquals(before, count("Order"), "a refused act commits nothing")
-    }
-
-    @Test
-    fun `never - a Order with amount 1 is accepted`() {
-        // given: any committed 'Customer'
-        val customer = givens.someCustomer()
-        val result = sys.system.commit("Order", mapOf("customer" to customer.id, "amount" to java.math.BigDecimal("1"), "dueBy" to java.time.LocalDate.of(2026, 1, 15), "shippingAddress" to "sample"))
-        assertIs<CommitResult.Accepted>(result)
     }
 }

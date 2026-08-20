@@ -11,8 +11,6 @@ import velle.generated.billing.*
  *     invoice.customer.largestPayment = max(invoice.customer.largestPayment, amount)
  * }
  *
- * never (Payment where amount <= 0)
- *
  */
 class PaymentSpec : SpecSupport() {
 
@@ -21,23 +19,5 @@ class PaymentSpec : SpecSupport() {
         // given: one new subject entered 'Payment'
         val payment = givens.payment()
         payment.assertIsA("Payment", "the given must deliver a member of 'Payment'")
-    }
-
-    @Test
-    fun `never - a Payment where amount at most 0 is refused`() {
-        // given: any committed 'Invoice'
-        val invoice = givens.someInvoice()
-        val before = count("Payment")
-        val result = sys.system.commit("Payment", mapOf("invoice" to invoice.id, "amount" to java.math.BigDecimal("-1")))
-        assertIs<CommitResult.Refused>(result)
-        assertEquals(before, count("Payment"), "a refused act commits nothing")
-    }
-
-    @Test
-    fun `never - a Payment with amount 1 is accepted`() {
-        // given: any committed 'Invoice'
-        val invoice = givens.someInvoice()
-        val result = sys.system.commit("Payment", mapOf("invoice" to invoice.id, "amount" to java.math.BigDecimal("1")))
-        assertIs<CommitResult.Accepted>(result)
     }
 }

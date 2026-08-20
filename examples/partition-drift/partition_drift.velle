@@ -28,10 +28,22 @@
 
 -- ── A note that can be locked ────────────────────────────────────────────────
 
-expose shape Note {
+-- The note's `locked` flag is system-maintained (the lock/unlock acts below
+-- write it), so it lives on the unexposed record (V21); creating a note is
+-- its own input act.
+expose transient shape CreateNote {
+    title: text
+    body: text
+}
+
+shape Note {
     title: text
     body: text
     locked: boolean initially false
+}
+
+rule MaterializeNote when CreateNote {
+    Note from { title: title, body: body }
 }
 
 expose shape LockNote {

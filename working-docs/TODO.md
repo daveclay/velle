@@ -22,8 +22,8 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 - [ ] Build reverse-path candidate narrowing (per-watcher read paths walked backward from the mutation); bare-shape entrant diffs and aggregate pre-filters ride with it (§6).
 - [ ] Switch the generated `System` to real time by default, controllable clock as the test affordance (§1).
 - [ ] Implement V21 in the validator: `initially`/`timestamp` on an exposed shape is a compile error (OQ31, settled — `checks.md` V21).
-- [ ] Make generated commit functions require every stored field — drop the optional-parameter treatment of `initially`/optional fields in `Codegen.kt` `commitFn` and the boundary typecheck in `Runtime.kt` (OQ31, settled — README §22).
-- [ ] Migrate the example specs off `initially`/`timestamp` on exposed shapes via the request/record split (billing, membership, loyalty, enrollment, partition-drift, payments all carry them today).
+- [ ] Remove the now-dead `initially` optional-parameter branch from `Codegen.kt` `commitFn` once V21 lands (optional `?` fields stay optional parameters — ratified 2026-08-20; no example spec puts `initially` on an exposed shape any more).
+- [ ] Teach SpecGen to generate refinement specs over rule-materialized shapes — the request/record split dropped its specs for PaidInvoice, SettledOrder, Delinquent, ClosedTicket, LockedNote, and kin (givens still reach those states; only the generated coverage vanished).
 
 ## v0 loose ends
 

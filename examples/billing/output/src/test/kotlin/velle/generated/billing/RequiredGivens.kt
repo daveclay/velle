@@ -14,14 +14,14 @@ import velle.generated.BillingSystem
  */
 interface RequiredGivens {
 
+    /** Commit ONE new 'SignUp' that enters 'SignUp' at its commit. The act is transient — nothing to return. */
+    fun signUp()
+
     /** Perform the commit(s) that make ONE new subject enter 'CorrectEmail'; return the subject. */
     fun correctEmail(): BillingSystem.CorrectEmailView
 
-    /** Perform the commit(s) that make ONE new subject enter 'Payment'; return the subject. */
-    fun payment(): BillingSystem.PaymentView
-
-    /** Provide any committed 'Invoice'; return it. */
-    fun someInvoice(): BillingSystem.InvoiceView
+    /** Commit ONE new 'BillCustomer' that enters 'BillCustomer' at its commit. The act is transient — nothing to return. */
+    fun billCustomer()
 
     /** Perform the commit(s) that make ONE new subject enter 'PaidInvoice'; return the subject. */
     fun paidInvoice(): BillingSystem.InvoiceView
@@ -40,4 +40,13 @@ interface RequiredGivens {
 
     /** Bring ONE subject into 'ArchivedInvoice'; return it. */
     fun archivedInvoice(): BillingSystem.InvoiceView
+
+    /** Commit ONE new 'SubmitPayment' that enters 'SubmitPayment' at its commit. The act is transient — nothing to return. */
+    fun submitPayment()
+
+    /** Provide any committed 'Invoice'; return it. */
+    fun someInvoice(): BillingSystem.InvoiceView
+
+    /** Perform the commit(s) that make ONE new subject enter 'Payment'; return the subject. */
+    fun payment(): BillingSystem.PaymentView
 }

@@ -3,6 +3,11 @@
 Generated from the Velle spec (testgen.md). One file per business state;
 each case below is an executable test.
 
+## JoinSpec.kt
+
+- AdmitMember - a new Join produces a Member
+- IssueKeycard - a new CertifiedMember produces a Keycard
+
 ## QualifiedPurchaseSpec.kt
 
 - PromoteBuyer - a new QualifiedPurchase sets member.tier
@@ -17,10 +22,6 @@ each case below is an executable test.
 - FileWaiver - a new Enrollment produces a SafetyWaiver
 - BookOrientation - a new Enrollment produces an OrientationRecord
 
-## CertifiedMemberSpec.kt
-
-- IssueKeycard - a new CertifiedMember produces a Keycard
-
 ## MemberSpec.kt
 
 
@@ -31,4 +32,4 @@ each case below is an executable test.
 
 ## Not yet generated
 
-- never #1: non-literal bound
+- never #1: shape not exposed

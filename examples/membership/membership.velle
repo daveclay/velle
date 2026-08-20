@@ -20,13 +20,22 @@
 -- renewal charges draw down. The email on file is whatever they gave us most
 -- recently, normalized to lowercase.
 -- velle: optional self-relationship, `timestamp on update`, a derived property
--- reading the email-change ledger below
+-- reading the email-change ledger below. The sign-up is the input; the member
+-- record is what the service keeps, its bookkeeping fields system-maintained
+-- on the unexposed record (V21).
 expose shape Plan {
     name: text
     price: decimal
 }
 
-expose shape Member {
+expose transient shape SignUp {
+    name: text
+    signupEmail: text
+    plan: one Plan
+    referredBy: one Member?
+}
+
+shape Member {
     name: text
     signupEmail: text
     plan: one Plan
@@ -44,8 +53,13 @@ expose shape Member {
                   else lowercase(signupEmail)
 }
 
+rule AdmitMember when SignUp {
+    Member from { name: name, signupEmail: signupEmail, plan: plan, referredBy: referredBy }
+}
+
 -- Nobody gets referral credit for referring themselves.
--- velle: a named-refinement `never`; input-constrained, enforced at the boundary
+-- velle: a named-refinement `never` — a stated fact about the data, held at
+-- every transaction's close
 shape SelfReferral = Member where referredBy is some and referredBy == this
 never SelfReferral
 
@@ -66,11 +80,21 @@ rule SendWelcome when Member {
 -- addresses explain old notifications. Nothing is edited: every change is
 -- kept, and the current email is simply the newest one.
 -- velle: the ledger pattern — ordered by the ledger shape's sole creation
--- timestamp, derived `email` above selects the latest
-expose shape EmailChange {
+-- timestamp, derived `email` above selects the latest; the change request is
+-- the input, the ledger entry the durable trace
+expose transient shape ChangeEmail {
+    member: one Member
+    newEmail: text
+}
+
+shape EmailChange {
     member: one Member
     newEmail: text
     changedOn: timestamp on create
+}
+
+rule RecordEmailChange when ChangeEmail {
+    EmailChange from { member: member, newEmail: newEmail }
 }
 
 -- ── Visits ───────────────────────────────────────────────────────────────────
@@ -108,14 +132,24 @@ rule PingAnalytics when Visit tolerates loss {
 
 -- Members top up their balance with deposits. A deposit must land on the
 -- balance exactly once — promptly, and even if the system crashes mid-way.
--- velle: the flag-witness guard, `after commit` with an hourly backstop
-expose shape Deposit {
+-- velle: the flag-witness guard, `after commit` with an hourly backstop; the
+-- `applied` flag is system-maintained, so it lives on the unexposed record
+expose transient shape MakeDeposit {
+    member: one Member
+    amount: decimal
+}
+
+never (MakeDeposit where amount <= 0)
+
+shape Deposit {
     member: one Member
     amount: decimal
     applied: boolean initially false
 }
 
-never (Deposit where amount <= 0)
+rule RecordDeposit when MakeDeposit {
+    Deposit from { member: member, amount: amount }
+}
 
 shape UnappliedDeposit = Deposit where not applied
 
@@ -266,7 +300,17 @@ expose shape Agent {
     email: text
 }
 
-expose shape Ticket {
+expose transient shape RaiseTicket {
+    member: one Member
+    subject: text
+    due: Date
+    priority: text
+    assignee: one Agent?
+}
+
+never (RaiseTicket where priority != "low" and priority != "normal" and priority != "high")
+
+shape Ticket {
     member: one Member
     subject: text
     due: Date
@@ -277,7 +321,9 @@ expose shape Ticket {
     contact: text = if assignee is some then assignee.email else "support@velle.example"
 }
 
-never (Ticket where priority != "low" and priority != "normal" and priority != "high")
+rule FileTicket when RaiseTicket {
+    Ticket from { member: member, subject: subject, due: due, priority: priority, assignee: assignee }
+}
 
 -- ── Closing freezes the whole ticket ─────────────────────────────────────────
 
@@ -285,11 +331,21 @@ never (Ticket where priority != "low" and priority != "normal" and priority != "
 -- notifies whoever closed it — with a suggestion to take it back — since they
 -- had the context.
 -- velle: bare `frozen`, act-sourced captures, and the capture's last reader
--- at `when leaving`
-expose shape CloseTicket {
+-- at `when leaving`. The close request is the input; the closure is the
+-- durable trace, carrying the commit-stamped `closedOn`.
+expose transient shape CloseTicket {
+    ticket: one Ticket
+    closedBy: one Agent
+}
+
+shape TicketClosure {
     ticket: one Ticket
     closedBy: one Agent
     closedOn: timestamp on create
+}
+
+rule RecordTicketClosure when CloseTicket {
+    TicketClosure from { ticket: ticket, closedBy: closedBy }
 }
 
 expose shape ReopenTicket {
@@ -297,10 +353,10 @@ expose shape ReopenTicket {
 }
 
 shape ClosedTicket = Ticket where
-    exists CloseTicket for this and not exists ReopenTicket for this {
+    exists TicketClosure for this and not exists ReopenTicket for this {
     frozen
     captured closedOn: Date = today
-    captured closedBy: one Agent = latest(CloseTicket where ticket == this by closedOn).closedBy
+    captured closedBy: one Agent = latest(TicketClosure where ticket == this by closedOn).closedBy
 }
 
 shape ReopenNotice {

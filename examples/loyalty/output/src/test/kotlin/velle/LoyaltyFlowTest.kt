@@ -26,7 +26,7 @@ class LoyaltyFlowTest {
         name: String,
         referrer: LoyaltySystem.MemberView? = null,
     ): LoyaltySystem.MemberView {
-        assertIs<CommitResult.Accepted>(sys.commitMember(name, referrer = referrer))
+        assertIs<CommitResult.Accepted>(sys.commitJoin(name, referrer = referrer))
         return sys.members().last()
     }
 

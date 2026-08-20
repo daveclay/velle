@@ -32,7 +32,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
             put("price", price)
         })
 
-    /** Queue keys: [member.plan], [member.referredBy] — plus system-wide width below.
+    /** Queue keys: [signUp.plan], [signUp.referredBy] — plus system-wide width below.
      *  System-wide over Member — reads Member.balance with no path back to any key (unexamined (A5)).
      *  System-wide over DelinquencyFlag — consults OpenDelinquencyFlag through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over DelinquencyResolution — consults DelinquencyResolution through a path the derivation cannot key (unexamined (A5)).
@@ -41,24 +41,19 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
      *  System-wide over AuditEntry — creates AuditEntry referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitMember(name: String, signupEmail: String, plan: PlanView, referredBy: MemberView? = null, balance: BigDecimal? = null, lowestBalance: BigDecimal? = null, visitCount: Long? = null, suspended: Boolean? = null, engagementScore: Double? = null): CommitResult =
-        system.commit("Member", buildMap {
+    fun commitSignUp(name: String, signupEmail: String, plan: PlanView, referredBy: MemberView? = null): CommitResult =
+        system.commit("SignUp", buildMap {
             put("name", name)
             put("signupEmail", signupEmail)
             put("plan", plan.id)
             referredBy?.let { put("referredBy", it.id) }
-            balance?.let { put("balance", it) }
-            lowestBalance?.let { put("lowestBalance", it) }
-            visitCount?.let { put("visitCount", it) }
-            suspended?.let { put("suspended", it) }
-            engagementScore?.let { put("engagementScore", it) }
         })
 
-    /** Queue key: [emailChange.member].
+    /** Queue key: [changeEmail.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitEmailChange(member: MemberView, newEmail: String): CommitResult =
-        system.commit("EmailChange", buildMap {
+    fun commitChangeEmail(member: MemberView, newEmail: String): CommitResult =
+        system.commit("ChangeEmail", buildMap {
             put("member", member.id)
             put("newEmail", newEmail)
         })
@@ -72,7 +67,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
             put("minutes", minutes)
         })
 
-    /** Queue keys: [deposit.member], [deposit.member.plan], [deposit.member.referredBy] — plus system-wide width below.
+    /** Queue keys: [makeDeposit.member], [makeDeposit.member.plan], [makeDeposit.member.referredBy] — plus system-wide width below.
      *  System-wide over Member — reads Member.balance with no path back to any key (unexamined (A5)).
      *  System-wide over DelinquencyFlag — consults OpenDelinquencyFlag through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over DelinquencyResolution — consults DelinquencyResolution through a path the derivation cannot key (unexamined (A5)).
@@ -81,11 +76,10 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
      *  System-wide over AuditEntry — creates AuditEntry referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitDeposit(member: MemberView, amount: BigDecimal, applied: Boolean? = null): CommitResult =
-        system.commit("Deposit", buildMap {
+    fun commitMakeDeposit(member: MemberView, amount: BigDecimal): CommitResult =
+        system.commit("MakeDeposit", buildMap {
             put("member", member.id)
             put("amount", amount)
-            applied?.let { put("applied", it) }
         })
 
     /** Queue keys: none — this commit contends with no other work.
@@ -97,12 +91,12 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
             put("email", email)
         })
 
-    /** Queue keys: [ticket.assignee], [ticket.member] — plus system-wide width below.
+    /** Queue keys: [raiseTicket.assignee], [raiseTicket.member] — plus system-wide width below.
      *  System-wide over ReopenNotice — creates ReopenNotice referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitTicket(member: MemberView, subject: String, due: LocalDate, priority: String, assignee: AgentView? = null): CommitResult =
-        system.commit("Ticket", buildMap {
+    fun commitRaiseTicket(member: MemberView, subject: String, due: LocalDate, priority: String, assignee: AgentView? = null): CommitResult =
+        system.commit("RaiseTicket", buildMap {
             put("member", member.id)
             put("subject", subject)
             put("due", due)
@@ -166,8 +160,8 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     fun agent(id: Long) = AgentView(id)
     fun tickets(): List<TicketView> = system.instancesOf("Ticket").map { TicketView(it) }
     fun ticket(id: Long) = TicketView(id)
-    fun closeTickets(): List<CloseTicketView> = system.instancesOf("CloseTicket").map { CloseTicketView(it) }
-    fun closeTicket(id: Long) = CloseTicketView(id)
+    fun ticketClosures(): List<TicketClosureView> = system.instancesOf("TicketClosure").map { TicketClosureView(it) }
+    fun ticketClosure(id: Long) = TicketClosureView(id)
     fun reopenTickets(): List<ReopenTicketView> = system.instancesOf("ReopenTicket").map { ReopenTicketView(it) }
     fun reopenTicket(id: Long) = ReopenTicketView(id)
     fun reopenNotices(): List<ReopenNoticeView> = system.instancesOf("ReopenNotice").map { ReopenNoticeView(it) }
@@ -347,7 +341,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         val name: String get() = system.get(id, "name") as String
         val email: String get() = system.get(id, "email") as String
         val tickets: List<TicketView> get() = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) }
-        val closeTickets: List<CloseTicketView> get() = (system.get(id, "closeTickets") as List<*>).map { CloseTicketView(it as Long) }
+        val ticketClosures: List<TicketClosureView> get() = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) }
         val reopenNotices: List<ReopenNoticeView> get() = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) }
         override fun toString() = "Agent#$id"
         override fun equals(other: Any?) = other is AgentView && other.id == id
@@ -363,7 +357,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         val openedOn: Instant get() = system.get(id, "openedOn") as Instant
         val assigneeEmail: String? get() = system.get(id, "assigneeEmail") as String?
         val contact: String get() = system.get(id, "contact") as String
-        val closeTickets: List<CloseTicketView> get() = (system.get(id, "closeTickets") as List<*>).map { CloseTicketView(it as Long) }
+        val ticketClosures: List<TicketClosureView> get() = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) }
         val reopenTickets: List<ReopenTicketView> get() = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) }
         val reopenNotices: List<ReopenNoticeView> get() = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) }
         val escalations: List<EscalationView> get() = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) }
@@ -372,12 +366,12 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun hashCode() = id.hashCode()
     }
 
-    inner class CloseTicketView(override val id: Long) : View {
+    inner class TicketClosureView(override val id: Long) : View {
         val ticket: TicketView get() = TicketView(system.get(id, "ticket") as Long)
         val closedBy: AgentView get() = AgentView(system.get(id, "closedBy") as Long)
         val closedOn: Instant get() = system.get(id, "closedOn") as Instant
-        override fun toString() = "CloseTicket#$id"
-        override fun equals(other: Any?) = other is CloseTicketView && other.id == id
+        override fun toString() = "TicketClosure#$id"
+        override fun equals(other: Any?) = other is TicketClosureView && other.id == id
         override fun hashCode() = id.hashCode()
     }
 
@@ -516,13 +510,22 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
 -- renewal charges draw down. The email on file is whatever they gave us most
 -- recently, normalized to lowercase.
 -- velle: optional self-relationship, `timestamp on update`, a derived property
--- reading the email-change ledger below
+-- reading the email-change ledger below. The sign-up is the input; the member
+-- record is what the service keeps, its bookkeeping fields system-maintained
+-- on the unexposed record (V21).
 expose shape Plan {
     name: text
     price: decimal
 }
 
-expose shape Member {
+expose transient shape SignUp {
+    name: text
+    signupEmail: text
+    plan: one Plan
+    referredBy: one Member?
+}
+
+shape Member {
     name: text
     signupEmail: text
     plan: one Plan
@@ -540,8 +543,13 @@ expose shape Member {
                   else lowercase(signupEmail)
 }
 
+rule AdmitMember when SignUp {
+    Member from { name: name, signupEmail: signupEmail, plan: plan, referredBy: referredBy }
+}
+
 -- Nobody gets referral credit for referring themselves.
--- velle: a named-refinement `never`; input-constrained, enforced at the boundary
+-- velle: a named-refinement `never` — a stated fact about the data, held at
+-- every transaction's close
 shape SelfReferral = Member where referredBy is some and referredBy == this
 never SelfReferral
 
@@ -562,11 +570,21 @@ rule SendWelcome when Member {
 -- addresses explain old notifications. Nothing is edited: every change is
 -- kept, and the current email is simply the newest one.
 -- velle: the ledger pattern — ordered by the ledger shape's sole creation
--- timestamp, derived `email` above selects the latest
-expose shape EmailChange {
+-- timestamp, derived `email` above selects the latest; the change request is
+-- the input, the ledger entry the durable trace
+expose transient shape ChangeEmail {
+    member: one Member
+    newEmail: text
+}
+
+shape EmailChange {
     member: one Member
     newEmail: text
     changedOn: timestamp on create
+}
+
+rule RecordEmailChange when ChangeEmail {
+    EmailChange from { member: member, newEmail: newEmail }
 }
 
 -- ── Visits ───────────────────────────────────────────────────────────────────
@@ -604,14 +622,24 @@ rule PingAnalytics when Visit tolerates loss {
 
 -- Members top up their balance with deposits. A deposit must land on the
 -- balance exactly once — promptly, and even if the system crashes mid-way.
--- velle: the flag-witness guard, `after commit` with an hourly backstop
-expose shape Deposit {
+-- velle: the flag-witness guard, `after commit` with an hourly backstop; the
+-- `applied` flag is system-maintained, so it lives on the unexposed record
+expose transient shape MakeDeposit {
+    member: one Member
+    amount: decimal
+}
+
+never (MakeDeposit where amount <= 0)
+
+shape Deposit {
     member: one Member
     amount: decimal
     applied: boolean initially false
 }
 
-never (Deposit where amount <= 0)
+rule RecordDeposit when MakeDeposit {
+    Deposit from { member: member, amount: amount }
+}
 
 shape UnappliedDeposit = Deposit where not applied
 
@@ -762,7 +790,17 @@ expose shape Agent {
     email: text
 }
 
-expose shape Ticket {
+expose transient shape RaiseTicket {
+    member: one Member
+    subject: text
+    due: Date
+    priority: text
+    assignee: one Agent?
+}
+
+never (RaiseTicket where priority != "low" and priority != "normal" and priority != "high")
+
+shape Ticket {
     member: one Member
     subject: text
     due: Date
@@ -773,7 +811,9 @@ expose shape Ticket {
     contact: text = if assignee is some then assignee.email else "support@velle.example"
 }
 
-never (Ticket where priority != "low" and priority != "normal" and priority != "high")
+rule FileTicket when RaiseTicket {
+    Ticket from { member: member, subject: subject, due: due, priority: priority, assignee: assignee }
+}
 
 -- ── Closing freezes the whole ticket ─────────────────────────────────────────
 
@@ -781,11 +821,21 @@ never (Ticket where priority != "low" and priority != "normal" and priority != "
 -- notifies whoever closed it — with a suggestion to take it back — since they
 -- had the context.
 -- velle: bare `frozen`, act-sourced captures, and the capture's last reader
--- at `when leaving`
-expose shape CloseTicket {
+-- at `when leaving`. The close request is the input; the closure is the
+-- durable trace, carrying the commit-stamped `closedOn`.
+expose transient shape CloseTicket {
+    ticket: one Ticket
+    closedBy: one Agent
+}
+
+shape TicketClosure {
     ticket: one Ticket
     closedBy: one Agent
     closedOn: timestamp on create
+}
+
+rule RecordTicketClosure when CloseTicket {
+    TicketClosure from { ticket: ticket, closedBy: closedBy }
 }
 
 expose shape ReopenTicket {
@@ -793,10 +843,10 @@ expose shape ReopenTicket {
 }
 
 shape ClosedTicket = Ticket where
-    exists CloseTicket for this and not exists ReopenTicket for this {
+    exists TicketClosure for this and not exists ReopenTicket for this {
     frozen
     captured closedOn: Date = today
-    captured closedBy: one Agent = latest(CloseTicket where ticket == this by closedOn).closedBy
+    captured closedBy: one Agent = latest(TicketClosure where ticket == this by closedOn).closedBy
 }
 
 shape ReopenNotice {
@@ -875,7 +925,7 @@ shape LateEscalatedMember = Member where
 fun main() {
     val sys = MembershipSystem()
     println("Velle MockHarness — Membership")
-    println("Commits: commitPlan(...), commitMember(...), commitEmailChange(...), commitVisit(...), commitDeposit(...), commitAgent(...), commitTicket(...), commitCloseTicket(...), commitReopenTicket(...), commitAssignTicket(...)")
+    println("Commits: commitPlan(...), commitSignUp(...), commitChangeEmail(...), commitVisit(...), commitMakeDeposit(...), commitAgent(...), commitRaiseTicket(...), commitCloseTicket(...), commitReopenTicket(...), commitAssignTicket(...)")
     println("Ticks: tickHourly(), tickMonthly(), tickNightly(), tickDaily()")
     println("Edit this main to drive the system; state prints below.")
 
@@ -896,7 +946,7 @@ fun main() {
     println("AccountReview: " + sys.accountReviews().size)
     println("Agent: " + sys.agents().size)
     println("Ticket: " + sys.tickets().size)
-    println("CloseTicket: " + sys.closeTickets().size)
+    println("TicketClosure: " + sys.ticketClosures().size)
     println("ReopenTicket: " + sys.reopenTickets().size)
     println("ReopenNotice: " + sys.reopenNotices().size)
     println("Escalation: " + sys.escalations().size)

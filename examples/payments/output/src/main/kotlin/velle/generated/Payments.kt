@@ -150,7 +150,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
             put("card", card.id)
         })
 
-    /** Queue keys: [order.customer], [order.customer.card] — plus system-wide width below.
+    /** Queue keys: [placeOrder.customer], [placeOrder.customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
      *  System-wide over StockReservation — reads StockReservation.order with no path back to any key (unexamined (A5)).
      *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
@@ -177,15 +177,15 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitOrder(customer: CustomerView, amount: BigDecimal, dueBy: LocalDate, shippingAddress: String): CommitResult =
-        system.commit("Order", buildMap {
+    fun commitPlaceOrder(customer: CustomerView, amount: BigDecimal, dueBy: LocalDate, shippingAddress: String): CommitResult =
+        system.commit("PlaceOrder", buildMap {
             put("customer", customer.id)
             put("amount", amount)
             put("dueBy", dueBy)
             put("shippingAddress", shippingAddress)
         })
 
-    /** Queue keys: [chargeResponse.attempt] — plus system-wide width below.
+    /** Queue keys: [processorVerdict.attempt] — plus system-wide width below.
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over AttemptTimeout — consults AttemptTimeout through a path the derivation cannot key (unexamined (A5)).
@@ -231,8 +231,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeAttempt — consults ChargeAttempt through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitChargeResponse(attempt: ChargeAttemptView, outcome: String): CommitResult =
-        system.commit("ChargeResponse", buildMap {
+    fun commitProcessorVerdict(attempt: ChargeAttemptView, outcome: String): CommitResult =
+        system.commit("ProcessorVerdict", buildMap {
             put("attempt", attempt.id)
             put("outcome", outcome)
         })
@@ -246,7 +246,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
             put("newAddress", newAddress)
         })
 
-    /** Queue keys: [refund.order] — plus system-wide width below.
+    /** Queue keys: [issueRefund.order] — plus system-wide width below.
      *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over AddressChangeRefusal — consults AddressChangeRefusal through a path the derivation cannot key (unexamined (A5)).
      *  System-wide over ChangeShippingAddress — reads ChangeShippingAddress.order with no path back to any key (unexamined (A5)).
@@ -269,8 +269,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitRefund(order: OrderView, amount: BigDecimal): CommitResult =
-        system.commit("Refund", buildMap {
+    fun commitIssueRefund(order: OrderView, amount: BigDecimal): CommitResult =
+        system.commit("IssueRefund", buildMap {
             put("order", order.id)
             put("amount", amount)
         })
@@ -813,8 +813,19 @@ rule ApplyCardUpdate when CardUpdate {
 -- is never stored — it is read off the successful charges minus the refunds.
 -- Receipts go to the card's billing contact when that whole chain exists.
 -- velle: filtered `sum` with a named-refinement collection filter; a
--- multi-link `?.` chain; `first(...)` and `is empty` in a derived property
-expose shape Order {
+-- multi-link `?.` chain; `first(...)` and `is empty` in a derived property.
+-- Placing the order is the input; the order record carries the commit-stamped
+-- `placedOn` on the unexposed side (V21).
+expose transient shape PlaceOrder {
+    customer: one Customer
+    amount: decimal
+    dueBy: Date
+    shippingAddress: text
+}
+
+never (PlaceOrder where amount <= 0)
+
+shape Order {
     customer: one Customer
     amount: decimal
     dueBy: Date
@@ -826,7 +837,9 @@ expose shape Order {
                                   else first(chargeAttempts by requestedOn).requestedOn
 }
 
-never (Order where amount <= 0)
+rule AcceptOrder when PlaceOrder {
+    Order from { customer: customer, amount: amount, dueBy: dueBy, shippingAddress: shippingAddress }
+}
 
 -- An order is settled once payments net out to at least the asking amount; a
 -- settled order knows its overpayment.
@@ -860,14 +873,25 @@ shape ChargeAttempt {
 }
 
 -- The processor's verdict. v0 exposes shape creation only, so the verdict is
--- its own act referencing the attempt — never a write into it.
-expose shape ChargeResponse {
+-- its own act referencing the attempt — never a write into it. The verdict's
+-- arrival is the input; the response record carries the commit-stamped
+-- `respondedOn`.
+expose transient shape ProcessorVerdict {
+    attempt: one ChargeAttempt
+    outcome: text
+}
+
+never (ProcessorVerdict where outcome != "approved" and outcome != "declined" and outcome != "error")
+
+shape ChargeResponse {
     attempt: one ChargeAttempt
     outcome: text
     respondedOn: timestamp on create
 }
 
-never (ChargeResponse where outcome != "approved" and outcome != "declined" and outcome != "error")
+rule RecordVerdict when ProcessorVerdict {
+    ChargeResponse from { attempt: attempt, outcome: outcome }
+}
 
 -- A processor that stays silent past the window is timed out by the sweep
 -- below; the timeout is a fact, so a timed-out attempt stops counting as
@@ -1050,13 +1074,22 @@ rule RecordAddressRefusal when RefusedAddressChange {
 
 -- A refund is an act with consequences read off the numbers: it can push a
 -- settled order back out of settlement, and the reversal is worth noticing.
-expose shape Refund {
+expose transient shape IssueRefund {
+    order: one Order
+    amount: decimal
+}
+
+never (IssueRefund where amount <= 0)
+
+shape Refund {
     order: one Order
     amount: decimal
     refundedOn: timestamp on create
 }
 
-never (Refund where amount <= 0)
+rule RecordRefund when IssueRefund {
+    Refund from { order: order, amount: amount }
+}
 
 shape SettlementReversal {
     order: one Order
@@ -1157,7 +1190,7 @@ rule CloseDunningEpisode when ClosableDunningFlag on Daily {
 fun main() {
     val sys = PaymentsSystem()
     println("Velle MockHarness — Payments")
-    println("Commits: commitContact(...), commitCard(...), commitCustomer(...), commitCardUpdate(...), commitOrder(...), commitChargeResponse(...), commitChangeShippingAddress(...), commitRefund(...), commitManualCharge(...), commitExtensionRequest(...)")
+    println("Commits: commitContact(...), commitCard(...), commitCustomer(...), commitCardUpdate(...), commitPlaceOrder(...), commitProcessorVerdict(...), commitChangeShippingAddress(...), commitIssueRefund(...), commitManualCharge(...), commitExtensionRequest(...)")
     println("Ticks: tickDaily(), tickQuarterHourly(), tickNightly()")
     println("Edit this main to drive the system; state prints below.")
 

@@ -192,9 +192,6 @@ interface BillingStore {
     /** Serves never #2 — `LineItem where price < 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never2Candidates(): List<LineItemRow>
-    /** Serves never #3 — `Payment where amount <= 0`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never3Candidates(): List<PaymentRow>
 
     // ── capture memory: null when no current membership (README §13) ──
     fun archivedInvoiceCapture(instance: Ref.Persisted): ArchivedInvoiceCapture?
@@ -210,7 +207,6 @@ class BillingStoreQuestions(model: Model) {
     val remindOverdueCandidates = QTemplate.of(model, "Invoice", model.rules.getValue("RemindOverdue").condition)
     val never1Candidates = QTemplate.of(model, "LineItem", model.nevers[0].target)
     val never2Candidates = QTemplate.of(model, "LineItem", model.nevers[1].target)
-    val never3Candidates = QTemplate.of(model, "Payment", model.nevers[2].target)
 }
 
 /**
@@ -308,10 +304,6 @@ open class BillingStoreOverGeneric(
         backend.fetchCandidates("LineItem", questions.never2Candidates.instantiate(listOf()))
             .map { it.toLineItemRow() }
 
-    override fun never3Candidates(): List<PaymentRow> =
-        backend.fetchCandidates("Payment", questions.never3Candidates.instantiate(listOf()))
-            .map { it.toPaymentRow() }
-
     override fun archivedInvoiceCapture(instance: Ref.Persisted): ArchivedInvoiceCapture? =
         backend.fetchCaptures(instance, "ArchivedInvoice")?.toArchivedInvoiceCapture()
 }
@@ -390,8 +382,6 @@ class BillingStoreResolver(
             questions.never1Candidates.match(filter)?.let { h -> return store.never1Candidates().map { it.toRow() } }
         if (shape == "LineItem")
             questions.never2Candidates.match(filter)?.let { h -> return store.never2Candidates().map { it.toRow() } }
-        if (shape == "Payment")
-            questions.never3Candidates.match(filter)?.let { h -> return store.never3Candidates().map { it.toRow() } }
         return fetchAll(shape) // unrecognized filters fall back to the scan floor
     }
 

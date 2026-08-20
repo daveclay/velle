@@ -7,6 +7,10 @@ import velle.generated.*
 import velle.generated.loyalty.*
 
 /**
+ * rule AdmitMember when Join {
+ *     Member from { name: name, referrer: referrer }
+ * }
+ *
  * shape CertifiedMember = Member where (exists SafetyWaiver for this) and (exists OrientationRecord for this)
  *
  * rule IssueKeycard when (CertifiedMember where not (exists Keycard for this)) {
@@ -14,7 +18,15 @@ import velle.generated.loyalty.*
  * }
  *
  */
-class CertifiedMemberSpec : SpecSupport() {
+class JoinSpec : SpecSupport() {
+
+    @Test
+    fun `AdmitMember - a new Join produces a Member`() {
+        val beforeMember = count("Member")
+        // given: a 'Join' committed entering 'Join' — transient: the act is not kept
+        givens.join()
+        assertEquals(beforeMember + 1, count("Member"), "rule AdmitMember: one 'Member' per firing")
+    }
 
     @Test
     fun `IssueKeycard - a new CertifiedMember produces a Keycard`() {

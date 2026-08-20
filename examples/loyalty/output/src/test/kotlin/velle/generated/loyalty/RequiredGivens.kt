@@ -14,6 +14,12 @@ import velle.generated.LoyaltySystem
  */
 interface RequiredGivens {
 
+    /** Commit ONE new 'Join' that enters 'Join' at its commit. The act is transient — nothing to return. */
+    fun join()
+
+    /** Perform the commit(s) that make ONE new subject enter 'CertifiedMember'; return the subject. */
+    fun memberForIssueKeycard(): LoyaltySystem.MemberView
+
     /** Perform the commit(s) that make ONE new subject enter 'QualifiedPurchase'; return the subject. */
     fun qualifiedPurchase(): LoyaltySystem.PurchaseView
 
@@ -25,9 +31,6 @@ interface RequiredGivens {
 
     /** Perform the commit(s) that make ONE new subject enter 'Enrollment'; return the subject. */
     fun enrollment(): LoyaltySystem.EnrollmentView
-
-    /** Perform the commit(s) that make ONE new subject enter 'CertifiedMember'; return the subject. */
-    fun memberForIssueKeycard(): LoyaltySystem.MemberView
 
     /** Provide any committed 'Member'; return it. */
     fun someMember(): LoyaltySystem.MemberView

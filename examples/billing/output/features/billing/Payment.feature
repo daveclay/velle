@@ -6,16 +6,3 @@ Feature: Payment
   Scenario: A new Payment sets invoice.customer.largestPayment
     When a commit brings one new payment into "Payment"
     Then that payment is a "Payment"
-
-  # never (Payment where amount <= 0)
-  Scenario: A Payment where amount at most 0 is refused
-    Given any committed "Invoice"
-    When a "Payment" with amount -1 is committed
-    Then it is refused
-    And nothing has committed
-
-  # never (Payment where amount <= 0)
-  Scenario: A Payment with amount 1 is accepted
-    Given any committed "Invoice"
-    When a "Payment" with amount 1 is committed
-    Then it is accepted

@@ -13,12 +13,12 @@ import velle.generated.BillingSystem
 class Givens(private val sys: BillingSystem) : RequiredGivens {
 
     private fun customer(): BillingSystem.CustomerView {
-        sys.commitCustomer("Ada", "ada@example.com")
+        sys.commitSignUp("Ada", "ada@example.com")
         return sys.customers().last()
     }
 
     private fun invoice(due: LocalDate = LocalDate.of(2026, 2, 1)): BillingSystem.InvoiceView {
-        sys.commitInvoice(customer(), due)
+        sys.commitBillCustomer(customer(), due)
         return sys.invoices().last()
     }
 
@@ -31,13 +31,25 @@ class Givens(private val sys: BillingSystem) : RequiredGivens {
         return inv
     }
 
+    override fun signUp() {
+        sys.commitSignUp("Grace", "grace@example.com")
+    }
+
+    override fun billCustomer() {
+        sys.commitBillCustomer(customer(), LocalDate.of(2026, 2, 1))
+    }
+
+    override fun submitPayment() {
+        sys.commitSubmitPayment(invoiceWithBalance(BigDecimal("100")), BigDecimal("40"))
+    }
+
     override fun correctEmail(): BillingSystem.CorrectEmailView {
         sys.commitCorrectEmail(customer(), "corrected@example.com")
         return sys.correctEmails().last()
     }
 
     override fun payment(): BillingSystem.PaymentView {
-        sys.commitPayment(invoiceWithBalance(BigDecimal("100")), BigDecimal("40"))
+        sys.commitSubmitPayment(invoiceWithBalance(BigDecimal("100")), BigDecimal("40"))
         return sys.payments().last()
     }
 
@@ -45,7 +57,7 @@ class Givens(private val sys: BillingSystem) : RequiredGivens {
 
     override fun paidInvoice(): BillingSystem.InvoiceView {
         val inv = invoiceWithBalance(BigDecimal("100"))
-        sys.commitPayment(inv, BigDecimal("100")) // covering payment: newly paid
+        sys.commitSubmitPayment(inv, BigDecimal("100")) // covering payment: newly paid
         return inv
     }
 

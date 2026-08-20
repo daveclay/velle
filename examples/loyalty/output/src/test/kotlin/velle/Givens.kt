@@ -12,10 +12,13 @@ class Givens(private val sys: LoyaltySystem) : RequiredGivens {
 
     private fun member(
         referrer: LoyaltySystem.MemberView? = null,
-        tier: String? = null,
     ): LoyaltySystem.MemberView {
-        sys.commitMember("Member ${++n}", referrer = referrer, tier = tier)
+        sys.commitJoin("Member ${++n}", referrer = referrer)
         return sys.members().last()
+    }
+
+    override fun join() {
+        sys.commitJoin("Member ${++n}")
     }
 
     override fun qualifiedPurchase(): LoyaltySystem.PurchaseView {
@@ -30,10 +33,10 @@ class Givens(private val sys: LoyaltySystem) : RequiredGivens {
     }
 
     override fun purchaseForThankVip(): LoyaltySystem.PurchaseView {
-        // already gold BEFORE the purchase, so this purchase is the entrant —
-        // a qualifying purchase would enter at its own promotion's commit and
-        // carry a note of its own before the given returns
-        sys.commitPurchase(member(tier = "gold"), BigDecimal("20"))
+        // tier is system-maintained, so gold is earned, never given: the
+        // qualifying purchase is itself the subject — it enters VipPurchase at
+        // its own promotion's commit, and ThankVip thanks it there
+        sys.commitPurchase(member(), BigDecimal("150"))
         return sys.purchases().last()
     }
 

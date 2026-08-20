@@ -52,8 +52,19 @@ rule ApplyCardUpdate when CardUpdate {
 -- is never stored — it is read off the successful charges minus the refunds.
 -- Receipts go to the card's billing contact when that whole chain exists.
 -- velle: filtered `sum` with a named-refinement collection filter; a
--- multi-link `?.` chain; `first(...)` and `is empty` in a derived property
-expose shape Order {
+-- multi-link `?.` chain; `first(...)` and `is empty` in a derived property.
+-- Placing the order is the input; the order record carries the commit-stamped
+-- `placedOn` on the unexposed side (V21).
+expose transient shape PlaceOrder {
+    customer: one Customer
+    amount: decimal
+    dueBy: Date
+    shippingAddress: text
+}
+
+never (PlaceOrder where amount <= 0)
+
+shape Order {
     customer: one Customer
     amount: decimal
     dueBy: Date
@@ -65,7 +76,9 @@ expose shape Order {
                                   else first(chargeAttempts by requestedOn).requestedOn
 }
 
-never (Order where amount <= 0)
+rule AcceptOrder when PlaceOrder {
+    Order from { customer: customer, amount: amount, dueBy: dueBy, shippingAddress: shippingAddress }
+}
 
 -- An order is settled once payments net out to at least the asking amount; a
 -- settled order knows its overpayment.
@@ -99,14 +112,25 @@ shape ChargeAttempt {
 }
 
 -- The processor's verdict. v0 exposes shape creation only, so the verdict is
--- its own act referencing the attempt — never a write into it.
-expose shape ChargeResponse {
+-- its own act referencing the attempt — never a write into it. The verdict's
+-- arrival is the input; the response record carries the commit-stamped
+-- `respondedOn`.
+expose transient shape ProcessorVerdict {
+    attempt: one ChargeAttempt
+    outcome: text
+}
+
+never (ProcessorVerdict where outcome != "approved" and outcome != "declined" and outcome != "error")
+
+shape ChargeResponse {
     attempt: one ChargeAttempt
     outcome: text
     respondedOn: timestamp on create
 }
 
-never (ChargeResponse where outcome != "approved" and outcome != "declined" and outcome != "error")
+rule RecordVerdict when ProcessorVerdict {
+    ChargeResponse from { attempt: attempt, outcome: outcome }
+}
 
 -- A processor that stays silent past the window is timed out by the sweep
 -- below; the timeout is a fact, so a timed-out attempt stops counting as
@@ -289,13 +313,22 @@ rule RecordAddressRefusal when RefusedAddressChange {
 
 -- A refund is an act with consequences read off the numbers: it can push a
 -- settled order back out of settlement, and the reversal is worth noticing.
-expose shape Refund {
+expose transient shape IssueRefund {
+    order: one Order
+    amount: decimal
+}
+
+never (IssueRefund where amount <= 0)
+
+shape Refund {
     order: one Order
     amount: decimal
     refundedOn: timestamp on create
 }
 
-never (Refund where amount <= 0)
+rule RecordRefund when IssueRefund {
+    Refund from { order: order, amount: amount }
+}
 
 shape SettlementReversal {
     order: one Order

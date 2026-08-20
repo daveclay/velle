@@ -14,14 +14,8 @@ import velle.generated.PartitionDriftSystem
  */
 interface RequiredGivens {
 
-    /** Perform the commit(s) that make ONE new subject enter 'LockNote'; return the subject. */
-    fun lockNote(): PartitionDriftSystem.LockNoteView
-
-    /** Perform the commit(s) that make ONE new subject enter 'UnlockNote'; return the subject. */
-    fun unlockNote(): PartitionDriftSystem.UnlockNoteView
-
-    /** Perform the commit(s) that make ONE new subject enter 'RenameText'; return the subject. */
-    fun renameText(): PartitionDriftSystem.RenameTextView
+    /** Commit ONE new 'CreateNote' that enters 'CreateNote' at its commit. The act is transient — nothing to return. */
+    fun createNote()
 
     /** Perform the commit(s) that make ONE new subject enter 'ApplicableBareEdit'; return the subject. */
     fun applicableBareEdit(): PartitionDriftSystem.BareEditView
@@ -40,4 +34,13 @@ interface RequiredGivens {
 
     /** Commit ONE new 'TransientEdit' that enters 'RefusedTransientEdit' at its commit. The act is transient — nothing to return. */
     fun refusedTransientEdit()
+
+    /** Perform the commit(s) that make ONE new subject enter 'LockNote'; return the subject. */
+    fun lockNote(): PartitionDriftSystem.LockNoteView
+
+    /** Perform the commit(s) that make ONE new subject enter 'UnlockNote'; return the subject. */
+    fun unlockNote(): PartitionDriftSystem.UnlockNoteView
+
+    /** Perform the commit(s) that make ONE new subject enter 'RenameText'; return the subject. */
+    fun renameText(): PartitionDriftSystem.RenameTextView
 }

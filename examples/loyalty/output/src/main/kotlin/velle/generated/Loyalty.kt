@@ -17,25 +17,24 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     fun advanceDays(days: Long) = system.advanceDays(days)
     fun setTime(t: Instant) = system.setTime(t)
 
-    /** Queue keys: [member.referrer], [member.referrer.referrer].
+    /** Queue keys: [join.referrer], [join.referrer.referrer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitMember(name: String, referrer: MemberView? = null, tier: String? = null): CommitResult =
-        system.commit("Member", buildMap {
+    fun commitJoin(name: String, referrer: MemberView? = null): CommitResult =
+        system.commit("Join", buildMap {
             put("name", name)
             referrer?.let { put("referrer", it.id) }
-            tier?.let { put("tier", it) }
         })
 
     /** Queue key: [duesPayment.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitDuesPayment(member: MemberView, coveredMonth: String, dueBy: LocalDate, paidOn: LocalDate? = null): CommitResult =
+    fun commitDuesPayment(member: MemberView, coveredMonth: String, dueBy: LocalDate, paidOn: LocalDate): CommitResult =
         system.commit("DuesPayment", buildMap {
             put("member", member.id)
             put("coveredMonth", coveredMonth)
             put("dueBy", dueBy)
-            paidOn?.let { put("paidOn", it) }
+            put("paidOn", paidOn)
         })
 
     /** Queue keys: [purchase.member], [purchase.member.referrer], [purchase.member.referrer.referrer].
@@ -185,12 +184,19 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
 -- ── Members and referrals ────────────────────────────────────────────────────
 
--- Members join by referral. Nobody recruits themselves — the club says so
+-- Members join by referral: the join is the input, the member record is what
+-- the club keeps (its `tier` is system-maintained, so it lives on the
+-- unexposed record — V21). Nobody recruits themselves — the club says so
 -- once, as a fact about the data, and the compiler spends that fact twice
 -- below: it is what makes the referral chain provably finite (the
 -- foundingReferrer recurrence) and what proves the two promotion rules write
 -- two different people (the tier rules).
-expose shape Member {
+expose transient shape Join {
+    name: text
+    referrer: one Member?
+}
+
+shape Member {
     name: text
     referrer: one Member?
     tier: text initially "basic"
@@ -215,6 +221,10 @@ expose shape Member {
         else 0
 }
 
+rule AdmitMember when Join {
+    Member from { name: name, referrer: referrer }
+}
+
 never (Member where referrer == this)
 
 -- ── Monthly dues and the on-time streak ──────────────────────────────────────
@@ -236,7 +246,7 @@ expose shape DuesPayment {
     member: one Member
     coveredMonth: text
     dueBy: Date
-    paidOn: Date initially today
+    paidOn: Date
     onTime: boolean = if paidOn <= dueBy then true else false
     previous: one DuesPayment? =
         latest(DuesPayment where member == this.member and paidOn < this.paidOn by paidOn)
@@ -343,7 +353,7 @@ rule IssueKeycard when (CertifiedMember where not exists Keycard for this) {
 fun main() {
     val sys = LoyaltySystem()
     println("Velle MockHarness — Loyalty")
-    println("Commits: commitMember(...), commitDuesPayment(...), commitPurchase(...), commitEnrollment(...)")
+    println("Commits: commitJoin(...), commitDuesPayment(...), commitPurchase(...), commitEnrollment(...)")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>

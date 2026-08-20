@@ -13,12 +13,19 @@
 
 -- ── Members and referrals ────────────────────────────────────────────────────
 
--- Members join by referral. Nobody recruits themselves — the club says so
+-- Members join by referral: the join is the input, the member record is what
+-- the club keeps (its `tier` is system-maintained, so it lives on the
+-- unexposed record — V21). Nobody recruits themselves — the club says so
 -- once, as a fact about the data, and the compiler spends that fact twice
 -- below: it is what makes the referral chain provably finite (the
 -- foundingReferrer recurrence) and what proves the two promotion rules write
 -- two different people (the tier rules).
-expose shape Member {
+expose transient shape Join {
+    name: text
+    referrer: one Member?
+}
+
+shape Member {
     name: text
     referrer: one Member?
     tier: text initially "basic"
@@ -43,6 +50,10 @@ expose shape Member {
         else 0
 }
 
+rule AdmitMember when Join {
+    Member from { name: name, referrer: referrer }
+}
+
 never (Member where referrer == this)
 
 -- ── Monthly dues and the on-time streak ──────────────────────────────────────
@@ -64,7 +75,7 @@ expose shape DuesPayment {
     member: one Member
     coveredMonth: text
     dueBy: Date
-    paidOn: Date initially today
+    paidOn: Date
     onTime: boolean = if paidOn <= dueBy then true else false
     previous: one DuesPayment? =
         latest(DuesPayment where member == this.member and paidOn < this.paidOn by paidOn)

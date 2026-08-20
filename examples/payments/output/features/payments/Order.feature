@@ -7,16 +7,3 @@ Feature: Order
     When a commit brings one new order into "Order"
     Then one more "StockReservation" exists
     And that StockReservation's "order" is the order
-
-  # never (Order where amount <= 0)
-  Scenario: A Order where amount at most 0 is refused
-    Given any committed "Customer"
-    When a "Order" with amount -1 is committed
-    Then it is refused
-    And nothing has committed
-
-  # never (Order where amount <= 0)
-  Scenario: A Order with amount 1 is accepted
-    Given any committed "Customer"
-    When a "Order" with amount 1 is committed
-    Then it is accepted

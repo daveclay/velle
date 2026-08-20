@@ -18,7 +18,7 @@ class DriftDemonstrationTest {
     @Test
     fun `bare partition - applied edits drift into refusal and back`() {
         val sys = PartitionDriftSystem()
-        sys.commitNote("minutes", "v1")
+        sys.commitCreateNote("minutes", "v1")
         val note = sys.notes().single()
 
         // an editor's edit, applied while the note is open: correct so far
@@ -53,7 +53,7 @@ class DriftDemonstrationTest {
     @Test
     fun `handled-once partition - the same story behaves`() {
         val sys = PartitionDriftSystem()
-        sys.commitNote("minutes", "v1")
+        sys.commitCreateNote("minutes", "v1")
         val note = sys.notes().single()
 
         // the editor's edit, applied while open — and anchored by its evidence
@@ -92,7 +92,7 @@ class DriftDemonstrationTest {
     @Test
     fun `transient partition - the same story, with no acts left to drift`() {
         val sys = PartitionDriftSystem()
-        sys.commitNote("minutes", "v1")
+        sys.commitCreateNote("minutes", "v1")
         val note = sys.notes().single()
 
         // the editor's edit, applied while open — and then the act is gone:

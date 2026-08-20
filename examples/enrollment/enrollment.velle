@@ -1,8 +1,8 @@
 -- enrollment.velle — the collection constructs of README §6 exercised end-to-end:
 -- a declared m2m `many` (the owned edge set) with its inferred inverse, `many <scalar>`,
 -- reference-set act fields, whole-set replacement, `+`/`-` union and removal, fan-out
--- assignment through a one-to-many, `initially empty`, derived collection views
--- (the renamed inverse), and the boundary's duplicate refusal.
+-- assignment through a one-to-many, derived collection views (the renamed inverse),
+-- and the boundary's duplicate refusal.
 
 expose shape Advisor {
     name: text
@@ -18,7 +18,8 @@ expose shape Course {
 expose shape Student {
     name: text
     advisor: one Advisor?             -- declared side of a one-to-many (child pointer)
-    tags: many text initially empty   -- owned collection of values
+    tags: many text                   -- owned collection of values; the committer
+                                      -- supplies the set, possibly empty (§6)
     courses: many Course              -- declared side of the many-to-many: the edge set
 }
 -- inferred inverses: Course.students (from Student.courses, the m2m view) and

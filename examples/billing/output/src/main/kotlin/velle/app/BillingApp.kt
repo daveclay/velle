@@ -35,39 +35,40 @@ fun main() {
         println()
 
         // ── the scenario: ordinary application code calling generated commits ──
-        // Accepted.id is this session's handle (what the typed views wrap);
-        // Accepted.storeKey is the store-assigned row key — what the app's own
-        // SQL below keys on (identity is the store's, investigate_runtime.md §8)
-        val custRes = accept(billing.commitCustomer("Ada Lovelace", "ada@example.com"))
-        val cust = billing.customer(custRes.id)
-        val invRes = accept(billing.commitInvoice(cust, due = today().plusDays(30)))
-        val inv = billing.invoice(invRes.id)
+        // SignUp/BillCustomer/SubmitPayment are transient acts: the durable
+        // record is what their rules materialize, so the app reads it back
+        // through the typed accessors (identity is the store's,
+        // investigate_runtime.md §8)
+        accept(billing.commitSignUp("Ada Lovelace", "ada@example.com"))
+        val cust = billing.customers().last()
+        accept(billing.commitBillCustomer(cust, due = today().plusDays(30)))
+        val inv = billing.invoices().last()
         accept(billing.commitLineItem(inv, "Design work", BigDecimal("1200.00"), 1))
         accept(billing.commitLineItem(inv, "Hosting", BigDecimal("50.00"), 2))
         accept(billing.commitIssuance(inv))
-        println("committed customer #${custRes.storeKey}, invoice #${invRes.storeKey} with two line items, issued")
+        println("committed customer #${cust.id}, invoice #${inv.id} with two line items, issued")
 
         // typed reads: derived properties computed by demand-hydrating rows from SQLite
         println("   invoice.total=${inv.total}  balance=${inv.balance}  status=${inv.status}")
 
         // a `never` refusal: rejected at the boundary, nothing reaches the DB
-        val refused = billing.commitPayment(inv, BigDecimal.ZERO)
+        val refused = billing.commitSubmitPayment(inv, BigDecimal.ZERO)
         println("zero payment -> $refused")
 
         // payment in full: one envelope = Payment + largestPayment assign + Receipt,
         // landed as one SQLite transaction; EmailReceipt is `after commit` — its
         // ReceiptEmail is a second envelope, a second SQLite transaction
-        accept(billing.commitPayment(inv, BigDecimal("1300.00")))
+        accept(billing.commitSubmitPayment(inv, BigDecimal("1300.00")))
         println("paid in full -> status=${inv.status}")
         println()
 
         // an already-overdue invoice, then the weekly tick sweeps it — the tick's
         // candidate query brings back overdue invoices from SQLite
-        val overdueRes = accept(billing.commitInvoice(cust, due = today().minusDays(10)))
-        val overdue = billing.invoice(overdueRes.id)
+        accept(billing.commitBillCustomer(cust, due = today().minusDays(10)))
+        val overdue = billing.invoices().last()
         accept(billing.commitLineItem(overdue, "Old work", BigDecimal("99.00"), 1))
         billing.tickWeekly()
-        println("committed overdue invoice #${overdueRes.storeKey}, ran the weekly tick")
+        println("committed overdue invoice #${overdue.id}, ran the weekly tick")
         println()
 
         // ── the engineer's own SQL against their own DB ──

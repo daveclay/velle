@@ -81,16 +81,19 @@ class TypedStoreTest {
         billing.system.connect(BillingStoreResolver(store, billing.system.model), sqlite)
 
         // the full cascade rides the typed layer's generic defaults
-        val cust = billing.customer(accept(billing.commitCustomer("Ada", "ada@x.com")))
-        val inv = billing.invoice(accept(billing.commitInvoice(cust, due = LocalDate.of(2026, 2, 1))))
+        accept(billing.commitSignUp("Ada", "ada@x.com"))
+        val cust = billing.customers().last()
+        accept(billing.commitBillCustomer(cust, due = LocalDate.of(2026, 2, 1)))
+        val inv = billing.invoices().last()
         accept(billing.commitLineItem(inv, "Design", BigDecimal("1200.00"), 1))
-        accept(billing.commitPayment(inv, BigDecimal("1200.00")))
+        accept(billing.commitSubmitPayment(inv, BigDecimal("1200.00")))
         assertEquals("paid", billing.invoice(inv.id).status)
         assertEquals(1, billing.receipts().size)
         assertEquals(1, billing.receiptEmails().size)
 
         // the weekly sweep routes to the hand-tuned override, typed and folded
-        val overdue = billing.invoice(accept(billing.commitInvoice(cust, due = LocalDate.of(2025, 12, 20))))
+        accept(billing.commitBillCustomer(cust, due = LocalDate.of(2025, 12, 20)))
+        val overdue = billing.invoices().last()
         accept(billing.commitLineItem(overdue, "Old work", BigDecimal("99.00"), 1))
         billing.tickWeekly()
 
