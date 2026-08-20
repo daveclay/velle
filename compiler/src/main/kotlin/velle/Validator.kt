@@ -5,11 +5,11 @@ package velle
  *
  * Where checks.md calls for a prover (predicate disjointness, never-induction,
  * confluence), v0 proves the syntactic cases and fails closed on the rest —
- * calibration against realistic specs is OQ14–16's deferred work. Not yet
+ * calibration against realistic specs is OQ16's deferred work. Not yet
  * implemented (tracked in checks.md): V11 branch-sensitive narrowing, V12
  * at-most-one proofs beyond the refinement slice (base-shape to-one-inverse
- * proofs stay runtime-enforced), V14 descent certificates, and the A-series
- * beyond A4 (drift-exposed partitions — advisory, via Validator.advisories).
+ * proofs stay runtime-enforced), and the A-series beyond A4/A5
+ * (drift-exposed partitions and contention — advisory, via Validator.advisories).
  */
 class Validator(private val model: Model) {
 
@@ -43,7 +43,8 @@ class Validator(private val model: Model) {
         checkCaptures()           // V6
         checkFolds()              // V8
         checkNevers()             // V10
-        checkDerivedCycles()      // V14 (stratification; certificates TODO)
+        checkWellFoundedness()    // V14 (stratify, then certify)
+        checkTransitionInterference() // V15 (third leg)
         checkQuiescence()         // V16
         checkSingularProofs()     // V12 (refinement slice)
         checkTransients()         // V17 isolation, V18 totality
@@ -425,7 +426,7 @@ class Validator(private val model: Model) {
                     diags.add(Diagnostic("V1", "rule '${a.rule.name}' assigns ${field.first}.${field.second} twice in one body"))
                     continue
                 }
-                if (!provablyDisjoint(a.rule, b.rule))
+                if (!provablyDisjoint(a.rule, b.rule) && !aliasDischarged(a, b))
                     diags.add(Diagnostic("V1", "rules '${a.rule.name}' and '${b.rule.name}' both assign " +
                         "${field.first}.${field.second} and their triggers are not provably disjoint"))
             }
@@ -441,6 +442,68 @@ class Validator(private val model: Model) {
                     "outcome depends on unstated order; state the intent (OQ16)"))
             }
         }
+    }
+
+    // ── spent invariants: `never`s as proof inputs (README §21, checks.md V10) ─
+    //
+    // Only a fully-discharged invariant is spendable. In v0 that is exactly the
+    // input-constrained kind: no rule writes any field its predicate reads, so
+    // the invariant is enforced entirely at the boundary (compiled guardrails
+    // at every expose site) and holds in every settled state. A rule-maintained
+    // `never` would need the inductive proof v0 doesn't attempt (V10 fails
+    // closed on it), so it is never spent.
+
+    private val spendableNevers: List<NeverDecl> by lazy {
+        val written = writes.map { it.owner to it.member.name }.toSet()
+        model.nevers.filter { n ->
+            val s = model.summaryOfRefExpr(n.target)
+            !s.opaque && s.fields.none { it in written }
+        }
+    }
+
+    /**
+     * Does a spendable `never (S where hop == this)` hold — no instance of
+     * [shape]'s [hop] relationship ever points back at its own instance? The
+     * direct-case acyclicity certificate (checks.md V14) and the aliasing
+     * discharge (checks.md V1/V15). The predicate must be exactly the one
+     * equality over the whole base shape: a refinement scope or an extra
+     * conjunct narrows what the invariant forbids, which weakens it below
+     * what the proof needs — fail closed on those.
+     */
+    private fun neverForbidsSelfReference(shape: String, hop: String): Boolean =
+        spendableNevers.any { n ->
+            val t = n.target as? RefName ?: return@any false
+            if (t.name != shape) return@any false
+            val w = t.where as? Binary ?: return@any false
+            if (w.op != "==") return@any false
+            val self = PathExpr("this")
+            val h = PathExpr(hop)
+            (w.left == h && w.right == self) || (w.left == self && w.right == h)
+        }
+
+    /**
+     * The instance-aliasing discharge (OQ16's PromoteBuyer/PromoteReferrer
+     * case): two writers of one field whose target routes differ by exactly
+     * one to-one self-hop write provably different instances when a spendable
+     * `never` forbids the hop pointing back at its own instance — the routes
+     * share a prefix, so the two targets coincide exactly when `x.hop == x`,
+     * the forbidden configuration.
+     */
+    private fun aliasDischarged(a: Write, b: Write): Boolean {
+        if (a.fanOut || b.fanOut) return false
+        if (model.baseOfExpr(a.rule.condition) != model.baseOfExpr(b.rule.condition)) return false
+        fun route(w: Write): List<String> = listOf(w.target.root) + w.target.segs.dropLast(1).map { it.name }
+        val ra = route(a)
+        val rb = route(b)
+        val long = when {
+            ra.size + 1 == rb.size && rb.subList(0, ra.size) == ra -> rb
+            rb.size + 1 == ra.size && ra.subList(0, rb.size) == rb -> ra
+            else -> return false
+        }
+        val hop = long.last()
+        val m = model.membersOf(a.owner)[hop] ?: return false
+        if (!m.stored || m.type.instanceShape() != a.owner) return false
+        return neverForbidsSelfReference(a.owner, hop)
     }
 
     private fun RuleDecl.rule() = name
@@ -758,26 +821,73 @@ class Validator(private val model: Model) {
         }
     }
 
-    // ── V14: definition-graph stratification (certificates TODO) ─────────────
+    // ── V14: definition-graph well-foundedness (stratify, then certify) ──────
+    //
+    // Evaluation is definition-unfolding, and unfolding is the one thing that
+    // can fail to bottom out — so the definition graph (derived properties;
+    // refinements referencing refinements) must be well-founded. The acyclic
+    // part passes free (stratification). Each static cycle owes a certificate
+    // from the decidable whitelist (checks.md V14), and v0 certifies exactly
+    // one cycle form — a single derived property reading itself one hop
+    // through an optional to-one on its own shape — by either:
+    //   (a) strict descent: the hop is a derived selector over the same shape
+    //       whose predicate strictly compares a creation-fixed datum against
+    //       the subject's (`previous` = latest(... receivedOn < this.receivedOn
+    //       ...) — the streakAfter recurrence, README §19);
+    //   (b) spent acyclicity: the hop is a stored to-one and a spendable
+    //       `never (S where hop == this)` forbids it pointing back at its own
+    //       instance (`root` through `parent`, README §7, §21 — the direct case).
+    // Everything else — direct self-reads, deeper paths, multi-node cycles,
+    // refinement cycles — fails closed; fixpoint semantics are never attempted.
 
-    private fun checkDerivedCycles() {
-        val edges = mutableMapOf<Pair<String, String>, MutableSet<Pair<String, String>>>()
+    private sealed interface DefNode {
+        data class Prop(val shape: String, val prop: String) : DefNode
+        data class Ref(val name: String) : DefNode
+    }
+
+    private fun label(n: DefNode) = when (n) {
+        is DefNode.Prop -> "${n.shape}.${n.prop}"
+        is DefNode.Ref -> "shape '${n.name}'"
+    }
+
+    private fun checkWellFoundedness() {
+        val edges = mutableMapOf<DefNode, Set<DefNode>>()
+        val exprs = mutableMapOf<DefNode, Pair<String, DerivedProp>>()
         for ((shapeName, shape) in model.shapes) {
             for (m in shape.members.filterIsInstance<DerivedProp>()) {
                 val s = ReadSummary()
                 model.collectExpr(m.expr, shapeName, s)
-                val deps = s.derivedSeen.filterNot { it == shapeName to m.name }
-                edges[shapeName to m.name] = deps.toMutableSet()
+                val refs = mutableSetOf<String>()
+                exprMentions(m.expr, refs)
+                val node = DefNode.Prop(shapeName, m.name)
+                edges[node] = s.derivedSeen.map { DefNode.Prop(it.first, it.second) }.toSet() +
+                    refs.map { DefNode.Ref(it) }
+                exprs[node] = shapeName to m
             }
         }
-        val visiting = mutableSetOf<Pair<String, String>>()
-        val done = mutableSetOf<Pair<String, String>>()
-        fun dfs(node: Pair<String, String>, path: List<Pair<String, String>>) {
+        for ((name, r) in model.refinements) {
+            val s = model.summaryOfRefExpr(r.expr)
+            val refs = mutableSetOf<String>()
+            refExprMentions(r.expr, refs)
+            edges[DefNode.Ref(name)] = s.derivedSeen.map { DefNode.Prop(it.first, it.second) }.toSet() +
+                refs.map { DefNode.Ref(it) }
+        }
+        val visiting = mutableSetOf<DefNode>()
+        val done = mutableSetOf<DefNode>()
+        fun dfs(node: DefNode, path: List<DefNode>) {
             if (node in done) return
             if (node in visiting) {
-                diags.add(Diagnostic("V14", "derived-property cycle: " +
-                    (path.dropWhile { it != node } + node).joinToString(" -> ") { "${it.first}.${it.second}" } +
-                    " — v0 has no descent certificates yet; restructure or wait for the V14 certificate whitelist (OQ16 calibration)"))
+                val cycle = path.dropWhile { it != node } + node
+                val selfLoop = (cycle.toSet().singleOrNull() as? DefNode.Prop)
+                    ?.let { exprs[it] }
+                if (selfLoop != null && certifiedSelfRecursion(selfLoop.first, selfLoop.second)) return
+                diags.add(Diagnostic("V14", "definition cycle: " +
+                    cycle.joinToString(" -> ") { label(it) } +
+                    " — no certificate from the whitelist applies: v0 certifies a derived property " +
+                    "that reads itself one hop through an optional to-one on its own shape, where the hop " +
+                    "either strictly descends a creation-fixed datum (a derived `latest ... by` predecessor) " +
+                    "or is proven acyclic by a spendable `never (Shape where hop == this)`; " +
+                    "restructure, or supply a certificate (checks.md V14)"))
                 return
             }
             visiting.add(node)
@@ -786,6 +896,208 @@ class Validator(private val model: Model) {
             done.add(node)
         }
         edges.keys.forEach { dfs(it, emptyList()) }
+    }
+
+    /**
+     * Certify one self-recursive derived property: every occurrence of the
+     * property's own name in its formula must be exactly `<hop>.<prop>`, one
+     * hop through an optional to-one on the same shape (the optionality is
+     * the structural base case — the chain can end), and every such hop must
+     * carry a descent or acyclicity certificate. Any other occurrence — a
+     * direct self-read, a deeper path, a read through a selector — fails
+     * closed. Name collisions with same-named fields elsewhere fail closed
+     * too; the walk is syntactic, and coarse-but-sound is the v0 contract.
+     */
+    private fun certifiedSelfRecursion(shape: String, prop: DerivedProp): Boolean {
+        val name = prop.name
+        val hops = mutableSetOf<String>()
+        var ok = true
+        fun walk(e: Expr?) {
+            if (e == null || !ok) return
+            when (e) {
+                is PathExpr -> {
+                    if (e.root == name || e.segs.any { it.name == name }) {
+                        val hop = e.root.takeIf { e.root != name && e.segs.size == 1 && e.segs[0].name == name }
+                        val m = hop?.let { model.membersOf(shape)[it] }
+                        if (m == null || m.type !is VType.Optional || m.type.instanceShape() != shape) {
+                            ok = false
+                            return
+                        }
+                        hops.add(hop)
+                    }
+                }
+                is Access -> {
+                    if (e.segs.any { it.name == name }) { ok = false; return }
+                    walk(e.target)
+                }
+                is UnaryMinus -> walk(e.inner)
+                is Binary -> { walk(e.left); walk(e.right) }
+                is NotExpr -> walk(e.inner)
+                is IfExpr -> { walk(e.condition); walk(e.thenExpr); walk(e.elseExpr) }
+                is IsExpr -> walk(e.subject)
+                is ExistsExpr -> {
+                    walk(e.forExpr)
+                    e.collection?.let { c -> c.bindings.forEach { walk(it.source) }; walk(c.where) }
+                }
+                is AggCall -> { e.collection.bindings.forEach { walk(it.source) }; walk(e.collection.where) }
+                is FunCall -> e.args.forEach { walk(it) }
+                is SingularFor -> walk(e.forExpr)
+                is ShapeForSource -> walk(e.forExpr)
+                is SetExpr -> { e.collection.bindings.forEach { walk(it.source) }; walk(e.collection.where) }
+                else -> {}
+            }
+        }
+        walk(prop.expr)
+        return ok && hops.isNotEmpty() && hops.all { hopCertified(shape, it) }
+    }
+
+    private fun hopCertified(shape: String, hop: String): Boolean {
+        val m = model.membersOf(shape)[hop] ?: return false
+        m.derived?.let { return strictDescentSelector(shape, it.expr) }
+        return m.stored && neverForbidsSelfReference(shape, hop)
+    }
+
+    /** Is [e] a `latest`/`first` over [shape]'s own instances whose predicate
+     *  carries a strict comparison of a creation-fixed datum against the
+     *  subject's — so every hop lands on a strictly smaller (or larger) value
+     *  of a datum that never changes, and the chain must end in finite data? */
+    private fun strictDescentSelector(shape: String, e: Expr): Boolean {
+        val agg = e as? AggCall ?: return false
+        if (agg.name != "latest" && agg.name != "first") return false
+        val src = agg.collection.bindings.singleOrNull()?.source ?: return false
+        val overOwnShape = when {
+            src is PathExpr && src.segs.isEmpty() -> model.baseOf(src.root) == shape
+            src is ShapeForSource -> model.baseOf(src.shape) == shape
+            else -> false
+        }
+        if (!overOwnShape) return false
+        val conjuncts = agg.collection.where?.let(::conjunctsOf) ?: return false
+        return conjuncts.any { strictDescentConjunct(shape, it) }
+    }
+
+    private fun strictDescentConjunct(shape: String, c: Expr): Boolean {
+        val bin = c as? Binary ?: return false
+        if (bin.op != "<" && bin.op != ">") return false
+        fun bare(e: Expr): String? =
+            (e as? PathExpr)?.takeIf { it.segs.isEmpty() && it.root != "this" }?.root
+        fun viaThis(e: Expr): String? =
+            (e as? PathExpr)?.takeIf { it.root == "this" && it.segs.size == 1 }?.segs?.single()?.name
+        val datum = bare(bin.left)?.takeIf { it == viaThis(bin.right) }
+            ?: bare(bin.right)?.takeIf { it == viaThis(bin.left) }
+            ?: return false
+        return creationFixed(shape, datum)
+    }
+
+    /** Fixed at the creation commit, never changed after: a `timestamp on
+     *  create` field, or a stored field no rule ever assigns. */
+    private fun creationFixed(shape: String, field: String): Boolean {
+        val members = model.shapes[shape]?.members ?: return false
+        members.filterIsInstance<TimestampProp>().find { it.name == field }
+            ?.let { return it.on == "create" }
+        if (members.filterIsInstance<StoredProp>().none { it.name == field }) return false
+        return writes.none { it.owner == shape && it.member.name == field }
+    }
+
+    // ── refinement mentions (the definition graph's refinement edges, and
+    //    "which refinements does this rule watch" for V15) ────────────────────
+
+    private fun refExprMentions(e: RefExpr, out: MutableSet<String>) {
+        when (e) {
+            is RefName -> {
+                if (e.name in model.refinements) out.add(e.name)
+                e.where?.let { exprMentions(it, out) }
+            }
+            is RefNot -> refExprMentions(e.inner, out)
+            is RefAnd -> { refExprMentions(e.left, out); refExprMentions(e.right, out) }
+            is RefOr -> { refExprMentions(e.left, out); refExprMentions(e.right, out) }
+        }
+    }
+
+    private fun exprMentions(e: Expr?, out: MutableSet<String>) {
+        e ?: return
+        fun add(name: String?) { if (name != null && name in model.refinements) out.add(name) }
+        when (e) {
+            is PathExpr -> add(e.root)
+            is UnaryMinus -> exprMentions(e.inner, out)
+            is Binary -> { exprMentions(e.left, out); exprMentions(e.right, out) }
+            is NotExpr -> exprMentions(e.inner, out)
+            is IfExpr -> { exprMentions(e.condition, out); exprMentions(e.thenExpr, out); exprMentions(e.elseExpr, out) }
+            is IsExpr -> { add(e.refinement); exprMentions(e.subject, out) }
+            is ExistsExpr -> {
+                add(e.shape)
+                exprMentions(e.forExpr, out)
+                e.collection?.let { c -> c.bindings.forEach { exprMentions(it.source, out) }; exprMentions(c.where, out) }
+            }
+            is AggCall -> { e.collection.bindings.forEach { exprMentions(it.source, out) }; exprMentions(e.collection.where, out) }
+            is FunCall -> e.args.forEach { exprMentions(it, out) }
+            is SingularFor -> { add(e.shape); exprMentions(e.forExpr, out) }
+            is ShapeForSource -> { add(e.shape); exprMentions(e.forExpr, out) }
+            is SetExpr -> { e.collection.bindings.forEach { exprMentions(it.source, out) }; exprMentions(e.collection.where, out) }
+            else -> {}
+        }
+    }
+
+    private val refinementMentionGraph: Map<String, Set<String>> by lazy {
+        model.refinements.mapValues { (_, r) ->
+            mutableSetOf<String>().also { refExprMentions(r.expr, it) }
+        }
+    }
+
+    /** Refinements whose membership this rule's condition depends on, closed
+     *  transitively over refinement definitions: if the condition mentions T
+     *  and T's definition mentions R, a flip of R flips T. */
+    private fun watchedRefinements(rule: RuleDecl): Set<String> = watchedCache.getOrPut(rule.name) {
+        val out = mutableSetOf<String>()
+        val work = ArrayDeque<String>()
+        mutableSetOf<String>().also { refExprMentions(rule.condition, it) }.forEach { work.add(it) }
+        while (work.isNotEmpty()) {
+            val r = work.removeFirst()
+            if (out.add(r)) refinementMentionGraph[r].orEmpty().forEach { work.add(it) }
+        }
+        out
+    }
+
+    private val watchedCache = mutableMapOf<String, Set<String>>()
+
+    // ── V15 (third leg): transition interference ─────────────────────────────
+    //
+    // Two unordered siblings each write a different input of one refinement's
+    // predicate. Whether the mid-transaction membership history has a
+    // transition at all — does the instance pass through the refinement
+    // between the two writes? — then depends on which sibling fired first,
+    // and any rule watching the refinement sees different histories under
+    // different orders (checks.md V15; OQ16's value-dependent interference
+    // case, fail-closed: statically there is only "both inputs written by
+    // unordered siblings"). Unwatched refinements are skipped — with no
+    // observer, the mid-transaction history is not part of the outcome.
+
+    private fun checkTransitionInterference() {
+        val commitRules = model.rules.values.filter { it.preposition != "after" && firesOnCommit(it) }
+        if (commitRules.size < 2) return
+        val watchers = mutableMapOf<String, RuleDecl>()
+        for (rule in model.rules.values) watchedRefinements(rule).forEach { watchers.putIfAbsent(it, rule) }
+        if (watchers.isEmpty()) return
+        val writesByRule = commitRules.associateWith { r ->
+            writes.filter { it.rule === r }.map { it.owner to it.member.name }.toSet()
+        }
+        fun fmt(fs: Set<Pair<String, String>>) = fs.joinToString(", ") { "${it.first}.${it.second}" }
+        for ((refName, watcher) in watchers) {
+            val inputs = model.predicateSummary(refName).fields
+            if (inputs.isEmpty()) continue
+            for (i in commitRules.indices) for (j in i + 1 until commitRules.size) {
+                val a = commitRules[i]
+                val b = commitRules[j]
+                if (provablyDisjoint(a, b) || !canShareCommit(a, b)) continue
+                val fa = writesByRule.getValue(a) intersect inputs
+                val fb = writesByRule.getValue(b) intersect inputs
+                if (fa.isEmpty() || fb.isEmpty() || (fa + fb).size < 2) continue
+                diags.add(Diagnostic("V15", "'${a.name}' writes ${fmt(fa)} and sibling '${b.name}' writes ${fmt(fb)} — " +
+                    "both inputs of '$refName', which rule '${watcher.name}' watches: whether the transaction " +
+                    "passes through '$refName' between the two writes depends on their unstated order; " +
+                    "state the intent — condition one rule on the other's outcome, or move both writes " +
+                    "into one rule (OQ16)"))
+            }
+        }
     }
 
     // ── V16: quiescence (condition-graph cycles broken by disarms) ───────────

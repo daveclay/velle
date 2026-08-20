@@ -574,4 +574,226 @@ class ValidatorTest {
         val v12s = diags(src).filter { it.code == "V12" }
         assertEquals(emptyList(), v12s, "got: ${diags(src)}")
     }
+
+    // ── V14: well-foundedness (stratify, then certify) ───────────────────────
+
+    /** README §19's predecessor recurrence — the streak as derived history. */
+    private val recurrence = """
+        shape Account {
+            note: text
+        }
+
+        expose shape Payment {
+            account: one Account
+            onTime: boolean
+            receivedOn: timestamp on create
+            previous: one Payment? = latest(Payment where account == this.account and receivedOn < this.receivedOn by receivedOn)
+            streakAfter: integer =
+                if not onTime then 0
+                else if previous is some then previous.streakAfter + 1
+                else 1
+        }
+    """.trimIndent()
+
+    @Test
+    fun `V14 - the streak recurrence is certified by strict descent`() {
+        assertEquals(emptyList(), diags(recurrence))
+    }
+
+    @Test
+    fun `V14 - a non-strict comparison is no descent certificate`() {
+        val src = recurrence.replace("receivedOn < this.receivedOn", "receivedOn <= this.receivedOn")
+        assertTrue(codes(src).contains("V14"), "got: ${diags(src)}")
+    }
+
+    @Test
+    fun `V14 - descent needs a creation-fixed datum`() {
+        // the ordering datum is a stored field a rule reassigns — descent can be undone
+        val src = """
+            shape Account {
+                note: text
+            }
+
+            expose shape Payment {
+                account: one Account
+                onTime: boolean
+                position: integer
+                previous: one Payment? = latest(Payment where account == this.account and position < this.position by position)
+                streakAfter: integer =
+                    if not onTime then 0
+                    else if previous is some then previous.streakAfter + 1
+                    else 1
+            }
+
+            expose shape Reorder {
+                payment: one Payment
+                newPosition: integer
+            }
+
+            rule Apply when Reorder {
+                payment.position = newPosition
+            }
+        """.trimIndent()
+        assertTrue(codes(src).contains("V14"), "got: ${diags(src)}")
+    }
+
+    /** README §7's root/parent example — acyclicity supplied by a spent `never`. */
+    private val rootParent = """
+        expose shape Node {
+            parent: one Node?
+            root: one Node? =
+                if parent is none then none
+                else if parent.root is none then parent
+                else parent.root
+        }
+    """.trimIndent()
+
+    @Test
+    fun `V14 - root through parent is certified by a spendable never`() {
+        val src = rootParent + "\n\nnever (Node where parent == this)"
+        assertEquals(emptyList(), diags(src))
+    }
+
+    @Test
+    fun `V14 - root through parent without the never fails closed`() {
+        assertTrue(codes(rootParent).contains("V14"), "got: ${diags(rootParent)}")
+    }
+
+    @Test
+    fun `V14 - a rule-maintained never cannot be spent`() {
+        val src = rootParent + """
+
+
+            expose shape Reparent {
+                node: one Node
+                newParent: one Node?
+            }
+
+            rule Apply when Reparent {
+                node.parent = newParent
+            }
+
+            never (Node where parent == this)
+        """.trimIndent()
+        // the never reads what 'Apply' writes: rule-maintained, so V10 fails
+        // closed on the invariant and V14 refuses to spend it
+        assertTrue(codes(src).contains("V10"), "got: ${diags(src)}")
+        assertTrue(codes(src).contains("V14"), "got: ${diags(src)}")
+    }
+
+    @Test
+    fun `V14 - a direct self-read has no well-founded reading`() {
+        val src = """
+            shape Counter {
+                base: integer
+                next: integer = next + 1
+            }
+        """.trimIndent()
+        assertTrue(codes(src).contains("V14"), "got: ${diags(src)}")
+    }
+
+    @Test
+    fun `V14 - a refinement cycle has no well-founded reading`() {
+        val src = """
+            expose shape Item {
+                flag: boolean
+            }
+
+            shape Odd = Item where this is Even
+            shape Even = Item where this is Odd
+        """.trimIndent()
+        assertTrue(codes(src).contains("V14"), "got: ${diags(src)}")
+    }
+
+    // ── V15 (third leg): transition interference ─────────────────────────────
+
+    /** OQ16's value-dependent interference case: two siblings write the two
+     *  inputs of one watched predicate. */
+    private val interference = """
+        expose shape Account {
+            balance: decimal
+            creditLimit: decimal
+        }
+
+        expose shape AccountReview {
+            account: one Account
+            newBalance: decimal
+            newLimit: decimal
+        }
+
+        shape Overextended = Account where balance > creditLimit
+
+        rule ApplyBalance when AccountReview {
+            account.balance = newBalance
+        }
+
+        rule ApplyLimit when AccountReview {
+            account.creditLimit = newLimit
+        }
+
+        shape Alarm {
+            account: one Account
+        }
+
+        rule Watch when Overextended {
+            Alarm from { account: this }
+        }
+    """.trimIndent()
+
+    @Test
+    fun `V15 - sibling writes to both inputs of a watched refinement interfere`() {
+        assertTrue(codes(interference).contains("V15"), "got: ${diags(interference)}")
+    }
+
+    @Test
+    fun `V15 - with no watcher the mid-transaction history is not observed`() {
+        val src = interference
+            .substringBefore("shape Alarm")
+            .replace("shape Overextended = Account where balance > creditLimit\n\n", "")
+        assertEquals(emptyList(), diags(src), "got: ${diags(src)}")
+    }
+
+    @Test
+    fun `V15 - disjoint siblings cannot interfere`() {
+        val src = interference
+            .replace("rule ApplyBalance when AccountReview {",
+                "shape FullReview = AccountReview where newLimit > 0\n" +
+                "shape PartialReview = AccountReview where not newLimit > 0\n\n" +
+                "rule ApplyBalance when PartialReview {")
+            .replace("rule ApplyLimit when AccountReview {", "rule ApplyLimit when FullReview {")
+        assertEquals(emptyList(), diags(src).filter { it.code == "V15" }, "got: ${diags(src)}")
+    }
+
+    // ── V1: the instance-aliasing discharge (a spent never) ──────────────────
+
+    /** OQ16's PromoteBuyer/PromoteReferrer aliasing case. */
+    private val promotion = """
+        expose shape Customer {
+            tier: text
+            referrer: one Customer?
+        }
+
+        expose shape QualifiedPurchase {
+            customer: one Customer
+        }
+
+        rule PromoteBuyer when QualifiedPurchase {
+            customer.tier = "gold"
+        }
+
+        rule PromoteReferrer when (QualifiedPurchase where customer.referrer is some) {
+            customer.referrer.tier = "advocate"
+        }
+    """.trimIndent()
+
+    @Test
+    fun `V1 - routes differing by a self-hop collide without the invariant`() {
+        assertTrue(codes(promotion).contains("V1"), "got: ${diags(promotion)}")
+    }
+
+    @Test
+    fun `V1 - a spendable never discharges the aliasing`() {
+        val src = promotion + "\n\nnever (Customer where referrer == this)"
+        assertEquals(emptyList(), diags(src).filter { it.code == "V1" }, "got: ${diags(src)}")
+    }
 }
