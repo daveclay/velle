@@ -159,7 +159,7 @@ Decided and built (2026-08-12). Pulling on §8's ordering thread exposed three s
 
 The resolution: **no implicit ordering source exists.** `latest`/`first` carry a mandatory `by` clause naming one or more orderable properties of the element — the ordering is the author's statement, typechecked (F2), read like any other datum. "Creation order" is spelled by *naming* the declared creation timestamp; a shape with no orderable datum cannot be selected over until the author declares one (both corpus gaps gained honest `timestamp on create` fields). A selection whose declared datums fail to discriminate the winning position fails loudly at evaluation — the model is underspecified, and further comma-separated datums are the fix; the runtime never silently picks. `by` is contextual, like the duration units. The seq tiebreak is deleted; ordering, like memory, must be data. Promoted to README §10 (with the §22 explicit-ordering item resolved as *required*, not optional), grammar.md's contextual-keyword note, and checks.md F2.
 
-What this deliberately leaves: the within-transaction case now fails at runtime when observed, but the *static* obligation — proving a selector's candidates can't collide per transaction, or demanding a discriminating datum at compile time — is OQ15/OQ16 calibration territory, not a v0 check.
+What this deliberately leaves: the within-transaction case now fails at runtime when observed, but the *static* obligation — proving a selector's candidates can't collide per transaction, or demanding a discriminating datum at compile time — is OQ16 calibration territory, not a v0 check.
 
 ## 10. The typed store surface
 
@@ -195,7 +195,7 @@ Still open, re-homed (details live at the pointers):
 
 - Committer-suppliable fields → [OQ31](questions/OQ31-committer-suppliable-fields.md).
 - The universal-transaction contract, stated precisely → settled (OQ36): `evaluation.md`, "The universal transaction" (U1–U5); the serialization-domain refinement settled as OQ40 (2026-08-18) → `evaluation.md` U3, `checks.md` A5, `Domains.kt`; its trust residue is [OQ42](questions/OQ42-domain-derivation-trust.md).
-- Static selector-discrimination check (from §9) → TODO.md; rides OQ15/OQ16's calibration.
+- Static selector-discrimination check (from §9) → TODO.md; rides OQ16's calibration.
 - Production clock default (real time; controllable clock as test affordance) → TODO.md.
 - Reverse-path candidate narrowing, bare-shape entrant diffs, aggregate pre-filters (from §6) → TODO.md.
 - Rule-execution hook — rejected as a hook (§4); residue folds into the `why`/provenance item (README §22).

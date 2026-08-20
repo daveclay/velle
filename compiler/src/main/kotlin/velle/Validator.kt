@@ -738,7 +738,8 @@ class Validator(private val model: Model) {
             val orderSafe = assignment.value.let { it is Binary && it.op in setOf("+", "-") }
             if (schedules.isNotEmpty() && !orderSafe && tolerates != "reordering")
                 diags.add(Diagnostic("V8", "'${w.owner}.${w.member.name}' is an order-dependent fold on a tick cadence " +
-                    "(rule '${w.rule.name}') — nothing orders one tick's firings (README §19, OQ15)"))
+                    "(rule '${w.rule.name}') — nothing orders one tick's firings; " +
+                    "spell the value as a predecessor recurrence over the ordering datum (README §19)"))
         }
     }
 
@@ -776,7 +777,7 @@ class Validator(private val model: Model) {
             if (node in visiting) {
                 diags.add(Diagnostic("V14", "derived-property cycle: " +
                     (path.dropWhile { it != node } + node).joinToString(" -> ") { "${it.first}.${it.second}" } +
-                    " — v0 has no descent certificates yet; restructure or wait for OQ15's whitelist"))
+                    " — v0 has no descent certificates yet; restructure or wait for the V14 certificate whitelist (OQ16 calibration)"))
                 return
             }
             visiting.add(node)

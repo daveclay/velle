@@ -4,7 +4,7 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## Now: calibrate v0 against realistic specs
 
-- [ ] Write more realistic specs against the v0 pipeline (three exist: `billing`, `membership`, `payments`) — the empirical answers to OQ15–OQ16.
+- [ ] Write more realistic specs against the v0 pipeline (three exist: `billing`, `membership`, `payments`) — the empirical answer to OQ16 (which carries the V14 certificate whitelist, OQ15's residue).
 - [ ] While spec-writing, exercise the calibration riders: rung-recognition boundaries (README §20), boundary/apparatus legibility at scale (formerly OQ19), and `when leaving R on <schedule>` tick-exit semantics (`evaluation.md` "Ticks" — derived, unexercised).
 - [ ] Convert `billing.velle` (`ApplyDueChange`/`RecordDueChangeRefusal`) and `membership.velle` (`ApplyAssignment`/`RecordAssignmentRefusal`) to the anchored handled-once spelling — A4 flags them; `AdvisorySweepTest` inventories the debt. *(Superseded if those acts stay `transient` — both were migrated; confirm and close.)*
 - [ ] Update README §8's "Frozen fields" fix text and `patterns.md` "Validation rejection is data" to the anchored spelling.
@@ -26,13 +26,13 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 - [ ] Decide: `if ... then` sharing the condition's line — language rule, or parser limitation to lift?
 - [ ] Close validator gaps (tracked in `Validator.kt`'s header): V11 branch-sensitive narrowing · V12 at-most-one beyond the refinement slice (`singular_references.md`) · V14 descent certificates · A-series beyond A4.
-- [ ] Add the static selector-discrimination check (selectors fail loudly at runtime today; the static proof rides OQ15/OQ16 calibration — `investigate_runtime.md` §9).
+- [ ] Add the static selector-discrimination check (selectors fail loudly at runtime today; the static proof rides OQ16 calibration — `investigate_runtime.md` §9).
 
 ## Serialization domains (OQ40/OQ42 settled → `evaluation.md` U3, `checks.md` A5, `audit-symmetric-evaluation.md`)
 
 - [ ] Commutation-sweep extensions (`CommutationSweepTest`, OQ42 item 3's noted residue): randomized value exploration (value-boundary bugs the fixed small worlds miss), commit-versus-tick-firing pairs over `scheduledRuleDomains`, and triples.
 - [ ] Precision follow-ups from the symmetric-evaluation audit (sound today, wider than necessary — `audit-symmetric-evaluation.md` P2–P4): element-scoped `this.` paths going opaque (P2), condition collector not expanding refinement filters / `is` atoms (P3), multi-hop route composition — payments' `ChargeResponse` width (P4).
-- [ ] Stress-test the A5 advisory ruling against realistic specs once the OQ15/OQ16 calibration questions resolve (`docs/concurrency.md`, "Why the width warning is an advisory").
+- [ ] Stress-test the A5 advisory ruling against realistic specs once the OQ16 calibration question resolves (`docs/concurrency.md`, "Why the width warning is an advisory").
 - [ ] Spec-generation phase 2 (boundary synthesis, scenario DSL, no-refire cases) and phase 3 (the `example` construct) — `testgen.md`.
 
 ## Delete investigation (`investigate-delete.md`, OQ37)

@@ -22,6 +22,8 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **materialize, then decide** — the transient-act idiom for async work: the handler copies the act into a durable intent within its transaction; decisions and effects hang off the intent (`break-b.md` Case 5).
 - **ledger / episode** — history patterns: an append-only record read via `latest` · a bounded occurrence fact counted later (README §12, §20).
 - **rung / rung recognition** — a spelling's position on the pattern spectrum (e.g. incremental vs. recompute — one description, two spellings); diagnostics point at the twin rung (README §19–§20).
+- **predecessor recurrence** — the derived-history spelling of an order-dependent fold: a derived `previous` (`latest ... by` the ordering datum) plus self-reference one hop through it, so each record derives its running value from its predecessor's and the current total is a selector read; the served spelling for tick-cadence order-dependent folds (README §19; OQ15, ruled 2026-08-19).
+- **arrival-order semantics** — what a commit-cadence stored fold describes: commits are serialized, so fold order is commit order — the order records arrived — which diverges from the business's ordering datum when a record arrives late (README §19; OQ15).
 
 ## Relationships and collections
 
@@ -33,13 +35,14 @@ Coined terms used across the working docs, one line each, with the pointer that 
 ## Proofs and checks
 
 - **fail-closed** — when the prover can't decide, the spec is rejected, never silently accepted; calibration then grows the provable set.
-- **calibration** — the post-v0 work of running realistic specs to learn how coarse the fail-closed checks can stay before they reject too much (OQ15–OQ16).
+- **calibration** — the post-v0 work of running realistic specs to learn how coarse the fail-closed checks can stay before they reject too much (OQ16, which also carries the V14 certificate whitelist since OQ15 settled).
 - **one-writer** — every stored field has provably one writing rule per coincidence class (README §12; check V1).
 - **disarm proof** — showing a rule's effects falsify its own trigger condition, breaking a re-fire cycle (check V2).
 - **confluence** — sibling firings commute: every firing order yields the same outcome (OQ16; check V15).
 - **quiescence** — a transaction terminates: eventually no rule's condition is newly matched (OQ16; check V16).
 - **discharge** — satisfy a derived proof obligation; standard proof-theory usage, throughout README §18–§21. "The disarm proof discharges" = the compiler completes the required proof (the body provably falsifies its trigger); a "dischargeable state" is a trigger state the rule's own effects provably exit; an "undischarged obligation" is a compile error.
 - **spent invariant** — an established `never` used as a proof input by other analyses ("the author states the invariant; the prover spends it," README §21); only a fully-discharged invariant is spendable.
+- **certificate** — the stated reason a static cycle provably ends, drawn from a decidable whitelist: strict descent on a creation-fixed datum plus a base case, or acyclicity supplied by a `never` invariant. Consumed by V14 for definition-graph cycles and V16 for cascade quiescence; one shared vocabulary (ruled at OQ15's settling, 2026-08-19), grown by OQ16's calibration.
 - **check IDs** — V1–V18 are validator errors, A-series are advisories (A4 = drift-exposed partition), F-series are type/form checks; all cataloged in `checks.md`.
 - **OQ tags** — stable open-question numbers; index in `QUESTIONS.md`.
 

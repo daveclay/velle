@@ -63,7 +63,7 @@ The consequence for this author: a throughput ceiling of one commit at a time, a
 
 ## Why the width warning is an advisory
 
-Ruled 2026-08-18, and reaffirmed at the resolution of OQ42 item 4: **the dial stays at advisory.** A wide domain's failure is throughput, not a wrong value — the system stays correct, only slower — so failing open costs less here than anywhere else in the tolerance family. The *required* position remains arguable (the comprehension framing that produced the obligation leans that way, and the accidental author above is its whole case), and the ruling is held deliberately revisitable: stress-testing against realistic specs follows once the OQ15/OQ16 calibration questions resolve.
+Ruled 2026-08-18, and reaffirmed at the resolution of OQ42 item 4: **the dial stays at advisory.** A wide domain's failure is throughput, not a wrong value — the system stays correct, only slower — so failing open costs less here than anywhere else in the tolerance family. The *required* position remains arguable (the comprehension framing that produced the obligation leans that way, and the accidental author above is its whole case), and the ruling is held deliberately revisitable: stress-testing against realistic specs follows once the OQ16 calibration question resolves.
 
 ## Where a width shows up
 
