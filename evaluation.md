@@ -28,8 +28,10 @@ commitAct(actInstance):
      an edge shape, §6) — then the input-constrained `never` guardrails compiled to
      this expose site (§21) — violation → refusal naming what was violated; nothing begins
   2. begin transaction T
-  3. C0 := apply the act commit — insert the instance; evaluate `initially`
-     expressions and generators; stamp `timestamp on create`/`on update`
+  3. C0 := apply the act commit — insert the instance with the committer's fields
+     (an exposed shape declares no `initially` or `timestamp` fields — V21; those
+     clauses are evaluated at rule-created instances' creation commits, inside
+     process)
   4. process(C0)                                   -- may recurse, growing T
   5. transaction-end `never` check over settled post-state (§21)   [S5]
   6. any error in 3–5 → roll back T entirely; report the error to the caller;

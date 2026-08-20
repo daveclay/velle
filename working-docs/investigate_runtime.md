@@ -1,7 +1,7 @@
 # Investigation: how Velle is used at runtime
 
 **Status:** decided and built through §10 (2026-08-11 → 2026-08-12). Reframed the transpile target, dissolved the mechanism-plugin design, and landed the hydrating runtime over engineer-owned storage; the settled outcomes are listed at the bottom and promoted to README §22/§10, `grammar.md`, and `checks.md`. This doc records the reasoning.
-**Residue:** [OQ31](questions/OQ31-committer-suppliable-fields.md) committer-suppliable fields · TODO.md: reverse-path candidate narrowing, production clock default, static selector-discrimination check. (The universal-transaction contract, OQ36, settled 2026-08-16 → `evaluation.md`, "The universal transaction" U1–U5; its serialization-scope refinement, OQ40, settled 2026-08-18 → `evaluation.md` U3, `checks.md` A5, `Domains.kt`; trust residue is [OQ42](questions/OQ42-domain-derivation-trust.md).)
+**Residue:** TODO.md: reverse-path candidate narrowing, production clock default, static selector-discrimination check. (Committer-suppliable fields, OQ31, settled 2026-08-20 → README §22 "External input", `checks.md` V21. The universal-transaction contract, OQ36, settled 2026-08-16 → `evaluation.md`, "The universal transaction" U1–U5; its serialization-scope refinement, OQ40, settled 2026-08-18 → `evaluation.md` U3, `checks.md` A5, `Domains.kt`; trust residue is [OQ42](questions/OQ42-domain-derivation-trust.md).)
 
 ## The reframing
 
@@ -193,7 +193,7 @@ Settled enough to promote:
 
 Still open, re-homed (details live at the pointers):
 
-- Committer-suppliable fields → [OQ31](questions/OQ31-committer-suppliable-fields.md).
+- Committer-suppliable fields → settled (OQ31, 2026-08-20): README §22 "External input" — every stored field of an exposed shape is a required parameter, derived properties are legal and never parameters, `initially`/`timestamp` on an exposed shape is a compile error (`checks.md` V21).
 - The universal-transaction contract, stated precisely → settled (OQ36): `evaluation.md`, "The universal transaction" (U1–U5); the serialization-domain refinement settled as OQ40 (2026-08-18) → `evaluation.md` U3, `checks.md` A5, `Domains.kt`; its trust residue is [OQ42](questions/OQ42-domain-derivation-trust.md).
 - Static selector-discrimination check (from §9) → TODO.md; rides OQ16's calibration.
 - Production clock default (real time; controllable clock as test affordance) → TODO.md.

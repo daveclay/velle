@@ -21,7 +21,9 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 - [ ] Build reverse-path candidate narrowing (per-watcher read paths walked backward from the mutation); bare-shape entrant diffs and aggregate pre-filters ride with it (§6).
 - [ ] Switch the generated `System` to real time by default, controllable clock as the test affordance (§1).
-- [ ] Design committer-suppliable fields — OQ31 (determines generated commit-function signatures).
+- [ ] Implement V21 in the validator: `initially`/`timestamp` on an exposed shape is a compile error (OQ31, settled — `checks.md` V21).
+- [ ] Make generated commit functions require every stored field — drop the optional-parameter treatment of `initially`/optional fields in `Codegen.kt` `commitFn` and the boundary typecheck in `Runtime.kt` (OQ31, settled — README §22).
+- [ ] Migrate the example specs off `initially`/`timestamp` on exposed shapes via the request/record split (billing, membership, loyalty, enrollment, partition-drift, payments all carry them today).
 
 ## v0 loose ends
 

@@ -112,6 +112,10 @@ The static condition graph (rule effects → conditions they can newly satisfy) 
 
 (§6, "Committing and assigning collections".) A whole-collection assignment's target must be a *declared* `many` — the stored edge set; an inferred inverse or a derived collection is a view, never a target (diagnostic points at the fan-out or derived spelling). A collection-path assignment traverses exactly **one** `many` hop and writes a stored field of the member shape (`this.invoices.customer`, never `this.invoices.customer.tier` — the deeper write is its own rule on the shape that owns the field); the written field follows all ordinary rules (freezes V5, one-writer V1 with its fan-out extension).
 
+### V21 — Exposed-shape field forms
+
+(§22 "External input".) A shape with an `expose` declaration — either form, inline or standalone — is an external submission, and its declaration forms say what the committer supplies: every stored field is a required parameter of the generated commit function, and derived properties are never parameters (nothing is stored, so nothing can be supplied). Errors: an `initially` clause or a `timestamp` declaration on an exposed shape — a system-maintained value is no part of an external submission; it lives on an unexposed shape, supplied by a materializing rule's `from` block, minted by `initially` at that record's creation commit, or populated as `timestamp` commit metadata (§4's transient materialization is the served spelling). The diagnostic is connected: it names the exposure and the offending field, and prescribes the split.
+
 ## Advisories
 
 ### A1 — Rung recognition
