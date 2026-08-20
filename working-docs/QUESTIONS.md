@@ -10,7 +10,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 
 ## Open
 
-- **[OQ16](questions/OQ16-order-independence.md)** — can the compiler prove sibling firing order never matters? · calibration; coarse V15/V16 shipped, fail-closed; also carries the V14 certificate-whitelist calibration (OQ15's residue, one shared vocabulary)
+- **[OQ16](questions/OQ16-order-independence.md)** — can the compiler prove sibling firing order never matters? · calibration + the completeness audit; coarse slices fully implemented (V15's three legs, V16, V14 certificates, first spent-invariant discharge); also carries the V14 certificate-whitelist calibration (OQ15's residue, one shared vocabulary)
 - **[OQ17](questions/OQ17-rejection-scope.md)** — rejection scope: what unwinds, what is the caller told, can refusal be partial? · minimal v0 answer settled
 - **[OQ27](questions/OQ27-erasure.md)** — erasure and retention (right-to-be-forgotten) · language-side resolved via OQ37-R10 (`? initially required` + ordinary `= none` rules); residue: compilation's unretrievability guarantee
 - **[OQ28](questions/OQ28-bootstrap-backfill.md)** — bootstrap/backfill: a new rule against pre-existing state · not designed

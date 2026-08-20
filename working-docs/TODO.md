@@ -27,6 +27,7 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 - [ ] Decide: `if ... then` sharing the condition's line — language rule, or parser limitation to lift?
 - [ ] Close validator gaps (tracked in `Validator.kt`'s header): V11 branch-sensitive narrowing · V12 at-most-one beyond the refinement slice (`singular_references.md`) · A-series beyond A4/A5.
 - [ ] Add the static selector-discrimination check (selectors fail loudly at runtime today; the static proof rides OQ16 calibration — `investigate_runtime.md` §9).
+- [ ] Run the sibling-confluence completeness audit (OQ16): pin the step relation, the divergence-channel matrix with a probe per verdict, a test-only firing-order knob plus an order-permutation sweep over probe and example specs, vocabulary fixes for confirmed gaps, then the written Newman argument — plan and suspects in `questions/OQ16-order-independence.md`.
 
 ## Serialization domains (OQ40/OQ42 settled → `evaluation.md` U3, `checks.md` A5, `audit-symmetric-evaluation.md`)
 
