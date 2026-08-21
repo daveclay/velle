@@ -8,7 +8,7 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 - [ ] While spec-writing, exercise the calibration riders: rung-recognition boundaries (README §20), boundary/apparatus legibility at scale (formerly OQ19), and `when leaving R on <schedule>` tick-exit semantics (`evaluation.md` "Ticks" — derived, unexercised).
 - [ ] Convert `billing.velle` (`ApplyDueChange`/`RecordDueChangeRefusal`) and `membership.velle` (`ApplyAssignment`/`RecordAssignmentRefusal`) to the anchored handled-once spelling — A4 flags them; `AdvisorySweepTest` inventories the debt. *(Superseded if those acts stay `transient` — both were migrated; confirm and close.)*
 - [ ] Update README §8's "Frozen fields" fix text and `patterns.md` "Validation rejection is data" to the anchored spelling.
-- [ ] Cover the remaining small constructs: 3+-binding sibling joins · per-hop freeze depth (`LockedLineItem = LineItem where order is SettledOrder { frozen ... }`) · self-referential derived property (V14 descent certificates now accept the recurrence — exercise it in an example spec) · declared `many` field (OQ30 settled — README §6; exercised by `examples/enrollment/`).
+- [ ] Cover the remaining small constructs: 3+-binding sibling joins · per-hop freeze depth (`LockedLineItem = LineItem where order is SettledOrder { frozen ... }`) · self-referential derived property (V14 descent certificates now accept the recurrence — exercise it in an example spec) · declared `many` field (README §6; exercised by `examples/enrollment/`).
 - [ ] Add human-readable examples of *invalid* velle with the diagnostics each produces — `examples/` shows only working specs; nothing shows a reader what a rejection (e.g. V15's order-dependence error) looks like or how to fix it.
 
 ## Transient acts — Design B residue (`investigate-transient.md`)
@@ -16,6 +16,7 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 - [ ] Decide an author-supplied refusal message on `never` (today a refusal names the violated `never`).
 - [ ] Confirm outcome-mediated provenance satisfies `why` when provenance lands (README §22's `why` item).
 - [ ] Grow V18 beyond the complement slice once V9's exhaustiveness engine exists.
+- [ ] Revisit (after OQ39 closes): can rules copy a transient container act *and its parts* into a durable tree? The part-copying rules appear to have no way to name the durable container a sibling rule just created (V17 bans the reference path, U1's snapshot hides the sibling's creation) — confirm or break the tracing; the outcome scopes OQ43.
 
 ## Runtime follow-ons (`investigate_runtime.md`)
 
