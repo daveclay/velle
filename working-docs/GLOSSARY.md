@@ -11,6 +11,7 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **anchor / anchored spelling** — the outcome-evidence conjunct (`... where not exists EditApplication for this`) that pins an already-handled act out of its partition.
 - **correlation key** — a client-supplied business key (the idempotency-key pattern) a transient act carries and its outcomes copy, so callers can match responses to requests and duplicate submissions can be recognized (OQ26, settled 2026-08-19 → README §4 "Transient acts"): a documented idiom, deliberately not language machinery — the key's uniqueness is the client's to own, the dedup guard the author's to write.
 - **C0 pinning** — a transient act's partitions are evaluated against the state at its arrival commit and never re-evaluated by its own consequences (`evaluation.md`, "Transient acts").
+- **closure / exposure closure / input closure** — what one commit carries: the exposed act plus the inline parts its `with` declaration says arrive with it, statically shaped, with the single instance as the degenerate case (README §4; §6 "Inline part creation").
 - **HOLDS / TAX / GAP** — break-doc verdicts: the design handles the case · handles it at a cost · needs a new obligation or fails (`break-b.md`).
 
 ## Patterns
@@ -30,7 +31,6 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **ownership (of a relationship)** — what `one`/`many` declare: the declaring shape's property is the stored side — rules assign it, committers supply it — and the inverse is inferred, derived, unassignable; direction is not encoded because inference makes both sides traverse (README §6).
 - **graduation point** — the moment an edge carries data (when, who, a grade, a quantity), it stops being a bare `many` edge and becomes a business fact with its own shape; join shapes are never ceremony, only facts (README §6).
 - **fan-out assignment** — a collection-path assignment (`this.invoices.customer = ...`): one write per member of the collection, one `many` hop only, the mutated field named in the statement (README §6; checks V20, V1's coarse extension).
-- **input closure** — the transport-level input to a generated commit function for a multi-part act: the act plus the inline part values that ride with it; whether that closure is "one instance" is OQ39's question.
 
 ## Proofs and checks
 

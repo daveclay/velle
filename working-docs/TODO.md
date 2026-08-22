@@ -16,13 +16,14 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 - [ ] Decide an author-supplied refusal message on `never` (today a refusal names the violated `never`).
 - [ ] Confirm outcome-mediated provenance satisfies `why` when provenance lands (README §22's `why` item).
 - [ ] Grow V18 beyond the complement slice once V9's exhaustiveness engine exists.
-- [ ] Revisit (after OQ39 closes): can rules copy a transient container act *and its parts* into a durable tree? The part-copying rules appear to have no way to name the durable container a sibling rule just created (V17 bans the reference path, U1's snapshot hides the sibling's creation) — confirm or break the tracing; the outcome scopes OQ43.
+- [ ] Revisit: can rules copy a transient container act *and its parts* into a durable tree? The part-copying rules appear to have no way to name the durable container a sibling rule just created (V17 bans the reference path, U1's snapshot hides the sibling's creation) — confirm or break the tracing; the outcome scopes OQ43.
 
 ## Runtime follow-ons (`investigate_runtime.md`)
 
 - [ ] Build reverse-path candidate narrowing (per-watcher read paths walked backward from the mutation); bare-shape entrant diffs and aggregate pre-filters ride with it (§6).
 - [ ] Switch the generated `System` to real time by default, controllable clock as the test affordance (§1).
 - [ ] Implement V21 in the validator: `initially`/`timestamp` on an exposed shape is a compile error (OQ31, settled — `checks.md` V21).
+- [x] Implement the exposure closure (`expose ... with` — README §6 "Inline part creation"): parser `withClause`, V22 + the V1 self-pair extension + closure shapes in the commit-kind derivation (V3/V15 reach), codegen nested input types, runtime closure commits, `ClosureTest`, and `examples/orders/` exercising it end-to-end. The V21 projection's *static* slice (back-reference unsuppliable is runtime-enforced today) rides the existing V21 item above.
 - [ ] Remove the now-dead `initially` optional-parameter branch from `Codegen.kt` `commitFn` once V21 lands (optional `?` fields stay optional parameters — ratified 2026-08-20; no example spec puts `initially` on an exposed shape any more).
 - [ ] Teach SpecGen to generate refinement specs over rule-materialized shapes — the request/record split dropped its specs for PaidInvoice, SettledOrder, Delinquent, ClosedTicket, LockedNote, and kin (givens still reach those states; only the generated coverage vanished).
 

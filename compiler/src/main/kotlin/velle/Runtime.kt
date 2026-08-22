@@ -19,6 +19,10 @@ sealed interface Value {
     data class VVals(val values: List<Value>) : Value
     /** The `empty` literal before its collection kind is known; coerced at the write site. */
     data object VEmpty : Value
+    /** A closure part's back-reference before its target exists: index into the
+     *  commit's creation list, resolved to a VRef as creations land (README §6,
+     *  "Inline part creation"). Never escapes applyCommit. */
+    data class VPendingRef(val index: Int) : Value
     data class VDuration(val amount: Long, val unit: String) : Value
     data object VNone : Value
 
@@ -479,28 +483,36 @@ class VelleSystem(
 
     // ── the exposed commit surface ────────────────────────────────────────────
 
-    fun commit(shape: String, suppliedFields: Map<String, Any?>): CommitResult {
+    fun commit(
+        shape: String,
+        suppliedFields: Map<String, Any?>,
+        parts: Map<String, List<Map<String, Any?>>> = emptyMap(),
+    ): CommitResult {
         val decl = model.shapes[shape]
             ?: return CommitResult.Refused("type: unknown shape '$shape'")
         if (shape !in model.exposed)
             return CommitResult.Refused("type: shape '$shape' is not exposed — it enters state only as a rule's effect")
 
-        // a committed collection is a set: a duplicate is a caller bug or a
-        // multiplicity claim `many` cannot express — refused, with the fix named
-        // (multiplicity that matters is data on an edge shape; README §6)
-        for (m in decl.members.filterIsInstance<StoredProp>()) {
-            val isMany = (m.type as? RelType)?.many == true || (m.type as? ScalarType)?.many == true
-            if (!isMany) continue
-            val raw = suppliedFields[m.name] as? List<*> ?: continue
-            if (raw.size != raw.distinct().size)
-                return CommitResult.Refused("type: duplicate in '$shape.${m.name}' — a `many` is a set; " +
-                    "if multiplicity is meaningful, it is data on an edge shape (README §6)")
-        }
+        duplicateRefusal(decl, suppliedFields)?.let { return CommitResult.Refused(it) }
 
         val converted = convertFields(decl, suppliedFields)
             ?: return CommitResult.Refused(typeFailure(decl, suppliedFields))
 
-        val result = inTransaction { applyCommit(listOf(Mutation.Create(shape, converted))).single() }
+        // the exposure closure (README §6, "Inline part creation"): the act plus
+        // its declared inline parts land as ONE commit — parts are values created
+        // here, back-references language-populated, entrants container-and-parts
+        val edges = model.closures[shape].orEmpty()
+        parts.keys.find { key -> edges.none { it.prop == key } }?.let {
+            return CommitResult.Refused("type: '$shape' declares no closure edge '$it'")
+        }
+        val mutations = mutableListOf<Mutation>(Mutation.Create(shape, converted))
+        try {
+            appendParts(edges, parts, parentIndex = 0, mutations)
+        } catch (e: PartRefusal) {
+            return CommitResult.Refused(e.reason)
+        }
+
+        val result = inTransaction { applyCommit(mutations).first() }
         return result.fold(
             onSuccess = { id ->
                 // a transient act is an input to the state, not a member of it: at
@@ -522,7 +534,62 @@ class VelleSystem(
         )
     }
 
-    private fun convertFields(decl: ShapeDecl, supplied: Map<String, Any?>): Map<String, Value>? {
+    /** The set refusal: a duplicate reference in a committed collection is a
+     *  caller bug or a multiplicity claim `many` cannot express (README §6).
+     *  Inline part *values* are a bag — two identical values mint two distinct
+     *  instances — so this applies to reference collections only. */
+    private fun duplicateRefusal(decl: ShapeDecl, supplied: Map<String, Any?>): String? {
+        for (m in decl.members.filterIsInstance<StoredProp>()) {
+            val isMany = (m.type as? RelType)?.many == true || (m.type as? ScalarType)?.many == true
+            if (!isMany) continue
+            val raw = supplied[m.name] as? List<*> ?: continue
+            if (raw.size != raw.distinct().size)
+                return "type: duplicate in '${decl.name}.${m.name}' — a `many` is a set; " +
+                    "if multiplicity is meaningful, it is data on an edge shape (README §6)"
+        }
+        return null
+    }
+
+    private class PartRefusal(val reason: String) : Exception(reason)
+
+    /**
+     * Flatten a closure's inline parts into the commit's creation list, depth
+     * first — parents always precede children, so a part's back-reference is a
+     * [Value.VPendingRef] at an earlier index, resolved as creations land.
+     */
+    private fun appendParts(
+        edges: List<ClosureEdge>,
+        supplied: Map<String, List<Map<String, Any?>>>,
+        parentIndex: Int,
+        out: MutableList<Mutation>,
+    ) {
+        for (edge in edges) {
+            val partDecl = model.shapes[edge.partShape]
+                ?: throw PartRefusal("type: unknown part shape '${edge.partShape}'")
+            for (raw in supplied[edge.prop].orEmpty()) {
+                if (edge.backRef in raw)
+                    throw PartRefusal("type: '${edge.partShape}.${edge.backRef}' is language-populated — " +
+                        "a back-reference cannot be claimed by the committer (README §6)")
+                val childKeys = edge.children.map { it.prop }.toSet()
+                val own = raw.filterKeys { it !in childKeys }
+                duplicateRefusal(partDecl, own)?.let { throw PartRefusal(it) }
+                val converted = convertFields(partDecl, own, skipRequired = setOf(edge.backRef))
+                    ?: throw PartRefusal(typeFailure(partDecl, own) + " (inline part)")
+                val index = out.size
+                out.add(Mutation.Create(edge.partShape,
+                    converted + (edge.backRef to Value.VPendingRef(parentIndex))))
+                if (edge.children.isNotEmpty()) {
+                    @Suppress("UNCHECKED_CAST")
+                    val nested = edge.children.associate { child ->
+                        child.prop to ((raw[child.prop] as? List<Map<String, Any?>>).orEmpty())
+                    }
+                    appendParts(edge.children, nested, parentIndex = index, out)
+                }
+            }
+        }
+    }
+
+    private fun convertFields(decl: ShapeDecl, supplied: Map<String, Any?>, skipRequired: Set<String> = emptySet()): Map<String, Value>? {
         val out = mutableMapOf<String, Value>()
         for (m in decl.members.filterIsInstance<StoredProp>()) {
             val raw = supplied[m.name]
@@ -533,7 +600,8 @@ class VelleSystem(
                         out[m.name] = Value.VColl(emptyList(), (m.type as RelType).shape)
                     (m.type as? ScalarType)?.many == true ->
                         out[m.name] = Value.VVals(emptyList())
-                    m.initially == null && (m.type as? ScalarType)?.optional != true &&
+                    m.name !in skipRequired &&
+                        m.initially == null && (m.type as? ScalarType)?.optional != true &&
                         (m.type as? RelType)?.optional != true -> return null
                 }
                 continue
@@ -699,7 +767,18 @@ class VelleSystem(
         val createdIds = mutableListOf<Long>()
         var wroteStored = mutableSetOf<Long>()
         for (m in mutations) when (m) {
-            is Mutation.Create -> createdIds.add(applyCreate(m, t))
+            is Mutation.Create -> {
+                // a closure part's back-reference lands here: pending index →
+                // the already-created container's id (README §6, "Inline part
+                // creation" — materialization order is topological, never observable)
+                val resolved =
+                    if (m.fields.values.any { it is Value.VPendingRef })
+                        m.copy(fields = m.fields.mapValues { (_, v) ->
+                            if (v is Value.VPendingRef) Value.VRef(createdIds[v.index]) else v
+                        })
+                    else m
+                createdIds.add(applyCreate(resolved, t))
+            }
             is Mutation.Assign -> { applyAssign(m, t, pre); wroteStored.add(m.id) }
         }
         // `on update` timestamps advance at every commit writing a stored field
@@ -974,6 +1053,7 @@ class VelleSystem(
         is Value.VVals -> v.values.map { unwrap(it) }
         Value.VEmpty -> emptyList<Any?>()
         is Value.VDuration -> v.amount to v.unit
+        is Value.VPendingRef -> throw VelleRuntimeError("pending closure reference escaped its commit")
         Value.VNone -> null
     }
 }

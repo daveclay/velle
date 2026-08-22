@@ -41,6 +41,8 @@ commitAct(actInstance):
      transaction by this same algorithm, synchronously, in queue order          [S2]
 ```
 
+**Closure commits** (`expose ... with`, README §6 "Inline part creation"): C0 carries the container plus its declared inline parts as one commit — the entrants are the container and each part, so `process(C0)` matches rules per entrant, all inside T. The order the records are physically inserted in is the topological order over the closure's reference tree (container first) — compilation's business, never observable: pre-state and post-state are defined at C0 as one moment, and no state where the container exists without its parts is ever observable. Back-references on parts are language-populated at insert. Step 1's boundary validation extends to the parts — duplicate *references* are refused per collection, while inline part values are a bag (two identical values mint two distinct instances, each with its own `id`), and the input-constrained `never` guardrails compile to this expose site over the whole closure.
+
 ### Processing one commit
 
 ```

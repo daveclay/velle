@@ -1,0 +1,53 @@
+-- The exposure closure (README §6, "Inline part creation"): an order arrives
+-- together with its line items — the parts don't exist yet, so they can't be
+-- references; they are values created in the act's commit. `expose ... with`
+-- names the inverse edges that ride the closure; back-references are
+-- language-populated; container and parts land as one commit, entrants all,
+-- and a part-triggered rule fires once per inline part in the act's
+-- transaction (the §20 fan-out precedent). The aggregate the parts imply
+-- lives on the container as a derivation, never a part-written field.
+
+shape Customer {
+    name: text
+}
+
+shape Product {
+    sku: text
+}
+
+shape Order {
+    customer: one Customer
+    placedOn: Date
+    total: integer = sum(orderLines, quantity)    -- derive the aggregate on the container
+}
+
+shape OrderLine {
+    order: one Order              -- the one-to-many, declared from the many-of side
+    product: one Product
+    quantity: integer
+}
+
+shape Customization {
+    line: one OrderLine
+    note: text
+}
+
+shape Reservation {
+    line: one OrderLine
+    quantity: integer
+}
+
+expose Customer
+expose Product
+expose Order with {
+    orderLines with { customizations }
+}
+
+-- one firing per inline part, every firing standing or falling with the act
+rule ReserveStock when OrderLine {
+    Reservation from { line: this, quantity: this.quantity }
+}
+
+-- input-constrained: compiled to the boundary — a closure carrying a
+-- non-positive quantity is refused whole, nothing lands
+never (OrderLine where quantity <= 0)

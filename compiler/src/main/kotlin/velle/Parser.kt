@@ -288,9 +288,42 @@ class Parser(private val tokens: List<Token>) {
         if (peek().isKw("shape")) {
             val decl = parseShapeOrRefinement()
             if (decl !is ShapeDecl) fail("only base shapes can be exposed inline", peek())
-            return (decl as ShapeDecl).copy(exposed = true, transient = transient)
+            return (decl as ShapeDecl).copy(exposed = true, transient = transient, with = parseWithClause())
         }
-        return ExposeDecl(expect(TokType.UIDENT).text, transient)
+        val shape = expect(TokType.UIDENT).text
+        return ExposeDecl(shape, transient, parseWithClause())
+    }
+
+    // ── the exposure closure (README §6, "Inline part creation") ─────────────
+    // `with` is contextual, not reserved (grammar.md): it reads as the closure
+    // keyword only here — after the exposed shape (or a closure entry) — and is
+    // an ordinary identifier everywhere else.
+
+    private fun atWith() = at(TokType.LIDENT) && peek().text == "with"
+
+    private fun parseWithClause(): List<WithEntry> {
+        if (!atWith()) return emptyList()
+        next() // consume 'with'
+        skipNewlines()
+        if (at(TokType.LBRACE)) {
+            next()
+            val entries = mutableListOf<WithEntry>()
+            skipSeparators()
+            while (!at(TokType.RBRACE)) {
+                entries.add(parseWithEntry())
+                if (!at(TokType.RBRACE)) skipSeparators()
+            }
+            expect(TokType.RBRACE)
+            return entries
+        }
+        val entries = mutableListOf(parseWithEntry())
+        while (at(TokType.COMMA)) { next(); skipNewlines(); entries.add(parseWithEntry()) }
+        return entries
+    }
+
+    private fun parseWithEntry(): WithEntry {
+        val name = expect(TokType.LIDENT).text
+        return WithEntry(name, parseWithClause())
     }
 
     // ── refinement expressions ───────────────────────────────────────────────

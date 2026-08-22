@@ -37,6 +37,7 @@ object Codegen {
             line()
             clock()
             ticks()
+            closureInputTypes()
             model.exposed.forEach { commitFn(it) }
             model.shapes.keys.forEach { shapeAccessors(it) }
             model.refinements.keys.forEach { refinementAccessors(it) }
@@ -76,18 +77,83 @@ object Codegen {
             line()
         }
 
+        // ── the exposure closure: nested input types (README §6, "Inline part
+        // creation") — the projection, not the mirror: no `id`, no back-reference
+        // (language-populated); an out-of-closure relationship stays a typed view
+        // (the reference handle), an in-closure edge is a nested input value. ──
+
+        /** structural signature (prop name excluded) → generated class name */
+        val closureNames = linkedMapOf<ClosureEdge, String>()
+
+        fun closureClassName(edge: ClosureEdge): String {
+            val sig = edge.copy(prop = "")
+            closureNames[sig]?.let { return it }
+            var name = "New${edge.partShape}"
+            if (name in closureNames.values)
+                name = "New${edge.partShape}Via${edge.backRef.replaceFirstChar { it.uppercase() }}"
+            var n = 2
+            while (name in closureNames.values) name = "New${edge.partShape}${n++}"
+            closureNames[sig] = name
+            return name
+        }
+
+        fun emitClosureClass(name: String, edge: ClosureEdge) {
+            val decl = model.shapes.getValue(edge.partShape)
+            val stored = decl.members.filterIsInstance<StoredProp>().filter { it.name != edge.backRef }
+            val required = stored.filter { it.initially == null && !isOptional(it.type) }
+            val optional = stored.filter { it.initially != null || isOptional(it.type) }
+            val hasParams = required.isNotEmpty() || optional.isNotEmpty() || edge.children.isNotEmpty()
+            if (!hasParams) {
+                line("    class $name { internal fun raw(): Map<String, Any?> = emptyMap() }")
+                line()
+                return
+            }
+            line("    data class $name(")
+            required.forEach { line("        val ${it.name}: ${paramType(it.type)},") }
+            optional.forEach { line("        val ${it.name}: ${paramType(it.type).removeSuffix("?")}? = null,") }
+            edge.children.forEach { line("        val ${it.prop}: List<${closureClassName(it)}> = emptyList(),") }
+            line("    ) {")
+            line("        internal fun raw(): Map<String, Any?> = buildMap {")
+            required.forEach { line("            put(\"${it.name}\", ${rawExpr(it.name, it.type)})") }
+            optional.forEach { line("            ${it.name}?.let { put(\"${it.name}\", ${rawExpr("it", it.type)}) }") }
+            edge.children.forEach { line("            put(\"${it.prop}\", ${it.prop}.map { it.raw() })") }
+            line("        }")
+            line("    }")
+            line()
+        }
+
+        fun closureInputTypes() {
+            val toEmit = linkedMapOf<String, ClosureEdge>()
+            fun visit(edge: ClosureEdge) {
+                edge.children.forEach { visit(it) }
+                toEmit.putIfAbsent(closureClassName(edge), edge)
+            }
+            model.exposed.forEach { shape -> model.closures[shape].orEmpty().forEach { visit(it) } }
+            if (toEmit.isEmpty()) return
+            line("    // ── closure input values (README §6, \"Inline part creation\") ──")
+            for ((name, edge) in toEmit) emitClosureClass(name, edge)
+        }
+
         fun commitFn(shape: String) {
             queueKeyDoc(shape)
             val stored = model.shapes.getValue(shape).members.filterIsInstance<StoredProp>()
             val required = stored.filter { it.initially == null && !isOptional(it.type) }
             val optional = stored.filter { it.initially != null || isOptional(it.type) }
+            val edges = model.closures[shape].orEmpty()
             val params = required.map { "${it.name}: ${paramType(it.type)}" } +
-                optional.map { "${it.name}: ${paramType(it.type).removeSuffix("?")}? = null" }
+                optional.map { "${it.name}: ${paramType(it.type).removeSuffix("?")}? = null" } +
+                edges.map { "${it.prop}: List<${closureClassName(it)}> = emptyList()" }
             line("    fun commit$shape(${params.joinToString(", ")}): CommitResult =")
             line("        system.commit(\"$shape\", buildMap {")
             required.forEach { line("            put(\"${it.name}\", ${rawExpr(it.name, it.type)})") }
             optional.forEach { line("            ${it.name}?.let { put(\"${it.name}\", ${rawExpr("it", it.type)}) }") }
-            line("        })")
+            if (edges.isEmpty()) {
+                line("        })")
+            } else {
+                line("        }, buildMap {")
+                edges.forEach { line("            put(\"${it.prop}\", ${it.prop}.map { it.raw() })") }
+                line("        })")
+            }
             line()
         }
 

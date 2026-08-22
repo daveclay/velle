@@ -24,6 +24,9 @@ class Model(val decls: List<Decl>) {
     /** shapes exposed `transient` — inputs to the state, not members of it (README §4) */
     val transients = mutableSetOf<String>()
 
+    /** raw `with` declarations per exposed shape, resolved lazily by [closures] */
+    private val withDecls = mutableMapOf<String, List<WithEntry>>()
+
     init {
         for (d in decls) when (d) {
             is ShapeDecl -> {
@@ -31,6 +34,7 @@ class Model(val decls: List<Decl>) {
                 shapes[d.name] = d
                 if (d.exposed) exposed.add(d.name)
                 if (d.transient) transients.add(d.name)
+                if (d.with.isNotEmpty()) withDecls[d.name] = d.with
             }
             is RefinementDecl -> if (register(d.name)) refinements[d.name] = d
             is RuleDecl ->
@@ -46,6 +50,7 @@ class Model(val decls: List<Decl>) {
                 else -> {
                     exposed.add(d.shape)
                     if (d.transient) transients.add(d.shape)
+                    if (d.with.isNotEmpty()) withDecls[d.shape] = d.with
                 }
             }
         }
@@ -148,6 +153,84 @@ class Model(val decls: List<Decl>) {
         is RefNot -> collectOperandScopes(expr.inner)
         is RefAnd -> collectOperandScopes(expr.left) + collectOperandScopes(expr.right)
         is RefOr -> collectOperandScopes(expr.left) + collectOperandScopes(expr.right)
+    }
+
+    // ── the exposure closure (README §6, "Inline part creation"; checks V22) ─
+
+    /**
+     * Resolved closure per exposed shape: each `with` entry pinned to its part
+     * shape and language-populated back-reference. Resolution errors land in
+     * [diagnostics] as V22 the first time this is read (Validator forces it).
+     */
+    val closures: Map<String, List<ClosureEdge>> by lazy {
+        withDecls.entries.associate { (shape, entries) ->
+            if (shape in transients) {
+                error("V22", "expose transient '$shape' with a closure is refused — " +
+                    "the combination is open (OQ43); commit the request without inline parts")
+                return@associate shape to emptyList()
+            }
+            shape to resolveClosureLevel(shape, entries)
+        }
+    }
+
+    private fun resolveClosureLevel(scope: String, entries: List<WithEntry>): List<ClosureEdge> {
+        entries.groupBy { it.name }.filterValues { it.size > 1 }.keys.forEach {
+            error("V22", "'expose ... with': closure edge '$it' declared twice on '$scope'")
+        }
+        return entries.distinctBy { it.name }.mapNotNull { resolveClosureEdge(scope, it) }
+    }
+
+    private fun resolveClosureEdge(scope: String, entry: WithEntry): ClosureEdge? {
+        val m = membersOf(scope)[entry.name]
+        val fix = "a closure edge must be the inverse of a declared `one` field (README §6)"
+        val edge = when {
+            m == null -> {
+                error("V22", "'expose ... with ${entry.name}': '$scope' has no such collection — $fix")
+                null
+            }
+            m.inverse != null ->
+                if (m.inverse.many) {
+                    error("V22", "'expose ... with ${entry.name}': the inverse of a declared `many` " +
+                        "(an m2m edge set) cannot ride a closure — its members are existing instances, " +
+                        "named by reference; $fix")
+                    null
+                } else m.inverse.shape to m.inverse.field
+            m.derived != null -> recognizedInverse(scope, m.derived).also {
+                if (it == null) error("V22", "'expose ... with ${entry.name}': $fix — " +
+                    "an arbitrary-predicate view cannot ride a closure")
+            }
+            else -> {
+                error("V22", "'expose ... with ${entry.name}': '${entry.name}' is not a collection view of '$scope' — $fix")
+                null
+            }
+        } ?: return null
+        val (partShape, backRef) = edge
+        if (partShape in transients) {
+            error("V22", "'expose ... with ${entry.name}': part shape '$partShape' is a transient act — " +
+                "closure parts are durable records created at the commit")
+            return null
+        }
+        return ClosureEdge(entry.name, partShape, backRef, resolveClosureLevel(partShape, entry.children))
+    }
+
+    /** The recognized inverse form `(P where field == this)` (README §6, the
+     *  `Transfer` example): the view pins the language-populated back-reference. */
+    private fun recognizedInverse(scope: String, d: DerivedProp): Pair<String, String>? {
+        val set = d.expr as? SetExpr ?: return null
+        val b = set.collection.bindings.singleOrNull() ?: return null
+        val src = b.source as? PathExpr ?: return null
+        if (src.segs.isNotEmpty() || src.root !in shapes) return null
+        val where = set.collection.where as? Binary ?: return null
+        if (where.op != "==") return null
+        val sides = listOf(where.left, where.right).filterIsInstance<PathExpr>()
+        if (sides.size != 2) return null
+        val fieldSide = sides.find { it.root != "this" && it.segs.isEmpty() } ?: return null
+        if (sides.find { it.root == "this" && it.segs.isEmpty() } == null) return null
+        val part = shapes[src.root] ?: return null
+        val f = part.members.filterIsInstance<StoredProp>().find { it.name == fieldSide.root } ?: return null
+        val t = f.type as? RelType ?: return null
+        if (t.many || t.shape != scope) return null
+        return src.root to f.name
     }
 
     /** The capture-persistence problems this spec poses a store, one per
@@ -370,6 +453,17 @@ data class MemberInfo(
 
 /** The declared side an inferred inverse reads: [shape].[field], to-one or an m2m `many`. */
 data class InverseInfo(val shape: String, val field: String, val many: Boolean)
+
+/** One resolved closure edge (README §6, "Inline part creation"): the exposed
+ *  commit takes [prop] as inline [partShape] values; [backRef] is the part's
+ *  language-populated pointer at the enclosing level. The closure graph is a
+ *  tree by construction — entries only name inverse edges of their level. */
+data class ClosureEdge(
+    val prop: String,
+    val partShape: String,
+    val backRef: String,
+    val children: List<ClosureEdge> = emptyList(),
+)
 
 sealed interface VType {
     data class Num(val name: String) : VType

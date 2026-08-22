@@ -48,8 +48,44 @@ class Validator(private val model: Model) {
         checkQuiescence()         // V16
         checkSingularProofs()     // V12 (refinement slice)
         checkTransients()         // V17 isolation, V18 totality
+        checkClosures()           // V22 legality + V1's closure self-pair extension
         checkDriftExposedPartitions() // A4 (advisory)
         checkContention()             // A5 (advisory, OQ40)
+    }
+
+    // ── V22: closure declaration legality + V1 closure extension (README §6,
+    // "Inline part creation") ─────────────────────────────────────────────────
+    //
+    // Edge resolution (and its V22 diagnostics) lives in Model.closures — forced
+    // here. What this check adds is V1's closure self-pair: a closure commit
+    // makes N entrants of a part shape, so a rule triggered by it coincides with
+    // itself across sibling firings, and a body assigning through the language-
+    // populated back-reference provably converges on one container instance —
+    // a write-write conflict, refused totally (value-equal RHS included).
+
+    private fun checkClosures() {
+        val parts = mutableListOf<ClosureEdge>()
+        fun collect(e: ClosureEdge) { parts.add(e); e.children.forEach { collect(it) } }
+        model.closures.values.flatten().forEach { collect(it) }
+        if (parts.isEmpty()) return
+
+        for (rule in model.rules.values) {
+            val base = model.baseOfExpr(rule.condition) ?: continue
+            for (edge in parts.filter { it.partShape == base }) {
+                for (item in rule.body.filterIsInstance<Assignment>()) {
+                    val p = item.target
+                    val throughBackRef =
+                        (p.root == edge.backRef && p.segs.isNotEmpty()) ||
+                            (p.root == "this" && p.segs.size >= 2 && p.segs[0].name == edge.backRef)
+                    if (throughBackRef)
+                        diags.add(Diagnostic("V1", "'${rule.name}' when ${base} assigns through " +
+                            "'${edge.backRef}' — at a closure commit this rule fires once per inline " +
+                            "'${base}', every firing writing the same field of the same container: a " +
+                            "proven write-write conflict. Derive the aggregate on the container, or " +
+                            "move the condition to the container for once-per-act granularity (README §6)"))
+                }
+            }
+        }
     }
 
     // ── F1/F2/F3: declarations ───────────────────────────────────────────────
@@ -1036,6 +1072,14 @@ class Validator(private val model: Model) {
     private val commitKindsCache: List<CommitKind> by lazy {
         val kinds = mutableListOf<CommitKind>()
         model.exposed.forEach { kinds.add(CommitKind.Creates(it, source = "expose $it")) }
+        // closure parts are committable-via-closure (README §6, "Inline part
+        // creation"): the closure commit creates them, so they join the trigger,
+        // reachability, and co-firability analyses as ordinary creations
+        fun addClosure(container: String, e: ClosureEdge) {
+            kinds.add(CommitKind.Creates(e.partShape, source = "expose $container with ${e.prop}"))
+            e.children.forEach { addClosure(container, it) }
+        }
+        model.closures.forEach { (container, edges) -> edges.forEach { addClosure(container, it) } }
         for (rule in model.rules.values) {
             rule.body.filterIsInstance<Creation>().forEach {
                 kinds.add(CommitKind.Creates(it.shape, source = "rule ${rule.name}", byRule = rule))

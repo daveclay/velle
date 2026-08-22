@@ -11,7 +11,14 @@ data class ShapeDecl(
     val exposed: Boolean = false,
     /** `expose transient` — an input to the state, not a member of it (README §4). */
     val transient: Boolean = false,
+    /** the exposure's closure — inline `expose shape ... with` (README §6, "Inline part creation") */
+    val with: List<WithEntry> = emptyList(),
 ) : Decl
+
+/** One closure edge: an inverse-edge name on the enclosing level, with its own
+ *  nested closure when the part arrives with parts of its own (README §6,
+ *  "Inline part creation"; grammar.md, withEntry). */
+data class WithEntry(val name: String, val children: List<WithEntry> = emptyList())
 
 /** `shape Name = refExpr { members }` */
 data class RefinementDecl(
@@ -42,8 +49,12 @@ data class NeverDecl(
     val toleratesContention: Boolean = false,
 ) : Decl
 
-/** Standalone `expose [transient] Shape`. */
-data class ExposeDecl(val shape: String, val transient: Boolean = false) : Decl
+/** Standalone `expose [transient] Shape [with ...]`. */
+data class ExposeDecl(
+    val shape: String,
+    val transient: Boolean = false,
+    val with: List<WithEntry> = emptyList(),
+) : Decl
 
 // ── Shape / refinement members ───────────────────────────────────────────────
 

@@ -36,6 +36,8 @@ A `from { ... }` block supplies every field the created shape declares (minus la
 
 *Coarse* extension for fan-out (§6, "Committing and assigning collections"): a collection-path assignment counts as a write to that field on **every** instance of the member shape — any other write to the same field whose trigger could coincide is a conflict, and instance-level disjointness of target sets is never attempted (they are runtime data). Refining this with disjointness proofs in specific patterns is post-v0 calibration.
 
+*Closure* extension (§6, "Inline part creation"): a closure commit makes N entrants of each riding part shape, so the pair enumeration includes **self-pairs** — a rule triggered by a closure-riding shape coincides with itself across sibling entrants. A body assigning through the language-populated back-reference converges on the same container instance by construction — a proven write-write conflict, refused totally, value-equal right-hand sides included (proving RHS equality across firings is the instance-level reasoning this check already declines). The diagnostic prescribes the served spellings: derive the aggregate on the container, or move the condition to the container for once-per-act granularity.
+
 ### V2 — Disarm proof
 
 (§18.) A guarded rule's body must provably falsify its own trigger predicate — produce the witness the `not exists` reads, or assign the flag the predicate tests. Falsifying any one conjunct falsifies the conjunction, so one disarmed guard atom discharges the proof; the trigger's other `not`-atoms are conditions, not guards (`ActiveMember`'s `not suspended` owes no disarm to a rule guarded by a witness). Failure: "this rule never leaves its trigger state."
@@ -115,6 +117,12 @@ The static condition graph (rule effects → conditions they can newly satisfy) 
 ### V21 — Exposed-shape field forms
 
 (§22 "External input".) A shape with an `expose` declaration — either form, inline or standalone — is an external submission, and its declaration forms say what the committer supplies: every stored field is a required parameter of the generated commit function, and derived properties are never parameters (nothing is stored, so nothing can be supplied). Errors: an `initially` clause or a `timestamp` declaration on an exposed shape — a system-maintained value is no part of an external submission; it lives on an unexposed shape, supplied by a materializing rule's `from` block, minted by `initially` at that record's creation commit, or populated as `timestamp` commit metadata (§4's transient materialization is the served spelling). The diagnostic is connected: it names the exposure and the offending field, and prescribes the split.
+
+With a closure (`expose ... with`, §6 "Inline part creation"), the inline parts extend the signature: per part, a nested input value carrying every stored field minus the language-populated back-reference — never `id`, never the back-reference (a claim about an instance that does not exist yet); out-of-closure relationships stay reference parameters, and the empty part collection is the absence. Input-side part collections are bags — two identical part values mint two distinct instances — so the duplicate refusal applies to references only.
+
+### V22 — Closure declaration legality
+
+(§6, "Inline part creation".) A `with` entry must resolve, on the enclosing level's shape, to an inferred inverse or a declared view of exactly the recognized-inverse form (`(P where field == this)`); an arbitrary-predicate view is an error — "a closure edge must be the inverse of a declared `one` field." The recognized view pins the language-populated back-reference (the `Transfer.source`/`target` situation; V19's demand-intent posture). The closure graph is a tree by grammar — `with` only names inverse edges pointing at the enclosing level, so sibling references are unspellable declaration-side — and an in-closure reference targeting an instance created in the same closure is refused: "commit it and name it in a later act, or restructure." The closure is creation-only: it carries references and inline creations, nothing update-shaped. `expose transient` with a closure is refused — fail closed while OQ43 is open.
 
 ## Advisories
 
