@@ -15,7 +15,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **[OQ27](questions/OQ27-erasure.md)** — erasure and retention (right-to-be-forgotten) · language-side resolved via OQ37-R10 (`? initially required` + ordinary `= none` rules); residue: compilation's unretrievability guarantee
 - **[OQ28](questions/OQ28-bootstrap-backfill.md)** — bootstrap/backfill: a new rule against pre-existing state · not designed
 - **[OQ29](questions/OQ29-sum-types.md)** — sum types / union shapes · workaround exists (two optionals + xor `never`)
-- **[OQ37](questions/OQ37-delete.md)** — delete as a described mutation: statement, existence-dependency check, gating, referential completeness · investigation open (`investigate-delete.md`)
+- **[OQ37](questions/OQ37-delete.md)** — deleting records: `delete` is implemented (checks V23–V28); still to decide whether a deleted record's `when leaving` rules fire, and whether one commit may both change a record and delete it · rulings in `investigate-delete.md`, stress-test pass pending (`TODO.md`)
 - **[OQ43](questions/OQ43-transient-containers.md)** — transient containers: a closure whose container is `expose transient` · V17's direction forces the all-transient tree; v0 refuses the combination (`checks.md` V22) — remaining: the scoped V17 carve-out (same-closure references, `with`-resolution-only inverse inference), V18's reach over transient parts, the durable-container/transient-branch mix
 
 ## Deferred — post-v0 re-derivations (README §22's list)

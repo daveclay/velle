@@ -1,7 +1,7 @@
-# OQ37 — Delete as a described mutation
+# OQ37 — Deleting a record: do its `when leaving` rules fire, and may the same commit also change it?
 
 **Status:** open — discussion and rulings (R1–R10) live in `../investigate-delete.md`; the rulings are **implemented in v0** (2026-08-22: `delete`, `undeletable`, `? initially required` — grammar.md, checks V23–V28, `examples/moderation/`); still open: the two decisions in **§1 and §2 below**, plus the stress-test pass over R1–R10 (a `TODO.md` item)
-**In plain terms:** businesses delete records as ordinary behavior (discard the draft, remove the duplicate) — can Velle express delete as a mutation with describable rules, without breaking everything the spec proves by assuming facts persist?
+**In plain terms:** Velle can now delete records (the original question here — can deletion be an ordinary rule effect without breaking what the spec proves — is answered and implemented); what remains to decide is two shipped-with-a-default behaviors: should the rules that react to a record leaving a state also run when the record is deleted, and may a single commit both change a record's field and delete that record (refused today)?
 **Opened by:** design discussion (2026-08-14); distinct from [OQ27](OQ27-erasure.md) (erasure/retention — the storage-policy face; this is the description face)
 **See:** `../investigate-delete.md` (the discussion) · README §4, §8 "Frozen fields", §12, §13, §18 · `evaluation.md` "Transient acts"
 

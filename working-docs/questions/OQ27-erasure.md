@@ -3,7 +3,7 @@
 **Status:** open — language-side resolved via OQ37-R10 (see the 2026-08-15 section below); residue is compilation's unretrievability guarantee. Settles fully when OQ37 promotes.
 **In plain terms:** how does a system built on "facts don't un-happen" satisfy real-world obligations to erase data — retention windows, right-to-be-forgotten?
 **Opened by:** `investigate-transient.md` (its closing section, moved here)
-**See:** README §4 (no delete primitive) · `investigate_runtime.md` §7 (capture retraction — the contract's one sanctioned delete, for memory, not records) · [OQ37](OQ37-delete.md) / `../investigate-delete.md` (delete as a described mutation — the description face of what may be the same primitive; if a delete statement lands, this question's policy vocabulary plausibly compiles down to scheduled deletes plus a payload-shredding choice)
+**See:** README §4 (no delete primitive) · `investigate_runtime.md` §7 (capture retraction — the contract's one sanctioned delete, for memory, not records) · [OQ37](OQ37-delete.md) / `../investigate-delete.md` (deleting records through ordinary rules — the description face of what may be the same primitive; if a delete statement lands, this question's policy vocabulary plausibly compiles down to scheduled deletes plus a payload-shredding choice)
 
 ---
 
