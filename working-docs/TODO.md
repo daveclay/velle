@@ -42,10 +42,12 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 - [ ] Stress-test the A5 advisory ruling against realistic specs once the OQ16 calibration question resolves (`docs/concurrency.md`, "Why the width warning is an advisory").
 - [ ] Spec-generation phase 2 (boundary synthesis, scenario DSL, no-refire cases) and phase 3 (the `example` construct) — `testgen.md`.
 
-## Delete investigation (`investigate-delete.md`, OQ37)
+## Delete investigation (`investigate-delete.md`, OQ37) — rulings implemented in v0 (2026-08-22)
 
-- [ ] Resolve the two remaining opens: exit-rules-at-deletion; the `delete` statement's edge cases.
-- [ ] Stress-test rulings R1–R10 with adversarial use cases; anything that breaks reopens in the investigation doc.
+- [ ] Resolve the two remaining opens: exit-rules-at-deletion (implemented default: every exit rule fires, last-reader semantics); the `delete` statement's edge cases (implemented default: write-plus-delete refused fail-closed).
+- [ ] Stress-test rulings R1–R10 with adversarial use cases; anything that breaks reopens in the investigation doc — and changes the v0 implementation with it.
+- [ ] Revise README §4's "no delete primitive" to the derived-legality stance (`investigate-delete.md`, "Reconciling with §4") and add the deleting-commit semantics to `evaluation.md`; the compiler and checks.md already carry the implemented stance.
+- [ ] Teach the serialization-domain analysis (Domains.kt) to propagate deletion-caused drift precisely — today a delete keys the deleted row and re-uses creation-shaped relevance at shape granularity (advisory A5 only).
 
 ## Language questions awaiting design
 

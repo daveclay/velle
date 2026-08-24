@@ -116,6 +116,7 @@ class Model(val decls: List<Decl>) {
                 is TimestampProp -> out[m.name] =
                     MemberInfo(m.name, owner, VType.DateTimeT, stored = false, timestamp = true)
                 is FrozenClause -> {}
+                UndeletableClause -> {}
             }
         }
         shapes[scope]?.let { shape ->
@@ -232,6 +233,33 @@ class Model(val decls: List<Decl>) {
         if (t.many || t.shape != scope) return null
         return src.root to f.name
     }
+
+    // ── delete sites (OQ37): every deleter of every shape, statically ────────
+
+    /** Every `delete` statement in the spec, with its target resolved to the
+     *  base shape it deletes. Literal static paths keep this derivable — the
+     *  whole-spec compiler knows every deleter of every shape, exactly as it
+     *  knows every writer. Unresolvable targets are dropped here (the
+     *  validator reports them as F1). */
+    val deleteSites: List<DeleteSite> by lazy {
+        rules.values.flatMap { rule ->
+            val scope = (rule.condition as? RefName)?.name
+                ?.takeIf { it in shapes || it in refinements }
+                ?: baseOfExpr(rule.condition)
+                ?: return@flatMap emptyList()
+            rule.body.filterIsInstance<DeleteStmt>().mapNotNull { stmt ->
+                val shape =
+                    if (stmt.target.root == "this" && stmt.target.segs.isEmpty()) baseOf(scope)
+                    else pathElementShape(stmt.target, scope)?.let { baseOf(it) }
+                shape?.let { DeleteSite(rule, stmt, it) }
+            }
+        }
+    }
+
+    /** Base shapes some rule deletes — the set every persistence-leaning proof
+     *  (monotone `exists`, one-way state flow, anti-monotone predicates) must
+     *  consult before assuming facts are immortal. */
+    val deletedShapes: Set<String> by lazy { deleteSites.map { it.shape }.toSet() }
 
     /** The capture-persistence problems this spec poses a store, one per
      *  capture-carrying refinement (CaptureSchema's kdoc states the contract). */
@@ -453,6 +481,9 @@ data class MemberInfo(
 
 /** The declared side an inferred inverse reads: [shape].[field], to-one or an m2m `many`. */
 data class InverseInfo(val shape: String, val field: String, val many: Boolean)
+
+/** One `delete` statement, resolved: [rule] deletes an instance of [shape] via [stmt]. */
+data class DeleteSite(val rule: RuleDecl, val stmt: DeleteStmt, val shape: String)
 
 /** One resolved closure edge (README §6, "Inline part creation"): the exposed
  *  commit takes [prop] as inline [partShape] values; [backRef] is the part's

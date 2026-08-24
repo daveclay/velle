@@ -49,8 +49,15 @@ class Validator(private val model: Model) {
         checkSingularProofs()     // V12 (refinement slice)
         checkTransients()         // V17 isolation, V18 totality
         checkClosures()           // V22 legality + V1's closure self-pair extension
+        checkDeleteStatements()   // V23 (OQ37: statement legality, one deleter, write-and-delete)
+        checkReferentialCompleteness() // V24 (OQ37: cascade / absorb / copy)
+        checkExistenceDependency()     // V25 (OQ37: guard witnesses, singularity proofs)
+        checkNeverDeleters()           // V26 (OQ37: deleters join `never` induction)
+        checkUndeletable()             // V27 (OQ37: the state-scoped deletion gate)
+        checkDeleteStranding()         // V28 (OQ37: the V17 mirror at deletion)
         checkDriftExposedPartitions() // A4 (advisory)
         checkContention()             // A5 (advisory, OQ40)
+        checkDeadOptionality()        // A2 (advisory: `? initially required` nothing can absent)
     }
 
     // ── V22: closure declaration legality + V1 closure extension (README §6,
@@ -101,6 +108,14 @@ class Validator(private val model: Model) {
                     if (t is RelType && t.shape in model.refinements)
                         diags.add(Diagnostic("F2", "'$name.${m.name}' — relationships target base shapes, not refinements"))
                     m.initially?.let { checkExpr(it, name, allowGenerator = true) }
+                    // `initially required` demands an optional type: the whole point of
+                    // the decomposition is read-side optionality with creation-side
+                    // requiredness (OQ37-R10); a plain field is already both
+                    if (m.initiallyRequired &&
+                        (t as? RelType)?.optional != true && (t as? ScalarType)?.optional != true)
+                        diags.add(Diagnostic("F3", "'$name.${m.name}' — 'initially required' needs an " +
+                            "optional type ('?'): a plain field is already required at creation and can " +
+                            "never be absent (OQ37)"))
                     if (m.tolerates != null && m.tolerates !in setOf("duplication", "reordering"))
                         diags.add(Diagnostic("F3", "'$name.${m.name}' — fields tolerate 'duplication' or 'reordering', not '${m.tolerates}'"))
                 }
@@ -187,6 +202,7 @@ class Validator(private val model: Model) {
         for (item in rule.body) when (item) {
             is Assignment -> checkAssignment(rule, scope, item)
             is Creation -> checkCreation(rule, scope, item)
+            is DeleteStmt -> {} // legality is V23's (checkDeleteStatements)
             ThenMarker -> {}
         }
     }
@@ -543,6 +559,20 @@ class Validator(private val model: Model) {
                     .any { n -> pol.getValue(n).let { p -> if (rule.leaving) p <= 0 else p >= 0 } }
             }
             is CommitKind.Assigns -> affects(k, rule) // value-dependent: either direction
+            is CommitKind.Deletes -> {
+                // creation's mirror, signs flipped: a deletion can only unsatisfy a
+                // consult, so it moves a predicate at the consult's NEGATED polarity;
+                // the deleted instance itself can only LEAVE; and a read through a
+                // reference at the deleted shape flips value-dependently (either
+                // direction — `is none` becomes true, `is some` false)
+                if (k.shape == base && rule.leaving) true
+                else {
+                    val pol = conditionPolarities(rule).map
+                    pol.keys.filter { model.baseOf(it) == k.shape }
+                        .any { n -> pol.getValue(n).let { p -> if (rule.leaving) p >= 0 else p <= 0 } } ||
+                        conditionReadsRefTo(rule, k.shape)
+                }
+            }
         }
     }
 
@@ -786,9 +816,9 @@ class Validator(private val model: Model) {
     /** What of [a]'s effects does a summary of [reads] consult? Human-readable
      *  conflict descriptions; empty means provably no read-write conflict. */
     private fun readConflicts(a: RuleDecl, reads: ReadSummary): List<String> {
-        val (assigned, created) = ruleEffects(a)
+        val (assigned, created, deleted) = ruleEffects(a)
         if (reads.opaque)
-            return if (assigned.isEmpty() && created.isEmpty()) emptyList()
+            return if (assigned.isEmpty() && created.isEmpty() && deleted.isEmpty()) emptyList()
             else listOf("state its summary cannot attribute (opaque — treated as reading anything)")
         val out = mutableListOf<String>()
         (assigned intersect reads.fields).forEach { out.add("${it.first}.${it.second}") }
@@ -800,6 +830,15 @@ class Validator(private val model: Model) {
             val touched = readNames.filter { model.baseOf(it) == s }
                 .any { it in model.shapes || !freshCannotEnter(it, created) }
             if (touched) out.add("instances of '$s' (existence or an aggregate)")
+        }
+        // a deletion changes any existence/aggregate read of the shape, and any
+        // read through a reference at it (the absorbing `is none`, OQ37)
+        for (s in deleted) {
+            val touched = readNames.any { model.baseOf(it) == s } ||
+                (reads.fields + reads.collFields).any { (o, f) ->
+                    model.membersOf(o)[f]?.type?.instanceShape()?.let { model.baseOf(it) } == s
+                }
+            if (touched) out.add("instances of '$s' (a delete the read consults)")
         }
         return out
     }
@@ -836,8 +875,8 @@ class Validator(private val model: Model) {
     }
 
     /** [a]'s effects: fields assigned — `on update` timestamps those writes
-     *  advance included — and shapes created. */
-    private fun ruleEffects(a: RuleDecl): Pair<Set<Pair<String, String>>, Set<String>> =
+     *  advance included — shapes created, and shapes deleted (OQ37). */
+    private fun ruleEffects(a: RuleDecl): Triple<Set<Pair<String, String>>, Set<String>, Set<String>> =
         effectsCache.getOrPut(a.name) {
             val assigned = mutableSetOf<Pair<String, String>>()
             writes.filter { it.rule === a }.forEach { w ->
@@ -845,10 +884,11 @@ class Validator(private val model: Model) {
                 updateTimestamps(w.owner).forEach { assigned.add(w.owner to it) }
             }
             val created = a.body.filterIsInstance<Creation>().map { it.shape }.toSet()
-            assigned to created
+            val deleted = model.deleteSites.filter { it.rule === a }.map { it.shape }.toSet()
+            Triple(assigned, created, deleted)
         }
 
-    private val effectsCache = mutableMapOf<String, Pair<Set<Pair<String, String>>, Set<String>>>()
+    private val effectsCache = mutableMapOf<String, Triple<Set<Pair<String, String>>, Set<String>, Set<String>>>()
 
     private fun updateTimestamps(shape: String): Set<String> = updateTsCache.getOrPut(shape) {
         model.shapes[shape]?.members?.filterIsInstance<TimestampProp>()
@@ -875,6 +915,7 @@ class Validator(private val model: Model) {
                         item.forExpr?.let { model.collectExpr(it, scope, s) }
                         item.fields.forEach { model.collectExpr(it.value, scope, s) }
                     }
+                    is DeleteStmt -> model.collectExpr(item.target, scope, s) // the route to the target
                     ThenMarker -> {}
                 }
             }
@@ -897,7 +938,13 @@ class Validator(private val model: Model) {
         val written = writes.map { it.owner to it.member.name }.toSet()
         model.nevers.filter { n ->
             val s = model.summaryOfRefExpr(n.target)
-            !s.opaque && s.fields.none { it in written }
+            // deleters join the proof's state changes (OQ37): deleting the never's
+            // own base only shrinks the forbidden set, but a deleter of any other
+            // consulted shape can flip membership either way — not spendable
+            val nBase = model.baseOfExpr(n.target)
+            val foreignConsults = s.touchedShapes().mapNotNull { model.baseOf(it) }.toSet() - setOfNotNull(nBase)
+            !s.opaque && s.fields.none { it in written } &&
+                foreignConsults.none { it in model.deletedShapes }
         }
     }
 
@@ -1018,8 +1065,10 @@ class Validator(private val model: Model) {
         // V2: a guarded rule that can re-evaluate (boundary or tick) must disarm its own
         // trigger. Falsifying any one conjunct falsifies the conjunction, so one
         // disarmed atom discharges the proof — the others are conditions, not guards.
+        // deleting the subject is the structural disarm: the trigger state has
+        // no member left to re-fire on (OQ37)
         if (atoms.isNotEmpty() && (rule.preposition == "after" || schedules.isNotEmpty())) {
-            if (atoms.none { disarmed(rule, it) }) {
+            if (atoms.none { disarmed(rule, it) } && !deletesSubject(rule)) {
                 val what = atoms.joinToString(" or ") { atom ->
                     when (atom) {
                         is GuardAtom.Witness -> "produce a '${atom.shape}'"
@@ -1059,6 +1108,7 @@ class Validator(private val model: Model) {
             when (item) {
                 is Assignment -> walk(item.value)
                 is Creation -> item.fields.forEach { walk(it.value) }
+                is DeleteStmt -> {}
                 ThenMarker -> {}
             }
         }
@@ -1087,6 +1137,9 @@ class Validator(private val model: Model) {
             writes.filter { it.rule === rule }.forEach {
                 kinds.add(CommitKind.Assigns(it.owner, it.member.name, byRule = rule))
             }
+            model.deleteSites.filter { it.rule === rule }.forEach {
+                kinds.add(CommitKind.Deletes(it.shape, byRule = rule))
+            }
         }
         kinds
     }
@@ -1095,6 +1148,8 @@ class Validator(private val model: Model) {
         val byRule: RuleDecl?
         data class Creates(val shape: String, val source: String, override val byRule: RuleDecl? = null) : CommitKind
         data class Assigns(val shape: String, val field: String, override val byRule: RuleDecl? = null) : CommitKind
+        /** A rule's delete of an instance of [shape] (OQ37) — the third state change. */
+        data class Deletes(val shape: String, override val byRule: RuleDecl? = null) : CommitKind
     }
 
     private fun ruleReads(rule: RuleDecl): RuleSummary = ruleSummaries.getOrPut(rule.name) {
@@ -1113,6 +1168,7 @@ class Validator(private val model: Model) {
                 when (item) {
                     is Assignment -> model.collectExpr(item.value, scope, s)
                     is Creation -> item.fields.forEach { model.collectExpr(it.value, scope, s) }
+                    is DeleteStmt -> model.collectExpr(item.target, scope, s)
                     ThenMarker -> {}
                 }
             }
@@ -1168,6 +1224,21 @@ class Validator(private val model: Model) {
                 (k.shape to k.field) in cond.fields ||
                     (k.shape to k.field) in cond.collFields ||
                     cond.collFields.any { it.first == k.shape && it.second in updateTimestamps(k.shape) }
+            // a deletion flips existence/aggregate consults of the shape, removes the
+            // deleted instance from every refinement of its base, and turns reads
+            // through references at it absent (`is none` — the absorbing reference)
+            is CommitKind.Deletes ->
+                k.shape == base || k.shape in consultedShapes(rule) || conditionReadsRefTo(rule, k.shape)
+        }
+    }
+
+    /** Does the rule's condition read a reference-typed field whose target is
+     *  [shape]? Deleting the target flips such reads to absent (OQ37-R10). */
+    private fun conditionReadsRefTo(rule: RuleDecl, shape: String): Boolean {
+        val cond = conditionSummary(rule)
+        if (cond.opaque) return true
+        return (cond.fields + cond.collFields).any { (o, f) ->
+            model.membersOf(o)[f]?.type?.instanceShape()?.let { model.baseOf(it) } == shape
         }
     }
 
@@ -1565,10 +1636,11 @@ class Validator(private val model: Model) {
              *  creating the base shape itself is entry (+) unless the
              *  predicate provably excludes fresh instances. */
             fun flips(rule: RuleDecl): Map<String, Int> {
-                val (assigned, created) = ruleEffects(rule)
+                val (assigned, created, deleted) = ruleEffects(rule)
                 if (pr.opaque)
                     return (assigned.map { "${it.first}.${it.second}" } +
-                        created.map { "creates '$it'" }).associateWith { 0 }
+                        created.map { "creates '$it'" } +
+                        deleted.map { "deletes '$it'" }).associateWith { 0 }
                 val fieldTokens = assigned.intersect(pr.fields + pr.collFields)
                     .associate { "${it.first}.${it.second}" to 0 }
                 val createTokens = mutableMapOf<String, Int>()
@@ -1582,6 +1654,20 @@ class Validator(private val model: Model) {
                         .map { polarities.getValue(it) }
                     if (signs.isEmpty()) continue
                     createTokens["creates '$s'"] = signs.toSet().singleOrNull()?.takeIf { it != 0 } ?: 0
+                }
+                // deletion mirrors creation with the sign negated: it can only
+                // unsatisfy a consult; the deleted base instance can only leave;
+                // reads through references at the shape flip value-dependently
+                for (s in deleted) {
+                    if (s == base) { createTokens["deletes '$s'"] = -1; continue }
+                    val signs = polarities.keys.filter { model.baseOf(it) == s }
+                        .map { -polarities.getValue(it) }
+                    val viaRef = (pr.fields + pr.collFields).any { (o, f) ->
+                        model.membersOf(o)[f]?.type?.instanceShape()?.let { model.baseOf(it) } == s
+                    }
+                    if (signs.isEmpty() && !viaRef) continue
+                    createTokens["deletes '$s'"] =
+                        if (viaRef) 0 else signs.toSet().singleOrNull()?.takeIf { it != 0 } ?: 0
                 }
                 return fieldTokens + createTokens
             }
@@ -1639,7 +1725,7 @@ class Validator(private val model: Model) {
             if (node in done) return
             if (node in visiting) {
                 val cycle = path.dropWhile { it != node } + node
-                val broken = cycle.any { r -> guardAtoms(r).any { disarmed(r, it) } }
+                val broken = cycle.any { r -> guardAtoms(r).any { disarmed(r, it) } || deletesSubject(r) }
                 if (!broken)
                     diags.add(Diagnostic("V16", "rule cascade may not quiesce: " +
                         cycle.joinToString(" -> ") { it.name } +
@@ -1692,7 +1778,7 @@ class Validator(private val model: Model) {
     /**
      * Anti-monotone: once an instance leaves R it can never re-enter, so guarded
      * creation bounds membership forever. v0's provable conjunct forms: `not
-     * exists ...` (facts are monotone — no delete primitive), and `not <flag>`
+     * exists ...` (monotone while no rule deletes the witness — OQ37), and `not <flag>`
      * where every writer assigns literal true (a one-way latch, checked against
      * the same write set V1 walks). Returns null when proven, else the reason.
      */
@@ -1703,7 +1789,17 @@ class Validator(private val model: Model) {
             val inner = (c as? NotExpr)?.inner
                 ?: return "a conjunct is not of the form 'not ...' — not provably anti-monotone in v0"
             when {
-                inner is ExistsExpr -> {}
+                inner is ExistsExpr -> {
+                    // 'not exists W' was anti-monotone because facts persisted; a
+                    // deleter of W makes re-entry by deletion possible (OQ37)
+                    val w = inner.shape
+                        ?: (inner.collection?.bindings?.firstOrNull()?.source as? PathExpr)
+                            ?.takeIf { it.segs.isEmpty() }?.root
+                    val wb = w?.let { model.baseOf(it) }
+                    if (wb != null && wb in model.deletedShapes)
+                        return "a rule deletes '$wb' (OQ37), so the 'not exists' conjunct can " +
+                            "re-become true — re-entry by deletion is possible"
+                }
                 inner is PathExpr && inner.segs.isEmpty() -> {
                     val flag = inner.root
                     val falseWriter = writes.firstOrNull {
@@ -1873,6 +1969,306 @@ class Validator(private val model: Model) {
                     "over the act (the boundary refusal is the response); add a catch-all rule, refuse the " +
                     "remainder with a `never`, or restructure the partitions as complements (per-reason " +
                     "refusals go in one complement rule with a conditional reason value)"))
+        }
+    }
+
+    // ── V23–V28: delete (OQ37) ───────────────────────────────────────────────
+    //
+    // Delete is instance-granularity mutation whose legality is derived from
+    // what the spec proves *using* the instance's existence — never banned by
+    // category. The boundary principle (the C1–C11 catalog,
+    // working-docs/investigate-delete.md): a delete errors when it can break
+    // something the spec proves or declares — never merely because state
+    // changes; recalculation is drift, the design working. The disjointness
+    // prover is deliberately the shared refinement-overlap one — syntactic
+    // conjunct complements — and nothing finer (ruled conservative,
+    // 2026-08-14): no window arithmetic, no lifetime analysis. The accepted
+    // false positive's discharge is restructure, never a signature (guard
+    // re-arming is not `tolerates`-signable — ruled, 2026-08-14).
+
+    /** The conjuncts provably constraining which instances a delete site can
+     *  target: for `delete this`, the deleting rule's own condition; for a
+     *  path target, the predicates of every refinement the condition asserts
+     *  of that path (`<path> is R` conjuncts). Empty means "any instance". */
+    private fun deleteScopeConjuncts(site: DeleteSite): List<Expr> {
+        val t = site.stmt.target
+        if (t.root == "this" && t.segs.isEmpty()) return conditionConjuncts(site.rule.condition)
+        return conditionConjuncts(site.rule.condition).flatMap { conj ->
+            val isE = conj as? IsExpr ?: return@flatMap emptyList<Expr>()
+            if (isE.kind != "refinement" || isE.subject != t) return@flatMap emptyList<Expr>()
+            isE.refinement?.let { refPredicateConjuncts(RefName(it)) } ?: emptyList()
+        }
+    }
+
+    /** The shared prover, aimed at deletion: the delete scope provably excludes
+     *  membership in [name] when a scope conjunct is the syntactic complement
+     *  of one of [name]'s predicate conjuncts. A base shape has no conjuncts,
+     *  so nothing excludes it — fail closed. */
+    private fun deleteExcludes(site: DeleteSite, name: String): Boolean {
+        val target = refPredicateConjuncts(RefName(name)) ?: return false
+        if (target.isEmpty()) return false
+        val scope = deleteScopeConjuncts(site)
+        // the explicit spelling: a `not (<target path> is Name)` conjunct on the condition
+        val notIs = conditionConjuncts(site.rule.condition)
+            .any { it == NotExpr(IsExpr(site.stmt.target, "refinement", name)) }
+        return notIs || scope.any { p -> target.any { q -> p == NotExpr(q) || q == NotExpr(p) } }
+    }
+
+    /** Does this rule's body delete its own subject? Deleting `this` leaves
+     *  every trigger state — the structural disarm (V2/V16). */
+    private fun deletesSubject(rule: RuleDecl): Boolean =
+        rule.body.any { it is DeleteStmt && it.target == PathExpr("this") }
+
+    private fun siteLabel(s: DeleteSite) =
+        "rule '${s.rule.name}' deletes ${s.shape} ('delete ${Printer.expr(s.stmt.target)}')"
+
+    // V23 — the statement: literal static to-one path; a shape known to the
+    // spec, never a transient act; one deleter per instance per commit (two
+    // deleters of one shape at one commit is the coincidence error); and a
+    // commit never both writes a field of an instance and deletes it — there
+    // is no business sentence "change it and also remove it, at once" (fail
+    // closed, pending a use case).
+    private fun checkDeleteStatements() {
+        for (rule in model.rules.values) {
+            val scope = subjectScope(rule) ?: continue
+            for (stmt in rule.body.filterIsInstance<DeleteStmt>()) {
+                val t = stmt.target
+                val shape: String? =
+                    if (t.root == "this" && t.segs.isEmpty()) model.baseOf(scope)
+                    else {
+                        resolvePath(t, scope) // F1 on unknown members
+                        model.pathElementShape(t, scope)?.let { model.baseOf(it) }
+                    }
+                if (shape == null) {
+                    if (!(t.root == "this" && t.segs.isEmpty()))
+                        diags.add(Diagnostic("V23", "rule '${rule.name}' — 'delete ${Printer.expr(t)}' " +
+                            "does not resolve to a single instance: the target is a literal static " +
+                            "to-one path (OQ37; no fan-out deletes in v0 — a per-member delete is its " +
+                            "own rule on the shape that owns the instances)"))
+                    continue
+                }
+                if (shape in model.transients)
+                    diags.add(Diagnostic("V23", "rule '${rule.name}' deletes transient act '$shape' — " +
+                        "a transient act is an input to the state, not a member of it: there is " +
+                        "nothing to delete (README §4)"))
+                // a collection anywhere in the target is a fan-out — refused
+                if (pathHasCollectionHop(t, scope))
+                    diags.add(Diagnostic("V23", "rule '${rule.name}' — 'delete ${Printer.expr(t)}' " +
+                        "traverses a collection: no fan-out deletes in v0 — a per-member delete is " +
+                        "its own rule on the shape that owns the instances (OQ37)"))
+                // same body: the same instance deleted twice, or written and deleted
+                val dupes = rule.body.filterIsInstance<DeleteStmt>().count { it.target == t }
+                if (dupes > 1)
+                    diags.add(Diagnostic("V23", "rule '${rule.name}' deletes ${Printer.expr(t)} twice in one body"))
+                for (a in rule.body.filterIsInstance<Assignment>()) {
+                    val writesDeleted =
+                        if (t.root == "this" && t.segs.isEmpty())
+                            (a.target.root == "this" && a.target.segs.size == 1) ||
+                                (a.target.root != "this" && a.target.segs.isEmpty())
+                        else a.target.root == t.root &&
+                            a.target.segs.dropLast(1).map { it.name } == t.segs.map { it.name } &&
+                            a.target.segs.size == t.segs.size + 1
+                    if (writesDeleted)
+                        diags.add(Diagnostic("V23", "rule '${rule.name}' both writes " +
+                            "${Printer.expr(a.target)} and deletes ${Printer.expr(t)} in one commit — " +
+                            "there is no business sentence \"change it and also remove it, at once\" (OQ37)"))
+                }
+            }
+        }
+        // cross-rule: one deleter per instance per commit, and no co-firing
+        // writer of a shape a sibling deletes — both fail closed at shape
+        // granularity (the coarse slice of the instance-level rulings)
+        val sites = model.deleteSites
+        for (i in sites.indices) for (j in i + 1 until sites.size) {
+            val (a, b) = sites[i] to sites[j]
+            if (a.rule === b.rule || a.shape != b.shape) continue
+            if (!provablyDisjoint(a.rule, b.rule) && canCoFire(a.rule, b.rule))
+                diags.add(Diagnostic("V23", "rules '${a.rule.name}' and '${b.rule.name}' can both delete " +
+                    "a ${a.shape} at one commit and their triggers are not provably disjoint — " +
+                    "one deleter per instance per commit (OQ37)"))
+        }
+        for (site in sites) {
+            for (w in writes) {
+                if (w.owner != site.shape || w.rule === site.rule) continue
+                if (!provablyDisjoint(w.rule, site.rule) && canCoFire(w.rule, site.rule))
+                    diags.add(Diagnostic("V23", "'${w.rule.name}' writes ${w.owner}.${w.member.name} and " +
+                        "sibling '${site.rule.name}' deletes ${site.shape} — a commit that both writes a " +
+                        "field of an instance and deletes it is refused, fail closed (OQ37); " +
+                        "condition one rule away from the other"))
+            }
+        }
+    }
+
+    private fun pathHasCollectionHop(t: PathExpr, scope: String): Boolean {
+        val steps = if (t.root == "this") t.segs.map { it.name } else listOf(t.root) + t.segs.map { it.name }
+        var current: String? = scope
+        for (name in steps) {
+            val m = current?.let { model.membersOf(it)[name] } ?: return false
+            if (m.type is VType.Coll || m.type is VType.CollS) return true
+            current = m.type.instanceShape()
+        }
+        return false
+    }
+
+    // V24 — referential completeness (cascade, OQ37): deleting an instance
+    // that required `one` references point at is illegal unless every referrer
+    // is resolved — deleted in the same commit (the cascade, spelled), the
+    // reference declared `? initially required` (absorbing — it goes absent),
+    // or restructured to copies. Never transitive magic: each hop is its own
+    // visible decision (README §8's freeze-depth precedent).
+    private fun checkReferentialCompleteness() {
+        for (site in model.deleteSites) {
+            val cascaded = site.rule.body.filterIsInstance<DeleteStmt>()
+                .mapNotNull { s -> model.deleteSites.find { it.rule === site.rule && it.stmt === s }?.shape }
+                .toSet()
+            for ((refName, referrer) in model.shapes) {
+                if (refName in model.transients) continue // an act reads it within the commit — the last reader
+                for (f in referrer.members.filterIsInstance<StoredProp>()) {
+                    val t = f.type as? RelType ?: continue
+                    if (t.shape != site.shape || t.many || t.optional) continue
+                    if (refName in cascaded) continue // resolved at the same commit (coarse C4)
+                    diags.add(Diagnostic("V24", "${siteLabel(site)}, which strands " +
+                        "'$refName.${f.name}: one ${site.shape}' — deleting an instance required " +
+                        "references point at needs every referrer resolved: delete the referrer in the " +
+                        "same commit, declare the reference '${f.name}: one ${site.shape}? initially " +
+                        "required' (it then absorbs the deletion by going absent), or copy the fields " +
+                        "that must survive (OQ37)"))
+                }
+            }
+        }
+    }
+
+    // V25 — existence is spent in proofs (OQ37's genuinely new check). Two
+    // v0 slices: (a) guard witnesses — a `not exists W` conjunct on any rule's
+    // condition makes W's records load-bearing: deleting one re-arms the guard
+    // and the rule re-fires (the double-apply hazard); (b) singularity proofs —
+    // a `(R for ...)` reference relies on the member the guard maintains;
+    // deleting it mid-episode strands the reference. Discharge is the shared
+    // disjointness prover only; not `tolerates`-signable (ruled): intentional
+    // re-triggering is reversal-as-data, cleanup is provable disjointness or
+    // OQ27 retention.
+    private fun checkExistenceDependency() {
+        if (model.deleteSites.isEmpty()) return
+        for (rule in model.rules.values) {
+            for (conj in conditionConjuncts(rule.condition)) {
+                val inner = (conj as? NotExpr)?.inner as? ExistsExpr ?: continue
+                val witness = inner.shape
+                    ?: (inner.collection?.bindings?.firstOrNull()?.source as? PathExpr)
+                        ?.takeIf { it.segs.isEmpty() && (it.root in model.shapes || it.root in model.refinements) }?.root
+                    ?: continue
+                val base = model.baseOf(witness) ?: continue
+                for (site in model.deleteSites) {
+                    if (site.shape != base) continue
+                    if (deleteExcludes(site, witness)) continue
+                    diags.add(Diagnostic("V25", "${siteLabel(site)}, whose existence '${rule.name}'s " +
+                        "guard reads ('not exists $witness ...') — the delete re-arms the guard and the " +
+                        "rule applies again. Restructure the guard onto a field witness, write the " +
+                        "disjointness into the predicates (the shared refinement-overlap prover, nothing " +
+                        "finer — OQ37, ruled conservative), or — for intentional re-triggering — model " +
+                        "the reversal as data (README §22); this hazard is not `tolerates`-signable"))
+                }
+            }
+        }
+        forEachSpecExpr { spot, e ->
+            if (e !is SingularFor) return@forEachSpecExpr
+            val base = model.baseOf(e.shape) ?: return@forEachSpecExpr
+            for (site in model.deleteSites) {
+                if (site.shape != base) continue
+                if (e.shape != base && deleteExcludes(site, e.shape)) continue
+                diags.add(Diagnostic("V25", "${siteLabel(site)}, and $spot relies on " +
+                    "'(${e.shape} for ...)' being present — the delete can strand the singular " +
+                    "reference mid-episode. Condition the deleter on the complement of " +
+                    "'${e.shape}' (complementary predicates, which the shared prover clears), " +
+                    "or restructure (OQ37)"))
+            }
+        }
+    }
+
+    // V26 — deleters join every invariant's inductive proof (OQ37): deleting
+    // an instance of the `never`'s own base only shrinks the forbidden set —
+    // safe; deleting an instance of any *other* shape the predicate consults
+    // can flip membership either way, and v0 cannot prove the invariant holds
+    // across it — fail closed.
+    private fun checkNeverDeleters() {
+        if (model.deleteSites.isEmpty()) return
+        for ((i, n) in model.nevers.withIndex()) {
+            val nBase = model.baseOfExpr(n.target)
+            val s = model.summaryOfRefExpr(n.target)
+            val consulted = s.touchedShapes().mapNotNull { model.baseOf(it) }.toSet() - setOfNotNull(nBase)
+            for (site in model.deleteSites) {
+                if (site.shape !in consulted && !s.opaque) continue
+                diags.add(Diagnostic("V26", "${siteLabel(site)}, which never #${i + 1} " +
+                    "(over $nBase) consults — the delete can end a transaction violating the " +
+                    "invariant, and v0 cannot prove otherwise: condition the deleting act, or " +
+                    "resolve the invariant's other side in the same commit (OQ37)"))
+            }
+        }
+    }
+
+    // V27 — the deletion gate (OQ37-R1/R9): `undeletable` scopes deletion
+    // permission to a state exactly as `frozen` scopes write permission — the
+    // same fail-closed disjointness proof, the same fix-it idiom (partition
+    // the deleter onto the deletable subset; refusal lands as data).
+    private fun checkUndeletable() {
+        for ((refName, r) in model.refinements) {
+            if (r.members.none { it is UndeletableClause }) continue
+            val base = model.baseOf(refName) ?: continue
+            val guarded = model.deleteSites.filter { it.shape == base }
+            for (site in guarded) {
+                if (deleteExcludes(site, refName)) continue
+                diags.add(Diagnostic("V27", "${siteLabel(site)}, undeletable while a member of " +
+                    "'$refName' — the trigger does not provably exclude membership; partition the " +
+                    "deleter onto the deletable subset so refusal lands as data (OQ37; the " +
+                    "README §8 \"Frozen fields\" idiom, aimed at existence)"))
+            }
+            if (guarded.isEmpty() && model.deleteSites.isNotEmpty())
+                diags.add(Diagnostic("A2", "'$refName' declares `undeletable` but no rule deletes " +
+                    "'$base' — the gate refuses nothing (dead machinery)", advisory = true))
+        }
+    }
+
+    // V28 — transaction stranding, the V17 mirror (OQ37): nothing after the
+    // deleting transaction's close may read the deleted instance. A `when
+    // leaving` rule with an `after commit` boundary or a tick backstop can be
+    // handed a deletion's leaver — a subject that does not survive to its
+    // firing. Durable reactions hang off the outcome record the deleting
+    // commit produced.
+    private fun checkDeleteStranding() {
+        if (model.deleteSites.isEmpty()) return
+        for (rule in model.rules.values) {
+            if (!rule.leaving) continue
+            if (!(rule.preposition == "after" || rule.triggers.any { it != "commit" })) continue
+            val base = model.baseOfExpr(rule.condition) ?: continue
+            for (site in model.deleteSites) {
+                if (site.shape != base) continue
+                val left = (rule.condition as? RefName)?.name
+                if (left != null && left != base && deleteExcludes(site, left)) continue
+                diags.add(Diagnostic("V28", "${siteLabel(site)}, and '${rule.name}' reads the " +
+                    "leaver ${if (rule.preposition == "after") "after commit" else "at a tick"} — a " +
+                    "deleted instance does not survive the transaction boundary the rule declares " +
+                    "(OQ37; the V17 mirror). React on-commit as a last reader, or hang the durable " +
+                    "reaction off the outcome record the deleting commit produces"))
+            }
+        }
+    }
+
+    // A2 (advisory) — dead optionality (OQ37-R10's converse diagnostic): an
+    // `? initially required` field nothing can ever make absent — no deleter
+    // of its target, no writer of the field — is `one X` wearing a costume.
+    private fun checkDeadOptionality() {
+        for ((shapeName, shape) in model.shapes) {
+            for (m in shape.members.filterIsInstance<StoredProp>()) {
+                if (!m.initiallyRequired) continue
+                val rel = m.type as? RelType
+                val targetDeletable = rel?.shape?.let { it in model.deletedShapes } == true
+                val written = writes.any { it.owner == shapeName && it.member.name == m.name }
+                if (!targetDeletable && !written)
+                    diags.add(Diagnostic("A2", "'$shapeName.${m.name}' is '? initially required' but " +
+                        "nothing can make it absent — no rule deletes " +
+                        (rel?.shape?.let { "'$it'" } ?: "its target") +
+                        " and no rule assigns the field; did you mean the plain required form? (OQ37)",
+                        advisory = true))
+            }
         }
     }
 

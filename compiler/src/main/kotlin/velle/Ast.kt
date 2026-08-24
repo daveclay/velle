@@ -64,6 +64,10 @@ data class StoredProp(
     val type: TypeRef,
     val initially: Expr? = null,
     val tolerates: String? = null,
+    /** `? initially required` (OQ37-R10): the type is read-optional, but a
+     *  creation must supply a value — never-set is impossible, so `is none`
+     *  means "was present, now gone" (target deleted, or assigned `none`). */
+    val initiallyRequired: Boolean = false,
 ) : Member
 
 data class DerivedProp(
@@ -77,6 +81,12 @@ data class TimestampProp(val name: String, val on: String) : Member // "create" 
 
 /** `frozen a, b` — empty list means bare `frozen` (every stored field). */
 data class FrozenClause(val fields: List<String>) : Member
+
+/** `undeletable` — the state-scoped deletion gate (OQ37-R1): while an instance
+ *  is a member of the declaring refinement, deleting it is refused. A sibling
+ *  of `frozen`, deliberately separate from it (OQ37-R2): "you can't edit it"
+ *  and "you can't delete it" are different business sentences. */
+data object UndeletableClause : Member
 
 sealed interface TypeRef
 /** `many` marks an owned collection of values (`tags: many text`) — never optional (README §6). */
@@ -106,6 +116,14 @@ data class Creation(
 ) : BodyItem
 
 data class FieldInit(val name: String, val value: Expr)
+
+/** `delete <path>` — instance-granularity mutation (OQ37): the instance ceases
+ *  to be part of the state at this commit's close. The target is a literal
+ *  static path, like assignment's (README §12), and always a to-one instance —
+ *  no fan-out deletes in v0. Semantics: the instance becomes transient at its
+ *  final commit — fully present within the deleting transaction (rules fired
+ *  by the commit are its last readers), removed at transaction close. */
+data class DeleteStmt(val target: PathExpr) : BodyItem
 
 // ── Expressions (values and predicates share one grammar) ────────────────────
 

@@ -66,6 +66,7 @@ internal object ClassDiagramGen {
         is DerivedProp -> "/${m.name}: ${Printer.type(m.type)}" + if (m.captured) " captured at entry" else ""
         is TimestampProp -> "${m.name}: timestamp on ${m.on}"
         is FrozenClause -> "frozen " + (m.fields.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: "all stored fields")
+        UndeletableClause -> "undeletable"
     }
 
     private fun relEdge(model: Model, owner: String, field: String, t: RelType): String {

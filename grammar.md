@@ -25,7 +25,7 @@ DurationLiteral := IntegerLiteral ("seconds" | "minutes" | "hours" | "days" | "w
 
 Casing is **enforced, not convention**: the case of a name's first letter is load-bearing for parsing — `invoices where OverdueInvoice` reads a lowercase name as a path and an uppercase name as a refinement-membership test, and no other signal distinguishes them.
 
-Keywords (reserved, never identifiers): `shape` `rule` `never` `expose` `transient` `when` `leaving` `on` `after` `commit` `where` `and` `or` `not` `is` `exists` `for` `from` `then` `if` `else` `as` `this` `none` `some` `empty` `one` `many` `initially` `captured` `frozen` `tolerates` `timestamp` `create` `update` `true` `false` — plus the scalar type names, `now`, and `today`. The duration units (`seconds` `minutes` `hours` `days` `weeks`) are **contextual**, not reserved: a unit word reads as a unit only immediately after an integer literal (`3 days`), the one position DurationLiteral gives it; everywhere else it is an ordinary identifier, so `minutes: integer` is a legal property. `by` is contextual the same way: it reads as the selector-ordering keyword only after a `latest`/`first` collection argument (README §10, selectorCall — the clause is mandatory there); everywhere else it is an ordinary identifier. `with` is contextual too: it reads as the closure keyword only where the `expose` production places it (README §6, "Inline part creation"); everywhere else it is an ordinary identifier. Builtin function names (`count`, `sum`, `latest`, `first`, `lowercase`, `max`, `min`) and the generator `randomUUID` are ordinary identifiers resolved as builtins, not keywords.
+Keywords (reserved, never identifiers): `shape` `rule` `never` `expose` `transient` `when` `leaving` `on` `after` `commit` `where` `and` `or` `not` `is` `exists` `for` `from` `then` `if` `else` `as` `this` `none` `some` `empty` `one` `many` `initially` `captured` `frozen` `tolerates` `delete` `undeletable` `timestamp` `create` `update` `true` `false` — plus the scalar type names, `now`, and `today`. `required` is **contextual**: it reads as the creation-side requiredness marker only immediately after `initially` (OQ37-R10); everywhere else it is an ordinary identifier. The duration units (`seconds` `minutes` `hours` `days` `weeks`) are **contextual**, not reserved: a unit word reads as a unit only immediately after an integer literal (`3 days`), the one position DurationLiteral gives it; everywhere else it is an ordinary identifier, so `minutes: integer` is a legal property. `by` is contextual the same way: it reads as the selector-ordering keyword only after a `latest`/`first` collection argument (README §10, selectorCall — the clause is mandatory there); everywhere else it is an ordinary identifier. `with` is contextual too: it reads as the closure keyword only where the `expose` production places it (README §6, "Inline part creation"); everywhere else it is an ordinary identifier. Builtin function names (`count`, `sum`, `latest`, `first`, `lowercase`, `max`, `min`) and the generator `randomUUID` are ordinary identifiers resolved as builtins, not keywords.
 
 **Statements and declarations are line-oriented** — no semicolons, no braces around individual statements; a newline ends a statement, and `then` joining two effects stands on its own line (README §15's example is already written this way). This is what keeps `then`-the-statement-connector and `then`-the-conditional-keyword unambiguous. Within braces, a comma is equivalent to a newline as a member separator — `{ customer: one Customer, corrected: text }` and `from { invoice: this, sentOn: now }` are the one-line spellings of the multi-line forms. Inside parentheses, newlines are insignificant (a long predicate may wrap freely).
 
@@ -45,8 +45,11 @@ shapeDecl     := "shape" ShapeName "{" property* "}"
 
 property      := storedProp | derivedProp | timestampProp
 
-storedProp    := Identifier ":" propType ("initially" initializer)? ("tolerates" foldHazard)?
+storedProp    := Identifier ":" propType ("initially" (initializer | "required"))? ("tolerates" foldHazard)?
 initializer   := valueExpr | GeneratorName          -- generator: bare name, no call syntax ("initially randomUUID")
+                 -- "initially required" (OQ37-R10): the type must be optional — read-side optionality
+                 -- with creation-side requiredness; never-set is impossible, so `is none` means
+                 -- "was present, now gone" (target deleted, or a rule assigned `none`)
 foldHazard    := "duplication" | "reordering"       -- README §19; "loss" is rule-position only
 
 derivedProp   := Identifier ":" propType "=" valueExpr
@@ -83,6 +86,7 @@ refinementBody := "{" refinementMember* "}"
 refinementMember := "captured" Identifier ":" propType "=" valueExpr
                  | Identifier ":" propType "=" valueExpr                -- derived (live)
                  | "frozen" (Identifier ("," Identifier)*)?             -- bare "frozen" = every stored field
+                 | "undeletable"                                        -- the deletion gate (OQ37-R1): state-scoped, frozen's sibling
 ```
 
 The `Base where predicate` form and composition are one grammar: `shape OverdueInvoice = Invoice where balance > 0 and due < today` is a `refAtom` with a `where` clause; `shape UrgentOverdueTicket = Overdue and HighPriority and Open` is a `refTerm`; mixing is legal (`Quoted and (Invoice where total > 100)`). Operands must share a base shape or refine one another — a type check, not a grammar rule (README §9).
@@ -111,12 +115,18 @@ Omitted `triggerClause` means `on commit` (README §11). The `on`/`after` prepos
 ruleBody      := statement (thenLine? statement)*
 thenLine      := "then"                  -- on its own line, between two statements (README §15)
 
-statement     := assignment | creation
+statement     := assignment | creation | deletion
 
 assignment    := path "=" valueExpr
                  -- the target may traverse at most one `many` hop (fan-out assignment: one write per
                  -- member, `this.invoices.customer = ...`); depth and target legality are validator
                  -- rules (checks catalog, V20), not grammar
+
+deletion      := "delete" path
+                 -- instance-granularity mutation (OQ37): the target is a literal static to-one path
+                 -- (`delete this`, `delete draft`); no fan-out. Legality — referential completeness,
+                 -- existence-dependency, the `undeletable` gate, stranding — is the validator's
+                 -- (checks catalog, V23–V28), not grammar
 
 creation      := ShapeName "from" "{" fieldInit* "}"
               | ShapeName "for" valueExpr (fieldInit)*     -- the compact form: Receipt for invoice sentOn: now

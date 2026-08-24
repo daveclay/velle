@@ -72,6 +72,7 @@ internal object RuleGraphGen {
                 val kindDesc = when (k) {
                     is CommitKind.Create -> "inserts ${k.shape}"
                     is CommitKind.Assign -> "writes ${k.shape}.${k.field}"
+                    is CommitKind.Delete -> "deletes ${k.shape}"
                     CommitKind.TimePasses -> continue
                 }
                 for (target in model.rules.values) {

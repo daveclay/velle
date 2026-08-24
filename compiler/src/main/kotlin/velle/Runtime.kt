@@ -85,6 +85,32 @@ class VelleSystem(
 
     internal val instances = LinkedHashMap<Long, Instance>()
     internal val byShape = HashMap<String, MutableList<Long>>()
+
+    /** Instances deleted by the current transaction (OQ37): no longer members of
+     *  the state — every existence/collection read excludes them from the delete
+     *  commit on — but still directly readable by id (the last-reader contract).
+     *  Physically removed at transaction close; cleared on rollback. */
+    internal val pendingDeleted = mutableSetOf<Long>()
+
+    /** Membership-facing instance list: [byShape] minus the current transaction's
+     *  deletions. Every scan/exists/aggregate read goes through this. */
+    internal fun liveIds(shape: String): List<Long> {
+        val ids = byShape[shape].orEmpty()
+        return if (pendingDeleted.isEmpty()) ids.toList() else ids.filter { it !in pendingDeleted }
+    }
+
+    /** The absorbing-reference read (OQ37-R10): a stored reference at a deleted
+     *  instance reads as absent — `is none` true, `?.` propagates — with no
+     *  write anywhere; a collection silently loses the member. Applied to
+     *  values read out of fields, never to a subject read by id. */
+    internal fun normalizeRead(v: Value): Value = when (v) {
+        is Value.VRef -> if (v.id in pendingDeleted || instance(v.id) == null) Value.VNone else v
+        is Value.VColl -> {
+            val live = v.ids.filter { it !in pendingDeleted && instance(it) != null }
+            if (live.size == v.ids.size) v else Value.VColl(live, v.shape)
+        }
+        else -> v
+    }
     /** (instance id, refinement name) → captured values for the current membership */
     internal val captures = HashMap<Pair<Long, String>, Map<String, Value>>()
 
@@ -195,7 +221,7 @@ class VelleSystem(
         val r = resolver
         if (r != null && shape !in model.transients && fetchedAll.add(shape))
             r.fetchAll(shape).forEach { hydrateIfAbsent(it) }
-        return byShape[shape].orEmpty().toList()
+        return liveIds(shape)
     }
 
     /**
@@ -212,7 +238,7 @@ class VelleSystem(
             return idsOf(shape)
         if (fetchedFilters.add(shape to filter))
             r.fetchCandidates(shape, filter).forEach { hydrateIfAbsent(it) }
-        return byShape[shape].orEmpty().toList()
+        return liveIds(shape)
     }
 
     /** Filters fold `today`/`now` to constants, so a compiler is built per evaluation moment. */
@@ -310,11 +336,15 @@ class VelleSystem(
         val created = mutableListOf<Long>()
         val oldValues = mutableListOf<Triple<Long, String, Value?>>()
         val afterQueue = mutableListOf<Pair<RuleDecl, Long>>()
+        /** Instances this transaction deletes (OQ37), in deletion order —
+         *  physically removed at close, unmarked on rollback. */
+        val deleted = mutableListOf<Long>()
         var depth = 0
 
         /** Cumulative footprint of every commit in the envelope (never gating). */
         val createdShapes = mutableSetOf<String>()
         val assignedFields = mutableSetOf<Pair<String, String>>()
+        val deletedShapes = mutableSetOf<String>()
 
         /** (id, refinement) → prior values, recorded before each capture write
          *  or retraction — rollback restores them, buildCommitSet reads the
@@ -348,7 +378,8 @@ class VelleSystem(
                 val pending = buildCommitSet(t)
                 val set = pending.set
                 if (set.created.isNotEmpty() || set.assigned.isNotEmpty() ||
-                    set.captured.isNotEmpty() || set.retracted.isNotEmpty()
+                    set.captured.isNotEmpty() || set.retracted.isNotEmpty() ||
+                    set.deleted.isNotEmpty()
                 ) {
                     val keys = cb.onCommit(set)
                     if (keys.size != set.created.size)
@@ -362,6 +393,10 @@ class VelleSystem(
                 }
             }
             txn = null
+            // deletions land now: the store already saw them in the commit set;
+            // after-commit firings are separate transactions and never see the
+            // instance (OQ37 — the transaction close is the removal)
+            finalizeDeletes(t)
             drainAfterQueue(t)
             Result.success(out)
         } catch (e: Exception) {
@@ -381,7 +416,10 @@ class VelleSystem(
      *  acts are excluded: only their consequences persist (README §4). */
     private fun buildCommitSet(t: Txn): PendingCommit {
         val createdSet = t.created.toSet()
-        val createdHandles = t.created.filter { instances.getValue(it).shape !in model.transients }
+        // created-then-deleted inside one envelope nets to nothing (OQ37)
+        val createdHandles = t.created.filter {
+            it !in pendingDeleted && instances.getValue(it).shape !in model.transients
+        }
         val indexOfHandle = createdHandles.withIndex().associate { (i, h) -> h to i }
 
         fun refOf(handle: Long): Ref {
@@ -412,7 +450,7 @@ class VelleSystem(
         val assigned = t.oldValues.asSequence()
             .map { (id, field, _) -> id to field }
             .distinct()
-            .filter { (id, _) -> id !in createdSet }
+            .filter { (id, _) -> id !in createdSet && id !in pendingDeleted }
             .map { (id, field) ->
                 val inst = instances.getValue(id)
                 val target = refOf(id) as? Ref.Persisted
@@ -428,7 +466,9 @@ class VelleSystem(
         for ((id, refName) in t.captureOld.map { it.first }.distinct()) {
             val base = model.baseOf(refName) ?: continue
             if (base in model.transients) continue
-            val values = captures[id to refName]
+            // a deleted instance's touched memberships net to retraction; its
+            // untouched capture rows go with the row itself (the Deletion op)
+            val values = if (id in pendingDeleted) null else captures[id to refName]
             if (values != null)
                 capturedOps.add(CommitSet.Capture(refOf(id), refName, values.mapValues { storeValue(it.value) }))
             else {
@@ -436,10 +476,16 @@ class VelleSystem(
                 retractedOps.add(CommitSet.Retraction(Ref.Persisted(idShape.getValue(id), key), refName))
             }
         }
-        return PendingCommit(CommitSet(created, assigned, capturedOps, retractedOps), createdHandles)
+        // the deletions (OQ37): persisted rows this transaction removed; a
+        // created-then-deleted instance has no key and appears nowhere
+        val deletions = t.deleted.distinct().mapNotNull { id ->
+            keyOf[id]?.let { CommitSet.Deletion(Ref.Persisted(idShape.getValue(id), it)) }
+        }
+        return PendingCommit(CommitSet(created, assigned, capturedOps, retractedOps, deletions), createdHandles)
     }
 
     private fun rollback(t: Txn) {
+        pendingDeleted.removeAll(t.deleted.toSet()) // deletions were only marks until close
         for ((id, field, old) in t.oldValues.asReversed()) {
             if (old == null) instances[id]?.fields?.remove(field)
             else instances[id]?.fields?.put(field, old)
@@ -600,9 +646,12 @@ class VelleSystem(
                         out[m.name] = Value.VColl(emptyList(), (m.type as RelType).shape)
                     (m.type as? ScalarType)?.many == true ->
                         out[m.name] = Value.VVals(emptyList())
-                    m.name !in skipRequired &&
-                        m.initially == null && (m.type as? ScalarType)?.optional != true &&
-                        (m.type as? RelType)?.optional != true -> return null
+                    // `? initially required` (OQ37-R10): read-optional, but the
+                    // creation must supply a value — absence is refused here
+                    m.name !in skipRequired && m.initially == null &&
+                        (m.initiallyRequired ||
+                            ((m.type as? ScalarType)?.optional != true &&
+                                (m.type as? RelType)?.optional != true)) -> return null
                 }
                 continue
             }
@@ -644,6 +693,8 @@ class VelleSystem(
     private fun typeFailure(decl: ShapeDecl, supplied: Map<String, Any?>): String {
         val required = decl.members.filterIsInstance<StoredProp>()
             .filter { it.initially == null }
+            .filter { it.initiallyRequired ||
+                ((it.type as? RelType)?.optional != true && (it.type as? ScalarType)?.optional != true) }
             .filterNot { (it.type as? RelType)?.many == true || (it.type as? ScalarType)?.many == true }
             .map { it.name }
         val missing = required - supplied.keys
@@ -656,6 +707,9 @@ class VelleSystem(
     internal sealed interface Mutation {
         data class Create(val shape: String, val fields: Map<String, Value>) : Mutation
         data class Assign(val id: Long, val field: String, val value: Value) : Mutation
+        /** OQ37: the instance becomes transient at this, its final commit — fully
+         *  present within the deleting transaction (last readers), removed at close. */
+        data class Delete(val id: Long) : Mutation
     }
 
     /**
@@ -676,6 +730,9 @@ class VelleSystem(
         val summary: ReadSummary,
         val sensShapes: Set<String>,
         val selfContained: Boolean,
+        /** Shapes targeted by reference-typed fields the predicate reads — a
+         *  deletion of one flips those reads to absent (OQ37-R10). */
+        val refTargets: Set<String>,
     )
 
     private fun watcherOf(key: String, condition: RefExpr, base: String): Watcher {
@@ -683,7 +740,10 @@ class VelleSystem(
         val sens = (s.existsShapes + s.collShapes).mapNotNull { model.baseOf(it) }.toSet()
         val selfContained = !s.opaque && sens.isEmpty() &&
             (s.fields + s.collFields).all { it.first == base }
-        return Watcher(key, condition, base, s, sens, selfContained)
+        val refTargets = (s.fields + s.collFields).mapNotNull { (o, f) ->
+            model.membersOf(o)[f]?.type?.instanceShape()?.let { model.baseOf(it) }
+        }.toSet()
+        return Watcher(key, condition, base, s, sens, selfContained, refTargets)
     }
 
     /** Watched conditions: every commit-triggered rule plus capture-carrying
@@ -707,10 +767,11 @@ class VelleSystem(
 
     private val watcherByKey: Map<String, Watcher> by lazy { watchers.associateBy { it.key } }
 
-    /** The mutation footprint of one commit: what it creates and writes. */
+    /** The mutation footprint of one commit: what it creates, writes, and deletes. */
     private class Footprint {
         val created = mutableSetOf<String>()
         val assigned = mutableSetOf<Pair<String, String>>()
+        val deleted = mutableSetOf<String>()
     }
 
     private fun footprintOf(mutations: List<Mutation>): Footprint {
@@ -725,6 +786,7 @@ class VelleSystem(
                     ?.filter { it.on == "update" }
                     ?.forEach { f.assigned.add(shape to it.name) }
             }
+            is Mutation.Delete -> instance(m.id)?.shape?.let { f.deleted.add(it) }
         }
         return f
     }
@@ -740,6 +802,10 @@ class VelleSystem(
     private fun relevant(w: Watcher, fp: Footprint): Boolean {
         if (w.summary.opaque) return true
         if (fp.created.any { it == w.base || it in w.sensShapes }) return true
+        // a deletion flips existence/aggregate consults, removes the deleted
+        // instance from every refinement of its base, and turns reference reads
+        // at it absent (OQ37)
+        if (fp.deleted.any { it == w.base || it in w.sensShapes || it in w.refTargets }) return true
         return fp.assigned.any { (sh, f) ->
             sh in w.sensShapes || (sh to f) in w.summary.fields || (sh to f) in w.summary.collFields
         }
@@ -759,6 +825,7 @@ class VelleSystem(
         val fp = footprintOf(mutations)
         t.createdShapes.addAll(fp.created)
         t.assignedFields.addAll(fp.assigned)
+        t.deletedShapes.addAll(fp.deleted)
         // only watchers this commit's footprint can affect get their member
         // sets evaluated — for the rest, no membership can have flipped
         val active = watchers.filter { relevant(it, fp) }
@@ -780,6 +847,7 @@ class VelleSystem(
                 createdIds.add(applyCreate(resolved, t))
             }
             is Mutation.Assign -> { applyAssign(m, t, pre); wroteStored.add(m.id) }
+            is Mutation.Delete -> applyDelete(m, t)
         }
         // `on update` timestamps advance at every commit writing a stored field
         for (id in wroteStored) {
@@ -884,6 +952,37 @@ class VelleSystem(
         inst.fields[field] = value
     }
 
+    /** The deleting commit (OQ37): the instance leaves the state's member sets
+     *  now — post-state membership excludes it, exit rules fire as its last
+     *  readers — and is physically removed at transaction close. */
+    private fun applyDelete(m: Mutation.Delete, t: Txn) {
+        val inst = instance(m.id) ?: throw VelleRuntimeError("delete of missing instance ${m.id}")
+        if (inst.shape in model.transients)
+            throw VelleRuntimeError("delete of transient act '${inst.shape}' — validator gap (V23)")
+        // undeletable tripwire: the validator proved this impossible; assert anyway [S5 spirit]
+        for ((refName, r) in model.refinements) {
+            if (r.members.none { it is UndeletableClause }) continue
+            if (model.baseOf(refName) != inst.shape) continue
+            if (m.id !in pendingDeleted && evaluator.memberOfRefExpr(m.id, RefName(refName)))
+                throw VelleRuntimeError("delete of ${inst.shape} ${m.id}, undeletable in '$refName' — validator gap")
+        }
+        if (pendingDeleted.add(m.id)) t.deleted.add(m.id)
+    }
+
+    /** Physical removal at the deleting transaction's close: after the commit
+     *  callback (the store saw the deletions), before the after-queue drains
+     *  (its firings are separate transactions and must not see the instance). */
+    private fun finalizeDeletes(t: Txn) {
+        for (id in t.deleted) {
+            val inst = instances.remove(id) ?: continue
+            byShape[inst.shape]?.remove(id)
+            captures.keys.removeIf { it.first == id }
+            keyOf.remove(id)?.let { handleOf.remove(Ref.Persisted(inst.shape, it)) }
+            idShape.remove(id)
+            pendingDeleted.remove(id)
+        }
+    }
+
     /** Fit a collection value to its declared field type: type the bare `empty`
      *  literal, and dedupe — a `many` is a set (README §6). Non-collections pass through. */
     internal fun coerceCollection(v: Value, type: TypeRef): Value = when {
@@ -928,6 +1027,15 @@ class VelleSystem(
                 }
                 item.fields.forEach { f -> fields[f.name] = evaluator.eval(f.value, ctx) }
                 mutations.add(Mutation.Create(item.shape, fields))
+            }
+            is DeleteStmt -> {
+                // the target is a literal static path (OQ37): the subject itself,
+                // or a to-one route from it
+                val id = if (item.target.root == "this" && item.target.segs.isEmpty()) subject
+                else (evaluator.eval(item.target, ctx) as? Value.VRef)?.id
+                    ?: throw VelleRuntimeError(
+                        "delete target '${Printer.expr(item.target)}' is not a present instance")
+                mutations.add(Mutation.Delete(id))
             }
             ThenMarker -> {} // ordering within one commit is a compilation concern
         }
@@ -1004,6 +1112,7 @@ class VelleSystem(
         val fp = Footprint().apply {
             created.addAll(t.createdShapes)
             assigned.addAll(t.assignedFields)
+            deleted.addAll(t.deletedShapes)
         }
         for ((i, n) in model.nevers.withIndex()) {
             val w = neverWatchers[i] ?: continue

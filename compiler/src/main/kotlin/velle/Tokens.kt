@@ -25,6 +25,7 @@ val KEYWORDS: Set<String> = setOf(
     "none", "some", "empty",
     "one", "many",
     "initially", "captured", "frozen", "tolerates",
+    "delete", "undeletable",
     "timestamp", "create", "update",
     "true", "false",
     "now", "today",

@@ -69,11 +69,12 @@ class Evaluator(private val system: VelleSystem) {
         }
         m.derived?.let { return eval(it.expr, Ctx(m.owner, id)) }
         m.inverse?.let { inv ->
-            // inferred inverse collection: a view over the declared side (README §6)
+            // inferred inverse collection: a view over the declared side (README §6);
+            // liveIds excludes instances the current transaction deleted (OQ37)
             return if (!inv.many) {
                 // one-to-many: children whose stored pointer references this instance
                 system.ensureReferencing(inv.shape, inv.field, id)
-                val ids = system.byShape[inv.shape].orEmpty()
+                val ids = system.liveIds(inv.shape)
                     .filter { (system.instances.getValue(it).fields[inv.field] as? Value.VRef)?.id == id }
                 Value.VColl(ids, inv.shape)
             } else {
@@ -84,10 +85,13 @@ class Evaluator(private val system: VelleSystem) {
             }
         }
         if (m.stored && m.type is VType.Coll)
-            return inst.fields[m.name] ?: Value.VColl(emptyList(), (m.type as VType.Coll).shape)
+            return system.normalizeRead(inst.fields[m.name] ?: Value.VColl(emptyList(), (m.type as VType.Coll).shape))
         if (m.stored && m.type is VType.CollS)
             return inst.fields[m.name] ?: Value.VVals(emptyList())
-        return inst.fields[m.name] ?: Value.VNone
+        // the absorbing reference (OQ37-R10): a stored reference whose target was
+        // deleted reads as absent — narrowing and `?.` carry it from here
+        return if (m.stored) system.normalizeRead(inst.fields[m.name] ?: Value.VNone)
+        else inst.fields[m.name] ?: Value.VNone
     }
 
     fun evalMember(id: Long, scope: String, prop: DerivedProp): Value =
@@ -222,7 +226,7 @@ class Evaluator(private val system: VelleSystem) {
         val field = model.shapes.getValue(base).members.filterIsInstance<StoredProp>()
             .single { (it.type as? RelType)?.let { t -> !t.many && t.shape == targetShape } == true }
         system.ensureReferencing(base, field.name, id)
-        val referencing = system.byShape[base].orEmpty().filter {
+        val referencing = system.liveIds(base).filter {
             (system.instances.getValue(it).fields[field.name] as? Value.VRef)?.id == id
         }
         return if (shape in model.refinements) referencing.filter { memberOfRefExpr(it, RefName(shape)) }
@@ -277,7 +281,7 @@ class Evaluator(private val system: VelleSystem) {
                 val target = runCatching { eval(refSide, ctx) }.getOrNull() as? Value.VRef ?: continue
                 if (system.instance(target.id)?.shape != fieldShape) continue
                 system.ensureReferencing(base, p.root, target.id)
-                return system.byShape[base].orEmpty().filter {
+                return system.liveIds(base).filter {
                     (system.instances.getValue(it).fields[p.root] as? Value.VRef)?.id == target.id
                 }
             }

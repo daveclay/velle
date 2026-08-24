@@ -396,6 +396,7 @@ class DomainAnalysis(private val model: Model) {
                     item.forExpr?.let { bodyCorr(it, scope, out, seen) }
                     for (f in item.fields) bodyCorr(f.value, scope, out, seen)
                 }
+                is DeleteStmt -> bodyCorr(item.target, scope, out, seen)
                 ThenMarker -> {}
             }
         }
@@ -534,6 +535,7 @@ class DomainAnalysis(private val model: Model) {
         for (item in rule.body) when (item) {
             is Assignment -> walker.walkAssignment(item, ctx, events)
             is Creation -> walker.walkCreation(item, ctx, events)
+            is DeleteStmt -> walker.walkDelete(item, ctx, events)
             ThenMarker -> {}
         }
     }
@@ -608,6 +610,19 @@ class DomainAnalysis(private val model: Model) {
 
         /** Walks [e], recording keyed reads; returns the instance scope the
          *  expression denotes when it denotes one (for hop continuation). */
+        /** A delete is an instance-granularity write (OQ37): key the deleted
+         *  row like a write to it, and propagate the drift it causes coarsely —
+         *  at shape granularity a deletion poses watchers the same relevance
+         *  question a creation does (existence and aggregate consults flip),
+         *  so it re-uses Create's event shape. */
+        fun walkDelete(d: DeleteStmt, ctx: Ctx, events: MutableList<Event>) {
+            val sc = if (d.target.root == "this" && d.target.segs.isEmpty()) ctx.subject
+            else walkExpr(d.target, ctx)
+            val shape = sc?.let { model.baseOf(it.name) } ?: return
+            acc.key(sc.anchor, shape, "deletes a $shape with no path back to any key", decl, tolerated)
+            events.add(Event.Create(shape, sc.anchor))
+        }
+
         fun walkExpr(e: Expr, ctx: Ctx): Scope? {
             when (e) {
                 is PathExpr -> return walkPath(e, ctx)

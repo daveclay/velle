@@ -125,6 +125,7 @@ data class CommitSet(
     val assigned: List<Assign>,
     val captured: List<Capture> = emptyList(),
     val retracted: List<Retraction> = emptyList(),
+    val deleted: List<Deletion> = emptyList(),
 ) {
     /** One new row; the store assigns its key and reports it back. */
     data class Creation(val shape: String, val fields: Map<String, Any?>)
@@ -134,6 +135,16 @@ data class CommitSet(
     /** Per-membership memory for [refinement] on [instance] (README §8). */
     data class Capture(val instance: Ref, val refinement: String, val values: Map<String, Any?>)
     data class Retraction(val instance: Ref.Persisted, val refinement: String)
+
+    /** A `delete` statement's row removal (OQ37): the instance ceased to be part
+     *  of the state at this transaction. The store removes the row and any
+     *  capture memory keyed on it; how (hard delete, tombstone, crypto-shred)
+     *  is the store's realization choice — the statement is declarative.
+     *  Apply deletions after [created]/[assigned]: a same-set write never
+     *  targets a deleted row, but a surviving row may hold a reference at a
+     *  deleted one — such a reference reads as absent thereafter (the
+     *  absorbing reference, `? initially required`). */
+    data class Deletion(val target: Ref.Persisted)
 }
 
 fun interface CommitCallback {

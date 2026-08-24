@@ -13,6 +13,8 @@ package velle
 internal sealed interface CommitKind {
     data class Create(val shape: String) : CommitKind
     data class Assign(val shape: String, val field: String) : CommitKind
+    /** A rule's `delete` of an instance of [shape] (OQ37). */
+    data class Delete(val shape: String) : CommitKind
     data object TimePasses : CommitKind
 }
 
@@ -29,6 +31,7 @@ internal class KindCatalog(private val model: Model) {
             for (rule in model.rules.values) for (k in producedKinds(rule)) when (k) {
                 is CommitKind.Create -> add(Cause(k, "${rule.name} inserts ${k.shape}"))
                 is CommitKind.Assign -> add(Cause(k, "${rule.name} writes ${k.shape}.${k.field}"))
+                is CommitKind.Delete -> add(Cause(k, "${rule.name} deletes ${k.shape}"))
                 CommitKind.TimePasses -> {}
             }
             add(Cause(CommitKind.TimePasses, "time passes"))
@@ -50,6 +53,13 @@ internal class KindCatalog(private val model: Model) {
                 val field = if (t.segs.isEmpty()) t.root else t.segs.last().name
                 out.add(CommitKind.Assign(owner, field))
             }
+            is DeleteStmt -> {
+                val t = item.target
+                val shape =
+                    if (t.root == "this" && t.segs.isEmpty()) subject?.let { model.baseOf(it) }
+                    else subject?.let { model.pathElementShape(t, it) }?.let { model.baseOf(it) }
+                shape?.let { out.add(CommitKind.Delete(it)) }
+            }
             ThenMarker -> {}
         }
         return out
@@ -62,6 +72,14 @@ internal class KindCatalog(private val model: Model) {
                 s.fields.any { it.first == k.shape } || s.collFields.any { it.first == k.shape }
         is CommitKind.Assign ->
             (k.shape to k.field) in s.fields || (k.shape to k.field) in s.collFields
+        // a deletion flips existence/aggregate consults of the shape and turns
+        // reference reads at it absent (OQ37) — Create's test plus the ref-target check
+        is CommitKind.Delete ->
+            k.shape in s.existsShapes || k.shape in s.collShapes ||
+                s.fields.any { it.first == k.shape } || s.collFields.any { it.first == k.shape } ||
+                (s.fields + s.collFields).any { (o, f) ->
+                    model.membersOf(o)[f]?.type?.instanceShape()?.let { model.baseOf(it) } == k.shape
+                }
         CommitKind.TimePasses -> s.readsTime
     }
 }

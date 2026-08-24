@@ -124,6 +124,30 @@ With a closure (`expose ... with`, §6 "Inline part creation"), the inline parts
 
 (§6, "Inline part creation".) A `with` entry must resolve, on the enclosing level's shape, to an inferred inverse or a declared view of exactly the recognized-inverse form (`(P where field == this)`); an arbitrary-predicate view is an error — "a closure edge must be the inverse of a declared `one` field." The recognized view pins the language-populated back-reference (the `Transfer.source`/`target` situation; V19's demand-intent posture). The closure graph is a tree by grammar — `with` only names inverse edges pointing at the enclosing level, so sibling references are unspellable declaration-side — and an in-closure reference targeting an instance created in the same closure is refused: "commit it and name it in a later act, or restructure." The closure is creation-only: it carries references and inline creations, nothing update-shaped. `expose transient` with a closure is refused — fail closed while OQ43 is open.
 
+### V23 — Delete statement legality (*coarse*)
+
+(OQ37; decision record `working-docs/investigate-delete.md`.) The `delete` target is a literal static to-one path resolving to a known, non-transient shape — a transient act is an input to the state, not a member of it, so there is nothing to delete; a collection anywhere in the path is a refused fan-out (a per-member delete is its own rule). One deleter per instance per commit: two deletes of one target in a body, or two rules deleting one shape with non-disjoint co-firable triggers, is the coincidence error. A commit never both writes a field of an instance and deletes it — there is no business sentence "change it and also remove it, at once" — refused same-body at path granularity and cross-rule at shape granularity, fail closed pending a use case. Deleting `this` counts as the structural disarm for V2 and V16 (the trigger state loses its member).
+
+### V24 — Referential completeness (*coarse*)
+
+(OQ37 — cascade as a completeness check, never `ON DELETE CASCADE`'s transitive magic; catalog C3–C5.) Deleting an instance that required `one` references point at demands every referrer resolved: deleted in the same commit (v0's coarse discharge: the same body also deletes the referrer's shape), declared `? initially required` (the absorbing reference — it goes absent at the target's deletion, no write anywhere), or restructured to per-field copies. Optional and `many` references absorb; transient referrers read the target within the deleting transaction as last readers and need nothing.
+
+### V25 — Existence-dependency (*coarse*)
+
+(OQ37's genuinely new check — existence is spent in proofs; catalog C6–C8.) Two v0 slices: a deleter of a shape some rule's guard reads through `not exists` re-arms the guard and the rule re-applies (the double-apply hazard, C6); a deleter of a singular reference's shape can strand `(R for ...)` mid-episode (C8). Discharge is **the shared refinement-overlap disjointness prover and nothing finer** (ruled conservative, 2026-08-14): the delete scope — the deleting rule's condition for `delete this`, the asserted `is <Refinement>` predicates for a path target — must carry a syntactic complement of the read's predicate. The accepted false positive (C7, window arithmetic) discharges by restructure — the field-witness guard — never by signature: guard re-arming is **not `tolerates`-signable** (ruled, 2026-08-14; intentional re-triggering is reversal-as-data, cleanup is disjointness or OQ27 retention). A prover sharpening is a backward-compatible relaxation riding OQ16.
+
+### V26 — Deleters join `never` induction (*coarse*)
+
+(OQ37; catalog C9; §21.) Deleters are a class of state change every invariant's inductive proof must range over. Deleting an instance of the `never`'s own base only shrinks the forbidden set — safe; a deleter of any other shape the predicate consults can flip membership either way, and v0 fails closed on it. The same posture reaches V10's spend-tracking: a `never` whose foreign consults have deleters is not spendable, and V12's anti-monotone proof fails when a `not exists` witness has a deleter (re-entry by deletion).
+
+### V27 — The deletion gate
+
+(OQ37-R1/R9; §8's freeze machinery re-aimed at existence.) `undeletable` is a state-scoped, `frozen`-sibling refinement clause — deletion permission scoped exactly as write permission, deliberately *not* implied by `frozen` (different business sentences, OQ37-R2). Every deleter of the base must provably exclude membership — the same fail-closed disjointness proof and connected diagnostic; the fix-it idiom is the partition (hang the deleter off the deletable subset; refusal lands as data). The gate's polarity is negative, no second polarity (ruled 2026-08-14); positive-exhaustive sentences ride the `states of` construct when it lands (§22). A gate no deleter could trip is dead machinery (A2).
+
+### V28 — Deletion stranding
+
+(OQ37; the V17 mirror; catalog C11.) An instance becomes transient at its final commit: rules fired by the deleting commit are its last readers, and nothing after the transaction's close may read it. A `when leaving` rule over a deletable shape with an `after commit` boundary or tick backstop can be handed a deletion's leaver — a subject that does not survive to its firing — and errors unless the delete scope is provably disjoint from the left refinement. Durable reactions hang off the outcome record the deleting commit produced (the explicitly modeled deletion record; no built-in tombstone, OQ37-R6).
+
 ## Advisories
 
 ### A1 — Rung recognition
@@ -132,7 +156,7 @@ With a closure (`expose ... with`, §6 "Inline part creation"), the inline parts
 
 ### A2 — Dead machinery
 
-(§8, §18, §19.) The family of "provably serves nothing" findings that aren't errors elsewhere: a freeze no writer could violate ("serves no writer"). The required members of the family (dead tolerance, dead guard apparatus) are in V8 and V4.
+(§8, §18, §19.) The family of "provably serves nothing" findings that aren't errors elsewhere: a freeze no writer could violate ("serves no writer"); an `undeletable` gate no deleter could trip (V27's dead case); an `? initially required` field nothing can make absent — no deleter of its target, no writer of the field — which is `one X` wearing a costume (OQ37-R10's converse diagnostic). The delete-side members are *implemented in v0*, surfaced via `Validator.advisories(...)`. The required members of the family (dead tolerance, dead guard apparatus) are in V8 and V4.
 
 ### A3 — Impact analysis surfaces
 

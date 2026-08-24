@@ -372,6 +372,7 @@ class CommutationSweepTest {
                     when (b) {
                         is Assignment -> expr(b.value)
                         is Creation -> { expr(b.forExpr); b.fields.forEach { expr(it.value) } }
+                        is DeleteStmt -> expr(b.target)
                         ThenMarker -> {}
                     }
                 }

@@ -1,6 +1,6 @@
 # OQ37 — Delete as a described mutation
 
-**Status:** open — under active investigation; discussion and rulings (R1–R9) live in `../investigate-delete.md`; the stress-test pass over the rulings is a `TODO.md` item
+**Status:** open — discussion and rulings (R1–R10) live in `../investigate-delete.md`; the rulings are **implemented in v0** (2026-08-22: `delete`, `undeletable`, `? initially required` — grammar.md, checks V23–V28, `examples/moderation/`); still open there: exit-rules-at-deletion, the statement's edge cases, and the stress-test pass (a `TODO.md` item)
 **In plain terms:** businesses delete records as ordinary behavior (discard the draft, remove the duplicate) — can Velle express delete as a mutation with describable rules, without breaking everything the spec proves by assuming facts persist?
 **Opened by:** design discussion (2026-08-14); distinct from [OQ27](OQ27-erasure.md) (erasure/retention — the storage-policy face; this is the description face)
 **See:** `../investigate-delete.md` (the discussion) · README §4, §8 "Frozen fields", §12, §13, §18 · `evaluation.md` "Transient acts"

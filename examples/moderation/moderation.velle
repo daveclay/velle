@@ -1,0 +1,146 @@
+-- Moderation: a marketplace's listings — drafts discarded, sellers closing
+-- their accounts, reports outliving what they report. The sixth Velle spec,
+-- written to put OQ37's delete machinery on display in business terms:
+-- `delete` as an ordinary rule effect, `undeletable` as the state-scoped
+-- deletion gate, `? initially required` as the reference that absorbs its
+-- target's deletion, and the per-field copy discipline for what must survive.
+--
+-- Comment convention (as in payments.velle): plain comments tell the business
+-- story; `velle:` comments note the language machinery on show.
+
+-- ── Sellers and listings ─────────────────────────────────────────────────────
+
+expose shape Seller {
+    name: text
+}
+
+-- A listing requires a seller at creation, but the reference is declared
+-- absorbing: if the seller's account is closed — deleted — the listing
+-- survives with `seller` reading as absent. Never-set is impossible (creation
+-- required presence), so `seller is none` MEANS "the seller is gone."
+-- velle: `? initially required` — read-side optionality and creation-side
+-- requiredness as orthogonal declarations (OQ37-R10); reads ride the existing
+-- narrowing machinery (`is none`, `is some`, `?.`)
+expose shape Listing {
+    title: text
+    seller: one Seller? initially required
+    isDraft: boolean initially true
+}
+
+never (Listing where title == "")
+
+shape Draft = Listing where isDraft
+
+-- Published listings cannot be deleted. The gate is negative and state-scoped
+-- (deletion permission beside write permission), spelled on the complement
+-- state exactly as a freeze would be — and with a boolean the complement is
+-- exact, so the disjointness check covers the sentence fully.
+-- velle: `undeletable`, the frozen-sibling deletion gate (OQ37-R1/R9); every
+-- deleter below rides the `isDraft` complement, which the shared
+-- refinement-overlap prover clears (checks.md V27)
+shape PublishedListing = Listing where not isDraft {
+    undeletable
+}
+
+expose transient shape Publish {
+    listing: one Listing
+}
+
+rule ApplyPublish when Publish {
+    listing.isDraft = false
+}
+
+-- ── Reports: evidence that outlives its subject ──────────────────────────────
+
+-- A report references the living listing — correlation and traversal while it
+-- lives — and COPIES the slice that must survive its deletion: the title is
+-- durable business data; the reference serves the living target.
+-- velle: absorbing reference plus per-field copy — the crux's resolution
+-- (OQ37-R3); the copy is the author declaring, field by field, which slice of
+-- the target was history all along
+expose shape ListingReport {
+    listing: one Listing? initially required
+    listingTitle: text
+    reason: text
+    reportedOn: timestamp on create
+}
+
+-- The listing's deletion is the commit that flips this membership — entry is
+-- ordinary drift, and NotifyReporter reacts to it. No `when deleted` trigger
+-- exists: a business that must react to "this was deleted" models the state
+-- the deletion leaves behind, or the deletion record below.
+-- velle: deletion-caused drift entry (OQ37, "Refinements recalculate")
+shape OrphanReport = ListingReport where listing is none
+
+shape ReporterNotice {
+    report: one ListingReport
+    listingTitle: text
+    noticedOn: timestamp on create
+}
+
+rule NotifyReporter when (OrphanReport where not exists ReporterNotice for this) {
+    ReporterNotice from { report: this, listingTitle: listingTitle }
+}
+
+-- ── Discarding a draft ───────────────────────────────────────────────────────
+
+-- The request is transient — its durable trace is what was done, not the
+-- asking. The outcome record is the explicitly modeled deletion record: what
+-- a deletion leaves behind is the author's call, never minted for free.
+-- velle: `delete` as an ordinary rule effect; the transient-acts copy idiom
+-- as the deletion record (OQ37-R6: no built-in tombstone)
+expose transient shape DiscardDraft {
+    listing: one Listing
+    reason: text
+}
+
+shape DiscardRecord {
+    listingTitle: text
+    reason: text
+    discardedOn: timestamp on create
+}
+
+shape DiscardRefusal {
+    listingTitle: text
+    reason: text
+    refusedOn: timestamp on create
+}
+
+-- The deleting rule rides the deletable partition; the complement rule makes
+-- the refusal data (patterns.md, "Validation rejection is data"). Within the
+-- deleting transaction the listing is fully present — ApplyDiscard reads its
+-- title as one of its last readers; at transaction close it is removed.
+-- velle: the partition idiom discharging the V27 gate; last-reader semantics
+-- (OQ37, "Semantics of the deleting commit"); V18 totality by complement pair
+rule ApplyDiscard when (DiscardDraft where listing is Draft) {
+    DiscardRecord from { listingTitle: listing.title, reason: reason }
+    delete listing
+}
+
+rule RefuseDiscard when (DiscardDraft where not (listing is Draft)) {
+    DiscardRefusal from { listingTitle: listing.title, reason: reason }
+}
+
+-- ── Closing a seller's account ───────────────────────────────────────────────
+
+expose transient shape CloseAccount {
+    seller: one Seller
+}
+
+rule ApplyClose when CloseAccount {
+    delete seller
+}
+
+-- The orphan side is the point, not a residue: "what does the business do
+-- with a listing whose seller is gone?" is a real product question the
+-- partition makes visible, where `?.` everywhere would have silently
+-- propagated it away. Orphaned drafts are swept at the seller's deletion
+-- commit — deletion-caused drift cascading as visible rules, each hop its own
+-- decision; published listings stay, undeletable, awaiting product policy.
+-- velle: the named-partition read discipline (OQ37-R10); a deleter fired by
+-- another deleter's drift; `delete this` as the structural disarm
+shape OrphanedListing = Listing where seller is none
+
+rule SweepOrphanedDrafts when (OrphanedListing where isDraft) {
+    delete this
+}

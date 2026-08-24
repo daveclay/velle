@@ -34,6 +34,7 @@ object Printer {
                     ThenMarker -> append("    then\n")
                     is Assignment -> append("    ${expr(it.target)} = ${expr(it.value)}\n")
                     is Creation -> append("    ${creation(it)}\n")
+                    is DeleteStmt -> append("    delete ${expr(it.target)}\n")
                 }
             }
             append("}")
@@ -62,11 +63,13 @@ object Printer {
         is StoredProp -> buildString {
             append("${m.name}: ${type(m.type)}")
             m.initially?.let { append(" initially ${expr(it)}") }
+            if (m.initiallyRequired) append(" initially required")
             m.tolerates?.let { append(" tolerates $it") }
         }
         is DerivedProp -> (if (m.captured) "captured " else "") + "${m.name}: ${type(m.type)} = ${expr(m.expr)}"
         is TimestampProp -> "${m.name}: timestamp on ${m.on}"
         is FrozenClause -> "frozen" + if (m.fields.isEmpty()) "" else " ${m.fields.joinToString(", ")}"
+        UndeletableClause -> "undeletable"
     }
 
     fun type(t: TypeRef): String = when (t) {

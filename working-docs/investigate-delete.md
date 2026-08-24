@@ -1,6 +1,7 @@
 # Investigation: delete — can removing an instance be a described mutation?
 
 **Status:** open (2026-08-15) — rulings R1–R10 below (R4 superseded by R10); still open: exit-rules-at-deletion ("Refinements recalculate"), the delete statement's edge cases ("The statement"). Follow-up actions (remaining opens, the stress-test pass) tracked in `TODO.md`.
+**Implementation (2026-08-22):** the v0 compiler implements the rulings — `delete`, `undeletable`, and `? initially required` (grammar.md; checks V23–V28 plus the deleter-aware extensions of V2/V10/V12/V14/V16 and the A2 dead-machinery members; `examples/moderation/` is the worked fixture). The two opens ship with implemented defaults pending their resolution: every exit rule fires for the deleted instance at the deleting commit (last-reader semantics), and write-plus-delete of one instance in one commit is refused fail-closed. Anything the stress-test pass reopens changes the implementation with it.
 **Question tag:** [OQ37](questions/OQ37-delete.md) — the index entry; this doc holds the discussion
 **See:** README §4 (no delete primitive; transient acts) · §12 (assignment) · §8 "Frozen fields" · §13 (the last-reader rule) · §18 (run-once guards) · `evaluation.md` "Transient acts" (the step-7 removal) · [OQ27](questions/OQ27-erasure.md) (erasure/retention — the storage-policy face of what may be the same primitive)
 

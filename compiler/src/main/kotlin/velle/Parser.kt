@@ -81,6 +81,11 @@ class Parser(private val tokens: List<Token>) {
             if (!refinementBody) fail("'frozen' is only legal in a refinement body", t)
             return FrozenClause(fields)
         }
+        if (t.isKw("undeletable")) {
+            next()
+            if (!refinementBody) fail("'undeletable' is only legal in a refinement body — the deletion gate is state-scoped (OQ37)", t)
+            return UndeletableClause
+        }
         if (t.isKw("captured")) {
             next()
             val name = expect(TokType.LIDENT).text
@@ -106,12 +111,19 @@ class Parser(private val tokens: List<Token>) {
             return DerivedProp(name, type, parseValue())
         }
         var initially: Expr? = null
+        var initiallyRequired = false
         var tolerates: String? = null
-        if (peek().isKw("initially")) { next(); skipNewlines(); initially = parseValue() }
+        if (peek().isKw("initially")) {
+            next(); skipNewlines()
+            // `required` is contextual, not reserved (grammar.md): it reads as the
+            // creation-side requiredness marker only here, after `initially` (OQ37-R10)
+            if (at(TokType.LIDENT) && peek().text == "required") { next(); initiallyRequired = true }
+            else initially = parseValue()
+        }
         if (peek().isKw("tolerates")) { next(); tolerates = expect(TokType.LIDENT).text }
         if (refinementBody)
             fail("a refinement property is derived (= expr) or captured — stored properties belong to the base shape", peek())
-        return StoredProp(name, type, initially, tolerates)
+        return StoredProp(name, type, initially, tolerates, initiallyRequired)
     }
 
     private fun parseTypeRef(): TypeRef {
@@ -220,6 +232,18 @@ class Parser(private val tokens: List<Token>) {
     }
 
     private fun parseStatement(): BodyItem {
+        if (peek().isKw("delete")) {
+            // deletion: literal static path, like assignment (OQ37)
+            next()
+            val root = when {
+                peek().isKw("this") -> { next(); "this" }
+                at(TokType.LIDENT) -> next().text
+                else -> fail("expected the delete target (a literal static path)", peek())
+            }
+            val segs = mutableListOf<Seg>()
+            while (at(TokType.DOT)) { next(); segs.add(Seg(expect(TokType.LIDENT).text, viaQdot = false)) }
+            return DeleteStmt(PathExpr(root, segs))
+        }
         if (at(TokType.UIDENT)) return parseCreation()
         // assignment: literal static path (README §12) — plain '.' only
         val root = when {

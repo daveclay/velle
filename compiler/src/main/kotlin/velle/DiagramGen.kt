@@ -158,6 +158,7 @@ object DiagramGen {
             for (item in rule.body) when (item) {
                 is Creation -> sb.appendLine("        S->>S: insert ${item.shape}")
                 is Assignment -> sb.appendLine("        S->>S: ${esc(Printer.expr(item.target))} = ${esc(Printer.expr(item.value))}")
+                is DeleteStmt -> sb.appendLine("        S->>S: delete ${esc(Printer.expr(item.target))}")
                 ThenMarker -> {}
             }
             return produced
@@ -202,6 +203,7 @@ object DiagramGen {
             when (k) {
                 is CommitKind.Create -> touched.add(k.shape)
                 is CommitKind.Assign -> touched.add(k.shape)
+                is CommitKind.Delete -> touched.add(k.shape)
                 CommitKind.TimePasses -> {}
             }
         }
@@ -209,6 +211,7 @@ object DiagramGen {
         private fun describe(k: CommitKind) = when (k) {
             is CommitKind.Create -> "the ${k.shape} created above"
             is CommitKind.Assign -> "the write to ${k.shape}.${k.field}"
+            is CommitKind.Delete -> "the ${k.shape} deleted above"
             CommitKind.TimePasses -> "the passage of time"
         }
 

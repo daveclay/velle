@@ -15,7 +15,7 @@ package velle
  *
  * Arrow directions are proven, not guessed:
  *  - an `exists X for this` atom can only be satisfied, never unsatisfied —
- *    v0 has no delete (OQ37) — so its edges are one-way, and a conjunction of
+ *    when no rule deletes the witness (OQ37) — so its edges are one-way, and a conjunction of
  *    a positive and a negated atom yields the once-through chain: never a
  *    member, then a member, then out permanently;
  *  - a comparison moves one way when the fold behind it has a pinned sign:
@@ -44,7 +44,9 @@ internal object StateFlowGen {
             appendLine(
                 "A state is membership in a refinement, and memberships overlap — so each diagram below " +
                     "is one *axis* of membership, varying independently of its siblings. Arrow directions " +
-                    "are proven from the spec (an `exists` can only be satisfied — v0 never deletes — and " +
+                    "are proven from the spec (an `exists` can only be satisfied — " +
+                    (if (model.deletedShapes.isEmpty()) "v0 never deletes" else "where no rule deletes the witness (OQ37)") +
+                    " — and " +
                     "a fold moves one way when the input-constrained refusals pin the sign of every " +
                     "contribution); where no proof exists, the edge says **may flip** and is drawn in both " +
                     "directions."
@@ -88,6 +90,10 @@ private class ShapeFlow(
     val atomics = refs.filter { (it.expr as? RefName)?.let { e -> e.name == base && e.where != null } == true }
     val composites = refs - atomics.toSet()
     val analysis = FlowAnalysis(model, catalog)
+
+    /** The one-way notes' justification: the mono proof only holds where the
+     *  witness has no deleter, and the phrasing says which claim is being made. */
+    val noDelete = if (model.deletedShapes.isEmpty()) "v0 never deletes" else "no rule deletes the witness (OQ37)"
 
     fun render(): String = buildString {
         val axes = groupIntoAxes()
@@ -159,7 +165,7 @@ private class ShapeFlow(
         appendLine("    state \"not yet ${r.name}\" as pre")
         appendLine("    [*] --> pre : a new $base")
         edges(this, "pre", r.name, c)
-        note(this, r.name, "one-way — ${Printer.expr(r.whereExpr()!!)} can never stop holding (v0 never deletes)")
+        note(this, r.name, "one-way — ${Printer.expr(r.whereExpr()!!)} can never stop holding ($noDelete)")
         stateNotes(this, r)
     }
 
@@ -173,7 +179,7 @@ private class ShapeFlow(
         )
         edges(this, "post", r.name, c, exitOnly = true)
         val settled = (r.whereExpr() as? NotExpr)?.inner?.let { Printer.expr(it) }
-        note(this, "post", "one-way — " + (settled?.let { "$it now holds forever (v0 never deletes)" }
+        note(this, "post", "one-way — " + (settled?.let { "$it now holds forever ($noDelete)" }
             ?: "membership cannot return"))
         stateNotes(this, r)
     }
@@ -194,7 +200,7 @@ private class ShapeFlow(
             .firstOrNull { analysis.mono(it, base) == Mono.DOWN }
         val settled = ((down as? NotExpr)?.inner ?: down)?.let { Printer.expr(it) }
         note(this, "post", "terminal — " + (settled?.let {
-            "$it now holds forever (v0 never deletes), so membership can never be regained"
+            "$it now holds forever ($noDelete), so membership can never be regained"
         } ?: "membership can never be regained"))
         stateNotes(this, r)
     }
@@ -383,7 +389,10 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
         }
         is ExistsExpr -> {
             val elem = e.shape ?: e.collection?.takeIf { it.where == null }?.let { elementShapeOf(it, subject) }
-            if (elem != null && elem in model.shapes && elem !in model.transients) Mono.UP else Mono.UNKNOWN
+            // one-way only while nothing deletes the witness (OQ37): a deleter
+            // makes the exists un-satisfiable again, so the edge may flip
+            if (elem != null && elem in model.shapes && elem !in model.transients &&
+                elem !in model.deletedShapes) Mono.UP else Mono.UNKNOWN
         }
         is IsExpr -> e.refinement?.let { name ->
             if (!guard.add(name)) Mono.UNKNOWN
@@ -760,6 +769,7 @@ private fun ruleActions(rule: RuleDecl): String = rule.body.mapNotNull {
     when (it) {
         is Creation -> "inserts ${it.shape}"
         is Assignment -> "sets ${Printer.expr(it.target)} = ${Printer.expr(it.value)}"
+        is DeleteStmt -> "deletes ${Printer.expr(it.target)}"
         ThenMarker -> null
     }
 }.joinToString(", ")

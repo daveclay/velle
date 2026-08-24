@@ -100,8 +100,10 @@ object Codegen {
         fun emitClosureClass(name: String, edge: ClosureEdge) {
             val decl = model.shapes.getValue(edge.partShape)
             val stored = decl.members.filterIsInstance<StoredProp>().filter { it.name != edge.backRef }
-            val required = stored.filter { it.initially == null && !isOptional(it.type) }
-            val optional = stored.filter { it.initially != null || isOptional(it.type) }
+            // `? initially required` (OQ37-R10): read-optional, but the commit
+            // must supply a value — a required, non-null parameter
+            val required = stored.filter { it.initially == null && (!isOptional(it.type) || it.initiallyRequired) }
+            val optional = stored.filter { it.initially != null || (isOptional(it.type) && !it.initiallyRequired) }
             val hasParams = required.isNotEmpty() || optional.isNotEmpty() || edge.children.isNotEmpty()
             if (!hasParams) {
                 line("    class $name { internal fun raw(): Map<String, Any?> = emptyMap() }")
@@ -109,7 +111,7 @@ object Codegen {
                 return
             }
             line("    data class $name(")
-            required.forEach { line("        val ${it.name}: ${paramType(it.type)},") }
+            required.forEach { line("        val ${it.name}: ${paramType(it.type).removeSuffix("?")},") }
             optional.forEach { line("        val ${it.name}: ${paramType(it.type).removeSuffix("?")}? = null,") }
             edge.children.forEach { line("        val ${it.prop}: List<${closureClassName(it)}> = emptyList(),") }
             line("    ) {")
@@ -137,10 +139,12 @@ object Codegen {
         fun commitFn(shape: String) {
             queueKeyDoc(shape)
             val stored = model.shapes.getValue(shape).members.filterIsInstance<StoredProp>()
-            val required = stored.filter { it.initially == null && !isOptional(it.type) }
-            val optional = stored.filter { it.initially != null || isOptional(it.type) }
+            // `? initially required` (OQ37-R10): read-optional, but the commit
+            // must supply a value — a required, non-null parameter
+            val required = stored.filter { it.initially == null && (!isOptional(it.type) || it.initiallyRequired) }
+            val optional = stored.filter { it.initially != null || (isOptional(it.type) && !it.initiallyRequired) }
             val edges = model.closures[shape].orEmpty()
-            val params = required.map { "${it.name}: ${paramType(it.type)}" } +
+            val params = required.map { "${it.name}: ${paramType(it.type).removeSuffix("?")}" } +
                 optional.map { "${it.name}: ${paramType(it.type).removeSuffix("?")}? = null" } +
                 edges.map { "${it.prop}: List<${closureClassName(it)}> = emptyList()" }
             line("    fun commit$shape(${params.joinToString(", ")}): CommitResult =")
