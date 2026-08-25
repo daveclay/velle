@@ -44,8 +44,7 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## Delete investigation (`investigate-delete.md`, OQ37) — rulings implemented in v0 (2026-08-22)
 
-- [ ] Design and implement the deletion-reaction trigger, the transition-only marker, and R13's collision error (R11–R13; open spellings in `questions/OQ37-delete.md` §1a–§1c) — lands together with `when leaving` becoming predicate-exit-only; flip the counterfeit-firing probe and convert the gap probes to a validation-error assertion in `LeavingRuleDeletionProbeTest` with it.
-- [ ] Resolve the `delete` statement's remaining edge case: write-plus-delete of one instance in one commit (implemented default: refused fail-closed; `questions/OQ37-delete.md` §2).
+- [ ] Implement the trigger family (`when deleted`, `when leaving or deleted` — R16), the transition-only marker, and R13's collision error (R11–R16; open: marker spelling, trigger conditions, bare-shape edge — `questions/OQ37-delete.md` §1–§3) — lands together with `when leaving` becoming predicate-exit-only; flip the counterfeit-firing probe and convert the gap probes to a validation-error assertion in `LeavingRuleDeletionProbeTest` with it.
 - [ ] Stress-test rulings R1–R10 with adversarial use cases; anything that breaks reopens in the investigation doc — and changes the v0 implementation with it.
 - [ ] Revise README §4's "no delete primitive" to the derived-legality stance (`investigate-delete.md`, "Reconciling with §4") and add the deleting-commit semantics to `evaluation.md`; the compiler and checks.md already carry the implemented stance.
 - [ ] Teach the serialization-domain analysis (Domains.kt) to propagate deletion-caused drift precisely — today a delete keys the deleted row and re-uses creation-shaped relevance at shape granularity (advisory A5 only).

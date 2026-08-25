@@ -6,7 +6,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * OQ37 §1's exhibits: what happens when a spec combines a `when leaving` rule
+ * OQ37's exhibits: what happens when a spec combines a `when leaving` rule
  * with a deleter of the same base — the collision the example corpus avoids
  * (its four leaving-rules live in specs with no deleters).
  *
@@ -21,14 +21,15 @@ import kotlin.test.assertTrue
  *    the rule was written for — the probe below produces a publication
  *    notice for a listing that was never published, and nothing refuses it;
  *  - the gap: a leaving-rule the author meant as "for any reason, deletion
- *    included" (OQ37 §1a) — under the implemented default it happens to
- *    cover deletion; under the settled semantics it will not, and by
- *    OQ37-R13 the collision itself becomes a hard validation error until
- *    the author addresses it.
+ *    included" — under the implemented default it happens to cover
+ *    deletion; under the settled semantics it will not, and by OQ37-R13
+ *    the collision itself becomes a hard validation error until the
+ *    author addresses it (that spec's fix is `when leaving or deleted
+ *    OpenLead`, OQ37-R16).
  *
  * The runtime probes document the default REJECTED by OQ37-R11/R12: bare
  * `when leaving` fires only when the predicate flips, never at deletion.
- * When that lands (together with the deletion trigger, OQ37 §1b), the
+ * When that lands (together with R16's `when deleted` trigger), the
  * counterfeit probe flips to asserting no notice, and the gap spec stops
  * validating at all (R13) — its probes become a validation-error assertion.
  */
