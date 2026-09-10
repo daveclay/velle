@@ -19,7 +19,7 @@ data class Token(val type: TokType, val text: String, val line: Int, val col: In
 // keywords; Date/DateTime are UIDENTs recognized in type position by the parser.
 val KEYWORDS: Set<String> = setOf(
     "shape", "rule", "never", "expose", "transient",
-    "when", "leaving", "on", "after", "commit",
+    "when", "leaving", "deleted", "on", "after", "commit",
     "where", "and", "or", "not", "is", "exists", "for", "from", "then",
     "if", "else", "as", "this",
     "none", "some", "empty",

@@ -44,7 +44,7 @@ A `from { ... }` block supplies every field the created shape declares (minus la
 
 ### V3 — Unfireable rule
 
-(§11.) Derive each rule's trigger set from the writers of what its condition reads, the spec's `expose` declarations (an act shape with no `expose` and no producing rule is uncommittable, §22), and its `on` schedules. Empty set → error. The time-dependence instance: a condition reading `today` with no schedule in `on` observes no entry by aging — diagnostic says exactly that.
+(§11.) Derive each rule's trigger set from the writers of what its condition reads, the spec's `expose` declarations (an act shape with no `expose` and no producing rule is uncommittable, §22), and its `on` schedules. Empty set → error. The time-dependence instance: a condition reading `today` with no schedule in `on` observes no entry by aging — diagnostic says exactly that. The bare-shape instance (OQ37-R17): a predicate-exit trigger over a bare shape — `when leaving Listing` with `Listing` bare — has no predicate to flip and, since `when leaving` never fires at deletion, an empty trigger set; the diagnostic says the shape is bare and offers `when deleted`.
 
 ### V4 — Boundary/apparatus, both ways
 
@@ -130,7 +130,7 @@ With a closure (`expose ... with`, §6 "Inline part creation"), the inline parts
 
 ### V24 — Referential completeness (*coarse*)
 
-(OQ37 — cascade as a completeness check, never `ON DELETE CASCADE`'s transitive magic; catalog C3–C5.) Deleting an instance that required `one` references point at demands every referrer resolved: deleted in the same commit (v0's coarse discharge: the same body also deletes the referrer's shape), declared `? initially required` (the absorbing reference — it goes absent at the target's deletion, no write anywhere), or restructured to per-field copies. Optional and `many` references absorb; transient referrers read the target within the deleting transaction as last readers and need nothing.
+(OQ37 — cascade as a completeness check, never `ON DELETE CASCADE`'s transitive magic; catalog C3–C5.) Deleting an instance that required `one` references point at demands every referrer resolved: deleted in the same commit (v0's coarse discharge: the same body also deletes the referrer's shape), declared `? initially required` (the absorbing reference — it goes absent at the target's deletion, no write anywhere), or restructured to per-field copies. Optional and `many` references absorb; transient referrers read the target within the deleting transaction as last readers and need nothing. On the deletion-side triggers (§13 "Deletion as a second exit cause": `when deleted X` and `when leaving or deleted X`) the rule's product may not keep a reference to the subject — it copies fields (OQ37-R14); a predicate-exit body may keep one.
 
 ### V25 — Existence-dependency (*coarse*)
 
@@ -146,7 +146,7 @@ With a closure (`expose ... with`, §6 "Inline part creation"), the inline parts
 
 ### V28 — Deletion stranding
 
-(OQ37; the V17 mirror; catalog C11.) An instance becomes transient at its final commit: rules fired by the deleting commit are its last readers, and nothing after the transaction's close may read it. A `when leaving` rule over a deletable shape with an `after commit` boundary or tick backstop can be handed a deletion's leaver — a subject that does not survive to its firing — and errors unless the delete scope is provably disjoint from the left refinement. Durable reactions hang off the outcome record the deleting commit produced (the explicitly modeled deletion record; no built-in tombstone, OQ37-R6).
+(OQ37; the V17 mirror; catalog C11.) An instance becomes transient at its final commit: rules fired by the deleting commit are its last readers, and nothing after the transaction's close may read it. A `when leaving` rule over a deletable shape with an `after commit` boundary or tick backstop can be handed a deletion's leaver — a subject that does not survive to its firing — and errors unless the delete scope is provably disjoint from the left refinement. Durable reactions hang off the outcome record the deleting commit produced (the explicitly modeled deletion record; no built-in tombstone, OQ37-R6). The deletion-side forms are transaction-bound by construction — `when deleted X` and `when leaving or deleted X` refuse `after commit` and schedule backstops outright, since a record kept to be read later is the deletion memory OQ37-R5 forbids (OQ37-R14).
 
 ## Advisories
 
@@ -156,7 +156,7 @@ With a closure (`expose ... with`, §6 "Inline part creation"), the inline parts
 
 ### A2 — Dead machinery
 
-(§8, §18, §19.) The family of "provably serves nothing" findings that aren't errors elsewhere: a freeze no writer could violate ("serves no writer"); an `undeletable` gate no deleter could trip (V27's dead case); an `? initially required` field nothing can make absent — no deleter of its target, no writer of the field — which is `one X` wearing a costume (OQ37-R10's converse diagnostic). The delete-side members are *implemented in v0*, surfaced via `Validator.advisories(...)`. The required members of the family (dead tolerance, dead guard apparatus) are in V8 and V4.
+(§8, §18, §19.) The family of "provably serves nothing" findings that aren't errors elsewhere: a freeze no writer could violate ("serves no writer"); an `undeletable` gate no deleter could trip (V27's dead case); an `? initially required` field nothing can make absent — no deleter of its target, no writer of the field — which is `one X` wearing a costume (OQ37-R10's converse diagnostic); the inert `not deleted` half of `when leaving not deleted X` where no deleter reaches X, and the inert `leaving` half of `when leaving or deleted X` over a bare shape (OQ37-R17/R19). The delete-side members are *implemented in v0*, surfaced via `Validator.advisories(...)`. The required members of the family (dead tolerance, dead guard apparatus) are in V8 and V4.
 
 ### A3 — Impact analysis surfaces
 
@@ -169,3 +169,8 @@ With a closure (`expose ... with`, §6 "Inline part creation"), the inline parts
 ### A5 — Contention width
 
 The serialization-domain derivation (`Domains.kt`) attributes every read and write of every act envelope to a queue key; a read with no path back to any key widens the domain to the whole shape — every commit touching that shape joins a single queue. An unexamined width warns, naming the read and the declaration carrying it, and lists the discharges: correlate the read (a model fact — the relationship the model was missing), move the rule to a schedule (the read then runs once per tick instead of inside every commit — a width living only in a schedule-fired rule's own firing never warns), or declare `tolerates contention` on the declaration whose read causes the width (a rule's header, or a `never`). A tolerance covering no width is dead and flagged, like an impossible `reordering`. Advisory by design: the failure a wide domain causes is throughput, not a wrong value, so fail-open costs less here than anywhere else in the tolerance family; the two author situations the advisory weighs — the intended width and the accidental one — are recorded in `docs/concurrency.md`, and a stress test during post-v0 calibration may still move the dial. *Implemented in v0* — with the contention map (`diagrams.md`) and the per-commit-function queue-key contract as the companion surfaces, and `CommutationTest` as the derivation's falsification harness (derivation-disjoint envelope pairs must commute under order-swap in the reference evaluator).
+
+### A6 — Deleter reaches a bare `when leaving`
+
+(OQ37-R18; §13 "Deletion as a second exit cause".) A `delete` whose scope is not provably disjoint (the shared prover, V25's posture) from the state of a bare `when leaving X` rule. Not an error: under the settled semantics the rule's meaning is defined — the predicate flipped, never deletion — so nothing is ambiguous; what the compiler can see is an omission hazard, an author who meant "for any reason" getting a rule that silently stops at deletion. The advisory names the rule and the deleter and lists the discharges: state the cause with an explicit form (`when leaving not deleted X`, `when leaving or deleted X`, or a separate `when deleted X` rule), or restructure the deleter to provable disjointness (the V25/V27 pattern). The explicit forms never draw it — the form is the statement. Deleters are statically known (V23), so it fires only when a reaching `delete` actually exists. *Implemented in v0* — surfaced via `Validator.advisories(...)`; `TriggerFamilyTest` and `LeavingRuleDeletionProbeTest` carry the exhibits.
+

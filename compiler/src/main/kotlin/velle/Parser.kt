@@ -168,7 +168,20 @@ class Parser(private val tokens: List<Token>) {
         skipNewlines()
         expectKw("when")
         skipNewlines()
-        val leaving = peek().isKw("leaving").also { if (it) next() }
+        // the trigger family (README §13): `when X` / `when leaving X` /
+        // `when deleted X` / `when leaving or deleted X` / `when leaving not deleted X`
+        val trigger = when {
+            peek().isKw("leaving") -> {
+                next(); skipNewlines()
+                when {
+                    peek().isKw("or") -> { next(); skipNewlines(); expectKw("deleted"); Trigger.LEAVING_OR_DELETED }
+                    peek().isKw("not") -> { next(); skipNewlines(); expectKw("deleted"); Trigger.LEAVING_NOT_DELETED }
+                    else -> Trigger.LEAVING
+                }
+            }
+            peek().isKw("deleted") -> { next(); Trigger.DELETED }
+            else -> Trigger.ENTRY
+        }
         skipNewlines()
         val condition = parseCondition()
         skipNewlines()
@@ -196,7 +209,7 @@ class Parser(private val tokens: List<Token>) {
             skipNewlines()
         }
         val body = parseRuleBody()
-        return RuleDecl(name, leaving, condition, preposition, triggers, toleratesLoss, body, toleratesContention)
+        return RuleDecl(name, trigger, condition, preposition, triggers, toleratesLoss, body, toleratesContention)
     }
 
     private fun parseCondition(): RefExpr = when {

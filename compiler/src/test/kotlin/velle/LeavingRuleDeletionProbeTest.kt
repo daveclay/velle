@@ -16,22 +16,18 @@ import kotlin.test.assertTrue
  *    outright (V24, referential completeness) — the combination cannot even
  *    validate;
  *  - the semantic trap: a leaving-rule whose product only copies fields
- *    validates clean, and under the implemented default (every exit rule
- *    fires at the deleting commit) a deletion counterfeits the transition
- *    the rule was written for — the probe below produces a publication
- *    notice for a listing that was never published, and nothing refuses it;
+ *    validates clean, and under v0's original default (every exit rule
+ *    fired at the deleting commit) a deletion counterfeited the transition
+ *    the rule was written for — a publication notice for a listing that
+ *    was never published. Under the settled semantics (OQ37-R12, README
+ *    §13) bare `when leaving` fires only when the predicate flips, never at
+ *    deletion: the probe asserts no notice, and the A6 advisory (OQ37-R18)
+ *    names the reaching deleter;
  *  - the gap: a leaving-rule the author meant as "for any reason, deletion
- *    included" — under the implemented default it happens to cover
- *    deletion; under the settled semantics it will not, and by OQ37-R13
- *    the collision itself becomes a hard validation error until the
- *    author addresses it (that spec's fix is `when leaving or deleted
- *    OpenLead`, OQ37-R16).
- *
- * The runtime probes document the default REJECTED by OQ37-R11/R12: bare
- * `when leaving` fires only when the predicate flips, never at deletion.
- * When that lands (together with R16's `when deleted` trigger), the
- * counterfeit probe flips to asserting no notice, and the gap spec stops
- * validating at all (R13) — its probes become a validation-error assertion.
+ *    included" — the original default happened to cover deletion; the
+ *    settled semantics do not, and the same advisory says so. That spec's
+ *    fix is `when leaving or deleted OpenLead` (OQ37-R16), exercised in
+ *    TriggerFamilyTest.
  */
 class LeavingRuleDeletionProbeTest {
 
@@ -126,6 +122,12 @@ class LeavingRuleDeletionProbeTest {
         return VelleSystem(Model(Parser.parse(fieldCopyingSpec)))
     }
 
+    @Test
+    fun `the collision is surfaced - the deleter reaching Draft draws the A6 advisory`() {
+        val advisories = Validator.advisories(fieldCopyingSpec)
+        assertTrue(advisories.any { it.code == "A6" && "AnnouncePublication" in it.message }, "expected A6, got: $advisories")
+    }
+
     private fun accepted(r: CommitResult): Long {
         assertIs<CommitResult.Accepted>(r, "commit refused: $r")
         return (r as CommitResult.Accepted).id
@@ -142,18 +144,17 @@ class LeavingRuleDeletionProbeTest {
     }
 
     @Test
-    fun `the counterfeit firing - discarding a draft announces a publication that never happened`() {
+    fun `no counterfeit - discarding a draft announces nothing`() {
         val sys = system()
         val listing = accepted(sys.commit("Listing", mapOf("title" to "Old bike")))
 
         accepted(sys.commit("DiscardDraft", mapOf("listing" to listing)))
 
-        // the listing is gone — and the implemented (R11-rejected) default fired
-        // AnnouncePublication at the deleting commit: a notice for a listing
-        // that was never published. When R11's design lands, this flips to
-        // asserting NO notice exists.
+        // the listing is gone, and AnnouncePublication did not fire: bare
+        // `when leaving` reacts to the predicate flipping, never to deletion
+        // (OQ37-R12) — no notice for a listing that was never published
         assertEquals(emptyList(), sys.instancesOf("Listing"))
-        assertEquals("Old bike", sys.get(sys.instancesOf("PublicationNotice").single(), "title"))
+        assertEquals(emptyList(), sys.instancesOf("PublicationNotice"))
     }
 
     // ── Face 3: a rule meant as "for any reason" — the settled semantics' gap ─
@@ -209,21 +210,20 @@ class LeavingRuleDeletionProbeTest {
     }
 
     @Test
-    fun `the gap spec - today a purge also stops the follow-up, by the rejected default`() {
+    fun `the gap spec - a purge no longer stops the follow-up, and the advisory says so`() {
         val sys = leadSystem()
         val lead = accepted(sys.commit("Lead", mapOf("company" to "Acme")))
 
         accepted(sys.commit("PurgeLead", mapOf("lead" to lead)))
 
-        // Under the implemented (rejected) default the purge fires
-        // NoteFollowUpStop, which here is what the author wanted. Under the
-        // settled semantics (OQ37-R12) it will NOT fire — and by OQ37-R13
-        // the spec above stops validating: a deleter reaching a leaving-rule's
-        // state is a hard error until addressed (deletion-reaction rule,
-        // provable disjointness, or the transition-only marker). When the
-        // implementation lands, this probe becomes a validation-error
-        // assertion instead of a runtime one.
+        // The author wanted the purge to stop the follow-up too; bare `when
+        // leaving` does not fire at deletion (OQ37-R12), so nothing lands —
+        // and the spec validates with the A6 advisory (OQ37-R18) naming the
+        // reaching deleter and the explicit forms that state the cause. The
+        // fix is `when leaving or deleted OpenLead` (TriggerFamilyTest).
         assertEquals(emptyList(), sys.instancesOf("Lead"))
-        assertEquals("Acme", sys.get(sys.instancesOf("FollowUpStop").single(), "company"))
+        assertEquals(emptyList(), sys.instancesOf("FollowUpStop"))
+        val advisories = Validator.advisories(forAnyReasonSpec)
+        assertTrue(advisories.any { it.code == "A6" && "NoteFollowUpStop" in it.message }, "expected A6, got: $advisories")
     }
 }

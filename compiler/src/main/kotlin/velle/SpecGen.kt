@@ -370,8 +370,16 @@ object SpecGen {
                 condName?.let {
                     body.line(2, "$subject.assertIsA(\"$it\", \"the given must deliver a member of '$it'\")")
                 }
-                val derived = exitAct(rule)?.let { act -> exitCommit(act, subject, base)?.let { act to it } }
-                if (derived != null) {
+                val derived =
+                    if (rule.trigger.onPredicateExit) exitAct(rule)?.let { act -> exitCommit(act, subject, base)?.let { act to it } }
+                    else null
+                if (rule.trigger == Trigger.DELETED) {
+                    // the deletion-side trigger (README §13): the "when" is the deleting commit
+                    val deleteGiven = if (bare != null) "delete${bare.name}" else "deleteFor${rule.name}"
+                    demandGiven(deleteGiven, "Perform the commit that deletes [$subject].", viewType, takesSubject = true)
+                    body.line(2, "// when: the commit that deletes it")
+                    body.line(2, "givens.$deleteGiven($subject)")
+                } else if (derived != null) {
                     val (act, commit) = derived
                     exitActName = act.name
                     body.line(2, "// when: a ${act.name} for it is committed")
@@ -383,7 +391,7 @@ object SpecGen {
                     body.line(2, "// when: the commit that takes it out of '$cond'")
                     body.line(2, "givens.$exitGiven($subject)")
                 }
-                condName?.let {
+                if (rule.trigger != Trigger.DELETED) condName?.let {
                     body.line(2, "$subject.assertIsNotA(\"$it\", \"the exit commit must end the membership\")")
                 }
             } else if (transientSubject) {
@@ -493,6 +501,7 @@ object SpecGen {
             val sentence = "${rule.name} - " + when {
                 rule.leaving && exitActName != null ->
                     "${article(exitActName!!)} $exitActName for ${article(cond)} $cond $effects"
+                rule.trigger == Trigger.DELETED -> "${article(subject)} $subject in $cond that is deleted $effects"
                 rule.leaving -> "${article(subject)} $subject that leaves $cond $effects"
                 tickOnly -> "at the ${schedules.first()} tick, ${article(cond)} $cond $effects"
                 rule.preposition == "after" -> "a new $cond $effects after the commit"
@@ -540,9 +549,12 @@ object SpecGen {
             when {
                 rule.leaving -> {
                     g.appendLine("    Given a member of \"$cond\"")
-                    if (exitActName != null) g.appendLine("    When a \"$exitActName\" for it is committed")
-                    else g.appendLine("    When the commit that takes it out of \"$cond\" lands")
-                    thens.add("it is no longer a \"$cond\"")
+                    when {
+                        rule.trigger == Trigger.DELETED -> g.appendLine("    When the commit that deletes it lands")
+                        exitActName != null -> g.appendLine("    When a \"$exitActName\" for it is committed")
+                        else -> g.appendLine("    When the commit that takes it out of \"$cond\" lands")
+                    }
+                    thens.add(if (rule.trigger == Trigger.DELETED) "it no longer exists" else "it is no longer a \"$cond\"")
                 }
                 tickOnly -> {
                     g.appendLine("    Given one $subject in \"$cond\", no \"${schedules.first()}\" tick yet")

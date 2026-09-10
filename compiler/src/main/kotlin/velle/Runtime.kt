@@ -871,18 +871,29 @@ class VelleSystem(
                 retractions.add(id to refName)
         }
 
-        // firings: entrants for `when R`, leavers for `when leaving R` — the
+        // firings: entrants for `when R`, leavers for the exit forms — the
         // whole firing set is pinned from this commit's pre/post diff before
         // any sibling runs (evaluation.md step 5), then executed in an order
-        // the spec must not observe (step 6, [S3])
+        // the spec must not observe (step 6, [S3]). A leaver left either
+        // because its predicate flipped or because this commit deleted it —
+        // different exit causes, and each rule says which it reacts to
+        // (README §13, "Deletion as a second exit cause"): bare `when leaving`
+        // never fires at deletion
+        val deletedNow = mutations.filterIsInstance<Mutation.Delete>().map { it.id }.toSet()
         val pending = mutableListOf<Pair<RuleDecl, Long>>()
         for (rule in model.rules.values) {
             if (!(rule.preposition == null || "commit" in rule.triggers)) continue
             val w = watcherByKey["rule:${rule.name}"] ?: continue
             if (w !in active) continue // this commit provably cannot flip its condition
-            var subjects =
-                if (rule.leaving) pre.getValue(w) - post.getValue(w)
-                else post.getValue(w) - pre.getValue(w)
+            var subjects: Set<Long> =
+                if (!rule.leaving) post.getValue(w) - pre.getValue(w)
+                else {
+                    val gone = pre.getValue(w) - post.getValue(w)
+                    buildSet {
+                        if (rule.trigger.onPredicateExit) addAll(gone - deletedNow)
+                        if (rule.trigger.onDeletion) addAll(gone intersect deletedNow)
+                    }
+                }
             // a transient act's partitions are decided exactly once, at its
             // creation commit — consequence commits within the transaction
             // never re-partition it (README §4, "Transient acts")
@@ -1057,6 +1068,9 @@ class VelleSystem(
         val previous = lastTick[schedule] ?: startInstant
         for (rule in model.rules.values) {
             if (schedule !in rule.triggers) continue
+            // a tick deletes nothing: the deletion-side forms are transaction-bound
+            // and the validator refuses them a schedule (V28)
+            if (rule.trigger == Trigger.DELETED) continue
             val subjects: List<Long> =
                 if (rule.leaving) {
                     // leavers at the tick commit itself: member under the previous

@@ -3,7 +3,10 @@
 -- written to put OQ37's delete machinery on display in business terms:
 -- `delete` as an ordinary rule effect, `undeletable` as the state-scoped
 -- deletion gate, `? initially required` as the reference that absorbs its
--- target's deletion, and the per-field copy discipline for what must survive.
+-- target's deletion, the per-field copy discipline for what must survive —
+-- and the trigger family that tells a state's two exit causes apart
+-- (README §13, "Deletion as a second exit cause"): `when leaving not
+-- deleted`, `when deleted`, and `when leaving or deleted`.
 --
 -- Comment convention (as in payments.velle): plain comments tell the business
 -- story; `velle:` comments note the language machinery on show.
@@ -50,6 +53,60 @@ rule ApplyPublish when Publish {
     listing.isDraft = false
 }
 
+-- ── How a draft ends: two causes, three reactions ────────────────────────────
+
+-- A listing leaves Draft for two different business reasons — it was
+-- published (the predicate flipped) or it was discarded (the record was
+-- deleted) — and each reaction below says which one it means.
+
+-- "The listing was published" and nothing else. Written as bare `when
+-- leaving Draft` this rule would draw the A6 advisory, because ApplyDiscard
+-- and SweepOrphanedDrafts below delete drafts and a bare `when leaving` never
+-- fires at deletion; `not deleted` states the intent and discharges it.
+-- velle: `when leaving not deleted` — the predicate-exit cause, stated
+-- (OQ37-R12/R19); the body reads the leaver as any exit body does
+shape PublicationNotice {
+    listingTitle: text
+    publishedOn: timestamp on create
+}
+
+rule AnnouncePublication when leaving not deleted Draft {
+    PublicationNotice from { listingTitle: title }
+}
+
+-- "The draft was discarded" — tell the seller, if there is one to tell. The
+-- inline condition narrows to drafts whose seller lives on: a draft swept
+-- because its seller closed their account has no one to notify, and the
+-- narrowing is what licenses reading `seller` in the body. The notice copies
+-- the title (the listing will not exist to reference) and keeps the seller
+-- reference absorbing, as every reference to a Seller here is.
+-- velle: `when deleted` over an inline refinement (OQ37-R16/R20) — the
+-- subject is the deleted listing, read one last time inside the deleting
+-- commit; a deletion-side body keeps no reference to its subject (V24)
+shape SellerNotice {
+    seller: one Seller? initially required
+    listingTitle: text
+    noticedOn: timestamp on create
+}
+
+rule NoteDiscard when deleted (Draft where seller is some) {
+    SellerNotice from { seller: seller, listingTitle: title }
+}
+
+-- "A draft ended, however it ended" — the drafts dashboard counts closures
+-- by either cause with one rule. A combined-form body is checked against the
+-- deletion-side constraints, so it copies the title rather than referencing
+-- the listing.
+-- velle: `when leaving or deleted` — either cause, one body (OQ37-R16)
+shape DraftClosure {
+    listingTitle: text
+    closedOn: timestamp on create
+}
+
+rule RecordDraftClosure when leaving or deleted Draft {
+    DraftClosure from { listingTitle: title }
+}
+
 -- ── Reports: evidence that outlives its subject ──────────────────────────────
 
 -- A report references the living listing — correlation and traversal while it
@@ -66,9 +123,10 @@ expose shape ListingReport {
 }
 
 -- The listing's deletion is the commit that flips this membership — entry is
--- ordinary drift, and NotifyReporter reacts to it. No `when deleted` trigger
--- exists: a business that must react to "this was deleted" models the state
--- the deletion leaves behind, or the deletion record below.
+-- ordinary drift, and NotifyReporter reacts to it. Where NoteDiscard above
+-- reacts to the deletion itself (`when deleted`), this reacts to the state
+-- the deletion leaves behind — the report's own membership — so it needs no
+-- deletion trigger at all.
 -- velle: deletion-caused drift entry (OQ37, "Refinements recalculate")
 shape OrphanReport = ListingReport where listing is none
 

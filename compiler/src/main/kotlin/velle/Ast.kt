@@ -27,9 +27,29 @@ data class RefinementDecl(
     val members: List<Member> = emptyList(),
 ) : Decl
 
+/**
+ * The trigger family (README §13, "Deletion as a second exit cause"): what a
+ * rule reacts to. A record leaves a state for two different business reasons —
+ * its predicate flipped, or it was deleted — and the rule says which.
+ */
+enum class Trigger(val keyword: String) {
+    ENTRY(""),
+    LEAVING("leaving "),
+    DELETED("deleted "),
+    LEAVING_OR_DELETED("leaving or deleted "),
+    LEAVING_NOT_DELETED("leaving not deleted ");
+
+    /** The subject is a member whose membership ends at the commit, by any cause. */
+    val exit: Boolean get() = this != ENTRY
+    /** Fires when the state's predicate flips false. */
+    val onPredicateExit: Boolean get() = this == LEAVING || this == LEAVING_OR_DELETED || this == LEAVING_NOT_DELETED
+    /** Fires when a member is deleted. */
+    val onDeletion: Boolean get() = this == DELETED || this == LEAVING_OR_DELETED
+}
+
 data class RuleDecl(
     val name: String,
-    val leaving: Boolean,
+    val trigger: Trigger,
     val condition: RefExpr,
     /** "on" | "after" | null (null = omitted clause, defaulting to `on commit`) */
     val preposition: String?,
@@ -40,7 +60,10 @@ data class RuleDecl(
     /** `tolerates contention` — the author accepts the wide serialization domain
      *  this rule's condition creates (OQ40; advisory A5). */
     val toleratesContention: Boolean = false,
-) : Decl
+) : Decl {
+    /** Exit-shaped: the subject is a leaver (any cause) — reads captures as a last reader. */
+    val leaving: Boolean get() = trigger.exit
+}
 
 data class NeverDecl(
     val target: RefExpr,

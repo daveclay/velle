@@ -91,6 +91,55 @@ class DeleteRuntimeTest {
         assertEquals("Draft thing", sys.get(sys.instancesOf("ReporterNotice").single(), "listingTitle"))
     }
 
+    // ── the trigger family, driven through the fixture (README §13) ──────────
+
+    @Test
+    fun `publishing a draft - the stated predicate-exit rule and the combined form fire, the deletion rule does not`() {
+        val sys = moderation()
+        val seller = accepted(sys.commit("Seller", mapOf("name" to "Ada")))
+        val listing = accepted(sys.commit("Listing", mapOf("title" to "Old bike", "seller" to seller)))
+
+        accepted(sys.commit("Publish", mapOf("listing" to listing)))
+
+        assertEquals("Old bike", sys.get(sys.instancesOf("PublicationNotice").single(), "listingTitle"))
+        assertEquals("Old bike", sys.get(sys.instancesOf("DraftClosure").single(), "listingTitle"))
+        assertEquals(emptyList(), sys.instancesOf("SellerNotice"))
+    }
+
+    @Test
+    fun `discarding a draft - the deletion rule and the combined form fire, the predicate-exit rule does not`() {
+        val sys = moderation()
+        val seller = accepted(sys.commit("Seller", mapOf("name" to "Ada")))
+        val listing = accepted(sys.commit("Listing", mapOf("title" to "Old bike", "seller" to seller)))
+
+        accepted(sys.commit("DiscardDraft", mapOf("listing" to listing, "reason" to "seller request")))
+
+        assertEquals(emptyList(), sys.instancesOf("Listing"))
+        val notice = sys.instancesOf("SellerNotice").single()
+        assertEquals("Old bike", sys.get(notice, "listingTitle"))
+        assertEquals(seller, sys.get(notice, "seller"))
+        assertEquals("Old bike", sys.get(sys.instancesOf("DraftClosure").single(), "listingTitle"))
+        assertEquals(emptyList(), sys.instancesOf("PublicationNotice"))
+    }
+
+    @Test
+    fun `a draft swept by its seller's account closing - no seller to notify, but the closure is counted`() {
+        val sys = moderation()
+        val seller = accepted(sys.commit("Seller", mapOf("name" to "Ada")))
+        accepted(sys.commit("Listing", mapOf("title" to "Draft thing", "seller" to seller)))
+
+        accepted(sys.commit("CloseAccount", mapOf("seller" to seller)))
+
+        // the draft was deleted by SweepOrphanedDrafts at the same commit: its
+        // seller reads absent there, so NoteDiscard's inline condition excludes
+        // it; the combined form still counts the closure, and nothing announces
+        // a publication that never happened
+        assertEquals(emptyList(), sys.instancesOf("Listing"))
+        assertEquals(emptyList(), sys.instancesOf("SellerNotice"))
+        assertEquals("Draft thing", sys.get(sys.instancesOf("DraftClosure").single(), "listingTitle"))
+        assertEquals(emptyList(), sys.instancesOf("PublicationNotice"))
+    }
+
     @Test
     fun `initially required refuses an absent reference at the boundary`() {
         val sys = moderation()
@@ -99,13 +148,16 @@ class DeleteRuntimeTest {
     }
 
     @Test
-    fun `an exit rule fires at the deleting commit as the instance's last reader`() {
+    fun `a deletion rule fires at the deleting commit as the instance's last reader`() {
+        // `when deleted` is the trigger for the deletion cause (README §13);
+        // bare `when leaving OpenTask` would never fire here — nothing flips
+        // `done` — and is V3 (TriggerFamilyTest)
         val source = """
             expose shape Task { name: text, done: boolean initially false }
             shape OpenTask = Task where not done
             expose transient shape Drop { task: one Task }
             rule ApplyDrop when Drop { delete task }
-            rule LogExit when leaving OpenTask {
+            rule LogDrop when deleted OpenTask {
                 ExitLog from { name: name }
             }
             shape ExitLog { name: text }
@@ -115,7 +167,7 @@ class DeleteRuntimeTest {
         val task = accepted(sys.commit("Task", mapOf("name" to "water plants")))
         accepted(sys.commit("Drop", mapOf("task" to task)))
         assertEquals(emptyList(), sys.instancesOf("Task"))
-        // the exit rule read the deleted task's name — the last-reader contract
+        // the deletion rule read the deleted task's name — the last-reader contract
         assertEquals("water plants", sys.get(sys.instancesOf("ExitLog").single(), "name"))
     }
 

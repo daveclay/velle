@@ -20,7 +20,7 @@ object Printer {
         }
         is RuleDecl -> buildString {
             append("rule ${d.name} when ")
-            if (d.leaving) append("leaving ")
+            append(d.trigger.keyword)
             append(condition(d.condition))
             if (d.preposition != null) append(" ${d.preposition} ${d.triggers.joinToString(", ")}")
             if (d.toleratesLoss || d.toleratesContention) append(

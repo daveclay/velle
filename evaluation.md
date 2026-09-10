@@ -86,6 +86,8 @@ Rollback needs no special case — an error rolls back the whole transaction, ac
 
 "Newly-satisfying" is always relative to one commit's pre/post states (§11) — the runtime never stores membership, never diffs history, and never needs to: both states are transiently available while processing C, and that is the only place transitions exist (the transition law, §11). September's re-entry is a new entering commit and fires entry rules again — episodes are free at commit granularity (§11); durability across boundaries is the guard apparatus's job, visible in the spec (§18).
 
+**The deleting commit.** A `delete` (README §12, "Deletion") makes its target transient at that commit, the mirror of a transient act: the instance is fully present in the pre-state, every rule the commit fires reads it as one of its last readers, and step 7 removes it. It leaves every refinement it was a member of at once — by deletion, not by a predicate flipping, and those are different exit causes (README §13, "Deletion as a second exit cause"): for each state R it was in, `when deleted R` and `when leaving or deleted R` rules fire from this commit, while bare `when leaving R` and `when leaving not deleted R` rules do not. Nothing after the transaction's close may read the instance, which is why the deletion-side forms are transaction-bound (V28).
+
 ### `after commit`
 
 An `after commit` firing runs as its **own transaction**, begun only after the triggering transaction is durable (§11). The act stands even if the firing fails; the declared backstop schedule heals the gap — which in v0 means: the harness calls the backstop tick function, and the guard makes re-evaluation harmless (§18). `[S2]` v0 drains the queue synchronously, immediately after durability, in FIFO order — an execution choice invisible to a valid spec, since each entry is an independent transaction whose rule carries its own guard.
@@ -152,7 +154,7 @@ The language-side layer, for the reader who works on Velle rather than against i
 
 ## Capture lifecycle
 
-One timeline per membership (§8, §13): **entry commit** — captured expressions evaluated against post-state, values fixed; **during membership** — readable wherever the refinement's properties are in scope (narrowing, §8); **exit commit** — exit rules fired from that commit may read them (the last reader); **close of exit commit** — retracted. Re-entry re-captures from scratch. A capture never survives its transaction — which is why a capture-reading exit rule can never be `after commit` (validated, V7); durable reactions read reified acts instead (§13).
+One timeline per membership (§8, §13): **entry commit** — captured expressions evaluated against post-state, values fixed; **during membership** — readable wherever the refinement's properties are in scope (narrowing, §8); **exit commit** — exit rules fired from that commit may read them (the last reader); **close of exit commit** — retracted. Re-entry re-captures from scratch. A capture never survives its transaction — which is why a capture-reading exit rule can never be `after commit` (validated, V7); durable reactions read reified acts instead (§13). Deletion is the exit commit for every membership the instance held, at once: the deletion-side rules are the last readers of all of its captures, and all retract at that commit's close (§13, "Deletion as a second exit cause").
 
 ## Errors, refusals, and retry
 

@@ -152,7 +152,7 @@ object DiagramGen {
 
         /** Renders a firing's note + body statements; returns the commit kinds the body produces. */
         private fun renderFiring(rule: RuleDecl, deferred: MutableList<Pair<RuleDecl, String>>): List<CommitKind> {
-            val leaving = if (rule.leaving) "when leaving" else "when"
+            val leaving = ("when " + rule.trigger.keyword).trim()
             sb.appendLine("        Note over S: ${rule.name} — $leaving ${cond(rule)}")
             val produced = catalog.producedKinds(rule)
             for (item in rule.body) when (item) {
@@ -195,6 +195,13 @@ object DiagramGen {
             // creating the base shape is an entry (born a member) but never an
             // exit — a new instance has no prior membership to leave
             if (k is CommitKind.Create && k.shape == base && !rule.leaving) return true
+            // deleting the subject's own shape is the exit cause the deletion-side
+            // forms react to; a predicate-exit rule sees it only through consults
+            if (k is CommitKind.Delete && k.shape == base) {
+                if (rule.trigger.onDeletion) return true
+                if (rule.leaving) return catalog.deletionTouchesOthers(k, condSummary(rule))
+            }
+            if (rule.trigger == Trigger.DELETED) return false
             return catalog.touches(k, condSummary(rule))
         }
 

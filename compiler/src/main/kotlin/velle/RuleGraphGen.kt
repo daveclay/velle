@@ -163,8 +163,14 @@ internal object RuleGraphGen {
                     true -> guard = null // provably fires for every new instance
                     null -> {}
                 }
+            } else if (k is CommitKind.Delete && k.shape == base && target.trigger.onDeletion) {
+                // the deletion itself is the exit cause this rule reacts to
             } else {
-                if (!catalog.touches(k, summaryOf(target))) return
+                if (target.trigger == Trigger.DELETED) return // fires only at deletions of its own shape
+                val touched =
+                    if (k is CommitKind.Delete && k.shape == base) catalog.deletionTouchesOthers(k, summaryOf(target))
+                    else catalog.touches(k, summaryOf(target))
+                if (!touched) return
                 when (analysis.dirRef(target.condition, k)) {
                     Dir.TOWARD_TRUE -> if (target.leaving) return
                     Dir.TOWARD_FALSE -> if (!target.leaving) return
@@ -187,7 +193,7 @@ internal object RuleGraphGen {
         private fun guardText(rule: RuleDecl): String? {
             val cond = rule.condition
             if (!rule.leaving && cond is RefName && cond.where == null && cond.name in model.shapes) return null
-            val leaving = if (rule.leaving) "leaving " else ""
+            val leaving = rule.trigger.keyword
             val printed = Printer.refExpr(cond)
             if (printed.length <= 60) return "when $leaving$printed"
             legend.add("**${rule.name}** fires when $leaving$printed")

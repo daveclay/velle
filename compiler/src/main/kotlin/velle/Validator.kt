@@ -54,7 +54,10 @@ class Validator(private val model: Model) {
         checkExistenceDependency()     // V25 (OQ37: guard witnesses, singularity proofs)
         checkNeverDeleters()           // V26 (OQ37: deleters join `never` induction)
         checkUndeletable()             // V27 (OQ37: the state-scoped deletion gate)
-        checkDeleteStranding()         // V28 (OQ37: the V17 mirror at deletion)
+        checkDeleteStranding()         // V28 (OQ37: the V17 mirror at deletion; deletion-side forms transaction-bound)
+        checkDeletionSideReferences()  // V24 (OQ37-R14: a deletion-side body keeps no reference to its subject)
+        checkDeleterReachesBareLeaving() // A6 (advisory, OQ37-R18: the omission hazard)
+        checkDeadTriggerHalves()       // A2 (advisory, OQ37-R17/R19: inert `not deleted` / inert `leaving`)
         checkDriftExposedPartitions() // A4 (advisory)
         checkContention()             // A5 (advisory, OQ40)
         checkDeadOptionality()        // A2 (advisory: `? initially required` nothing can absent)
@@ -540,6 +543,8 @@ class Validator(private val model: Model) {
         val base = model.baseOfExpr(rule.condition) ?: return false
         if (base in model.transients)
             return k is CommitKind.Creates && k.shape == base && !rule.leaving
+        // the deletion-only trigger gains a subject at exactly one kind of commit
+        if (rule.trigger == Trigger.DELETED) return k is CommitKind.Deletes && k.shape == base
         val cond = conditionSummary(rule)
         if (cond.opaque) return true
         return when (k) {
@@ -565,7 +570,10 @@ class Validator(private val model: Model) {
                 // the deleted instance itself can only LEAVE; and a read through a
                 // reference at the deleted shape flips value-dependently (either
                 // direction — `is none` becomes true, `is some` false)
-                if (k.shape == base && rule.leaving) true
+                // deleting the subject's own shape is the exit cause only the
+                // deletion-side forms react to (README §13); a predicate-exit
+                // rule sees it through consults alone
+                if (k.shape == base && rule.trigger.onDeletion) true
                 else {
                     val pol = conditionPolarities(rule).map
                     pol.keys.filter { model.baseOf(it) == k.shape }
@@ -1215,11 +1223,14 @@ class Validator(private val model: Model) {
         // creation commit — no other commit can ever fire the rule (README §4)
         if (base in model.transients)
             return k is CommitKind.Creates && k.shape == base
+        if (rule.trigger == Trigger.DELETED) return k is CommitKind.Deletes && k.shape == base
         val cond = conditionSummary(rule)
         if (cond.opaque) return true
         return when (k) {
+            // a freshly created base instance is born a member (entry) but was a
+            // member of nothing, so it can never leave
             is CommitKind.Creates ->
-                k.shape == base || k.shape in consultedShapes(rule)
+                (k.shape == base && !rule.leaving) || k.shape in consultedShapes(rule)
             is CommitKind.Assigns ->
                 (k.shape to k.field) in cond.fields ||
                     (k.shape to k.field) in cond.collFields ||
@@ -1228,7 +1239,8 @@ class Validator(private val model: Model) {
             // deleted instance from every refinement of its base, and turns reads
             // through references at it absent (`is none` — the absorbing reference)
             is CommitKind.Deletes ->
-                k.shape == base || k.shape in consultedShapes(rule) || conditionReadsRefTo(rule, k.shape)
+                (k.shape == base && (!rule.leaving || rule.trigger.onDeletion)) ||
+                    k.shape in consultedShapes(rule) || conditionReadsRefTo(rule, k.shape)
         }
     }
 
@@ -1252,6 +1264,21 @@ class Validator(private val model: Model) {
 
     private fun checkReachability(rule: RuleDecl) {
         val schedules = rule.triggers.filter { it != "commit" }
+        val base = model.baseOfExpr(rule.condition)
+        // the bare-shape edge (OQ37-R17): a bare shape has no predicate to flip,
+        // and `when leaving` never fires at deletion — a record leaves a bare
+        // shape only by being deleted (README §13)
+        val bareShape = (rule.condition as? RefName)?.let { it.where == null && it.name in model.shapes } == true
+        if (bareShape && rule.trigger.onPredicateExit && !rule.trigger.onDeletion && base !in model.transients) {
+            diags.add(Diagnostic("V3", "rule '${rule.name}' can never fire — '$base' is a bare shape with no " +
+                "predicate to flip, and 'when leaving' never fires at deletion; a record leaves a bare shape " +
+                "only by being deleted. Did you mean 'when deleted $base'? (README §13)"))
+            return
+        }
+        if (rule.trigger == Trigger.DELETED && base != null && base !in model.deletedShapes) {
+            diags.add(Diagnostic("V3", "rule '${rule.name}' can never fire — no rule deletes '$base' (README §13)"))
+            return
+        }
         val cond = conditionSummary(rule)
         if (cond.readsTime && schedules.isEmpty()) {
             diags.add(Diagnostic("V3", "rule '${rule.name}' — its condition depends on the passage of time, " +
@@ -1931,7 +1958,7 @@ class Validator(private val model: Model) {
             val base = subjectScope(rule)?.let { model.baseOf(it) } ?: continue
             if (base !in model.transients) continue
             if (rule.leaving)
-                diags.add(Diagnostic("V17", "rule '${rule.name}' — 'when leaving' over transient act '$base' " +
+                diags.add(Diagnostic("V17", "rule '${rule.name}' — 'when ${rule.trigger.keyword.trim()}' over transient act '$base' " +
                     "is meaningless: the act's refinements are evaluated exactly once, at its commit; there are no exits"))
             if (rule.preposition == "after" || rule.triggers.any { it != "commit" })
                 diags.add(Diagnostic("V17", "rule '${rule.name}' — transient act '$base' is gone before any " +
@@ -2234,10 +2261,20 @@ class Validator(private val model: Model) {
     // firing. Durable reactions hang off the outcome record the deleting
     // commit produced.
     private fun checkDeleteStranding() {
-        if (model.deleteSites.isEmpty()) return
         for (rule in model.rules.values) {
             if (!rule.leaving) continue
             if (!(rule.preposition == "after" || rule.triggers.any { it != "commit" })) continue
+            // the deletion-side forms are transaction-bound by construction
+            // (OQ37-R14): the deleted subject does not survive to a later firing,
+            // and a record kept to be read later is the deletion memory R5 forbids
+            if (rule.trigger.onDeletion) {
+                diags.add(Diagnostic("V28", "rule '${rule.name}' — 'when ${rule.trigger.keyword.trim()}' is " +
+                    "transaction-bound: the deleted subject does not survive to an after-commit firing or a " +
+                    "tick (README §13). React on commit as a last reader, or hang the durable reaction off " +
+                    "the outcome record the deleting commit produces"))
+                continue
+            }
+            if (model.deleteSites.isEmpty()) continue
             val base = model.baseOfExpr(rule.condition) ?: continue
             for (site in model.deleteSites) {
                 if (site.shape != base) continue
@@ -2248,6 +2285,90 @@ class Validator(private val model: Model) {
                     "deleted instance does not survive the transaction boundary the rule declares " +
                     "(OQ37; the V17 mirror). React on-commit as a last reader, or hang the durable " +
                     "reaction off the outcome record the deleting commit produces"))
+            }
+        }
+    }
+
+    // V24 (deletion side, OQ37-R14) — a deletion-side body may not keep a
+    // reference to its subject: the product would outlive the deleted
+    // instance. It copies the fields it needs; a predicate-exit body may keep
+    // the reference (README §13, "One reading rule").
+    private fun checkDeletionSideReferences() {
+        for (rule in model.rules.values) {
+            if (!rule.trigger.onDeletion) continue
+            var keeps = false
+            fun walk(e: Expr) {
+                when (e) {
+                    is PathExpr -> if (e.root == "this" && e.segs.isEmpty()) keeps = true
+                    is Binary -> { walk(e.left); walk(e.right) }
+                    is UnaryMinus -> walk(e.inner)
+                    is NotExpr -> walk(e.inner)
+                    is IfExpr -> { walk(e.condition); walk(e.thenExpr); walk(e.elseExpr) }
+                    is FunCall -> e.args.forEach(::walk)
+                    else -> {}
+                }
+            }
+            for (item in rule.body) when (item) {
+                is Creation -> { item.forExpr?.let(::walk); item.fields.forEach { walk(it.value) } }
+                is Assignment -> walk(item.value)
+                else -> {}
+            }
+            if (keeps)
+                diags.add(Diagnostic("V24", "rule '${rule.name}' — a 'when ${rule.trigger.keyword.trim()}' body " +
+                    "may not keep a reference to its subject ('this'): the record will not exist after the " +
+                    "deleting commit. Copy the fields that must survive instead (README §13)"))
+        }
+    }
+
+    // A6 (advisory, OQ37-R18) — a deleter reaches a bare `when leaving` rule's
+    // state. Not an error: the rule's meaning is defined (the predicate flipped,
+    // never deletion), so nothing is ambiguous — but an author who meant "for
+    // any reason" gets a rule that silently stops at deletion. The explicit
+    // forms never draw it: the form is the statement.
+    private fun checkDeleterReachesBareLeaving() {
+        if (model.deleteSites.isEmpty()) return
+        for (rule in model.rules.values) {
+            if (rule.trigger != Trigger.LEAVING) continue
+            val base = model.baseOfExpr(rule.condition) ?: continue
+            val left = (rule.condition as? RefName)?.name
+            if (left == base) continue // the bare-shape edge is V3's
+            for (site in model.deleteSites) {
+                if (site.shape != base) continue
+                if (left != null && deleteExcludes(site, left)) continue
+                diags.add(Diagnostic("A6", "${siteLabel(site)}, which can reach '${left ?: base}' — the state " +
+                    "'${rule.name}' leaves. A bare 'when leaving' fires only when the predicate flips, never at " +
+                    "deletion: if the rule means \"for any reason\", it silently stops there. State the cause — " +
+                    "'when leaving not deleted' (the transition only), 'when leaving or deleted' (either), or a " +
+                    "separate 'when deleted' rule — or partition the deleter to provably exclude " +
+                    "'${left ?: base}' (README §13)", advisory = true))
+            }
+        }
+    }
+
+    // A2 (advisory) — dead trigger halves (OQ37-R17/R19): a `not deleted`
+    // qualifier where no deleter can reach the state refuses nothing, and the
+    // `leaving` half of a combined form over a bare shape can never fire.
+    private fun checkDeadTriggerHalves() {
+        for (rule in model.rules.values) {
+            val base = model.baseOfExpr(rule.condition) ?: continue
+            val cond = rule.condition as? RefName
+            when (rule.trigger) {
+                Trigger.LEAVING_NOT_DELETED -> {
+                    val reaching = model.deleteSites.filter { site ->
+                        site.shape == base && !(cond != null && cond.name != base && deleteExcludes(site, cond.name))
+                    }
+                    if (reaching.isEmpty())
+                        diags.add(Diagnostic("A2", "rule '${rule.name}' says 'not deleted', but no rule's delete " +
+                            "can reach '${cond?.name ?: base}' — the qualifier refuses nothing (dead machinery); " +
+                            "plain 'when leaving' means the same here (README §13)", advisory = true))
+                }
+                Trigger.LEAVING_OR_DELETED -> {
+                    if (cond != null && cond.where == null && cond.name in model.shapes && base !in model.transients)
+                        diags.add(Diagnostic("A2", "rule '${rule.name}' — the 'leaving' half is inert: '$base' is a " +
+                            "bare shape with no predicate to flip, so only deletion fires this rule; " +
+                            "'when deleted $base' says the same (dead machinery, README §13)", advisory = true))
+                }
+                else -> {}
             }
         }
     }

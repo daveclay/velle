@@ -65,6 +65,19 @@ internal class KindCatalog(private val model: Model) {
         return out
     }
 
+    /**
+     * Can deleting an instance of [k]'s shape change what a predicate over that
+     * same shape reads for OTHER instances? The deleted instance's own fields
+     * vanish with it — that is exit by deletion, not a predicate flip (README
+     * §13), so a predicate-exit rule sees such a deletion only through the
+     * consults the predicate makes of the shape.
+     */
+    fun deletionTouchesOthers(k: CommitKind.Delete, s: ReadSummary): Boolean = s.opaque ||
+        k.shape in s.existsShapes || k.shape in s.collShapes ||
+        (s.fields + s.collFields).any { (o, f) ->
+            model.membersOf(o)[f]?.type?.instanceShape()?.let { model.baseOf(it) } == k.shape
+        }
+
     /** Can this kind change the value of a predicate with this read summary? */
     fun touches(k: CommitKind, s: ReadSummary): Boolean = s.opaque || when (k) {
         is CommitKind.Create ->

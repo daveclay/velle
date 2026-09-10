@@ -288,7 +288,12 @@ private class ShapeFlow(
         }
         for (rule in model.rules.values) {
             if (exactCondition(rule) != r.name) continue
-            val moment = if (rule.leaving) "on exit" else "on entry"
+            val moment = when (rule.trigger) {
+                Trigger.ENTRY -> "on entry"
+                Trigger.DELETED -> "on deletion"
+                Trigger.LEAVING_OR_DELETED -> "on exit or deletion"
+                else -> "on exit"
+            }
             note(sb, r.name, "$moment — ${rule.name} ${ruleActions(rule)} (${triggerPhrase(rule)})")
         }
     }
