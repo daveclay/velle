@@ -63,6 +63,9 @@ timestampProp := Identifier ":" "timestamp" "on" ("create" | "update")
 propType      := scalarType "?"?
               | "one" ShapeName "?"?                -- owned to-one side; "?" marks it optional
               | "many" ShapeName                    -- owned edge set (m2m); no "?" (empty collection is the absence)
+                                                    -- ShapeName in either relationship position must resolve to a
+                                                    -- base shape; a refinement name is a validator error (checks
+                                                    -- catalog, F2), not a grammar concern
               | "many" scalarType                   -- owned collection of values; no "?"
 scalarType    := "text" | "integer" | "long" | "decimal" | "double" | "boolean" | "Date" | "DateTime"
 ```

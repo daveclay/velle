@@ -109,7 +109,9 @@ class Validator(private val model: Model) {
                     if (t is RelType && t.shape !in model.shapes)
                         diags.add(Diagnostic("F1", "'$name.${m.name}' relates to unknown shape '${t.shape}'"))
                     if (t is RelType && t.shape in model.refinements)
-                        diags.add(Diagnostic("F2", "'$name.${m.name}' — relationships target base shapes, not refinements"))
+                        diags.add(Diagnostic("F2", "'$name.${m.name}' — relationships target base shapes, not refinements: " +
+                            "a field type is fixed at the write, a membership drifts after it (README §6). " +
+                            "State the condition on the act that creates '$name' — a gate refinement or a never"))
                     m.initially?.let { checkExpr(it, name, allowGenerator = true) }
                     // `initially required` demands an optional type: the whole point of
                     // the decomposition is read-side optionality with creation-side
