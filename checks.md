@@ -18,11 +18,11 @@ Every reference resolves to exactly one declaration; uppercase-initial names are
 
 ### F2 — Type checking
 
-The Kotlin-grounded scalar rules (§5): operator/operand compatibility, duration arithmetic only on `Date`/`DateTime` (receiver-dependent), predicates boolean, comparisons like-typed, `==` on instances is identity. Calls only to the closed builtin list (§5) with correct arity — including the selectors' mandatory `by` list (§10): each named datum must be an orderable member of the element shape. A relationship's target (`one X`, `many X`) is a base shape, never a refinement — a field type is fixed at the write, a membership drifts after it, so a refinement-typed field could be violated by a commit that never wrote it (README §6); the diagnostic prescribes a gate refinement or a `never` on the creating act. Relationship traversal follows declared `one`/`many` types; `?` optionality is part of the type. Collection typing (README §6, "Committing and assigning collections"): `+`/`-` on a declared `many` are union/removal with an element or collection right-hand side; `empty` types only where a `many` is expected; a `many` never takes `?` (the empty collection is the absence).
+The Kotlin-grounded scalar rules (§5): operator/operand compatibility, duration arithmetic only on `Date`/`DateTime` (receiver-dependent), predicates boolean, comparisons like-typed, `==` on instances is identity. Calls only to the closed builtin list (§5) with correct arity — including the selectors' mandatory `by` list (§10): each named datum must be an orderable member of the element shape. A relationship's target (`one X`, `many X`) is a base shape or a **static union** — a pure `or` of base shapes with no predicate anywhere (README §6, §9) — never any other refinement: a field type is fixed at the write, a membership drifts after it, so a refinement-typed field could be violated by a commit that never wrote it; the diagnostic prescribes a gate refinement or a `never` on the creating act, or names the operand carrying the predicate. A membership test `x is R` whose two sides have no base shape in common is an error, never trivially false. `and` across distinct bases is provably empty (A2); a rule condition composing unrelated shapes inline must name the union (README §9). Relationship traversal follows declared `one`/`many` types; `?` optionality is part of the type. Collection typing (README §6, "Committing and assigning collections"): `+`/`-` on a declared `many` are union/removal with an element or collection right-hand side; `empty` types only where a `many` is expected; a `many` never takes `?` (the empty collection is the absence).
 
 ### F3 — Position rules
 
-Shape bodies contain no effects; rule bodies contain no definitions (`=` is positional, §12). `captured` only in refinement bodies (§8); `frozen` only names stored fields of the base shape (§8); `initially` only on stored properties (§5); `timestamp` fields and `id` never assigned, never committer-supplied (§5); `tolerates duplication|reordering` on fields, `tolerates loss` on rules (§19).
+Shape bodies contain no effects; rule bodies contain no definitions (`=` is positional, §12). `captured` only in refinement bodies (§8); `frozen` only names stored fields of the base shape (§8); a cross-base union's body admits derived properties only — `frozen` has no base to name, `captured` has no entry moment but creation (the spelling is `initially` on each operand), `undeletable` gates a refinement of each operand (§9); `initially` only on stored properties (§5); `timestamp` fields and `id` never assigned, never committer-supplied (§5); `tolerates duplication|reordering` on fields, `tolerates loss` on rules (§19).
 
 ### F4 — Mapping totality
 
@@ -32,7 +32,7 @@ A `from { ... }` block supplies every field the created shape declares (minus la
 
 ### V1 — One-writer disjointness
 
-(§12.) For every pair of assignments targeting the same field: prove their triggers can never coincide at one commit (unrelated act shapes → disjoint; same shape, refinement-and-base, or overlapping refinements → error). Uses the refinement-overlap machinery (V9) on trigger shapes; spends established `never` invariants for alias cases (V11). Connected diagnostic names both rules.
+(§12.) For every pair of assignments targeting the same field: prove their triggers can never coincide at one commit (unrelated act shapes → disjoint; same shape, refinement-and-base, or overlapping refinements → error; a cross-base union overlaps each of its operands, while distinct bases never overlap — §9). Uses the refinement-overlap machinery (V9) on trigger shapes; spends established `never` invariants for alias cases (V11). Connected diagnostic names both rules.
 
 *Coarse* extension for fan-out (§6, "Committing and assigning collections"): a collection-path assignment counts as a write to that field on **every** instance of the member shape — any other write to the same field whose trigger could coincide is a conflict, and instance-level disjointness of target sets is never attempted (they are runtime data). Refining this with disjointness proofs in specific patterns is post-v0 calibration.
 
@@ -44,7 +44,7 @@ A `from { ... }` block supplies every field the created shape declares (minus la
 
 ### V3 — Unfireable rule
 
-(§11.) Derive each rule's trigger set from the writers of what its condition reads, the spec's `expose` declarations (an act shape with no `expose` and no producing rule is uncommittable, §22), and its `on` schedules. Empty set → error. The time-dependence instance: a condition reading `today` with no schedule in `on` observes no entry by aging — diagnostic says exactly that. The bare-shape instance (OQ37-R17): a predicate-exit trigger over a bare shape — `when leaving Listing` with `Listing` bare — has no predicate to flip and, since `when leaving` never fires at deletion, an empty trigger set; the diagnostic says the shape is bare and offers `when deleted`.
+(§11.) Derive each rule's trigger set from the writers of what its condition reads, the spec's `expose` declarations (an act shape with no `expose` and no producing rule is uncommittable, §22), and its `on` schedules. Empty set → error. The time-dependence instance: a condition reading `today` with no schedule in `on` observes no entry by aging — diagnostic says exactly that. The bare-shape instance (OQ37-R17): a predicate-exit trigger over a bare shape — `when leaving Listing` with `Listing` bare — has no predicate to flip and, since `when leaving` never fires at deletion, an empty trigger set; the diagnostic says the shape is bare and offers `when deleted`. A bare static union is bare the same way: entry is creation of an operand instance (§9).
 
 ### V4 — Boundary/apparatus, both ways
 
@@ -76,7 +76,7 @@ A `from { ... }` block supplies every field the created shape declares (minus la
 
 ### V11 — Narrowing analysis
 
-(§10.) Plain `.` through an optional requires provable non-absence — narrowed by `is some`/`is none`/`is Refinement` earlier in the same conjunction or the corresponding conditional branch; otherwise error (the escape is `?.`). Same analysis licenses refinement-property access after `is Refinement`.
+(§10.) Plain `.` through an optional requires provable non-absence — narrowed by `is some`/`is none`/`is Refinement` earlier in the same conjunction or the corresponding conditional branch; otherwise error (the escape is `?.`). Same analysis licenses refinement-property access after `is Refinement`. *Built in v0 for the union slice* (§9): `path is Operand` in a conditional's condition or to the left of an `and` licenses the operand's own properties on that path in the then-branch or the right conjunct, and the else-branch of a two-operand static union narrows to the other operand; the optionality slice, `not (x is A)`, and nested forms remain unimplemented.
 
 ### V12 — Singular-reference proofs
 
@@ -84,7 +84,7 @@ A `from { ... }` block supplies every field the created shape declares (minus la
 
 ### V13 — Ambiguity is a connected diagnostic
 
-(§14, §22.) A declaration change that creates a new type-match ambiguity for an existing bare `for` reference (a shape gaining a second `Customer`-typed field) is reported as one diagnostic naming the declaration *and* every reference it broke — an incoherence of the spec, not a syntax error at one line.
+(§14, §22.) A field typed with a static union type-matches an expression of any operand's type (§6). A declaration change that creates a new type-match ambiguity for an existing bare `for` reference (a shape gaining a second `Customer`-typed field) is reported as one diagnostic naming the declaration *and* every reference it broke — an incoherence of the spec, not a syntax error at one line.
 
 ### V14 — Well-foundedness (*coarse*)
 
@@ -100,7 +100,7 @@ The static condition graph (rule effects → conditions they can newly satisfy) 
 
 ### V17 — Transient isolation
 
-(§4 "Transient acts".) A `transient` act exists only within its own commit's transaction, so nothing durable or later may depend on it. Errors: a stored or derived property typed `one`/`many` of a transient shape, anywhere (outcomes copy the act's fields instead — no references, hence no inferred inverses); the transient shape's name appearing in any expression (collection root, `exists ... for`, `(X for expr)`, aggregate) — even inside its own refinement family, since that is a cross-act read; `when leaving` over a refinement of it (there are no exits, only the one evaluation); an `after commit` preposition or any schedule trigger on a rule whose subject is the transient act (the act is gone when they run — asynchronous work hangs off a materialized durable intent).
+(§4 "Transient acts".) A `transient` act exists only within its own commit's transaction, so nothing durable or later may depend on it. A cross-base union with a transient operand is refused outright (§9): the rule would fire per act, but every read is a branch per operand and nothing durable may reference the act — one declaration for the acts to inherit is the mixin's job (OQ35). Errors: a stored or derived property typed `one`/`many` of a transient shape, anywhere (outcomes copy the act's fields instead — no references, hence no inferred inverses); the transient shape's name appearing in any expression (collection root, `exists ... for`, `(X for expr)`, aggregate) — even inside its own refinement family, since that is a cross-act read; `when leaving` over a refinement of it (there are no exits, only the one evaluation); an `after commit` preposition or any schedule trigger on a rule whose subject is the transient act (the act is gone when they run — asynchronous work hangs off a materialized durable intent).
 
 ### V18 — Transient totality: every request gets a response (*coarse*)
 
@@ -156,7 +156,7 @@ With a closure (`expose ... with`, §6 "Inline part creation"), the inline parts
 
 ### A2 — Dead machinery
 
-(§8, §18, §19.) The family of "provably serves nothing" findings that aren't errors elsewhere: a freeze no writer could violate ("serves no writer"); an `undeletable` gate no deleter could trip (V27's dead case); an `? initially required` field nothing can make absent — no deleter of its target, no writer of the field — which is `one X` wearing a costume (OQ37-R10's converse diagnostic); the inert `not deleted` half of `when leaving not deleted X` where no deleter reaches X, and the inert `leaving` half of `when leaving or deleted X` over a bare shape (OQ37-R17/R19). The delete-side members are *implemented in v0*, surfaced via `Validator.advisories(...)`. The required members of the family (dead tolerance, dead guard apparatus) are in V8 and V4.
+(§8, §9, §18, §19.) The family of "provably serves nothing" findings that aren't errors elsewhere: a freeze no writer could violate ("serves no writer"); `and` composed across distinct bases, provably empty since an instance has one base (§9); an `undeletable` gate no deleter could trip (V27's dead case); an `? initially required` field nothing can make absent — no deleter of its target, no writer of the field — which is `one X` wearing a costume (OQ37-R10's converse diagnostic); the inert `not deleted` half of `when leaving not deleted X` where no deleter reaches X, and the inert `leaving` half of `when leaving or deleted X` over a bare shape (OQ37-R17/R19). The delete-side members are *implemented in v0*, surfaced via `Validator.advisories(...)`. The required members of the family (dead tolerance, dead guard apparatus) are in V8 and V4.
 
 ### A3 — Impact analysis surfaces
 

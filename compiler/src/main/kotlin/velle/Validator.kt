@@ -6,7 +6,8 @@ package velle
  * Where checks.md calls for a prover (predicate disjointness, never-induction,
  * confluence), v0 proves the syntactic cases and fails closed on the rest —
  * calibration against realistic specs is OQ16's deferred work. Not yet
- * implemented (tracked in checks.md): V11 branch-sensitive narrowing, V12
+ * implemented (tracked in checks.md): V11 branch-sensitive narrowing beyond
+ * the union slice (`is <Operand>` in conditionals and conjunctions), V12
  * at-most-one proofs beyond the refinement slice (base-shape to-one-inverse
  * proofs stay runtime-enforced), and the A-series beyond A4/A5
  * (drift-exposed partitions and contention — advisory, via Validator.advisories).
@@ -109,13 +110,13 @@ class Validator(private val model: Model) {
                     if (t is RelType && t.shape !in model.shapes && t.shape !in model.refinements)
                         diags.add(Diagnostic("F1", "'$name.${m.name}' relates to unknown shape '${t.shape}'"))
                     // a static union — a pure `or` of base shapes — is a stable target
-                    // type (OQ29 §4); any refinement carrying a predicate is not
+                    // type (README §6); any refinement carrying a predicate is not
                     if (t is RelType && t.shape in model.refinements && !model.isStaticUnion(t.shape))
                         diags.add(Diagnostic("F2", "'$name.${m.name}' — relationships target base shapes, not refinements: " +
                             "a field type is fixed at the write, a membership drifts after it (README §6). " +
                             (if (model.isCrossBase(t.shape))
                                 "'${t.shape}' is a union whose operands carry a predicate; a field's target union must be " +
-                                "a pure `or` of base shapes (OQ29)"
+                                "a pure `or` of base shapes (README §9)"
                             else "State the condition on the act that creates '$name' — a gate refinement or a never")))
                     m.initially?.let { checkExpr(it, name, allowGenerator = true) }
                     // `initially required` demands an optional type: the whole point of
@@ -188,28 +189,28 @@ class Validator(private val model: Model) {
     }
 
     /**
-     * A cross-base union (README §9 extended across unrelated bases; OQ29): the
+     * A cross-base union (README §9 extended across unrelated bases): the
      * property rule is unchanged, so its body may carry derived properties only
-     * (OQ29 §6.2 — `frozen` has no base to name, a creation-entered capture is
+     * (README §9 — `frozen` has no base to name, a creation-entered capture is
      * `initially` on each operand), and a transient operand is refused until
-     * OQ35's mixin lands (OQ29 §6.1).
+     * OQ35's mixin lands (README §9).
      */
     private fun checkCrossBaseUnion(name: String, r: RefinementDecl, bases: Set<String>) {
         bases.filter { it in model.transients }.forEach {
             diags.add(Diagnostic("V17", "'$name' composes transient act '$it' with unrelated shapes — " +
                 "a union with a transient operand is refused until unrelated shapes can share a declaration " +
-                "(OQ29 §6.1; OQ35): give the acts one declaration to inherit, or write one rule per act"))
+                "(README §9; OQ35): give the acts one declaration to inherit, or write one rule per act"))
         }
         for (m in r.members) when (m) {
             is DerivedProp -> if (m.captured)
                 diags.add(Diagnostic("F3", "'$name.${m.name}' — a cross-base union is entered only by creation, " +
-                    "so a capture there is `initially` on each operand; declare it on ${bases.joinToString(" and ")} (OQ29 §6.2)"))
+                    "so a capture there is `initially` on each operand; declare it on ${bases.joinToString(" and ")} (README §9)"))
             is FrozenClause ->
                 diags.add(Diagnostic("F3", "'$name' declares `frozen` — a cross-base union has no base shape whose " +
-                    "stored fields it could name; freeze on a refinement of each operand (OQ29 §6.2)"))
+                    "stored fields it could name; freeze on a refinement of each operand (README §9)"))
             UndeletableClause ->
                 diags.add(Diagnostic("F3", "'$name' declares `undeletable` on a cross-base union — " +
-                    "gate deletion on a refinement of each operand (OQ29 §6.2)"))
+                    "gate deletion on a refinement of each operand (README §9)"))
             else -> {}
         }
     }
@@ -235,7 +236,7 @@ class Validator(private val model: Model) {
         else -> model.baseOfExpr(rule.condition) ?: run {
             if (model.basesOfExpr(rule.condition).size > 1)
                 diags.add(Diagnostic("F2", "rule '${rule.name}' — its condition composes unrelated shapes inline; " +
-                    "name the union (`shape X = A or B`) and react to the name (OQ29)"))
+                    "name the union (`shape X = A or B`) and react to the name (README §9)"))
             null
         }
     }
@@ -472,7 +473,7 @@ class Validator(private val model: Model) {
         }
     }
 
-    // ── narrowing (README §10; V11's union slice, OQ29) ──────────────────────
+    // ── narrowing (README §10; V11's union slice) ────────────────────────────
     //
     // `path is Name` in a governing predicate licenses Name's own properties on
     // that path inside the licensed branch: the then-branch of a conditional,
@@ -1137,7 +1138,7 @@ class Validator(private val model: Model) {
         val basesA = model.basesOfExpr(a.condition)
         val basesB = model.basesOfExpr(b.condition)
         if (basesA.isEmpty() || basesB.isEmpty()) return false
-        // distinct bases are disjoint by construction; a union overlaps each operand (OQ29 §2)
+        // distinct bases are disjoint by construction; a union overlaps each operand (README §9)
         if (basesA != basesB) return !(canShareCommit(a, b))
         val ca = conditionConjuncts(a.condition)
         val cb = conditionConjuncts(b.condition)
@@ -1395,7 +1396,7 @@ class Validator(private val model: Model) {
         // the bare-shape edge (OQ37-R17): a bare shape has no predicate to flip,
         // and `when leaving` never fires at deletion — a record leaves a bare
         // shape only by being deleted (README §13). A static union is bare the
-        // same way: entry is creation of an operand instance (OQ29)
+        // same way: entry is creation of an operand instance (README §9)
         val bareShape = (rule.condition as? RefName)
             ?.let { it.where == null && (it.name in model.shapes || model.isStaticUnion(it.name)) } == true
         if (bareShape && rule.trigger.onPredicateExit && !rule.trigger.onDeletion && bases.none { it in model.transients }) {

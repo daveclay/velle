@@ -225,7 +225,7 @@ class Evaluator(private val system: VelleSystem) {
      */
     private fun instancesReferencing(shape: String, id: Long): List<Long> {
         val targetShape = (system.instance(id) ?: throw VelleRuntimeError("missing instance $id")).shape
-        // a union subject (OQ29) scans each operand; a field typed with a static
+        // a union subject (README §9) scans each operand; a field typed with a static
         // union accepts an instance of any operand
         val referencing = model.basesOf(shape).flatMap { base ->
             val field = model.shapes.getValue(base).members.filterIsInstance<StoredProp>()

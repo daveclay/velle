@@ -328,7 +328,7 @@ object SpecGen {
             val schedules = rule.triggers.filter { it != "commit" }
             val tickOnly = rule.preposition != "after" && schedules.isNotEmpty() && "commit" !in rule.triggers
             // the subject reads as what it is: the condition's base-shape instance —
-            // or, over a cross-base union, the static union it is drawn from (OQ29)
+            // or, over a cross-base union, the static union it is drawn from (README §9)
             val base = model.baseOfExpr(rule.condition)
                 ?: (rule.condition as? RefName)?.name?.let { model.unionRootOf(it) }
             val subject = base?.replaceFirstChar { it.lowercase() } ?: "subject"

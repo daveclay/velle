@@ -73,7 +73,7 @@ class Model(val decls: List<Decl>) {
     /**
      * The base shapes a shape-or-refinement's members are drawn from. One for a
      * base shape or an ordinary refinement; several for a cross-base union —
-     * `or` composed across unrelated shapes (README §9 extended; OQ29). Empty,
+     * `or` composed across unrelated shapes (README §9). Empty,
      * with F1, when a name is unknown.
      */
     fun basesOf(name: String): Set<String> = basesCache.getOrPut(name) {
@@ -95,7 +95,7 @@ class Model(val decls: List<Decl>) {
             val r = basesOfExpr(expr.right)
             val both = l intersect r
             // distinct bases are disjoint by construction: an instance has one
-            // base, so `Car and Bicycle` has no members (OQ29 §4)
+            // base, so `Car and Bicycle` has no members (README §9)
             if (both.isEmpty() && l.isNotEmpty() && r.isNotEmpty())
                 diagnostics.add(Diagnostic("A2", "'${Printer.refExpr(expr)}' is provably empty — " +
                     "its operands have no base shape in common, and an instance has exactly one base", advisory = true))
@@ -117,7 +117,7 @@ class Model(val decls: List<Decl>) {
      * A static union: a named refinement that is a pure `or` of base shapes (or
      * of static unions) with no predicate anywhere. Its member set is fixed by
      * declarations, never by data, so it is stable enough to be a field's
-     * target type (OQ29 §4, the field-type rule; README §6).
+     * target type (README §6, the static-union field-type rule).
      */
     fun isStaticUnion(name: String): Boolean =
         refinements[name]?.let { pureOr(it.expr) && basesOf(name).size > 1 } == true
@@ -183,7 +183,7 @@ class Model(val decls: List<Decl>) {
             // demand declared derived views (README §6; the `Transfer` example).
             for ((otherName, other) in shapes) {
                 if (otherName in transients) continue
-                // a field typed with a static union targets every operand (OQ29):
+                // a field typed with a static union targets every operand (README §9):
                 // `Comment.target: one Content` puts `comments` on each operand
                 val targeting = other.members.filterIsInstance<StoredProp>()
                     .filter { (it.type as? RelType)?.shape?.let { t -> typeAccepts(t, scope) } == true }
@@ -199,7 +199,7 @@ class Model(val decls: List<Decl>) {
         refinements[scope]?.let { r ->
             if (isCrossBase(scope)) {
                 // a cross-base union exposes only what every operand inherits from
-                // ONE declaration (README §9, unchanged; OQ29 §2): `id`, and the
+                // ONE declaration (README §9, unchanged): `id`, and the
                 // inverses inferred through a field typed with the union. Two
                 // same-named declarations on different bases are never shared.
                 val operandMaps = collectOperandScopes(r.expr).map { membersOf(it) }

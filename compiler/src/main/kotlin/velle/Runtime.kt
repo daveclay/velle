@@ -678,7 +678,7 @@ class VelleSystem(
     }
 
     /** A committed reference names an existing instance the field's declared
-     *  type accepts — the shape itself, or an operand of a static union (OQ29):
+     *  type accepts — the shape itself, or an operand of a static union (README §9):
      *  a handle of the wrong shape can't inhabit the type, a boundary refusal. */
     private fun acceptedReference(handle: Long, declared: String): Boolean {
         if (declared in model.shapes) idShape.putIfAbsent(handle, declared)
@@ -730,7 +730,7 @@ class VelleSystem(
     private class Watcher(
         val key: String,
         val condition: RefExpr,
-        /** the base shapes the condition's subjects are drawn from — several for a cross-base union (OQ29) */
+        /** the base shapes the condition's subjects are drawn from — several for a cross-base union (README §9) */
         val bases: Set<String>,
         val summary: ReadSummary,
         val sensShapes: Set<String>,
@@ -1153,7 +1153,7 @@ class VelleSystem(
         name in model.refinements -> {
             val bases = model.basesOf(name)
             val ids = if (bases.size == 1) idsOfCandidates(bases.single(), queryCompiler().filterFor(RefName(name)))
-            else bases.flatMap { idsOf(it) } // a cross-base union: every operand's instances (OQ29)
+            else bases.flatMap { idsOf(it) } // a cross-base union: every operand's instances (README §9)
             ids.filter { evaluator.memberOfRefExpr(it, RefName(name)) }
         }
         else -> throw IllegalArgumentException("unknown shape or refinement '$name'")
@@ -1162,7 +1162,7 @@ class VelleSystem(
     fun isMember(id: Long, refinement: String): Boolean =
         evaluator.memberOfRefExpr(id, RefName(refinement))
 
-    /** The concrete base shape of an instance — which operand a union-typed reference points at (OQ29). */
+    /** The concrete base shape of an instance — which operand a union-typed reference points at (README §9). */
     fun shapeOf(id: Long): String =
         instance(id)?.shape ?: throw IllegalArgumentException("no instance $id")
 

@@ -64,8 +64,9 @@ propType      := scalarType "?"?
               | "one" ShapeName "?"?                -- owned to-one side; "?" marks it optional
               | "many" ShapeName                    -- owned edge set (m2m); no "?" (empty collection is the absence)
                                                     -- ShapeName in either relationship position must resolve to a
-                                                    -- base shape; a refinement name is a validator error (checks
-                                                    -- catalog, F2), not a grammar concern
+                                                    -- base shape or a static union (a pure `or` of base shapes,
+                                                    -- README §6); any other refinement name is a validator error
+                                                    -- (checks catalog, F2), not a grammar concern
               | "many" scalarType                   -- owned collection of values; no "?"
 scalarType    := "text" | "integer" | "long" | "decimal" | "double" | "boolean" | "Date" | "DateTime"
 ```
@@ -92,7 +93,7 @@ refinementMember := "captured" Identifier ":" propType "=" valueExpr
                  | "undeletable"                                        -- the deletion gate (OQ37-R1): state-scoped, frozen's sibling
 ```
 
-The `Base where predicate` form and composition are one grammar: `shape OverdueInvoice = Invoice where balance > 0 and due < today` is a `refAtom` with a `where` clause; `shape UrgentOverdueTicket = Overdue and HighPriority and Open` is a `refTerm`; mixing is legal (`Quoted and (Invoice where total > 100)`). Operands must share a base shape or refine one another — a type check, not a grammar rule (README §9).
+The `Base where predicate` form and composition are one grammar: `shape OverdueInvoice = Invoice where balance > 0 and due < today` is a `refAtom` with a `where` clause; `shape UrgentOverdueTicket = Overdue and HighPriority and Open` is a `refTerm`; mixing is legal (`Quoted and (Invoice where total > 100)`). `or` may compose unrelated base shapes — a cross-base union, `shape Content = Post or Photo` — while `and` across distinct bases is provably empty; both are type checks, not grammar rules (README §9, checks catalog F2/A2). A rule's `condition` composing unrelated shapes inline must name the union first (F2).
 
 ## Rule declarations
 

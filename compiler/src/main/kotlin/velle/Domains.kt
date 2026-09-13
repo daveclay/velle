@@ -746,7 +746,7 @@ class DomainAnalysis(private val model: Model) {
 
         /**
          * A read the validator licensed by narrowing (`target is Post` governing
-         * `target.author`, OQ29): the name is no shared member of the union, but
+         * `target.author`, README §9): the name is no shared member of the union, but
          * an operand's own. Attribute the read to every operand that declares it,
          * at the same anchor — the over-approximation of the one operand the
          * branch actually reads, which is all the derivation ever claims.

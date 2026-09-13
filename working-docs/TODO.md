@@ -11,10 +11,9 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 - [ ] Cover the remaining small constructs: 3+-binding sibling joins · per-hop freeze depth (`LockedLineItem = LineItem where order is SettledOrder { frozen ... }`) · self-referential derived property (V14 descent certificates now accept the recurrence — exercise it in an example spec) · declared `many` field (README §6; exercised by `examples/enrollment/`).
 - [ ] Add human-readable examples of *invalid* velle with the diagnostics each produces — `examples/` shows only working specs; nothing shows a reader what a rejection (e.g. V15's order-dependence error) looks like or how to fix it.
 
-## Cross-base unions (OQ29 §7)
+## Cross-base unions (OQ44)
 
-- [ ] Promote OQ29 sections 4 and 6 to README §6/§9/§10, `grammar.md`, and `checks.md` — after the author confirms the rulings (OQ29 §7, decision 1).
-- [ ] Tighten V5, V6, V10, V12, V14, and V15's transition leg to reason per operand of a cross-base refinement (today: skipped, fail-open) — rides OQ16's calibration.
+- [ ] Tighten V5, V6, V10, V12, V14, and V15's transition leg to reason per operand of a cross-base refinement (today: skipped, fail-open) — OQ44 exercises each; rides OQ16's calibration.
 - [ ] Extend narrowing to `not (x is A)`, nested conditionals, and three-or-more-operand else-branches (`Validator.kt`, the narrowing block).
 - [ ] Add a union notation to the class and state-flow diagrams (`diagrams.md`).
 
@@ -57,7 +56,6 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 ## Language questions awaiting design
 
 - [ ] Bootstrap/backfill triggers — OQ28.
-- [ ] Sum types / union shapes — OQ29.
 - [ ] Erasure and retention — OQ27.
 
 ## Post-v0 re-derivations
@@ -66,7 +64,7 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## Research
 
-- [ ] Mine prior art: Eve, Alloy, CUE, SQL still unstudied; term rewriting (critical pairs, Newman's lemma) and CHR confluence checking are now load-bearing for OQ16. (Datalog's first pass landed: stratification → V14, recursive predicates → self-reference; its residue is OQ29.)
+- [ ] Mine prior art: Eve, Alloy, CUE, SQL still unstudied; term rewriting (critical pairs, Newman's lemma) and CHR confluence checking are now load-bearing for OQ16. (Datalog's first pass landed: stratification → V14, recursive predicates → self-reference; its residue, sum types, settled as cross-base `or` — README §9; the adversarial pass is OQ44.)
 
 ## Doc chores
 

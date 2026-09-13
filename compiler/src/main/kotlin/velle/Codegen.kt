@@ -209,7 +209,7 @@ object Codegen {
                 if (memberName == "id") continue
                 line("        val $memberName: ${kotlinType(m.type)} get() = ${readExpr("system.get(id, \"$memberName\")", m.type)}")
             }
-            // an operand's view widens to each static union it belongs to (OQ29):
+            // an operand's view widens to each static union it belongs to (README §9):
             // how a Post is handed to a field typed `one Content`
             model.refinements.keys.filter { model.isStaticUnion(it) && shape in model.basesOf(it) }.forEach {
                 line("        fun as$it() = ${it}View(id)")
@@ -236,7 +236,7 @@ object Codegen {
             line("    }")
         }
 
-        /** A static union's view (OQ29): the shared members — `id`, the inverses
+        /** A static union's view (README §9): the shared members — `id`, the inverses
          *  inferred through fields typed with the union, the union's own derived
          *  body — plus a narrowing accessor per operand, null when the instance
          *  is of another operand (`is` at the surface). */
