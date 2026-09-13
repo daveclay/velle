@@ -157,7 +157,7 @@ Proposed, each owed a home in `checks.md` or `grammar.md` when promoted:
 - **Static versus predicate refinements.** A field type must be stable, and a refinement with a `where` anywhere in it drifts. `one Vehicle` is legal only when the named refinement is a pure union of base shapes — a syntactic classification; `one (Bicycle where startedOn is some)` draws a diagnostic saying the type carries a predicate. Inline `one Car or Bicycle` needs a grammar line in `propType`, or the union must be named first.
 - **`and` across bases is provably empty.** `Car and Bicycle` has no members by construction; a dead-refinement diagnostic in the A2 family rather than silent acceptance.
 - **Unscoped `not`.** `shape X = not Car` is the complement within all shapes; refused unless scoped, as in `Vehicle and not Car`.
-- **Bodies.** A cross-base union may carry derived properties only (ruled 2026-09-13, section 6.2): `frozen` has no base to name, and a creation-entered `captured` is dead machinery pointing at `initially` on each operand.
+- **Bodies.** A cross-base union may carry derived properties only (ruled 2026-09-13, section 6.2): `frozen` has no base to name, and a creation-entered `captured` is refused (F3), pointing at `initially` on each operand.
 - **Inverses per operand.** A union-typed `one` field infers its inverse on every operand; V19's both-sides and collision checks run against each, and an operand also declaring `comments` collides.
 - **`for` matching widens.** README §14 matches a field by type equality. With `target: one Post or Photo` beside `post: one Post`, `Comment for somePost` matches two fields (V13 applies as is); passing a union-typed expression to a field typed with one operand is a partial match with no current rule and should be refused pending narrowing.
 - **Comparison typing.** F2's like-typed comparisons become overlapping-typed: `target == this` inside a `Post` inverse view compares a union to one operand.
@@ -237,7 +237,7 @@ shape Bicycle {
 
 shape Vehicle = Car or Bicycle {
     frozen plate                                   -- error: no base for `frozen` to name; `plate` is Car's alone
-    captured registeredOn: DateTime = now          -- dead: entry is creation, so this is `initially now` on each operand
+    captured registeredOn: DateTime = now          -- error: entry is creation, so this is `initially now` on each operand
     tripCount: integer = count(trips)              -- the one candidate: `trips` is shared (see Trip.vehicle)
 }
 
@@ -247,9 +247,9 @@ shape Trip {
 }
 ```
 
-The first is refused whatever is decided: `frozen` names stored fields of a base shape, and a cross-base union has none in common. The second is dead machinery, reported as such, since a creation-entered capture is an `initially` clause the operand should carry. The third is well-defined, evaluable on every operand, and needs nothing from OQ35.
+The first is refused whatever is decided: `frozen` names stored fields of a base shape, and a cross-base union has none in common. The second is refused (F3, ruled 2026-09-13): a creation-entered union has no membership memory for the runtime to hold, and the capture is an `initially` clause the operand should carry. The third is well-defined, evaluable on every operand, and needs nothing from OQ35.
 
-**Ruling:** a cross-base union may carry a body of derived properties only. A derived property there reads what the union exposes under §9 — `id` and inferred inverses — or narrows per operand; `frozen` is refused for want of a base, and a creation-entered `captured` is dead machinery pointing at `initially` on each operand. Refusing bodies outright would have had the author write `tripCount` once per operand, restating one formula in several places — the effect-at-a-distance README §1 exists to prevent.
+**Ruling:** a cross-base union may carry a body of derived properties only. A derived property there reads what the union exposes under §9 — `id` and inferred inverses — or narrows per operand; `frozen` is refused for want of a base, and a creation-entered `captured` is refused, pointing at `initially` on each operand. Refusing bodies outright would have had the author write `tripCount` once per operand, restating one formula in several places — the effect-at-a-distance README §1 exists to prevent.
 
 Refinements *over* a union are unaffected either way: `shape BusyVehicle = Vehicle where count(trips) > 3 { captured busySince: Date = today }` is an ordinary refinement whose base happens to be a union, entered by its predicate, and its body works as README §8 says.
 
@@ -258,7 +258,7 @@ Refinements *over* a union are unaffected either way: `shape BusyVehicle = Vehic
 Built in the v0 compiler; `examples/gallery/gallery.velle` exercises it end to end, with `compiler/src/test/kotlin/velle/UnionTest.kt` and the example's `GalleryFlowTest.kt` as the checks.
 
 - **The model** resolves a refinement to a *set* of base shapes. `baseOf` stays single-valued for ordinary refinements; a cross-base `or` reports every operand. A *static union* — a pure `or` of base shapes with no predicate anywhere — is a legal relationship target (the field-type rule, section 4); a union carrying a predicate draws F2 with a message naming the operand that carries it.
-- **Members of a union** are exactly what README §9 says: `id`, and inverses inferred through a field typed with the union, which land on every operand and on the union. Two same-named declarations on different operands are not shared. A union's body admits derived properties only; `frozen`, `captured`, and `undeletable` there are F3 errors (section 6.2, with the capture refused rather than advisory because a creation-entered union has no membership memory for the runtime to hold).
+- **Members of a union** are exactly what README §9 says: `id`, and inverses inferred through a field typed with the union, which land on every operand and on the union. Two same-named declarations on different operands are not shared. A union's body admits derived properties only; `frozen`, `captured`, and `undeletable` there are F3 errors (section 6.2).
 - **A transient operand** is refused with V17 (section 6.1). An inline cross-base condition on a rule must be named first (F2). `Car and Bicycle` is an A2 advisory: provably empty.
 - **Narrowing**, README §10's rule applied to unions: `path is Operand` in the governing predicate licenses the operand's own properties on that path in the then-branch of a conditional and to the right of an `and`; the else-branch of a two-operand static union narrows to the other operand. A membership test with no base in common (`author is Photo` on a `Member`) is F2.
 - **Reachability, co-firing, and one-writer disjointness** read operand sets: a union rule overlaps each operand's rules, and distinct bases are disjoint by construction.
@@ -269,7 +269,7 @@ Built in the v0 compiler; `examples/gallery/gallery.velle` exercises it end to e
 ### Decisions owed by the author
 
 1. **Confirm section 4's eleven rulings as built, or amend them.** They were proposed before implementation and are now the compiler's behavior; nothing is promoted to the README, `grammar.md`, or `checks.md` until they are confirmed. The implementation follows each as written, with one exception below.
-2. **A capture in a union body: error, or advisory?** Section 6.2 ruled it dead machinery (an A2 advisory). It is built as an F3 error instead, because a creation-entered union has no membership memory for the runtime to hold, so an advisory would leave a capture that can never be read. Either confirm the error, or rule that the runtime should treat a creation-entered capture as `initially` on each operand and downgrade to the advisory.
+2. ~~A capture in a union body: error, or advisory?~~ Ruled 2026-09-13: an error, as built (F3). A creation-entered union has no membership memory for the runtime to hold, so an advisory would leave a capture that can never be read; the spelling is `initially` on each operand.
 
 ### Work owed, no decision needed
 
