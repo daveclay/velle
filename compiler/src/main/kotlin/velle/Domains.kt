@@ -704,11 +704,12 @@ class DomainAnalysis(private val model: Model) {
                     val inner = ctx.innermost()
                     val m = model.membersOf(inner.name)[p.root]
                     if (m == null) {
-                        acc.widen(model.baseOf(inner.name) ?: inner.name,
-                            "'${p.root}' cannot be resolved on '${inner.name}'", decl, tolerated)
-                        return null
-                    }
-                    memberScope(m, inner)
+                        narrowedOnUnion(p.root, inner) ?: run {
+                            acc.widen(model.baseOf(inner.name) ?: inner.name,
+                                "'${p.root}' cannot be resolved on '${inner.name}'", decl, tolerated)
+                            return null
+                        }
+                    } else memberScope(m, inner)
                 }
             }
             for (seg in p.segs) scope = hop(scope, seg.name)
@@ -734,11 +735,27 @@ class DomainAnalysis(private val model: Model) {
             if (scope == null) return null
             val m = model.membersOf(scope.name)[field]
             if (m == null) {
-                acc.widen(model.baseOf(scope.name) ?: scope.name,
-                    "'$field' cannot be resolved on '${scope.name}'", decl, tolerated)
-                return null
+                return narrowedOnUnion(field, scope) ?: run {
+                    acc.widen(model.baseOf(scope.name) ?: scope.name,
+                        "'$field' cannot be resolved on '${scope.name}'", decl, tolerated)
+                    null
+                }
             }
             return memberScope(m, scope)
+        }
+
+        /**
+         * A read the validator licensed by narrowing (`target is Post` governing
+         * `target.author`, OQ29): the name is no shared member of the union, but
+         * an operand's own. Attribute the read to every operand that declares it,
+         * at the same anchor — the over-approximation of the one operand the
+         * branch actually reads, which is all the derivation ever claims.
+         */
+        private fun narrowedOnUnion(field: String, at: Scope): Scope? {
+            val operands = model.basesOf(at.name)
+            if (operands.size < 2) return null
+            val per = operands.mapNotNull { op -> model.membersOf(op)[field]?.let { memberScope(it, Scope(op, at.anchor)) } }
+            return per.firstOrNull()
         }
 
         /** Record one member read at an anchor — the attribution point. Every

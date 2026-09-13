@@ -14,7 +14,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **[OQ17](questions/OQ17-rejection-scope.md)** — rejection scope: what unwinds, what is the caller told, can refusal be partial? · minimal v0 answer settled
 - **[OQ27](questions/OQ27-erasure.md)** — erasure and retention (right-to-be-forgotten) · language-side resolved via OQ37-R10 (`? initially required` + ordinary `= none` rules); residue: compilation's unretrievability guarantee
 - **[OQ28](questions/OQ28-bootstrap-backfill.md)** — bootstrap/backfill: a new rule against pre-existing state · not designed
-- **[OQ29](questions/OQ29-sum-types.md)** — sum types / union shapes · workaround exists (two optionals + xor `never`)
+- **[OQ29](questions/OQ29-sum-types.md)** — sum types / union shapes · direction chosen 2026-09-12: extend `or` across unrelated bases under §9's unchanged property rule; the field-type use is the polymorphic association (a comment on a post or a photo), kept — the escalation chain that first raised it decomposes instead; implemented 2026-09-13 (`examples/gallery/`), not yet promoted to README/grammar/checks; two ruled (a union with a transient operand is refused until OQ35's mixin; a cross-base union's body may hold derived properties only); residue: single-base checks skip unions (fail-open), diagram notation
 - **[OQ43](questions/OQ43-transient-containers.md)** — transient containers: a closure whose container is `expose transient` · V17's direction forces the all-transient tree; v0 refuses the combination (`checks.md` V22) — remaining: the scoped V17 carve-out (same-closure references, `with`-resolution-only inverse inference), V18's reach over transient parts, the durable-container/transient-branch mix
 
 ## Deferred — post-v0 re-derivations (README §22's list)
@@ -22,7 +22,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **[OQ32](questions/OQ32-requires.md)** — `requires`, re-derived
 - **[OQ33](questions/OQ33-visible-to.md)** — `visible to` field visibility, re-derived
 - **[OQ34](questions/OQ34-schedule-definition.md)** — schedule definition (carries event-anchored timeouts, data-derived durations)
-- **[OQ35](questions/OQ35-mixins.md)** — cross-shape structural mixins (§22 item missing; restore it)
+- **[OQ35](questions/OQ35-mixins.md)** — cross-shape structural mixins · design sketched 2026-09-13: a non-instantiable shape fragment other shapes include; one declaration shared by every includer, so it is a rule subject, a refinement base, and a stable field type — the open union OQ29's closed `or` composes with; syntax undecided; §22 item still missing
 
 ## Settled
 

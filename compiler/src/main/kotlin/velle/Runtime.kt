@@ -665,21 +665,25 @@ class VelleSystem(
     private fun convert(raw: Any, type: TypeRef): Value? = when (type) {
         is RelType ->
             if (type.many) (raw as? List<*>)
-                ?.map { el ->
-                    (el as? Long)
-                        ?.also { idShape.putIfAbsent(it, type.shape) }
-                        ?.takeIf { instance(it) != null } ?: return null
-                }
+                ?.map { el -> (el as? Long)?.takeIf { acceptedReference(it, type.shape) } ?: return null }
                 ?.let { Value.VColl(it, type.shape) }
             else (raw as? Long)
-                ?.also { idShape.putIfAbsent(it, type.shape) }
-                ?.takeIf { instance(it) != null }
+                ?.takeIf { acceptedReference(it, type.shape) }
                 ?.let { Value.VRef(it) }
         is ScalarType ->
             if (type.many) (raw as? List<*>)
                 ?.map { el -> el?.let { convertScalar(it, type.name) } ?: return null }
                 ?.let { Value.VVals(it) }
             else convertScalar(raw, type.name)
+    }
+
+    /** A committed reference names an existing instance the field's declared
+     *  type accepts — the shape itself, or an operand of a static union (OQ29):
+     *  a handle of the wrong shape can't inhabit the type, a boundary refusal. */
+    private fun acceptedReference(handle: Long, declared: String): Boolean {
+        if (declared in model.shapes) idShape.putIfAbsent(handle, declared)
+        val inst = instance(handle) ?: return false
+        return model.typeAccepts(declared, inst.shape)
     }
 
     private fun convertScalar(raw: Any, name: String): Value? = when (name) {
@@ -726,7 +730,8 @@ class VelleSystem(
     private class Watcher(
         val key: String,
         val condition: RefExpr,
-        val base: String,
+        /** the base shapes the condition's subjects are drawn from — several for a cross-base union (OQ29) */
+        val bases: Set<String>,
         val summary: ReadSummary,
         val sensShapes: Set<String>,
         val selfContained: Boolean,
@@ -735,15 +740,15 @@ class VelleSystem(
         val refTargets: Set<String>,
     )
 
-    private fun watcherOf(key: String, condition: RefExpr, base: String): Watcher {
+    private fun watcherOf(key: String, condition: RefExpr, bases: Set<String>): Watcher {
         val s = model.summaryOfRefExpr(condition)
-        val sens = (s.existsShapes + s.collShapes).mapNotNull { model.baseOf(it) }.toSet()
-        val selfContained = !s.opaque && sens.isEmpty() &&
-            (s.fields + s.collFields).all { it.first == base }
-        val refTargets = (s.fields + s.collFields).mapNotNull { (o, f) ->
-            model.membersOf(o)[f]?.type?.instanceShape()?.let { model.baseOf(it) }
+        val sens = (s.existsShapes + s.collShapes).flatMap { model.basesOf(it) }.toSet()
+        val selfContained = !s.opaque && sens.isEmpty() && bases.size == 1 &&
+            (s.fields + s.collFields).all { it.first in bases }
+        val refTargets = (s.fields + s.collFields).flatMap { (o, f) ->
+            model.membersOf(o)[f]?.type?.instanceShape()?.let { model.basesOf(it) } ?: emptySet()
         }.toSet()
-        return Watcher(key, condition, base, s, sens, selfContained, refTargets)
+        return Watcher(key, condition, bases, s, sens, selfContained, refTargets)
     }
 
     /** Watched conditions: every commit-triggered rule plus capture-carrying
@@ -753,13 +758,14 @@ class VelleSystem(
         val ws = mutableListOf<Watcher>()
         for (r in model.rules.values) {
             if (!(r.preposition == null || "commit" in r.triggers)) continue
-            val base = model.baseOfExpr(r.condition) ?: continue
-            ws.add(watcherOf("rule:${r.name}", r.condition, base))
+            val bases = model.basesOfExpr(r.condition)
+            if (bases.isEmpty()) continue
+            ws.add(watcherOf("rule:${r.name}", r.condition, bases))
         }
         for ((name, r) in model.refinements) {
             if (r.members.any { it is DerivedProp && it.captured }) {
                 val base = model.baseOf(name) ?: continue
-                ws.add(watcherOf("capture:$name", RefName(name), base))
+                ws.add(watcherOf("capture:$name", RefName(name), setOf(base)))
             }
         }
         ws
@@ -801,19 +807,19 @@ class VelleSystem(
      */
     private fun relevant(w: Watcher, fp: Footprint): Boolean {
         if (w.summary.opaque) return true
-        if (fp.created.any { it == w.base || it in w.sensShapes }) return true
+        if (fp.created.any { it in w.bases || it in w.sensShapes }) return true
         // a deletion flips existence/aggregate consults, removes the deleted
         // instance from every refinement of its base, and turns reference reads
         // at it absent (OQ37)
-        if (fp.deleted.any { it == w.base || it in w.sensShapes || it in w.refTargets }) return true
+        if (fp.deleted.any { it in w.bases || it in w.sensShapes || it in w.refTargets }) return true
         return fp.assigned.any { (sh, f) ->
             sh in w.sensShapes || (sh to f) in w.summary.fields || (sh to f) in w.summary.collFields
         }
     }
 
     private fun memberSet(w: Watcher): Set<Long> {
-        val ids = if (w.selfContained) idsOfCandidates(w.base, queryCompiler().filterFor(w.condition))
-        else idsOf(w.base)
+        val ids = if (w.selfContained) idsOfCandidates(w.bases.single(), queryCompiler().filterFor(w.condition))
+        else w.bases.flatMap { idsOf(it) }
         return ids.filter { evaluator.memberOfRefExpr(it, w.condition) }.toSet()
     }
 
@@ -897,7 +903,7 @@ class VelleSystem(
             // a transient act's partitions are decided exactly once, at its
             // creation commit — consequence commits within the transaction
             // never re-partition it (README §4, "Transient acts")
-            if (w.base in model.transients) subjects = subjects intersect createdIds.toSet()
+            if (w.bases.any { it in model.transients }) subjects = subjects intersect createdIds.toSet()
             for (subject in subjects) {
                 if (rule.preposition == "after") t.afterQueue.add(rule to subject)
                 else pending.add(rule to subject)
@@ -1033,7 +1039,7 @@ class VelleSystem(
                     val target = (instance(ref.id) ?: throw VelleRuntimeError("missing instance ${ref.id}")).shape
                     val matched = model.shapes.getValue(item.shape).members
                         .filterIsInstance<StoredProp>()
-                        .single { (it.type as? RelType)?.let { t -> !t.many && t.shape == target } == true }
+                        .single { (it.type as? RelType)?.let { t -> !t.many && model.typeAccepts(t.shape, target) } == true }
                     fields[matched.name] = ref
                 }
                 item.fields.forEach { f -> fields[f.name] = evaluator.eval(f.value, ctx) }
@@ -1111,7 +1117,7 @@ class VelleSystem(
     /** Never targets with their read summaries, index-aligned with model.nevers. */
     private val neverWatchers: List<Watcher?> by lazy {
         model.nevers.map { n ->
-            model.baseOfExpr(n.target)?.let { base -> watcherOf("never", n.target, base) }
+            model.basesOfExpr(n.target).takeIf { it.isNotEmpty() }?.let { bases -> watcherOf("never", n.target, bases) }
         }
     }
 
@@ -1131,11 +1137,11 @@ class VelleSystem(
         for ((i, n) in model.nevers.withIndex()) {
             val w = neverWatchers[i] ?: continue
             if (!w.summary.readsTime && !relevant(w, fp)) continue
-            val ids = if (w.selfContained) idsOfCandidates(w.base, queryCompiler().filterFor(n.target))
-            else idsOf(w.base)
+            val ids = if (w.selfContained) idsOfCandidates(w.bases.single(), queryCompiler().filterFor(n.target))
+            else w.bases.flatMap { idsOf(it) }
             for (id in ids) {
                 if (evaluator.memberOfRefExpr(id, n.target))
-                    throw NeverViolation("never #${i + 1} over ${w.base} is violated")
+                    throw NeverViolation("never #${i + 1} over ${w.bases.joinToString(" or ")} is violated")
             }
         }
     }
@@ -1145,15 +1151,20 @@ class VelleSystem(
     fun instancesOf(name: String): List<Long> = when {
         name in model.shapes -> idsOf(name)
         name in model.refinements -> {
-            val base = model.baseOf(name) ?: return emptyList()
-            idsOfCandidates(base, queryCompiler().filterFor(RefName(name)))
-                .filter { evaluator.memberOfRefExpr(it, RefName(name)) }
+            val bases = model.basesOf(name)
+            val ids = if (bases.size == 1) idsOfCandidates(bases.single(), queryCompiler().filterFor(RefName(name)))
+            else bases.flatMap { idsOf(it) } // a cross-base union: every operand's instances (OQ29)
+            ids.filter { evaluator.memberOfRefExpr(it, RefName(name)) }
         }
         else -> throw IllegalArgumentException("unknown shape or refinement '$name'")
     }
 
     fun isMember(id: Long, refinement: String): Boolean =
         evaluator.memberOfRefExpr(id, RefName(refinement))
+
+    /** The concrete base shape of an instance — which operand a union-typed reference points at (OQ29). */
+    fun shapeOf(id: Long): String =
+        instance(id)?.shape ?: throw IllegalArgumentException("no instance $id")
 
     /** Read a field — stored, derived, timestamp, capture, or inverse collection — unwrapped. */
     fun get(id: Long, field: String): Any? {

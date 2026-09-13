@@ -68,30 +68,83 @@ class Model(val decls: List<Decl>) {
 
     // ── refinement → base shape ──────────────────────────────────────────────
 
-    private val baseCache = mutableMapOf<String, String?>()
+    private val basesCache = mutableMapOf<String, Set<String>>()
 
-    /** Base shape name for a shape or refinement name; null (with F1) if unresolvable. */
-    fun baseOf(name: String): String? = baseCache.getOrPut(name) {
+    /**
+     * The base shapes a shape-or-refinement's members are drawn from. One for a
+     * base shape or an ordinary refinement; several for a cross-base union —
+     * `or` composed across unrelated shapes (README §9 extended; OQ29). Empty,
+     * with F1, when a name is unknown.
+     */
+    fun basesOf(name: String): Set<String> = basesCache.getOrPut(name) {
         when {
-            name in shapes -> name
-            name in refinements -> baseOfExpr(refinements.getValue(name).expr)
-            else -> { error("F1", "unknown shape or refinement '$name'"); null }
+            name in shapes -> setOf(name)
+            name in refinements -> {
+                basesCache[name] = emptySet() // break cycles; V14 reports them
+                basesOfExpr(refinements.getValue(name).expr)
+            }
+            else -> { error("F1", "unknown shape or refinement '$name'"); emptySet() }
         }
     }
 
-    fun baseOfExpr(expr: RefExpr): String? = when (expr) {
-        is RefName -> baseOf(expr.name)
-        is RefNot -> baseOfExpr(expr.inner)
-        is RefAnd -> commonBase(expr.left, expr.right)
-        is RefOr -> commonBase(expr.left, expr.right)
+    fun basesOfExpr(expr: RefExpr): Set<String> = when (expr) {
+        is RefName -> basesOf(expr.name)
+        is RefNot -> basesOfExpr(expr.inner)
+        is RefAnd -> {
+            val l = basesOfExpr(expr.left)
+            val r = basesOfExpr(expr.right)
+            val both = l intersect r
+            // distinct bases are disjoint by construction: an instance has one
+            // base, so `Car and Bicycle` has no members (OQ29 §4)
+            if (both.isEmpty() && l.isNotEmpty() && r.isNotEmpty())
+                diagnostics.add(Diagnostic("A2", "'${Printer.refExpr(expr)}' is provably empty — " +
+                    "its operands have no base shape in common, and an instance has exactly one base", advisory = true))
+            both
+        }
+        is RefOr -> basesOfExpr(expr.left) + basesOfExpr(expr.right)
     }
 
-    private fun commonBase(l: RefExpr, r: RefExpr): String? {
-        val lb = baseOfExpr(l) ?: return baseOfExpr(r)
-        val rb = baseOfExpr(r) ?: return lb
-        if (lb != rb) error("F2", "composed refinements must share a base shape ($lb vs $rb)")
-        return lb
+    /** The single base shape of a shape or ordinary refinement; null for a
+     *  cross-base union (use [basesOf]) or an unresolvable name (F1). */
+    fun baseOf(name: String): String? = basesOf(name).singleOrNull()
+
+    fun baseOfExpr(expr: RefExpr): String? = basesOfExpr(expr).singleOrNull()
+
+    /** A refinement whose members span more than one base shape. */
+    fun isCrossBase(name: String): Boolean = basesOf(name).size > 1
+
+    /**
+     * A static union: a named refinement that is a pure `or` of base shapes (or
+     * of static unions) with no predicate anywhere. Its member set is fixed by
+     * declarations, never by data, so it is stable enough to be a field's
+     * target type (OQ29 §4, the field-type rule; README §6).
+     */
+    fun isStaticUnion(name: String): Boolean =
+        refinements[name]?.let { pureOr(it.expr) && basesOf(name).size > 1 } == true
+
+    private fun pureOr(e: RefExpr): Boolean = when (e) {
+        is RefName -> e.where == null && (e.name in shapes || isStaticUnion(e.name))
+        is RefOr -> pureOr(e.left) && pureOr(e.right)
+        else -> false
     }
+
+    /** The static union a cross-base refinement's subjects are drawn from,
+     *  following `shape X = Union where ...` chains; null when there is none. */
+    fun unionRootOf(name: String): String? = when {
+        isStaticUnion(name) -> name
+        else -> (refinements[name]?.expr as? RefName)?.name?.takeIf { it != name }?.let { unionRootOf(it) }
+    }
+
+    /** The scope a value of this type is viewed through: a base shape, or the
+     *  static union it is drawn from (the generated view's name); null for a
+     *  cross-base composite that chains to no static union. */
+    fun viewScopeOf(name: String): String? =
+        if (name in shapes) name else baseOf(name) ?: unionRootOf(name)
+
+    /** Does a field declared `one <declared>` accept an instance of [actual]?
+     *  Equal names, or an operand of the declared static union. */
+    fun typeAccepts(declared: String, actual: String): Boolean =
+        declared == actual || actual in basesOf(declared)
 
     // ── member lookup ────────────────────────────────────────────────────────
 
@@ -130,8 +183,10 @@ class Model(val decls: List<Decl>) {
             // demand declared derived views (README §6; the `Transfer` example).
             for ((otherName, other) in shapes) {
                 if (otherName in transients) continue
+                // a field typed with a static union targets every operand (OQ29):
+                // `Comment.target: one Content` puts `comments` on each operand
                 val targeting = other.members.filterIsInstance<StoredProp>()
-                    .filter { (it.type as? RelType)?.shape == scope }
+                    .filter { (it.type as? RelType)?.shape?.let { t -> typeAccepts(t, scope) } == true }
                 if (targeting.size != 1) continue
                 val f = targeting.single()
                 val inverse = otherName.replaceFirstChar { it.lowercase() } + "s"
@@ -142,11 +197,33 @@ class Model(val decls: List<Decl>) {
             return out
         }
         refinements[scope]?.let { r ->
-            collectOperandScopes(r.expr).forEach { operand -> out.putAll(membersOf(operand)) }
+            if (isCrossBase(scope)) {
+                // a cross-base union exposes only what every operand inherits from
+                // ONE declaration (README §9, unchanged; OQ29 §2): `id`, and the
+                // inverses inferred through a field typed with the union. Two
+                // same-named declarations on different bases are never shared.
+                val operandMaps = collectOperandScopes(r.expr).map { membersOf(it) }
+                val names = operandMaps.map { it.keys }.reduce { a, b -> a intersect b }
+                for (n in names) {
+                    val infos = operandMaps.map { it.getValue(n) }
+                    val first = infos.first()
+                    val shared = infos.all { it.sameDeclarationAs(first) }
+                    if (!shared) continue
+                    out[n] = if (first.inverse != null) first.copy(owner = scope) else first
+                }
+                out["id"] = MemberInfo("id", scope, VType.Id, stored = false)
+            } else {
+                collectOperandScopes(r.expr).forEach { operand -> out.putAll(membersOf(operand)) }
+            }
             r.members.forEach { add(scope, it) }
             return out
         }
         return out
+    }
+
+    private fun MemberInfo.sameDeclarationAs(o: MemberInfo): Boolean = name == o.name && when {
+        inverse != null || o.inverse != null -> inverse == o.inverse
+        else -> owner == o.owner
     }
 
     private fun collectOperandScopes(expr: RefExpr): List<String> = when (expr) {
@@ -247,11 +324,11 @@ class Model(val decls: List<Decl>) {
                 ?.takeIf { it in shapes || it in refinements }
                 ?: baseOfExpr(rule.condition)
                 ?: return@flatMap emptyList()
-            rule.body.filterIsInstance<DeleteStmt>().mapNotNull { stmt ->
-                val shape =
-                    if (stmt.target.root == "this" && stmt.target.segs.isEmpty()) baseOf(scope)
-                    else pathElementShape(stmt.target, scope)?.let { baseOf(it) }
-                shape?.let { DeleteSite(rule, stmt, it) }
+            rule.body.filterIsInstance<DeleteStmt>().flatMap { stmt ->
+                val shapes =
+                    if (stmt.target.root == "this" && stmt.target.segs.isEmpty()) basesOf(scope)
+                    else pathElementShape(stmt.target, scope)?.let { basesOf(it) } ?: emptySet()
+                shapes.map { DeleteSite(rule, stmt, it) }
             }
         }
     }

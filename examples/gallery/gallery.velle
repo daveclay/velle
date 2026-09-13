@@ -1,0 +1,74 @@
+-- gallery.velle — cross-base unions exercised end-to-end (README §9 extended
+-- across unrelated shapes; OQ29): a static union as a field's target type (the
+-- polymorphic association), the inverse it infers onto every operand, a derived
+-- body on the union, a refinement and a rule over the union, per-operand
+-- narrowing in a value expression and in a predicate, and the boundary's
+-- type-level refusal of a reference outside the union.
+
+expose shape Member {
+    name: text
+}
+
+expose shape Post {
+    author: one Member
+    body: text
+}
+
+expose shape Photo {
+    author: one Member
+    caption: text
+}
+
+-- Content is a static union: a pure `or` of base shapes, so it is a stable
+-- field type. It exposes only what both operands inherit from ONE declaration —
+-- `id`, and the `comments` inverse inferred through Comment.target below.
+-- Post.author and Photo.author are two declarations that happen to agree; they
+-- are not shared, and reach the union's readers only by narrowing (below).
+shape Content = Post or Photo {
+    commentCount: integer = count(comments)     -- a derived body over the shared inverse
+}
+
+-- the polymorphic association: one role, filled by an instance of either shape
+expose shape Comment {
+    target: one Content
+    author: one Member
+    body: text
+}
+-- inferred inverse: Post.comments, Photo.comments, and Content.comments, from Comment.target
+
+-- Nobody comments on their own post. Narrowing in a conjunction: `target is Post`
+-- licenses `target.author` in what follows it.
+never (Comment where target is Post and target.author == author)
+
+-- a refinement over the union, and a rule reacting to entry into it
+shape Popular = Content where count(comments) >= 2
+
+shape PopularityNotice {
+    content: one Content
+    noticedOn: DateTime
+}
+
+rule NotePopularity when Popular {
+    PopularityNotice from { content: this, noticedOn: now }
+}
+
+-- Narrowing in a value expression: each branch reads its operand's own field.
+-- `author` is one name on two declarations, so both branches read alike —
+-- deliberately, until OQ35 lets the operands share one declaration.
+shape CommentNotice {
+    recipient: one Member
+    comment: one Comment
+    excerpt: text
+}
+
+rule NotifyAuthor when Comment {
+    CommentNotice from {
+        recipient: if target is Post then target.author else target.author
+        comment: this
+        excerpt: if target is Post then target.body else target.caption
+    }
+}
+
+-- membership tests through a union-typed field
+shape PostComment  = Comment where target is Post
+shape PhotoComment = Comment where target is Photo

@@ -12,4 +12,5 @@ include(
     "examples:enrollment:output",
     "examples:loyalty:output",
     "examples:orders:output",
+    "examples:gallery:output",
 )

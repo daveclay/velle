@@ -106,12 +106,17 @@ class Validator(private val model: Model) {
                 is StoredProp -> {
                     if (m.name == "id") diags.add(Diagnostic("F3", "'$name.id' — 'id' is reserved (README §5)"))
                     val t = m.type
-                    if (t is RelType && t.shape !in model.shapes)
+                    if (t is RelType && t.shape !in model.shapes && t.shape !in model.refinements)
                         diags.add(Diagnostic("F1", "'$name.${m.name}' relates to unknown shape '${t.shape}'"))
-                    if (t is RelType && t.shape in model.refinements)
+                    // a static union — a pure `or` of base shapes — is a stable target
+                    // type (OQ29 §4); any refinement carrying a predicate is not
+                    if (t is RelType && t.shape in model.refinements && !model.isStaticUnion(t.shape))
                         diags.add(Diagnostic("F2", "'$name.${m.name}' — relationships target base shapes, not refinements: " +
                             "a field type is fixed at the write, a membership drifts after it (README §6). " +
-                            "State the condition on the act that creates '$name' — a gate refinement or a never"))
+                            (if (model.isCrossBase(t.shape))
+                                "'${t.shape}' is a union whose operands carry a predicate; a field's target union must be " +
+                                "a pure `or` of base shapes (OQ29)"
+                            else "State the condition on the act that creates '$name' — a gate refinement or a never")))
                     m.initially?.let { checkExpr(it, name, allowGenerator = true) }
                     // `initially required` demands an optional type: the whole point of
                     // the decomposition is read-side optionality with creation-side
@@ -163,8 +168,10 @@ class Validator(private val model: Model) {
 
     private fun checkRefinementDeclarations() {
         for ((name, r) in model.refinements) {
-            model.baseOfExpr(r.expr) ?: continue
+            val bases = model.basesOfExpr(r.expr)
+            if (bases.isEmpty()) continue
             walkRefExpr(r.expr)
+            if (bases.size > 1) checkCrossBaseUnion(name, r, bases)
             for (m in r.members) when (m) {
                 is DerivedProp -> checkExpr(m.expr, name)
                 is FrozenClause -> {
@@ -178,6 +185,33 @@ class Validator(private val model: Model) {
             }
         }
         model.nevers.forEach { walkRefExpr(it.target) }
+    }
+
+    /**
+     * A cross-base union (README §9 extended across unrelated bases; OQ29): the
+     * property rule is unchanged, so its body may carry derived properties only
+     * (OQ29 §6.2 — `frozen` has no base to name, a creation-entered capture is
+     * `initially` on each operand), and a transient operand is refused until
+     * OQ35's mixin lands (OQ29 §6.1).
+     */
+    private fun checkCrossBaseUnion(name: String, r: RefinementDecl, bases: Set<String>) {
+        bases.filter { it in model.transients }.forEach {
+            diags.add(Diagnostic("V17", "'$name' composes transient act '$it' with unrelated shapes — " +
+                "a union with a transient operand is refused until unrelated shapes can share a declaration " +
+                "(OQ29 §6.1; OQ35): give the acts one declaration to inherit, or write one rule per act"))
+        }
+        for (m in r.members) when (m) {
+            is DerivedProp -> if (m.captured)
+                diags.add(Diagnostic("F3", "'$name.${m.name}' — a cross-base union is entered only by creation, " +
+                    "so a capture there is `initially` on each operand; declare it on ${bases.joinToString(" and ")} (OQ29 §6.2)"))
+            is FrozenClause ->
+                diags.add(Diagnostic("F3", "'$name' declares `frozen` — a cross-base union has no base shape whose " +
+                    "stored fields it could name; freeze on a refinement of each operand (OQ29 §6.2)"))
+            UndeletableClause ->
+                diags.add(Diagnostic("F3", "'$name' declares `undeletable` on a cross-base union — " +
+                    "gate deletion on a refinement of each operand (OQ29 §6.2)"))
+            else -> {}
+        }
     }
 
     private fun walkRefExpr(e: RefExpr) {
@@ -198,7 +232,12 @@ class Validator(private val model: Model) {
         is RefName ->
             if (c.name in model.shapes || c.name in model.refinements) c.name
             else { diags.add(Diagnostic("F1", "rule '${rule.name}' — unknown condition '${c.name}'")); null }
-        else -> model.baseOfExpr(rule.condition)
+        else -> model.baseOfExpr(rule.condition) ?: run {
+            if (model.basesOfExpr(rule.condition).size > 1)
+                diags.add(Diagnostic("F2", "rule '${rule.name}' — its condition composes unrelated shapes inline; " +
+                    "name the union (`shape X = A or B`) and react to the name (OQ29)"))
+            null
+        }
     }
 
     private fun checkRuleNamesAndBody(rule: RuleDecl) {
@@ -277,7 +316,7 @@ class Validator(private val model: Model) {
         val exprShape = exprInstanceShape(expr, scope) ?: return emptyList()
         // a refinement's matchable to-one fields are its base's stored fields
         return model.shapes[model.baseOf(shape) ?: shape]?.members?.filterIsInstance<StoredProp>()
-            ?.filter { (it.type as? RelType)?.let { t -> !t.many && t.shape == exprShape } == true }
+            ?.filter { (it.type as? RelType)?.let { t -> !t.many && model.typeAccepts(t.shape, exprShape) } == true }
             ?.map { it.name } ?: emptyList()
     }
 
@@ -297,12 +336,30 @@ class Validator(private val model: Model) {
                 resolvePath(e, scope)
             }
             is UnaryMinus -> checkExpr(e.inner, scope)
-            is Binary -> { checkExpr(e.left, scope); checkExpr(e.right, scope) }
+            is Binary -> {
+                checkExpr(e.left, scope)
+                // a conjunction narrows what follows it (README §10)
+                if (e.op == "and") withNarrowing(narrowingsOf(e.left)) { checkExpr(e.right, scope) }
+                else checkExpr(e.right, scope)
+            }
             is NotExpr -> checkExpr(e.inner, scope)
-            is IfExpr -> { checkExpr(e.condition, scope); checkExpr(e.thenExpr, scope); checkExpr(e.elseExpr, scope) }
+            is IfExpr -> {
+                checkExpr(e.condition, scope)
+                withNarrowing(narrowingsOf(e.condition)) { checkExpr(e.thenExpr, scope) }
+                withNarrowing(complementNarrowingsOf(e.condition, scope)) { checkExpr(e.elseExpr, scope) }
+            }
             is IsExpr -> {
                 checkExpr(e.subject, scope)
-                e.refinement?.let { model.baseOf(it) }
+                e.refinement?.let { r ->
+                    val rb = model.basesOf(r)
+                    val subjectType = (e.subject as? PathExpr)?.let { pathTypeName(it, scope) }
+                    if (subjectType != null && rb.isNotEmpty()) {
+                        val sb = model.basesOf(subjectType)
+                        if (sb.isNotEmpty() && (sb intersect rb).isEmpty())
+                            diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — a '$subjectType' can never be a " +
+                                "member of '$r' (no base shape in common)"))
+                    }
+                }
             }
             is ExistsExpr -> {
                 e.forExpr?.let { checkExpr(it, scope) }
@@ -382,7 +439,10 @@ class Validator(private val model: Model) {
     private val aliasScopes = mutableMapOf<String, String>()
 
     private fun resolvePath(p: PathExpr, scope: String) {
-        var current: String? = when {
+        // a narrowed prefix (`target is Post` governing this branch) resolves the
+        // rest of the path against the narrowed scope — V11's union slice
+        narrowedPrefix(p)?.let { (k, sc) -> walkSegs(sc, p.segs.drop(k)); return }
+        val current: String? = when {
             p.root == "this" -> scope
             p.root in aliasScopes -> aliasScopes[p.root]
             p.root in model.shapes || p.root in model.refinements -> return // membership atom / collection source
@@ -396,7 +456,12 @@ class Validator(private val model: Model) {
                 m.type.instanceShape() ?: (m.type as? VType.Coll)?.shape
             }
         }
-        for (seg in p.segs) {
+        walkSegs(current, p.segs)
+    }
+
+    private fun walkSegs(start: String?, segs: List<Seg>) {
+        var current = start
+        for (seg in segs) {
             val sc = current ?: return
             val m = model.membersOf(sc)[seg.name]
             if (m == null) {
@@ -404,6 +469,62 @@ class Validator(private val model: Model) {
                 return
             }
             current = m.type.instanceShape() ?: (m.type as? VType.Coll)?.shape
+        }
+    }
+
+    // ── narrowing (README §10; V11's union slice, OQ29) ──────────────────────
+    //
+    // `path is Name` in a governing predicate licenses Name's own properties on
+    // that path inside the licensed branch: the then-branch of a conditional,
+    // the right side of a conjunction. Over a two-operand static union the
+    // else-branch narrows to the other operand — the complement is exhaustive
+    // by construction, since an instance has exactly one base.
+
+    /** path text → the scope it is narrowed to, live while a licensed branch is checked */
+    private val narrowed = mutableMapOf<String, String>()
+
+    private fun pathKey(p: PathExpr) = p.root + p.segs.joinToString("") { "." + it.name }
+
+    private fun narrowedPrefix(p: PathExpr): Pair<Int, String>? {
+        for (k in p.segs.size downTo 0)
+            narrowed[pathKey(PathExpr(p.root, p.segs.take(k)))]?.let { return k to it }
+        return null
+    }
+
+    private fun narrowingsOf(cond: Expr): List<Pair<PathExpr, String>> =
+        predicateConjuncts(cond).mapNotNull { c ->
+            (c as? IsExpr)?.takeIf { it.kind == "refinement" }
+                ?.let { i -> (i.subject as? PathExpr)?.let { it to i.refinement!! } }
+        }
+
+    private fun complementNarrowingsOf(cond: Expr, scope: String): List<Pair<PathExpr, String>> {
+        val i = cond as? IsExpr ?: return emptyList()
+        if (i.kind != "refinement") return emptyList()
+        val p = i.subject as? PathExpr ?: return emptyList()
+        val declared = pathTypeName(p, scope) ?: return emptyList()
+        if (!model.isStaticUnion(declared)) return emptyList()
+        val operands = model.basesOf(declared)
+        val named = i.refinement ?: return emptyList()
+        if (operands.size != 2 || named !in operands) return emptyList()
+        return listOf(p to (operands - named).single())
+    }
+
+    /** The declared type name a path resolves to — a shape, refinement, or static union — or null. */
+    private fun pathTypeName(p: PathExpr, scope: String): String? {
+        narrowedPrefix(p)?.let { (k, sc) ->
+            var cur: String? = sc
+            for (seg in p.segs.drop(k)) cur = model.membersOf(cur ?: return null)[seg.name]?.type?.instanceShape()
+            return cur
+        }
+        if (p.root == "this" && p.segs.isEmpty()) return scope
+        return model.pathElementShape(p, scope, aliasScopes)
+    }
+
+    private inline fun withNarrowing(entries: List<Pair<PathExpr, String>>, body: () -> Unit) {
+        val saved = entries.map { (p, _) -> pathKey(p) to narrowed[pathKey(p)] }
+        entries.forEach { (p, sc) -> narrowed[pathKey(p)] = sc }
+        try { body() } finally {
+            saved.forEach { (k, v) -> if (v == null) narrowed.remove(k) else narrowed[k] = v }
         }
     }
 
@@ -542,18 +663,19 @@ class Validator(private val model: Model) {
         commitKinds().any { k -> canGainSubject(k, a) && canGainSubject(k, b) }
 
     private fun canGainSubject(k: CommitKind, rule: RuleDecl): Boolean {
-        val base = model.baseOfExpr(rule.condition) ?: return false
-        if (base in model.transients)
-            return k is CommitKind.Creates && k.shape == base && !rule.leaving
+        val bases = model.basesOfExpr(rule.condition)
+        if (bases.isEmpty()) return false
+        if (bases.any { it in model.transients })
+            return k is CommitKind.Creates && k.shape in bases && !rule.leaving
         // the deletion-only trigger gains a subject at exactly one kind of commit
-        if (rule.trigger == Trigger.DELETED) return k is CommitKind.Deletes && k.shape == base
+        if (rule.trigger == Trigger.DELETED) return k is CommitKind.Deletes && k.shape in bases
         val cond = conditionSummary(rule)
         if (cond.opaque) return true
         return when (k) {
             is CommitKind.Creates -> {
                 val coCreated = k.byRule?.body?.filterIsInstance<Creation>()?.map { it.shape }?.toSet()
                     ?: setOf(k.shape) // an exposed commit carries exactly the act
-                if (k.shape == base) {
+                if (k.shape in bases) {
                     if (rule.leaving) return false // a fresh instance was never a member
                     return positiveCorrelatedExistsTargets(conditionConjuncts(rule.condition))
                         .none { it !in coCreated }
@@ -575,7 +697,7 @@ class Validator(private val model: Model) {
                 // deleting the subject's own shape is the exit cause only the
                 // deletion-side forms react to (README §13); a predicate-exit
                 // rule sees it through consults alone
-                if (k.shape == base && rule.trigger.onDeletion) true
+                if (k.shape in bases && rule.trigger.onDeletion) true
                 else {
                     val pol = conditionPolarities(rule).map
                     pol.keys.filter { model.baseOf(it) == k.shape }
@@ -1012,10 +1134,11 @@ class Validator(private val model: Model) {
         commitKinds().any { k -> affects(k, a) && affects(k, b) }
 
     private fun provablyDisjoint(a: RuleDecl, b: RuleDecl): Boolean {
-        val baseA = model.baseOfExpr(a.condition)
-        val baseB = model.baseOfExpr(b.condition)
-        if (baseA == null || baseB == null) return false
-        if (baseA != baseB) return !(canShareCommit(a, b))
+        val basesA = model.basesOfExpr(a.condition)
+        val basesB = model.basesOfExpr(b.condition)
+        if (basesA.isEmpty() || basesB.isEmpty()) return false
+        // distinct bases are disjoint by construction; a union overlaps each operand (OQ29 §2)
+        if (basesA != basesB) return !(canShareCommit(a, b))
         val ca = conditionConjuncts(a.condition)
         val cb = conditionConjuncts(b.condition)
         // syntactic complement: one side asserts P, the other `not P`
@@ -1220,19 +1343,20 @@ class Validator(private val model: Model) {
      *  reads (any write to the shape advances its `on update` stamps), and
      *  `opaque` as affects-everything — the summary's own soundness contract. */
     private fun affects(k: CommitKind, rule: RuleDecl): Boolean {
-        val base = model.baseOfExpr(rule.condition) ?: return false
+        val bases = model.basesOfExpr(rule.condition)
+        if (bases.isEmpty()) return false
         // a transient act's refinements are evaluated exactly once, at its
         // creation commit — no other commit can ever fire the rule (README §4)
-        if (base in model.transients)
-            return k is CommitKind.Creates && k.shape == base
-        if (rule.trigger == Trigger.DELETED) return k is CommitKind.Deletes && k.shape == base
+        if (bases.any { it in model.transients })
+            return k is CommitKind.Creates && k.shape in bases
+        if (rule.trigger == Trigger.DELETED) return k is CommitKind.Deletes && k.shape in bases
         val cond = conditionSummary(rule)
         if (cond.opaque) return true
         return when (k) {
             // a freshly created base instance is born a member (entry) but was a
             // member of nothing, so it can never leave
             is CommitKind.Creates ->
-                (k.shape == base && !rule.leaving) || k.shape in consultedShapes(rule)
+                (k.shape in bases && !rule.leaving) || k.shape in consultedShapes(rule)
             is CommitKind.Assigns ->
                 (k.shape to k.field) in cond.fields ||
                     (k.shape to k.field) in cond.collFields ||
@@ -1241,7 +1365,7 @@ class Validator(private val model: Model) {
             // deleted instance from every refinement of its base, and turns reads
             // through references at it absent (`is none` — the absorbing reference)
             is CommitKind.Deletes ->
-                (k.shape == base && (!rule.leaving || rule.trigger.onDeletion)) ||
+                (k.shape in bases && (!rule.leaving || rule.trigger.onDeletion)) ||
                     k.shape in consultedShapes(rule) || conditionReadsRefTo(rule, k.shape)
         }
     }
@@ -1252,32 +1376,35 @@ class Validator(private val model: Model) {
         val cond = conditionSummary(rule)
         if (cond.opaque) return true
         return (cond.fields + cond.collFields).any { (o, f) ->
-            model.membersOf(o)[f]?.type?.instanceShape()?.let { model.baseOf(it) } == shape
+            model.membersOf(o)[f]?.type?.instanceShape()?.let { shape in model.basesOf(it) } == true
         }
     }
 
     /** Base shapes whose instance sets the rule's condition consults. */
     private fun consultedShapes(rule: RuleDecl): Set<String> = consultedCache.getOrPut(rule.name) {
         val cond = conditionSummary(rule)
-        (cond.existsShapes + cond.collShapes).mapNotNull { model.baseOf(it) }.toSet()
+        (cond.existsShapes + cond.collShapes).flatMap { model.basesOf(it) }.toSet()
     }
 
     private val consultedCache = mutableMapOf<String, Set<String>>()
 
     private fun checkReachability(rule: RuleDecl) {
         val schedules = rule.triggers.filter { it != "commit" }
-        val base = model.baseOfExpr(rule.condition)
+        val bases = model.basesOfExpr(rule.condition)
+        val base = bases.joinToString(" or ")
         // the bare-shape edge (OQ37-R17): a bare shape has no predicate to flip,
         // and `when leaving` never fires at deletion — a record leaves a bare
-        // shape only by being deleted (README §13)
-        val bareShape = (rule.condition as? RefName)?.let { it.where == null && it.name in model.shapes } == true
-        if (bareShape && rule.trigger.onPredicateExit && !rule.trigger.onDeletion && base !in model.transients) {
+        // shape only by being deleted (README §13). A static union is bare the
+        // same way: entry is creation of an operand instance (OQ29)
+        val bareShape = (rule.condition as? RefName)
+            ?.let { it.where == null && (it.name in model.shapes || model.isStaticUnion(it.name)) } == true
+        if (bareShape && rule.trigger.onPredicateExit && !rule.trigger.onDeletion && bases.none { it in model.transients }) {
             diags.add(Diagnostic("V3", "rule '${rule.name}' can never fire — '$base' is a bare shape with no " +
                 "predicate to flip, and 'when leaving' never fires at deletion; a record leaves a bare shape " +
                 "only by being deleted. Did you mean 'when deleted $base'? (README §13)"))
             return
         }
-        if (rule.trigger == Trigger.DELETED && base != null && base !in model.deletedShapes) {
+        if (rule.trigger == Trigger.DELETED && bases.isNotEmpty() && bases.none { it in model.deletedShapes }) {
             diags.add(Diagnostic("V3", "rule '${rule.name}' can never fire — no rule deletes '$base' (README §13)"))
             return
         }

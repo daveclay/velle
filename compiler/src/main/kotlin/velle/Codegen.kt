@@ -190,10 +190,15 @@ object Codegen {
         }
 
         fun refinementAccessors(ref: String) {
-            val base = model.baseOf(ref) ?: return
-            if (base in model.transients) return
+            val scope = model.viewScopeOf(ref) ?: return
+            if (model.basesOf(ref).any { it in model.transients }) return
             line("    fun ${plural(ref)}(): List<${ref}View> = system.instancesOf(\"$ref\").map { ${ref}View(it) }")
-            line("    fun ${base}View.is$ref(): Boolean = system.isMember(id, \"$ref\")")
+            // membership is asked of the view a value is seen through: the base, or
+            // the static union it is drawn from — and of each operand's own view
+            line("    fun ${scope}View.is$ref(): Boolean = system.isMember(id, \"$ref\")")
+            if (scope == ref) model.basesOf(ref).forEach { op ->
+                line("    fun ${op}View.is$ref(): Boolean = system.isMember(id, \"$ref\")")
+            }
         }
 
         fun shapeView(shape: String) {
@@ -204,6 +209,11 @@ object Codegen {
                 if (memberName == "id") continue
                 line("        val $memberName: ${kotlinType(m.type)} get() = ${readExpr("system.get(id, \"$memberName\")", m.type)}")
             }
+            // an operand's view widens to each static union it belongs to (OQ29):
+            // how a Post is handed to a field typed `one Content`
+            model.refinements.keys.filter { model.isStaticUnion(it) && shape in model.basesOf(it) }.forEach {
+                line("        fun as$it() = ${it}View(id)")
+            }
             line("        override fun toString() = \"$shape#\$id\"")
             line("        override fun equals(other: Any?) = other is ${shape}View && other.id == id")
             line("        override fun hashCode() = id.hashCode()")
@@ -211,17 +221,42 @@ object Codegen {
         }
 
         fun refinementView(ref: String) {
-            val base = model.baseOf(ref) ?: return
-            if (base in model.transients) return
+            val scope = model.viewScopeOf(ref) ?: return
+            if (model.basesOf(ref).any { it in model.transients }) return
+            if (scope == ref) { unionView(ref); return }
             val own = model.refinements.getValue(ref).members.filterIsInstance<DerivedProp>()
             line()
             line("    inner class ${ref}View(override val id: Long) : View {")
-            line("        fun as$base() = ${base}View(id)")
+            line("        fun as$scope() = ${scope}View(id)")
             for (m in own) {
                 val t = model.typeOf(m.type)
                 line("        val ${m.name}: ${kotlinType(t)} get() = ${readExpr("system.getAs(id, \"$ref\", \"${m.name}\")", t)}")
             }
             line("        override fun toString() = \"$ref#\$id\"")
+            line("    }")
+        }
+
+        /** A static union's view (OQ29): the shared members — `id`, the inverses
+         *  inferred through fields typed with the union, the union's own derived
+         *  body — plus a narrowing accessor per operand, null when the instance
+         *  is of another operand (`is` at the surface). */
+        fun unionView(union: String) {
+            val own = model.refinements.getValue(union).members.filterIsInstance<DerivedProp>().map { it.name }.toSet()
+            line()
+            line("    inner class ${union}View(override val id: Long) : View {")
+            line("        /** the operand this instance is of */")
+            line("        val shape: String get() = system.shapeOf(id)")
+            model.basesOf(union).forEach { op ->
+                line("        fun as$op(): ${op}View? = if (system.shapeOf(id) == \"$op\") ${op}View(id) else null")
+            }
+            for ((memberName, m) in model.membersOf(union)) {
+                if (memberName == "id") continue
+                val call = if (memberName in own) "system.getAs(id, \"$union\", \"$memberName\")" else "system.get(id, \"$memberName\")"
+                line("        val $memberName: ${kotlinType(m.type)} get() = ${readExpr(call, m.type)}")
+            }
+            line("        override fun toString() = \"$union#\$id\"")
+            line("        override fun equals(other: Any?) = other is View && other.id == id")
+            line("        override fun hashCode() = id.hashCode()")
             line("    }")
         }
 

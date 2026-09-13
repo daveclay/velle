@@ -42,7 +42,7 @@ class Evaluator(private val system: VelleSystem) {
             e.name in model.shapes -> inst.shape == e.name
             e.name in model.refinements -> {
                 val r = model.refinements.getValue(e.name)
-                model.baseOf(e.name) == inst.shape && memberOfRefExpr(id, r.expr)
+                inst.shape in model.basesOf(e.name) && memberOfRefExpr(id, r.expr)
             }
             else -> throw VelleRuntimeError("unknown refinement '${e.name}'")
         }
@@ -55,7 +55,10 @@ class Evaluator(private val system: VelleSystem) {
     /** Read a member of [id] in scope [scope] (a shape or refinement name). */
     fun readMember(id: Long, scope: String, name: String): Value {
         val m = model.membersOf(scope)[name]
-            ?: throw VelleRuntimeError("'$name' is not a member of '$scope'")
+            // a read the validator licensed by narrowing (`target is Post`, README
+            // §10): the scope is a union, the instance has one concrete shape
+            ?: return system.instance(id)?.let { readMemberAnyScope(id, it.shape, name) }
+                ?: throw VelleRuntimeError("'$name' is not a member of '$scope'")
         return readResolved(id, m)
     }
 
@@ -138,7 +141,7 @@ class Evaluator(private val system: VelleSystem) {
         val kept = ids.filter { id ->
             e.collection.where?.let { truthy(eval(it, ctx.push(scope, id, b.alias))) } ?: true
         }
-        val base = if (scope in model.refinements) model.baseOf(scope) ?: scope else scope
+        val base = if (scope in model.refinements) model.viewScopeOf(scope) ?: scope else scope
         return Value.VColl(kept.distinct(), base)
     }
 
@@ -177,7 +180,7 @@ class Evaluator(private val system: VelleSystem) {
     private fun readMemberAnyScope(id: Long, shape: String, name: String): Value {
         model.membersOf(shape)[name]?.let { return readResolved(id, it) }
         for ((refName, r) in model.refinements) {
-            if (model.baseOf(refName) != shape) continue
+            if (shape !in model.basesOf(refName)) continue
             val m = r.members.filterIsInstance<DerivedProp>().find { it.name == name } ?: continue
             if (m.captured) system.captureValues(id, refName)?.let { return it.getValue(name) }
             else if (memberOfRefExpr(id, RefName(refName))) return eval(m.expr, Ctx(refName, id))
@@ -221,13 +224,16 @@ class Evaluator(private val system: VelleSystem) {
      * applies to refinement roots in collection position.
      */
     private fun instancesReferencing(shape: String, id: Long): List<Long> {
-        val base = if (shape in model.refinements) model.baseOf(shape)!! else shape
         val targetShape = (system.instance(id) ?: throw VelleRuntimeError("missing instance $id")).shape
-        val field = model.shapes.getValue(base).members.filterIsInstance<StoredProp>()
-            .single { (it.type as? RelType)?.let { t -> !t.many && t.shape == targetShape } == true }
-        system.ensureReferencing(base, field.name, id)
-        val referencing = system.liveIds(base).filter {
-            (system.instances.getValue(it).fields[field.name] as? Value.VRef)?.id == id
+        // a union subject (OQ29) scans each operand; a field typed with a static
+        // union accepts an instance of any operand
+        val referencing = model.basesOf(shape).flatMap { base ->
+            val field = model.shapes.getValue(base).members.filterIsInstance<StoredProp>()
+                .single { (it.type as? RelType)?.let { t -> !t.many && model.typeAccepts(t.shape, targetShape) } == true }
+            system.ensureReferencing(base, field.name, id)
+            system.liveIds(base).filter {
+                (system.instances.getValue(it).fields[field.name] as? Value.VRef)?.id == id
+            }
         }
         return if (shape in model.refinements) referencing.filter { memberOfRefExpr(it, RefName(shape)) }
         else referencing
@@ -238,9 +244,12 @@ class Evaluator(private val system: VelleSystem) {
             if (src.root in model.shapes && src.segs.isEmpty())
                 src.root to (keyedCandidates(src.root, where, ctx) ?: system.idsOf(src.root))
             else if (src.root in model.refinements && src.segs.isEmpty()) {
-                val base = model.baseOf(src.root)!!
-                base to (keyedCandidates(src.root, where, ctx) ?: system.idsOf(base))
-                    .filter { memberOfRefExpr(it, RefName(src.root)) }
+                // the element scope: the base, or the static union a cross-base
+                // refinement draws from (its shared members are what reads see)
+                val scope = model.viewScopeOf(src.root) ?: src.root
+                val ids = keyedCandidates(src.root, where, ctx)
+                    ?: model.basesOf(src.root).flatMap { system.idsOf(it) }
+                scope to ids.filter { memberOfRefExpr(it, RefName(src.root)) }
             } else when (val v = eval(src, ctx)) {
                 is Value.VColl -> v.shape to v.ids
                 Value.VEmpty -> "" to emptyList()
@@ -265,7 +274,7 @@ class Evaluator(private val system: VelleSystem) {
      */
     private fun keyedCandidates(shapeOrRef: String, where: Expr?, ctx: Ctx): List<Long>? {
         if (where == null) return null
-        val base = if (shapeOrRef in model.refinements) model.baseOf(shapeOrRef)!! else shapeOrRef
+        val base = if (shapeOrRef in model.refinements) model.baseOf(shapeOrRef) ?: return null else shapeOrRef
         for (conjunct in conjunctsOf(where)) {
             val cmp = conjunct as? Binary ?: continue
             if (cmp.op != "==") continue

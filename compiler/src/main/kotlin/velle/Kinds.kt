@@ -75,7 +75,7 @@ internal class KindCatalog(private val model: Model) {
     fun deletionTouchesOthers(k: CommitKind.Delete, s: ReadSummary): Boolean = s.opaque ||
         k.shape in s.existsShapes || k.shape in s.collShapes ||
         (s.fields + s.collFields).any { (o, f) ->
-            model.membersOf(o)[f]?.type?.instanceShape()?.let { model.baseOf(it) } == k.shape
+            model.membersOf(o)[f]?.type?.instanceShape()?.let { k.shape in model.basesOf(it) } == true
         }
 
     /** Can this kind change the value of a predicate with this read summary? */
@@ -91,7 +91,7 @@ internal class KindCatalog(private val model: Model) {
             k.shape in s.existsShapes || k.shape in s.collShapes ||
                 s.fields.any { it.first == k.shape } || s.collFields.any { it.first == k.shape } ||
                 (s.fields + s.collFields).any { (o, f) ->
-                    model.membersOf(o)[f]?.type?.instanceShape()?.let { model.baseOf(it) } == k.shape
+                    model.membersOf(o)[f]?.type?.instanceShape()?.let { k.shape in model.basesOf(it) } == true
                 }
         CommitKind.TimePasses -> s.readsTime
     }
