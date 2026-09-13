@@ -266,4 +266,16 @@ Built in the v0 compiler; `examples/gallery/gallery.velle` exercises it end to e
 - **The generated surface** gives a static union a view carrying the shared members, a `shape` accessor naming the operand, and `asPost()`-style narrowing accessors returning null for another operand; each operand's view gains `asContent()` to widen. The store contract needs nothing: `Ref.Persisted` already carries the concrete shape.
 - **The queue-key derivation** attributes a narrowed read to every operand that declares the name.
 
-**Residue.** The checks that still key on a single base — V5 freezes, V6 captures, V10 `never` induction, V12 singular proofs, V14 well-foundedness, V15's transition-interference leg — skip a cross-base refinement rather than reasoning per operand: fail-open, to be tightened with OQ16's calibration. Narrowing covers `if`/`and` with a bare `is` atom, not `not (x is A)` or nested forms. The class and state-flow diagrams have no union notation yet. Promotion of sections 4 and 6 to the finalized docs is owed.
+### Decisions owed by the author
+
+1. **Confirm section 4's eleven rulings as built, or amend them.** They were proposed before implementation and are now the compiler's behavior; nothing is promoted to the README, `grammar.md`, or `checks.md` until they are confirmed. The implementation follows each as written, with one exception below.
+2. **A capture in a union body: error, or advisory?** Section 6.2 ruled it dead machinery (an A2 advisory). It is built as an F3 error instead, because a creation-entered union has no membership memory for the runtime to hold, so an advisory would leave a capture that can never be read. Either confirm the error, or rule that the runtime should treat a creation-entered capture as `initially` on each operand and downgrade to the advisory.
+
+### Work owed, no decision needed
+
+Mirrored as one-liners in `TODO.md`.
+
+- Promote sections 4 and 6 to README §6, §9, §10, `grammar.md`, and `checks.md`, once decision 1 is made.
+- Tighten the checks that still key on a single base — V5 freezes, V6 captures, V10 `never` induction, V12 singular proofs, V14 well-foundedness, V15's transition-interference leg — to reason per operand; today they skip a cross-base refinement, fail-open, riding OQ16's calibration.
+- Extend narrowing beyond `if`/`and` with a bare `is` atom: `not (x is A)`, nested conditionals, unions of three or more operands in the else-branch.
+- Give the class and state-flow diagrams a union notation (`diagrams.md`).
