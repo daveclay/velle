@@ -13,7 +13,7 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-/** One stored Customer row; references arrive as typed [Ref.Persisted]. */
+/** One stored Customer row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class CustomerRow(
     val key: StoreKey,
     val name: String,
@@ -22,14 +22,14 @@ data class CustomerRow(
     val largestPayment: BigDecimal,
 )
 
-/** One stored CorrectEmail row; references arrive as typed [Ref.Persisted]. */
+/** One stored CorrectEmail row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class CorrectEmailRow(
     val key: StoreKey,
     val customer: Ref.Persisted,
     val corrected: String,
 )
 
-/** One stored Invoice row; references arrive as typed [Ref.Persisted]. */
+/** One stored Invoice row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class InvoiceRow(
     val key: StoreKey,
     val customer: Ref.Persisted,
@@ -38,7 +38,7 @@ data class InvoiceRow(
     val issuedOn: Instant,
 )
 
-/** One stored LineItem row; references arrive as typed [Ref.Persisted]. */
+/** One stored LineItem row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class LineItemRow(
     val key: StoreKey,
     val invoice: Ref.Persisted,
@@ -47,7 +47,7 @@ data class LineItemRow(
     val quantity: Int,
 )
 
-/** One stored Payment row; references arrive as typed [Ref.Persisted]. */
+/** One stored Payment row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class PaymentRow(
     val key: StoreKey,
     val invoice: Ref.Persisted,
@@ -55,34 +55,34 @@ data class PaymentRow(
     val receivedOn: Instant,
 )
 
-/** One stored Receipt row; references arrive as typed [Ref.Persisted]. */
+/** One stored Receipt row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class ReceiptRow(
     val key: StoreKey,
     val invoice: Ref.Persisted,
     val sentOn: Instant,
 )
 
-/** One stored ReceiptEmail row; references arrive as typed [Ref.Persisted]. */
+/** One stored ReceiptEmail row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class ReceiptEmailRow(
     val key: StoreKey,
     val receipt: Ref.Persisted,
     val queuedOn: Instant,
 )
 
-/** One stored Reminder row; references arrive as typed [Ref.Persisted]. */
+/** One stored Reminder row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class ReminderRow(
     val key: StoreKey,
     val invoice: Ref.Persisted,
     val sentOn: LocalDate,
 )
 
-/** One stored Issuance row; references arrive as typed [Ref.Persisted]. */
+/** One stored Issuance row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class IssuanceRow(
     val key: StoreKey,
     val invoice: Ref.Persisted,
 )
 
-/** One stored DueChangeRefusal row; references arrive as typed [Ref.Persisted]. */
+/** One stored DueChangeRefusal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class DueChangeRefusalRow(
     val key: StoreKey,
     val invoice: Ref.Persisted,
@@ -91,19 +91,19 @@ data class DueChangeRefusalRow(
     val refusedOn: Instant,
 )
 
-/** One stored ArchiveRequest row; references arrive as typed [Ref.Persisted]. */
+/** One stored ArchiveRequest row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class ArchiveRequestRow(
     val key: StoreKey,
     val invoice: Ref.Persisted,
 )
 
-/** One stored UnarchiveRequest row; references arrive as typed [Ref.Persisted]. */
+/** One stored UnarchiveRequest row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class UnarchiveRequestRow(
     val key: StoreKey,
     val invoice: Ref.Persisted,
 )
 
-/** One stored UnarchiveNotice row; references arrive as typed [Ref.Persisted]. */
+/** One stored UnarchiveNotice row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class UnarchiveNoticeRow(
     val key: StoreKey,
     val invoice: Ref.Persisted,

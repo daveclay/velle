@@ -13,14 +13,14 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-/** One stored Plan row; references arrive as typed [Ref.Persisted]. */
+/** One stored Plan row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class PlanRow(
     val key: StoreKey,
     val name: String,
     val price: BigDecimal,
 )
 
-/** One stored Member row; references arrive as typed [Ref.Persisted]. */
+/** One stored Member row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class MemberRow(
     val key: StoreKey,
     val name: String,
@@ -36,14 +36,14 @@ data class MemberRow(
     val engagementScore: Double,
 )
 
-/** One stored WelcomeNote row; references arrive as typed [Ref.Persisted]. */
+/** One stored WelcomeNote row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class WelcomeNoteRow(
     val key: StoreKey,
     val member: Ref.Persisted,
     val sentOn: Instant,
 )
 
-/** One stored EmailChange row; references arrive as typed [Ref.Persisted]. */
+/** One stored EmailChange row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class EmailChangeRow(
     val key: StoreKey,
     val member: Ref.Persisted,
@@ -51,21 +51,21 @@ data class EmailChangeRow(
     val changedOn: Instant,
 )
 
-/** One stored Visit row; references arrive as typed [Ref.Persisted]. */
+/** One stored Visit row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class VisitRow(
     val key: StoreKey,
     val member: Ref.Persisted,
     val minutes: Int,
 )
 
-/** One stored AnalyticsPing row; references arrive as typed [Ref.Persisted]. */
+/** One stored AnalyticsPing row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class AnalyticsPingRow(
     val key: StoreKey,
     val visit: Ref.Persisted,
     val pingedOn: Instant,
 )
 
-/** One stored Deposit row; references arrive as typed [Ref.Persisted]. */
+/** One stored Deposit row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class DepositRow(
     val key: StoreKey,
     val member: Ref.Persisted,
@@ -73,7 +73,7 @@ data class DepositRow(
     val applied: Boolean,
 )
 
-/** One stored Charge row; references arrive as typed [Ref.Persisted]. */
+/** One stored Charge row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class ChargeRow(
     val key: StoreKey,
     val member: Ref.Persisted,
@@ -82,28 +82,28 @@ data class ChargeRow(
     val requestedOn: LocalDate,
 )
 
-/** One stored ChargeApplication row; references arrive as typed [Ref.Persisted]. */
+/** One stored ChargeApplication row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class ChargeApplicationRow(
     val key: StoreKey,
     val charge: Ref.Persisted,
     val appliedOn: Instant,
 )
 
-/** One stored DelinquencyFlag row; references arrive as typed [Ref.Persisted]. */
+/** One stored DelinquencyFlag row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class DelinquencyFlagRow(
     val key: StoreKey,
     val member: Ref.Persisted,
     val flaggedOn: LocalDate,
 )
 
-/** One stored DelinquencyResolution row; references arrive as typed [Ref.Persisted]. */
+/** One stored DelinquencyResolution row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class DelinquencyResolutionRow(
     val key: StoreKey,
     val flag: Ref.Persisted,
     val resolvedOn: LocalDate,
 )
 
-/** One stored AuditEntry row; references arrive as typed [Ref.Persisted]. */
+/** One stored AuditEntry row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class AuditEntryRow(
     val key: StoreKey,
     val member: Ref.Persisted,
@@ -111,21 +111,21 @@ data class AuditEntryRow(
     val loggedOn: Instant,
 )
 
-/** One stored AccountReview row; references arrive as typed [Ref.Persisted]. */
+/** One stored AccountReview row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class AccountReviewRow(
     val key: StoreKey,
     val member: Ref.Persisted,
     val openedOn: Instant,
 )
 
-/** One stored Agent row; references arrive as typed [Ref.Persisted]. */
+/** One stored Agent row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class AgentRow(
     val key: StoreKey,
     val name: String,
     val email: String,
 )
 
-/** One stored Ticket row; references arrive as typed [Ref.Persisted]. */
+/** One stored Ticket row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class TicketRow(
     val key: StoreKey,
     val member: Ref.Persisted,
@@ -136,7 +136,7 @@ data class TicketRow(
     val openedOn: Instant,
 )
 
-/** One stored TicketClosure row; references arrive as typed [Ref.Persisted]. */
+/** One stored TicketClosure row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class TicketClosureRow(
     val key: StoreKey,
     val ticket: Ref.Persisted,
@@ -144,13 +144,13 @@ data class TicketClosureRow(
     val closedOn: Instant,
 )
 
-/** One stored ReopenTicket row; references arrive as typed [Ref.Persisted]. */
+/** One stored ReopenTicket row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class ReopenTicketRow(
     val key: StoreKey,
     val ticket: Ref.Persisted,
 )
 
-/** One stored ReopenNotice row; references arrive as typed [Ref.Persisted]. */
+/** One stored ReopenNotice row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class ReopenNoticeRow(
     val key: StoreKey,
     val ticket: Ref.Persisted,
@@ -158,7 +158,7 @@ data class ReopenNoticeRow(
     val noticedOn: Instant,
 )
 
-/** One stored Escalation row; references arrive as typed [Ref.Persisted]. */
+/** One stored Escalation row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class EscalationRow(
     val key: StoreKey,
     val ticket: Ref.Persisted,

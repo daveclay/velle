@@ -13,9 +13,11 @@ import velle.generated.GallerySystem
  * through the generated typed surface — the business-flow companion to the
  * generated per-rule specs.
  */
-class GalleryFlowTest {
+open class GalleryFlowTest {
 
-    private val sys = GallerySystem()
+    /** The system under test; the storage-backed variants override this. */
+    protected open fun newSystem(): GallerySystem = GallerySystem()
+    protected val sys: GallerySystem by lazy { newSystem() }
 
     private fun member(name: String): GallerySystem.MemberView {
         assertIs<CommitResult.Accepted>(sys.commitMember(name))

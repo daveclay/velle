@@ -13,7 +13,7 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-/** One stored Member row; references arrive as typed [Ref.Persisted]. */
+/** One stored Member row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class MemberRow(
     val key: StoreKey,
     val name: String,
@@ -21,7 +21,7 @@ data class MemberRow(
     val tier: String,
 )
 
-/** One stored DuesPayment row; references arrive as typed [Ref.Persisted]. */
+/** One stored DuesPayment row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class DuesPaymentRow(
     val key: StoreKey,
     val member: Ref.Persisted,
@@ -30,38 +30,38 @@ data class DuesPaymentRow(
     val paidOn: LocalDate,
 )
 
-/** One stored Purchase row; references arrive as typed [Ref.Persisted]. */
+/** One stored Purchase row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class PurchaseRow(
     val key: StoreKey,
     val member: Ref.Persisted,
     val amount: BigDecimal,
 )
 
-/** One stored ThankYouNote row; references arrive as typed [Ref.Persisted]. */
+/** One stored ThankYouNote row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class ThankYouNoteRow(
     val key: StoreKey,
     val purchase: Ref.Persisted,
 )
 
-/** One stored Enrollment row; references arrive as typed [Ref.Persisted]. */
+/** One stored Enrollment row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class EnrollmentRow(
     val key: StoreKey,
     val member: Ref.Persisted,
 )
 
-/** One stored SafetyWaiver row; references arrive as typed [Ref.Persisted]. */
+/** One stored SafetyWaiver row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class SafetyWaiverRow(
     val key: StoreKey,
     val member: Ref.Persisted,
 )
 
-/** One stored OrientationRecord row; references arrive as typed [Ref.Persisted]. */
+/** One stored OrientationRecord row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class OrientationRecordRow(
     val key: StoreKey,
     val member: Ref.Persisted,
 )
 
-/** One stored Keycard row; references arrive as typed [Ref.Persisted]. */
+/** One stored Keycard row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class KeycardRow(
     val key: StoreKey,
     val member: Ref.Persisted,

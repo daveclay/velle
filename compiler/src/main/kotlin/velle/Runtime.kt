@@ -142,6 +142,10 @@ class VelleSystem(
     private val fetchedAll = mutableSetOf<String>()
     private val fetchedRefs = mutableSetOf<Triple<String, String, Long>>()
     private val fetchedFilters = mutableSetOf<Pair<String, QF>>()
+    /** Handles whose by-key fetch found no row this envelope — a reference at a
+     *  deleted row (README §12) is read as absent every time, and one snapshot
+     *  answers it once. */
+    private val fetchMisses = mutableSetOf<Long>()
 
     fun connect(resolver: StateResolver, onCommit: CommitCallback) {
         this.resolver = resolver
@@ -173,6 +177,7 @@ class VelleSystem(
         fetchedAll.clear()
         fetchedRefs.clear()
         fetchedFilters.clear()
+        fetchMisses.clear()
         captures.clear()
         captureMisses.clear()
     }
@@ -212,15 +217,31 @@ class VelleSystem(
         val r = resolver ?: return null
         val shape = idShape[id] ?: return null
         val key = keyOf[id] ?: return null // no key: never persisted (rolled back, or another session's handle)
-        val row = r.fetchByKey(shape, key) ?: return null
+        if (id in fetchMisses) return null
+        val row = r.fetchByKey(shape, key) ?: return null.also { fetchMisses.add(id) }
         return hydrateIfAbsent(row)
     }
 
-    /** Scan read: every current instance of [shape], faulting in the full set once per envelope. */
+    /**
+     * Scan read: every current instance of [shape], faulting in the full set
+     * once per envelope. The order is the store's: [byShape] is kept as the
+     * rows storage reported, in the order it reported them, ahead of anything
+     * this envelope created that storage does not hold yet — so the query
+     * surface reads the same order over a store as in memory (creation order,
+     * for a store whose scan order is insertion order).
+     */
     internal fun idsOf(shape: String): List<Long> {
         val r = resolver
-        if (r != null && shape !in model.transients && fetchedAll.add(shape))
-            r.fetchAll(shape).forEach { hydrateIfAbsent(it) }
+        if (r != null && shape !in model.transients && fetchedAll.add(shape)) {
+            val fetched = r.fetchAll(shape).map { hydrateIfAbsent(it).id }
+            val list = byShape.getOrPut(shape) { mutableListOf() }
+            val fetchedSet = fetched.toSet()
+            val (persisted, unpersisted) = list.filter { it !in fetchedSet }.partition { keyOf[it] != null }
+            list.clear()
+            list.addAll(fetched)
+            list.addAll(persisted)
+            list.addAll(unpersisted)
+        }
         return liveIds(shape)
     }
 
@@ -273,7 +294,11 @@ class VelleSystem(
         }
         val inst = Instance(handle, row.shape, handle, fields)
         instances[handle] = inst
-        byShape.getOrPut(row.shape) { mutableListOf() }.add(handle)
+        // a hydrated row goes behind the rows already hydrated and ahead of this
+        // envelope's unpersisted creations (see idsOf on order)
+        val list = byShape.getOrPut(row.shape) { mutableListOf() }
+        val firstUnpersisted = list.indexOfFirst { keyOf[it] == null }
+        if (firstUnpersisted < 0) list.add(handle) else list.add(firstUnpersisted, handle)
         return inst
     }
 

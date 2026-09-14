@@ -10,9 +10,10 @@ import kotlin.test.assertTrue
 import velle.generated.PaymentsSystem
 
 /** The async charge lifecycle, driven end-to-end through the typed surface. */
-class PaymentsApiTest {
+open class PaymentsApiTest {
 
-    private fun newSystem() = PaymentsSystem()
+    /** The system under test; the storage-backed variants override this. */
+    protected open fun newSystem(): PaymentsSystem = PaymentsSystem()
 
     private fun PaymentsSystem.cardedCustomer(): PaymentsSystem.CustomerView {
         commitContact("Grace", "grace@velle.example")

@@ -11,9 +11,11 @@ import velle.generated.EnrollmentSystem
  * The collection constructs of README §6 driven through the generated typed
  * surface — the business-flow companion to the generated per-rule specs.
  */
-class EnrollmentFlowTest {
+open class EnrollmentFlowTest {
 
-    private val sys = EnrollmentSystem()
+    /** The system under test; the storage-backed variants override this. */
+    protected open fun newSystem(): EnrollmentSystem = EnrollmentSystem()
+    protected val sys: EnrollmentSystem by lazy { newSystem() }
 
     private fun student(name: String = "Ada"): EnrollmentSystem.StudentView {
         assertIs<CommitResult.Accepted>(sys.commitStudent(name, tags = emptyList(), courses = emptyList()))

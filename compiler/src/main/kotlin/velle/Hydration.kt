@@ -47,7 +47,14 @@ sealed interface Ref {
  * fields only (derived properties recompute; refinement membership is the
  * predicate; captures travel on their own channel). Scalar values are plain
  * Kotlin — String, Boolean, BigDecimal (all numerics), LocalDate, Instant —
- * and every to-one reference is a [Ref.Persisted] built by the store.
+ * every to-one reference is a [Ref.Persisted] built by the store, and a
+ * declared `many` is a List of those (or of scalars) in membership order.
+ *
+ * A field typed with a static union (README §9) still arrives as a
+ * [Ref.Persisted] naming the concrete operand: keys are unique only per
+ * table, so the store must have kept the shape beside the key — a bare key
+ * cannot say whether `target` is Post#1 or Photo#1 (SqliteStore keeps a
+ * discriminator column, and matches on both in the join read).
  */
 data class Row(val shape: String, val key: StoreKey, val fields: Map<String, Any?>)
 
@@ -61,7 +68,13 @@ interface StateResolver {
     /** Fetch one row by the store's own key — following a to-one reference. */
     fun fetchByKey(shape: String, key: StoreKey): Row?
 
-    /** The scan read: all rows of a shape (refinement candidates, tick sweeps, `never` checks). */
+    /**
+     * The scan read: all rows of a shape (refinement candidates, tick sweeps,
+     * `never` checks). The order rows come back in is the order the query
+     * surface reports them (`VelleSystem.instancesOf`), ahead of anything the
+     * current transaction created that storage does not hold yet — so a store
+     * whose scan order is insertion order gives the application creation order.
+     */
     fun fetchAll(shape: String): List<Row>
 
     /** The join read: rows of [shape] whose to-one [field] references [target]. */
@@ -116,9 +129,10 @@ interface StateResolver {
  * membership" (delete; deleting nothing is fine). A capture entered by the
  * same set's create carries a [Ref.Pending] instance; a retraction is always
  * persisted, because create-then-exit inside one envelope nets to nothing. A
- * retraction is the one deletion in the whole contract — legal because a
- * capture is per-membership *memory*, not a record of something that happened
- * in the world (README §8; history is occurrence facts, not captures).
+ * retraction and a [Deletion] are the contract's only removals — the first
+ * legal because a capture is per-membership *memory*, not a record of
+ * something that happened in the world (README §8; history is occurrence
+ * facts, not captures), the second because the spec said `delete` (README §12).
  */
 data class CommitSet(
     val created: List<Creation>,
@@ -143,7 +157,11 @@ data class CommitSet(
      *  Apply deletions after [created]/[assigned]: a same-set write never
      *  targets a deleted row, but a surviving row may hold a reference at a
      *  deleted one — such a reference reads as absent thereafter (the
-     *  absorbing reference, `? initially required`). */
+     *  absorbing reference, `? initially required`). That reading is only
+     *  sound while the dead key stays dead: a store must never reissue a
+     *  deleted row's key to a later row (SQLite: `AUTOINCREMENT`, not the
+     *  reusing default), or the dangling reference silently points at a
+     *  stranger. Capture memory keyed on the row goes with it. */
     data class Deletion(val target: Ref.Persisted)
 }
 

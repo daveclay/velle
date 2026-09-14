@@ -13,8 +13,9 @@ repositories {
 
 dependencies {
     implementation(project(":compiler"))
-    // engineer-side storage for the hydration spike app (velle/app)
-    implementation("org.xerial:sqlite-jdbc:3.47.1.0")
+    // the generic SQLite backend the hydration spike app (velle/app) and the
+    // store-backed tests run over
+    implementation(project(":stores:sqlite"))
     testImplementation(kotlin("test"))
 }
 

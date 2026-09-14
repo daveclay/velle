@@ -41,11 +41,9 @@ object StoreGen {
         fun rowFields(shape: String): List<RowField> =
             model.shapes.getValue(shape).members.mapNotNull { m ->
                 when (m) {
-                    is StoredProp -> model.typeOf(m.type)
-                        // collection persistence (declared `many` / `many <scalar>`, README §6)
-                        // is store-side design the v0 store surface doesn't carry yet
-                        .takeIf { it !is VType.Coll && it !is VType.CollS }
-                        ?.let { RowField(m.name, it) }
+                    // a declared `many` / `many <scalar>` (README §6) travels as a
+                    // list in membership order, like the generic Row carries it
+                    is StoredProp -> RowField(m.name, model.typeOf(m.type))
                     is TimestampProp -> RowField(m.name, VType.DateTimeT)
                     else -> null
                 }
@@ -158,7 +156,7 @@ object StoreGen {
         }
 
         fun rowType(shape: String) {
-            line("/** One stored $shape row; references arrive as typed [Ref.Persisted]. */")
+            line("/** One stored $shape row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */")
             line("data class ${shape}Row(")
             line("    val key: StoreKey,")
             rowFields(shape).forEach { line("    val ${it.name}: ${rowKotlin(it.type)},") }
@@ -360,8 +358,18 @@ object StoreGen {
             VType.DateT -> "LocalDate"
             VType.DateTimeT -> "Instant"
             is VType.Inst -> "Ref.Persisted"
+            is VType.Coll -> "List<Ref.Persisted>"
+            is VType.CollS -> "List<${rowKotlin(scalarType(t.name))}>"
             is VType.Optional -> rowKotlin(t.inner) + "?"
             else -> "Any"
+        }
+
+        fun scalarType(name: String): VType = when (name) {
+            "text" -> VType.Text
+            "boolean" -> VType.Bool
+            "Date" -> VType.DateT
+            "DateTime" -> VType.DateTimeT
+            else -> VType.Num(name)
         }
 
         fun fromRaw(expr: String, t: VType): String = when (t) {
@@ -376,6 +384,8 @@ object StoreGen {
             VType.Text -> "$expr as String"
             VType.Bool -> "$expr as Boolean"
             is VType.Inst -> "$expr as Ref.Persisted"
+            is VType.Coll -> "($expr as List<*>).map { it as Ref.Persisted }"
+            is VType.CollS -> "($expr as List<*>).map { ${fromRaw("it", scalarType(t.name))} }"
             is VType.Optional -> when (val inner = t.inner) {
                 is VType.Num -> when (inner.name) {
                     "integer" -> "($expr as Number?)?.toInt()"

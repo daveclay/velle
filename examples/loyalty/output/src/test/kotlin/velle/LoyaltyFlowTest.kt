@@ -18,9 +18,11 @@ import velle.generated.LoyaltySystem
  * delivering the thank-you note, and same-direction siblings certifying in
  * either order.
  */
-class LoyaltyFlowTest {
+open class LoyaltyFlowTest {
 
-    private val sys = LoyaltySystem()
+    /** The system under test; the storage-backed variants override this. */
+    protected open fun newSystem(): LoyaltySystem = LoyaltySystem()
+    protected val sys: LoyaltySystem by lazy { newSystem() }
 
     private fun member(
         name: String,

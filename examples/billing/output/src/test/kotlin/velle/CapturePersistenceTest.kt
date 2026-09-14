@@ -7,7 +7,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import velle.app.SqliteStore
+import velle.sqlite.SqliteStore
 import velle.generated.BillingSystem
 
 /**

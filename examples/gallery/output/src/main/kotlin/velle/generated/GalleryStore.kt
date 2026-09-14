@@ -13,27 +13,27 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-/** One stored Member row; references arrive as typed [Ref.Persisted]. */
+/** One stored Member row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class MemberRow(
     val key: StoreKey,
     val name: String,
 )
 
-/** One stored Post row; references arrive as typed [Ref.Persisted]. */
+/** One stored Post row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class PostRow(
     val key: StoreKey,
     val author: Ref.Persisted,
     val body: String,
 )
 
-/** One stored Photo row; references arrive as typed [Ref.Persisted]. */
+/** One stored Photo row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class PhotoRow(
     val key: StoreKey,
     val author: Ref.Persisted,
     val caption: String,
 )
 
-/** One stored Comment row; references arrive as typed [Ref.Persisted]. */
+/** One stored Comment row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class CommentRow(
     val key: StoreKey,
     val target: Ref.Persisted,
@@ -41,14 +41,14 @@ data class CommentRow(
     val body: String,
 )
 
-/** One stored PopularityNotice row; references arrive as typed [Ref.Persisted]. */
+/** One stored PopularityNotice row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class PopularityNoticeRow(
     val key: StoreKey,
     val content: Ref.Persisted,
     val noticedOn: Instant,
 )
 
-/** One stored CommentNotice row; references arrive as typed [Ref.Persisted]. */
+/** One stored CommentNotice row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class CommentNoticeRow(
     val key: StoreKey,
     val recipient: Ref.Persisted,

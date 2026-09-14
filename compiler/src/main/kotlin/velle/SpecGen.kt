@@ -464,7 +464,9 @@ object SpecGen {
                 // a handled-once partition (each side guarded by outcome evidence the
                 // firing itself produces) is exited on firing — the exactly-one-side
                 // law holds only for unhandled acts, so it can't be asserted after
-                partitionPeer(cn)?.takeIf { !transientSubject && !bodyDisarms(rule, conditionConjuncts(RefName(cn))) }?.let { peer ->
+                // a `when deleted` rule's subject is gone once the given returns:
+                // no act remains to sit on one side of the partition
+                partitionPeer(cn)?.takeIf { !transientSubject && rule.trigger != Trigger.DELETED && !bodyDisarms(rule, conditionConjuncts(RefName(cn))) }?.let { peer ->
                     body.line(2, "assertTrue(member($subject, \"$cn\") != member($subject, \"$peer\"), \"'$cn' and '$peer' partition the act\")")
                 }
             }

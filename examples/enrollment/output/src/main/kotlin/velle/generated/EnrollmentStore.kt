@@ -13,24 +13,26 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-/** One stored Advisor row; references arrive as typed [Ref.Persisted]. */
+/** One stored Advisor row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class AdvisorRow(
     val key: StoreKey,
     val name: String,
 )
 
-/** One stored Course row; references arrive as typed [Ref.Persisted]. */
+/** One stored Course row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class CourseRow(
     val key: StoreKey,
     val title: String,
     val capacity: Int,
 )
 
-/** One stored Student row; references arrive as typed [Ref.Persisted]. */
+/** One stored Student row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class StudentRow(
     val key: StoreKey,
     val name: String,
     val advisor: Ref.Persisted?,
+    val tags: List<String>,
+    val courses: List<Ref.Persisted>,
 )
 
 /**
@@ -153,9 +155,13 @@ fun Row.toStudentRow(): StudentRow = StudentRow(
     key = key,
     name = fields["name"] as String,
     advisor = fields["advisor"] as Ref.Persisted?,
+    tags = (fields["tags"] as List<*>).map { it as String },
+    courses = (fields["courses"] as List<*>).map { it as Ref.Persisted },
 )
 
 fun StudentRow.toRow(): Row = Row("Student", key, buildMap {
     put("name", name)
     advisor?.let { put("advisor", it) }
+    put("tags", tags)
+    put("courses", courses)
 })

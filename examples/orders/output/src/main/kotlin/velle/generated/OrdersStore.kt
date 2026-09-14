@@ -13,26 +13,26 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-/** One stored Customer row; references arrive as typed [Ref.Persisted]. */
+/** One stored Customer row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class CustomerRow(
     val key: StoreKey,
     val name: String,
 )
 
-/** One stored Product row; references arrive as typed [Ref.Persisted]. */
+/** One stored Product row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class ProductRow(
     val key: StoreKey,
     val sku: String,
 )
 
-/** One stored Order row; references arrive as typed [Ref.Persisted]. */
+/** One stored Order row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class OrderRow(
     val key: StoreKey,
     val customer: Ref.Persisted,
     val placedOn: LocalDate,
 )
 
-/** One stored OrderLine row; references arrive as typed [Ref.Persisted]. */
+/** One stored OrderLine row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class OrderLineRow(
     val key: StoreKey,
     val order: Ref.Persisted,
@@ -40,14 +40,14 @@ data class OrderLineRow(
     val quantity: Int,
 )
 
-/** One stored Customization row; references arrive as typed [Ref.Persisted]. */
+/** One stored Customization row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class CustomizationRow(
     val key: StoreKey,
     val line: Ref.Persisted,
     val note: String,
 )
 
-/** One stored Reservation row; references arrive as typed [Ref.Persisted]. */
+/** One stored Reservation row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class ReservationRow(
     val key: StoreKey,
     val line: Ref.Persisted,

@@ -15,11 +15,14 @@ import velle.generated.MembershipSystem
  * latest/lowercase, `?.` and `is some` narrowing, or/and composition, the
  * sibling join and `as` reach-back refinements, and captures read at exit.
  */
-class MembershipApiTest {
+open class MembershipApiTest {
+
+    /** The system under test; the storage-backed variants override this. */
+    protected open fun newSystem(): MembershipSystem = MembershipSystem()
 
     @Test
     fun `the ledger derives the current email`() {
-        val sys = MembershipSystem()
+        val sys = newSystem()
         assertIs<CommitResult.Accepted>(sys.commitPlan("Standard", BigDecimal("20")))
         assertIs<CommitResult.Accepted>(sys.commitSignUp("Ada", "Ada@Example.com", sys.plans().single()))
         val ada = sys.members().single()
@@ -33,7 +36,7 @@ class MembershipApiTest {
 
     @Test
     fun `optional narrowing and composed attention traits`() {
-        val sys = MembershipSystem()
+        val sys = newSystem()
         sys.commitPlan("Standard", BigDecimal("20"))
         sys.commitSignUp("Ada", "ada@example.com", sys.plans().single())
         val ada = sys.members().single()
@@ -63,7 +66,7 @@ class MembershipApiTest {
 
     @Test
     fun `cross-collection classifications join and reach back`() {
-        val sys = MembershipSystem()
+        val sys = newSystem()
         sys.commitPlan("Standard", BigDecimal("20"))
         sys.commitSignUp("Ada", "ada@example.com", sys.plans().single())
         val ada = sys.members().single()
@@ -87,7 +90,7 @@ class MembershipApiTest {
 
     @Test
     fun `closing captures the closer and the reopen notice reads it on the way out`() {
-        val sys = MembershipSystem()
+        val sys = newSystem()
         sys.commitPlan("Standard", BigDecimal("20"))
         sys.commitSignUp("Ada", "ada@example.com", sys.plans().single())
         val ada = sys.members().single()
@@ -108,7 +111,7 @@ class MembershipApiTest {
 
     @Test
     fun `deposits and charges fold the balance from disjoint writers`() {
-        val sys = MembershipSystem()
+        val sys = newSystem()
         sys.commitPlan("Standard", BigDecimal("20"))
         sys.commitSignUp("Ada", "ada@example.com", sys.plans().single())
         val ada = sys.members().single()

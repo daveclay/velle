@@ -14,9 +14,10 @@ import kotlin.test.assertTrue
  * per-part rule firings, the derived aggregate on the container, bag
  * semantics for inline values, and the boundary refusal rolling back whole.
  */
-class OrdersFlowTest {
+open class OrdersFlowTest {
 
-    private fun newSystem() = OrdersSystem()
+    /** The system under test; the storage-backed variants override this. */
+    protected open fun newSystem(): OrdersSystem = OrdersSystem()
 
     @Test
     fun `an order lands with its lines and their customizations in one commit`() {

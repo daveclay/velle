@@ -50,11 +50,14 @@ class CodegenGoldenTest {
 }
 
 /** The same billing scenarios, driven through the generated typed surface. */
-class GeneratedApiTest {
+open class GeneratedApiTest {
+
+    /** The system under test; the storage-backed variants override this. */
+    protected open fun newSystem(): BillingSystem = BillingSystem()
 
     @Test
     fun `the typed surface drives the payment cascade`() {
-        val sys = BillingSystem()
+        val sys = newSystem()
         assertIs<CommitResult.Accepted>(sys.commitSignUp("Ada", "a@x.com"))
         val ada = sys.customers().single()
 
@@ -79,7 +82,7 @@ class GeneratedApiTest {
 
     @Test
     fun `refusals surface through the typed commits`() {
-        val sys = BillingSystem()
+        val sys = newSystem()
         sys.commitSignUp("Ada", "a@x.com")
         sys.commitBillCustomer(sys.customers().single(), LocalDate.of(2026, 2, 1))
         val refused = sys.commitSubmitPayment(sys.invoices().single(), BigDecimal.ZERO)
@@ -89,7 +92,7 @@ class GeneratedApiTest {
 
     @Test
     fun `refinement views expose captures`() {
-        val sys = BillingSystem()
+        val sys = newSystem()
         sys.commitSignUp("Ada", "a@x.com")
         sys.commitBillCustomer(sys.customers().single(), LocalDate.of(2026, 2, 1))
         val invoice = sys.invoices().single()
@@ -107,7 +110,7 @@ class GeneratedApiTest {
 
     @Test
     fun `ticks drive the sweep through the typed surface`() {
-        val sys = BillingSystem()
+        val sys = newSystem()
         sys.commitSignUp("Ada", "a@x.com")
         sys.commitBillCustomer(sys.customers().single(), LocalDate.of(2025, 12, 1))
         sys.commitLineItem(sys.invoices().single(), "widgets", BigDecimal("50"), 1)

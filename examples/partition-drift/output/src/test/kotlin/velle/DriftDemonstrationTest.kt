@@ -11,13 +11,16 @@ import velle.generated.PartitionDriftSystem
  * assertion marked THE DEFECT passes and *shouldn't*; the handled-once
  * spelling behaves. Read the two tests side by side.
  */
-class DriftDemonstrationTest {
+open class DriftDemonstrationTest {
+
+    /** The system under test; the storage-backed variants override this. */
+    protected open fun newSystem(): PartitionDriftSystem = PartitionDriftSystem()
 
     // ── the drift-exposed spelling ───────────────────────────────────────────
 
     @Test
     fun `bare partition - applied edits drift into refusal and back`() {
-        val sys = PartitionDriftSystem()
+        val sys = newSystem()
         sys.commitCreateNote("minutes", "v1")
         val note = sys.notes().single()
 
@@ -52,7 +55,7 @@ class DriftDemonstrationTest {
 
     @Test
     fun `handled-once partition - the same story behaves`() {
-        val sys = PartitionDriftSystem()
+        val sys = newSystem()
         sys.commitCreateNote("minutes", "v1")
         val note = sys.notes().single()
 
@@ -91,7 +94,7 @@ class DriftDemonstrationTest {
 
     @Test
     fun `transient partition - the same story, with no acts left to drift`() {
-        val sys = PartitionDriftSystem()
+        val sys = newSystem()
         sys.commitCreateNote("minutes", "v1")
         val note = sys.notes().single()
 

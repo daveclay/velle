@@ -10,5 +10,9 @@ tasks.register("generate") {
         ":examples:payments:output:generate",
         ":examples:partition-drift:output:generate",
         ":examples:gallery:output:generate",
+        ":examples:enrollment:output:generate",
+        ":examples:loyalty:output:generate",
+        ":examples:orders:output:generate",
+        ":examples:moderation:output:generate",
     )
 }

@@ -2,6 +2,7 @@ package velle.app
 
 import velle.CommitResult
 import velle.generated.BillingSystem
+import velle.sqlite.SqliteStore
 import java.math.BigDecimal
 import java.sql.Connection
 import java.sql.DriverManager

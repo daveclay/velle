@@ -13,7 +13,7 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-/** One stored Note row; references arrive as typed [Ref.Persisted]. */
+/** One stored Note row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class NoteRow(
     val key: StoreKey,
     val title: String,
@@ -21,54 +21,54 @@ data class NoteRow(
     val locked: Boolean,
 )
 
-/** One stored LockNote row; references arrive as typed [Ref.Persisted]. */
+/** One stored LockNote row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class LockNoteRow(
     val key: StoreKey,
     val note: Ref.Persisted,
 )
 
-/** One stored UnlockNote row; references arrive as typed [Ref.Persisted]. */
+/** One stored UnlockNote row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class UnlockNoteRow(
     val key: StoreKey,
     val note: Ref.Persisted,
 )
 
-/** One stored RenameText row; references arrive as typed [Ref.Persisted]. */
+/** One stored RenameText row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class RenameTextRow(
     val key: StoreKey,
     val note: Ref.Persisted,
     val newText: String,
 )
 
-/** One stored BareEdit row; references arrive as typed [Ref.Persisted]. */
+/** One stored BareEdit row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class BareEditRow(
     val key: StoreKey,
     val note: Ref.Persisted,
     val newText: String,
 )
 
-/** One stored BareEditRefusal row; references arrive as typed [Ref.Persisted]. */
+/** One stored BareEditRefusal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class BareEditRefusalRow(
     val key: StoreKey,
     val edit: Ref.Persisted,
     val refusedOn: Instant,
 )
 
-/** One stored SafeEdit row; references arrive as typed [Ref.Persisted]. */
+/** One stored SafeEdit row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class SafeEditRow(
     val key: StoreKey,
     val note: Ref.Persisted,
     val newTitle: String,
 )
 
-/** One stored EditApplication row; references arrive as typed [Ref.Persisted]. */
+/** One stored EditApplication row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class EditApplicationRow(
     val key: StoreKey,
     val edit: Ref.Persisted,
     val appliedOn: Instant,
 )
 
-/** One stored EditRefusal row; references arrive as typed [Ref.Persisted]. */
+/** One stored EditRefusal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class EditRefusalRow(
     val key: StoreKey,
     val edit: Ref.Persisted,
@@ -76,7 +76,7 @@ data class EditRefusalRow(
     val refusedOn: Instant,
 )
 
-/** One stored TransientEditRefusal row; references arrive as typed [Ref.Persisted]. */
+/** One stored TransientEditRefusal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class TransientEditRefusalRow(
     val key: StoreKey,
     val note: Ref.Persisted,

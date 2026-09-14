@@ -17,6 +17,7 @@ repositories {
 dependencies {
     implementation(project(":compiler"))
     testImplementation(kotlin("test"))
+    testImplementation(project(":stores:sqlite")) // the flows re-run over real storage
 }
 
 tasks.test {

@@ -9,7 +9,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import velle.app.SqliteStore
+import velle.sqlite.SqliteStore
 import velle.generated.BillingStore
 import velle.generated.BillingStoreOverGeneric
 import velle.generated.BillingStoreResolver

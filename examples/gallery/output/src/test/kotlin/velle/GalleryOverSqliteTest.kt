@@ -1,0 +1,134 @@
+package velle.generated.gallery
+
+import java.sql.Connection
+import java.sql.DriverManager
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
+import velle.CommitResult
+import velle.generated.GalleryStoreOverGeneric
+import velle.generated.GalleryStoreResolver
+import velle.generated.GallerySystem
+import velle.sqlite.SqliteStore
+
+/**
+ * The gallery flows over real storage. With a store connected the runtime
+ * keeps no state of its own: every transaction opens a fresh snapshot and
+ * faults rows in through the resolver (investigate_runtime.md §2), so each
+ * inherited scenario is the in-memory scenario re-run against SQLite — once
+ * through the generic protocol, once through the generated typed store
+ * surface (GalleryStore, §10).
+ */
+class GalleryFlowOverSqliteTest : GalleryFlowTest() {
+    private val conn: Connection = DriverManager.getConnection("jdbc:sqlite::memory:")
+
+    @AfterTest
+    fun close() = conn.close()
+
+    override fun newSystem(): GallerySystem = GallerySystem().also { SqliteStore.attach(it.system, conn) }
+}
+
+class GalleryFlowOverTypedStoreTest : GalleryFlowTest() {
+    private val conn: Connection = DriverManager.getConnection("jdbc:sqlite::memory:")
+
+    @AfterTest
+    fun close() = conn.close()
+
+    override fun newSystem(): GallerySystem = GallerySystem().also { sys ->
+        val backend = SqliteStore(sys.system.model, conn).apply { createSchema() }
+        val store = GalleryStoreOverGeneric(backend, sys.system.model)
+        sys.system.connect(GalleryStoreResolver(store, sys.system.model), backend)
+    }
+}
+
+/**
+ * What only storage can show (OQ44, "Hydration and the store"): a union-typed
+ * reference (README §9) persisted with its concrete shape and read back in a
+ * second process — the polymorphic association, the inverse inferred through
+ * it, and the join read telling Post#1 from Photo#1 behind one key.
+ */
+class GalleryPersistenceTest {
+    private val conn: Connection = DriverManager.getConnection("jdbc:sqlite::memory:")
+
+    @AfterTest
+    fun close() = conn.close()
+
+    /** A fresh process over the same database: handles are session-local, rows are not. */
+    private fun process(): GallerySystem = GallerySystem().also { SqliteStore.attach(it.system, conn) }
+
+    private fun accept(r: CommitResult) = assertIs<CommitResult.Accepted>(r, "refused: $r")
+
+    private fun rows(sql: String): List<List<Any?>> =
+        conn.createStatement().use { st ->
+            st.executeQuery(sql).use { rs ->
+                buildList {
+                    while (rs.next()) add((1..rs.metaData.columnCount).map { i ->
+                        rs.getObject(i).let { if (it is Number) it.toLong() else it }
+                    })
+                }
+            }
+        }
+
+    @Test
+    fun `a union-typed reference is stored with its concrete shape, and the join read matches on both`() {
+        val first = process()
+        accept(first.commitMember("Ada"))
+        val ada = first.members().last()
+        accept(first.commitMember("Grace"))
+        val grace = first.members().last()
+        accept(first.commitPost(ada, "hello"))
+        val post = first.posts().last()
+        accept(first.commitPhoto(ada, "sunset"))
+        val photo = first.photos().last()
+        accept(first.commitComment(post.asContent(), grace, "hi"))
+        accept(first.commitComment(photo.asContent(), grace, "lovely"))
+        accept(first.commitComment(photo.asContent(), ada, "thanks"))
+
+        // Post#1 and Photo#1 share a key; the discriminator column tells them apart
+        assertEquals(
+            listOf(listOf(1L, "Post"), listOf(1L, "Photo"), listOf(1L, "Photo")),
+            rows("""SELECT target, target__shape FROM Comment ORDER BY id"""),
+        )
+
+        // a second process enters from the storage side, by key
+        val second = process()
+        val photo2 = second.photo(second.system.handleFor("Photo", 1L))
+        val post2 = second.post(second.system.handleFor("Post", 1L))
+        val grace2 = second.member(second.system.handleFor("Member", 2L))
+        assertEquals(2, photo2.comments.size, "the join read matched key and shape, not key alone")
+        assertEquals(1, post2.comments.size)
+        assertEquals(2, photo2.asContent().commentCount)
+        assertTrue(with(second) { photo2.asContent().isPopular() })
+        assertEquals(listOf(photo2), second.popularityNotices().map { it.content.asPhoto() })
+        assertEquals(1, second.postComments().size)
+        assertEquals(2, second.photoComments().size)
+        assertEquals(setOf(post2.id, photo2.id), second.contents().map { it.id }.toSet())
+
+        // entry into Popular is decided against stored rows: the post's second
+        // comment is an entry, the photo's third is not
+        accept(second.commitComment(post2.asContent(), grace2, "again"))
+        assertEquals(setOf(post2.id, photo2.id), second.popularityNotices().map { it.content.id }.toSet())
+        accept(second.commitComment(photo2.asContent(), grace2, "three"))
+        assertEquals(2, second.popularityNotices().size)
+    }
+
+    @Test
+    fun `the never's narrowing through the union is checked over stored rows`() {
+        val first = process()
+        accept(first.commitMember("Ada"))
+        accept(first.commitPost(first.members().last(), "hello"))
+        accept(first.commitPhoto(first.members().last(), "sunset"))
+
+        val second = process()
+        val ada = second.member(second.system.handleFor("Member", 1L))
+        val post = second.post(second.system.handleFor("Post", 1L))
+        val photo = second.photo(second.system.handleFor("Photo", 1L))
+        val refused = second.commitComment(post.asContent(), ada, "me again")
+        assertIs<CommitResult.Refused>(refused)
+        assertEquals(listOf(listOf(0L)), rows("""SELECT COUNT(*) FROM Comment"""), "a refused act reaches no row")
+        accept(second.commitComment(photo.asContent(), ada, "my own photo"))
+        assertEquals(listOf(listOf(1L)), rows("""SELECT COUNT(*) FROM Comment"""))
+    }
+}
