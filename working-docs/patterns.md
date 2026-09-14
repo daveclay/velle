@@ -40,7 +40,7 @@ Because each firing is its own commit, transitions inside a transaction are ordi
 
 ## Conditioned acceptance is a definition
 
-*Context for OQ17 — the first of two patterns showing why most "reject the commit" sentences need no rejection machinery.*
+*The first of two patterns showing why most "reject the commit" sentences need no rejection machinery.*
 
 "Don't accept the order unless the payment authorizes" is not a transaction statement — it is the definition of *accepted*, owned by the errors-are-refinements pattern:
 
@@ -64,7 +64,7 @@ Fulfillment rules hang off `AcceptedOrder`, never `Order`. The order landing as 
 
 ## Validation rejection is data
 
-*Context for OQ17 — the second pattern, and the reason that question is down to a residue. Also referenced from README §8 ("Frozen fields") and `evaluation.md`.*
+*The second pattern. Also referenced from README §8 ("Frozen fields") and `evaluation.md`.*
 
 There is nothing to throw and nowhere to throw it — Velle has no stack and no functions, so exception propagation doesn't exist; a validation failure is a shape or a refinement membership, never a control-flow event. A validate-and-reject flow needs no transaction machinery:
 
@@ -83,6 +83,6 @@ rule RecordRefusal when RefusedVoid {
 }
 ```
 
-The act lands (the request happened — audit for free: `count(RefusedVoid)`), the consequence never fires for the refused subset, the refusal lands as a fact the caller reads back (delivery is compilation's job). `ApplicableVoid`/`RefusedVoid` partition `VoidPayment`, exhaustiveness-checked — the forgotten `catch` block becomes a compile-time uncovered-subset error. Three levels of "invalid," only the first pre-commit: **(1)** can't inhabit the shape's type at all — rejected below the language, at the trust/input boundary, the `expose` surface (README §22, "External input mechanisms"); **(2)** well-shaped, business-invalid — rejection-as-data, above; **(3)** well-shaped, valid, consequence forbidden — resolved as the `frozen` write-gate (README §8, "Frozen fields"; the residue is OQ17's).
+The act lands (the request happened — audit for free: `count(RefusedVoid)`), the consequence never fires for the refused subset, the refusal lands as a fact the caller reads back (delivery is compilation's job). `ApplicableVoid`/`RefusedVoid` partition `VoidPayment`, exhaustiveness-checked — the forgotten `catch` block becomes a compile-time uncovered-subset error. Three levels of "invalid," only the first pre-commit: **(1)** can't inhabit the shape's type at all — rejected below the language, at the trust/input boundary, the `expose` surface (README §22, "External input (`expose`)"); **(2)** well-shaped, business-invalid — rejection-as-data, above; **(3)** well-shaped, valid, consequence forbidden — resolved as the `frozen` write-gate (README §8, "Frozen fields").
 
 *Note (from TODO.md): a bare state partition over a **persistent** act, as in this example, is drift-exposed (A4 flags it); this appendix is owed an update to the anchored handled-once spelling — or the act goes `transient`, which dissolves the hazard (README §4).*

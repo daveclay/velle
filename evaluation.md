@@ -160,7 +160,7 @@ One timeline per membership (§8, §13): **entry commit** — captured expressio
 
 Three distinct outcomes of an exposed call, never conflated:
 
-- **Refusal** (step 1): the act violates a type or an input-constrained `never` — named in the result; no transaction ever began. The general rejection-scope question stays open (OQ17); this minimal shape is the settled v0 answer.
+- **Refusal** (step 1): the act violates a type or an input-constrained `never` — named in the result; no transaction ever began. Refusal is whole: the unit refused is the closure the commit would have been (§4), never a part of it — a request that should succeed in part is separate acts, or rejection-as-data, below.
 - **Rejection-as-data**: not an error at all — the act commits, the refusing fact lands, the caller reads it back (the pattern in `working-docs/patterns.md`, "Validation rejection is data"). The runtime does nothing special.
 - **Transaction error** (step 6): an unexpected failure mid-transaction — the whole envelope rolls back, the caller is told, and retry is the caller's re-invocation `[S4]`, which re-evaluates generators (§5).
 
