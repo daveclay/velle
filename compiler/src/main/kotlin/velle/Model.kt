@@ -398,41 +398,41 @@ class Model(val decls: List<Decl>) {
 
     /** Collect reads of an expression evaluated with `subject` as its scope.
      *  [aliases] maps `as`-bound names to their element scopes (README §10). */
-    fun collectExpr(e: Expr, subject: String, s: ReadSummary, aliases: Map<String, String> = emptyMap()) {
+    fun collectExpr(e: Expr, subject: String, s: ReadSummary, aliases: Map<String, String> = emptyMap(), root: String = subject) {
         when (e) {
             is TodayLit, is NowLit -> s.readsTime = true
-            is PathExpr -> collectPath(e, subject, s, aliases)
-            is UnaryMinus -> collectExpr(e.inner, subject, s, aliases)
-            is Binary -> { collectExpr(e.left, subject, s, aliases); collectExpr(e.right, subject, s, aliases) }
-            is NotExpr -> collectExpr(e.inner, subject, s, aliases)
-            is IfExpr -> { collectExpr(e.condition, subject, s, aliases); collectExpr(e.thenExpr, subject, s, aliases); collectExpr(e.elseExpr, subject, s, aliases) }
+            is PathExpr -> collectPath(e, subject, s, aliases, root)
+            is UnaryMinus -> collectExpr(e.inner, subject, s, aliases, root)
+            is Binary -> { collectExpr(e.left, subject, s, aliases, root); collectExpr(e.right, subject, s, aliases, root) }
+            is NotExpr -> collectExpr(e.inner, subject, s, aliases, root)
+            is IfExpr -> { collectExpr(e.condition, subject, s, aliases, root); collectExpr(e.thenExpr, subject, s, aliases, root); collectExpr(e.elseExpr, subject, s, aliases, root) }
             is IsExpr -> {
-                collectExpr(e.subject, subject, s, aliases)
+                collectExpr(e.subject, subject, s, aliases, root)
                 e.refinement?.let { if (it in refinements) s.absorb(predicateSummary(it)) }
             }
             is ExistsExpr -> {
                 e.shape?.let { consultShape(it, s) }
-                e.forExpr?.let { collectExpr(it, subject, s, aliases) }
-                e.collection?.let { collectCollection(it, subject, s, aliases) }
+                e.forExpr?.let { collectExpr(it, subject, s, aliases, root) }
+                e.collection?.let { collectCollection(it, subject, s, aliases, root) }
             }
-            is AggCall -> collectAgg(e, subject, s, aliases)
-            is FunCall -> e.args.forEach { collectExpr(it, subject, s, aliases) }
-            is SingularFor -> { consultShape(e.shape, s); collectExpr(e.forExpr, subject, s, aliases) }
+            is AggCall -> collectAgg(e, subject, s, aliases, root)
+            is FunCall -> e.args.forEach { collectExpr(it, subject, s, aliases, root) }
+            is SingularFor -> { consultShape(e.shape, s); collectExpr(e.forExpr, subject, s, aliases, root) }
             is Access -> {
                 val start: String? = when (val t = e.target) {
-                    is AggCall -> collectAgg(t, subject, s, aliases)
+                    is AggCall -> collectAgg(t, subject, s, aliases, root)
                         .takeIf { t.name == "latest" || t.name == "first" }
                     is SingularFor -> {
                         consultShape(t.shape, s)
-                        collectExpr(t.forExpr, subject, s, aliases)
+                        collectExpr(t.forExpr, subject, s, aliases, root)
                         t.shape
                     }
-                    else -> { collectExpr(t, subject, s, aliases); null }
+                    else -> { collectExpr(t, subject, s, aliases, root); null }
                 }
                 walkSegs(start, e.segs, s)
             }
-            is ShapeForSource -> { consultShape(e.shape, s); collectExpr(e.forExpr, subject, s, aliases) }
-            is SetExpr -> collectCollection(e.collection, subject, s, aliases)
+            is ShapeForSource -> { consultShape(e.shape, s); collectExpr(e.forExpr, subject, s, aliases, root) }
+            is SetExpr -> collectCollection(e.collection, subject, s, aliases, root)
             else -> {}
         }
     }
@@ -446,8 +446,8 @@ class Model(val decls: List<Decl>) {
 
     /** Collects an aggregate's reads (collection, sum's selected field, and the
      *  selectors' `by` datums); returns the element scope, null when unresolvable. */
-    private fun collectAgg(e: AggCall, subject: String, s: ReadSummary, aliases: Map<String, String>): String? {
-        val elem = collectCollection(e.collection, subject, s, aliases)
+    private fun collectAgg(e: AggCall, subject: String, s: ReadSummary, aliases: Map<String, String>, root: String = subject): String? {
+        val elem = collectCollection(e.collection, subject, s, aliases, root)
         for (f in listOfNotNull(e.field) + e.orderBy) {
             val m = elem?.let { membersOf(it)[f] }
             if (m != null) record(elem, m, s) else s.opaque = true
@@ -457,7 +457,7 @@ class Model(val decls: List<Decl>) {
 
     /** Returns the last binding's element scope (the innermost scope the shared
      *  `where` evaluates bare names against), null when it can't be resolved. */
-    private fun collectCollection(c: CollectionExpr, subject: String, s: ReadSummary, aliases: Map<String, String> = emptyMap()): String? {
+    private fun collectCollection(c: CollectionExpr, subject: String, s: ReadSummary, aliases: Map<String, String> = emptyMap(), root: String = subject): String? {
         var elementScope: String? = null
         var env = aliases
         for (b in c.bindings) {
@@ -469,28 +469,30 @@ class Model(val decls: List<Decl>) {
                         if (src.root in refinements) s.absorb(predicateSummary(src.root))
                         bScope = src.root
                     } else {
-                        collectPath(src, subject, s, env)
-                        bScope = pathElementShape(src, subject, env)
+                        collectPath(src, subject, s, env, root)
+                        bScope = pathElementShape(src, subject, env, root)
                         if (bScope == null) s.opaque = true
                     }
                 }
                 is ShapeForSource -> {
                     consultShape(src.shape, s)
-                    collectExpr(src.forExpr, subject, s, env)
+                    collectExpr(src.forExpr, subject, s, env, root)
                     bScope = src.shape
                 }
-                else -> { collectExpr(src, subject, s, env); s.opaque = true }
+                else -> { collectExpr(src, subject, s, env, root); s.opaque = true }
             }
             if (b.alias != null && bScope != null) env = env + (b.alias to bScope)
             if (bScope != null) elementScope = bScope
         }
-        c.where?.let { collectExpr(it, elementScope ?: subject, s, env) }
+        // the shared `where` resolves bare names against the innermost element,
+        // while `this` keeps naming the outermost subject (README §10)
+        c.where?.let { collectExpr(it, elementScope ?: subject, s, env, root) }
         return elementScope
     }
 
-    private fun collectPath(p: PathExpr, subject: String, s: ReadSummary, aliases: Map<String, String> = emptyMap()) {
+    private fun collectPath(p: PathExpr, subject: String, s: ReadSummary, aliases: Map<String, String> = emptyMap(), root: String = subject) {
         val scope: String? = when {
-            p.root == "this" -> subject
+            p.root == "this" -> root
             p.root in aliases -> aliases.getValue(p.root)
             p.root in shapes || p.root in refinements -> {
                 // bare refinement name as a membership atom
@@ -530,9 +532,9 @@ class Model(val decls: List<Decl>) {
         }
     }
 
-    fun pathElementShape(p: PathExpr, subject: String, aliases: Map<String, String> = emptyMap()): String? {
+    fun pathElementShape(p: PathExpr, subject: String, aliases: Map<String, String> = emptyMap(), root: String = subject): String? {
         var scope: String? = when {
-            p.root == "this" -> subject
+            p.root == "this" -> root
             p.root in aliases -> aliases.getValue(p.root)
             else -> membersOf(subject)[p.root]?.type?.let { it.instanceShape() ?: (it as? VType.Coll)?.shape }
         }

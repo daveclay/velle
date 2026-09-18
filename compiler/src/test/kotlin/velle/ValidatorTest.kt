@@ -44,6 +44,52 @@ class ValidatorTest {
     }
 
     @Test
+    fun `F1 - this inside a collection filter names the outermost subject, not the element`() {
+        // README §10: `this` is the outermost subject; a bare name is the innermost
+        // element. The runtime always read it that way; the validator once resolved
+        // `this` against the filter's element too (found by examples/peptides).
+        val src = """
+            expose shape Protocol {
+                durationHours: integer
+            }
+
+            expose shape Assay {
+                protocol: one Protocol
+            }
+
+            expose shape Reading {
+                assay: one Assay
+                hoursElapsed: integer
+            }
+
+            shape CompletedAssay = Assay where exists (readings where hoursElapsed >= this.protocol.durationHours)
+        """.trimIndent()
+        assertEquals(emptyList(), diags(src).filter { it.code == "F1" })
+    }
+
+    @Test
+    fun `F1 - an as-alias used as a collection source resolves to its element`() {
+        val src = """
+            expose shape Trial {
+                name: text
+            }
+
+            expose shape Plot {
+                trial: one Trial
+            }
+
+            expose shape Scouting {
+                plot: one Plot
+                scoutedOn: Date
+            }
+
+            shape BehindOnScouting = Trial where
+                exists (plots as plot where not exists (plot.scoutings where scoutedOn > today - 7 days))
+        """.trimIndent()
+        assertEquals(emptyList(), diags(src).filter { it.code == "F1" })
+    }
+
+    @Test
     fun `F3 - assigning a derived property fails`() {
         val src = """
             expose shape Account {

@@ -14,5 +14,6 @@ tasks.register("generate") {
         ":examples:loyalty:output:generate",
         ":examples:orders:output:generate",
         ":examples:moderation:output:generate",
+        ":examples:peptides:output:generate",
     )
 }

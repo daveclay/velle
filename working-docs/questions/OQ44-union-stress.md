@@ -32,6 +32,7 @@ Each is a compile-error today where it should license the read, or an unguarded 
 - Nested conditionals: narrowing inside a branch already narrowed.
 - Three-or-more-operand unions: the else-branch is the residual union, not one operand.
 - Narrowing inside a collection filter (`comments where target is Post and target.body == ""`) and of an `as` alias.
+- Narrowing on a collection filter's *source path*: `if trial is GreenhouseTrial then count(trial.greenhousePlots where lastObservedDay < this.dayMark) else ...` — the name check resolves the source against the union and finds no element, and the read-summary collector (`Model.collectExpr`) has no narrowing at all, so the branch goes opaque and V15 pairs the rule with everything. Found by `examples/peptides/peptides.velle` (`CollectionTask.plotsPending`, spelled around by comparing each operand's plots to the union-typed reference; `break-peptides.md` S14).
 - Nested static unions (`shape Media = Content or Video`): `is Content` on a `Media`-typed value, complement narrowing through the nesting, a field typed `one Media`.
 - Degenerate declarations: `Post or Post`, `Content or Post` — what `basesOf` and the generated views do.
 

@@ -1,0 +1,911 @@
+-- Peptides: a crop-protection discovery pipeline — candidate peptides screened
+-- against plant pathogens in the lab, grown out under the disease in a
+-- greenhouse, and finally planted at permitted field sites. The eighth Velle
+-- spec, and the first written to stress the language against a domain rather
+-- than to exhibit one construct: three stages with their own evidence, gates
+-- between the stages, and a time series at every stage — lab readings taken
+-- at hour marks, greenhouse disease scores taken at day marks, climate sensors
+-- logging around the clock, field scouting, site weather, and harvest.
+--
+-- What the domain asks of the language, and where each answer lives:
+--   · a running value over an ordered series (peak inhibition; the area under
+--     a disease-progress curve) — the predecessor recurrence (README §19)
+--   · a series ordered by a business datum, not by arrival — `latest ... by`
+--     the hour or day mark, so late-entered points slot into place
+--   · means over a series — `sum` / `count`, since there is no mean builtin
+--   · "silence" in a sensor series — a windowed `not exists` on a schedule,
+--     with the alert as the cross-tick memory
+--   · when data is collected — an admin-configured task over a union of the
+--     two trial shapes, done when every plot has data at its day mark, nagged
+--     daily while overdue, reschedulable and cancellable until done
+--   · correlating two series (a treatment event against site rainfall) —
+--     Date arithmetic in an `exists` filter
+--   · stage gates — rejection as data for requests, `never` at the boundary
+--     for acts that must not land at all
+--   · locking a series once it has been evaluated — `undeletable` on the
+--     observation and a refused-as-data correction, both scoped by the
+--     trial's state; `frozen` on a plot's bench once the trial is treated
+--   · a value fixed at the moment of evaluation — the result record, written
+--     at the completing commit beside the live derivation that keeps moving
+--     as corrections land
+--
+-- Comment convention (as in payments.velle): plain comments tell the business
+-- story; `velle:` comments note the language machinery on show.
+
+-- ── Reference data: crops, pathogens, peptides ───────────────────────────────
+
+expose shape Crop {
+    name: text
+}
+
+-- A pathogen is tracked against the crop it attacks.
+expose shape Pathogen {
+    name: text
+    host: one Crop
+}
+
+-- A candidate peptide. Its pipeline stage is never stored: it is read off the
+-- evidence each stage produces, below.
+-- velle: a derived property testing the instance's own refinement
+-- memberships (`this is FieldValidated`) — classification, not state
+expose shape Peptide {
+    code: text
+    sequence: text
+    stage: text = if this is FieldValidated then "field-validated"
+                  else if this is GreenhouseValidated then "greenhouse-validated"
+                  else if this is LabValidated then "lab-validated"
+                  else "candidate"
+}
+
+never (Peptide where sequence == "")
+
+-- ── Lab: in-vitro assays ─────────────────────────────────────────────────────
+
+-- A protocol says how long an assay runs, how many replicate plates an
+-- experiment needs, and what inhibition counts as a hit.
+expose shape AssayProtocol {
+    name: text
+    durationHours: integer
+    replicates: integer
+    hitThreshold: decimal
+}
+
+-- An experiment pairs a peptide against a pathogen under a protocol. Its
+-- numbers are read off its completed replicates: nothing is totalled by hand.
+-- velle: `sum` over a *derived* field of a refinement-filtered inferred
+-- inverse; the mean is `sum` / `count` guarded against the empty case
+expose shape LabExperiment {
+    peptide: one Peptide
+    pathogen: one Pathogen
+    protocol: one AssayProtocol
+    completedReplicates: integer = count(assays where CompletedAssay)
+    meanPeakInhibition: decimal = if completedReplicates == 0 then 0.0
+                                  else sum(assays where CompletedAssay, peakInhibition) / completedReplicates
+}
+
+-- Each replicate is one assay plate the lab reads at hour marks.
+-- velle: the plate's peak is the last point's running peak — a selector read
+-- over the series ordered by the hour mark, never by arrival
+expose shape Assay {
+    experiment: one LabExperiment
+    replicate: integer
+    peakInhibition: decimal = if assayReadings is empty then 0.0
+                              else latest(assayReadings by hoursElapsed).runningPeak
+}
+
+-- A reading: percent growth inhibition at an hour mark. The running peak is a
+-- predecessor recurrence — each reading's peak is the larger of its own value
+-- and its predecessor's peak, where the predecessor is the latest earlier hour
+-- mark. A reading entered late slots in at its hour and every later reading's
+-- peak re-derives.
+-- velle: the predecessor recurrence (README §19): a derived `previous` by
+-- `latest ... by` a creation-fixed datum plus one self-referential hop; V14's
+-- descent certificate; `max` as the duplication- and order-safe fold
+expose shape AssayReading {
+    assay: one Assay
+    hoursElapsed: integer
+    inhibitionPercent: decimal
+    previous: one AssayReading? = latest(AssayReading where assay == this.assay and hoursElapsed < this.hoursElapsed by hoursElapsed)
+    runningPeak: decimal = if previous is some then max(previous.runningPeak, inhibitionPercent) else inhibitionPercent
+}
+
+never (AssayReading where inhibitionPercent < 0 or inhibitionPercent > 100)
+never (AssayReading where hoursElapsed < 0)
+
+-- Two readings at the same hour mark would leave the series unordered, so the
+-- second is refused at the boundary.
+-- velle: uniqueness within a series stated as a count over the siblings that
+-- share the datum — no instance inequality needed
+never (AssayReading where count(assay.assayReadings where hoursElapsed == this.hoursElapsed) > 1)
+
+-- A plate is complete once it has been read at or past the protocol's
+-- duration.
+-- velle: `this.` reaching the subject from inside a collection filter, where
+-- a bare name would mean the element
+shape CompletedAssay = Assay where exists (assayReadings where hoursElapsed >= this.experiment.protocol.durationHours)
+
+-- An experiment is a hit when enough replicates are complete and their mean
+-- peak clears the threshold. The state is live: a late replicate can pull an
+-- experiment out of it, and a corrected reading can put it back.
+shape HitExperiment = LabExperiment where
+    completedReplicates >= protocol.replicates and meanPeakInhibition >= protocol.hitThreshold
+
+-- The first time an experiment becomes a hit, the lab records it — once, with
+-- the mean as it stood. A later exit is recorded as a retraction; re-entry
+-- adds nothing, since the hit is already on file.
+-- velle: the guard is business memory (once ever), not durability apparatus;
+-- `when leaving` carries the retraction with no evidence lookup at all
+shape LabHit {
+    experiment: one LabExperiment
+    meanPeakInhibition: decimal
+    recordedOn: timestamp on create
+}
+
+rule RecordLabHit when (HitExperiment where not exists LabHit for this) {
+    LabHit from { experiment: this, meanPeakInhibition: meanPeakInhibition }
+}
+
+shape LabHitRetraction {
+    experiment: one LabExperiment
+    retractedOn: timestamp on create
+}
+
+rule RetractLabHit when leaving HitExperiment {
+    LabHitRetraction from { experiment: this }
+}
+
+-- The lab stage's verdict on a peptide: it has a standing hit against some
+-- pathogen.
+shape LabValidated = Peptide where exists (labExperiments where HitExperiment)
+
+-- ── Greenhouse: whole plants under the disease ───────────────────────────────
+
+-- A greenhouse keeps a temperature band its trials depend on, and logs its
+-- climate around the clock.
+expose shape Greenhouse {
+    name: text
+    minTemperature: decimal
+    maxTemperature: decimal
+}
+
+expose shape ClimateReading {
+    greenhouse: one Greenhouse
+    recordedAt: DateTime
+    temperature: decimal
+    humidity: decimal
+}
+
+-- A greenhouse protocol: how many plots per arm, which day the trial ends on,
+-- and the efficacy that counts as a success.
+expose shape GreenhouseProtocol {
+    name: text
+    plotsPerArm: integer
+    finalDay: integer
+    efficacyThreshold: decimal
+}
+
+-- Scientists request a greenhouse trial for a peptide against a pathogen. The
+-- request is answered at its commit: approved into a trial record if the
+-- peptide has a standing lab hit against that pathogen, refused as data
+-- otherwise. The request key lets the requester find the answer.
+-- velle: a transient act partitioned on evidence two shapes away; the
+-- complement pair satisfies V18; the correlation-key idiom (README §4)
+expose transient shape RequestGreenhouseTrial {
+    requestKey: text
+    peptide: one Peptide
+    pathogen: one Pathogen
+    greenhouse: one Greenhouse
+    protocol: one GreenhouseProtocol
+}
+
+shape ApprovedGreenhouseRequest = RequestGreenhouseTrial where
+    exists (LabExperiment where HitExperiment and peptide == this.peptide and pathogen == this.pathogen)
+
+shape RefusedGreenhouseRequest = RequestGreenhouseTrial where
+    not exists (LabExperiment where HitExperiment and peptide == this.peptide and pathogen == this.pathogen)
+
+-- The trial. Its treatment moment is read off the treatment record below; the
+-- two arms are views over the trial's plots; the curve numbers are means per
+-- arm.
+-- velle: derived collections with a set-denotation formula beside the
+-- inferred inverse; `sum` / `count` over a derived collection's derived field;
+-- an optional derived from a `first(...)` selector
+shape GreenhouseTrial {
+    requestKey: text
+    peptide: one Peptide
+    pathogen: one Pathogen
+    greenhouse: one Greenhouse
+    protocol: one GreenhouseProtocol
+    approvedOn: timestamp on create
+    treatedAt: DateTime? = if treatments is empty then none else first(treatments by treatedAt).treatedAt
+    treatedPlots: many GreenhousePlot = (GreenhousePlot where trial == this and treatment == "peptide")
+    controlPlots: many GreenhousePlot = (GreenhousePlot where trial == this and treatment == "control")
+    meanTreatedAudpc: decimal = if treatedPlots is empty then 0.0 else sum(treatedPlots, audpc) / count(treatedPlots)
+    meanControlAudpc: decimal = if controlPlots is empty then 0.0 else sum(controlPlots, audpc) / count(controlPlots)
+    efficacy: decimal = if meanControlAudpc == 0 then 0.0
+                        else (meanControlAudpc - meanTreatedAudpc) / meanControlAudpc * 100
+}
+
+shape GreenhouseRefusal {
+    requestKey: text
+    reason: text
+    refusedOn: timestamp on create
+}
+
+rule ApproveGreenhouseTrial when ApprovedGreenhouseRequest {
+    GreenhouseTrial from {
+        requestKey: requestKey
+        peptide: peptide
+        pathogen: pathogen
+        greenhouse: greenhouse
+        protocol: protocol
+    }
+}
+
+rule RefuseGreenhouseTrial when RefusedGreenhouseRequest {
+    GreenhouseRefusal from { requestKey: requestKey, reason: "no standing lab hit against this pathogen" }
+}
+
+-- Plots are laid out on benches, each in the peptide arm or the control arm.
+expose shape GreenhousePlot {
+    trial: one GreenhouseTrial
+    bench: text
+    treatment: text
+    lastObservedDay: integer = if plotObservations is empty then 0
+                               else latest(plotObservations by dayAfterTreatment).dayAfterTreatment
+    audpc: decimal = if plotObservations is empty then 0.0
+                     else latest(plotObservations by dayAfterTreatment).audpcSoFar
+}
+
+never (GreenhousePlot where treatment != "peptide" and treatment != "control")
+
+-- Treatment day: the plants are inoculated and the peptide applied. The
+-- record is the fact; a trial is treated once.
+-- velle: an exposed record rather than an assignment into the trial, so the
+-- invariants that read the treatment stay input-constrained (README §21)
+expose shape Treatment {
+    trial: one GreenhouseTrial
+    treatedAt: DateTime
+}
+
+never (Treatment where count(trial.treatments) > 1)
+
+shape TreatedTrial = GreenhouseTrial where treatments is not empty
+
+-- A disease score at a day mark after treatment. The score as recorded is
+-- kept as committed; the score in force is the latest correction, if any
+-- (corrections are below). The area under the disease-progress curve (AUDPC,
+-- the standard plant-pathology summary of a severity series) accumulates by
+-- the trapezoid rule from the predecessor's running total, over the score in
+-- force.
+-- velle: the ledger pattern (README §12) for the current score; the
+-- recurrence again, over the day mark; mixed decimal and integer arithmetic
+-- in the trapezoid
+expose shape PlotObservation {
+    plot: one GreenhousePlot
+    dayAfterTreatment: integer
+    recordedSeverity: decimal
+    observedOn: Date
+    diseaseSeverity: decimal = if observationCorrections is empty then recordedSeverity
+                               else latest(observationCorrections by correctedOn).correctedSeverity
+    previous: one PlotObservation? = latest(PlotObservation where plot == this.plot and dayAfterTreatment < this.dayAfterTreatment by dayAfterTreatment)
+    audpcSoFar: decimal = if previous is some then
+                              previous.audpcSoFar + (diseaseSeverity + previous.diseaseSeverity) / 2 * (dayAfterTreatment - previous.dayAfterTreatment)
+                          else 0.0
+}
+
+never (PlotObservation where recordedSeverity < 0 or recordedSeverity > 100)
+never (PlotObservation where dayAfterTreatment < 0)
+never (PlotObservation where count(plot.plotObservations where dayAfterTreatment == this.dayAfterTreatment) > 1)
+
+-- No score before the plants were treated.
+-- velle: an input-constrained `never` testing refinement membership two
+-- hops away
+never (PlotObservation where not plot.trial is TreatedTrial)
+
+-- The trial's states: laid out once each arm has its plots; observed to the
+-- end once every plot has a score at or past the final day; complete when
+-- both; effective when the completed curves clear the threshold.
+-- velle: `this.` reaching the trial's protocol from inside the plot filter;
+-- `and`-composition of two refinements with different bases in the chain
+shape LaidOutTrial = GreenhouseTrial where
+    count(treatedPlots) >= protocol.plotsPerArm and count(controlPlots) >= protocol.plotsPerArm
+
+shape ObservedToEnd = TreatedTrial where
+    count(greenhousePlots where lastObservedDay < this.protocol.finalDay) == 0
+
+shape CompleteTrial = LaidOutTrial and ObservedToEnd
+
+shape EffectiveTrial = CompleteTrial where efficacy >= protocol.efficacyThreshold
+
+-- The greenhouse's verdict is recorded once, at the commit that completes the
+-- trial, with the efficacy as it stood then — a correction landing later
+-- moves the live number, never the recorded one. The record is what the
+-- field stage reads.
+-- velle: a boolean field computed by a conditional — a comparison is a
+-- predicate, not a value, so `if ... then true else false` is the spelling
+shape GreenhouseResult {
+    trial: one GreenhouseTrial
+    efficacy: decimal
+    effective: boolean
+    recordedOn: timestamp on create
+}
+
+rule RecordGreenhouseResult when (CompleteTrial where not exists GreenhouseResult for this) {
+    GreenhouseResult from {
+        trial: this
+        efficacy: efficacy
+        effective: if efficacy >= protocol.efficacyThreshold then true else false
+    }
+}
+
+shape EvaluatedTrial = GreenhouseTrial where exists GreenhouseResult for this
+
+-- The greenhouse's verdict on a peptide reads the recorded result, not the
+-- live trial state: the record is what was decided on, and it cannot drift.
+shape GreenhouseValidated = Peptide where exists (GreenhouseResult where effective and trial.peptide == this)
+
+-- Two complete, ineffective greenhouse trials with no effective one: the
+-- peptide is deprioritized. Reporting vocabulary, acted on by people.
+-- velle: negated refinement membership inside a collection filter
+shape Deprioritized = Peptide where
+    count(greenhouseTrials where CompleteTrial and not EffectiveTrial) >= 2 and
+    not exists (greenhouseTrials where EffectiveTrial)
+
+-- ── Greenhouse: the series is locked once evaluated; corrections and voids ───
+
+-- Once a trial has its result, its scores are locked: no corrections, no
+-- removals. Correction is refused as data below; removal is gated here.
+-- velle: `undeletable` on the observation, scoped by the state of the trial
+-- two hops up — the gate is declared per hop, never inferred
+shape LockedObservation = PlotObservation where plot.trial is EvaluatedTrial {
+    undeletable
+}
+
+-- A score can be corrected while the trial is open. Nothing is overwritten:
+-- the correction is a record carrying the value it replaced, and the score
+-- in force is the latest correction (the ledger read on the observation). On
+-- a locked observation the correction is refused as data.
+-- velle: rejection as data partitioned on the locked state; the transient
+-- request makes drift structurally impossible; the record reads the score in
+-- force before it lands — a body reads the commit's pre-state
+expose transient shape CorrectObservation {
+    observation: one PlotObservation
+    correctedSeverity: decimal
+    reason: text
+}
+
+never (CorrectObservation where correctedSeverity < 0 or correctedSeverity > 100)
+
+shape ObservationCorrection {
+    observation: one PlotObservation? initially required
+    previousSeverity: decimal
+    correctedSeverity: decimal
+    reason: text
+    correctedOn: timestamp on create
+}
+
+shape CorrectionRefusal {
+    observation: one PlotObservation? initially required
+    reason: text
+    refusedOn: timestamp on create
+}
+
+shape ApplicableCorrection = CorrectObservation where not observation is LockedObservation
+shape RefusedCorrection    = CorrectObservation where observation is LockedObservation
+
+rule ApplyCorrection when ApplicableCorrection {
+    ObservationCorrection from {
+        observation: observation
+        previousSeverity: observation.diseaseSeverity
+        correctedSeverity: correctedSeverity
+        reason: reason
+    }
+}
+
+rule RefuseCorrection when RefusedCorrection {
+    CorrectionRefusal from { observation: observation, reason: "the trial has been evaluated" }
+}
+
+-- A score entered against the wrong plot is voided — removed outright, with
+-- a record of what was removed — unless the trial is locked.
+-- velle: `delete` against a series point; the recurrence over the survivors
+-- re-derives; the correction record's reference absorbs the deletion
+expose transient shape VoidObservation {
+    observation: one PlotObservation
+    reason: text
+}
+
+shape VoidRecord {
+    bench: text
+    dayAfterTreatment: integer
+    diseaseSeverity: decimal
+    reason: text
+    voidedOn: timestamp on create
+}
+
+shape VoidRefusal {
+    observation: one PlotObservation? initially required
+    reason: text
+    refusedOn: timestamp on create
+}
+
+shape ApplicableVoid = VoidObservation where not observation is LockedObservation
+shape RefusedVoid    = VoidObservation where observation is LockedObservation
+
+rule ApplyVoid when ApplicableVoid {
+    VoidRecord from {
+        bench: observation.plot.bench
+        dayAfterTreatment: observation.dayAfterTreatment
+        diseaseSeverity: observation.diseaseSeverity
+        reason: reason
+    }
+    delete observation
+}
+
+rule RefuseVoid when RefusedVoid {
+    VoidRefusal from { observation: observation, reason: "the trial has been evaluated" }
+}
+
+-- Plots can be moved between benches while the trial is being set up. Once
+-- the plants are treated the plots stay where they are: the bench is frozen,
+-- and a move request is refused as data.
+-- velle: `frozen` scoped by the trial's state one hop up; the writer's
+-- partition is the freeze's syntactic complement (checks.md V5)
+shape TreatedPlot = GreenhousePlot where trial is TreatedTrial {
+    frozen bench
+}
+
+expose transient shape MovePlot {
+    plot: one GreenhousePlot
+    bench: text
+}
+
+shape MoveRefusal {
+    plot: one GreenhousePlot
+    reason: text
+    refusedOn: timestamp on create
+}
+
+shape ApplicableMove = MovePlot where not plot is TreatedPlot
+shape RefusedMove    = MovePlot where plot is TreatedPlot
+
+rule ApplyMove when ApplicableMove {
+    plot.bench = bench
+}
+
+rule RefuseMove when RefusedMove {
+    MoveRefusal from { plot: plot, reason: "the trial has been treated" }
+}
+
+-- ── Greenhouse: watching the climate and the sampling cadence ────────────────
+
+-- A trial is active from treatment until its result is recorded.
+shape ActiveTrial = TreatedTrial where not exists GreenhouseResult for this
+
+-- A greenhouse is out of band when its latest reading is outside its
+-- temperature limits. Each stretch out of band is an excursion episode:
+-- opened when the band is left, closed when it is regained — so a trial can
+-- later be asked how many excursions it lived through. The closer's subject
+-- is the open excursion itself, entered into "closable" by the reading that
+-- brings the greenhouse back in band; it runs as its own transaction right
+-- after that reading lands, and the hourly check heals any it missed.
+-- velle: episodes as data (README §20) over a drift refinement fed by a
+-- sensor series; the closer is the compensation pattern (README §13) rather
+-- than `when leaving`, and it is `after commit` with a backstop because the
+-- sibling-order check (checks.md V15) pairs it with the opener otherwise
+shape OutOfBand = Greenhouse where
+    climateReadings is not empty and
+    (latest(climateReadings by recordedAt).temperature < minTemperature or
+     latest(climateReadings by recordedAt).temperature > maxTemperature)
+
+shape ClimateExcursion {
+    greenhouse: one Greenhouse
+    startedAt: DateTime
+    temperature: decimal
+}
+
+shape ExcursionEnd {
+    excursion: one ClimateExcursion
+    endedAt: DateTime
+}
+
+shape OpenExcursion = ClimateExcursion where not exists ExcursionEnd for this
+
+rule OpenClimateExcursion when (OutOfBand where not exists OpenExcursion for this) {
+    ClimateExcursion from {
+        greenhouse: this
+        startedAt: now
+        temperature: latest(climateReadings by recordedAt).temperature
+    }
+}
+
+shape ClosableExcursion = OpenExcursion where not greenhouse is OutOfBand
+
+rule CloseClimateExcursion when ClosableExcursion after commit, Hourly {
+    ExcursionEnd from { excursion: this, endedAt: now }
+}
+
+-- A trial that lived through an excursion after treatment is compromised:
+-- its numbers are reported with that flag.
+-- velle: correlating an episode series against a trial's window — the
+-- subject's treatment moment read through `this.` from inside the filter
+shape CompromisedTrial = TreatedTrial where
+    exists (greenhouse.climateExcursions where startedAt >= first(this.treatments by treatedAt).treatedAt)
+
+-- A greenhouse running an active trial whose sensors have gone quiet for two
+-- hours raises an alert — at most one per two hours, checked hourly.
+-- velle: silence in a series is a windowed `not exists` over `now`; the
+-- alert is the cross-tick memory the rate limit reads
+shape SilentGreenhouse = Greenhouse where
+    exists (greenhouseTrials where ActiveTrial) and
+    not exists (climateReadings where recordedAt > now - 2 hours)
+
+shape SensorAlert {
+    greenhouse: one Greenhouse
+    raisedAt: DateTime
+}
+
+rule RaiseSensorAlert
+    when (SilentGreenhouse where not exists (SensorAlert where greenhouse == this and raisedAt > now - 2 hours))
+    on Hourly {
+    SensorAlert from { greenhouse: this, raisedAt: now }
+}
+
+-- ── Field: permitted sites, planting, scouting, weather, harvest ─────────────
+
+expose shape FieldSite {
+    name: text
+    region: text
+}
+
+-- Regulators permit a crop at a site for a period.
+expose shape Permit {
+    site: one FieldSite
+    crop: one Crop
+    issuedOn: Date
+    expiresOn: Date
+}
+
+-- Weather at a site, one row per day.
+expose shape WeatherObservation {
+    site: one FieldSite
+    observedOn: Date
+    rainfallMm: decimal
+    maxTemperature: decimal
+}
+
+never (WeatherObservation where count(site.weatherObservations where observedOn == this.observedOn) > 1)
+
+-- A field protocol: what yield gain counts as success. When the plots are
+-- scouted is not protocol data — it is scheduled per trial, as collection
+-- tasks (below).
+expose shape FieldProtocol {
+    name: text
+    yieldGainThreshold: decimal
+}
+
+-- A field trial is requested against the greenhouse's recorded verdict, not
+-- the live state: an effective greenhouse result on file for this peptide
+-- against this pathogen approves it.
+-- velle: the gate reads the *record* (`GreenhouseResult where effective`),
+-- which cannot drift, where the greenhouse gate read live lab membership
+expose transient shape RequestFieldTrial {
+    requestKey: text
+    peptide: one Peptide
+    pathogen: one Pathogen
+    crop: one Crop
+    site: one FieldSite
+    protocol: one FieldProtocol
+}
+
+shape ApprovedFieldRequest = RequestFieldTrial where
+    exists (GreenhouseResult where effective and trial.peptide == this.peptide and trial.pathogen == this.pathogen)
+
+shape RefusedFieldRequest = RequestFieldTrial where
+    not exists (GreenhouseResult where effective and trial.peptide == this.peptide and trial.pathogen == this.pathogen)
+
+shape FieldTrial {
+    requestKey: text
+    peptide: one Peptide
+    pathogen: one Pathogen
+    crop: one Crop
+    site: one FieldSite
+    protocol: one FieldProtocol
+    approvedOn: timestamp on create
+    treatedPlots: many FieldPlot = (FieldPlot where trial == this and treatment == "peptide")
+    controlPlots: many FieldPlot = (FieldPlot where trial == this and treatment == "control")
+    meanTreatedYield: decimal = if treatedPlots is empty then 0.0 else sum(treatedPlots, yieldKgPerHa) / count(treatedPlots)
+    meanControlYield: decimal = if controlPlots is empty then 0.0 else sum(controlPlots, yieldKgPerHa) / count(controlPlots)
+    yieldGain: decimal = if meanControlYield == 0 then 0.0
+                         else (meanTreatedYield - meanControlYield) / meanControlYield * 100
+}
+
+shape FieldRefusal {
+    requestKey: text
+    reason: text
+    refusedOn: timestamp on create
+}
+
+rule ApproveFieldTrial when ApprovedFieldRequest {
+    FieldTrial from {
+        requestKey: requestKey
+        peptide: peptide
+        pathogen: pathogen
+        crop: crop
+        site: site
+        protocol: protocol
+    }
+}
+
+rule RefuseFieldTrial when RefusedFieldRequest {
+    FieldRefusal from { requestKey: requestKey, reason: "no effective greenhouse result against this pathogen" }
+}
+
+-- A trial is permitted while a permit for its crop at its site is in force.
+-- velle: a time-dependent refinement (`today`) consulted only by a boundary
+-- `never` and by classification — no rule needs a schedule for it
+shape PermittedTrial = FieldTrial where
+    exists (Permit where site == this.site and crop == this.crop and issuedOn <= today and expiresOn >= today)
+
+-- Planting is a request that must not land at all without a permit in force
+-- — refused at the boundary, nothing recorded. The request is transient and
+-- the planting is the record it leaves: the `never` is checked at the moment
+-- of the request and never again. Declared on the persistent record instead,
+-- it would be a statement about history — the day the permit expired, the
+-- planting on file would violate it, and every later commit in the system
+-- would be refused.
+-- velle: an input-constrained `never` over a transient act reading
+-- refinement membership through a relationship, paired with the bare-shape
+-- rule that answers every request (checks.md V18)
+expose transient shape PlantTrial {
+    trial: one FieldTrial
+    plantedOn: Date
+    seedLot: text
+}
+
+never (PlantTrial where not trial is PermittedTrial)
+
+shape Planting {
+    trial: one FieldTrial
+    plantedOn: Date
+    seedLot: text
+    recordedOn: timestamp on create
+}
+
+rule RecordPlanting when PlantTrial {
+    Planting from { trial: trial, plantedOn: plantedOn, seedLot: seedLot }
+}
+
+shape PlantedTrial = FieldTrial where plantings is not empty
+
+-- Field plots are blocked replicates; each block has one plot per arm.
+expose shape FieldPlot {
+    trial: one FieldTrial
+    block: integer
+    treatment: text
+    yieldKgPerHa: decimal = if harvests is empty then 0.0 else latest(harvests by harvestedOn).yieldKgPerHa
+}
+
+never (FieldPlot where treatment != "peptide" and treatment != "control")
+
+-- The peptide is sprayed on the treated plots on a date. The request is
+-- transient for the same reason as planting: the halt check below must be a
+-- statement about the moment of application, not about history. Rain of
+-- five millimetres or more the next day washes the application off, and the
+-- trial needs a reapplication — which the agronomist is told about once per
+-- washed-off application.
+-- velle: two series correlated through Date arithmetic — the application
+-- date against the site's weather rows; the reminder is the guard witness
+expose transient shape ApplyTreatment {
+    trial: one FieldTrial
+    appliedOn: Date
+    rateGramsPerHa: decimal
+}
+
+shape TreatmentApplication {
+    trial: one FieldTrial
+    appliedOn: Date
+    rateGramsPerHa: decimal
+    recordedOn: timestamp on create
+}
+
+rule RecordApplication when ApplyTreatment {
+    TreatmentApplication from { trial: trial, appliedOn: appliedOn, rateGramsPerHa: rateGramsPerHa }
+}
+
+shape WashedOffApplication = TreatmentApplication where
+    exists (trial.site.weatherObservations where observedOn == this.appliedOn + 1 days and rainfallMm >= 5)
+
+shape ReapplicationNotice {
+    application: one TreatmentApplication
+    noticedOn: Date
+}
+
+rule NoticeWashOff when (WashedOffApplication where not exists ReapplicationNotice for this) {
+    ReapplicationNotice from { application: this, noticedOn: today }
+}
+
+-- Scouting: disease incidence and severity per plot at a day mark after
+-- planting, with the same running curve as the greenhouse.
+expose shape Scouting {
+    plot: one FieldPlot
+    daysAfterPlanting: integer
+    scoutedOn: Date
+    incidencePercent: decimal
+    severity: decimal
+    previous: one Scouting? = latest(Scouting where plot == this.plot and daysAfterPlanting < this.daysAfterPlanting by daysAfterPlanting)
+    audpcSoFar: decimal = if previous is some then
+                              previous.audpcSoFar + (severity + previous.severity) / 2 * (daysAfterPlanting - previous.daysAfterPlanting)
+                          else 0.0
+}
+
+never (Scouting where severity < 0 or severity > 100)
+never (Scouting where incidencePercent < 0 or incidencePercent > 100)
+never (Scouting where count(plot.scoutings where daysAfterPlanting == this.daysAfterPlanting) > 1)
+
+-- A planted trial with a plot that has never been scouted — reported, not
+-- nagged; nagging is the collection tasks' job (below).
+-- velle: `as` binding to reach a plot from inside its own series filter
+shape NeverScouted = PlantedTrial where
+    exists (fieldPlots as plot where plot.scoutings is empty)
+
+-- Harvest: yield per plot. The trial's yield gain is treated over control.
+expose shape Harvest {
+    plot: one FieldPlot
+    harvestedOn: Date
+    yieldKgPerHa: decimal
+}
+
+never (Harvest where yieldKgPerHa < 0)
+
+shape HarvestedTrial = FieldTrial where
+    fieldPlots is not empty and count(fieldPlots where harvests is empty) == 0
+
+shape SuccessfulFieldTrial = HarvestedTrial where yieldGain >= protocol.yieldGainThreshold
+
+shape FieldValidated = Peptide where exists (fieldTrials where SuccessfulFieldTrial)
+
+-- ── Field: adverse events halt a trial ───────────────────────────────────────
+
+-- Crop injury from the peptide itself. A severe report halts the trial: no
+-- further application request may land, and the sponsor is told once.
+-- velle: nested `exists` two relationships down; a boundary `never` over the
+-- transient application request reading the halted state
+expose shape PhytotoxicityReport {
+    plot: one FieldPlot
+    observedOn: Date
+    severity: integer
+}
+
+never (PhytotoxicityReport where severity < 1 or severity > 5)
+
+shape HaltedTrial = FieldTrial where
+    exists (fieldPlots where exists (phytotoxicityReports where severity >= 3))
+
+never (ApplyTreatment where trial is HaltedTrial)
+
+shape HaltNotice {
+    trial: one FieldTrial
+    noticedOn: DateTime
+}
+
+rule NoticeHalt when (HaltedTrial where not exists HaltNotice for this) {
+    HaltNotice from { trial: this, noticedOn: now }
+}
+
+-- ── Collection tasks: an admin configures when data is collected ────────────
+
+-- When the plots are scored or scouted is not written into the spec: an
+-- admin schedules it, one task per trial and day mark, with a due date. A
+-- task belongs to a trial of either stage — the day mark means days after
+-- treatment in the greenhouse and days after planting in the field. It is
+-- done when every plot of its trial has data at or past that mark; it is
+-- overdue when its due date has passed and it is not done.
+--
+-- The due date is a date the admin states, not a rule the spec computes:
+-- "seven days after treatment" would need a duration built from data
+-- (`treatedAt + interval days`), and a duration takes a literal count only.
+-- velle: a static union as a relationship target (README §6) — one task
+-- shape for both stages. The pending count reads each stage's plots by
+-- comparing their trial to the union-typed reference: a greenhouse task
+-- matches no field plot and a field task no greenhouse plot, so the two
+-- counts sum without narrowing. (Narrowing the reference first —
+-- `if trial is GreenhouseTrial then count(trial.greenhousePlots where ...)`
+-- — is not carried into a collection filter's source path today; OQ44.)
+-- The task's day mark is read through `this.` two filters deep.
+shape Trial = GreenhouseTrial or FieldTrial
+
+expose shape CollectionTask {
+    trial: one Trial
+    dayMark: integer
+    dueOn: Date
+    plotsPending: integer = count(GreenhousePlot where trial == this.trial and not exists (plotObservations where dayAfterTreatment >= this.dayMark)) +
+                            count(FieldPlot where trial == this.trial and not exists (scoutings where daysAfterPlanting >= this.dayMark))
+}
+
+never (CollectionTask where dayMark < 0)
+
+-- A done task is settled: its due date is frozen and it cannot be cancelled.
+-- velle: `frozen` and `undeletable` on a state of a shape whose reference is
+-- union-typed; both gates are cleared by the partitions below
+shape DoneTask = CollectionTask where plotsPending == 0 {
+    frozen dueOn
+    undeletable
+}
+
+shape OpenTask    = CollectionTask where plotsPending > 0
+shape OverdueTask = OpenTask where dueOn < today
+
+-- An overdue task is nagged once a day until the data is in.
+-- velle: a tick sweep whose guard is "not yet today" — the reminder's date
+-- is the cross-tick memory
+shape TaskReminder {
+    task: one CollectionTask? initially required
+    sentOn: Date
+}
+
+rule RemindTask
+    when (OverdueTask where not exists (TaskReminder where task == this and sentOn == today))
+    on Daily {
+    TaskReminder from { task: this, sentOn: today }
+}
+
+-- The admin can move a task's due date until the task is done; on a done
+-- task the change is refused as data.
+expose transient shape RescheduleTask {
+    task: one CollectionTask
+    dueOn: Date
+}
+
+shape RescheduleRefusal {
+    task: one CollectionTask? initially required
+    reason: text
+    refusedOn: timestamp on create
+}
+
+shape ApplicableReschedule = RescheduleTask where not task is DoneTask
+shape RefusedReschedule    = RescheduleTask where task is DoneTask
+
+rule ApplyReschedule when ApplicableReschedule {
+    task.dueOn = dueOn
+}
+
+rule RefuseReschedule when RefusedReschedule {
+    RescheduleRefusal from { task: task, reason: "the task is done" }
+}
+
+-- Cancelling an open task removes it, with a record of what was cancelled;
+-- a done task stays.
+-- velle: `delete` against a shape with a union-typed reference; the
+-- cancellation copies what must survive, since the task will not exist to
+-- reference; the reminders' and refusals' references absorb the deletion
+expose transient shape CancelTask {
+    task: one CollectionTask
+    reason: text
+}
+
+shape TaskCancellation {
+    dayMark: integer
+    dueOn: Date
+    reason: text
+    cancelledOn: timestamp on create
+}
+
+shape CancelRefusal {
+    task: one CollectionTask? initially required
+    reason: text
+    refusedOn: timestamp on create
+}
+
+shape ApplicableCancel = CancelTask where not task is DoneTask
+shape RefusedCancel    = CancelTask where task is DoneTask
+
+rule ApplyCancel when ApplicableCancel {
+    TaskCancellation from { dayMark: task.dayMark, dueOn: task.dueOn, reason: reason }
+    delete task
+}
+
+rule RefuseCancel when RefusedCancel {
+    CancelRefusal from { task: task, reason: "the task is done" }
+}

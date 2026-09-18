@@ -323,14 +323,25 @@ class Validator(private val model: Model) {
 
     private fun exprInstanceShape(e: Expr, scope: String): String? = when (e) {
         is PathExpr -> {
-            if (e.root == "this" && e.segs.isEmpty()) model.baseOf(scope)
-            else model.pathElementShape(e, scope)
+            if (e.root == "this" && e.segs.isEmpty()) model.baseOf(thisScope ?: scope)
+            else model.pathElementShape(e, scope, aliasScopes, thisScope ?: scope)
         }
         else -> null
     }
 
+    /** The outermost subject of the expression being checked: what `this` names
+     *  (README §10). Set by the outermost [checkExpr] call and left alone by the
+     *  nested ones, so a collection filter's element scope never captures it. */
+    private var thisScope: String? = null
+
     /** Name-resolution walk shared by predicates and values (F1, F2 closed list). */
     private fun checkExpr(e: Expr, scope: String, allowGenerator: Boolean = false) {
+        val outer = thisScope
+        if (outer == null) thisScope = scope
+        try { checkExprIn(e, scope, allowGenerator) } finally { thisScope = outer }
+    }
+
+    private fun checkExprIn(e: Expr, scope: String, allowGenerator: Boolean) {
         when (e) {
             is PathExpr -> {
                 if (allowGenerator && e.root == "randomUUID" && e.segs.isEmpty()) return
@@ -406,7 +417,7 @@ class Validator(private val model: Model) {
                     if (src.root in model.shapes || src.root in model.refinements) element = src.root
                     else {
                         resolvePath(src, scope)
-                        model.pathElementShape(src, scope)?.let { element = it }
+                        model.pathElementShape(src, scope, aliasScopes, thisScope ?: scope)?.let { element = it }
                     }
                 is ShapeForSource -> { checkExpr(src.forExpr, scope); element = src.shape }
                 else -> checkExpr(src, scope)
@@ -444,7 +455,7 @@ class Validator(private val model: Model) {
         // rest of the path against the narrowed scope — V11's union slice
         narrowedPrefix(p)?.let { (k, sc) -> walkSegs(sc, p.segs.drop(k)); return }
         val current: String? = when {
-            p.root == "this" -> scope
+            p.root == "this" -> thisScope ?: scope
             p.root in aliasScopes -> aliasScopes[p.root]
             p.root in model.shapes || p.root in model.refinements -> return // membership atom / collection source
             else -> {
@@ -517,8 +528,8 @@ class Validator(private val model: Model) {
             for (seg in p.segs.drop(k)) cur = model.membersOf(cur ?: return null)[seg.name]?.type?.instanceShape()
             return cur
         }
-        if (p.root == "this" && p.segs.isEmpty()) return scope
-        return model.pathElementShape(p, scope, aliasScopes)
+        if (p.root == "this" && p.segs.isEmpty()) return thisScope ?: scope
+        return model.pathElementShape(p, scope, aliasScopes, thisScope ?: scope)
     }
 
     private inline fun withNarrowing(entries: List<Pair<PathExpr, String>>, body: () -> Unit) {

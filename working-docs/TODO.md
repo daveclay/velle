@@ -4,17 +4,28 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## Now: calibrate v0 against realistic specs
 
-- [ ] Write more realistic specs against the v0 pipeline (three exist: `billing`, `membership`, `payments`) — the empirical answer to OQ16 (which carries the V14 certificate whitelist, OQ15's residue).
+- [ ] Write more realistic specs against the v0 pipeline — the empirical answer to OQ16 (which carries the V14 certificate whitelist, OQ15's residue). `examples/peptides/` is the first domain-first pass; its findings are in `break-peptides.md` and the section below.
 - [ ] While spec-writing, exercise the calibration riders: rung-recognition boundaries (README §20), boundary/apparatus legibility at scale (formerly OQ19), and `when leaving R on <schedule>` tick-exit semantics (`evaluation.md` "Ticks" — derived, unexercised).
 - [ ] Convert `billing.velle` (`ApplyDueChange`/`RecordDueChangeRefusal`) and `membership.velle` (`ApplyAssignment`/`RecordAssignmentRefusal`) to the anchored handled-once spelling — A4 flags them; `AdvisorySweepTest` inventories the debt. *(Superseded if those acts stay `transient` — both were migrated; confirm and close.)*
 - [ ] Update README §8's "Frozen fields" fix text and `patterns.md` "Validation rejection is data" to the anchored spelling.
-- [ ] Cover the remaining small constructs: 3+-binding sibling joins · per-hop freeze depth (`LockedLineItem = LineItem where order is SettledOrder { frozen ... }`) · self-referential derived property (V14 descent certificates now accept the recurrence — exercise it in an example spec) · declared `many` field (README §6; exercised by `examples/enrollment/`).
+- [ ] Cover the remaining small constructs: 3+-binding sibling joins · per-hop freeze depth (`LockedLineItem = LineItem where order is SettledOrder { frozen ... }`) · self-referential derived property (V14 descent certificates accept the recurrence; exercised twice in `examples/peptides/`) · declared `many` field (README §6; exercised by `examples/enrollment/`).
 - [ ] Add human-readable examples of *invalid* velle with the diagnostics each produces — `examples/` shows only working specs; nothing shows a reader what a rejection (e.g. V15's order-dependence error) looks like or how to fix it.
+
+## Peptides stress pass (`break-peptides.md`)
+
+- [ ] Rule on evaluation order for an input-constrained `never` over the act's own series: boundary check before processing, or a selector tie as a refusal — today a duplicate ordering datum is a runtime error, not a refusal (S3).
+- [ ] Note in README §10/§12 that a ledger ordered by `timestamp on create` ties within one clock instant, and recommend an author-carried sequence datum or a per-commit harness clock step (S4).
+- [ ] Decide OQ45 — a `never` over a persistent act whose predicate can flip after the act lands (S5).
+- [ ] Relax V6 to accept a capture of the base shape's own derived property, which is evaluable for every instance (S6).
+- [ ] Extend V15's episodes discharge to states flipped by a series creation read through an inferred inverse, not only by an own-column assignment (S8; rides OQ16).
+- [ ] Teach the domain derivation to key a series read rooted at the subject's inferred inverse (`assays`, `climateReadings`, …) — 41 A5 widths on `examples/peptides/`, all of that shape (S12; rides the A5 stress-test item under serialization domains).
+- [ ] Generate `never` cases for `or` ranges, and skip or demand a given for a positive case when a relationship `never` on the shape cannot be satisfied by synthesis (S11's remaining half).
 
 ## Cross-base unions (OQ44)
 
 - [ ] Tighten V5, V6, V10, V12, V14, and V15's transition leg to reason per operand of a cross-base refinement (today: skipped, fail-open) — OQ44 exercises each; rides OQ16's calibration.
 - [ ] Extend narrowing to `not (x is A)`, nested conditionals, and three-or-more-operand else-branches (`Validator.kt`, the narrowing block).
+- [ ] Carry narrowing into a collection filter's source path, in the name check and in the read-summary collector (`Model.collectExpr`) — `if trial is GreenhouseTrial then count(trial.greenhousePlots where ...)` (`break-peptides.md` S14).
 - [ ] Add a union notation to the class and state-flow diagrams (`diagrams.md`).
 
 ## Transient acts — Design B residue (`investigate-transient.md`)
@@ -58,6 +69,7 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## Language questions awaiting design
 
+- [ ] Decide whether a duration may be built from a data value (`treatedAt + interval days`) — today a duration takes a literal count only, so "collect every N days" cannot be derived and the peptides collection tasks carry admin-stated due dates instead (`break-peptides.md` S13).
 - [ ] Bootstrap/backfill triggers — OQ28.
 - [ ] Erasure and retention — OQ27.
 

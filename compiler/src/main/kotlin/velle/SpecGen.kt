@@ -732,13 +732,24 @@ object SpecGen {
             }
         }
 
+        /** The comparisons `never`s over [shape] forbid on [field]: a single-conjunct
+         *  never's comparison, and each disjunct of a range never (`x < 0 or x > 100`)
+         *  — a disjunction forbids every one of its arms. */
         fun neverComparisonsOn(shape: String, field: String): List<Binary> =
-            model.nevers.mapNotNull { n ->
-                val t = n.target as? RefName ?: return@mapNotNull null
-                if (t.name != shape) return@mapNotNull null
-                val c = t.where?.let { predicateConjuncts(it) }?.singleOrNull() as? Binary ?: return@mapNotNull null
-                if ((c.left as? PathExpr)?.root == field && (c.left as? PathExpr)?.segs?.isEmpty() == true) c else null
+            model.nevers.flatMap { n ->
+                val t = n.target as? RefName ?: return@flatMap emptyList()
+                if (t.name != shape) return@flatMap emptyList()
+                val c = t.where?.let { predicateConjuncts(it) }?.singleOrNull() ?: return@flatMap emptyList()
+                disjuncts(c).filter { d ->
+                    d.op != "or" && (d.left as? PathExpr)?.let { it.root == field && it.segs.isEmpty() } == true
+                }
             }
+
+        fun disjuncts(e: Expr): List<Binary> = when {
+            e is Binary && e.op == "or" -> disjuncts(e.left) + disjuncts(e.right)
+            e is Binary -> listOf(e)
+            else -> emptyList()
+        }
 
         fun satisfies(v: BigDecimal, cmp: Binary): Boolean {
             val bound = literalOf(cmp.right) ?: return false
