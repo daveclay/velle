@@ -1,7 +1,7 @@
 # Breaking v0 with a domain: a crop-protection discovery pipeline
 
 **Status:** first pass complete (2026-09-15) — the spec validates, runs in memory and over SQLite, and every finding below is either fixed in the compiler, spelled around in the spec with the cost recorded, or handed on as a TODO item or an open question. Scorecard at the bottom.
-**Residue:** OQ45 (a `never` over a persistent act whose predicate can flip after the act lands) · the TODO items under "Peptides stress pass" in `TODO.md`.
+**Residue:** OQ45 (a `never` over a persistent act whose predicate can flip after the act lands) · OQ46 (a uniqueness `never` on a series datum is reached after the rules that read the series) · the TODO items under "Peptides stress pass" in `TODO.md`.
 
 ---
 
@@ -32,7 +32,7 @@ Fixed in `compiler/src/main/kotlin/velle/Validator.kt` (the outermost `checkExpr
 
 `exists (fieldPlots as plot where not exists (plot.scoutings where scoutedOn > today - 7 days))` reported `'scoutedOn' is not a member of 'FieldPlot'`: the validator's collection check resolved the source path `plot.scoutings` without the alias table, got no element shape, and fell back to the enclosing scope. Fixed in the same `Validator.kt` change (the alias table is passed through). Probe: `F1 - an as-alias used as a collection source resolves to its element` in `ValidatorTest.kt`.
 
-### S3 — GAP, open: a uniqueness `never` on a series datum cannot protect the selector that needs it
+### S3 — GAP, open as OQ46: a uniqueness `never` on a series datum cannot protect the selector that needs it
 
 The spec states that two readings at one hour mark are impossible:
 
@@ -50,7 +50,7 @@ never (AssayReading where count(assay.assayReadings where hoursElapsed == this.h
 
 Committing a second reading at hour 24 does not produce a refusal. The `never` is checked at transaction end (`evaluation.md`, step 5), but the rules watching the series re-evaluate their conditions first (step 2), reach `latest(assayReadings by hoursElapsed)`, hit the tie, and fail loudly as README §10 says a selector must. The caller gets a `VelleRuntimeError` ("does not discriminate: 2 instances share the ordering datum"); the transaction rolls back, so nothing lands, but the outcome is an error rather than the refusal the author wrote. Evidence: `lab - a reading entered late slots into its hour mark and the running peak re-derives` in `examples/peptides/output/src/test/kotlin/velle/PeptidesPipelineTest.kt`, which asserts the error and that nothing landed.
 
-What it asks for: a ruling on evaluation order for an input-constrained `never` whose predicate reads only the act's own shape and its inverse (section 1 below).
+What it asks for: a ruling on evaluation order for an input-constrained `never` whose predicate reads only the act's own shape and its inverse — OQ46 (section 1 below).
 
 ### S4 — TAX, open: the ledger's commit-timestamp ordering ties within one clock instant
 
@@ -214,13 +214,9 @@ is refused: the name check resolves `trial.greenhousePlots` against the union (w
 
 ## What needs Dave's input
 
-### 1. Which comes first at a commit: the rules watching a series, or the `never` that keeps the series well-ordered? (S3)
+### 1. Which comes first at a commit: the rules watching a series, or the `never` that keeps the series well-ordered? — OQ46 (S3)
 
-Today the answer is the rules, so a duplicate hour mark is a runtime error from a selector rather than a refusal from the invariant. Three candidate rulings:
-
-- Evaluate an input-constrained `never` whose predicate reads only the act's own shape and the inverse it lands in before processing begins — a boundary check in `evaluation.md`'s step 1. The count spelling above then needs `>= 1` (the act is not inserted yet) or a pre-insert reading of `> 1`; either way the spelling depends on the evaluation moment, which the README would have to say.
-- Keep the order and make a selector tie a refusal category of its own ("the act would leave `assayReadings` unordered by `hoursElapsed`"). The error already names the datum; a refusal would name the act.
-- Keep both as they are and document that uniqueness of an ordering datum is the caller's to guarantee, like the correlation key.
+Spelled out as OQ46 in `QUESTIONS.md`, with the commit walked step by step over concrete readings. The short form: today the rules run first, so a duplicate hour mark is a runtime error from a selector rather than a refusal from the invariant, and whether the caller sees the error or the refusal depends on whether some rule elsewhere in the spec reads the series. The boundary guardrail `evaluation.md` step 1 describes is not implemented in v0, and step 1 does not say what state the guardrail reads; the question file shows that only one reading (pre-state plus the act, as if landed) lets one spelling of the `never` serve both the boundary and the transaction end, and recommends implementing step 1 that way.
 
 ### 2. Should the ledger's ordering carry an author datum beside the timestamp? (S4)
 
@@ -236,7 +232,7 @@ Spelled out in `questions/OQ45-never-over-persistent-acts.md`. The short form: i
 |---|---|---|---|
 | S1 | `this` inside a filter resolved to the element by the validator | GAP | fixed; probe in `ValidatorTest.kt` |
 | S2 | `as` alias as a collection source lost its element | GAP | fixed; probe in `ValidatorTest.kt` |
-| S3 | uniqueness `never` on a series datum cannot protect the selector | GAP | open — section 1 |
+| S3 | uniqueness `never` on a series datum cannot protect the selector | GAP | open — section 1; OQ46 |
 | S4 | ledger ordering by commit timestamp ties within one instant | TAX | open — section 2; TODO |
 | S5 | `never` over a persistent act is a statement about history | GAP | spelled around (transient request); OQ45 |
 | S6 | capture of the base's own derived property refused by V6 | TAX | spelled around (record); TODO |

@@ -13,7 +13,7 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## Peptides stress pass (`break-peptides.md`)
 
-- [ ] Rule on evaluation order for an input-constrained `never` over the act's own series: boundary check before processing, or a selector tie as a refusal — today a duplicate ordering datum is a runtime error, not a refusal (S3).
+- [ ] Rule on evaluation order for an input-constrained `never` over the act's own series (OQ46): implement `evaluation.md` step 1 over pre-state plus the act's closure, before processing — today a duplicate ordering datum is a runtime error, not a refusal (S3).
 - [ ] Note in README §10/§12 that a ledger ordered by `timestamp on create` ties within one clock instant, and recommend an author-carried sequence datum or a per-commit harness clock step (S4).
 - [ ] Decide OQ45 — a `never` over a persistent act whose predicate can flip after the act lands (S5).
 - [ ] Relax V6 to accept a capture of the base shape's own derived property, which is evaluable for every instance (S6).
