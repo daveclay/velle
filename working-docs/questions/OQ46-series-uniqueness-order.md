@@ -2,7 +2,7 @@
 
 **Status:** open (2026-09-30) — surfaced by the peptides stress pass (`break-peptides.md`, S3); the example's test asserts today's behaviour (a runtime error, nothing landed) rather than the refusal the author wrote
 **In plain terms:** the spec says "two readings at the same hour mark are impossible", and the author expects a second hour-24 reading to be refused. Today the rules that read the series run first, trip over the duplicate while picking "the latest earlier reading", and the caller gets a runtime error instead of the refusal. Should the refusal come first, and if so, what state does the refusal check look at?
-**v0 stance:** none ruled. The runtime evaluates every `never` at transaction end only (`compiler/src/main/kotlin/velle/Runtime.kt`: `checkNevers`, called from `inTransaction` after the body has run). The boundary guardrail that `evaluation.md` step 1 describes for input-constrained invariants is not implemented: the commit path (`Runtime.kt`, `commitShape`) does the type-level checks and then opens the transaction.
+**v0 stance:** none ruled. The runtime evaluates every `never` at transaction end only (`compiler/src/main/kotlin/velle/Runtime.kt`: `checkNevers`, called from `inTransaction` after the body has run). The boundary validation that `evaluation.md` describes as the first step of an exposed call (quoted below) promises a guardrail for input-constrained invariants; it is not implemented: the commit path (`Runtime.kt`, `commitShape`) does the type-level checks and then opens the transaction.
 **See:** README §21 (`never`: enforced at transaction end; input-constrained invariants compiled into the boundary) · README §10 (selector ordering: a tie at the winning position fails loudly) · `evaluation.md` "An exposed call" (steps 1 and 5) and "Errors, refusals, and retry" · `checks.md` V10 · `examples/peptides/peptides.velle` (`AssayReading` and its uniqueness `never`) · `examples/peptides/output/src/test/kotlin/velle/PeptidesPipelineTest.kt` (`lab - a reading entered late slots into its hour mark and the running peak re-derives`)
 
 ---
@@ -41,7 +41,25 @@ rule RecordStrongPlate when (StrongPlate where not exists StrongPlateRecord for 
 }
 ```
 
-The `never` is input-constrained in `checks.md` V10's sense: its predicate reads only `hoursElapsed` and the inferred inverse `assayReadings`, and no rule writes either. README §21 says such an invariant is compiled into the boundary, and `evaluation.md` step 1 says the guardrail runs before the transaction begins, so the author expects a duplicate hour mark to be a refusal that names the `never`.
+The `never` is input-constrained in `checks.md` V10's sense: its predicate reads only `hoursElapsed` and the inferred inverse `assayReadings`, and no rule writes either. README §21 says such an invariant is compiled into the boundary, and `evaluation.md` says the guardrail runs before the transaction begins, so the author expects a duplicate hour mark to be a refusal that names the `never`.
+
+The algorithm this question is about, quoted from `evaluation.md` "An exposed call" (the step numbers below refer to it):
+
+```
+commitAct(actInstance):
+  1. boundary validation: type-level checks first, then the input-constrained
+     `never` guardrails compiled to this expose site (§21) — violation → refusal
+     naming what was violated; nothing begins
+  2. begin transaction T
+  3. C0 := apply the act commit — insert the instance with the committer's fields
+  4. process(C0)                                   -- may recurse, growing T
+  5. transaction-end `never` check over settled post-state (§21)
+  6. any error in 3–5 → roll back T entirely; report the error to the caller
+  7. make T durable
+  8. drain the after-commit queue accumulated in T
+```
+
+The two evaluation moments for a `never` are the boundary validation (step 1, before the transaction) and the transaction-end check (step 5, after processing).
 
 ## What happens today, step by step
 
@@ -57,7 +75,7 @@ The plate's `peakInhibition` is r48's running peak, 80. The plate is a `StrongPl
 
 **The event.** The caller commits a second reading at hour 24: `commitAssayReading(plate, hoursElapsed = 24, inhibitionPercent = 81)`.
 
-**What the runtime does**, numbered as in `evaluation.md` "An exposed call":
+**What the runtime does**, numbered as in the algorithm quoted above:
 
 1. Boundary validation. The type-level checks pass (an integer, a decimal, a reference to a plate that exists). No `never` is evaluated here: v0 has no boundary guardrail.
 2. The transaction opens.
@@ -75,9 +93,9 @@ The caller cannot tell from the error that the act was the problem. The message 
 - Remove `StrongPlate` and `RecordStrongPlate` from the spec, so nothing reads the series during processing. Step 4 touches nothing, step 5 runs, the `never` finds count 2 for r24b, and the caller receives the refusal "never #1 over AssayReading is violated". Same act, same invariant, the outcome the author wrote. Whether a duplicate is refused or errors depends on whether some rule elsewhere in the spec happens to read the series.
 - Duplicate hour 48 instead of hour 24. Then the plate's own `latest(assayReadings by hoursElapsed)` ties at the winning position, and the error comes from a different selector. Which selector fails depends on where in the series the duplicate lands.
 
-## Why `evaluation.md` step 1 as written does not settle it
+## Why the boundary validation step as written does not settle it
 
-Step 1 says the input-constrained guardrails run before the transaction and that a violation is a refusal, but it does not say what state the predicate is evaluated against. The two readings give different answers for this `never`:
+The boundary validation (step 1 of the algorithm quoted above) says the input-constrained guardrails run before the transaction and that a violation is a refusal, but it does not say what state the predicate is evaluated against. The two readings give different answers for this `never`:
 
 - **Pre-state plus the act, as if the act had landed and nothing else.** The count at hour 24 is 2, the predicate `> 1` is true, the act is refused. The spelling is the same one the transaction-end check evaluates.
 - **Pre-state only, with the act's fields in scope.** The count at hour 24 is 1 (the act itself is not among the instances counted), `> 1` is false, and the guardrail never fires. The author would have to write `>= 1` for the boundary. But `>= 1` cannot also serve the transaction-end check in step 5: in settled state every reading counts itself, so every reading would violate it. One spelling cannot serve both moments under this reading, which rules it out as long as the transaction-end check remains.
@@ -86,11 +104,11 @@ So the first reading is the only one under which an input-constrained `never` ke
 
 ## Candidates
 
-### 1. Implement step 1 over pre-state plus the act's closure, before processing
+### 1. Implement the boundary validation's `never` guardrail over pre-state plus the act's closure, before processing
 
-The guardrail evaluates each input-constrained `never` as the state would stand with the act's closure landed and nothing processed, for the instances the act's own commit could affect. If any is in the forbidden configuration, the act is refused by name and processing never starts.
+The guardrail (step 1 of the algorithm quoted above) evaluates each input-constrained `never` as the state would stand with the act's closure landed and nothing processed, for the instances the act's own commit could affect. If any is in the forbidden configuration, the act is refused by name and processing never starts.
 
-What this is in the existing machinery: `Runtime.kt`'s `checkNevers` already takes a footprint and checks only the invariants that footprint makes relevant. Running it once more with a footprint of the act's commit alone, restricted to the input-constrained invariants (the classification `Validator.spendableNevers` computes today, which the runtime would need from the model), immediately after the act's insert and before `process(C0)`, is the whole change. Doing it inside the runtime's in-memory transaction rather than literally before it is observably the same as the documented step 1: nothing has been processed, and a refusal reaches the engineer's store as nothing at all, which is what `evaluation.md` "Errors, refusals, and retry" promises.
+What this is in the existing machinery: `Runtime.kt`'s `checkNevers` already takes a footprint and checks only the invariants that footprint makes relevant. Running it once more with a footprint of the act's commit alone, restricted to the input-constrained invariants (the classification `Validator.spendableNevers` computes today, which the runtime would need from the model), immediately after the act's insert and before `process(C0)`, is the whole change. Doing it inside the runtime's in-memory transaction rather than literally before it is observably the same as the documented boundary validation: nothing has been processed, and a refusal reaches the engineer's store as nothing at all, which is what `evaluation.md` "Errors, refusals, and retry" promises.
 
 What the README would say: one sentence under §21's "compiled into the boundary", that the boundary check evaluates the invariant over the state as it would be with the act landed and nothing else, so the spelling is the same as the transaction-end spelling, and the boundary check is in addition to the transaction-end check, not instead of it (the same sentence OQ45 asks for).
 
@@ -108,4 +126,4 @@ As the correlation key is (README §4). Against it: the author wrote the `never`
 
 ## Recommendation
 
-Candidate 1. It implements what README §21 and `evaluation.md` step 1 already promise, it fixes the state the guardrail reads so that one spelling serves both moments, and it keeps the error/refusal split where the design philosophy puts it: a refusal is the spec saying no, an error is the spec saying nothing.
+Candidate 1. It implements the guardrail that README §21 and the boundary validation step of `evaluation.md`'s exposed-call algorithm already promise, it fixes the state the guardrail reads so that one spelling serves both moments, and it keeps the error/refusal split where the design philosophy puts it: a refusal is the spec saying no, an error is the spec saying nothing.
