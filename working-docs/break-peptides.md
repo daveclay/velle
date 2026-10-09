@@ -224,7 +224,7 @@ README §12's ledger and this spec's corrections both order by `timestamp on cre
 
 ### 3. A `never` over a persistent act that reads state which can flip later — OQ45
 
-Spelled out in `questions/OQ45-never-over-persistent-acts.md`. The short form: is it an advisory (a defined meaning the author may not have intended — the split recorded for A6), is the transient spelling to be recommended in README §21, or is a `never` over an exposed persistent shape to be restricted to reads of the act's own fields?
+Spelled out in `questions/OQ45-never-over-persistent-acts.md`. The short form, after the 2026-10-09 reframing: whether a situation is rejected or recorded is the author's choice per `never`, so the persistent spelling is legitimate when chosen on purpose; the question is the advisory that makes the author see that a `never` over a standing record can be violated by a later act, tick, or deletion, and asks which they meant. What the rejection then says, and who hears it, is OQ47.
 
 ## Scorecard
 

@@ -30,7 +30,8 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## Transient acts — Design B residue (`investigate-transient.md`)
 
-- [ ] Decide an author-supplied refusal message on `never` (today a refusal names the violated `never`).
+- [ ] Decide what a rejection carries and how it reaches a person — the author-supplied sentence on `never` and the engineer-facing rejection surface (OQ47; today a refusal names a rule number).
+- [ ] Define what happens when a scheduled rule's transaction is rejected by a `never`: `evaluation.md` "Ticks" says nothing, the runtime returns the error to the harness, and the rejection repeats at every tick until a person acts (OQ47).
 - [ ] Confirm outcome-mediated provenance satisfies `why` when provenance lands (README §22's `why` item).
 - [ ] Grow V18 beyond the complement slice once V9's exhaustiveness engine exists.
 - [ ] Revisit: can rules copy a transient container act *and its parts* into a durable tree? The part-copying rules appear to have no way to name the durable container a sibling rule just created (V17 bans the reference path, U1's snapshot hides the sibling's creation) — confirm or break the tracing; the outcome scopes OQ43.
