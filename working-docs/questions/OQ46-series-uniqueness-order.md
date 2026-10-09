@@ -124,6 +124,12 @@ The error already names the datum; a refusal would name the act: "the act would 
 
 As the correlation key is (README §4). Against it: the author wrote the `never` precisely because the caller is not trusted with it, and candidate 1 costs no language surface.
 
+## What the author meant by writing the `never`
+
+Dave's observation (2026-10-09): the author wrote the `never` explicitly to prevent an invalid series reading from entering the state. That intent only makes sense if the `never` is read before anything else happens to the reading. An invariant meant to keep bad input out is a statement about the act's arrival, and checking it after the rules have already run against the bad input is checking it too late.
+
+The same point from the rules' side. Every rule that reads the series goes through `latest(... by hoursElapsed)`, and that selector is well-defined only while no two readings share an hour mark. So the invariant is a precondition of every read of the series: the rules assume it, they do not establish it. Evaluating those rules before the invariant has been checked on the new reading evaluates them against a state the spec has declared impossible, and the selector's error is the symptom of that. The order that respects what the spec says is: establish that the state the act would produce is a possible one, then run the rules against it.
+
 ## Recommendation
 
-Candidate 1. It implements the guardrail that README §21 and the boundary validation step of `evaluation.md`'s exposed-call algorithm already promise, it fixes the state the guardrail reads so that one spelling serves both moments, and it keeps the error/refusal split where the design philosophy puts it: a refusal is the spec saying no, an error is the spec saying nothing.
+Candidate 1. It is the order the `never`'s own purpose implies, as the section above says. It implements the guardrail that README §21 and the boundary validation step of `evaluation.md`'s exposed-call algorithm already promise, it fixes the state the guardrail reads so that one spelling serves both moments, and it keeps the error/refusal split where the design philosophy puts it: a refusal is the spec saying no, an error is the spec saying nothing.
