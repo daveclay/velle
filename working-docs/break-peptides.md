@@ -1,7 +1,7 @@
 # Breaking v0 with a domain: a crop-protection discovery pipeline
 
 **Status:** first pass complete (2026-09-15) — the spec validates, runs in memory and over SQLite, and every finding below is either fixed in the compiler, spelled around in the spec with the cost recorded, or handed on as a TODO item or an open question. Scorecard at the bottom.
-**Residue:** OQ45 (a `never` over a persistent act whose predicate can flip after the act lands) · OQ46 (a uniqueness `never` on a series datum is reached after the rules that read the series) · the TODO items under "Peptides stress pass" in `TODO.md`.
+**Residue:** OQ47 (rejections: the author's refuse-or-record choice, the advisory that makes it visible, and what the person is told) · the TODO items under "Peptides stress pass" in `TODO.md`.
 
 ---
 
@@ -32,7 +32,7 @@ Fixed in `compiler/src/main/kotlin/velle/Validator.kt` (the outermost `checkExpr
 
 `exists (fieldPlots as plot where not exists (plot.scoutings where scoutedOn > today - 7 days))` reported `'scoutedOn' is not a member of 'FieldPlot'`: the validator's collection check resolved the source path `plot.scoutings` without the alias table, got no element shape, and fell back to the enclosing scope. Fixed in the same `Validator.kt` change (the alias table is passed through). Probe: `F1 - an as-alias used as a collection source resolves to its element` in `ValidatorTest.kt`.
 
-### S3 — GAP, open as OQ46: a uniqueness `never` on a series datum cannot protect the selector that needs it
+### S3 — GAP, ruled: a uniqueness `never` on a series datum was reached after the rules that read the series
 
 The spec states that two readings at one hour mark are impossible:
 
@@ -50,7 +50,7 @@ never (AssayReading where count(assay.assayReadings where hoursElapsed == this.h
 
 Committing a second reading at hour 24 does not produce a refusal. The `never` is checked at transaction end (`evaluation.md`, step 5), but the rules watching the series re-evaluate their conditions first (step 2), reach `latest(assayReadings by hoursElapsed)`, hit the tie, and fail loudly as README §10 says a selector must. The caller gets a `VelleRuntimeError` ("does not discriminate: 2 instances share the ordering datum"); the transaction rolls back, so nothing lands, but the outcome is an error rather than the refusal the author wrote. Evidence: `lab - a reading entered late slots into its hour mark and the running peak re-derives` in `examples/peptides/output/src/test/kotlin/velle/PeptidesPipelineTest.kt`, which asserts the error and that nothing landed.
 
-What it asks for: a ruling on evaluation order for an input-constrained `never` whose predicate reads only the act's own shape and its inverse — OQ46 (section 1 below).
+Ruled 2026-10-09 (README §21; `evaluation.md` "An exposed call", the guardrail's moment): the input-constrained guardrail is evaluated over pre-state plus the act's closure, before processing, so the arriving reading is counted among its siblings with the same spelling the transaction end uses, and the rules that depend on the invariant never run against a state it forbids. The runtime does not implement the guardrail yet (section 1 below); the test above asserts today's behaviour until it does.
 
 ### S4 — TAX, open: the ledger's commit-timestamp ordering ties within one clock instant
 
@@ -77,7 +77,7 @@ expose shape PlotObservation {
 
 fails loudly the moment two corrections to one observation land at the same clock instant: the harness clock only moves when a test advances it, so two consecutive commits share `now`, and `latest(... by correctedOn)` ties. README §10 already says same-transaction siblings share a timestamp by definition; two transactions at one instant are the same hazard, and a real clock at millisecond resolution can produce it too. The test advances the clock sixty seconds between corrections (`greenhouse - a correction is a ledger entry the curve reads, never an overwrite`). README §12's own `EmailCorrection` example carries the same exposure. What it asks for: guidance — an author-carried sequence datum beside the timestamp, or the harness advancing its clock per commit — recorded as a TODO item.
 
-### S5 — GAP, spelled around; open as OQ45: a `never` over a persistent act is a statement about history
+### S5 — GAP, spelled around; open as OQ47: a `never` over a persistent act is a statement about history
 
 First spelling, on the persistent act:
 
@@ -121,7 +121,7 @@ rule RecordApplication when ApplyTreatment {
 }
 ```
 
-Evidence: `field - a severe phytotoxicity report halts the trial and later applications are refused at the boundary` and `field - the request needs an effective greenhouse result on record, and planting needs a permit in force` in `PeptidesPipelineTest.kt` — the second lets the permit lapse and shows unrelated commits still landing. The question of whether the validator should warn, and what the right check is, is OQ45.
+Evidence: `field - a severe phytotoxicity report halts the trial and later applications are refused at the boundary` and `field - the request needs an effective greenhouse result on record, and planting needs a permit in force` in `PeptidesPipelineTest.kt` — the second lets the permit lapse and shows unrelated commits still landing. Whether the validator should warn, and what the warning asks the author, is OQ47 (Part 1).
 
 ### S6 — TAX, open: a capture of the base shape's own derived property is refused
 
@@ -214,17 +214,17 @@ is refused: the name check resolves `trial.greenhousePlots` against the union (w
 
 ## What needs Dave's input
 
-### 1. Which comes first at a commit: the rules watching a series, or the `never` that keeps the series well-ordered? — OQ46 (S3)
+### 1. Which comes first at a commit: the rules watching a series, or the `never` that keeps the series well-ordered? (S3) — ruled
 
-Spelled out as OQ46 in `QUESTIONS.md`, with the commit walked step by step over concrete readings. The short form: today the rules run first, so a duplicate hour mark is a runtime error from a selector rather than a refusal from the invariant, and whether the caller sees the error or the refusal depends on whether some rule elsewhere in the spec reads the series. The boundary validation guardrail that `evaluation.md`'s exposed-call algorithm promises for input-constrained invariants (its first step, before the transaction opens) is not implemented in v0, and the algorithm does not say what state the guardrail reads; the question file shows that only one reading (pre-state plus the act, as if landed) lets one spelling of the `never` serve both the boundary and the transaction end, and recommends implementing step 1 that way.
+Ruled 2026-10-09, no input needed. The `never` comes first: the boundary guardrail for an input-constrained invariant is evaluated over pre-state plus the act's closure before any rule runs, with the worked example of the duplicate hour mark in `evaluation.md` "An exposed call". What remains is implementation: v0's runtime runs every `never` at transaction end only (`compiler/src/main/kotlin/velle/Runtime.kt`, `checkNevers`), and the item to add the boundary pass is in `TODO.md`.
 
 ### 2. Should the ledger's ordering carry an author datum beside the timestamp? (S4)
 
 README §12's ledger and this spec's corrections both order by `timestamp on create`. Within one clock instant that ties. Either the README notes the exposure and recommends an author-carried sequence (the caller supplies `sequence: integer`, as it supplies the correlation key), or the harness clock advances by one unit per commit so the tie cannot happen in tests — which hides it rather than answering it.
 
-### 3. A `never` over a persistent act that reads state which can flip later — OQ45
+### 3. A `never` over a persistent act that reads state which can flip later — OQ47
 
-Spelled out in `questions/OQ45-never-over-persistent-acts.md`. The short form, after the 2026-10-09 reframing: whether a situation is rejected or recorded is the author's choice per `never`, so the persistent spelling is legitimate when chosen on purpose; the question is the advisory that makes the author see that a `never` over a standing record can be violated by a later act, tick, or deletion, and asks which they meant. What the rejection then says, and who hears it, is OQ47.
+Spelled out as OQ47 in `QUESTIONS.md`. The short form: whether a situation is rejected or recorded is the author's choice per `never`, so the persistent spelling is legitimate when chosen on purpose; the question is the advisory that makes the author see that a `never` over a standing record can be violated by a later act, tick, or deletion, and asks which they meant (Part 1), and then what the rejection says and who hears it, including a scheduled rule's rejection, which reaches nobody today (Part 2).
 
 ## Scorecard
 
@@ -232,9 +232,9 @@ Spelled out in `questions/OQ45-never-over-persistent-acts.md`. The short form, a
 |---|---|---|---|
 | S1 | `this` inside a filter resolved to the element by the validator | GAP | fixed; probe in `ValidatorTest.kt` |
 | S2 | `as` alias as a collection source lost its element | GAP | fixed; probe in `ValidatorTest.kt` |
-| S3 | uniqueness `never` on a series datum cannot protect the selector | GAP | open — section 1; OQ46 |
+| S3 | uniqueness `never` on a series datum reached after the rules that read it | GAP | ruled 2026-10-09 → README §21, `evaluation.md`; runtime implementation in `TODO.md` |
 | S4 | ledger ordering by commit timestamp ties within one instant | TAX | open — section 2; TODO |
-| S5 | `never` over a persistent act is a statement about history | GAP | spelled around (transient request); OQ45 |
+| S5 | `never` over a persistent act is a statement about history | GAP | spelled around (transient request); OQ47 |
 | S6 | capture of the base's own derived property refused by V6 | TAX | spelled around (record); TODO |
 | S7 | `never` over any rule-written field fails closed (V10) | TAX | spelled around (ledger, record); rides OQ16 |
 | S8 | episodes discharge does not cover a series-fed state (V15) | TAX | spelled around (`after commit, Hourly`); TODO |

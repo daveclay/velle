@@ -54,10 +54,13 @@ open class PeptidesPipelineTest {
         assertEquals(dec("80"), plate.peakInhibition)
 
         // a second reading at an hour already on file would leave the series unordered.
-        // The uniqueness `never` is checked at transaction end, but the rules watching
-        // the series evaluate `latest ... by hoursElapsed` first and fail loudly on the
-        // tie (README §10) — so today the caller gets a runtime error rather than a
-        // refusal; the transaction rolls back either way
+        // Ruled (README §21; evaluation.md "An exposed call"): the input-constrained
+        // `never` is evaluated at the boundary, over pre-state plus the act, before any
+        // rule runs — so this is a refusal naming the `never`. The v0 runtime does not
+        // implement the boundary pass yet (TODO.md): it checks every `never` at
+        // transaction end only, so the rules watching the series evaluate
+        // `latest ... by hoursElapsed` first and fail loudly on the tie (README §10).
+        // Until then the caller gets a runtime error; the transaction rolls back either way
         assertFailsWith<VelleRuntimeError> { sys.commitAssayReading(plate, 24, dec("81")) }
         assertEquals(3, plate.assayReadings.size, "nothing landed")
         assertEquals(dec("80"), plate.peakInhibition)

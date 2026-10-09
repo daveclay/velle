@@ -13,9 +13,10 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## Peptides stress pass (`break-peptides.md`)
 
-- [ ] Rule on evaluation order for an input-constrained `never` over the act's own series (OQ46): implement the boundary validation's `never` guardrail (`evaluation.md`, "An exposed call", step 1) over pre-state plus the act's closure, before processing — today a duplicate ordering datum is a runtime error, not a refusal (S3).
+- [ ] Implement the boundary guardrail as ruled (README §21; `evaluation.md` "An exposed call", the guardrail's moment): run `checkNevers` over the input-constrained invariants with a footprint of the act's commit alone, after C0's insert and before `process(C0)` — the runtime needs the classification `Validator.spendableNevers` computes; the peptides test `lab - a reading entered late slots into its hour mark and the running peak re-derives` then asserts a refusal instead of a runtime error (S3).
+- [ ] Decide whether the deleting commit runs the input-constrained guardrail before processing — a deletion can make a `not exists` invariant true (`evaluation.md` "The deleting commit").
 - [ ] Note in README §10/§12 that a ledger ordered by `timestamp on create` ties within one clock instant, and recommend an author-carried sequence datum or a per-commit harness clock step (S4).
-- [ ] Decide OQ45 — a `never` over a persistent act whose predicate can flip after the act lands (S5).
+- [ ] Decide OQ47 Part 1 — the advisory that makes a books rule over a standing record visible as the author's choice (S5).
 - [ ] Relax V6 to accept a capture of the base shape's own derived property, which is evaluable for every instance (S6).
 - [ ] Extend V15's episodes discharge to states flipped by a series creation read through an inferred inverse, not only by an own-column assignment (S8; rides OQ16).
 - [ ] Teach the domain derivation to key a series read rooted at the subject's inferred inverse (`assays`, `climateReadings`, …) — 41 A5 widths on `examples/peptides/`, all of that shape (S12; rides the A5 stress-test item under serialization domains).

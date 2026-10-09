@@ -26,7 +26,9 @@ commitAct(actInstance):
   1. boundary validation: type-level checks first — a duplicate reference in a `many`
      field is refused here (collections are sets; multiplicity that matters is data on
      an edge shape, §6) — then the input-constrained `never` guardrails compiled to
-     this expose site (§21) — violation → refusal naming what was violated; nothing begins
+     this expose site (§21), evaluated over pre-state plus the act's closure as if
+     landed and nothing processed — violation → refusal naming what was violated;
+     nothing begins
   2. begin transaction T
   3. C0 := apply the act commit — insert the instance with the committer's fields
      (an exposed shape declares no `initially` or `timestamp` fields — V21; those
@@ -42,6 +44,10 @@ commitAct(actInstance):
 ```
 
 **Closure commits** (`expose ... with`, README §6 "Inline part creation"): C0 carries the container plus its declared inline parts as one commit — the entrants are the container and each part, so `process(C0)` matches rules per entrant, all inside T. The order the records are physically inserted in is the topological order over the closure's reference tree (container first) — compilation's business, never observable: pre-state and post-state are defined at C0 as one moment, and no state where the container exists without its parts is ever observable. Back-references on parts are language-populated at insert. Step 1's boundary validation extends to the parts — duplicate *references* are refused per collection, while inline part values are a bag (two identical values mint two distinct instances, each with its own `id`), and the input-constrained `never` guardrails compile to this expose site over the whole closure.
+
+**The boundary guardrail's moment** (ruled 2026-10-09). Each input-constrained `never` whose predicate reads the act's shape is evaluated over the state as it would stand with the act's closure inserted and nothing else done: pre-state plus the act, before `process(C0)`. Three things follow. The spelling is one spelling: `never (AssayReading where count(assay.assayReadings where hoursElapsed == this.hoursElapsed) > 1)` counts the arriving reading among its siblings at the boundary exactly as it does at transaction end, so the author writes the invariant once and it means the same thing at both moments. The rules never see a forbidden state: a rule whose condition reads the series through `latest(... by hoursElapsed)` is well-defined only because the invariant holds, and it runs only after the invariant has been confirmed for the arriving act, so a duplicate hour mark is the refusal the author wrote ("never … over AssayReading is violated") and not a selector's tie error from inside a rule. And the check is in addition to step 5, not instead of it: step 5 still catches what the boundary cannot see, a `never` that reads the clock and a deletion performed by a rule. A tie inside a `never`'s own predicate remains an error at either moment, because that predicate's meaning is undefined at the tie (README §10). Implementation latitude: running the check inside the runtime's own transaction immediately after C0's insert is observably the same as running it before the transaction, since nothing has been processed and a refusal reaches the engineer's store as nothing at all.
+
+Worked example, one plate with readings at hours 0, 24, and 48, running peaks 10, 80, 80. A second reading at hour 24 arrives. At the boundary the reading is counted among its siblings: two at hour 24, the predicate is true, the act is refused by name, and no rule runs. Without the boundary check the same act would reach the rules first; the plate's peak reads the hour-48 reading's predecessor, `latest(AssayReading where assay == this.assay and hoursElapsed < 48 by hoursElapsed)`, two readings tie at hour 24, and the caller receives a runtime error that names a datum and says the model is underspecified, when the model had already ruled the state out. Whether the caller saw the error or the refusal would then depend on whether any rule in the spec happens to read the series.
 
 ### Processing one commit
 

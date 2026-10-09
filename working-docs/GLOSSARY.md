@@ -6,6 +6,8 @@ Coined terms used across the working docs, one line each, with the pointer that 
 
 - **act** — a shape instance committed from outside the system through `expose`; a request or message crossing the trust boundary (README §4).
 - **transient act** — an act that exists only within its own commit's transaction (`expose transient`): an input to the state, not a member of it (README §4; decision record `investigate-transient.md`).
+- **door rule** — a `never` meant as "turn this request away": about the act being recorded, at the moment it is submitted, and silent about it afterwards. Velle's structural spelling is a `never` over a transient act (OQ47, `QUESTIONS.md`).
+- **books rule** — a `never` meant as "the records never look like this": about valid committed state at every moment, for as long as the record exists, and violable by later acts, ticks, and deletions. Velle's spelling is a `never` over a persistent shape (OQ47, `QUESTIONS.md`).
 - **drift / drift-exposed partition** — a partition of a *persistent* act over mutable state is re-evaluated at every later change to that state, so a long-handled act "drifts" between sides: a spurious refusal per flip, a stale re-fired write per flip back. Worked exhibit: `examples/partition-drift/`; flagged by advisory A4.
 - **handled-once act partition** — the fix idiom for drift under persistence: the partition is scoped to *unhandled* acts, each side anchored by its own rule's outcome evidence. Live in `payments.velle`.
 - **anchor / anchored spelling** — the outcome-evidence conjunct (`... where not exists EditApplication for this`) that pins an already-handled act out of its partition.
