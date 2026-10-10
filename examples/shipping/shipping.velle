@@ -1,0 +1,59 @@
+-- Shipping: orders, shipments, and cancellations. A deliberately small spec
+-- whose only point is one prohibition and the rejections it produces, written
+-- to explore what a rejection message can say (OQ47, "Rejections").
+--
+-- The prohibition is a constraint on the books (README §21): a shipment is
+-- never on the books for a cancelled order. It is one sentence, but it
+-- rejects two different acts, and names the shipment either way:
+--
+--   - a Shipment arriving for an order that already has a Cancellation
+--   - a Cancellation arriving for an order that already has a Shipment
+--
+-- The second is the interesting one. The act refused is a cancellation; the
+-- record that would be in the forbidden state is a shipment that already
+-- exists; and the person cancelling may not know the shipment is there. What
+-- the message can say, from the spec and the evaluation alone, is the
+-- exploration in `output/src/test/kotlin/velle/ShippingRejectionsTest.kt`.
+--
+-- Comment convention (as in payments.velle): plain comments tell the business
+-- story; `velle:` comments note the language machinery on show.
+
+-- ── Orders ───────────────────────────────────────────────────────────────────
+
+expose shape Order {
+    reference: text
+}
+
+-- ── Cancelling ───────────────────────────────────────────────────────────────
+
+-- A cancellation is a record, not a request: the business keeps who asked
+-- and when. An order with a cancellation on file is a cancelled order.
+-- velle: the inferred inverse `cancellations` on Order (README §6); a named
+-- refinement over its existence, so the rejection can speak in the author's
+-- name for the state rather than in the predicate
+expose shape Cancellation {
+    order: one Order
+    requestedOn: Date
+}
+
+shape CancelledOrder = Order where exists (cancellations)
+
+-- ── Shipping ─────────────────────────────────────────────────────────────────
+
+expose shape Shipment {
+    order: one Order
+    shippedOn: Date
+}
+
+-- Named for the same reason as CancelledOrder: not read by the prohibition,
+-- but the state the rejection of a cancellation is really about.
+shape ShippedOrder = Order where exists (shipments)
+
+-- ── The prohibition ──────────────────────────────────────────────────────────
+
+-- A shipment is never on the books for a cancelled order.
+-- velle: a `never` over a persistent exposed shape whose predicate reads
+-- through `order` into another shape's records — a constraint, not a refusal
+-- (README §21). It binds every transaction that would leave a Shipment in
+-- this state, whichever record the transaction touched.
+never (Shipment where order is CancelledOrder)

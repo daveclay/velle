@@ -18,4 +18,5 @@ include(
     "examples:gallery:output",
     "examples:moderation:output",
     "examples:peptides:output",
+    "examples:shipping:output",
 )

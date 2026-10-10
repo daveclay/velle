@@ -54,6 +54,7 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 - [ ] Decide: `if ... then` sharing the condition's line — language rule, or parser limitation to lift?
 - [ ] Close validator gaps (tracked in `Validator.kt`'s header): V11 branch-sensitive narrowing · V12 at-most-one beyond the refinement slice (`singular_references.md`) · A-series beyond A4/A5.
+- [ ] Levels of advisory checks: treat the A-series as a documenting artifact of validation, with levels from "warn at the line" down to "record what the spec entails" (generated tests that make a constraint's rejections visible and executable, or a generated note), so a calculable case the author may not have intended is exposed without being noisy — after OQ47 closes.
 - [ ] Add the static selector-discrimination check (selectors fail loudly at runtime today; the static proof rides OQ16 calibration — `investigate_runtime.md` §9).
 - [ ] Extend the sibling-confluence audit's order sweep beyond identity-versus-reversed: seeded N-permutation sampling per commit (`audit-sibling-confluence.md`, residue; the knob is `VelleSystem.firingOrder`).
 - [ ] Sharpen the audit's deliberately coarse spots as calibration demands: signed sums under positivity `never`s, `as`-aliased consult attribution, the cascade-induction write-up (`audit-sibling-confluence.md`, "What this audit does and does not establish").
