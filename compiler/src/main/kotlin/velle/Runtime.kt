@@ -51,7 +51,9 @@ sealed interface CommitResult {
      *  the store-assigned row key when a store is connected and the act
      *  persisted — what the application's own queries key on. */
     data class Accepted(val id: Long, val storeKey: Any? = null) : CommitResult
-    data class Refused(val reason: String) : CommitResult
+    /** [reason] is the rendered message; [rejection] is the same as data when a
+     *  `never` refused the act (OQ47), null for a type-level refusal. */
+    data class Refused(val reason: String, val rejection: Rejection? = null) : CommitResult
 }
 
 /**
@@ -63,7 +65,7 @@ interface View {
 }
 
 class VelleRuntimeError(message: String) : Exception(message)
-private class NeverViolation(val reason: String) : Exception(reason)
+private class NeverViolation(val rejection: Rejection) : Exception(rejection.message)
 
 /**
  * The v0 runtime: evaluation.md executed over in-memory state [S1].
@@ -365,6 +367,8 @@ class VelleSystem(
          *  physically removed at close, unmarked on rollback. */
         val deleted = mutableListOf<Long>()
         var depth = 0
+        /** The exposed act this transaction is for, once inserted; null for a tick or after-commit firing. */
+        var act: Long? = null
 
         /** Cumulative footprint of every commit in the envelope (never gating). */
         val createdShapes = mutableSetOf<String>()
@@ -583,7 +587,7 @@ class VelleSystem(
             return CommitResult.Refused(e.reason)
         }
 
-        val result = inTransaction { applyCommit(mutations).first() }
+        val result = inTransaction { applyCommit(mutations).first().also { txn!!.act = it } }
         return result.fold(
             onSuccess = { id ->
                 // a transient act is an input to the state, not a member of it: at
@@ -600,7 +604,7 @@ class VelleSystem(
                 CommitResult.Accepted(id, keyOf[id]?.value)
             },
             onFailure = { e ->
-                if (e is NeverViolation) CommitResult.Refused(e.reason) else throw e
+                if (e is NeverViolation) CommitResult.Refused(e.rejection.message, e.rejection) else throw e
             }
         )
     }
@@ -1164,11 +1168,73 @@ class VelleSystem(
             if (!w.summary.readsTime && !relevant(w, fp)) continue
             val ids = if (w.selfContained) idsOfCandidates(w.bases.single(), queryCompiler().filterFor(n.target))
             else w.bases.flatMap { idsOf(it) }
-            for (id in ids) {
-                if (evaluator.memberOfRefExpr(id, n.target))
-                    throw NeverViolation("never #${i + 1} over ${w.bases.joinToString(" or ")} is violated")
+            val violating = ids.filter { evaluator.memberOfRefExpr(it, n.target) }
+            if (violating.isNotEmpty()) throw NeverViolation(rejectionFor(i + 1, n, w, violating, t))
+        }
+    }
+
+    /**
+     * Everything in hand at the refusal, as data (OQ47): the prohibition is
+     * re-evaluated over the violating records with the evaluator's trace on,
+     * and the records the trace touched are snapshotted. The act's referenced
+     * records that the trace read through are the pivots — what the person
+     * was acting on.
+     */
+    private fun rejectionFor(ordinal: Int, n: NeverDecl, w: Watcher, violating: List<Long>, t: Txn): Rejection {
+        val steps = mutableListOf<Evaluator.Trace>()
+        evaluator.trace = steps
+        try { for (id in violating) evaluator.memberOfRefExpr(id, n.target) } finally { evaluator.trace = null }
+
+        fun refOf(id: Long) = RecordRef(shapeOf(id), id)
+        fun plain(v: Value): Any? = when (v) {
+            is Value.VNum -> v.v
+            is Value.VText -> v.v
+            is Value.VBool -> v.v
+            is Value.VDate -> v.v
+            is Value.VDateTime -> v.v
+            is Value.VRef -> if (instance(v.id) != null) refOf(v.id) else null
+            is Value.VColl -> v.ids.filter { instance(it) != null }.map { refOf(it) }
+            is Value.VVals -> v.values.map { plain(it) }
+            is Value.VDuration -> "${v.amount} ${v.unit}"
+            Value.VEmpty -> emptyList<Any?>()
+            Value.VNone, is Value.VPendingRef -> null
+        }
+        fun snapshot(id: Long) = RecordSnapshot(refOf(id), instance(id)!!.fields
+            .filterValues { it !is Value.VPendingRef }.mapValues { (_, v) -> plain(v) })
+        fun idsIn(v: Value): List<Long> = when (v) {
+            is Value.VRef -> listOf(v.id)
+            is Value.VColl -> v.ids
+            else -> emptyList()
+        }
+
+        val actId = t.act?.takeIf { instance(it) != null }
+        val actRefs = actId?.let { instance(it)!!.fields.values.flatMap(::idsIn).toSet() }.orEmpty()
+        val evaluation = steps.distinct().mapNotNull { step ->
+            when (step) {
+                is Evaluator.Trace.Read -> instance(step.id)?.let { EvalStep.Read(refOf(step.id), step.member, plain(step.value)) }
+                is Evaluator.Trace.Membership -> instance(step.id)?.let { EvalStep.Membership(refOf(step.id), step.refinement, step.member) }
             }
         }
+        val touched = steps.flatMap { step ->
+            when (step) {
+                is Evaluator.Trace.Read -> listOf(step.id) + idsIn(step.value)
+                is Evaluator.Trace.Membership -> listOf(step.id)
+            }
+        }.distinct().filter { instance(it) != null }
+        val pivots = touched.filter { it in actRefs && it !in violating }
+        val witnesses = touched.filter { it != actId && it !in violating && it !in pivots }
+
+        return Rejection(
+            never = ordinal,
+            prohibition = Printer.refExpr(n.target),
+            targetShape = w.bases.joinToString(" or "),
+            act = actId?.let(::snapshot),
+            violating = violating.map(::snapshot),
+            pivots = pivots.map(::snapshot),
+            witnesses = witnesses.map(::snapshot),
+            evaluation = evaluation,
+            today = if (w.summary.readsTime) effectiveToday.toString() else null,
+        )
     }
 
     // ── query surface (read-only; the typed-accessor codegen wraps this) ─────

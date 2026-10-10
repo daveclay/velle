@@ -13,6 +13,21 @@ class Evaluator(private val system: VelleSystem) {
 
     private val model get() = system.model
 
+    /** One step of an evaluation, recorded when [trace] is set (OQ47 rejection context). */
+    sealed interface Trace {
+        data class Read(val id: Long, val member: String, val value: Value) : Trace
+        data class Membership(val id: Long, val refinement: String, val member: Boolean) : Trace
+    }
+
+    /** When set, every member read and refinement test is appended; the runtime
+     *  sets it only while re-evaluating a violated `never` to build its rejection. */
+    var trace: MutableList<Trace>? = null
+
+    private fun traced(id: Long, member: String, v: Value): Value {
+        trace?.add(Trace.Read(id, member, v))
+        return v
+    }
+
     /** Evaluation context: the subject plus any open collection-element scopes. */
     data class Ctx(
         val subjectScope: String,
@@ -42,7 +57,8 @@ class Evaluator(private val system: VelleSystem) {
             e.name in model.shapes -> inst.shape == e.name
             e.name in model.refinements -> {
                 val r = model.refinements.getValue(e.name)
-                inst.shape in model.basesOf(e.name) && memberOfRefExpr(id, r.expr)
+                (inst.shape in model.basesOf(e.name) && memberOfRefExpr(id, r.expr))
+                    .also { trace?.add(Trace.Membership(id, e.name, it)) }
             }
             else -> throw VelleRuntimeError("unknown refinement '${e.name}'")
         }
@@ -59,7 +75,7 @@ class Evaluator(private val system: VelleSystem) {
             // §10): the scope is a union, the instance has one concrete shape
             ?: return system.instance(id)?.let { readMemberAnyScope(id, it.shape, name) }
                 ?: throw VelleRuntimeError("'$name' is not a member of '$scope'")
-        return readResolved(id, m)
+        return traced(id, name, readResolved(id, m))
     }
 
     private fun readResolved(id: Long, m: MemberInfo): Value {
@@ -178,12 +194,12 @@ class Evaluator(private val system: VelleSystem) {
 
     /** Member lookup that also sees refinement-scoped members the instance currently holds. */
     private fun readMemberAnyScope(id: Long, shape: String, name: String): Value {
-        model.membersOf(shape)[name]?.let { return readResolved(id, it) }
+        model.membersOf(shape)[name]?.let { return traced(id, name, readResolved(id, it)) }
         for ((refName, r) in model.refinements) {
             if (shape !in model.basesOf(refName)) continue
             val m = r.members.filterIsInstance<DerivedProp>().find { it.name == name } ?: continue
-            if (m.captured) system.captureValues(id, refName)?.let { return it.getValue(name) }
-            else if (memberOfRefExpr(id, RefName(refName))) return eval(m.expr, Ctx(refName, id))
+            if (m.captured) system.captureValues(id, refName)?.let { return traced(id, name, it.getValue(name)) }
+            else if (memberOfRefExpr(id, RefName(refName))) return traced(id, name, eval(m.expr, Ctx(refName, id)))
         }
         throw VelleRuntimeError("'$name' is not readable on '$shape' instance $id")
     }
@@ -235,8 +251,10 @@ class Evaluator(private val system: VelleSystem) {
                 (system.instances.getValue(it).fields[field.name] as? Value.VRef)?.id == id
             }
         }
-        return if (shape in model.refinements) referencing.filter { memberOfRefExpr(it, RefName(shape)) }
+        val found = if (shape in model.refinements) referencing.filter { memberOfRefExpr(it, RefName(shape)) }
         else referencing
+        trace?.add(Trace.Read(id, "$shape for this", Value.VColl(found, model.baseOf(shape) ?: shape)))
+        return found
     }
 
     private fun bindingCandidates(b: Binding, ctx: Ctx, where: Expr? = null): Pair<String, List<Long>> = when (val src = b.source) {

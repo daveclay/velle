@@ -4,26 +4,34 @@ import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 import velle.CommitResult
+import velle.EvalStep
+import velle.RecordRef
+import velle.Rejection
 import velle.generated.ShippingSystem
 
 /**
- * What a rejection can say (OQ47, "Rejections").
+ * What a rejection carries (OQ47, "Rejections").
  *
  * One constraint on the books, `never (Shipment where order is
  * CancelledOrder)`, and the two acts it rejects: a shipment for a cancelled
- * order, and a cancellation for a shipped order. Each test pins what the
- * runtime says today, then asserts that every ingredient of the message the
- * person should hear is still in the state after the refusal. The wanted
- * message is written out in a comment, not asserted: nothing produces it yet,
- * and that is the gap OQ47 Part 2 asks the runtime to close.
+ * order, and a cancellation for a shipped order. Each refusal comes back as a
+ * [Rejection]: the act, the records that would be in the forbidden state, the
+ * record the act references that the prohibition read through (the order,
+ * which is what the person was acting on), any other record it read, and the
+ * evaluation step by step — plus the rendered message, so no binding code is
+ * needed to get a readable one. Nothing here is fetched from the state by
+ * hand; every assertion reads the result.
  */
 class ShippingRejectionsTest {
 
     private val sys = ShippingSystem()
 
     private fun accept(r: CommitResult) = assertIs<CommitResult.Accepted>(r, "refused: $r")
-    private fun refuse(r: CommitResult) = assertIs<CommitResult.Refused>(r, "accepted: $r")
+    private fun rejection(r: CommitResult): Rejection =
+        assertNotNull(assertIs<CommitResult.Refused>(r, "accepted: $r").rejection, "a never refusal carries its rejection")
 
     private fun order(reference: String): ShippingSystem.OrderView {
         accept(sys.commitOrder(reference))
@@ -38,32 +46,54 @@ class ShippingRejectionsTest {
         val order = order("4471")
         accept(sys.commitShipment(order, sixth))
 
-        val refusal = refuse(sys.commitCancellation(order, seventh))
-
-        // What the runtime says today: a rule number and the shape it is over.
-        // The shape named is Shipment, the record protected, not Cancellation,
-        // the act refused.
-        assertEquals("never #1 over Shipment is violated", refusal.reason)
+        val r = rejection(sys.commitCancellation(order, seventh))
 
         // The refusal is whole: nothing landed.
         assertEquals(emptyList(), sys.cancellations(), "the cancellation did not land")
-        with(sys) { assertEquals(false, order.isCancelledOrder()) }
 
-        // What the person should hear:
-        //
-        //     Cancellation for order 4471 refused.
-        //     Order 4471 has a Shipment (shipped 2026-10-06), and a Shipment
-        //     is never on an order that has a Cancellation.
-        //
-        // Its ingredients, and where each one is after the refusal. The act's
-        // fields are the call's arguments. The pivot is the order: the one
-        // record the act references that the prohibition reads through.
-        val shipment = sys.shipments().single()
-        assertEquals(order, shipment.order, "the shipment on the pivot order is on file")
-        assertEquals(sixth, shipment.shippedOn, "with the date the message cites")
-        with(sys) { assertEquals(true, order.isShippedOrder(), "the pivot's state, in the author's name") }
-        assertEquals(1, sys.system.model.nevers.size, "the prohibition is in the model, for the last clause")
-        // Missing: the runtime handing these over as the rejection instead of a string.
+        // The prohibition, in the author's words.
+        assertEquals(1, r.never)
+        assertEquals("Shipment where order is CancelledOrder", r.prohibition)
+
+        // The act refused, with its fields as submitted.
+        val act = assertNotNull(r.act)
+        assertEquals("Cancellation", act.shape)
+        assertEquals(RecordRef("Order", order.id), act.fields["order"])
+        assertEquals(seventh, act.fields["requestedOn"])
+
+        // The record protected is not the act: the shipment already on file.
+        val shipment = r.violating.single()
+        assertEquals("Shipment", shipment.shape)
+        assertEquals(sixth, shipment.fields["shippedOn"])
+        assertEquals(RecordRef("Order", order.id), shipment.fields["order"])
+
+        // The pivot: the order, the one record the act references that the
+        // prohibition read through — what the person was acting on.
+        val pivot = r.pivots.single()
+        assertEquals(RecordRef("Order", order.id), pivot.ref)
+        assertEquals("4471", pivot.fields["reference"])
+        assertEquals(emptyList(), r.witnesses, "nothing else was read")
+
+        // The evaluation: how the order came to be a CancelledOrder — because
+        // of this very act.
+        assertTrue(EvalStep.Membership(pivot.ref, "CancelledOrder", true) in r.evaluation)
+        assertTrue(EvalStep.Read(pivot.ref, "cancellations", listOf(act.ref)) in r.evaluation)
+
+        // The default rendering, from the same data.
+        assertEquals(
+            """
+            Cancellation refused: Shipment#2 would be a Shipment where order is CancelledOrder.
+              never #1: Shipment where order is CancelledOrder
+              this Cancellation: order = Order#1, requestedOn = 2026-10-07
+              Shipment#2: order = Order#1, shippedOn = 2026-10-06
+              through Order#1: reference = "4471"
+              evaluation:
+                Shipment#2.order = Order#1
+                Order#1.cancellations = [this Cancellation]
+                Order#1 is CancelledOrder
+            """.trimIndent(),
+            r.message,
+        )
     }
 
     @Test
@@ -71,25 +101,37 @@ class ShippingRejectionsTest {
         val order = order("4471")
         accept(sys.commitCancellation(order, sixth))
 
-        val refusal = refuse(sys.commitShipment(order, seventh))
+        val r = rejection(sys.commitShipment(order, seventh))
 
-        // Same prohibition, same message, and this time the shape named is
-        // the act refused, so today's message is less wrong.
-        assertEquals("never #1 over Shipment is violated", refusal.reason)
         assertEquals(emptyList(), sys.shipments(), "the shipment did not land")
 
-        // What the person should hear:
-        //
-        //     Shipment for order 4471 refused.
-        //     Order 4471 is a CancelledOrder (cancellation requested
-        //     2026-10-06), and a Shipment is never on an order that has a
-        //     Cancellation.
-        //
-        // The witness is a record that already exists, not the act.
-        val cancellation = sys.cancellations().single()
-        assertEquals(order, cancellation.order, "the cancellation on the pivot order is on file")
-        assertEquals(sixth, cancellation.requestedOn, "with the date the message cites")
-        with(sys) { assertEquals(true, order.isCancelledOrder(), "the pivot's state, in the author's name") }
+        // This time the act is the record in violation.
+        val act = assertNotNull(r.act)
+        assertEquals("Shipment", act.shape)
+        assertEquals(listOf(act.ref), r.violating.map { it.ref })
+
+        // The pivot is still the order; the witness is a record that already
+        // exists, the cancellation of the 6th.
+        assertEquals(RecordRef("Order", order.id), r.pivots.single().ref)
+        val cancellation = r.witnesses.single()
+        assertEquals("Cancellation", cancellation.shape)
+        assertEquals(sixth, cancellation.fields["requestedOn"])
+        assertTrue(EvalStep.Read(r.pivots.single().ref, "cancellations", listOf(cancellation.ref)) in r.evaluation)
+
+        assertEquals(
+            """
+            Shipment refused: this Shipment would be a Shipment where order is CancelledOrder.
+              never #1: Shipment where order is CancelledOrder
+              this Shipment: order = Order#1, shippedOn = 2026-10-07
+              through Order#1: reference = "4471"
+              also Cancellation#2: order = Order#1, requestedOn = 2026-10-06
+              evaluation:
+                this Shipment.order = Order#1
+                Order#1.cancellations = [Cancellation#2]
+                Order#1 is CancelledOrder
+            """.trimIndent(),
+            r.message,
+        )
     }
 
     @Test
@@ -99,7 +141,8 @@ class ShippingRejectionsTest {
         accept(sys.commitShipment(shipped, sixth))
 
         accept(sys.commitCancellation(other, seventh))
-        refuse(sys.commitShipment(other, seventh))
+        val r = rejection(sys.commitShipment(other, seventh))
+        assertEquals(RecordRef("Order", other.id), r.pivots.single().ref, "the rejection is about the other order")
 
         with(sys) {
             assertEquals(true, other.isCancelledOrder())
