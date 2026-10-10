@@ -50,7 +50,7 @@ never (AssayReading where count(assay.assayReadings where hoursElapsed == this.h
 
 Committing a second reading at hour 24 does not produce a refusal. The `never` is checked at transaction end (`evaluation.md`, step 5), but the rules watching the series re-evaluate their conditions first (step 2), reach `latest(assayReadings by hoursElapsed)`, hit the tie, and fail loudly as README §10 says a selector must. The caller gets a `VelleRuntimeError` ("does not discriminate: 2 instances share the ordering datum"); the transaction rolls back, so nothing lands, but the outcome is an error rather than the refusal the author wrote. Evidence: `lab - a reading entered late slots into its hour mark and the running peak re-derives` in `examples/peptides/output/src/test/kotlin/velle/PeptidesPipelineTest.kt`, which asserts the error and that nothing landed.
 
-Ruled 2026-10-09 (README §21; `evaluation.md` "An exposed call", the guardrail's moment): the input-constrained guardrail is evaluated over pre-state plus the act's closure, before processing, so the arriving reading is counted among its siblings with the same spelling the transaction end uses, and the rules that depend on the invariant never run against a state it forbids. The runtime does not implement the guardrail yet (section 1 below); the test above asserts today's behaviour until it does.
+Ruled 2026-10-09 (README §21; `evaluation.md` "An exposed call", the guardrail's moment): the boundary guardrail is evaluated over pre-state plus the act's closure, before processing, so the arriving reading is counted among its siblings with the same spelling the transaction end uses, and the rules that depend on the prohibition never run against a state it forbids. The runtime does not implement the guardrail yet (section 1 below); the test above asserts today's behaviour until it does.
 
 ### S4 — TAX, open: the ledger's commit-timestamp ordering ties within one clock instant
 
@@ -149,7 +149,7 @@ The spelling works and is arguably the better one here (the field stage reads th
 
 ### S7 — TAX, open (rides OQ16): a `never` over any rule-written field fails closed
 
-Two invariants were refused as "rule-maintained — v0 cannot yet prove the invariant inductively": a score range, because a correction rule assigned `diseaseSeverity`; and "no score before treatment", because a rule assigned `treatedAt`. Both rewrites improved the model — the score became the ledger of S4 (what was committed stays committed; the score in force is derived), and treatment became a record (`expose shape Treatment`) with `treatedAt` derived from it — but the check is what forced them, and it will force them on every spec where an act and a rule both write one field. The remaining assigned field in the spec (a plot's bench, frozen after treatment) carries no `never`.
+Two prohibitions were refused as "rule-maintained — v0 cannot yet prove the invariant inductively": a score range, because a correction rule assigned `diseaseSeverity`; and "no score before treatment", because a rule assigned `treatedAt`. Both rewrites improved the model — the score became the ledger of S4 (what was committed stays committed; the score in force is derived), and treatment became a record (`expose shape Treatment`) with `treatedAt` derived from it — but the check is what forced them, and it will force them on every spec where an act and a rule both write one field. The remaining assigned field in the spec (a plot's bench, frozen after treatment) carries no `never`.
 
 ### S8 — TAX, open (rides OQ16): the episodes discharge does not cover a state fed by a series
 
@@ -186,7 +186,7 @@ Three things the domain reached for that the language does not have, each with a
 
 Also in this family, already a TODO item: `then` must share the `if`'s line.
 
-### S11 — GAP, fixed: generated boundary cases ignored range invariants spelled with `or`
+### S11 — GAP, fixed: generated boundary cases ignored range prohibitions spelled with `or`
 
 The generated "a `AssayReading` with `hoursElapsed` 0 is accepted" case filled the act's other numeric fields with −1, which `never (AssayReading where inhibitionPercent < 0 or inhibitionPercent > 100)` refuses; the positive case failed. The generator avoided values other `never`s forbid, but only single-comparison ones. Fixed in `compiler/src/main/kotlin/velle/SpecGen.kt`: each arm of an `or` is a forbidden comparison. Regenerating every example changed no other output. Still open in the same family: the generator cannot see a relationship `never` on the shape (`never (PlotObservation where not plot.trial is TreatedTrial)`), so the given that supplies "any committed `GreenhousePlot`" has to deliver a plot on a treated trial — the demand is documented on the given, and the generated case passes, but the coupling is invisible from the generated test.
 
@@ -216,7 +216,7 @@ is refused: the name check resolves `trial.greenhousePlots` against the union (w
 
 ### 1. Which comes first at a commit: the rules watching a series, or the `never` that keeps the series well-ordered? (S3) — ruled
 
-Ruled 2026-10-09, no input needed. The `never` comes first: the boundary guardrail for an input-constrained invariant is evaluated over pre-state plus the act's closure before any rule runs, with the worked example of the duplicate hour mark in `evaluation.md` "An exposed call". What remains is implementation: v0's runtime runs every `never` at transaction end only (`compiler/src/main/kotlin/velle/Runtime.kt`, `checkNevers`), and the item to add the boundary pass is in `TODO.md`.
+Ruled 2026-10-09, no input needed. The `never` comes first: the boundary guardrail for a refusal or constraint is evaluated over pre-state plus the act's closure before any rule runs, with the worked example of the duplicate hour mark in `evaluation.md` "An exposed call". What remains is implementation: v0's runtime runs every `never` at transaction end only (`compiler/src/main/kotlin/velle/Runtime.kt`, `checkNevers`), and the item to add the boundary pass is in `TODO.md`.
 
 ### 2. Should the ledger's ordering carry an author datum beside the timestamp? (S4)
 
@@ -240,7 +240,7 @@ Spelled out as OQ47 in `QUESTIONS.md`. The short form: whether a situation is re
 | S8 | episodes discharge does not cover a series-fed state (V15) | TAX | spelled around (`after commit, Hourly`); TODO |
 | S9 | predecessor recurrence over a business datum | HOLDS | `PeptidesPipelineTest.kt` |
 | S10 | no collection mean/max, no date difference, no boolean from a comparison | TAX | by design; spellings recorded |
-| S11 | generated boundary cases ignored `or` range invariants | GAP | fixed in `SpecGen.kt`; relationship-never coupling noted |
+| S11 | generated boundary cases ignored `or` range prohibitions | GAP | fixed in `SpecGen.kt`; relationship-never coupling noted |
 | S12 | every series rule widens to a whole-shape queue (A5) | TAX | open; TODO |
 | S13 | a duration cannot be built from data — due dates are stated, not derived | TAX | by design; language question in TODO |
 | S14 | union as a task target; narrowing lost on a filter's source path | HOLDS / GAP | the gap added to OQ44 |

@@ -42,7 +42,7 @@ Method, per the OQ42 precedent (`audit-symmetric-evaluation.md`): enumerate the 
 | 11 | Captured values (one sibling causes the entry, another writes what the captured expressions read) | **F3 — was a gap, fixed**: capture-carrying refinements are observers in their own right, and a capture-value leg checks the captured reads against sibling effects | probe E |
 | 12 | Two after-commit followers of one commit (queue order is the sibling order that appended them) | **F4 — was a gap, fixed**: after/after pairs sharing a trigger get the pairwise check on the FULL summary — their conditions re-check at drain, so condition reads matter there | probe F |
 | 13 | The firing set itself | **Safe by pinning** — the set of (rule, subject) firings at a commit is computed before any sibling runs | by the step relation; probe H |
-| 14 | `never` timing | **Safe by design** — invariants check settled post-state once, at transaction end [S5] | by the step relation |
+| 14 | `never` timing | **Safe by design** — prohibitions check settled post-state once, at transaction end [S5] | by the step relation |
 | 15 | Termination (Newman's second leg) | **Covered coarsely** — V16's DAG-or-disarmed-cycles plus the runtime depth backstop; the audit fixed its edge vocabulary (F5) but did NOT prove the disarm proof sufficient — that residue stays open in OQ16 | ValidatorTest V16 probes |
 
 ## Findings

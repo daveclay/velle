@@ -71,7 +71,7 @@ This is what makes delete different from assignment, and it is the investigation
 
 1. **Guard witnesses.** `UnappliedDeposit = Deposit where not exists DepositApplication for this` — delete the `DepositApplication` and the guard *re-arms*: the deposit re-enters the trigger state and the `Hourly` backstop applies it again. The disarm law's soundness (§18) silently assumes witnesses are immortal.
 2. **Singularity proofs.** `(OpenDelinquencyFlag for this)` is legal because a guard elsewhere proves at-most-one (§10's `for`-query rule); deleting the flag mid-episode breaks the *at-least-one* the exit rule's reference relies on.
-3. **Spent `never`s.** An established invariant is a proof input (§21) — the one-writer prover consumes it. Deleters are a new class of state change its inductive proof must range over, both as potential violators and as potential restorers.
+3. **Spent `never`s.** An established prohibition is a proof input (§21) — the one-writer prover consumes it. Deleters are a new class of state change its inductive proof must range over, both as potential violators and as potential restorers.
 4. **Monotone predicates.** `exists ArchiveRequest for this` is monotone today — the whole "exit from act-entered refinements" item (§22) exists because nothing can leave. A deleter of `ArchiveRequest` makes the refinement non-monotone: a feature (un-archival becomes expressible as removal) and a hazard (every act-entered refinement in the spec becomes exitable whether or not its author considered exit) at once.
 
 The good news: this has the same shape as every existing check. Static paths mean the compiler knows every predicate that reads a shape's existence (`exists`, `count`, `sum`, selectors, `for`-queries), so "who depends on this instance existing" is derivable exactly as trigger sets are (§11, "Rules ground in commits"). The check writes itself, fail-closed, as one connected diagnostic naming both sides:
@@ -366,7 +366,7 @@ rule ApplyDiscard when DiscardDraft {
 
 **C8 — singularity proof.** The episode pattern's exit rule reads `(OpenDelinquencyFlag for this)`, provably at-most-one *and present* because the entry rule's guard maintains exactly one open flag per delinquent account. A deleter of `DelinquencyFlag` can remove the open flag mid-episode, stranding the exit rule's singular reference: error naming deleter and reference. Fix: condition the deleter on the episode being closed (`DelinquencyFlag where exists DelinquencyResolution for this`) — complementary predicates, which the shared prover clears; this is what the coarseness ruling's conservative prover *can* do.
 
-**C9 — `never` maintenance.** Deleters join writers in every invariant's inductive proof:
+**C9 — `never` maintenance.** Deleters join writers in every prohibition's inductive proof:
 
 ```
 never (Order where count(lineItems) == 0)     -- "no empty orders"

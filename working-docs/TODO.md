@@ -13,8 +13,9 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## Peptides stress pass (`break-peptides.md`)
 
-- [ ] Implement the boundary guardrail as ruled (README §21; `evaluation.md` "An exposed call", the guardrail's moment): run `checkNevers` over the input-constrained invariants with a footprint of the act's commit alone, after C0's insert and before `process(C0)` — the runtime needs the classification `Validator.spendableNevers` computes; the peptides test `lab - a reading entered late slots into its hour mark and the running peak re-derives` then asserts a refusal instead of a runtime error (S3).
-- [ ] Decide whether the deleting commit runs the input-constrained guardrail before processing — a deletion can make a `not exists` invariant true (`evaluation.md` "The deleting commit").
+- [ ] Implement the boundary guardrail as ruled (README §21; `evaluation.md` "An exposed call", the guardrail's moment): run `checkNevers` over the refusals and constraints (README §21) with a footprint of the act's commit alone, after C0's insert and before `process(C0)` — the runtime needs the classification `Validator.spendableNevers` computes; the peptides test `lab - a reading entered late slots into its hour mark and the running peak re-derives` then asserts a refusal instead of a runtime error (S3).
+- [ ] Decide whether the deleting commit runs the boundary guardrail before processing — a deletion can make a `not exists` prohibition true (`evaluation.md` "The deleting commit").
+- [ ] Align the compiler's user-facing text with the prohibition vocabulary (README §21, 2026-10-10): the V10 diagnostic says "rule-maintained" (`Validator.kt`), and the sequence-diagram note, rule-graph legend, and state-flow legend say "input-constrained" (`DiagramGen.kt`, `RuleGraphGen.kt`, `StateFlowGen.kt`).
 - [ ] Note in README §10/§12 that a ledger ordered by `timestamp on create` ties within one clock instant, and recommend an author-carried sequence datum or a per-commit harness clock step (S4).
 - [ ] Decide OQ47 Part 1 — the advisory that makes a books rule over a standing record visible as the author's choice (S5).
 - [ ] Relax V6 to accept a capture of the base shape's own derived property, which is evaluable for every instance (S6).

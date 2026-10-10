@@ -90,7 +90,7 @@ Arrow directions are proven, not guessed, from three sources:
   explicitly.
 - **Sign-pinned folds.** `never (Payment where amount <= 0)` proves every
   payment amount positive, so `sum(payments, amount)` only grows and `balance`
-  only falls — the input-constrained refusal is what licenses drawing the
+  only falls — the boundary rejection is what licenses drawing the
   Payment arrow toward Paid and never away. Where the senses conflict, the
   edge honestly says *may flip* and is drawn in both directions.
 - **Time as a commit kind.** A predicate reading `today` gets a "time passes"
@@ -127,7 +127,7 @@ semantics:
   have exclusive branching; drawing Velle's fan-out that way would fabricate a
   decision nobody makes.
 - **A diamond is a claim of exclusivity, drawn only where proven.** Two places
-  qualify: the accept/refuse split an input-constrained `never` compiles to (a
+  qualify: the accept/refuse split a refusal or constraint compiles to (a
   `never` targeting the exposed act and reading only its own stored fields
   becomes a boundary diamond — violated means refused, nothing begins), and a
   transient act's partitions when their guards are provably exclusive

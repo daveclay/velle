@@ -5,7 +5,7 @@ Every check the v0 validator runs, one entry each: what it proves, what it reads
 Three principles govern every entry (README §1, §12):
 
 - **Whole-spec.** Compiling means re-validating the entire spec as one unit — every check may read every declaration, and a declaration added anywhere can trip a check on an untouched line.
-- **Fail-closed.** Where a proof can't be completed, the spec is rejected — uncertainty is an error, never a warning. Legit-but-unprovable and dangerous-but-unprovable get the same diagnostic; the legit author has an answer to give (guard, invariant, restructure, tolerance).
+- **Fail-closed.** Where a proof can't be completed, the spec is rejected — uncertainty is an error, never a warning. Legit-but-unprovable and dangerous-but-unprovable get the same diagnostic; the legit author has an answer to give (guard, prohibition, restructure, tolerance).
 - **Connected diagnostics.** A check that relates two constructs reports one diagnostic naming both sides (the writer and the freeze; the declaration that created an ambiguity and every reference it broke) — never an isolated error at either site.
 
 Severity: **F** foundations (name/type layer), **V** required semantic checks (errors), **A** advisories (guidance the author may ignore, §20).
@@ -32,7 +32,7 @@ A `from { ... }` block supplies every field the created shape declares (minus la
 
 ### V1 — One-writer disjointness
 
-(§12.) For every pair of assignments targeting the same field: prove their triggers can never coincide at one commit (unrelated act shapes → disjoint; same shape, refinement-and-base, or overlapping refinements → error; a cross-base union overlaps each of its operands, while distinct bases never overlap — §9). Uses the refinement-overlap machinery (V9) on trigger shapes; spends established `never` invariants for alias cases (V11). Connected diagnostic names both rules.
+(§12.) For every pair of assignments targeting the same field: prove their triggers can never coincide at one commit (unrelated act shapes → disjoint; same shape, refinement-and-base, or overlapping refinements → error; a cross-base union overlaps each of its operands, while distinct bases never overlap — §9). Uses the refinement-overlap machinery (V9) on trigger shapes; spends established `never` prohibitions for alias cases (V11). Connected diagnostic names both rules.
 
 *Coarse* extension for fan-out (§6, "Committing and assigning collections"): a collection-path assignment counts as a write to that field on **every** instance of the member shape — any other write to the same field whose trigger could coincide is a conflict, and instance-level disjointness of target sets is never attempted (they are runtime data). Refining this with disjointness proofs in specific patterns is post-v0 calibration.
 
@@ -72,7 +72,7 @@ A `from { ... }` block supplies every field the created shape declares (minus la
 
 ### V10 — `never` obligations and spend-tracking
 
-(§21.) Per invariant, derive an obligation per potential violator: rule-maintained → inductive proof over the statically-known writers (violator → connected diagnostic naming act and invariant); input-constrained → guardrail emitted at every `expose` site of the act shape. Only a fully-discharged invariant is *spendable* as a proof input by V1/V5/V15/V16; track the dependency so retracting an invariant re-opens what spent it.
+(§21.) Per prohibition, derive an obligation per potential violator: a guarantee → inductive proof over the statically-known writers (violator → connected diagnostic naming act and prohibition); a refusal or constraint → guardrail emitted at every `expose` site of the act shape. Only a fully-discharged prohibition is *spendable* as a proof input by V1/V5/V15/V16; track the dependency so retracting a prohibition re-opens what spent it.
 
 ### V11 — Narrowing analysis
 
@@ -92,7 +92,7 @@ A `from { ... }` block supplies every field the created shape declares (minus la
 
 ### V15 — Confluence (*coarse*)
 
-For sibling firings of one commit with no data dependency, three legs. **Read-write**: one sibling's body reads what another writes — fields, existence and aggregates over shapes it creates, timestamps its writes advance, opaque summaries as reads-anything; condition reads are exempt (subjects are pinned per commit — a flip fires at its own commit, as causality). **After/after**: two after-commit followers of one commit run as independent transactions in unspecified relative order, checked on the full summary (their conditions re-check at drain). **Transition interference**: two siblings can each flip an observed refinement's membership — by writing predicate inputs or by creations, at the consult's polarity — and not provably in the same direction; observers are watching rules and the refinement's own captures, and a capture-value leg checks captured reads against sibling effects. Pairs are gated by co-firability (`canCoFire`: a rule gains a subject only where a commit can flip its condition in the firing direction; a fresh instance satisfies no positive correlated `exists` over a shape the commit doesn't create, and never leaves anything) and by entrant/leaver exclusivity (the episodes discharge). Any unproven pair → error naming both rules and demanding the intent, not an ordering. Remaining value-dependent cases fail closed; discharge via spent invariants (V10) where they apply — the direct-case instance-aliasing discharge (routes differing by a to-one self-hop, a spendable `never (S where hop == this)`) is built.
+For sibling firings of one commit with no data dependency, three legs. **Read-write**: one sibling's body reads what another writes — fields, existence and aggregates over shapes it creates, timestamps its writes advance, opaque summaries as reads-anything; condition reads are exempt (subjects are pinned per commit — a flip fires at its own commit, as causality). **After/after**: two after-commit followers of one commit run as independent transactions in unspecified relative order, checked on the full summary (their conditions re-check at drain). **Transition interference**: two siblings can each flip an observed refinement's membership — by writing predicate inputs or by creations, at the consult's polarity — and not provably in the same direction; observers are watching rules and the refinement's own captures, and a capture-value leg checks captured reads against sibling effects. Pairs are gated by co-firability (`canCoFire`: a rule gains a subject only where a commit can flip its condition in the firing direction; a fresh instance satisfies no positive correlated `exists` over a shape the commit doesn't create, and never leaves anything) and by entrant/leaver exclusivity (the episodes discharge). Any unproven pair → error naming both rules and demanding the intent, not an ordering. Remaining value-dependent cases fail closed; discharge via spent prohibitions (V10) where they apply — the direct-case instance-aliasing discharge (routes differing by a to-one self-hop, a spendable `never (S where hop == this)`) is built.
 
 ### V16 — Quiescence (*coarse*)
 
@@ -138,7 +138,7 @@ With a closure (`expose ... with`, §6 "Inline part creation"), the inline parts
 
 ### V26 — Deleters join `never` induction (*coarse*)
 
-(OQ37; catalog C9; §21.) Deleters are a class of state change every invariant's inductive proof must range over. Deleting an instance of the `never`'s own base only shrinks the forbidden set — safe; a deleter of any other shape the predicate consults can flip membership either way, and v0 fails closed on it. The same posture reaches V10's spend-tracking: a `never` whose foreign consults have deleters is not spendable, and V12's anti-monotone proof fails when a `not exists` witness has a deleter (re-entry by deletion).
+(OQ37; catalog C9; §21.) Deleters are a class of state change every prohibition's inductive proof must range over. Deleting an instance of the `never`'s own base only shrinks the forbidden set — safe; a deleter of any other shape the predicate consults can flip membership either way, and v0 fails closed on it. The same posture reaches V10's spend-tracking: a `never` whose foreign consults have deleters is not spendable, and V12's anti-monotone proof fails when a `not exists` witness has a deleter (re-entry by deletion).
 
 ### V27 — The deletion gate
 
