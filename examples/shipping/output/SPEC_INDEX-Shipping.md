@@ -3,10 +3,6 @@
 Generated from the Velle spec (testgen.md). One file per business state;
 each case below is an executable test.
 
-## UnpaidOrderSpec.kt
-
-- CancelUnpaid - at the Nightly tick, an UnpaidOrder produces a Cancellation
-
 ## ShipmentSpec.kt
 
 

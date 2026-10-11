@@ -54,6 +54,7 @@ class Validator(private val model: Model) {
         checkReferentialCompleteness() // V24 (OQ37: cascade / absorb / copy)
         checkExistenceDependency()     // V25 (OQ37: guard witnesses, singularity proofs)
         checkNeverDeleters()           // V26 (OQ37: deleters join `never` induction)
+        checkUncalledCreations()       // V29 (a firing with no caller joins `never` induction)
         checkUndeletable()             // V27 (OQ37: the state-scoped deletion gate)
         checkDeleteStranding()         // V28 (OQ37: the V17 mirror at deletion; deletion-side forms transaction-bound)
         checkDeletionSideReferences()  // V24 (OQ37-R14: a deletion-side body keeps no reference to its subject)
@@ -2369,6 +2370,40 @@ class Validator(private val model: Model) {
                     "(over $nBase) consults — the delete can end a transaction violating the " +
                     "invariant, and v0 cannot prove otherwise: condition the deleting act, or " +
                     "resolve the invariant's other side in the same commit (OQ37)"))
+            }
+        }
+    }
+
+    // V29 — a firing with no caller joins every constraint's inductive proof.
+    // A rule on a schedule, or behind the `after commit` boundary, fires in a
+    // transaction of its own with nobody asking: a constraint that rejects
+    // the firing has no caller to answer, the rule's guard never disarms, and
+    // the same subject is refused at every tick. The spec instructs and
+    // forbids the same record. A record the firing creates whose shape the
+    // prohibition consults (its own base included: creation can grow the
+    // forbidden set, where deletion only shrinks it, V26) is the case, and v0
+    // cannot prove the rule's condition excludes it — fail closed, the V10
+    // posture. A commit-triggered rule is not here: its rejection answers the
+    // act that triggered it, and the caller is told (README §21).
+    private fun checkUncalledCreations() {
+        for ((i, n) in model.nevers.withIndex()) {
+            val nBase = model.baseOfExpr(n.target)
+            val s = model.summaryOfRefExpr(n.target)
+            val consulted = s.touchedShapes().mapNotNull { model.baseOf(it) }.toSet() + setOfNotNull(nBase)
+            for (rule in model.rules.values) {
+                val schedules = rule.triggers.filter { it != "commit" }
+                val uncalled = schedules.isNotEmpty() || rule.preposition == "after"
+                if (!uncalled) continue
+                for (c in rule.body.filterIsInstance<Creation>()) {
+                    val base = model.baseOf(c.shape) ?: c.shape
+                    if (base !in consulted && !s.opaque) continue
+                    val moment = if (schedules.isNotEmpty()) "on ${schedules.joinToString(", ")}" else "after commit"
+                    diags.add(Diagnostic("V29", "rule '${rule.name}' $moment creates a ${c.shape}, which never #${i + 1} " +
+                        "(${Printer.refExpr(n.target)}) consults — the firing can end its transaction in the " +
+                        "forbidden state with no caller to refuse, and v0 cannot prove the condition excludes it: " +
+                        "guard the record's creation on a state the prohibition cannot reach, restore within the " +
+                        "firing, or retract the prohibition (README §21)"))
+                }
             }
         }
     }

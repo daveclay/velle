@@ -16,11 +16,12 @@
 -- the message can say, from the spec and the evaluation alone, is the
 -- exploration in `output/src/test/kotlin/velle/ShippingRejectionsTest.kt`.
 --
--- A third rejection has no person behind it: a nightly rule cancels orders
--- that have gone unpaid, and an unpaid order that has already shipped puts
--- the rule's own cancellation in front of the same prohibition. There is no
--- caller to hand the refusal to, so the tick throws it, carrying the same
--- rejection an act's commit function returns.
+-- A third rejection would have no person behind it: a nightly rule that
+-- cancels orders gone unpaid would put its own cancellation in front of the
+-- same prohibition for an unpaid order that has shipped, with no caller to
+-- hand the refusal to. That rule is not here, because the validator refuses
+-- it (checks.md V29: the spec would instruct and forbid the same record);
+-- the compiler's `ValidatorTest.kt` keeps it as the fixture.
 --
 -- Comment convention (as in payments.velle): plain comments tell the business
 -- story; `velle:` comments note the language machinery on show.
@@ -29,17 +30,7 @@
 
 expose shape Order {
     reference: text
-    placedOn: Date
 }
-
--- ── Paying ───────────────────────────────────────────────────────────────────
-
-expose shape Payment {
-    order: one Order
-    paidOn: Date
-}
-
-shape UnpaidOrder = Order where not exists (payments)
 
 -- ── Cancelling ───────────────────────────────────────────────────────────────
 
@@ -54,18 +45,6 @@ expose shape Cancellation {
 }
 
 shape CancelledOrder = Order where exists (cancellations)
-
--- Every night, an order still unpaid a week after it was placed is cancelled.
--- The rule does not look at shipments: for an unpaid order that has shipped,
--- its cancellation meets the prohibition below, and the nightly tick is
--- rejected for that order. The remedy is the rule's, not the runtime's.
--- velle: a schedule-triggered rule (README §17); the guard on cancellations
--- makes the nightly sweep idempotent
-rule CancelUnpaid
-    when (UnpaidOrder where placedOn < today - 7 days and not exists (cancellations))
-    on Nightly {
-    Cancellation from { order: this, requestedOn: today }
-}
 
 -- ── Shipping ─────────────────────────────────────────────────────────────────
 

@@ -18,6 +18,82 @@ class ValidatorTest {
         assertEquals(emptyList(), result, "expected a clean fixture, got: $result")
     }
 
+    // ── V29: a firing with no caller joins never induction ───────────────────
+
+    private val shippingWithNightlyCancel = """
+        expose shape Order { reference: text  placedOn: Date }
+        expose shape Payment { order: one Order  paidOn: Date }
+        shape UnpaidOrder = Order where not exists (payments)
+        expose shape Cancellation { order: one Order  requestedOn: Date }
+        shape CancelledOrder = Order where exists (cancellations)
+        expose shape Shipment { order: one Order  shippedOn: Date }
+        never (Shipment where order is CancelledOrder)
+    """.trimIndent()
+
+    @Test
+    fun `V29 - a scheduled rule creating a record a constraint consults is refused`() {
+        val src = shippingWithNightlyCancel + """
+
+            rule CancelUnpaid
+                when (UnpaidOrder where placedOn < today - 7 days and not exists (cancellations))
+                on Nightly {
+                Cancellation from { order: this, requestedOn: today }
+            }
+        """.trimIndent()
+        val d = diags(src).filter { it.code == "V29" }
+        assertEquals(1, d.size, "got: ${diags(src)}")
+        assertTrue("rule 'CancelUnpaid' on Nightly creates a Cancellation, which never #1 (Shipment where order is CancelledOrder) consults" in d.single().message, d.single().message)
+    }
+
+    @Test
+    fun `V29 - a guard the prover cannot see through does not discharge it`() {
+        val src = shippingWithNightlyCancel + """
+
+            rule CancelUnpaid
+                when (UnpaidOrder where placedOn < today - 7 days and not exists (cancellations) and not exists (shipments))
+                on Nightly {
+                Cancellation from { order: this, requestedOn: today }
+            }
+        """.trimIndent()
+        assertTrue(codes(src).contains("V29"), "fail closed: got ${diags(src)}")
+    }
+
+    @Test
+    fun `V29 - an after-commit firing has no caller either`() {
+        val src = shippingWithNightlyCancel + """
+
+            expose transient shape Review { order: one Order }
+            rule CancelOnReview when (Review where order is UnpaidOrder) after commit {
+                Cancellation from { order: order, requestedOn: today }
+            }
+        """.trimIndent()
+        assertTrue(codes(src).contains("V29"), "got: ${diags(src)}")
+    }
+
+    @Test
+    fun `V29 - a commit-triggered rule answers its act and is not refused here`() {
+        val src = shippingWithNightlyCancel + """
+
+            expose transient shape Review { order: one Order }
+            rule CancelOnReview when (Review where order is UnpaidOrder) {
+                Cancellation from { order: order, requestedOn: today }
+            }
+        """.trimIndent()
+        assertTrue(!codes(src).contains("V29"), "got: ${diags(src)}")
+    }
+
+    @Test
+    fun `V29 - a scheduled rule creating a record no constraint consults is allowed`() {
+        val src = shippingWithNightlyCancel + """
+
+            shape Reminder { order: one Order  sentOn: Date }
+            rule RemindUnpaid when (UnpaidOrder where not exists (reminders)) on Nightly {
+                Reminder from { order: this, sentOn: today }
+            }
+        """.trimIndent()
+        assertTrue(!codes(src).contains("V29"), "got: ${diags(src)}")
+    }
+
     // ── foundations ──────────────────────────────────────────────────────────
 
     @Test

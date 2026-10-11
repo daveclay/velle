@@ -1,7 +1,7 @@
 # Breaking v0 with a domain: a crop-protection discovery pipeline
 
 **Status:** first pass complete (2026-09-15) — the spec validates, runs in memory and over SQLite, and every finding below is either fixed in the compiler, spelled around in the spec with the cost recorded, or handed on as a TODO item or an open question. Scorecard at the bottom.
-**Residue:** OQ47 (rejections: the author's refuse-or-record choice, the advisory that makes it visible, and what the person is told) · the TODO items under "Peptides stress pass" in `TODO.md`.
+**Residue:** the TODO items under "Peptides stress pass" in `TODO.md` (OQ47 and OQ48, which carried S5, settled 2026-10-11 into README §21; S5's clock-reading half is a TODO line).
 
 ---
 
@@ -77,7 +77,7 @@ expose shape PlotObservation {
 
 fails loudly the moment two corrections to one observation land at the same clock instant: the harness clock only moves when a test advances it, so two consecutive commits share `now`, and `latest(... by correctedOn)` ties. README §10 already says same-transaction siblings share a timestamp by definition; two transactions at one instant are the same hazard, and a real clock at millisecond resolution can produce it too. The test advances the clock sixty seconds between corrections (`greenhouse - a correction is a ledger entry the curve reads, never an overwrite`). README §12's own `EmailCorrection` example carries the same exposure. What it asks for: guidance — an author-carried sequence datum beside the timestamp, or the harness advancing its clock per commit — recorded as a TODO item.
 
-### S5 — GAP, spelled around; open as OQ47: a `never` over a persistent act is a statement about history
+### S5 — GAP, half ruled (2026-10-11), half a TODO line: a `never` over a persistent act is a statement about history
 
 First spelling, on the persistent act:
 
@@ -121,7 +121,9 @@ rule RecordApplication when ApplyTreatment {
 }
 ```
 
-Evidence: `field - a severe phytotoxicity report halts the trial and later applications are refused at the boundary` and `field - the request needs an effective greenhouse result on record, and planting needs a permit in force` in `PeptidesPipelineTest.kt` — the second lets the permit lapse and shows unrelated commits still landing. Whether the validator should warn, and what the warning asks the author, is OQ47 (Part 1).
+Evidence: `field - a severe phytotoxicity report halts the trial and later applications are refused at the boundary` and `field - the request needs an effective greenhouse result on record, and planting needs a permit in force` in `PeptidesPipelineTest.kt` — the second lets the permit lapse and shows unrelated commits still landing.
+
+Where it stands (2026-10-11). The halt half is ruled, not a gap: the persistent spelling is a constraint on the books, a different kind of statement from the refusal the owner's sentence sounds like, chosen on purpose (README §21). No advisory asks which the author meant, because the rejection now carries what makes the choice self-correcting — the application on file, the report refused, the trial it read through, and the evaluation — as data with a rendered message (`evaluation.md`, "Errors, refusals, and retry"); the transient request stays the spelling for an author who means only to turn the request away. A scheduled or after-commit rule that creates a record such a constraint consults is a validation error (`checks.md` V29), since its firing has no caller to refuse. The permit half is not ruled: a constraint that reads the clock is violated by aging, with no transaction to blame, and the runtime then refuses every transaction in the system; V29 does not see it, because no rule produces the state. That is the TODO line under "Peptides stress pass".
 
 ### S6 — TAX, open: a capture of the base shape's own derived property is refused
 
@@ -222,9 +224,9 @@ Ruled 2026-10-09, no input needed. The `never` comes first: the boundary guardra
 
 README §12's ledger and this spec's corrections both order by `timestamp on create`. Within one clock instant that ties. Either the README notes the exposure and recommends an author-carried sequence (the caller supplies `sequence: integer`, as it supplies the correlation key), or the harness clock advances by one unit per commit so the tie cannot happen in tests — which hides it rather than answering it.
 
-### 3. A `never` over a persistent act that reads state which can flip later — OQ47
+### 3. A `never` over a persistent act that reads state which can flip later — settled, one half remaining
 
-Spelled out as OQ47 in `QUESTIONS.md`. The short form: whether a situation is rejected or recorded is the author's choice per `never`, so the persistent spelling is legitimate when chosen on purpose; the question is the advisory that makes the author see that a `never` over a standing record can be violated by a later act, tick, or deletion, and asks which they meant (Part 1), and then what the rejection says and who hears it, including a scheduled rule's rejection, which reaches nobody today (Part 2).
+Was OQ47 and OQ48, settled 2026-10-11 (README §21; `checks.md` V29; `evaluation.md` "Ticks" and "Errors, refusals, and retry"). Whether a situation is rejected or recorded is the author's choice per `never`; a `never` on a persistent shape is a constraint on the books, enforced against whichever act or tick would break them, and the rejection carries the record protected, the act refused, the record it read through, and the evaluation, so no advisory is needed to make the choice visible. A rule with no caller behind it that creates a record a constraint consults is refused at validation. What remains is a constraint that reads the clock, which the books can fall into by aging alone: see S5 and the TODO line.
 
 ## Scorecard
 
@@ -234,7 +236,7 @@ Spelled out as OQ47 in `QUESTIONS.md`. The short form: whether a situation is re
 | S2 | `as` alias as a collection source lost its element | GAP | fixed; probe in `ValidatorTest.kt` |
 | S3 | uniqueness `never` on a series datum reached after the rules that read it | GAP | ruled 2026-10-09 → README §21, `evaluation.md`; runtime implementation in `TODO.md` |
 | S4 | ledger ordering by commit timestamp ties within one instant | TAX | open — section 2; TODO |
-| S5 | `never` over a persistent act is a statement about history | GAP | spelled around (transient request); OQ47 |
+| S5 | `never` over a persistent act is a statement about history | GAP | halt half ruled 2026-10-11 → README §21, `checks.md` V29; clock-reading half a TODO line |
 | S6 | capture of the base's own derived property refused by V6 | TAX | spelled around (record); TODO |
 | S7 | `never` over any rule-written field fails closed (V10) | TAX | spelled around (ledger, record); rides OQ16 |
 | S8 | episodes discharge does not cover a series-fed state (V15) | TAX | spelled around (`after commit, Hourly`); TODO |

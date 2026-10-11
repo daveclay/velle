@@ -1,19 +1,15 @@
 package velle.generated.shipping
 
-import java.time.Instant
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import velle.CommitResult
 import velle.EvalStep
 import velle.RecordRef
 import velle.Rejection
-import velle.TickRejected
 import velle.generated.ShippingSystem
 
 /**
@@ -29,9 +25,11 @@ import velle.generated.ShippingSystem
  * needed to get a readable one. Nothing here is fetched from the state by
  * hand; every assertion reads the result.
  *
- * The third rejection has no act: the nightly rule cancels an unpaid order
- * that has shipped, and the tick throws the same [Rejection] it would have
- * returned, naming the rule and the record it ran for instead of an act.
+ * A rejection with no act behind it — a scheduled rule's firing — is not
+ * reachable from this spec: the validator refuses a scheduled rule whose
+ * record the prohibition consults (checks.md V29). The runtime's thrown
+ * rejection for the case that remains, a constraint that reads the clock, is
+ * pinned in the compiler's `TickRejectionTest.kt`.
  */
 class ShippingRejectionsTest {
 
@@ -41,12 +39,11 @@ class ShippingRejectionsTest {
     private fun rejection(r: CommitResult): Rejection =
         assertNotNull(assertIs<CommitResult.Refused>(r, "accepted: $r").rejection, "a never refusal carries its rejection")
 
-    private val first = LocalDate.of(2026, 10, 1)
     private val sixth = LocalDate.of(2026, 10, 6)
     private val seventh = LocalDate.of(2026, 10, 7)
 
-    private fun order(reference: String, placedOn: LocalDate = first): ShippingSystem.OrderView {
-        accept(sys.commitOrder(reference, placedOn))
+    private fun order(reference: String): ShippingSystem.OrderView {
+        accept(sys.commitOrder(reference))
         return sys.orders().last()
     }
 
@@ -95,7 +92,7 @@ class ShippingRejectionsTest {
               never #1: Shipment where order is CancelledOrder
               this Cancellation: order = Order#1, requestedOn = 2026-10-07
               Shipment#2: order = Order#1, shippedOn = 2026-10-06
-              through Order#1: reference = "4471", placedOn = 2026-10-01
+              through Order#1: reference = "4471"
               evaluation:
                 Shipment#2.order = Order#1
                 Order#1.cancellations = [this Cancellation]
@@ -132,7 +129,7 @@ class ShippingRejectionsTest {
             Shipment refused: this Shipment would be a Shipment where order is CancelledOrder.
               never #1: Shipment where order is CancelledOrder
               this Shipment: order = Order#1, shippedOn = 2026-10-07
-              through Order#1: reference = "4471", placedOn = 2026-10-01
+              through Order#1: reference = "4471"
               also Cancellation#2: order = Order#1, requestedOn = 2026-10-06
               evaluation:
                 this Shipment.order = Order#1
@@ -141,77 +138,6 @@ class ShippingRejectionsTest {
             """.trimIndent(),
             r.message,
         )
-    }
-
-    @Test
-    fun `the nightly rule cancelling a shipped unpaid order is rejected - the tick throws the same rejection`() {
-        val order = order("4471", placedOn = LocalDate.of(2026, 9, 20))
-        accept(sys.commitShipment(order, sixth))
-        sys.setTime(Instant.parse("2026-10-07T02:00:00Z"))
-
-        val e = assertFailsWith<TickRejected> { sys.tickNightly() }
-
-        // The firing rolled back: the rule's cancellation did not land.
-        assertEquals(emptyList(), sys.cancellations(), "the rule's cancellation did not land")
-        assertEquals("Nightly", e.schedule)
-        val r = e.rejections.single()
-        assertEquals(e.message, r.message, "the exception's message is the rejection's")
-
-        // No act: the rule and the record it ran for stand in its place.
-        assertNull(r.act)
-        assertEquals("CancelUnpaid", r.rule)
-        assertEquals("Nightly", r.schedule)
-        val subject = assertNotNull(r.subject)
-        assertEquals(RecordRef("Order", order.id), subject.ref)
-
-        // What the firing produced, and the record that would be in the forbidden state.
-        val cancellation = r.produced.single()
-        assertEquals("Cancellation", cancellation.shape)
-        assertEquals(RecordRef("Order", order.id), cancellation.fields["order"])
-        assertEquals(seventh, cancellation.fields["requestedOn"])
-        val shipment = r.violating.single()
-        assertEquals("Shipment", shipment.shape)
-        assertEquals(sixth, shipment.fields["shippedOn"])
-
-        // The order is the subject, so it is neither a pivot nor a witness.
-        assertEquals(emptyList(), r.pivots)
-        assertEquals(emptyList(), r.witnesses)
-        assertTrue(EvalStep.Read(subject.ref, "cancellations", listOf(cancellation.ref)) in r.evaluation)
-
-        assertEquals(
-            """
-            Nightly tick rejected: Shipment#2 would be a Shipment where order is CancelledOrder.
-              never #1: Shipment where order is CancelledOrder
-              rule CancelUnpaid for Order#1: reference = "4471", placedOn = 2026-09-20
-              produced Cancellation#3: order = Order#1, requestedOn = 2026-10-07
-              Shipment#2: order = Order#1, shippedOn = 2026-10-06
-              evaluation:
-                Shipment#2.order = Order#1
-                Order#1.cancellations = [Cancellation#3]
-                Order#1 is CancelledOrder
-            """.trimIndent(),
-            r.message,
-        )
-    }
-
-    @Test
-    fun `a rejected firing blocks only itself - the other orders are cancelled and the tick still throws`() {
-        val shipped = order("4471", placedOn = LocalDate.of(2026, 9, 20))
-        val unshipped = order("4472", placedOn = LocalDate.of(2026, 9, 20))
-        val paid = order("4473", placedOn = LocalDate.of(2026, 9, 20))
-        accept(sys.commitShipment(shipped, sixth))
-        accept(sys.commitPayment(paid, sixth))
-        sys.setTime(Instant.parse("2026-10-07T02:00:00Z"))
-
-        val e = assertFailsWith<TickRejected> { sys.tickNightly() }
-
-        assertEquals(listOf(RecordRef("Order", shipped.id)), e.rejections.map { it.subject?.ref })
-        assertEquals(listOf(unshipped.id), sys.cancellations().map { it.order.id }, "only the unpaid, unshipped order was cancelled")
-
-        // The next tick retries exactly the rejected firing.
-        val again = assertFailsWith<TickRejected> { sys.tickNightly() }
-        assertEquals(listOf(RecordRef("Order", shipped.id)), again.rejections.map { it.subject?.ref })
-        assertEquals(1, sys.cancellations().size, "the guard makes re-evaluation harmless")
     }
 
     @Test

@@ -1230,8 +1230,8 @@ class VelleSystem(
         val subjectId = t.firing?.second?.takeIf { instance(it) != null }
         val produced = t.created.filter { it != actId && instance(it) != null }
         // what the transaction was about: the act's references, or the firing's
-        // subject and the references of what it produced
-        val originRefs = (listOfNotNull(actId) + produced)
+        // subject, its references, and the references of what it produced
+        val originRefs = (listOfNotNull(actId, subjectId) + produced)
             .flatMap { instance(it)!!.fields.values.flatMap(::idsIn) }.toSet() + listOfNotNull(subjectId)
         val evaluation = steps.distinct().mapNotNull { step ->
             when (step) {

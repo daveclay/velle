@@ -17,25 +17,12 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun advanceDays(days: Long) = system.advanceDays(days)
     fun setTime(t: Instant) = system.setTime(t)
 
-    // ── ticks: scheduled events and user acts are both external input ──
-    fun tickNightly() = system.tick("Nightly")
-
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitOrder(reference: String, placedOn: LocalDate): CommitResult =
+    fun commitOrder(reference: String): CommitResult =
         system.commit("Order", buildMap {
             put("reference", reference)
-            put("placedOn", placedOn)
-        })
-
-    /** Queue key: [payment.order].
-     *  Commits sharing a queue key are handled one at a time, in arrival
-     *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPayment(order: OrderView, paidOn: LocalDate): CommitResult =
-        system.commit("Payment", buildMap {
-            put("order", order.id)
-            put("paidOn", paidOn)
         })
 
     /** Queue keys: [cancellation.order] — plus system-wide width below.
@@ -60,14 +47,10 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     fun orders(): List<OrderView> = system.instancesOf("Order").map { OrderView(it) }
     fun order(id: Long) = OrderView(id)
-    fun payments(): List<PaymentView> = system.instancesOf("Payment").map { PaymentView(it) }
-    fun payment(id: Long) = PaymentView(id)
     fun cancellations(): List<CancellationView> = system.instancesOf("Cancellation").map { CancellationView(it) }
     fun cancellation(id: Long) = CancellationView(id)
     fun shipments(): List<ShipmentView> = system.instancesOf("Shipment").map { ShipmentView(it) }
     fun shipment(id: Long) = ShipmentView(id)
-    fun unpaidOrders(): List<UnpaidOrderView> = system.instancesOf("UnpaidOrder").map { UnpaidOrderView(it) }
-    fun OrderView.isUnpaidOrder(): Boolean = system.isMember(id, "UnpaidOrder")
     fun cancelledOrders(): List<CancelledOrderView> = system.instancesOf("CancelledOrder").map { CancelledOrderView(it) }
     fun OrderView.isCancelledOrder(): Boolean = system.isMember(id, "CancelledOrder")
     fun shippedOrders(): List<ShippedOrderView> = system.instancesOf("ShippedOrder").map { ShippedOrderView(it) }
@@ -75,20 +58,10 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     inner class OrderView(override val id: Long) : View {
         val reference: String get() = system.get(id, "reference") as String
-        val placedOn: LocalDate get() = system.get(id, "placedOn") as LocalDate
-        val payments: List<PaymentView> get() = (system.get(id, "payments") as List<*>).map { PaymentView(it as Long) }
         val cancellations: List<CancellationView> get() = (system.get(id, "cancellations") as List<*>).map { CancellationView(it as Long) }
         val shipments: List<ShipmentView> get() = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) }
         override fun toString() = "Order#$id"
         override fun equals(other: Any?) = other is OrderView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class PaymentView(override val id: Long) : View {
-        val order: OrderView get() = OrderView(system.get(id, "order") as Long)
-        val paidOn: LocalDate get() = system.get(id, "paidOn") as LocalDate
-        override fun toString() = "Payment#$id"
-        override fun equals(other: Any?) = other is PaymentView && other.id == id
         override fun hashCode() = id.hashCode()
     }
 
@@ -106,11 +79,6 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         override fun toString() = "Shipment#$id"
         override fun equals(other: Any?) = other is ShipmentView && other.id == id
         override fun hashCode() = id.hashCode()
-    }
-
-    inner class UnpaidOrderView(override val id: Long) : View {
-        fun asOrder() = OrderView(id)
-        override fun toString() = "UnpaidOrder#$id"
     }
 
     inner class CancelledOrderView(override val id: Long) : View {
@@ -143,11 +111,12 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 -- the message can say, from the spec and the evaluation alone, is the
 -- exploration in `output/src/test/kotlin/velle/ShippingRejectionsTest.kt`.
 --
--- A third rejection has no person behind it: a nightly rule cancels orders
--- that have gone unpaid, and an unpaid order that has already shipped puts
--- the rule's own cancellation in front of the same prohibition. There is no
--- caller to hand the refusal to, so the tick throws it, carrying the same
--- rejection an act's commit function returns.
+-- A third rejection would have no person behind it: a nightly rule that
+-- cancels orders gone unpaid would put its own cancellation in front of the
+-- same prohibition for an unpaid order that has shipped, with no caller to
+-- hand the refusal to. That rule is not here, because the validator refuses
+-- it (checks.md V29: the spec would instruct and forbid the same record);
+-- the compiler's `ValidatorTest.kt` keeps it as the fixture.
 --
 -- Comment convention (as in payments.velle): plain comments tell the business
 -- story; `velle:` comments note the language machinery on show.
@@ -156,17 +125,7 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
 expose shape Order {
     reference: text
-    placedOn: Date
 }
-
--- ── Paying ───────────────────────────────────────────────────────────────────
-
-expose shape Payment {
-    order: one Order
-    paidOn: Date
-}
-
-shape UnpaidOrder = Order where not exists (payments)
 
 -- ── Cancelling ───────────────────────────────────────────────────────────────
 
@@ -181,18 +140,6 @@ expose shape Cancellation {
 }
 
 shape CancelledOrder = Order where exists (cancellations)
-
--- Every night, an order still unpaid a week after it was placed is cancelled.
--- The rule does not look at shipments: for an unpaid order that has shipped,
--- its cancellation meets the prohibition below, and the nightly tick is
--- rejected for that order. The remedy is the rule's, not the runtime's.
--- velle: a schedule-triggered rule (README §17); the guard on cancellations
--- makes the nightly sweep idempotent
-rule CancelUnpaid
-    when (UnpaidOrder where placedOn < today - 7 days and not exists (cancellations))
-    on Nightly {
-    Cancellation from { order: this, requestedOn: today }
-}
 
 -- ── Shipping ─────────────────────────────────────────────────────────────────
 
@@ -220,14 +167,12 @@ never (Shipment where order is CancelledOrder)
 fun main() {
     val sys = ShippingSystem()
     println("Velle MockHarness — Shipping")
-    println("Commits: commitOrder(...), commitPayment(...), commitCancellation(...), commitShipment(...)")
-    println("Ticks: tickNightly()")
+    println("Commits: commitOrder(...), commitCancellation(...), commitShipment(...)")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>
 
     println("Order: " + sys.orders().size)
-    println("Payment: " + sys.payments().size)
     println("Cancellation: " + sys.cancellations().size)
     println("Shipment: " + sys.shipments().size)
 }

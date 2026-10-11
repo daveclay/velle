@@ -110,7 +110,7 @@ object RejectionRenderer {
         r.act?.let { appendLine("  ${record(it)}") }
         r.rule?.let { rule -> appendLine("  rule $rule" + (r.subject?.let { " for ${record(it)}" } ?: "")) }
         r.produced.forEach { appendLine("  produced ${record(it)}") }
-        r.violating.filter { it.ref != actRef }.forEach { appendLine("  ${record(it)}") }
+        r.violating.filter { it.ref != actRef && it.ref != r.subject?.ref }.forEach { appendLine("  ${record(it)}") }
         r.pivots.forEach { appendLine("  through ${record(it)}") }
         r.witnesses.forEach { appendLine("  also ${record(it)}") }
         if (r.evaluation.isNotEmpty()) {

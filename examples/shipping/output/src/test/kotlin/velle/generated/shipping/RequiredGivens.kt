@@ -13,7 +13,4 @@ import velle.generated.ShippingSystem
  * A missing given is a compile error naming exactly what the spec's tests are owed.
  */
 interface RequiredGivens {
-
-    /** Bring ONE subject into 'UnpaidOrder' without ticking 'Nightly'; return the subject. */
-    fun orderForCancelUnpaid(): ShippingSystem.OrderView
 }
