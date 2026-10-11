@@ -17,7 +17,6 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 - [ ] Decide whether the deleting commit runs the boundary guardrail before processing — a deletion can make a `not exists` prohibition true (`evaluation.md` "The deleting commit").
 - [ ] Align the compiler's user-facing text with the prohibition vocabulary (README §21, 2026-10-10): the V10 diagnostic says "rule-maintained" (`Validator.kt`), and the sequence-diagram note, rule-graph legend, and state-flow legend say "input-constrained" (`DiagramGen.kt`, `RuleGraphGen.kt`, `StateFlowGen.kt`).
 - [ ] Note in README §10/§12 that a ledger ordered by `timestamp on create` ties within one clock instant, and recommend an author-carried sequence datum or a per-commit harness clock step (S4).
-- [ ] Decide OQ47 Part 1 — the advisory that makes a books rule over a standing record visible as the author's choice (S5).
 - [ ] Relax V6 to accept a capture of the base shape's own derived property, which is evaluable for every instance (S6).
 - [ ] Extend V15's episodes discharge to states flipped by a series creation read through an inferred inverse, not only by an own-column assignment (S8; rides OQ16).
 - [ ] Teach the domain derivation to key a series read rooted at the subject's inferred inverse (`assays`, `climateReadings`, …) — 41 A5 widths on `examples/peptides/`, all of that shape (S12; rides the A5 stress-test item under serialization domains).
@@ -32,8 +31,6 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## Transient acts — Design B residue (`investigate-transient.md`)
 
-- [ ] Decide what a rejection carries and how it reaches a person — the author-supplied sentence on `never` and the engineer-facing rejection surface (OQ47; today a refusal names a rule number).
-- [ ] Define what happens when a scheduled rule's transaction is rejected by a `never`: `evaluation.md` "Ticks" says nothing, the runtime returns the error to the harness, and the rejection repeats at every tick until a person acts (OQ47).
 - [ ] Confirm outcome-mediated provenance satisfies `why` when provenance lands (README §22's `why` item).
 - [ ] Grow V18 beyond the complement slice once V9's exhaustiveness engine exists.
 - [ ] Revisit: can rules copy a transient container act *and its parts* into a durable tree? The part-copying rules appear to have no way to name the durable container a sibling rule just created (V17 bans the reference path, U1's snapshot hides the sibling's creation) — confirm or break the tracing; the outcome scopes OQ43.
@@ -54,7 +51,10 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 - [ ] Decide: `if ... then` sharing the condition's line — language rule, or parser limitation to lift?
 - [ ] Close validator gaps (tracked in `Validator.kt`'s header): V11 branch-sensitive narrowing · V12 at-most-one beyond the refinement slice (`singular_references.md`) · A-series beyond A4/A5.
-- [ ] Levels of advisory checks: treat the A-series as a documenting artifact of validation, with levels from "warn at the line" down to "record what the spec entails" (generated tests that make a constraint's rejections visible and executable, or a generated note), so a calculable case the author may not have intended is exposed without being noisy — after OQ47 closes.
+- [ ] Levels of advisory checks: treat the A-series as a documenting artifact of validation, with levels from "warn at the line" down to "record what the spec entails" (generated tests that make a constraint's rejections visible and executable, or a generated note), so a calculable case the author may not have intended is exposed without being noisy (the rejections decision, 2026-10-11: no warning, since a clear rejection makes a one-sided author self-correcting).
+- [ ] Generate spec cases for a `never` with a non-comparison predicate (`SpecGen.kt` skips them, "Not yet generated"): one test per act the constraint can reject, asserting the refusal and carrying the rendered message, so a spec documents its own constraints in its generated suite (`examples/shipping/` has none today).
+- [ ] Decide whether a `never` may carry an author-supplied sentence ("a shipment is never on the books for a cancelled order") as the top line of its rejection above the derived rendering; a string after the predicate is the smallest syntax (deferred at the rejections decision, 2026-10-11).
+- [ ] Carry a `never` rejection of an after-commit firing as a `Rejection` the way a tick's is thrown: `drainAfterQueue` (`Runtime.kt`) records it in the failures list as a string today. Whether it shares OQ48's answer is OQ48's.
 - [ ] Add the static selector-discrimination check (selectors fail loudly at runtime today; the static proof rides OQ16 calibration — `investigate_runtime.md` §9).
 - [ ] Extend the sibling-confluence audit's order sweep beyond identity-versus-reversed: seeded N-permutation sampling per commit (`audit-sibling-confluence.md`, residue; the knob is `VelleSystem.firingOrder`).
 - [ ] Sharpen the audit's deliberately coarse spots as calibration demands: signed sums under positivity `never`s, `as`-aliased consult attribution, the cascade-induction write-up (`audit-sibling-confluence.md`, "What this audit does and does not establish").

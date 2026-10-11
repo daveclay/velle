@@ -127,7 +127,8 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         private val SPEC = """
 -- Shipping: orders, shipments, and cancellations. A deliberately small spec
 -- whose only point is one prohibition and the rejections it produces, written
--- to explore what a rejection message can say (OQ47, "Rejections").
+-- to explore what a rejection message can say (README §21; `evaluation.md`,
+-- "Errors, refusals, and retry").
 --
 -- The prohibition is a constraint on the books (README §21): a shipment is
 -- never on the books for a cancelled order. It is one sentence, but it

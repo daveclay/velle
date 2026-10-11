@@ -52,7 +52,7 @@ sealed interface CommitResult {
      *  persisted — what the application's own queries key on. */
     data class Accepted(val id: Long, val storeKey: Any? = null) : CommitResult
     /** [reason] is the rendered message; [rejection] is the same as data when a
-     *  `never` refused the act (OQ47), null for a type-level refusal. */
+     *  `never` refused the act (README §21), null for a type-level refusal. */
     data class Refused(val reason: String, val rejection: Rejection? = null) : CommitResult
 }
 
@@ -1105,7 +1105,7 @@ class VelleSystem(
      * own transaction. A firing a `never` rejects has no caller to hand the
      * refusal to, so when the sweep is done the tick throws [TickRejected]
      * carrying each firing's [Rejection] — the same object an act's commit
-     * function returns in [CommitResult.Refused] (OQ47). The other firings
+     * function returns in [CommitResult.Refused] (`evaluation.md`, "Ticks"). The other firings
      * stand; the next tick retries the rejected ones.
      */
     fun tick(schedule: String) {
@@ -1193,7 +1193,7 @@ class VelleSystem(
     }
 
     /**
-     * Everything in hand at the refusal, as data (OQ47): the prohibition is
+     * Everything in hand at the refusal, as data (`evaluation.md`, "Errors, refusals, and retry"): the prohibition is
      * re-evaluated over the violating records with the evaluator's trace on,
      * and the records the trace touched are snapshotted. The act's referenced
      * records that the trace read through are the pivots — what the person

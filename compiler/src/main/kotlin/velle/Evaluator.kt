@@ -13,7 +13,7 @@ class Evaluator(private val system: VelleSystem) {
 
     private val model get() = system.model
 
-    /** One step of an evaluation, recorded when [trace] is set (OQ47 rejection context). */
+    /** One step of an evaluation, recorded when [trace] is set (rejection context, `Rejection.kt`). */
     sealed interface Trace {
         data class Read(val id: Long, val member: String, val value: Value) : Trace
         data class Membership(val id: Long, val refinement: String, val member: Boolean) : Trace

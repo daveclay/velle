@@ -3,7 +3,7 @@ package velle
 import java.math.BigDecimal
 
 /**
- * What a rejection carries (OQ47, "Rejections"). A `never` refused a
+ * What a rejection carries (`evaluation.md`, "Errors, refusals, and retry"). A `never` refused a
  * transaction; this is everything the runtime had in hand when it did, as
  * data for the engineer's binding code to build a specific response from,
  * plus a rendered [message] so that no binding code is required to get a

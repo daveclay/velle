@@ -17,7 +17,7 @@ import velle.TickRejected
 import velle.generated.ShippingSystem
 
 /**
- * What a rejection carries (OQ47, "Rejections").
+ * What a rejection carries (`evaluation.md`, "Errors, refusals, and retry").
  *
  * One constraint on the books, `never (Shipment where order is
  * CancelledOrder)`, and the two acts it rejects: a shipment for a cancelled
