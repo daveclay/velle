@@ -9,13 +9,18 @@ import java.math.BigDecimal
  * plus a rendered [message] so that no binding code is required to get a
  * readable one.
  *
- * The parts: the [act] that was refused (absent for a tick); the records
- * that would have been in the forbidden state, [violating]; the records the
- * act references that the prohibition's evaluation read through, [pivots]
- * — for "cancel this order" that is the order, the thing the person was
- * acting on; any other records the evaluation read, [witnesses]; and the
- * [evaluation] itself, every member read and refinement test the predicate
- * made over the violating records, in order.
+ * The parts: the [act] that was refused, or for a rule firing the [rule],
+ * its [subject], and the [schedule] when a tick ran it; the records the
+ * transaction [produced] beyond the act; the records that would have been in
+ * the forbidden state, [violating]; the records the act (or the firing's
+ * subject and products) references that the prohibition's evaluation read
+ * through, [pivots] — for "cancel this order" that is the order, the thing
+ * the person was acting on; any other records the evaluation read,
+ * [witnesses]; and the [evaluation] itself, every member read and refinement
+ * test the predicate made over the violating records, in order.
+ *
+ * An act's rejection comes back in [CommitResult.Refused]; a tick's is
+ * thrown as [TickRejected], since a tick has no caller to return it to.
  */
 data class Rejection(
     /** The prohibition's 1-based ordinal in the spec. */
@@ -24,8 +29,16 @@ data class Rejection(
     val prohibition: String,
     /** The shape the prohibition is over. */
     val targetShape: String,
-    /** The act refused, with its fields; null when a tick's transaction was rejected. */
+    /** The act refused, with its fields; null when a rule firing's transaction was rejected. */
     val act: RecordSnapshot?,
+    /** The rule whose firing was rejected; null for an act. */
+    val rule: String?,
+    /** The schedule whose tick ran the rule; null for an act or an after-commit firing. */
+    val schedule: String?,
+    /** The firing's subject, the record the rule ran for; null for an act. */
+    val subject: RecordSnapshot?,
+    /** Records the transaction created beyond the act: the firing's products, or what the act's rules produced. */
+    val produced: List<RecordSnapshot>,
     /** The records that would have been in the forbidden state. May include the act. */
     val violating: List<RecordSnapshot>,
     /** Records the act references that the evaluation read through. */
@@ -39,6 +52,15 @@ data class Rejection(
 ) {
     val message: String = RejectionRenderer.render(this)
 }
+
+/**
+ * A tick's rejection. A tick has no caller, so a firing that a `never`
+ * rejects is thrown once the sweep is done, carrying each rejected firing's
+ * [Rejection] — the same object an act's refusal returns. The other firings
+ * stood; the next tick retries the rejected ones.
+ */
+class TickRejected(val schedule: String, val at: java.time.Instant, val rejections: List<Rejection>) :
+    Exception(rejections.joinToString("\n\n") { it.message })
 
 /** A reference to a record: its shape and session-local id. */
 data class RecordRef(val shape: String, val id: Long) {
@@ -77,10 +99,17 @@ object RejectionRenderer {
 
         val subject = r.violating.joinToString(", ") { label(it.ref) }
         val article = if (r.prohibition.first().lowercaseChar() in "aeiou") "an" else "a"
-        if (r.act != null) append("${r.act.shape} refused: ") else append("Transaction rejected: ")
+        when {
+            r.act != null -> append("${r.act.shape} refused: ")
+            r.schedule != null -> append("${r.schedule} tick rejected: ")
+            r.rule != null -> append("rule ${r.rule} rejected: ")
+            else -> append("Transaction rejected: ")
+        }
         appendLine("$subject would be $article ${r.prohibition}.")
         appendLine("  never #${r.never}: ${r.prohibition}")
         r.act?.let { appendLine("  ${record(it)}") }
+        r.rule?.let { rule -> appendLine("  rule $rule" + (r.subject?.let { " for ${record(it)}" } ?: "")) }
+        r.produced.forEach { appendLine("  produced ${record(it)}") }
         r.violating.filter { it.ref != actRef }.forEach { appendLine("  ${record(it)}") }
         r.pivots.forEach { appendLine("  through ${record(it)}") }
         r.witnesses.forEach { appendLine("  also ${record(it)}") }

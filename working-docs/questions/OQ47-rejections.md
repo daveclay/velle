@@ -203,14 +203,14 @@ Nothing new is computed. The one restatement is the `never` read at the pivot, "
 
 *Status of the rendering* (checked 2026-10-10, and overtaken the same day: the trace now exists, see the end of this note). Grounded: `checkNevers` (`compiler/src/main/kotlin/velle/Runtime.kt`) already keeps a per-prohibition read summary, a clock flag, and footprint-based relevance gating, so "which acts can this reject" reads data the runtime holds. Across the checked-in specs there are 38 `never` declarations: 26 read only the target's own fields, 2 are self-reference, and all 10 cross-record ones reach other records through exactly one reference on the target, so every real case has a single pivot. The violating-record-is-not-the-act phenomenon is real: the five sibling-uniqueness prohibitions (`examples/peptides/peptides.velle` lines 119, 299, 578, 745, and `Treatment` at 271) put both siblings in violation and the runtime throws on whichever id it visits first, and `PlotObservation where not plot.trial is TreatedTrial` (line 304) can flip for an observation on file. Speculative: the witness trace does not exist (the check is a boolean membership test that throws a string, with no bindings kept, and the evaluator has not been assessed for a witness-keeping mode); the restatement of the `never` at the pivot is hand-written for four cases with no algorithm, and the real predicates come in several shapes (`count(...) > 1`, `not ... is`, a comparison of two paths in `examples/gallery/gallery.velle` line 41); and the shipment rendering, two different shapes meeting at an order, has no checked-in example, the nearest being the sibling counts where both records are the same shape.
 
-*Implemented* (2026-10-10, later). The evaluator gained a trace hook (`Evaluator.trace`: every member read and refinement test), and the runtime re-evaluates a violated `never` over its violating records with the trace on to build a `Rejection` (`compiler/src/main/kotlin/velle/Rejection.kt`): the act, the violating records, the pivots (records the act references that the trace read), the witnesses (other records read), the evaluation steps, and a rendered message. The pivot restatement of the `never` is not attempted; the rendering keeps the prohibition's own words and lets the pivot and evaluation lines carry the story. Exercised by `examples/shipping/output/src/test/kotlin/velle/ShippingRejectionsTest.kt`, which pins both messages. The cancellation's reads today:
+*Implemented* (2026-10-10, later). The evaluator gained a trace hook (`Evaluator.trace`: every member read and refinement test), and the runtime re-evaluates a violated `never` over its violating records with the trace on to build a `Rejection` (`compiler/src/main/kotlin/velle/Rejection.kt`): the act, the violating records, the pivots (records the act references that the trace read), the witnesses (other records read), the evaluation steps, and a rendered message. (Since 2026-10-11 also the firing's rule, schedule, and subject, and the records the transaction produced, for a tick's rejection; see "A tick" below.) The pivot restatement of the `never` is not attempted; the rendering keeps the prohibition's own words and lets the pivot and evaluation lines carry the story. Exercised by `examples/shipping/output/src/test/kotlin/velle/ShippingRejectionsTest.kt`, which pins both messages. The cancellation's reads today:
 
 ```
 Cancellation refused: Shipment#2 would be a Shipment where order is CancelledOrder.
   never #1: Shipment where order is CancelledOrder
   this Cancellation: order = Order#1, requestedOn = 2026-10-07
   Shipment#2: order = Order#1, shippedOn = 2026-10-06
-  through Order#1: reference = "4471"
+  through Order#1: reference = "4471", placedOn = 2026-10-01
   evaluation:
     Shipment#2.order = Order#1
     Order#1.cancellations = [this Cancellation]
@@ -228,7 +228,19 @@ Dave, 2026-10-10, on the three things velle cannot compute:
 Who hears it:
 
 - **An act's caller.** The generated commit function returns the refusal; the engineer's binding code carries it to whoever submitted the act. This exists. Its content is the gap. This includes a forbidden state produced by a rule the act triggered (Dave, 2026-10-10): the act caused it, so the submitter is told, the same as any other refusal, and the payload carries the rule and the effect because the trace does. Making the rule's owner aware is outside the language; it is a concern for the runtime's error logging, which the binding code owns.
-- **A tick.** There is no caller. The rejection goes back to the harness as an error, `evaluation.md` says nothing about it, and it is a standing condition: it repeats at every tick, and when the `never` reads the clock it rejects every act's transaction too. Dave, 2026-10-10: a tick rejection is an edge case and likely undesired in any velle, since it produces repeated errors. For now, the generated tick method throws an exception carrying the same rejection data model and the same rendered message as the exposed act's commit function returns. The harness sees the exception; what it does with the repetition is the binding code's.
+- **A tick.** There is no caller. The rejection goes back to the harness as an error, `evaluation.md` says nothing about it, and it is a standing condition: it repeats at every tick, and when the `never` reads the clock it rejects every act's transaction too. Dave, 2026-10-10: a tick rejection is an edge case and likely undesired in any velle, since it produces repeated errors. For now, the generated tick method throws an exception carrying the same rejection data model and the same rendered message as the exposed act's commit function returns. The harness sees the exception; what it does with the repetition is the binding code's. *Implemented 2026-10-11*: the tick finishes its sweep (every firing is its own transaction, so the other firings stand), then throws `TickRejected` (`compiler/src/main/kotlin/velle/Rejection.kt`) carrying the schedule, the moment, and one `Rejection` per rejected firing. The `Rejection` gained the firing's rule, schedule, subject, and the records the transaction produced, so a tick's message names the rule and the record it ran for where an act's names the act. Exercised in `examples/shipping/`, where a nightly rule cancels unpaid orders and meets the prohibition on an order that has shipped:
+
+  ```
+  Nightly tick rejected: Shipment#2 would be a Shipment where order is CancelledOrder.
+    never #1: Shipment where order is CancelledOrder
+    rule CancelUnpaid for Order#1: reference = "4471", placedOn = 2026-09-20
+    produced Cancellation#3: order = Order#1, requestedOn = 2026-10-07
+    Shipment#2: order = Order#1, shippedOn = 2026-10-06
+    evaluation:
+      Shipment#2.order = Order#1
+      Order#1.cancellations = [Cancellation#3]
+      Order#1 is CancelledOrder
+  ```
 
 Candidates:
 

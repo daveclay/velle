@@ -369,6 +369,10 @@ class VelleSystem(
         var depth = 0
         /** The exposed act this transaction is for, once inserted; null for a tick or after-commit firing. */
         var act: Long? = null
+        /** The rule firing this transaction is, and its subject; null for an exposed act. */
+        var firing: Pair<RuleDecl, Long>? = null
+        /** The schedule whose tick this transaction serves; null otherwise. */
+        var schedule: String? = null
 
         /** Cumulative footprint of every commit in the envelope (never gating). */
         val createdShapes = mutableSetOf<String>()
@@ -549,7 +553,7 @@ class VelleSystem(
         for ((rule, subject) in ordered(t.afterQueue)) {
             if (instance(subject) == null) continue
             if (!evaluator.memberOfRefExpr(subject, rule.condition)) continue
-            val result = inTransaction { fire(rule, subject) }
+            val result = inTransaction { txn!!.firing = rule to subject; fire(rule, subject) }
             result.exceptionOrNull()?.let {
                 failures.add("after-commit firing of '${rule.name}' failed: ${it.message}")
             }
@@ -1096,11 +1100,20 @@ class VelleSystem(
 
     // ── ticks (evaluation.md, "Ticks") ───────────────────────────────────────
 
+    /**
+     * Runs every rule on [schedule] over its current members, each firing its
+     * own transaction. A firing a `never` rejects has no caller to hand the
+     * refusal to, so when the sweep is done the tick throws [TickRejected]
+     * carrying each firing's [Rejection] — the same object an act's commit
+     * function returns in [CommitResult.Refused] (OQ47). The other firings
+     * stand; the next tick retries the rejected ones.
+     */
     fun tick(schedule: String) {
         // a tick is a new evaluation moment: select subjects against settled
         // storage, not the previous envelope's leftover working set
         beginSnapshot()
         val previous = lastTick[schedule] ?: startInstant
+        val rejected = mutableListOf<Rejection>()
         for (rule in model.rules.values) {
             if (schedule !in rule.triggers) continue
             // a tick deletes nothing: the deletion-side forms are transaction-bound
@@ -1127,13 +1140,19 @@ class VelleSystem(
             for (subject in subjects) {
                 // each firing is its own transaction; a straggler blocks only itself
                 if (!rule.leaving && !evaluator.memberOfRefExpr(subject, rule.condition)) continue
-                val result = inTransaction { fire(rule, subject) }
+                val result = inTransaction {
+                    txn!!.firing = rule to subject
+                    txn!!.schedule = schedule
+                    fire(rule, subject)
+                }
                 result.exceptionOrNull()?.let {
-                    failures.add("tick($schedule) firing of '${rule.name}' failed: ${it.message}")
+                    if (it is NeverViolation) rejected.add(it.rejection)
+                    else failures.add("tick($schedule) firing of '${rule.name}' failed: ${it.message}")
                 }
             }
         }
         lastTick[schedule] = now
+        if (rejected.isNotEmpty()) throw TickRejected(schedule, now, rejected)
     }
 
     private fun membershipAt(time: Instant, id: Long, condition: RefExpr): Boolean {
@@ -1208,7 +1227,12 @@ class VelleSystem(
         }
 
         val actId = t.act?.takeIf { instance(it) != null }
-        val actRefs = actId?.let { instance(it)!!.fields.values.flatMap(::idsIn).toSet() }.orEmpty()
+        val subjectId = t.firing?.second?.takeIf { instance(it) != null }
+        val produced = t.created.filter { it != actId && instance(it) != null }
+        // what the transaction was about: the act's references, or the firing's
+        // subject and the references of what it produced
+        val originRefs = (listOfNotNull(actId) + produced)
+            .flatMap { instance(it)!!.fields.values.flatMap(::idsIn) }.toSet() + listOfNotNull(subjectId)
         val evaluation = steps.distinct().mapNotNull { step ->
             when (step) {
                 is Evaluator.Trace.Read -> instance(step.id)?.let { EvalStep.Read(refOf(step.id), step.member, plain(step.value)) }
@@ -1221,14 +1245,20 @@ class VelleSystem(
                 is Evaluator.Trace.Membership -> listOf(step.id)
             }
         }.distinct().filter { instance(it) != null }
-        val pivots = touched.filter { it in actRefs && it !in violating }
-        val witnesses = touched.filter { it != actId && it !in violating && it !in pivots }
+        val pivots = touched.filter { it in originRefs && it !in violating && it != subjectId && it !in produced }
+        val witnesses = touched.filter {
+            it != actId && it != subjectId && it !in produced && it !in violating && it !in pivots
+        }
 
         return Rejection(
             never = ordinal,
             prohibition = Printer.refExpr(n.target),
             targetShape = w.bases.joinToString(" or "),
             act = actId?.let(::snapshot),
+            rule = t.firing?.first?.name,
+            schedule = t.schedule,
+            subject = subjectId?.let(::snapshot),
+            produced = produced.map(::snapshot),
             violating = violating.map(::snapshot),
             pivots = pivots.map(::snapshot),
             witnesses = witnesses.map(::snapshot),

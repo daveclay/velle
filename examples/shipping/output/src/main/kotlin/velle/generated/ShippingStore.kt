@@ -17,6 +17,14 @@ import java.time.LocalDate
 data class OrderRow(
     val key: StoreKey,
     val reference: String,
+    val placedOn: LocalDate,
+)
+
+/** One stored Payment row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class PaymentRow(
+    val key: StoreKey,
+    val order: Ref.Persisted,
+    val paidOn: LocalDate,
 )
 
 /** One stored Cancellation row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -42,19 +50,25 @@ data class ShipmentRow(
 interface ShippingStore {
     // ── keyed reads ──
     fun order(key: StoreKey): OrderRow?
+    fun payment(key: StoreKey): PaymentRow?
     fun cancellation(key: StoreKey): CancellationRow?
     fun shipment(key: StoreKey): ShipmentRow?
 
     // ── scan floor: all rows of a shape ──
     fun allOrders(): List<OrderRow>
+    fun allPayments(): List<PaymentRow>
     fun allCancellations(): List<CancellationRow>
     fun allShipments(): List<ShipmentRow>
 
     // ── join reads: rows referencing a target through a to-one field ──
+    fun paymentsByOrder(target: Ref.Persisted): List<PaymentRow>
     fun cancellationsByOrder(target: Ref.Persisted): List<CancellationRow>
     fun shipmentsByOrder(target: Ref.Persisted): List<ShipmentRow>
 
     // ── candidate reads: one per condition with a testable part ──
+    /** Serves rule CancelUnpaid — `UnpaidOrder where (placedOn < (today - 7 days)) and (not (exists (cancellations)))`.
+     *  Superset contract: any superset of the matching rows is correct. */
+    fun cancelUnpaidCandidates(placedOnBefore: LocalDate): List<OrderRow>
     /** Serves never #1 — `Shipment where order is CancelledOrder`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never1Candidates(): List<ShipmentRow>
@@ -62,6 +76,7 @@ interface ShippingStore {
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class ShippingStoreQuestions(model: Model) {
+    val cancelUnpaidCandidates = QTemplate.of(model, "Order", model.rules.getValue("CancelUnpaid").condition)
     val never1Candidates = QTemplate.of(model, "Shipment", model.nevers[0].target)
 }
 
@@ -76,17 +91,25 @@ open class ShippingStoreOverGeneric(
     private val questions = ShippingStoreQuestions(model)
 
     override fun order(key: StoreKey): OrderRow? = backend.fetchByKey("Order", key)?.toOrderRow()
+    override fun payment(key: StoreKey): PaymentRow? = backend.fetchByKey("Payment", key)?.toPaymentRow()
     override fun cancellation(key: StoreKey): CancellationRow? = backend.fetchByKey("Cancellation", key)?.toCancellationRow()
     override fun shipment(key: StoreKey): ShipmentRow? = backend.fetchByKey("Shipment", key)?.toShipmentRow()
 
     override fun allOrders(): List<OrderRow> = backend.fetchAll("Order").map { it.toOrderRow() }
+    override fun allPayments(): List<PaymentRow> = backend.fetchAll("Payment").map { it.toPaymentRow() }
     override fun allCancellations(): List<CancellationRow> = backend.fetchAll("Cancellation").map { it.toCancellationRow() }
     override fun allShipments(): List<ShipmentRow> = backend.fetchAll("Shipment").map { it.toShipmentRow() }
 
+    override fun paymentsByOrder(target: Ref.Persisted): List<PaymentRow> =
+        backend.fetchReferencing("Payment", "order", target).map { it.toPaymentRow() }
     override fun cancellationsByOrder(target: Ref.Persisted): List<CancellationRow> =
         backend.fetchReferencing("Cancellation", "order", target).map { it.toCancellationRow() }
     override fun shipmentsByOrder(target: Ref.Persisted): List<ShipmentRow> =
         backend.fetchReferencing("Shipment", "order", target).map { it.toShipmentRow() }
+
+    override fun cancelUnpaidCandidates(placedOnBefore: LocalDate): List<OrderRow> =
+        backend.fetchCandidates("Order", questions.cancelUnpaidCandidates.instantiate(listOf(QConst.QDate(placedOnBefore))))
+            .map { it.toOrderRow() }
 
     override fun never1Candidates(): List<ShipmentRow> =
         backend.fetchCandidates("Shipment", questions.never1Candidates.instantiate(listOf()))
@@ -102,6 +125,7 @@ class ShippingStoreResolver(
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
         "Order" -> store.order(key)?.toRow()
+        "Payment" -> store.payment(key)?.toRow()
         "Cancellation" -> store.cancellation(key)?.toRow()
         "Shipment" -> store.shipment(key)?.toRow()
         else -> null
@@ -109,18 +133,22 @@ class ShippingStoreResolver(
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
         "Order" -> store.allOrders().map { it.toRow() }
+        "Payment" -> store.allPayments().map { it.toRow() }
         "Cancellation" -> store.allCancellations().map { it.toRow() }
         "Shipment" -> store.allShipments().map { it.toRow() }
         else -> emptyList()
     }
 
     override fun fetchReferencing(shape: String, field: String, target: Ref.Persisted): List<Row> = when {
+        shape == "Payment" && field == "order" -> store.paymentsByOrder(target).map { it.toRow() }
         shape == "Cancellation" && field == "order" -> store.cancellationsByOrder(target).map { it.toRow() }
         shape == "Shipment" && field == "order" -> store.shipmentsByOrder(target).map { it.toRow() }
         else -> emptyList()
     }
 
     override fun fetchCandidates(shape: String, filter: QF): List<Row> {
+        if (shape == "Order")
+            questions.cancelUnpaidCandidates.match(filter)?.let { h -> return store.cancelUnpaidCandidates(h.date(0)).map { it.toRow() } }
         if (shape == "Shipment")
             questions.never1Candidates.match(filter)?.let { h -> return store.never1Candidates().map { it.toRow() } }
         return fetchAll(shape) // unrecognized filters fall back to the scan floor
@@ -131,15 +159,31 @@ class ShippingStoreResolver(
     }
 }
 
+private fun List<QConst>.date(i: Int): LocalDate = (this[i] as QConst.QDate).v
+private fun List<QConst>.instant(i: Int): Instant = (this[i] as QConst.QDateTime).v
+
 // ── row mappers: the generic wire format <-> the typed rows ──
 
 fun Row.toOrderRow(): OrderRow = OrderRow(
     key = key,
     reference = fields["reference"] as String,
+    placedOn = fields["placedOn"] as LocalDate,
 )
 
 fun OrderRow.toRow(): Row = Row("Order", key, buildMap {
     put("reference", reference)
+    put("placedOn", placedOn)
+})
+
+fun Row.toPaymentRow(): PaymentRow = PaymentRow(
+    key = key,
+    order = fields["order"] as Ref.Persisted,
+    paidOn = fields["paidOn"] as LocalDate,
+)
+
+fun PaymentRow.toRow(): Row = Row("Payment", key, buildMap {
+    put("order", order)
+    put("paidOn", paidOn)
 })
 
 fun Row.toCancellationRow(): CancellationRow = CancellationRow(
