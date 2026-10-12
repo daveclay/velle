@@ -706,7 +706,7 @@ interface PharmacyStore {
     /** Serves never #1 — `Staff where ((role != "pharmacist") and (role != "technician")) and (role != "admin")`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never1Candidates(): List<StaffRow>
-    /** Serves never #2 — `LicenceRenewal where not (pharmacist is Pharmacist)`.
+    /** Serves never #2 — `LicenceRenewal where pharmacist is not Pharmacist`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never2Candidates(): List<LicenceRenewalRow>
     /** Serves never #3 — `Drug where ((schedule < 0) or (schedule == 1)) or (schedule > 5)`.
@@ -739,13 +739,13 @@ interface PharmacyStore {
     /** Serves never #19 — `Prescription where (drug is Controlled) and (refillsAuthorized > 5)`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never19Candidates(): List<PrescriptionRow>
-    /** Serves never #22 — `ConflictOverride where not (pharmacist is Pharmacist)`.
+    /** Serves never #22 — `ConflictOverride where pharmacist is not Pharmacist`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never22Candidates(): List<ConflictOverrideRow>
-    /** Serves never #28 — `MonitoringCheck where not (pharmacist is Pharmacist)`.
+    /** Serves never #28 — `MonitoringCheck where pharmacist is not Pharmacist`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never28Candidates(): List<MonitoringCheckRow>
-    /** Serves never #34 — `Counselling where not (pharmacist is Pharmacist)`.
+    /** Serves never #34 — `Counselling where pharmacist is not Pharmacist`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never34Candidates(): List<CounsellingRow>
 

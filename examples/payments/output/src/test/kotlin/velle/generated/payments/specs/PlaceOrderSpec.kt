@@ -50,7 +50,7 @@ import velle.generated.payments.*
  *     Shipment from { order: this, shippedOn: now }
  * }
  *
- * shape ApplicableAddressChange = UnhandledAddressChange where not (order is ReadyToShip)
+ * shape ApplicableAddressChange = UnhandledAddressChange where order is not ReadyToShip
  *
  * shape RefusedAddressChange = UnhandledAddressChange where order is ReadyToShip
  *
@@ -73,7 +73,7 @@ import velle.generated.payments.*
  *
  * shape OverdueOrder = UnpaidOrder where dueBy < today
  *
- * rule RemindPayment when (OverdueOrder where (not (this is InGracePeriod)) and (not (exists (PaymentReminder where (order == this) and (sentOn > (today - 3 days)))))) on Daily {
+ * rule RemindPayment when (OverdueOrder where (this is not InGracePeriod) and (not (exists (PaymentReminder where (order == this) and (sentOn > (today - 3 days)))))) on Daily {
  *     PaymentReminder from { order: this, sentOn: today }
  * }
  *
@@ -81,7 +81,7 @@ import velle.generated.payments.*
  *     DunningFlag from { order: this, openedOn: today }
  * }
  *
- * shape ClosableDunningFlag = OpenDunningFlag where not (order is UnpaidOrder)
+ * shape ClosableDunningFlag = OpenDunningFlag where order is not UnpaidOrder
  *
  * rule CloseDunningEpisode when ClosableDunningFlag on Daily {
  *     DunningResolution from { flag: this, resolvedOn: today }

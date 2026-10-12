@@ -1505,7 +1505,7 @@ never (PlotObservation where count(plot.plotObservations where dayAfterTreatment
 -- No score before the plants were treated.
 -- velle: an input-constrained `never` testing refinement membership two
 -- hops away
-never (PlotObservation where not plot.trial is TreatedTrial)
+never (PlotObservation where plot.trial is not TreatedTrial)
 
 -- The trial's states: laid out once each arm has its plots; observed to the
 -- end once every plot has a score at or past the final day; complete when
@@ -1595,7 +1595,7 @@ shape CorrectionRefusal {
     refusedOn: timestamp on create
 }
 
-shape ApplicableCorrection = CorrectObservation where not observation is LockedObservation
+shape ApplicableCorrection = CorrectObservation where observation is not LockedObservation
 shape RefusedCorrection    = CorrectObservation where observation is LockedObservation
 
 rule ApplyCorrection when ApplicableCorrection {
@@ -1634,7 +1634,7 @@ shape VoidRefusal {
     refusedOn: timestamp on create
 }
 
-shape ApplicableVoid = VoidObservation where not observation is LockedObservation
+shape ApplicableVoid = VoidObservation where observation is not LockedObservation
 shape RefusedVoid    = VoidObservation where observation is LockedObservation
 
 rule ApplyVoid when ApplicableVoid {
@@ -1671,7 +1671,7 @@ shape MoveRefusal {
     refusedOn: timestamp on create
 }
 
-shape ApplicableMove = MovePlot where not plot is TreatedPlot
+shape ApplicableMove = MovePlot where plot is not TreatedPlot
 shape RefusedMove    = MovePlot where plot is TreatedPlot
 
 rule ApplyMove when ApplicableMove {
@@ -1724,7 +1724,7 @@ rule OpenClimateExcursion when (OutOfBand where not exists OpenExcursion for thi
     }
 }
 
-shape ClosableExcursion = OpenExcursion where not greenhouse is OutOfBand
+shape ClosableExcursion = OpenExcursion where greenhouse is not OutOfBand
 
 rule CloseClimateExcursion when ClosableExcursion after commit, Hourly {
     ExcursionEnd from { excursion: this, endedAt: now }
@@ -1868,7 +1868,7 @@ expose transient shape PlantTrial {
     seedLot: text
 }
 
-never (PlantTrial where not trial is PermittedTrial)
+never (PlantTrial where trial is not PermittedTrial)
 
 shape Planting {
     trial: one FieldTrial
@@ -2068,7 +2068,7 @@ shape RescheduleRefusal {
     refusedOn: timestamp on create
 }
 
-shape ApplicableReschedule = RescheduleTask where not task is DoneTask
+shape ApplicableReschedule = RescheduleTask where task is not DoneTask
 shape RefusedReschedule    = RescheduleTask where task is DoneTask
 
 rule ApplyReschedule when ApplicableReschedule {
@@ -2102,7 +2102,7 @@ shape CancelRefusal {
     refusedOn: timestamp on create
 }
 
-shape ApplicableCancel = CancelTask where not task is DoneTask
+shape ApplicableCancel = CancelTask where task is not DoneTask
 shape RefusedCancel    = CancelTask where task is DoneTask
 
 rule ApplyCancel when ApplicableCancel {

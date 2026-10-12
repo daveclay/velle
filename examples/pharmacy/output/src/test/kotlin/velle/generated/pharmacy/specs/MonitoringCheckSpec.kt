@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * never (MonitoringCheck where not (pharmacist is Pharmacist))
+ * never (MonitoringCheck where pharmacist is not Pharmacist)
  *
  */
 class MonitoringCheckSpec : SpecSupport() {

@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * never (CountLot where (not (technician is Technician)) and (not (technician is Pharmacist)))
+ * never (CountLot where (technician is not Technician) and (technician is not Pharmacist))
  *
  * never (CountLot where counted < 0)
  *

@@ -7,11 +7,11 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * shape Current = Prescription where ((refillsRemaining > 0) and (not (this is Discontinued))) and (not (this is Voided))
+ * shape Current = Prescription where ((refillsRemaining > 0) and (this is not Discontinued)) and (this is not Voided)
  *
  * shape ApplicableRefill = RequestRefill where prescription is ActivePrescription
  *
- * shape RefusedRefill = RequestRefill where not (prescription is ActivePrescription)
+ * shape RefusedRefill = RequestRefill where prescription is not ActivePrescription
  *
  * rule QueueRefill when ApplicableRefill {
  *     RefillTask from { prescription: prescription, requestKey: requestKey, fillsAtRequest: prescription.fillsRecorded }

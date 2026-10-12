@@ -315,7 +315,7 @@ interface PaymentsStore {
     /** Serves rule ReleaseStockOnExhaustion — `ExhaustedOrder where (exists StockReservation for this) and (not (exists (ReservationRelease where reservation.order == this)))`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun releaseStockOnExhaustionCandidates(): List<OrderRow>
-    /** Serves rule RemindPayment — `OverdueOrder where (not (this is InGracePeriod)) and (not (exists (PaymentReminder where (order == this) and (sentOn > (today - 3 days)))))`.
+    /** Serves rule RemindPayment — `OverdueOrder where (this is not InGracePeriod) and (not (exists (PaymentReminder where (order == this) and (sentOn > (today - 3 days)))))`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun remindPaymentCandidates(dueByBefore: LocalDate, sentOnAfter: LocalDate): List<OrderRow>
     /** Serves rule OpenDunningEpisode — `OverdueOrder where not (exists OpenDunningFlag for this)`.

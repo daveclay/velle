@@ -326,7 +326,7 @@ expose shape BareEdit {
     newText: text
 }
 
-shape ApplicableBareEdit = BareEdit where not note is LockedNote
+shape ApplicableBareEdit = BareEdit where note is not LockedNote
 shape RefusedBareEdit    = BareEdit where note is LockedNote
 
 rule ApplyBareEdit when ApplicableBareEdit {
@@ -374,7 +374,7 @@ shape EditRefusal {
 shape UnhandledSafeEdit = SafeEdit where
     not exists EditApplication for this and not exists EditRefusal for this
 
-shape ApplicableSafeEdit = UnhandledSafeEdit where not note is LockedNote
+shape ApplicableSafeEdit = UnhandledSafeEdit where note is not LockedNote
 shape RefusedSafeEdit    = UnhandledSafeEdit where note is LockedNote
 
 rule ApplySafeEdit when ApplicableSafeEdit {
@@ -401,7 +401,7 @@ expose transient shape TransientEdit {
     newTitle: text
 }
 
-shape ApplicableTransientEdit = TransientEdit where not note is LockedNote
+shape ApplicableTransientEdit = TransientEdit where note is not LockedNote
 shape RefusedTransientEdit    = TransientEdit where note is LockedNote
 
 rule ApplyTransientEdit when ApplicableTransientEdit {

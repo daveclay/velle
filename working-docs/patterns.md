@@ -71,7 +71,7 @@ There is nothing to throw and nowhere to throw it — Velle has no stack and no 
 ```
 shape ReceiptedInvoice = Invoice where exists Receipt for this
 
-shape ApplicableVoid = VoidPayment where not payment.invoice is ReceiptedInvoice
+shape ApplicableVoid = VoidPayment where payment.invoice is not ReceiptedInvoice
 shape RefusedVoid    = VoidPayment where payment.invoice is ReceiptedInvoice
 
 rule ApplyVoid when ApplicableVoid {

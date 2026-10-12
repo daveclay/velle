@@ -13,7 +13,7 @@ import velle.generated.peptides.*
  *     ClimateExcursion from { greenhouse: this, startedAt: now, temperature: latest(climateReadings by recordedAt).temperature }
  * }
  *
- * shape ClosableExcursion = OpenExcursion where not (greenhouse is OutOfBand)
+ * shape ClosableExcursion = OpenExcursion where greenhouse is not OutOfBand
  *
  * rule CloseClimateExcursion when ClosableExcursion after commit, Hourly {
  *     ExcursionEnd from { excursion: this, endedAt: now }

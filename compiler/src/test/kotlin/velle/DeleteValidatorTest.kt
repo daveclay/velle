@@ -214,7 +214,7 @@ class DeleteValidatorTest {
         assertLacks("V27", base + """
 
             rule ApplyDiscard when (Discard where listing is Draft) { delete listing }
-            rule RefuseDiscard when (Discard where not (listing is Draft)) {
+            rule RefuseDiscard when (Discard where listing is not Draft) {
                 Refusal from { title: listing.title }
             }
             shape Refusal { title: text }

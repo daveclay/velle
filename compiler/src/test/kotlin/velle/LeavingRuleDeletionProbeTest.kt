@@ -112,7 +112,7 @@ class LeavingRuleDeletionProbeTest {
             title: text
         }
 
-        rule RefuseDiscard when (DiscardDraft where not (listing is Draft)) {
+        rule RefuseDiscard when (DiscardDraft where listing is not Draft) {
             DiscardRefusal from { title: listing.title }
         }
     """.trimIndent()

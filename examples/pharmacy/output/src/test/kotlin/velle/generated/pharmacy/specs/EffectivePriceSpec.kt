@@ -11,7 +11,7 @@ import velle.generated.pharmacy.*
  *     undeletable
  * }
  *
- * shape ApplicableWithdrawal = WithdrawPriceChange where not (priceChange is EffectivePrice)
+ * shape ApplicableWithdrawal = WithdrawPriceChange where priceChange is not EffectivePrice
  *
  * shape RefusedWithdrawal = WithdrawPriceChange where priceChange is EffectivePrice
  *

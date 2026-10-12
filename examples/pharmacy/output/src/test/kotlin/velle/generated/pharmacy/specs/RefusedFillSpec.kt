@@ -12,7 +12,7 @@ import velle.generated.pharmacy.*
  * shape ApplicableFill = FillPrescription where dispensable
  *
  * rule RefuseFill when RefusedFill {
- *     FillRefusal from { requestKey: requestKey, prescription: prescription, reason: if prescription is Expired then "prescription expired" else if prescription is Discontinued then "prescription discontinued" else if prescription is Exhausted then "no refills remaining" else if not (prescription is Cleared) then "unresolved allergy or interaction conflict" else "the lot does not hold that much" }
+ *     FillRefusal from { requestKey: requestKey, prescription: prescription, reason: if prescription is Expired then "prescription expired" else if prescription is Discontinued then "prescription discontinued" else if prescription is Exhausted then "no refills remaining" else if prescription is not Cleared then "unresolved allergy or interaction conflict" else "the lot does not hold that much" }
  * }
  *
  */

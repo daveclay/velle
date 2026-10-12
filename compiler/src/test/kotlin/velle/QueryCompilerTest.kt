@@ -92,7 +92,7 @@ class QueryCompilerTest {
 
     @Test
     fun `membership through a to-one reference becomes a forward join`() {
-        // ApplicableDueChange = ChangeDueDate where not invoice is IssuedInvoice
+        // ApplicableDueChange = ChangeDueDate where invoice is not IssuedInvoice
         val m = billing()
         val f = compiler(m).filterFor(RefName("ApplicableDueChange"))
         assertEquals(

@@ -129,7 +129,7 @@ classDiagram
         <<refinement>>
     }
     ChangeDueDate <|-- ApplicableDueChange
-    note for ApplicableDueChange "= ChangeDueDate where not (invoice is IssuedInvoice)"
+    note for ApplicableDueChange "= ChangeDueDate where invoice is not IssuedInvoice"
     class RefusedDueChange {
         <<refinement>>
     }
@@ -218,7 +218,7 @@ A transient act is an input, not state: its partitions are decided once, at the 
 stateDiagram-v2
     state decide <<choice>>
     [*] --> decide : commitChangeDueDate
-    decide --> ApplicableDueChange : not (invoice is IssuedInvoice)
+    decide --> ApplicableDueChange : invoice is not IssuedInvoice
     ApplicableDueChange --> [*] : ApplyDueChange — sets invoice.due = newDue
     decide --> RefusedDueChange : invoice is IssuedInvoice
     RefusedDueChange --> [*] : RecordDueChangeRefusal — inserts DueChangeRefusal

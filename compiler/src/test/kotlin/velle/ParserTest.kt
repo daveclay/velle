@@ -226,6 +226,17 @@ class ExpressionTest {
     }
 
     @Test
+    fun `is not Refinement is the negated membership test`() {
+        val e = predicate("invoice is not IssuedInvoice")
+        assertEquals(NotExpr(IsExpr(PathExpr("invoice"), "refinement", "IssuedInvoice")), e)
+        assertEquals(e, predicate("not (invoice is IssuedInvoice)"))
+        // binds as one atom: the negation covers only the membership test
+        val and = assertIs<Binary>(predicate("this is not Discontinued and refillsRemaining > 0"))
+        assertEquals("and", and.op)
+        assertEquals(NotExpr(IsExpr(PathExpr("this"), "refinement", "Discontinued")), and.left)
+    }
+
+    @Test
     fun `bare refinement name filters a collection`() {
         val e = value("count(invoices where OverdueInvoice)")
         val count = assertIs<AggCall>(e)

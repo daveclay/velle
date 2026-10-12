@@ -21,7 +21,7 @@ import velle.generated.peptides.*
  *     GreenhouseResult from { trial: this, efficacy: efficacy, effective: if efficacy >= protocol.efficacyThreshold then true else false }
  * }
  *
- * shape ApplicableCorrection = CorrectObservation where not (observation is LockedObservation)
+ * shape ApplicableCorrection = CorrectObservation where observation is not LockedObservation
  *
  * shape RefusedCorrection = CorrectObservation where observation is LockedObservation
  *
@@ -33,7 +33,7 @@ import velle.generated.peptides.*
  *     CorrectionRefusal from { observation: observation, reason: "the trial has been evaluated" }
  * }
  *
- * shape ApplicableVoid = VoidObservation where not (observation is LockedObservation)
+ * shape ApplicableVoid = VoidObservation where observation is not LockedObservation
  *
  * shape RefusedVoid = VoidObservation where observation is LockedObservation
  *
@@ -46,7 +46,7 @@ import velle.generated.peptides.*
  *     VoidRefusal from { observation: observation, reason: "the trial has been evaluated" }
  * }
  *
- * shape ApplicableMove = MovePlot where not (plot is TreatedPlot)
+ * shape ApplicableMove = MovePlot where plot is not TreatedPlot
  *
  * shape RefusedMove = MovePlot where plot is TreatedPlot
  *

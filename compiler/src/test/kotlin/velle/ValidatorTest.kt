@@ -88,7 +88,7 @@ class ValidatorTest {
 
             shape UsableOrder = Order where not exists (cancellations)
             expose transient shape Ship { order: one Order }
-            never (Ship where not order is UsableOrder)
+            never (Ship where order is not UsableOrder)
             rule RecordShipment when Ship {
                 Shipment from { order: order, shippedOn: today }
             }
@@ -375,7 +375,7 @@ class ValidatorTest {
                 amount: decimal
             }
 
-            shape OnTimePayment = PayInvoice where not invoice is Overdue
+            shape OnTimePayment = PayInvoice where invoice is not Overdue
             shape OverduePayment = PayInvoice where invoice is Overdue
 
             rule RecordPayment when OnTimePayment {
@@ -633,7 +633,7 @@ class ValidatorTest {
                 DelinquencyFlag from { account: this }
             }
 
-            rule CloseFlag when (OpenDelinquencyFlag where not account is Delinquent) {
+            rule CloseFlag when (OpenDelinquencyFlag where account is not Delinquent) {
                 this.resolved = true
             }
 
@@ -665,7 +665,7 @@ class ValidatorTest {
             newDue: Date
         }
 
-        shape ApplicableDueChange = ChangeDueDate where not invoice is IssuedInvoice
+        shape ApplicableDueChange = ChangeDueDate where invoice is not IssuedInvoice
         shape RefusedDueChange    = ChangeDueDate where invoice is IssuedInvoice
 
         rule ApplyDueChange when ApplicableDueChange {
@@ -694,7 +694,7 @@ class ValidatorTest {
     fun `A4 - the handled-once anchor silences the advisory`() {
         val src = barePartition
             .replace(
-                "shape ApplicableDueChange = ChangeDueDate where not invoice is IssuedInvoice",
+                "shape ApplicableDueChange = ChangeDueDate where invoice is not IssuedInvoice",
                 """
                 shape DueChangeApplication {
                     change: one ChangeDueDate
@@ -703,7 +703,7 @@ class ValidatorTest {
                 shape UnhandledDueChange = ChangeDueDate where
                     not exists DueChangeApplication for this and not exists DueChangeRefusal for this
 
-                shape ApplicableDueChange = UnhandledDueChange where not invoice is IssuedInvoice
+                shape ApplicableDueChange = UnhandledDueChange where invoice is not IssuedInvoice
                 """.trimIndent(),
             )
             .replace(
@@ -747,7 +747,7 @@ class ValidatorTest {
                 DelinquencyFlag from { account: this }
             }
 
-            rule CloseFlag when (OpenDelinquencyFlag where not account is Delinquent) {
+            rule CloseFlag when (OpenDelinquencyFlag where account is not Delinquent) {
                 this.resolved = true
             }
 

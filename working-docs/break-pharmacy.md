@@ -74,7 +74,7 @@ Four refusals in the first draft were about the request's moment and read values
 never (FillPrescription where fillNumber != prescription.fillsRecorded + 1)   -- the next number
 never (FillPrescription where quantity > lot.onHand)                          -- what the shelf holds
 never (VerifyFill where exists Verification for fill)                         -- verified once
-never (PickUp where not fill is ReadyForPickup)                               -- at the counter
+never (PickUp where fill is not ReadyForPickup)                               -- at the counter
 ```
 
 Every correctly numbered fill was refused: `fillsRecorded` is `count(fills)`, the request's own rule creates the fill, and a `never` is checked at the end of the settled transaction (README §21), by which time the count has moved and `1 != 1 + 1` is true. The verify-once refusal refused every verification for the same reason; the pickup refusal refused every pickup, since the pickup is what ends `ReadyForPickup`; the shelf bound refused any fill of more than half the lot. Sixty-one of the hundred and five tests failed on the first spelling, all on the fill request.
@@ -85,7 +85,7 @@ Every correctly numbered fill was refused: `fillsRecorded` is `count(fills)`, th
 never (Fill where fillNumber != count(prescription.fills where fillNumber <= this.fillNumber))
 never (Fill where count(verifications) > 1)
 never (Fill where count(pickups) > 1)
-never (PickUp where not fill is VerifiedFill or exists ReturnToStock for fill)
+never (PickUp where fill is not VerifiedFill or exists ReturnToStock for fill)
 ```
 
 The first counts the arriving fill among its siblings exactly as the peptides spec's hour-mark uniqueness does (`break-peptides.md` S3), and catches gaps and repeats in one sentence. The shelf bound went a different way (P4). Evidence: `fill - data refusals at the boundary keep nothing, business refusals land on record with the reason` and `verify - a licensed pharmacist verifies once, never their own controlled fill, and a rejection returns the stock` in `examples/pharmacy/output/src/test/kotlin/velle/PharmacyFlowTest.kt`.
@@ -102,7 +102,7 @@ expose shape StockLot {
     onHand: integer = received - sum(fills where ConsumingFill, quantity) + sum(stockAdjustments, delta)
 }
 
-shape ConsumingFill = Fill where not this is RejectedFill and not exists ReturnToStock for this
+shape ConsumingFill = Fill where this is not RejectedFill and not exists ReturnToStock for this
 
 never (StockLot where onHand < 0)
 
@@ -128,7 +128,7 @@ The reorder-point bound moved to the act (`never (SetReorderPoint where reorderP
 
 ### P6 — TAX, by design: deleting an unfilled prescription strands fourteen referrers
 
-The first draft voided a never-filled prescription entered against the wrong patient with a `delete`. V24 (referential completeness) listed every shape holding a required `one Prescription`: discontinuations, correction refusals, void refusals, overrides, alerts, monitoring checks, fills, fill refusals, refill tasks, refill refusals, authorisation requests, enrolments, cancellations — fourteen, each to be deleted in the same commit, declared `? initially required`, or replaced by copied fields. The deleter's scope (`not prescription is FilledPrescription`) excludes the fills, but V24 does not reason from the scope, and the other thirteen are legitimately present on an unfilled prescription.
+The first draft voided a never-filled prescription entered against the wrong patient with a `delete`. V24 (referential completeness) listed every shape holding a required `one Prescription`: discontinuations, correction refusals, void refusals, overrides, alerts, monitoring checks, fills, fill refusals, refill tasks, refill refusals, authorisation requests, enrolments, cancellations — fourteen, each to be deleted in the same commit, declared `? initially required`, or replaced by copied fields. The deleter's scope (`prescription is not FilledPrescription`) excludes the fills, but V24 does not reason from the scope, and the other thirteen are legitimately present on an unfilled prescription.
 
 The spec keeps the prescription and records the void (`EntryVoid`; `Voided = Prescription where entryVoids is not empty`; `Current` excludes it) — reversal as data (README §22, "Reversal"). In a regulated domain that is the right model anyway, and `FilledPrescription` lost its `undeletable` clause, which with no deleter left would have been dead machinery. Evidence: `order - corrections and voids are refused once a prescription has been filled` in `PharmacyFlowTest.kt`. The deletion the spec does keep is a future-dated price change (P9).
 
@@ -137,7 +137,7 @@ The spec keeps the prescription and records the void (`EntryVoid`; `Voided = Pre
 ```
 shape QuarantinedLot = StockLot where quarantines is not empty
 
-rule QuarantineRecalled when (RecalledLot where not this is QuarantinedLot) {
+rule QuarantineRecalled when (RecalledLot where this is not QuarantinedLot) {
     Quarantine from { lot: this, reason: "recalled" }
 }
 ```

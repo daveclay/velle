@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * never (VoidEntry where not (pharmacist is Pharmacist))
+ * never (VoidEntry where pharmacist is not Pharmacist)
  *
  */
 class VoidEntrySpec : SpecSupport() {

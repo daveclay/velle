@@ -12,7 +12,7 @@ import velle.generated.peptides.*
  *     undeletable
  * }
  *
- * shape ApplicableReschedule = RescheduleTask where not (task is DoneTask)
+ * shape ApplicableReschedule = RescheduleTask where task is not DoneTask
  *
  * shape RefusedReschedule = RescheduleTask where task is DoneTask
  *
@@ -24,7 +24,7 @@ import velle.generated.peptides.*
  *     RescheduleRefusal from { task: task, reason: "the task is done" }
  * }
  *
- * shape ApplicableCancel = CancelTask where not (task is DoneTask)
+ * shape ApplicableCancel = CancelTask where task is not DoneTask
  *
  * shape RefusedCancel = CancelTask where task is DoneTask
  *

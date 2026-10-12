@@ -1582,7 +1582,7 @@ expose shape LicenceRenewal {
     expiresOn: Date
 }
 
-never (LicenceRenewal where not pharmacist is Pharmacist)
+never (LicenceRenewal where pharmacist is not Pharmacist)
 
 shape LicensedPharmacist = Pharmacist where exists (licenceRenewals where expiresOn >= today)
 
@@ -1678,7 +1678,7 @@ expose transient shape WithdrawPriceChange {
     reason: text
 }
 
-never (WithdrawPriceChange where not administrator is Administrator)
+never (WithdrawPriceChange where administrator is not Administrator)
 
 shape PriceWithdrawal {
     drug: one Drug
@@ -1694,7 +1694,7 @@ shape PriceWithdrawalRefusal {
     refusedOn: timestamp on create
 }
 
-shape ApplicableWithdrawal = WithdrawPriceChange where not priceChange is EffectivePrice
+shape ApplicableWithdrawal = WithdrawPriceChange where priceChange is not EffectivePrice
 shape RefusedWithdrawal    = WithdrawPriceChange where priceChange is EffectivePrice
 
 rule ApplyWithdrawal when ApplicableWithdrawal {
@@ -1721,7 +1721,7 @@ expose transient shape SetReorderPoint {
     reorderPoint: integer
 }
 
-never (SetReorderPoint where not requestedBy is Administrator and not requestedBy is Pharmacist)
+never (SetReorderPoint where requestedBy is not Administrator and requestedBy is not Pharmacist)
 never (SetReorderPoint where reorderPoint < 0)
 
 rule ApplyReorderPoint when SetReorderPoint {
@@ -1751,7 +1751,7 @@ shape ExpiredLot     = StockLot where expiresOn < today
 shape QuarantinedLot = StockLot where quarantines is not empty
 shape RecalledLot    = StockLot where recalls is not empty
 shape UsableLot      = StockLot where expiresOn >= today and onHand > 0 and
-                       not this is QuarantinedLot
+                       this is not QuarantinedLot
 
 -- A technician counts a lot. If the count matches, the match is on record;
 -- if not, the difference is an adjustment the lot's balance reads.
@@ -1764,7 +1764,7 @@ expose transient shape CountLot {
     counted: integer
 }
 
-never (CountLot where not technician is Technician and not technician is Pharmacist)
+never (CountLot where technician is not Technician and technician is not Pharmacist)
 never (CountLot where counted < 0)
 
 shape StockAdjustment {
@@ -1796,7 +1796,7 @@ rule AdjustCount when DiscrepantCount {
 -- quarantined the moment the recall lands.
 -- velle: two rules producing one witness shape from triggers that never
 -- coincide — one on the nightly tick, one on commit. The guard is spelled
--- `not exists Quarantine for this`, not `not this is QuarantinedLot`: the
+-- `not exists Quarantine for this`, not `this is not QuarantinedLot`: the
 -- disarm proof reads the `exists` atom and does not look through a named
 -- refinement over `is not empty`
 shape Quarantine {
@@ -1978,7 +1978,7 @@ shape Exhausted    = Prescription where refillsRemaining <= 0
 -- A current prescription is one the patient may still be taking: refills
 -- left, not discontinued, not voided — whatever the paper's date. An active
 -- one is current and not yet expired.
-shape Current = Prescription where refillsRemaining > 0 and not this is Discontinued and not this is Voided
+shape Current = Prescription where refillsRemaining > 0 and this is not Discontinued and this is not Voided
 shape ActivePrescription = Current where expiresOn >= today
 
 -- Once a prescription has been filled, nothing about it changes.
@@ -2005,7 +2005,7 @@ shape CorrectionRefusal {
     refusedOn: timestamp on create
 }
 
-shape ApplicableCorrection = CorrectEntry where not prescription is FilledPrescription
+shape ApplicableCorrection = CorrectEntry where prescription is not FilledPrescription
 shape RefusedCorrection    = CorrectEntry where prescription is FilledPrescription
 
 rule ApplyCorrection when ApplicableCorrection {
@@ -2028,7 +2028,7 @@ expose transient shape VoidEntry {
     reason: text
 }
 
-never (VoidEntry where not pharmacist is Pharmacist)
+never (VoidEntry where pharmacist is not Pharmacist)
 
 shape EntryVoid {
     prescription: one Prescription
@@ -2043,7 +2043,7 @@ shape VoidRefusal {
     refusedOn: timestamp on create
 }
 
-shape ApplicableVoid = VoidEntry where not prescription is FilledPrescription
+shape ApplicableVoid = VoidEntry where prescription is not FilledPrescription
 shape RefusedVoid    = VoidEntry where prescription is FilledPrescription
 
 rule ApplyVoid when ApplicableVoid {
@@ -2082,10 +2082,10 @@ expose shape ConflictOverride {
     justification: text
 }
 
-never (ConflictOverride where not pharmacist is Pharmacist)
+never (ConflictOverride where pharmacist is not Pharmacist)
 
 shape Cleared = Prescription where
-    (not this is AllergyConflict and not this is InteractionConflict) or
+    (this is not AllergyConflict and this is not InteractionConflict) or
     exists ConflictOverride for this
 
 shape Fillable = ActivePrescription and Cleared
@@ -2155,7 +2155,7 @@ expose transient shape FillPrescription {
     dispensable: boolean = if prescription is Fillable and quantity <= lot.onHand then true else false
 }
 
-never (FillPrescription where not filledBy is Technician and not filledBy is Pharmacist)
+never (FillPrescription where filledBy is not Technician and filledBy is not Pharmacist)
 never (FillPrescription where lot.drug != prescription.drug)
 never (FillPrescription where lot is ExpiredLot or lot is QuarantinedLot)
 never (FillPrescription where quantity <= 0 or quantity > prescription.quantity)
@@ -2175,7 +2175,7 @@ expose shape MonitoringCheck {
     cleared: boolean
 }
 
-never (MonitoringCheck where not pharmacist is Pharmacist)
+never (MonitoringCheck where pharmacist is not Pharmacist)
 
 never (FillPrescription where lot.drug is Controlled and
        not exists (prescription.monitoringChecks where cleared and checkedAt > now - 24 hours))
@@ -2225,7 +2225,7 @@ rule RefuseFill when RefusedFill {
         reason: (if prescription is Expired then "prescription expired"
                  else if prescription is Discontinued then "prescription discontinued"
                  else if prescription is Exhausted then "no refills remaining"
-                 else if not prescription is Cleared then "unresolved allergy or interaction conflict"
+                 else if prescription is not Cleared then "unresolved allergy or interaction conflict"
                  else "the lot does not hold that much")
     }
 }
@@ -2260,7 +2260,7 @@ expose transient shape VerifyFill {
     note: text
 }
 
-never (VerifyFill where not pharmacist is LicensedPharmacist)
+never (VerifyFill where pharmacist is not LicensedPharmacist)
 never (VerifyFill where pharmacist == fill.filledBy and fill.lot.drug is Controlled)
 never (VerifyFill where outcome != "approved" and outcome != "rejected")
 
@@ -2285,7 +2285,7 @@ shape RejectedFill = Fill where exists (verifications where outcome == "rejected
 
 -- A fill consumes stock and a refill unless it was rejected or went back to
 -- the shelf uncollected.
-shape ConsumingFill = Fill where not this is RejectedFill and not exists ReturnToStock for this
+shape ConsumingFill = Fill where this is not RejectedFill and not exists ReturnToStock for this
 
 -- ── The counter: counselling, pickup, return to stock ────────────────────────
 
@@ -2297,7 +2297,7 @@ expose shape Counselling {
     notes: text
 }
 
-never (Counselling where not pharmacist is Pharmacist)
+never (Counselling where pharmacist is not Pharmacist)
 
 shape CounsellingDue = VerifiedFill where
     (lot.drug.requiresCounselling or fillNumber == 1) and not exists Counselling for this
@@ -2343,7 +2343,7 @@ rule RecordCounterExit when leaving ReadyForPickup {
 -- The patient collects and pays what is due. A fill that was never verified
 -- or was rejected, one already returned to stock, one that still owes
 -- counselling, or an underpaid one is not handed over; a fill is collected
--- once. "At the counter" is not written as `not fill is ReadyForPickup`: the
+-- once. "At the counter" is not written as `fill is not ReadyForPickup`: the
 -- pickup itself ends that membership, so the refusal would read its own
 -- consequence at the settled transaction. Its stable parts are spelled out,
 -- and "collected once" is a constraint on the fill.
@@ -2353,7 +2353,7 @@ expose transient shape PickUp {
     amountPaid: decimal
 }
 
-never (PickUp where not fill is VerifiedFill or exists ReturnToStock for fill)
+never (PickUp where fill is not VerifiedFill or exists ReturnToStock for fill)
 never (PickUp where fill is CounsellingDue)
 never (PickUp where amountPaid < fill.amountDue)
 
@@ -2410,7 +2410,7 @@ shape RefillRefusal {
 }
 
 shape ApplicableRefill = RequestRefill where prescription is ActivePrescription
-shape RefusedRefill    = RequestRefill where not prescription is ActivePrescription
+shape RefusedRefill    = RequestRefill where prescription is not ActivePrescription
 
 rule QueueRefill when ApplicableRefill {
     RefillTask from { prescription: prescription, requestKey: requestKey, fillsAtRequest: prescription.fillsRecorded }

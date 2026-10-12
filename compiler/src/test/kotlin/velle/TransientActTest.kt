@@ -33,7 +33,7 @@ class TransientActTest {
 
         never (WithdrawRequest where amount <= 0)
 
-        rule ApplyWithdrawal when (WithdrawRequest where not account is OverdrawnAccount) {
+        rule ApplyWithdrawal when (WithdrawRequest where account is not OverdrawnAccount) {
             Withdrawal from { account: account, amount: amount }
         }
 
@@ -73,8 +73,8 @@ class TransientActTest {
     @Test
     fun `V17 - no tick or after-commit trigger on the act`() {
         val src = spec.replace(
-            "rule ApplyWithdrawal when (WithdrawRequest where not account is OverdrawnAccount) {",
-            "rule ApplyWithdrawal when (WithdrawRequest where not account is OverdrawnAccount) on commit, Daily {",
+            "rule ApplyWithdrawal when (WithdrawRequest where account is not OverdrawnAccount) {",
+            "rule ApplyWithdrawal when (WithdrawRequest where account is not OverdrawnAccount) on commit, Daily {",
         )
         assertTrue(Validator.validate(src).any { it.code == "V17" }, "got: ${Validator.validate(src)}")
     }

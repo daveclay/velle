@@ -309,7 +309,7 @@ class DomainsTest {
                 newDue: Date
             }
 
-            shape ApplicableDueChange = ChangeDueDate where not invoice is IssuedInvoice
+            shape ApplicableDueChange = ChangeDueDate where invoice is not IssuedInvoice
 
             rule ApplyDueChange when ApplicableDueChange {
                 invoice.due = newDue

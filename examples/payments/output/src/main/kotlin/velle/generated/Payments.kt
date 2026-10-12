@@ -1058,7 +1058,7 @@ shape AddressChangeRefusal {
 shape UnhandledAddressChange = ChangeShippingAddress where
     not exists AddressChangeApplication for this and not exists AddressChangeRefusal for this
 
-shape ApplicableAddressChange = UnhandledAddressChange where not order is ReadyToShip
+shape ApplicableAddressChange = UnhandledAddressChange where order is not ReadyToShip
 shape RefusedAddressChange    = UnhandledAddressChange where order is ReadyToShip
 
 rule ApplyAddressChange when ApplicableAddressChange {
@@ -1148,7 +1148,7 @@ shape PaymentReminder {
 -- during a grace period.
 rule RemindPayment
     when (OverdueOrder where
-          not this is InGracePeriod and
+          this is not InGracePeriod and
           not exists (PaymentReminder where order == this and sentOn > today - 3 days))
     on Daily {
     PaymentReminder from { order: this, sentOn: today }
@@ -1178,7 +1178,7 @@ rule OpenDunningEpisode
     DunningFlag from { order: this, openedOn: today }
 }
 
-shape ClosableDunningFlag = OpenDunningFlag where not order is UnpaidOrder
+shape ClosableDunningFlag = OpenDunningFlag where order is not UnpaidOrder
 
 rule CloseDunningEpisode when ClosableDunningFlag on Daily {
     DunningResolution from { flag: this, resolvedOn: today }

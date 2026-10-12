@@ -316,7 +316,7 @@ shape IssuedInvoice = Invoice where exists Issuance for this {
 
 Immutability in Velle is state-scoped, never field-scoped: the same field is freely editable on a draft and frozen once issued, so a declaration-site marker (`final`, `readonly`) is the wrong granularity — the business sentence is about the *state*, and the refinement is the state's name. `frozen` is a **conditional write permission**, a new kind of statement in the same family as one-writer (`## Assignment (mutation in place)`): one-writer says who may write a field; `frozen` says when writing it is legal at all. A write to a frozen field is illegal at any commit where the instance is a member in the commit's **pre-state** — so the entering commit may still write (the instance is a member only in post-state: a rule reacting to the `Issuance` can normalize a field in the same commit that freezes it), and a non-monotone predicate thaws the freeze the moment membership ends. Bare `frozen` (no list) freezes every stored field of the base shape, auto-extending to fields added later (the same virtue as derived trigger sets — `## rule`); the listed form narrows deliberately. Only stored fields are eligible: derived properties were never assignable, and captured properties are fixed by definition. Composition (`## Composing refinements`) needs no extra rule — each refinement's freeze applies wherever its own membership holds.
 
-**The check is static, whole-spec.** Every write to stored state is a rule assignment to a literal static path (`## Assignment (mutation in place)`), so the compiler knows every writer of every field; the freeze check is the one-writer disjointness question re-aimed — *can this writer's trigger coincide with membership in the freezing refinement?* — fail-closed, reported as one connected diagnostic naming writer and freeze. The fix is the rejection-as-data idiom: partition the act (`ApplicableEdit = LineItemEdit where not invoice is IssuedInvoice` / `RefusedEdit = ...`), hang the writing rule off the applicable subset — now provably disjoint — and let the refusal land as a fact the caller reads back. No commit is ever unwound: immutability needs no rejection machinery, only proofs and partitions. A freeze no rule could ever violate is advisory dead machinery ("serves no writer" — the dead-tolerance shape, `## Self-referential folds and tolerates`).
+**The check is static, whole-spec.** Every write to stored state is a rule assignment to a literal static path (`## Assignment (mutation in place)`), so the compiler knows every writer of every field; the freeze check is the one-writer disjointness question re-aimed — *can this writer's trigger coincide with membership in the freezing refinement?* — fail-closed, reported as one connected diagnostic naming writer and freeze. The fix is the rejection-as-data idiom: partition the act (`ApplicableEdit = LineItemEdit where invoice is not IssuedInvoice` / `RefusedEdit = ...`), hang the writing rule off the applicable subset — now provably disjoint — and let the refusal land as a fact the caller reads back. No commit is ever unwound: immutability needs no rejection machinery, only proofs and partitions. A freeze no rule could ever violate is advisory dead machinery ("serves no writer" — the dead-tolerance shape, `## Self-referential folds and tolerates`).
 
 **Freeze depth is declared, not inferred.** "Can't edit line items" usually means the `LineItem` instances too; that's a conditioned refinement on the related shape, not transitive magic:
 
@@ -377,7 +377,7 @@ The expression language usable inside `where` — refinement definitions, inline
 **`is`** — one operator, three sanctioned right-hand forms:
 - optionality: `assignee is none`, `response is some` — valid on an optional (`?`) field or to-one relationship
 - collection emptiness: `corrections is not empty` — valid on a `many` relationship or collection expression
-- refinement membership: `alert is UnacknowledgedAlert`, `this is FlaggedCustomer` — valid whenever the left side's shape shares a base with the named refinement, or the named set is an operand of the left side's static union (`target is Post` on a `target: one Content` — a base shape is a member set like any other); a test with no base in common is a compile error, never trivially false. Within a conjunction it also *narrows*, licensing access to the named set's own properties (`## Refinements`; an operand's own fields, `## Composing refinements`), the same way `is some` licenses `.` on an optional — and in a conditional the else-branch of a two-operand union narrows to the other operand, since an instance has exactly one base
+- refinement membership: `alert is UnacknowledgedAlert`, `this is FlaggedCustomer`, and its negation `invoice is not IssuedInvoice` — the spelling of non-membership, the same predicate as the general negation `not (invoice is IssuedInvoice)`, and the one the language's own diagnostics and examples use — valid whenever the left side's shape shares a base with the named refinement, or the named set is an operand of the left side's static union (`target is Post` on a `target: one Content` — a base shape is a member set like any other); a test with no base in common is a compile error, never trivially false. Within a conjunction it also *narrows*, licensing access to the named set's own properties (`## Refinements`; an operand's own fields, `## Composing refinements`), the same way `is some` licenses `.` on an optional — and in a conditional the else-branch of a two-operand union narrows to the other operand, since an instance has exactly one base
 
 **`exists`** — `exists Receipt for this`, `not exists AccountFlagResolved for this` — tests whether any instance of a shape references the given subject via `for`.
 
@@ -456,7 +456,7 @@ negation       := "not"? atom
 atom           := comparison | isExpr | existsExpr | booleanAtom | "(" predicate ")"
 
 comparison     := expr ("==" | "!=" | "<" | "<=" | ">" | ">=") expr
-isExpr         := expr "is" ("none" | "some" | "empty" | "not empty" | ShapeName)
+isExpr         := expr "is" ("none" | "some" | "empty" | "not empty" | ShapeName | "not" ShapeName)
 existsExpr     := "exists" ShapeName "for" expr           -- sugar; legal only when exactly one field matches expr's type
                | "exists" "(" collectionExpr ")"          -- general form; required when more than one field
                                                            -- matches, or more than one condition is needed
@@ -747,7 +747,7 @@ Compensation — the exit produces a compensating fact — is fully expressed by
 
 ```
 shape UncompensatedSuspension = ServiceSuspension where not exists ServiceRestoration for this
-shape RestorableSuspension    = UncompensatedSuspension where not account is Delinquent
+shape RestorableSuspension    = UncompensatedSuspension where account is not Delinquent
 
 rule CompensateSuspension when RestorableSuspension {
     ServiceRestoration from { suspension: this, restoredOn: now }

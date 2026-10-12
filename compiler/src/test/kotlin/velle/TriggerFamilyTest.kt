@@ -68,7 +68,7 @@ class TriggerFamilyTest {
             rule ApplyPublish when Publish { listing.isDraft = false }
             expose transient shape DiscardDraft { listing: one Listing }
             rule ApplyDiscard when (DiscardDraft where listing is Draft) { delete listing }
-            rule RefuseDiscard when (DiscardDraft where not (listing is Draft)) { Refusal from { title: listing.title } }
+            rule RefuseDiscard when (DiscardDraft where listing is not Draft) { Refusal from { title: listing.title } }
             shape Refusal { title: text }
             rule NoteWithdrawal when leaving not deleted (Draft where seller is some) {
                 SellerNotice from { seller: seller, listingTitle: title }
@@ -106,7 +106,7 @@ class TriggerFamilyTest {
         rule ApplyPublish when Publish { listing.isDraft = false }
         expose transient shape DiscardDraft { listing: one Listing }
         rule ApplyDiscard when (DiscardDraft where listing is Draft) { delete listing }
-        rule RefuseDiscard when (DiscardDraft where not (listing is Draft)) { Refusal from { title: listing.title } }
+        rule RefuseDiscard when (DiscardDraft where listing is not Draft) { Refusal from { title: listing.title } }
         shape Refusal { title: text }
     """.trimIndent()
 
@@ -196,7 +196,7 @@ class TriggerFamilyTest {
             expose transient shape MarkWon { lead: one Lead }
             rule ApplyWon when MarkWon { lead.won = true }
             expose transient shape PurgeWon { lead: one Lead }
-            rule ApplyPurge when (PurgeWon where not (lead is OpenLead)) { delete lead }
+            rule ApplyPurge when (PurgeWon where lead is not OpenLead) { delete lead }
             rule RefusePurge when (PurgeWon where lead is OpenLead) { Refusal from { company: lead.company } }
             shape Refusal { company: text }
         """.trimIndent()
@@ -223,7 +223,7 @@ class TriggerFamilyTest {
             rule ApplyPublish when Publish { listing.isDraft = false }
             expose transient shape DiscardDraft { listing: one Listing }
             rule ApplyDiscard when (DiscardDraft where listing is Draft) { delete listing }
-            rule RefuseDiscard when (DiscardDraft where not (listing is Draft)) { Refusal from { title: listing.title } }
+            rule RefuseDiscard when (DiscardDraft where listing is not Draft) { Refusal from { title: listing.title } }
             shape Refusal { title: text }
             rule NotePublication when leaving not deleted (Draft where seller is some) {
                 SellerNotice from { seller: seller, listingTitle: title }
@@ -331,7 +331,7 @@ class TriggerFamilyTest {
             expose transient shape MarkWon { lead: one Lead }
             rule ApplyWon when MarkWon { lead.won = true }
             expose transient shape PurgeWon { lead: one Lead }
-            rule ApplyPurge when (PurgeWon where not (lead is OpenLead)) { delete lead }
+            rule ApplyPurge when (PurgeWon where lead is not OpenLead) { delete lead }
             rule RefusePurge when (PurgeWon where lead is OpenLead) { Refusal from { company: lead.company } }
             shape Refusal { company: text }
         """.trimIndent())

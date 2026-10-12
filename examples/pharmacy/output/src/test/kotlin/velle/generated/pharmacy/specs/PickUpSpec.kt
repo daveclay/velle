@@ -11,7 +11,7 @@ import velle.generated.pharmacy.*
  *     Pickup from { fill: fill, collectedBy: collectedBy, amountPaid: amountPaid }
  * }
  *
- * never (PickUp where (not (fill is VerifiedFill)) or (exists ReturnToStock for fill))
+ * never (PickUp where (fill is not VerifiedFill) or (exists ReturnToStock for fill))
  *
  * never (PickUp where fill is CounsellingDue)
  *

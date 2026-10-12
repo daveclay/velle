@@ -44,7 +44,7 @@ shape EditRefusal {
 -- `unhandled SafeEdit` is an operator (no compiler-minted name), desugaring to:
 --   SafeEdit where not exists EditApplication for this
 --                  and not exists EditRefusal for this
-shape ApplicableSafeEdit = unhandled SafeEdit where not note is LockedNote
+shape ApplicableSafeEdit = unhandled SafeEdit where note is not LockedNote
 shape RefusedSafeEdit    = unhandled SafeEdit where note is LockedNote
 
 rule ApplySafeEdit when ApplicableSafeEdit {

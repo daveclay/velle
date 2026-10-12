@@ -29,7 +29,7 @@ import velle.generated.billing.*
  *     Reminder from { invoice: this, sentOn: today }
  * }
  *
- * shape ApplicableDueChange = ChangeDueDate where not (invoice is IssuedInvoice)
+ * shape ApplicableDueChange = ChangeDueDate where invoice is not IssuedInvoice
  *
  * shape RefusedDueChange = ChangeDueDate where invoice is IssuedInvoice
  *

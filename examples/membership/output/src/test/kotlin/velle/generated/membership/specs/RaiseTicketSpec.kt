@@ -21,7 +21,7 @@ import velle.generated.membership.*
  *     ReopenNotice from { ticket: this, reassignTo: closedBy, noticedOn: now }
  * }
  *
- * shape ApplicableAssignment = AssignTicket where not (ticket is ClosedTicket)
+ * shape ApplicableAssignment = AssignTicket where ticket is not ClosedTicket
  *
  * rule ApplyAssignment when ApplicableAssignment {
  *     ticket.assignee = agent

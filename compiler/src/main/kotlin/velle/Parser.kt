@@ -432,9 +432,19 @@ class Parser(private val tokens: List<Token>) {
             t.isKw("none") -> { next(); IsExpr(subject, "none") }
             t.isKw("some") -> { next(); IsExpr(subject, "some") }
             t.isKw("empty") -> { next(); IsExpr(subject, "empty") }
-            t.isKw("not") -> { next(); expectKw("empty"); IsExpr(subject, "notEmpty") }
+            t.isKw("not") -> {
+                next()
+                val r = peek()
+                when {
+                    r.isKw("empty") -> { next(); IsExpr(subject, "notEmpty") }
+                    // `x is not Shape` is the spelling of non-membership; it is the same
+                    // predicate as the general negation `not (x is Shape)`, so it parses to the same tree.
+                    r.type == TokType.UIDENT -> { next(); NotExpr(IsExpr(subject, "refinement", r.text)) }
+                    else -> fail("expected 'empty' or RefinementName after 'is not'", r)
+                }
+            }
             t.type == TokType.UIDENT -> { next(); IsExpr(subject, "refinement", t.text) }
-            else -> fail("expected none/some/empty/'not empty'/RefinementName after 'is'", t)
+            else -> fail("expected none/some/empty/'not empty'/RefinementName/'not' RefinementName after 'is'", t)
         }
     }
 

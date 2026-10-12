@@ -28,7 +28,7 @@ Found while implementing; each wants a spec that demonstrates it and a ruling.
 
 Each is a compile-error today where it should license the read, or an unguarded read where it should not.
 
-- `not (target is Post)` in a conjunction, and `if not (target is Post) then ...`.
+- `target is not Post` in a conjunction, and `if target is not Post then ...`.
 - Nested conditionals: narrowing inside a branch already narrowed.
 - Three-or-more-operand unions: the else-branch is the residual union, not one operand.
 - Narrowing inside a collection filter (`comments where target is Post and target.body == ""`) and of an `as` alias.

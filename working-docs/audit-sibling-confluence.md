@@ -75,7 +75,7 @@ Method, per the OQ42 precedent (`audit-symmetric-evaluation.md`): enumerate the 
 All code below is from `examples/payments/payments.velle`. The cast: an order reserves stock at creation (`StockReservation`); three failed charge attempts exhaust the order, and exhaustion releases the reserved stock (`ReservationRelease`) as the compensating action. Separately, a request to change the shipping address is applied when the order is not ready to ship, and refused (recorded as a fact, `AddressChangeRefusal`) when it is:
 
 ```velle
-shape ApplicableAddressChange = UnhandledAddressChange where not order is ReadyToShip
+shape ApplicableAddressChange = UnhandledAddressChange where order is not ReadyToShip
 shape RefusedAddressChange    = UnhandledAddressChange where order is ReadyToShip
 
 rule ApplyAddressChange when ApplicableAddressChange {

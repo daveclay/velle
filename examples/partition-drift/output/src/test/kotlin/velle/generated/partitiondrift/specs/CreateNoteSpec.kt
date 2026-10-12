@@ -11,7 +11,7 @@ import velle.generated.partitiondrift.*
  *     Note from { title: title, body: body }
  * }
  *
- * shape ApplicableBareEdit = BareEdit where not (note is LockedNote)
+ * shape ApplicableBareEdit = BareEdit where note is not LockedNote
  *
  * shape RefusedBareEdit = BareEdit where note is LockedNote
  *
@@ -23,7 +23,7 @@ import velle.generated.partitiondrift.*
  *     BareEditRefusal from { edit: this, refusedOn: now }
  * }
  *
- * shape ApplicableSafeEdit = UnhandledSafeEdit where not (note is LockedNote)
+ * shape ApplicableSafeEdit = UnhandledSafeEdit where note is not LockedNote
  *
  * shape RefusedSafeEdit = UnhandledSafeEdit where note is LockedNote
  *
@@ -36,7 +36,7 @@ import velle.generated.partitiondrift.*
  *     EditRefusal from { edit: this, reason: "note is locked", refusedOn: now }
  * }
  *
- * shape ApplicableTransientEdit = TransientEdit where not (note is LockedNote)
+ * shape ApplicableTransientEdit = TransientEdit where note is not LockedNote
  *
  * shape RefusedTransientEdit = TransientEdit where note is LockedNote
  *

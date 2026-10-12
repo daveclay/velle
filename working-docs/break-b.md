@@ -41,7 +41,7 @@ shape BidRefusal {
     refusedOn: DateTime
 }
 
-rule RefuseBid when (PlaceBid where not auction is OpenAuction or amount < auction.currentPrice + auction.minimumIncrement) {
+rule RefuseBid when (PlaceBid where auction is not OpenAuction or amount < auction.currentPrice + auction.minimumIncrement) {
     BidRefusal from { auction: auction, bidder: bidder, amount: amount, reason: "closed or below increment", refusedOn: now }
 }
 ```
@@ -62,7 +62,7 @@ rule ApplyResume when ResumeAuction { auction.paused = false }
 shape OpenAuction = Auction where not closed and not paused    -- revised
 ```
 
-The base spec's single `RefuseBid` happens to survive this revision, because its condition is a *complement* (`not auction is OpenAuction or ...`) — whatever `OpenAuction` comes to mean, the complement follows. But the complement spelling is exactly what a good author moves away from, because one catch-all rule can only say one thing; refusals want to be split *per reason* so each carries the right message. The realistic pre-revision spelling is the three-way enumeration:
+The base spec's single `RefuseBid` happens to survive this revision, because its condition is a *complement* (`auction is not OpenAuction or ...`) — whatever `OpenAuction` comes to mean, the complement follows. But the complement spelling is exactly what a good author moves away from, because one catch-all rule can only say one thing; refusals want to be split *per reason* so each carries the right message. The realistic pre-revision spelling is the three-way enumeration:
 
 ```
 shape ClosedAuction = Auction where closed
@@ -95,7 +95,7 @@ error: a PlaceBid can arrive that no rule responds to.
   PlaceBid is transient — it is not kept after its commit — so such a bid would
   be ignored, and no record that it arrived would exist anywhere.
   Add a rule for bids in this situation, or widen an existing rule's condition
-  (for example RefuseBidClosed: `auction is ClosedAuction` → `not auction is OpenAuction`).
+  (for example RefuseBidClosed: `auction is ClosedAuction` → `auction is not OpenAuction`).
 ```
 
 Everything in that message is a business statement: which request, in which situation, answered by nobody, remembered by nothing. Mechanically, the proof is a totality/exhaustiveness check over the act's partitions — the refinement-exhaustiveness checker README §8 names as a compiler goal and v0 hasn't built, kin to the `states of` partition construct. Until it exists, fail closed: a transient act whose rule coverage isn't provable is a compile error.

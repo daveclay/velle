@@ -94,7 +94,7 @@ shape HaltedTrial = FieldTrial where
 never (TreatmentApplication where trial is HaltedTrial)
 ```
 
-This validates, and it refuses an application on a halted trial. It also refuses the *severe report that halts the trial* whenever an application is already on record: the report's commit makes `trial is HaltedTrial` true for the application landed last week, the transaction-end check finds a `TreatmentApplication` in the forbidden configuration, and the report is refused with "never #20 over TreatmentApplication is violated". The same spelling for permits — `never (Planting where not trial is PermittedTrial)` with `PermittedTrial` reading `today` — is worse: a `never` that reads the clock is re-checked at every transaction end, so the day a permit expires, every commit in the whole system is refused for as long as a planting stands on that trial.
+This validates, and it refuses an application on a halted trial. It also refuses the *severe report that halts the trial* whenever an application is already on record: the report's commit makes `trial is HaltedTrial` true for the application landed last week, the transaction-end check finds a `TreatmentApplication` in the forbidden configuration, and the report is refused with "never #20 over TreatmentApplication is violated". The same spelling for permits — `never (Planting where trial is not PermittedTrial)` with `PermittedTrial` reading `today` — is worse: a `never` that reads the clock is re-checked at every transaction end, so the day a permit expires, every commit in the whole system is refused for as long as a planting stands on that trial.
 
 Nothing in the validator says a word. The advisory family that exists for this hazard (A4, drift-exposed act partition) covers a rule triggered by a partition of a persistent act; it does not cover a `never` over one.
 
@@ -167,7 +167,7 @@ shape OpenExcursion = ClimateExcursion where not exists ExcursionEnd for this
 
 rule OpenClimateExcursion when (OutOfBand where not exists OpenExcursion for this) { ... }
 
-shape ClosableExcursion = OpenExcursion where not greenhouse is OutOfBand
+shape ClosableExcursion = OpenExcursion where greenhouse is not OutOfBand
 
 rule CloseClimateExcursion when ClosableExcursion { ... }
 ```
@@ -190,7 +190,7 @@ Also in this family, already a TODO item: `then` must share the `if`'s line.
 
 ### S11 — GAP, fixed: generated boundary cases ignored range prohibitions spelled with `or`
 
-The generated "a `AssayReading` with `hoursElapsed` 0 is accepted" case filled the act's other numeric fields with −1, which `never (AssayReading where inhibitionPercent < 0 or inhibitionPercent > 100)` refuses; the positive case failed. The generator avoided values other `never`s forbid, but only single-comparison ones. Fixed in `compiler/src/main/kotlin/velle/SpecGen.kt`: each arm of an `or` is a forbidden comparison. Regenerating every example changed no other output. Still open in the same family: the generator cannot see a relationship `never` on the shape (`never (PlotObservation where not plot.trial is TreatedTrial)`), so the given that supplies "any committed `GreenhousePlot`" has to deliver a plot on a treated trial — the demand is documented on the given, and the generated case passes, but the coupling is invisible from the generated test.
+The generated "a `AssayReading` with `hoursElapsed` 0 is accepted" case filled the act's other numeric fields with −1, which `never (AssayReading where inhibitionPercent < 0 or inhibitionPercent > 100)` refuses; the positive case failed. The generator avoided values other `never`s forbid, but only single-comparison ones. Fixed in `compiler/src/main/kotlin/velle/SpecGen.kt`: each arm of an `or` is a forbidden comparison. Regenerating every example changed no other output. Still open in the same family: the generator cannot see a relationship `never` on the shape (`never (PlotObservation where plot.trial is not TreatedTrial)`), so the given that supplies "any committed `GreenhousePlot`" has to deliver a plot on a treated trial — the demand is documented on the given, and the generated case passes, but the coupling is invisible from the generated test.
 
 ### S12 — TAX, open: every series rule widens to a whole-shape queue
 

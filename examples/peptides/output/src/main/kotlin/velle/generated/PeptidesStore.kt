@@ -602,7 +602,7 @@ interface PeptidesStore {
     /** Serves never #8 — `PlotObservation where dayAfterTreatment < 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never8Candidates(): List<PlotObservationRow>
-    /** Serves never #10 — `PlotObservation where not (plot.trial is TreatedTrial)`.
+    /** Serves never #10 — `PlotObservation where plot.trial is not TreatedTrial`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never10Candidates(): List<PlotObservationRow>
     /** Serves never #14 — `FieldPlot where (treatment != "peptide") and (treatment != "control")`.

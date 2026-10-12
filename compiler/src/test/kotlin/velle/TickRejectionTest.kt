@@ -25,7 +25,7 @@ class TickRejectionTest {
         shape PermittedSite = Site where exists (Permit where site == this and expiresOn >= today)
 
         expose shape Planting { site: one Site  plantedOn: Date }
-        never (Planting where not site is PermittedSite)
+        never (Planting where site is not PermittedSite)
 
         shape ScoutingReminder { planting: one Planting  sentOn: Date }
         shape UnremindedPlanting = Planting where not exists (scoutingReminders)
@@ -65,8 +65,8 @@ class TickRejectionTest {
         assertEquals("2026-10-07", r.today)
         assertEquals(
             """
-            Nightly tick rejected: Planting#3 would be a Planting where not (site is PermittedSite).
-              never #1: Planting where not (site is PermittedSite)
+            Nightly tick rejected: Planting#3 would be a Planting where site is not PermittedSite.
+              never #1: Planting where site is not PermittedSite
               rule RemindScouting for Planting#3: site = Site#1, plantedOn = 2026-10-02
               produced ScoutingReminder#4: planting = Planting#3, sentOn = 2026-10-07
               through Site#1: name = "north field"

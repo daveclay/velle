@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * never (FillPrescription where (not (filledBy is Technician)) and (not (filledBy is Pharmacist)))
+ * never (FillPrescription where (filledBy is not Technician) and (filledBy is not Pharmacist))
  *
  * never (FillPrescription where lot.drug != prescription.drug)
  *

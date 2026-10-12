@@ -11,7 +11,7 @@ import velle.generated.pharmacy.*
  *     frozen
  * }
  *
- * shape ApplicableCorrection = CorrectEntry where not (prescription is FilledPrescription)
+ * shape ApplicableCorrection = CorrectEntry where prescription is not FilledPrescription
  *
  * shape RefusedCorrection = CorrectEntry where prescription is FilledPrescription
  *
@@ -23,7 +23,7 @@ import velle.generated.pharmacy.*
  *     CorrectionRefusal from { prescription: prescription, reason: "the prescription has been filled" }
  * }
  *
- * shape ApplicableVoid = VoidEntry where not (prescription is FilledPrescription)
+ * shape ApplicableVoid = VoidEntry where prescription is not FilledPrescription
  *
  * shape RefusedVoid = VoidEntry where prescription is FilledPrescription
  *

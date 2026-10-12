@@ -11,7 +11,7 @@ import velle.generated.pharmacy.*
  *     Verification from { fill: fill, pharmacist: pharmacist, outcome: outcome, note: note }
  * }
  *
- * never (VerifyFill where not (pharmacist is LicensedPharmacist))
+ * never (VerifyFill where pharmacist is not LicensedPharmacist)
  *
  * never (VerifyFill where (pharmacist == fill.filledBy) and (fill.lot.drug is Controlled))
  *

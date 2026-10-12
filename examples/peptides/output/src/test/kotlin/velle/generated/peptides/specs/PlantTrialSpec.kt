@@ -11,7 +11,7 @@ import velle.generated.peptides.*
  *     Planting from { trial: trial, plantedOn: plantedOn, seedLot: seedLot }
  * }
  *
- * never (PlantTrial where not (trial is PermittedTrial))
+ * never (PlantTrial where trial is not PermittedTrial)
  *
  */
 class PlantTrialSpec : SpecSupport() {

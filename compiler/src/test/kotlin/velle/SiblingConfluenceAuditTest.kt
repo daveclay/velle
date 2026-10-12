@@ -497,7 +497,7 @@ class SiblingConfluenceAuditTest {
 
         shape TriagedChange = UnhandledChange where order.reserved
 
-        shape ApplicableChange = TriagedChange where not order is ReadyOrder
+        shape ApplicableChange = TriagedChange where order is not ReadyOrder
         shape RefusedChange    = TriagedChange where order is ReadyOrder
 
         rule ApplyChange when ApplicableChange {

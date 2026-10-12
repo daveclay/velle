@@ -375,7 +375,7 @@ rule NoticeReopen when leaving ClosedTicket {
 -- a business record: which to keep is a product decision, made per act.)
 -- velle: a `never` over a `transient` act — the boundary refusal is the
 -- response, and it counts as an answer for V18's every-request-gets-a-response
--- proof: the rule takes `not ticket is ClosedTicket`, the `never` takes its
+-- proof: the rule takes `ticket is not ClosedTicket`, the `never` takes its
 -- complement
 expose transient shape AssignTicket {
     ticket: one Ticket
@@ -384,7 +384,7 @@ expose transient shape AssignTicket {
 
 never (AssignTicket where ticket is ClosedTicket)
 
-shape ApplicableAssignment = AssignTicket where not ticket is ClosedTicket
+shape ApplicableAssignment = AssignTicket where ticket is not ClosedTicket
 
 rule ApplyAssignment when ApplicableAssignment {
     ticket.assignee = agent
@@ -396,7 +396,7 @@ rule ApplyAssignment when ApplicableAssignment {
 -- is also sitting unassigned, it is urgent — and urgent tickets escalate
 -- daily, though no ticket escalates more than once every two days.
 -- velle: small trait-style refinements composed with and/or
-shape OpenTicket     = Ticket where not this is ClosedTicket
+shape OpenTicket     = Ticket where this is not ClosedTicket
 shape OverdueTicket  = OpenTicket where due < today
 shape HighPriority   = Ticket where priority == "high"
 shape Unassigned     = Ticket where assignee is none

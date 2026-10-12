@@ -280,7 +280,7 @@ class SymmetricEvaluationAuditTest {
                 review: one Review
             }
 
-            rule Clear when (Review where not account is Drained) {
+            rule Clear when (Review where account is not Drained) {
                 Cleared from { review: this }
             }
         """.trimIndent())
