@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * never (Staff where ((role != "pharmacist") and (role != "technician")) and (role != "admin"))
+ * Staff requires ((role == "pharmacist") or (role == "technician")) or (role == "admin")
  *
  */
 class StaffSpec : SpecSupport() {

@@ -186,7 +186,7 @@ class DomainAnalysis(private val model: Model) {
             }
             model.nevers.forEachIndexed { i, n ->
                 val base = model.baseOfExpr(n.target) ?: return@forEachIndexed
-                add(watcherOf("never #${i + 1}", n.target, base, null, n.toleratesContention))
+                add(watcherOf("${n.keyword} #${i + 1}", n.target, base, null, n.toleratesContention))
             }
             for ((name, r) in model.refinements) {
                 val props = r.members.filterIsInstance<DerivedProp>().filter { it.captured }

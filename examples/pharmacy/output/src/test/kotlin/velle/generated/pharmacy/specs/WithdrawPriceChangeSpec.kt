@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * never (WithdrawPriceChange where administrator is not Administrator)
+ * WithdrawPriceChange requires administrator is Administrator
  *
  */
 class WithdrawPriceChangeSpec : SpecSupport() {

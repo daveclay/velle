@@ -9,7 +9,7 @@ import velle.generated.pharmacy.*
 /**
  * never (Interaction where drugA == drugB)
  *
- * never (Interaction where (severity != "major") and (severity != "moderate"))
+ * Interaction requires (severity == "major") or (severity == "moderate")
  *
  */
 class InteractionSpec : SpecSupport() {

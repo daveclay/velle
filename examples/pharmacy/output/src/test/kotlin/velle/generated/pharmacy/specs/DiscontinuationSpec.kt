@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * never (Discontinuation where prescriber != prescription.order.prescriber)
+ * Discontinuation requires prescriber == prescription.order.prescriber
  *
  */
 class DiscontinuationSpec : SpecSupport() {

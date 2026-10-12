@@ -635,6 +635,7 @@ object SpecGen {
         // ── never cases ──────────────────────────────────────────────────────
 
         fun neverTests(never: NeverDecl, ordinal: Int, file: String): List<String> {
+            fun skip(ordinal: Int, reason: String) = skip(ordinal, never.keyword, reason)
             val target = never.target as? RefName ?: return skip(ordinal, "composite never")
             val shape = model.shapes[target.name] ?: return skip(ordinal, "never over a refinement")
             if (target.name !in model.exposed) return skip(ordinal, "shape not exposed")
@@ -658,7 +659,9 @@ object SpecGen {
 
             val tests = mutableListOf<String>()
             run {
-                val sentence = "never - a ${shape.name} where ${fieldPath.root} $opWords ${plain(literal)} is refused"
+                val sentence = if (never.requirement == null)
+                    "never - a ${shape.name} where ${fieldPath.root} $opWords ${plain(literal)} is refused"
+                else "requires - a ${shape.name} with ${fieldPath.root} ${plain(violating)} is refused"
                 val body = StringBuilder()
                 fields.setup.forEach { body.line(2, it) }
                 body.line(2, "val before = count(\"${shape.name}\")")
@@ -671,7 +674,7 @@ object SpecGen {
                 tests.add(testFn(sentence, body.toString()))
             }
             run {
-                val sentence = "never - a ${shape.name} with ${fieldPath.root} ${plain(legal)} is accepted"
+                val sentence = "${never.keyword} - a ${shape.name} with ${fieldPath.root} ${plain(legal)} is accepted"
                 val body = StringBuilder()
                 fields.setup.forEach { body.line(2, it) }
                 body.line(2, "val result = sys.system.commit(\"${shape.name}\", mapOf(${fields.entries(fieldPath.root, legal)}))")
@@ -696,15 +699,15 @@ object SpecGen {
             val g = StringBuilder()
             g.appendLine()
             g.appendLine("  # ${Printer.print(never).lines().first()}")
-            g.appendLine("  Scenario: ${sentence.removePrefix("never - ").replaceFirstChar { it.uppercase() }}")
+            g.appendLine("  Scenario: ${sentence.substringAfter(" - ").replaceFirstChar { it.uppercase() }}")
             relGivens.forEach { g.appendLine("    Given any committed \"$it\"") }
             g.appendLine("    When a \"$shape\" with $field $value is committed")
             outcome.forEach { g.appendLine("    $it") }
             currentFeatureScenarios?.add(g.toString())
         }
 
-        fun skip(ordinal: Int, reason: String): List<String> {
-            skipped.add("never #${ordinal + 1}: $reason")
+        fun skip(ordinal: Int, keyword: String, reason: String): List<String> {
+            skipped.add("$keyword #${ordinal + 1}: $reason")
             return emptyList()
         }
 

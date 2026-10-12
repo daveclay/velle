@@ -164,39 +164,39 @@ each case below is an executable test.
 
 ## Not yet generated
 
-- never #9: multi-conjunct predicate
-- never #27: shape not exposed
+- requires #9: multi-conjunct predicate
+- requires #27: shape not exposed
 - never #33: shape not exposed
 - never #38: shape not exposed
-- never #30: non-comparison predicate
+- requires #30: non-comparison predicate
 - never #31: multi-conjunct predicate
-- never #32: multi-conjunct predicate
-- never #35: complex comparison subject
+- requires #32: multi-conjunct predicate
+- requires #35: complex comparison subject
 - never #36: non-comparison predicate
 - never #37: non-literal bound
-- never #39: multi-conjunct predicate
+- requires #39: multi-conjunct predicate
 - never #40: complex comparison subject
-- never #1: multi-conjunct predicate
-- never #2: non-comparison predicate
+- requires #1: multi-conjunct predicate
+- requires #2: non-comparison predicate
 - never #3: complex comparison subject
 - never #4: non-literal bound
-- never #5: multi-conjunct predicate
+- requires #5: multi-conjunct predicate
 - never #7: complex comparison subject
-- never #8: non-comparison predicate
-- never #12: multi-conjunct predicate
+- requires #8: non-comparison predicate
+- requires #12: multi-conjunct predicate
 - never #14: non-literal bound
 - never #15: shape not exposed
 - never #16: shape not exposed
 - never #17: shape not exposed
 - never #18: shape not exposed
 - never #19: shape not exposed
-- never #20: non-literal bound
-- never #21: non-comparison predicate
-- never #22: non-comparison predicate
-- never #23: multi-conjunct predicate
-- never #24: multi-hop comparison subject
+- requires #20: non-literal bound
+- requires #21: non-comparison predicate
+- requires #22: non-comparison predicate
+- requires #23: multi-conjunct predicate
+- requires #24: multi-hop comparison subject
 - never #25: complex comparison subject
 - never #26: complex comparison subject
 - never #29: multi-conjunct predicate
-- never #28: non-comparison predicate
-- never #34: non-comparison predicate
+- requires #28: non-comparison predicate
+- requires #34: non-comparison predicate

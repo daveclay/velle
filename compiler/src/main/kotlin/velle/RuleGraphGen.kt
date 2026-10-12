@@ -89,7 +89,9 @@ internal object RuleGraphGen {
             val boundary = model.nevers.filter { boundaryActOf(it) == act }
             var src = "commit$act"
             if (boundary.isNotEmpty()) {
-                val question = boundary.joinToString(" or ") { Printer.expr((it.target as RefName).where!!) }
+                val question = boundary.joinToString(" or ") {
+                    it.requirement?.let { r -> "requires ${Printer.expr(r.predicate)}" } ?: Printer.expr((it.target as RefName).where!!)
+                }
                 lines.add("commit$act --> q$act{\"${esc(question)} ?\"}")
                 lines.add("q$act -->|\"violated — refused, nothing begins\"| ref$act([\"refusal\"])")
                 lines.add("q$act -->|\"passes\"| env$act[\"the $act envelope\"]")

@@ -21,7 +21,7 @@ plus the rules hanging off it. One generated spec file per **story root**:
   `IssuedInvoice` — the freeze's story); a chain rule whose trigger shape is
   produced, not exposed, roots with its producer (`EmailReceipt` → `UnemailedReceipt`
   → `Receipt` ← produced by `SendReceipt` → `PaidInvoice`).
-- `never`s and act-triggered rules file under their act shape.
+- prohibitions (`never`, `requires`) and act-triggered rules file under their act shape.
 - Every file opens with the **Velle it verifies, quoted verbatim** (pretty-printed
   from the AST) — reading the spec file is reading the description plus its proof.
 - A generated `SPEC_INDEX-<System>.md` per system lists every file and every
@@ -47,7 +47,7 @@ plus the rules hanging off it. One generated spec file per **story root**:
 | Tick sweep | member at tick → effect + linkage; the guard holds across ticks; a literal time window (`today - 7 days`) is advanced past and the sweep reopens |
 | `when leaving` rule | exit produces the effects; the subject is no longer a member |
 | Partition pair | the act subject is a member of exactly one side |
-| `never` (single comparison against a literal, on an exposed act) | a violating act is refused and nothing commits; a boundary-legal act is accepted |
+| `never` or `requires` (single comparison against a literal, on an exposed act) | a violating act is refused and nothing commits; a boundary-legal act is accepted; the case titles follow the author's spelling |
 
 ## The given/derived split
 

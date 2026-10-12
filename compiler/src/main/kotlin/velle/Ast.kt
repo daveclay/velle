@@ -65,12 +65,27 @@ data class RuleDecl(
     val leaving: Boolean get() = trigger.exit
 }
 
+/**
+ * A prohibition (README §21). Spelled `never <condition>`, or as a requirement,
+ * `Subject requires <predicate>`, which means `never (Subject where not <predicate>)`:
+ * [target] is always the forbidden configuration, and [requirement] keeps the
+ * declaration as the author wrote it, so rejections and diagnostics quote the
+ * requirement rather than its complement.
+ */
 data class NeverDecl(
     val target: RefExpr,
     /** `tolerates contention` — the author accepts the wide serialization domain
      *  this invariant's read creates (OQ40; advisory A5). */
     val toleratesContention: Boolean = false,
-) : Decl
+    /** Non-null when the prohibition was written `Subject requires <predicate>`. */
+    val requirement: Requirement? = null,
+) : Decl {
+    /** The declaration's keyword, for labels: `never` or `requires`. */
+    val keyword: String get() = if (requirement == null) "never" else "requires"
+}
+
+/** The requirement spelling of a prohibition, as written: `subject requires predicate`. */
+data class Requirement(val subject: String, val predicate: Expr)
 
 /** Standalone `expose [transient] Shape [with ...]`. */
 data class ExposeDecl(

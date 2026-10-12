@@ -93,7 +93,7 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## Post-v0 re-derivations
 
-- [ ] `requires` — OQ49 · `visible to` — OQ33 · schedule definition — OQ34 · cross-shape mixins — OQ35 (restore its README §22 item).
+- [ ] `visible to` — OQ33 · schedule definition — OQ34 · cross-shape mixins — OQ35 (restore its README §22 item).
 
 ## Research
 

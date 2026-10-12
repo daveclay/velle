@@ -1253,6 +1253,8 @@ class VelleSystem(
         return Rejection(
             never = ordinal,
             prohibition = Printer.refExpr(n.target),
+            declaration = Printer.prohibition(n),
+            requirement = n.requirement?.let { Printer.expr(it.predicate) },
             targetShape = w.bases.joinToString(" or "),
             act = actId?.let(::snapshot),
             rule = t.firing?.first?.name,

@@ -6,9 +6,9 @@ Coined terms used across the working docs, one line each, with the pointer that 
 
 - **act** — a shape instance committed from outside the system through `expose`; a request or message crossing the trust boundary (README §4).
 - **transient act** — an act that exists only within its own commit's transaction (`expose transient`): an input to the state, not a member of it (README §4; decision record `investigate-transient.md`).
-- **prohibition** — what a `never` declares: a configuration that is impossible. The umbrella noun (adopted 2026-10-10 in place of "invariant", which named only the proven kind); a prohibition is a refusal, a constraint, or a guarantee, by who it binds (README §21).
-- **refusal** — a prohibition that binds the caller: a `never` over a transient act, checked once, at the request; the record the request leaves carries nothing (README §21).
-- **constraint** — a prohibition that binds the books: a `never` over a persistent shape, holding at the end of every transaction for as long as the record exists; any act or tick that would leave the books otherwise is rejected (README §21).
+- **prohibition** — what a `never` or a `requires` declares: a configuration that is impossible, stated as the forbidden configuration (`never`) or as what every record satisfies (`requires`, whose prohibition is its complement). The umbrella noun (adopted 2026-10-10 in place of "invariant", which named only the proven kind); a prohibition is a refusal, a constraint, or a guarantee, by who it binds (README §21).
+- **refusal** — a prohibition that binds the caller: a prohibition over a transient act, checked once, at the request; the record the request leaves carries nothing (README §21).
+- **constraint** — a prohibition that binds the books: a prohibition over a persistent shape, holding at the end of every transaction for as long as the record exists; any act or tick that would leave the books otherwise is rejected (README §21).
 - **guarantee** — a prohibition that binds the spec's own rules: only rules can produce the state, nobody is refused, and the compiler proves the rules cannot reach it; a runtime violation is a bug (README §21; `evaluation.md` [S5]).
 - **door rule** — the owner's name for a refusal: "turn this request away", about the act being recorded at the moment it is submitted, and silent about it afterwards (README §21).
 - **books rule** — the owner's name for a constraint: "the records never look like this", about valid committed state at every moment, and violable by later acts, ticks, and deletions (README §21).

@@ -33,8 +33,9 @@ class Parser(private val tokens: List<Token>) {
             t.isKw("shape") -> parseShapeOrRefinement()
             t.isKw("rule") -> parseRule()
             t.isKw("never") -> parseNever()
+            t.type == TokType.UIDENT && peekAhead(1).isKw("requires") -> parseRequires()
             t.isKw("expose") -> parseExpose()
-            else -> fail("expected a declaration (shape/rule/never/expose)", t)
+            else -> fail("expected a declaration (shape/rule/never/requires/expose)", t)
         }
     }
 
@@ -309,15 +310,48 @@ class Parser(private val tokens: List<Token>) {
     private fun parseNever(): NeverDecl {
         expectKw("never")
         val target = parseCondition()
-        var toleratesContention = false
-        if (peek().isKw("tolerates")) {
-            next()
-            val w = expect(TokType.LIDENT)
-            if (w.text != "contention") fail("a never signs 'tolerates contention' only (OQ40)", w)
-            toleratesContention = true
-        }
-        return NeverDecl(target, toleratesContention)
+        return NeverDecl(target, parseToleratesContention("never"))
     }
+
+    /**
+     * `Subject requires <predicate>` — the requirement spelling of a prohibition
+     * (README §21): every Subject satisfies the predicate. Desugared here to
+     * `never (Subject where <complement>)`, with the complement pushed through
+     * the predicate so the rest of the compiler sees the same forbidden
+     * configuration a hand-written `never` would state.
+     */
+    private fun parseRequires(): NeverDecl {
+        val subject = expect(TokType.UIDENT).text
+        expectKw("requires")
+        skipNewlines()
+        val predicate = parsePredicate()
+        val target = RefName(subject, complement(predicate))
+        return NeverDecl(target, parseToleratesContention("requirement"), Requirement(subject, predicate))
+    }
+
+    private fun parseToleratesContention(what: String): Boolean {
+        if (!peek().isKw("tolerates")) return false
+        next()
+        val w = expect(TokType.LIDENT)
+        if (w.text != "contention") fail("a $what signs 'tolerates contention' only (OQ40)", w)
+        return true
+    }
+
+    /** The negation of a two-valued predicate, pushed to the atoms: comparisons flip,
+     *  `and`/`or` swap, membership and its negation exchange, anything else is wrapped. */
+    private fun complement(e: Expr): Expr = when {
+        e is NotExpr -> e.inner
+        e is Binary && e.op == "and" -> Binary("or", complement(e.left), complement(e.right))
+        e is Binary && e.op == "or" -> Binary("and", complement(e.left), complement(e.right))
+        e is Binary && e.op in inverseOp -> Binary(inverseOp.getValue(e.op), e.left, e.right)
+        e is IsExpr && e.kind == "none" -> IsExpr(e.subject, "some")
+        e is IsExpr && e.kind == "some" -> IsExpr(e.subject, "none")
+        e is IsExpr && e.kind == "empty" -> IsExpr(e.subject, "notEmpty")
+        e is IsExpr && e.kind == "notEmpty" -> IsExpr(e.subject, "empty")
+        else -> NotExpr(e)
+    }
+
+    private val inverseOp = mapOf("==" to "!=", "!=" to "==", "<" to ">=", ">=" to "<", ">" to "<=", "<=" to ">")
 
     private fun parseExpose(): Decl {
         expectKw("expose")

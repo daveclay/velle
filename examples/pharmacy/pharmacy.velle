@@ -54,7 +54,7 @@ expose shape Staff {
     role: text
 }
 
-never (Staff where role != "pharmacist" and role != "technician" and role != "admin")
+Staff requires role == "pharmacist" or role == "technician" or role == "admin"
 
 shape Pharmacist = Staff where role == "pharmacist"
 shape Technician = Staff where role == "technician"
@@ -70,7 +70,7 @@ expose shape LicenceRenewal {
     expiresOn: Date
 }
 
-never (LicenceRenewal where pharmacist is not Pharmacist)
+LicenceRenewal requires pharmacist is Pharmacist
 
 shape LicensedPharmacist = Pharmacist where exists (licenceRenewals where expiresOn >= today)
 
@@ -135,7 +135,7 @@ expose shape Interaction {
 }
 
 never (Interaction where drugA == drugB)
-never (Interaction where severity != "major" and severity != "moderate")
+Interaction requires severity == "major" or severity == "moderate"
 
 -- Prices change on a date, and the history matters for billing disputes:
 -- nothing is overwritten. The price in force is the latest change whose date
@@ -166,7 +166,7 @@ expose transient shape WithdrawPriceChange {
     reason: text
 }
 
-never (WithdrawPriceChange where administrator is not Administrator)
+WithdrawPriceChange requires administrator is Administrator
 
 shape PriceWithdrawal {
     drug: one Drug
@@ -209,7 +209,7 @@ expose transient shape SetReorderPoint {
     reorderPoint: integer
 }
 
-never (SetReorderPoint where requestedBy is not Administrator and requestedBy is not Pharmacist)
+SetReorderPoint requires requestedBy is Administrator or requestedBy is Pharmacist
 never (SetReorderPoint where reorderPoint < 0)
 
 rule ApplyReorderPoint when SetReorderPoint {
@@ -252,7 +252,7 @@ expose transient shape CountLot {
     counted: integer
 }
 
-never (CountLot where technician is not Technician and technician is not Pharmacist)
+CountLot requires technician is Technician or technician is Pharmacist
 never (CountLot where counted < 0)
 
 shape StockAdjustment {
@@ -458,7 +458,7 @@ expose shape Discontinuation {
     reason: text
 }
 
-never (Discontinuation where prescriber != prescription.order.prescriber)
+Discontinuation requires prescriber == prescription.order.prescriber
 
 shape Discontinued = Prescription where discontinuations is not empty
 shape Expired      = Prescription where expiresOn < today
@@ -516,7 +516,7 @@ expose transient shape VoidEntry {
     reason: text
 }
 
-never (VoidEntry where pharmacist is not Pharmacist)
+VoidEntry requires pharmacist is Pharmacist
 
 shape EntryVoid {
     prescription: one Prescription
@@ -570,7 +570,7 @@ expose shape ConflictOverride {
     justification: text
 }
 
-never (ConflictOverride where pharmacist is not Pharmacist)
+ConflictOverride requires pharmacist is Pharmacist
 
 shape Cleared = Prescription where
     (this is not AllergyConflict and this is not InteractionConflict) or
@@ -629,7 +629,7 @@ shape MultiplePrescribers = Patient where
 -- onHand < 0)`, was refused by checks V29: the nightly return to stock
 -- creates a record the balance reads, and v0 cannot see that a return only
 -- raises it.)
--- velle: refusals (`never` over the transient act) beside a constraint on the
+-- velle: refusals (`requires` and `never` over the transient act) beside a constraint on the
 -- record it produces, beside a rejection-as-data partition on one act whose
 -- two sides are a derived boolean and its negation (checks V18's complement
 -- slice); the correlation key lets the counter find the answer
@@ -643,15 +643,15 @@ expose transient shape FillPrescription {
     dispensable: boolean = if prescription is Fillable and quantity <= lot.onHand then true else false
 }
 
-never (FillPrescription where filledBy is not Technician and filledBy is not Pharmacist)
-never (FillPrescription where lot.drug != prescription.drug)
+FillPrescription requires filledBy is Technician or filledBy is Pharmacist
+FillPrescription requires lot.drug == prescription.drug
 never (FillPrescription where lot is ExpiredLot or lot is QuarantinedLot)
 never (FillPrescription where quantity <= 0 or quantity > prescription.quantity)
 
 -- velle: a constraint counting the record among its siblings — the arriving
 -- fill is the one whose number must equal how many fills now stand at or
 -- below it
-never (Fill where fillNumber != count(prescription.fills where fillNumber <= this.fillNumber))
+Fill requires fillNumber == count(prescription.fills where fillNumber <= this.fillNumber)
 
 -- A controlled fill needs a clear monitoring-programme check by a pharmacist
 -- within the last day.
@@ -663,7 +663,7 @@ expose shape MonitoringCheck {
     cleared: boolean
 }
 
-never (MonitoringCheck where pharmacist is not Pharmacist)
+MonitoringCheck requires pharmacist is Pharmacist
 
 never (FillPrescription where lot.drug is Controlled and
        not exists (prescription.monitoringChecks where cleared and checkedAt > now - 24 hours))
@@ -748,9 +748,9 @@ expose transient shape VerifyFill {
     note: text
 }
 
-never (VerifyFill where pharmacist is not LicensedPharmacist)
+VerifyFill requires pharmacist is LicensedPharmacist
 never (VerifyFill where pharmacist == fill.filledBy and fill.lot.drug is Controlled)
-never (VerifyFill where outcome != "approved" and outcome != "rejected")
+VerifyFill requires outcome == "approved" or outcome == "rejected"
 
 shape Verification {
     fill: one Fill
@@ -785,7 +785,7 @@ expose shape Counselling {
     notes: text
 }
 
-never (Counselling where pharmacist is not Pharmacist)
+Counselling requires pharmacist is Pharmacist
 
 shape CounsellingDue = VerifiedFill where
     (lot.drug.requiresCounselling or fillNumber == 1) and not exists Counselling for this
@@ -841,7 +841,7 @@ expose transient shape PickUp {
     amountPaid: decimal
 }
 
-never (PickUp where fill is not VerifiedFill or exists ReturnToStock for fill)
+PickUp requires fill is VerifiedFill and not exists ReturnToStock for fill
 never (PickUp where fill is CounsellingDue)
 never (PickUp where amountPaid < fill.amountDue)
 
@@ -1006,7 +1006,7 @@ expose transient shape Adjudication {
     patientPays: decimal
 }
 
-never (Adjudication where outcome != "paid" and outcome != "rejected")
+Adjudication requires outcome == "paid" or outcome == "rejected"
 never (Adjudication where paidAmount < 0 or patientPays < 0)
 
 shape ClaimResponse {

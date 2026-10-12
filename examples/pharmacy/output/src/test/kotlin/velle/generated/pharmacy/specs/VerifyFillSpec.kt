@@ -11,11 +11,11 @@ import velle.generated.pharmacy.*
  *     Verification from { fill: fill, pharmacist: pharmacist, outcome: outcome, note: note }
  * }
  *
- * never (VerifyFill where pharmacist is not LicensedPharmacist)
+ * VerifyFill requires pharmacist is LicensedPharmacist
  *
  * never (VerifyFill where (pharmacist == fill.filledBy) and (fill.lot.drug is Controlled))
  *
- * never (VerifyFill where (outcome != "approved") and (outcome != "rejected"))
+ * VerifyFill requires (outcome == "approved") or (outcome == "rejected")
  *
  */
 class VerifyFillSpec : SpecSupport() {

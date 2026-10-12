@@ -25,7 +25,7 @@ DurationLiteral := IntegerLiteral ("seconds" | "minutes" | "hours" | "days" | "w
 
 Casing is **enforced, not convention**: the case of a name's first letter is load-bearing for parsing — `invoices where OverdueInvoice` reads a lowercase name as a path and an uppercase name as a refinement-membership test, and no other signal distinguishes them.
 
-Keywords (reserved, never identifiers): `shape` `rule` `never` `expose` `transient` `when` `leaving` `deleted` `on` `after` `commit` `where` `and` `or` `not` `is` `exists` `for` `from` `then` `if` `else` `as` `this` `none` `some` `empty` `one` `many` `initially` `captured` `frozen` `tolerates` `delete` `undeletable` `timestamp` `create` `update` `true` `false` — plus the scalar type names, `now`, and `today`. `required` is **contextual**: it reads as the creation-side requiredness marker only immediately after `initially` (OQ37-R10); everywhere else it is an ordinary identifier. The duration units (`seconds` `minutes` `hours` `days` `weeks`) are **contextual**, not reserved: a unit word reads as a unit only immediately after an integer literal (`3 days`), the one position DurationLiteral gives it; everywhere else it is an ordinary identifier, so `minutes: integer` is a legal property. `by` is contextual the same way: it reads as the selector-ordering keyword only after a `latest`/`first` collection argument (README §10, selectorCall — the clause is mandatory there); everywhere else it is an ordinary identifier. `with` is contextual too: it reads as the closure keyword only where the `expose` production places it (README §6, "Inline part creation"); everywhere else it is an ordinary identifier. Builtin function names (`count`, `sum`, `latest`, `first`, `lowercase`, `max`, `min`) and the generator `randomUUID` are ordinary identifiers resolved as builtins, not keywords.
+Keywords (reserved, never identifiers): `shape` `rule` `never` `requires` `expose` `transient` `when` `leaving` `deleted` `on` `after` `commit` `where` `and` `or` `not` `is` `exists` `for` `from` `then` `if` `else` `as` `this` `none` `some` `empty` `one` `many` `initially` `captured` `frozen` `tolerates` `delete` `undeletable` `timestamp` `create` `update` `true` `false` — plus the scalar type names, `now`, and `today`. `required` is **contextual**: it reads as the creation-side requiredness marker only immediately after `initially` (OQ37-R10); everywhere else it is an ordinary identifier. The duration units (`seconds` `minutes` `hours` `days` `weeks`) are **contextual**, not reserved: a unit word reads as a unit only immediately after an integer literal (`3 days`), the one position DurationLiteral gives it; everywhere else it is an ordinary identifier, so `minutes: integer` is a legal property. `by` is contextual the same way: it reads as the selector-ordering keyword only after a `latest`/`first` collection argument (README §10, selectorCall — the clause is mandatory there); everywhere else it is an ordinary identifier. `with` is contextual too: it reads as the closure keyword only where the `expose` production places it (README §6, "Inline part creation"); everywhere else it is an ordinary identifier. Builtin function names (`count`, `sum`, `latest`, `first`, `lowercase`, `max`, `min`) and the generator `randomUUID` are ordinary identifiers resolved as builtins, not keywords.
 
 **Statements and declarations are line-oriented** — no semicolons, no braces around individual statements; a newline ends a statement, and `then` joining two effects stands on its own line (README §15's example is already written this way). This is what keeps `then`-the-statement-connector and `then`-the-conditional-keyword unambiguous. Within braces, a comma is equivalent to a newline as a member separator — `{ customer: one Customer, corrected: text }` and `from { invoice: this, sentOn: now }` are the one-line spellings of the multi-line forms. Inside parentheses, newlines are insignificant (a long predicate may wrap freely).
 
@@ -33,7 +33,7 @@ Keywords (reserved, never identifiers): `shape` `rule` `never` `expose` `transie
 
 ```
 spec        := declaration*
-declaration := shapeDecl | refinementDecl | ruleDecl | neverDecl | exposeDecl
+declaration := shapeDecl | refinementDecl | ruleDecl | neverDecl | requiresDecl | exposeDecl
 ```
 
 File boundaries carry no meaning. A spec may span any number of `.velle` files; declarations appear in any order, and forward references are always legal — the compiler validates the whole spec as one unit (README §1), so there is nothing an ordering could add.
@@ -149,6 +149,14 @@ neverDecl := "never" (ShapeName | "(" refExpr ")") ("tolerates" "contention")?
 ```
 
 Same operand shapes as a rule's condition — a named refinement or an inline one (README §21).
+
+## `requires` declarations
+
+```
+requiresDecl := ShapeName "requires" predicate ("tolerates" "contention")?
+```
+
+The requirement spelling of a prohibition (README §21): `Subject requires P` means `never (Subject where not P)`, and the parser derives the complement, pushing the negation to the atoms (comparisons flip, `and`/`or` exchange, `is`/`is not` and `is some`/`is none` and `is empty`/`is not empty` exchange; anything else is wrapped in `not`). The subject is any shape or refinement name. This is the one declaration that begins with a name rather than a keyword; the `requires` token after it decides the parse.
 
 ## `expose` declarations
 

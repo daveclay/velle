@@ -145,7 +145,7 @@ object DiagramGen {
             for (never in model.nevers) {
                 val reads = model.summaryOfRefExpr(never.target).touchedShapes().map { model.baseOf(it) ?: it }
                 if (reads.any { it in touched })
-                    sb.appendLine("        Note over S: transaction-end check — never ${esc(Printer.refExpr(never.target))}")
+                    sb.appendLine("        Note over S: transaction-end check — ${esc(if (never.requirement == null) "never " + Printer.refExpr(never.target) else Printer.prohibition(never))}")
             }
             sb.appendLine("    end")
         }

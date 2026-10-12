@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * never (Counselling where pharmacist is not Pharmacist)
+ * Counselling requires pharmacist is Pharmacist
  *
  */
 class CounsellingSpec : SpecSupport() {

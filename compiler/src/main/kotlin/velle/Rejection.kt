@@ -25,8 +25,13 @@ import java.math.BigDecimal
 data class Rejection(
     /** The prohibition's 1-based ordinal in the spec. */
     val never: Int,
-    /** The prohibition's predicate as written, e.g. `Shipment where order is CancelledOrder`. */
+    /** The forbidden configuration, e.g. `Shipment where order is CancelledOrder` — for a
+     *  requirement, the complement the compiler derived. */
     val prohibition: String,
+    /** The declaration as the author wrote it: `never (Shipment where ...)` or `VerifyFill requires ...`. */
+    val declaration: String,
+    /** The requirement's predicate as written, when the prohibition was spelled `requires`; else null. */
+    val requirement: String?,
     /** The shape the prohibition is over. */
     val targetShape: String,
     /** The act refused, with its fields; null when a rule firing's transaction was rejected. */
@@ -105,8 +110,14 @@ object RejectionRenderer {
             r.rule != null -> append("rule ${r.rule} rejected: ")
             else -> append("Transaction rejected: ")
         }
-        appendLine("$subject would be $article ${r.prohibition}.")
-        appendLine("  never #${r.never}: ${r.prohibition}")
+        if (r.requirement != null) {
+            val verb = if (r.violating.size == 1) "does" else "do"
+            appendLine("${r.declaration}, and $subject $verb not.")
+            appendLine("  requires #${r.never}: ${r.declaration}")
+        } else {
+            appendLine("$subject would be $article ${r.prohibition}.")
+            appendLine("  never #${r.never}: ${r.prohibition}")
+        }
         r.act?.let { appendLine("  ${record(it)}") }
         r.rule?.let { rule -> appendLine("  rule $rule" + (r.subject?.let { " for ${record(it)}" } ?: "")) }
         r.produced.forEach { appendLine("  produced ${record(it)}") }

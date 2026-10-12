@@ -94,7 +94,7 @@
       ]
     },
     "keyword-declaration": {
-      "match": "\\b(shape|rule|never|expose|using)\\b",
+      "match": "\\b(shape|rule|never|requires|expose|using)\\b",
       "name": "keyword.declaration.velle"
     },
     "keyword-control": {

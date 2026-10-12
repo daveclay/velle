@@ -39,10 +39,20 @@ object Printer {
             }
             append("}")
         }
-        is NeverDecl -> "never ${condition(d.target)}" +
+        is NeverDecl -> prohibition(d) +
             if (d.toleratesContention) " tolerates contention" else ""
         is ExposeDecl -> "expose ${if (d.transient) "transient " else ""}${d.shape}"
     }
+
+    /** The prohibition as the author wrote it, without its tolerance clause:
+     *  `never (X where P)` or `X requires P`. */
+    fun prohibition(d: NeverDecl): String =
+        d.requirement?.let { "${it.subject} requires ${expr(it.predicate)}" } ?: "never ${condition(d.target)}"
+
+    /** The prohibition's body for a label: the forbidden configuration of a `never`
+     *  (`X where P`, as diagnostics have always quoted it), or a requirement as written. */
+    fun prohibitionBody(d: NeverDecl): String =
+        d.requirement?.let { "${it.subject} requires ${expr(it.predicate)}" } ?: refExpr(d.target)
 
     private fun condition(e: RefExpr): String =
         if (e is RefName && e.where == null) e.name else "(${refExpr(e)})"

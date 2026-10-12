@@ -15,7 +15,7 @@ import velle.generated.pharmacy.*
  *     ControlledLogEntry from { fill: this, drug: lot.drug, quantity: quantity, balanceAfter: lot.drug.onHand }
  * }
  *
- * never (Fill where fillNumber != count(prescription.fills where fillNumber <= this.fillNumber))
+ * Fill requires fillNumber == count(prescription.fills where fillNumber <= this.fillNumber)
  *
  * never (Fill where count(verifications) > 1)
  *

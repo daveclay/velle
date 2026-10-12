@@ -118,7 +118,7 @@ class Validator(private val model: Model) {
                             (if (model.isCrossBase(t.shape))
                                 "'${t.shape}' is a union whose operands carry a predicate; a field's target union must be " +
                                 "a pure `or` of base shapes (README §9)"
-                            else "State the condition on the act that creates '$name' — a gate refinement or a never")))
+                            else "State the condition on the act that creates '$name': '$name requires ${m.name} is ${t.shape}', or a gate refinement")))
                     m.initially?.let { checkExpr(it, name, allowGenerator = true) }
                     // `initially required` demands an optional type: the whole point of
                     // the decomposition is read-side optionality with creation-side
@@ -2376,7 +2376,7 @@ class Validator(private val model: Model) {
             val consulted = s.touchedShapes().mapNotNull { model.baseOf(it) }.toSet() - setOfNotNull(nBase)
             for (site in model.deleteSites) {
                 if (site.shape !in consulted && !s.opaque) continue
-                diags.add(Diagnostic("V26", "${siteLabel(site)}, which never #${i + 1} " +
+                diags.add(Diagnostic("V26", "${siteLabel(site)}, which ${n.keyword} #${i + 1} " +
                     "(over $nBase) consults — the delete can end a transaction violating the " +
                     "invariant, and v0 cannot prove otherwise: condition the deleting act, or " +
                     "resolve the invariant's other side in the same commit (OQ37)"))
@@ -2413,8 +2413,8 @@ class Validator(private val model: Model) {
                     val base = model.baseOf(c.shape) ?: c.shape
                     if (base !in consulted && !s.opaque) continue
                     val moment = if (schedules.isNotEmpty()) "on ${schedules.joinToString(", ")}" else "after commit"
-                    diags.add(Diagnostic("V29", "rule '${rule.name}' $moment creates a ${c.shape}, which never #${i + 1} " +
-                        "(${Printer.refExpr(n.target)}) consults — the firing can end its transaction in the " +
+                    diags.add(Diagnostic("V29", "rule '${rule.name}' $moment creates a ${c.shape}, which ${n.keyword} #${i + 1} " +
+                        "(${Printer.prohibitionBody(n)}) consults — the firing can end its transaction in the " +
                         "forbidden state with no caller to refuse, and v0 cannot prove the condition excludes it: " +
                         "guard the record's creation on a state the prohibition cannot reach, restore within the " +
                         "firing, or retract the prohibition (README §21)"))
@@ -2653,7 +2653,7 @@ class Validator(private val model: Model) {
         // dead tolerance: a declared `tolerates contention` covering no width
         val tolerantDecls = buildList {
             model.rules.values.filter { it.toleratesContention }.forEach { add("rule ${it.name}") }
-            model.nevers.forEachIndexed { i, n -> if (n.toleratesContention) add("never #${i + 1}") }
+            model.nevers.forEachIndexed { i, n -> if (n.toleratesContention) add("${n.keyword} #${i + 1}") }
         }
         for (decl in tolerantDecls) {
             if (byDecl[decl].isNullOrEmpty())
