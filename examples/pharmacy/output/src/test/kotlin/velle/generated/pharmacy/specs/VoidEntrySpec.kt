@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * VoidEntry requires pharmacist is Pharmacist
+ * VoidEntry requires pharmacist to be Pharmacist
  *
  */
 class VoidEntrySpec : SpecSupport() {

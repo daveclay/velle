@@ -324,7 +324,8 @@ class Parser(private val tokens: List<Token>) {
         val subject = expect(TokType.UIDENT).text
         expectKw("requires")
         skipNewlines()
-        val predicate = parsePredicate()
+        inRequirement = true
+        val predicate = try { parsePredicate() } finally { inRequirement = false }
         val target = RefName(subject, complement(predicate))
         return NeverDecl(target, parseToleratesContention("requirement"), Requirement(subject, predicate))
     }
@@ -337,10 +338,16 @@ class Parser(private val tokens: List<Token>) {
         return true
     }
 
+    /** True while the predicate of a `requires` declaration is being read: the one
+     *  position where `to be` spells membership (README §21). */
+    private var inRequirement = false
+
     /** The negation of a two-valued predicate, pushed to the atoms: comparisons flip,
-     *  `and`/`or` swap, membership and its negation exchange, anything else is wrapped. */
+     *  `and`/`or` swap, membership and its negation exchange, anything else is wrapped.
+     *  The forbidden configuration is spelled with `is`, whatever the requirement wrote. */
     private fun complement(e: Expr): Expr = when {
-        e is NotExpr -> e.inner
+        e is NotExpr -> asIs(e.inner)
+        e is IsExpr && e.kind == "refinement" -> NotExpr(e.copy(toBe = false))
         e is Binary && e.op == "and" -> Binary("or", complement(e.left), complement(e.right))
         e is Binary && e.op == "or" -> Binary("and", complement(e.left), complement(e.right))
         e is Binary && e.op in inverseOp -> Binary(inverseOp.getValue(e.op), e.left, e.right)
@@ -350,6 +357,8 @@ class Parser(private val tokens: List<Token>) {
         e is IsExpr && e.kind == "notEmpty" -> IsExpr(e.subject, "empty")
         else -> NotExpr(e)
     }
+
+    private fun asIs(e: Expr): Expr = if (e is IsExpr) e.copy(toBe = false) else e
 
     private val inverseOp = mapOf("==" to "!=", "!=" to "==", "<" to ">=", ">=" to "<", ">" to "<=", "<=" to ">")
 
@@ -451,6 +460,14 @@ class Parser(private val tokens: List<Token>) {
         val t = peek()
         return when {
             t.isKw("is") -> { next(); parseIsRhs(left) }
+            t.type == TokType.LIDENT && t.text == "to" && peekAhead(1).let { it.type == TokType.LIDENT && it.text == "be" } -> {
+                if (!inRequirement) fail("'to be' spells membership only in the predicate of a 'requires' declaration; write 'is' here", t)
+                next(); next()
+                val r = peek()
+                if (r.type != TokType.UIDENT) fail("expected RefinementName after 'to be'; optionality, emptiness, and non-membership are spelled 'is some', 'is not empty', 'is not'", r)
+                next()
+                IsExpr(left, "refinement", r.text, toBe = true)
+            }
             t.type in COMPARISON_OPS -> {
                 val op = next().text
                 skipNewlines()

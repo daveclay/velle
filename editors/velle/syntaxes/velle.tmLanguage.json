@@ -15,6 +15,7 @@
     { "include": "#keyword-declaration" },
     { "include": "#keyword-control" },
     { "include": "#keyword-logical" },
+    { "include": "#to-be" },
     { "include": "#storage-modifier" },
     { "include": "#constant" },
     { "include": "#this" },
@@ -103,6 +104,10 @@
     },
     "keyword-logical": {
       "match": "\\b(and|or|not|is|exists)\\b",
+      "name": "keyword.operator.logical.velle"
+    },
+    "to-be": {
+      "match": "\\b(to)\\s+(be)\\b",
       "name": "keyword.operator.logical.velle"
     },
     "storage-modifier": {

@@ -11,7 +11,7 @@ import velle.generated.pharmacy.*
  *     drug.reorderPoint = reorderPoint
  * }
  *
- * SetReorderPoint requires (requestedBy is Administrator) or (requestedBy is Pharmacist)
+ * SetReorderPoint requires (requestedBy to be Administrator) or (requestedBy to be Pharmacist)
  *
  * never (SetReorderPoint where reorderPoint < 0)
  *

@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * ConflictOverride requires pharmacist is Pharmacist
+ * ConflictOverride requires pharmacist to be Pharmacist
  *
  */
 class ConflictOverrideSpec : SpecSupport() {

@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * CountLot requires (technician is Technician) or (technician is Pharmacist)
+ * CountLot requires (technician to be Technician) or (technician to be Pharmacist)
  *
  * never (CountLot where counted < 0)
  *

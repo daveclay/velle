@@ -192,7 +192,8 @@ data class NotExpr(val inner: Expr) : Expr
 data class IfExpr(val condition: Expr, val thenExpr: Expr, val elseExpr: Expr) : Expr
 
 /** kind: "none" | "some" | "empty" | "notEmpty" | "refinement" */
-data class IsExpr(val subject: Expr, val kind: String, val refinement: String? = null) : Expr
+/** `toBe` records the requirement spelling of membership (`x to be R`, README §21); it is the same predicate as `x is R`. */
+data class IsExpr(val subject: Expr, val kind: String, val refinement: String? = null, val toBe: Boolean = false) : Expr
 
 /** `exists Shape for expr` (sugar) or `exists (collection)` (general). */
 data class ExistsExpr(

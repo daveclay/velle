@@ -70,7 +70,7 @@ expose shape LicenceRenewal {
     expiresOn: Date
 }
 
-LicenceRenewal requires pharmacist is Pharmacist
+LicenceRenewal requires pharmacist to be Pharmacist
 
 shape LicensedPharmacist = Pharmacist where exists (licenceRenewals where expiresOn >= today)
 
@@ -166,7 +166,7 @@ expose transient shape WithdrawPriceChange {
     reason: text
 }
 
-WithdrawPriceChange requires administrator is Administrator
+WithdrawPriceChange requires administrator to be Administrator
 
 shape PriceWithdrawal {
     drug: one Drug
@@ -209,7 +209,7 @@ expose transient shape SetReorderPoint {
     reorderPoint: integer
 }
 
-SetReorderPoint requires requestedBy is Administrator or requestedBy is Pharmacist
+SetReorderPoint requires requestedBy to be Administrator or requestedBy to be Pharmacist
 never (SetReorderPoint where reorderPoint < 0)
 
 rule ApplyReorderPoint when SetReorderPoint {
@@ -252,7 +252,7 @@ expose transient shape CountLot {
     counted: integer
 }
 
-CountLot requires technician is Technician or technician is Pharmacist
+CountLot requires technician to be Technician or technician to be Pharmacist
 never (CountLot where counted < 0)
 
 shape StockAdjustment {
@@ -516,7 +516,7 @@ expose transient shape VoidEntry {
     reason: text
 }
 
-VoidEntry requires pharmacist is Pharmacist
+VoidEntry requires pharmacist to be Pharmacist
 
 shape EntryVoid {
     prescription: one Prescription
@@ -570,7 +570,7 @@ expose shape ConflictOverride {
     justification: text
 }
 
-ConflictOverride requires pharmacist is Pharmacist
+ConflictOverride requires pharmacist to be Pharmacist
 
 shape Cleared = Prescription where
     (this is not AllergyConflict and this is not InteractionConflict) or
@@ -643,7 +643,7 @@ expose transient shape FillPrescription {
     dispensable: boolean = if prescription is Fillable and quantity <= lot.onHand then true else false
 }
 
-FillPrescription requires filledBy is Technician or filledBy is Pharmacist
+FillPrescription requires filledBy to be Technician or filledBy to be Pharmacist
 FillPrescription requires lot.drug == prescription.drug
 never (FillPrescription where lot is ExpiredLot or lot is QuarantinedLot)
 never (FillPrescription where quantity <= 0 or quantity > prescription.quantity)
@@ -663,7 +663,7 @@ expose shape MonitoringCheck {
     cleared: boolean
 }
 
-MonitoringCheck requires pharmacist is Pharmacist
+MonitoringCheck requires pharmacist to be Pharmacist
 
 never (FillPrescription where lot.drug is Controlled and
        not exists (prescription.monitoringChecks where cleared and checkedAt > now - 24 hours))
@@ -748,7 +748,7 @@ expose transient shape VerifyFill {
     note: text
 }
 
-VerifyFill requires pharmacist is LicensedPharmacist
+VerifyFill requires pharmacist to be LicensedPharmacist
 never (VerifyFill where pharmacist == fill.filledBy and fill.lot.drug is Controlled)
 VerifyFill requires outcome == "approved" or outcome == "rejected"
 
@@ -785,7 +785,7 @@ expose shape Counselling {
     notes: text
 }
 
-Counselling requires pharmacist is Pharmacist
+Counselling requires pharmacist to be Pharmacist
 
 shape CounsellingDue = VerifiedFill where
     (lot.drug.requiresCounselling or fillNumber == 1) and not exists Counselling for this
@@ -841,7 +841,7 @@ expose transient shape PickUp {
     amountPaid: decimal
 }
 
-PickUp requires fill is VerifiedFill and not exists ReturnToStock for fill
+PickUp requires fill to be VerifiedFill and not exists ReturnToStock for fill
 never (PickUp where fill is CounsellingDue)
 never (PickUp where amountPaid < fill.amountDue)
 

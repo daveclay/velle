@@ -116,7 +116,7 @@ object Printer {
             if (e.inner is IsExpr && e.inner.kind == "refinement") "${operand(e.inner.subject)} is not ${e.inner.refinement}"
             else "not ${operand(e.inner)}"
         is IfExpr -> "if ${expr(e.condition)} then ${expr(e.thenExpr)} else ${expr(e.elseExpr)}"
-        is IsExpr -> "${operand(e.subject)} is ${
+        is IsExpr -> "${operand(e.subject)} ${if (e.toBe) "to be" else "is"} ${
             when (e.kind) {
                 "none" -> "none"; "some" -> "some"; "empty" -> "empty"; "notEmpty" -> "not empty"
                 else -> e.refinement ?: "?"

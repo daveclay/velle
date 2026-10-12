@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * FillPrescription requires (filledBy is Technician) or (filledBy is Pharmacist)
+ * FillPrescription requires (filledBy to be Technician) or (filledBy to be Pharmacist)
  *
  * FillPrescription requires lot.drug == prescription.drug
  *

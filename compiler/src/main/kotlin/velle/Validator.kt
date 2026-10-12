@@ -118,7 +118,7 @@ class Validator(private val model: Model) {
                             (if (model.isCrossBase(t.shape))
                                 "'${t.shape}' is a union whose operands carry a predicate; a field's target union must be " +
                                 "a pure `or` of base shapes (README §9)"
-                            else "State the condition on the act that creates '$name': '$name requires ${m.name} is ${t.shape}', or a gate refinement")))
+                            else "State the condition on the act that creates '$name': '$name requires ${m.name} to be ${t.shape}', or a gate refinement")))
                     m.initially?.let { checkExpr(it, name, allowGenerator = true) }
                     // `initially required` demands an optional type: the whole point of
                     // the decomposition is read-side optionality with creation-side
