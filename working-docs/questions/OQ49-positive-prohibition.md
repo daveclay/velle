@@ -85,11 +85,204 @@ So the keyword re-enters with a different subject. `requires` on a rule is dropp
 
 The enumeration family is better in the positive form but still wrong. `Staff requires role == "pharmacist" or role == "technician" or role == "admin"` checks a text field; the structural answer is an enumerated scalar type, which makes the bad value impossible instead of checked. That belongs with extensible data types (README §22), not here. The requirement form should be motivated by the role gates and the definitions, and must not become the reason the enumeration gap stays open.
 
-## 7. Questions to settle
+## 7. `to be` as a membership spelling
 
-1. **`to be` as a membership spelling.** `VerifyFill requires pharmacist to be LicensedPharmacist` reads better than `... pharmacist is LicensedPharmacist`. The language has one spelling of membership, `is`, and one of non-membership, `is not`, and the general form of this declaration must take an ordinary predicate because most requirements are not membership tests (`PriceChange requires unitPrice >= 0`). Decide whether `to be X` is admitted as a contextual alias for `is X` in this one position, like `by` and `with` are contextual elsewhere, accepting that the rendered rejection, the diagnostics, and the glossary would say `is` for a predicate the author wrote as `to be`. Recommendation: settle the keyword first with `is`, and take this as a separate yes-or-no.
-2. **Diagnostics.** The rendered rejection message should follow the author's polarity. The validator's diagnostics quote `is not` as the spelling of non-membership (README §10); decide whether a violation of a requirement is reported as the requirement unmet or as the complement refinement inhabited.
-3. **Vocabulary.** README §21 opens "a `never` declares a prohibition". Either both declarations declare a prohibition, with the complement taken for `requires`, or the glossary gains a second noun (requirement). The first keeps the three-way split as it is.
-4. **Generated cases.** `testgen.md`'s catalog derives two cases from a `never` with a single comparison against a literal on an exposed act. The same derivation applies to a requirement with the comparison inverted; the generated case titles name the keyword and would need both.
-5. **Surface.** `grammar.md`'s `declaration` gains `requiresDecl := ShapeName "requires" predicate`; every top-level declaration today begins with a keyword and this one begins with a shape name, which one token of lookahead settles. `requires` becomes reserved. `checks.md` F2's diagnostic, which today offers "a gate refinement or a `never` over the act", would offer the requirement first for the role-gate case. README §22's deferred `requires` item is rewritten or removed at settling.
-6. **Refinement subjects and totality.** `ScheduleTwoPrescription requires refillsAuthorized == 0` has a refinement as subject. Confirm that the subject may be any shape or refinement name, and that nothing in the form lets an author assert a refinement is total by accident.
+**The question.** Should `to be <Refinement>` be admitted after `requires` as an alias for `is <Refinement>`?
+
+The language has one spelling of membership, `is`, and one of non-membership, `is not` (README §10, the spelling the diagnostics and examples use). The general form of the declaration must take an ordinary predicate, because most requirements are not membership tests. Drawn from `examples/pharmacy/pharmacy.velle`:
+
+```
+expose shape Staff {
+    name: text
+    role: text
+}
+
+shape Pharmacist = Staff where role == "pharmacist"
+shape LicensedPharmacist = Pharmacist where exists (licenceRenewals where expiresOn >= today)
+
+expose transient shape VerifyFill {
+    fill: one Fill
+    pharmacist: one Staff
+    outcome: text
+    note: text
+}
+
+VerifyFill requires pharmacist is LicensedPharmacist                  -- the ordinary predicate
+VerifyFill requires pharmacist to be LicensedPharmacist               -- the alias under consideration
+VerifyFill requires outcome == "approved" or outcome == "rejected"    -- a requirement no `to be` can spell
+```
+
+The alias reads as English in the one position it is allowed. The cost shows up in three places:
+
+- **Negation.** A requirement over non-membership invites `not to be`: `FillPrescription requires lot not to be ExpiredLot`, beside the one spelling `lot is not ExpiredLot`. Admitting `to be` and refusing `not to be` is a rule a reader has to learn; admitting both is a second spelling of non-membership.
+- **Rendering.** The rejection renderer and the validator's diagnostics quote predicates as `is` / `is not` (`compiler/src/main/kotlin/velle/Rejection.kt`, the `evaluation:` block). A requirement written `to be` would be read back as `is`, so the author's sentence and the person's sentence would differ by a word.
+- **Scope.** `by`, `with`, and `required` are contextual words because each reads as a keyword in exactly one grammatical position (`grammar.md`, keywords). `to be` fits that pattern. `to` is otherwise unused.
+
+**Recommendation.** Settle the keyword first with `is`, and take this as a separate yes-or-no afterwards.
+
+## 8. Diagnostics: how a violation is reported
+
+**The question.** When a requirement is violated, is the rejection rendered as the requirement unmet, or as the complement refinement inhabited?
+
+Today's renderer speaks in the prohibition's terms. A technician's `VerifyFill` against the current `never` renders roughly as:
+
+```
+VerifyFill refused: this VerifyFill would be a VerifyFill where pharmacist is not LicensedPharmacist.
+  never #14: VerifyFill where pharmacist is not LicensedPharmacist
+  this VerifyFill: fill = Fill#3, pharmacist = Staff#17, outcome = "approved", note = ""
+  through Staff#17: name = "Ana", role = "technician"
+  evaluation:
+    Staff#17 is not LicensedPharmacist
+```
+
+Two renderings are possible for `VerifyFill requires pharmacist is LicensedPharmacist`:
+
+```
+-- (a) the requirement unmet, in the author's polarity
+VerifyFill refused: this VerifyFill requires pharmacist is LicensedPharmacist; Staff#17 is not.
+  requires #14: VerifyFill requires pharmacist is LicensedPharmacist
+  ...
+
+-- (b) the complement inhabited, in the normalized form
+VerifyFill refused: this VerifyFill would be a VerifyFill where not (pharmacist is LicensedPharmacist).
+  never #14: VerifyFill where not (pharmacist is LicensedPharmacist)
+  ...
+```
+
+Rendering (b) is what falls out of normalizing at the parser and changing nothing else. It also throws away the reason the construct exists: the rejection is first-class information rendered from the author's declaration (README §21), and (b) renders a declaration the author did not write. Rendering (a) means the `Rejection` carries the declaration's polarity, or the source text, alongside the normalized predicate.
+
+The same choice recurs in the validator. The guarantee prover's diagnostic today reads "`SuspendManually` can end a transaction violating `never (Account where balance >= 0 and suspended)`"; for a requirement it should quote the requirement. V29's diagnostic for a scheduled rule that creates a record a constraint consults, likewise.
+
+**Recommendation.** (a). The `evaluation:` block already shows the membership test that failed in `is not` terms, so the complement is visible to anyone who needs it.
+
+## 9. Vocabulary: what a `requires` declares
+
+**The question.** README §21 opens "a `never` declares a prohibition, and a prohibition is one of three things, by who it binds." Does a `requires` declare a prohibition too, or does the glossary gain a second noun?
+
+The two spellings are one statement. From `examples/shipping/shipping.velle`:
+
+```
+expose shape Order {
+    reference: text
+}
+
+shape CancelledOrder = Order where exists (cancellations)
+
+expose shape Shipment {
+    order: one Order
+}
+
+never (Shipment where order is CancelledOrder)        -- today
+Shipment requires order is not CancelledOrder          -- the same constraint
+```
+
+Either spelling rejects a shipment arriving for a cancelled order and a cancellation arriving for a shipped order alike, names the shipment either way, and is spendable as a proof input once established. Two ways to say that in the README:
+
+- **One noun.** "A `never` or a `requires` declares a prohibition; a requirement's prohibition is its complement." Refusal, constraint, and guarantee stay as they are. The glossary's *prohibition* entry grows one clause.
+- **Two nouns.** *Requirement* joins *prohibition* in the glossary, each with the three kinds beneath it. Every sentence in §21 that says "the prohibition" has to say "the prohibition or requirement", or pick one.
+
+**Recommendation.** One noun. The split that matters is by subject, and the polarity is spelling.
+
+## 10. Generated cases
+
+**The question.** `testgen.md`'s catalog derives two cases from a `never` with a single comparison against a literal on an exposed act. What does the same row derive from a requirement?
+
+Today, from `examples/pharmacy/pharmacy.velle` and its `output/SPEC_INDEX-Pharmacy.md`:
+
+```
+expose transient shape SetReorderPoint {
+    drug: one Drug
+    requestedBy: one Staff
+    reorderPoint: integer
+}
+
+never (SetReorderPoint where reorderPoint < 0)
+
+-- generated case titles
+-- never - a SetReorderPoint where reorderPoint below 0 is refused
+-- never - a SetReorderPoint with reorderPoint 0 is accepted
+```
+
+The requirement form inverts the comparison, and the derivation has to pick the failing and passing values from the inverted side:
+
+```
+SetReorderPoint requires reorderPoint >= 0
+
+-- generated case titles
+-- requires - a SetReorderPoint with reorderPoint -1 is refused
+-- requires - a SetReorderPoint with reorderPoint 0 is accepted
+```
+
+Three details to settle: the title's keyword follows the author's spelling; the boundary value is found on the complement (`>= 0` fails first at `-1`, where `< 0` failed at `-1` too, but `> 0` fails at `0`); and a requirement written as a disjunction of literals (`VerifyFill requires outcome == "approved" or outcome == "rejected"`) is the same shape as the enumeration `never` the catalog already declines to derive from, so the row's "single comparison" scope is unchanged.
+
+## 11. Surface: grammar, reserved word, F2, README §22
+
+**The question.** What changes in the normative documents and the validator at settling?
+
+**Grammar.** A new top-level declaration:
+
+```
+declaration  := shapeDecl | refinementDecl | ruleDecl | neverDecl | requiresDecl | exposeDecl
+requiresDecl := ShapeName "requires" predicate ("tolerates" "contention")?
+```
+
+Every declaration today begins with a keyword; this one begins with a shape name, which one token of lookahead settles. `tolerates contention` carries over from `neverDecl`: it answers the A5 serialization-width advisory for a read the declaration makes (`checks.md` A5, `evaluation.md` U3), and a requirement reads exactly what its complement reads, so the clause means the same on either spelling.
+
+**Reserved word.** `requires` joins the keyword list in `grammar.md`, so `requires: boolean` stops being a legal property. No example spec uses it as an identifier.
+
+**F2's diagnostic.** A refinement-typed field is refused today with "State the condition on the act that creates 'VerifyFill' — a gate refinement or a never" (`compiler/src/main/kotlin/velle/Validator.kt`). The role-gate case is the requirement's home, so the diagnostic should offer it first:
+
+```
+expose transient shape VerifyFill {
+    pharmacist: one Pharmacist              -- F2: relationships target base shapes, not refinements
+}
+
+-- the diagnostic's prescribed rewrite
+expose transient shape VerifyFill {
+    pharmacist: one Staff
+}
+VerifyFill requires pharmacist is Pharmacist
+```
+
+**README.** §21 gains the requirement as a spelling (per §9 above); §6's "a gate refinement or a `never` over the act" names the requirement; §22's deferred `requires` item is removed, since the construct has landed with a different subject. The merged OQ32 leaves no trail (history is git).
+
+## 12. Refinement subjects and totality
+
+**The question.** May the subject of a `requires` be a refinement, and does the form let an author assert that a refinement is total by accident?
+
+A refinement subject is the natural way to state a requirement that holds only in a state. From `examples/pharmacy/pharmacy.velle`:
+
+```
+expose shape Drug {
+    name: text
+    schedule: integer
+}
+
+shape ScheduleTwo = Drug where schedule == 2
+
+shape Prescription {
+    drug: one Drug
+    refillsAuthorized: integer
+}
+
+shape ScheduleTwoPrescription = Prescription where drug is ScheduleTwo
+
+never (Prescription where drug is ScheduleTwo and refillsAuthorized > 0)     -- today
+ScheduleTwoPrescription requires refillsAuthorized == 0                       -- the same constraint, on the state
+```
+
+The desugaring is unchanged: `never (ScheduleTwoPrescription where refillsAuthorized != 0)`. The subject may be any shape or refinement name, the same set `never SomeRefinement` accepts today.
+
+Totality is not an accident the form invites; it is a spelling the form allows on purpose. "Every staff member is a pharmacist, a technician, or an administrator" is a requirement over the base shape whose predicate is a membership test on `this`:
+
+```
+shape Pharmacist = Staff where role == "pharmacist"
+shape Technician = Staff where role == "technician"
+shape Administrator = Staff where role == "admin"
+
+Staff requires this is Pharmacist or this is Technician or this is Administrator
+```
+
+That is today's `never (Staff where role != "pharmacist" and role != "technician" and role != "admin")` stated over the refinements instead of the text values, and it is the closest the language gets to the enumeration without an enumerated scalar type (§6 above). The author wrote `this is`, so nothing is asserted by accident. What `always SomeRefinement` would have allowed, and this form does not, is a bare refinement name standing for "every instance is a member" with no predicate on the page.
+
+**Recommendation.** Any shape or refinement name as subject; `this is R` as a predicate is ordinary and stays legal.
