@@ -1,6 +1,6 @@
 # OQ49 — `requires`: a requirement stated on a shape, the positive twin of `never`
 
-**Status:** open (2026-10-11) — raised while reading the pharmacy spec's prohibitions; absorbs OQ32 (`requires`, re-derived) the same day; R1–R3 ruled the same day (spelling, rendering, vocabulary); one question open, refinement subjects and totality (§10); §11 is the promotion checklist
+**Status:** open (2026-10-11) — raised while reading the pharmacy spec's prohibitions; absorbs OQ32 (`requires`, re-derived) the same day; R1–R4 ruled the same day (spelling, rendering, vocabulary, subjects); every numbered question is ruled and §11 is the promotion checklist to run
 **In plain terms:** `never` says which records may not exist. Should the author also be able to say what every record of a shape must satisfy, so that "only a licensed pharmacist verifies a fill" is written as `VerifyFill requires pharmacist is LicensedPharmacist` instead of as a double negative?
 **See:** README §21 (`never`; refusal, constraint, guarantee) · README §10 (negation; `is not` as the spelling of non-membership) · README §6 (a relationship targets a base shape, never a refinement) · README §4 "Every request gets a response" · README §18 "No guard sugar" and §12 "No act-level sugar" (the two sugars the language refused, and why) · README §22 (the deferred `requires` item) · `grammar.md` `neverDecl`, `declaration` · `checks.md` F2 (the diagnostic that prescribes a `never` on the creating act), A4 · `evaluation.md` U3 (serialization) · `testgen.md` (the `never` row of the case catalog) · `examples/pharmacy/pharmacy.velle`
 
@@ -11,6 +11,7 @@
 | R1 | 2026-10-11 | membership after `requires` is spelled `is`; no `to be` alias (§7) |
 | R2 | 2026-10-11 | a violated requirement renders as the requirement unmet, in the author's polarity (§8) |
 | R3 | 2026-10-11 | one noun: a `requires` declares a prohibition, its complement (§9) |
+| R4 | 2026-10-11 | any shape or refinement name may be the subject; `this is R` is an ordinary predicate, so totality is a deliberate spelling (§10) |
 
 ## 1. The evidence
 
@@ -228,7 +229,7 @@ Staff requires this is Pharmacist or this is Technician or this is Administrator
 
 That is today's `never (Staff where role != "pharmacist" and role != "technician" and role != "admin")` stated over the refinements instead of the text values, and it is the closest the language gets to the enumeration without an enumerated scalar type (§6 above). The author wrote `this is`, so nothing is asserted by accident. What `always SomeRefinement` would have allowed, and this form does not, is a bare refinement name standing for "every instance is a member" with no predicate on the page.
 
-**Recommendation.** Any shape or refinement name as subject; `this is R` as a predicate is ordinary and stays legal.
+**Ruled (R4, 2026-10-11).** Any shape or refinement name as subject, the same set `never` accepts; `this is R` as a predicate is ordinary and stays legal.
 
 ## 11. Promotion at settling
 
