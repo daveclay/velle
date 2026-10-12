@@ -4,7 +4,7 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## Now: calibrate v0 against realistic specs
 
-- [ ] Write more realistic specs against the v0 pipeline — the empirical answer to OQ16 (which carries the V14 certificate whitelist, OQ15's residue). `examples/peptides/` is the first domain-first pass; its findings are in `break-peptides.md` and the section below.
+- [ ] Write more realistic specs against the v0 pipeline — the empirical answer to OQ16 (which carries the V14 certificate whitelist, OQ15's residue). `examples/peptides/` is the first domain-first pass and `examples/pharmacy/` the second; their findings are in `break-peptides.md` and `break-pharmacy.md` and the two sections below.
 - [ ] While spec-writing, exercise the calibration riders: rung-recognition boundaries (README §20), boundary/apparatus legibility at scale (formerly OQ19), and `when leaving R on <schedule>` tick-exit semantics (`evaluation.md` "Ticks" — derived, unexercised).
 - [ ] Convert `billing.velle` (`ApplyDueChange`/`RecordDueChangeRefusal`) and `membership.velle` (`ApplyAssignment`/`RecordAssignmentRefusal`) to the anchored handled-once spelling — A4 flags them; `AdvisorySweepTest` inventories the debt. *(Superseded if those acts stay `transient` — both were migrated; confirm and close.)*
 - [ ] Update README §8's "Frozen fields" fix text and `patterns.md` "Validation rejection is data" to the anchored spelling.
@@ -23,11 +23,24 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 - [ ] Teach the domain derivation to key a series read rooted at the subject's inferred inverse (`assays`, `climateReadings`, …) — 41 A5 widths on `examples/peptides/`, all of that shape (S12; rides the A5 stress-test item under serialization domains).
 - [ ] Generate `never` cases for `or` ranges, and skip or demand a given for a positive case when a relationship `never` on the shape cannot be satisfied by synthesis (S11's remaining half).
 
+## Pharmacy stress pass (`break-pharmacy.md`)
+
+- [ ] Decide which of two wordings about a refusal's moment stands — README §21 ("checked once, at the request") or `checks.md` V18 and `evaluation.md` "An exposed call" (checked at the settled transaction as well, "the stronger statement") — and fix the other; the pharmacy spec's fill-number, verify-once, and pickup-once sentences show the difference (`break-pharmacy.md`, section 1).
+- [ ] Let V29, V10, and V26 discharge a creation or deletion whose only effect on the aggregate a prohibition consults is in the safe direction — `never (StockLot where onHand < 0)` was refused because the nightly return to stock creates a record the balance reads, and a return only raises it (P4).
+- [ ] Teach the disarm proof (V2, and V16 through it) to look through a named refinement whose predicate is an inverse collection's `is not empty` — `not this is QuarantinedLot` with `QuarantinedLot = StockLot where quarantines is not empty` is a disarm the rule's `Quarantine` creation performs (P7).
+- [ ] Count a closure part as exposed in `SpecGen.kt`: the five prohibitions over `Prescription` in `examples/pharmacy/pharmacy.velle` are listed as "shape not exposed" and get no boundary case (P10).
+- [ ] Let a generated boundary case name the role or relationship refusals on its act, or demand a given per act instead of one `some<Shape>()` given shared by every act that references the shape — `CountLot` and `SetReorderPoint` both draw their staff member from `someStaff()` (P10; S11's remaining half).
+- [ ] Give a `when leaving R on <Schedule>` rule a generated case that ages a member out and ticks, or state that it is not generated — today's case drives a commit-caused exit and asserts nothing (P10).
+- [ ] Fix the serialization-domain derivation's resolution of a sibling join's second binding: `exists (drug.ingredients as ing, order.patient.allergies as al where ing == al)` reports "'order' cannot be resolved on 'Ingredient'" — the second path is resolved against the first binding's element shape instead of the subject (`Domains.kt`; P11, beside S12).
+- [ ] Add the three-way statement from `break-pharmacy.md` P13 to `patterns.md` and README §21: a refusal for data wrong on arrival, a refusal recorded as data for the requester's situation, a constraint on the record for a sentence the request's own handling makes true — chosen by whether the request's handling changes what the sentence reads.
+- [ ] Show the inline exposure with a closure (`expose shape Order { ... } with orderLines`) in README §6; only the standalone form appears today (P14).
+
 ## Cross-base unions (OQ44)
 
 - [ ] Tighten V5, V6, V10, V12, V14, and V15's transition leg to reason per operand of a cross-base refinement (today: skipped, fail-open) — OQ44 exercises each; rides OQ16's calibration.
 - [ ] Extend narrowing to `not (x is A)`, nested conditionals, and three-or-more-operand else-branches (`Validator.kt`, the narrowing block).
 - [ ] Carry narrowing into a collection filter's source path, in the name check and in the read-summary collector (`Model.collectExpr`) — `if trial is GreenhouseTrial then count(trial.greenhousePlots where ...)` (`break-peptides.md` S14).
+- [ ] Resolve the element of a refinement-filtered collection as the refinement, so an aggregate or selector over `claims where PaidClaim` can read `PaidClaim`'s own body properties — `sum(claims where PaidClaim, patientPays)` reports "'Claim' has no member 'patientPays'" (`break-pharmacy.md` P8).
 - [ ] Add a union notation to the class and state-flow diagrams (`diagrams.md`).
 
 ## Transient acts — Design B residue (`investigate-transient.md`)

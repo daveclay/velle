@@ -1422,7 +1422,12 @@ class Validator(private val model: Model) {
             return
         }
         val cond = conditionSummary(rule)
-        if (cond.readsTime && schedules.isEmpty()) {
+        // A transient act's partition is evaluated exactly once, at the act's
+        // own commit (README §4, "Transient acts"): the act cannot age into a
+        // state, and V17 bans a schedule on it — so a time-dependent condition
+        // over a transient act is not under-firing, it is read at the request.
+        val transientSubject = bases.isNotEmpty() && bases.all { it in model.transients }
+        if (cond.readsTime && schedules.isEmpty() && !transientSubject) {
             diags.add(Diagnostic("V3", "rule '${rule.name}' — its condition depends on the passage of time, " +
                 "which no act commit changes: entry by aging is unobserved. Add a schedule to 'on', or this rule under-fires (README §11)"))
             return
@@ -2362,6 +2367,11 @@ class Validator(private val model: Model) {
         if (model.deleteSites.isEmpty()) return
         for ((i, n) in model.nevers.withIndex()) {
             val nBase = model.baseOfExpr(n.target)
+            // A refusal — a prohibition over a transient act (README §21) — binds
+            // the caller at the request and nothing afterwards: no act instance
+            // exists at a tick or behind the after-commit boundary for the firing
+            // to leave in the forbidden state.
+            if (nBase != null && nBase in model.transients) continue
             val s = model.summaryOfRefExpr(n.target)
             val consulted = s.touchedShapes().mapNotNull { model.baseOf(it) }.toSet() - setOfNotNull(nBase)
             for (site in model.deleteSites) {
@@ -2388,6 +2398,11 @@ class Validator(private val model: Model) {
     private fun checkUncalledCreations() {
         for ((i, n) in model.nevers.withIndex()) {
             val nBase = model.baseOfExpr(n.target)
+            // A refusal — a prohibition over a transient act (README §21) — binds
+            // the caller at the request and nothing afterwards: no act instance
+            // exists at a tick or behind the after-commit boundary for the firing
+            // to leave in the forbidden state.
+            if (nBase != null && nBase in model.transients) continue
             val s = model.summaryOfRefExpr(n.target)
             val consulted = s.touchedShapes().mapNotNull { model.baseOf(it) }.toSet() + setOfNotNull(nBase)
             for (rule in model.rules.values) {

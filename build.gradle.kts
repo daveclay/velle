@@ -16,5 +16,6 @@ tasks.register("generate") {
         ":examples:moderation:output:generate",
         ":examples:peptides:output:generate",
         ":examples:shipping:output:generate",
+        ":examples:pharmacy:output:generate",
     )
 }

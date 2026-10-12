@@ -83,6 +83,28 @@ class ValidatorTest {
     }
 
     @Test
+    fun `V29 - a refusal over a transient act binds no tick - a scheduled rule creating a record it consults is allowed`() {
+        val src = shippingWithNightlyCancel + """
+
+            shape UsableOrder = Order where not exists (cancellations)
+            expose transient shape Ship { order: one Order }
+            never (Ship where not order is UsableOrder)
+            rule RecordShipment when Ship {
+                Shipment from { order: order, shippedOn: today }
+            }
+            rule CancelUnpaid
+                when (UnpaidOrder where placedOn < today - 7 days and not exists (cancellations) and not exists (shipments))
+                on Nightly {
+                Cancellation from { order: this, requestedOn: today }
+            }
+        """.trimIndent()
+        val v29 = diags(src).filter { it.code == "V29" }
+        // the constraint over Shipment still refuses the nightly cancellation; the refusal over Ship does not join
+        assertEquals(1, v29.size, "got: ${diags(src)}")
+        assertTrue("never #1" in v29.single().message, v29.single().message)
+    }
+
+    @Test
     fun `V29 - a scheduled rule creating a record no constraint consults is allowed`() {
         val src = shippingWithNightlyCancel + """
 
@@ -327,6 +349,44 @@ class ValidatorTest {
             }
         """.trimIndent()
         assertTrue(codes(src).contains("V3"), "got: ${diags(src)}")
+    }
+
+    @Test
+    fun `V3 - a transient act partitioned on a time-dependent state is read at the request, not by aging`() {
+        val src = """
+            expose shape Invoice {
+                due: Date
+            }
+
+            shape Overdue = Invoice where due < today
+
+            expose transient shape PayInvoice {
+                invoice: one Invoice
+                amount: decimal
+            }
+
+            shape Payment {
+                invoice: one Invoice
+                amount: decimal
+            }
+
+            shape LatePayment {
+                invoice: one Invoice
+                amount: decimal
+            }
+
+            shape OnTimePayment = PayInvoice where not invoice is Overdue
+            shape OverduePayment = PayInvoice where invoice is Overdue
+
+            rule RecordPayment when OnTimePayment {
+                Payment from { invoice: invoice, amount: amount }
+            }
+
+            rule RecordLatePayment when OverduePayment {
+                LatePayment from { invoice: invoice, amount: amount }
+            }
+        """.trimIndent()
+        assertTrue(!codes(src).contains("V3"), "got: ${diags(src)}")
     }
 
     @Test

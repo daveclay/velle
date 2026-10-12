@@ -1,0 +1,1055 @@
+-- Pharmacy: a retail pharmacy — prescriptions arriving from prescribers,
+-- technicians filling them from stock, pharmacists verifying and counselling,
+-- patients collecting at the counter, insurers adjudicating claims, and the
+-- administrative work around staff licences, prices, stock, and recalls. The
+-- ninth Velle spec and the second written against a whole domain rather than
+-- around one construct (the first is `examples/peptides/peptides.velle`).
+-- Four kinds of people act on it: customers (patients), pharmacists,
+-- assistants (pharmacy technicians), and administrators.
+--
+-- What the domain asks of the language, and where each answer lives:
+--   · a prescriber's order arriving with several prescriptions at once — the
+--     exposure closure (README §6, "Inline part creation"), with the
+--     prohibitions on a prescription refusing the whole order
+--   · a drug interacting with another drug, in either direction — a shape
+--     with two fields of one type, so no inverse is inferred and the drug
+--     declares its view with an `or` in the formula (README §6, "Renamed and
+--     derived collections")
+--   · an allergy match between a drug's ingredients and a patient's allergies
+--     — a sibling join over two declared `many` edge sets (README §10)
+--   · a conflict with another of the patient's active prescriptions — a
+--     derived view two hops long on the patient, an alias tested against a
+--     refinement, and a nested `exists` over the drug's interaction view
+--   · who may do what — refusals over the request shapes at the boundary:
+--     only a licensed pharmacist verifies, nobody verifies their own
+--     controlled fill, nobody fills from an expired or quarantined lot
+--   · why a fill was turned away, on record for the patient — rejection as
+--     data with a per-reason conditional (README §4, checks.md V18)
+--   · a fill waiting at the counter — a capture of the day it became ready,
+--     read by a nightly sweep that returns it to stock and read one last
+--     time when the fill leaves the counter (README §8, §13)
+--   · a prescription expiring by age, as distinct from being used up or
+--     discontinued — a `when leaving` rule naming only a schedule
+--     (`evaluation.md`, "Ticks")
+--   · prices that change on a date — a ledger ordered by a business date and
+--     read through `today`; a future-dated change may be removed, a change in
+--     force may not (README §12, "Deletion"; §8, `undeletable`)
+--   · stock on hand — a derivation over receipts, fills, returns, and cycle
+--     count adjustments, never a stored count; a reorder sweep guarded by the
+--     open purchase order it creates
+--   · the controlled-substance log — a record per controlled fill carrying
+--     the balance as it stood at that commit
+--   · the insurer as an external party — the claim as intent, the
+--     adjudication as a later act, the follow-up as an hourly sweep
+--
+-- Comment convention (as in payments.velle): plain comments tell the business
+-- story; `velle:` comments note the language machinery on show.
+
+-- ── Staff: pharmacists, technicians, administrators ──────────────────────────
+
+-- Everyone who works here is staff with one role. Roles do not change: a
+-- technician who qualifies as a pharmacist is a new staff record.
+expose shape Staff {
+    name: text
+    role: text
+}
+
+never (Staff where role != "pharmacist" and role != "technician" and role != "admin")
+
+shape Pharmacist = Staff where role == "pharmacist"
+shape Technician = Staff where role == "technician"
+shape Administrator = Staff where role == "admin"
+
+-- A pharmacist's licence is renewed for a period. The licence in force is
+-- whichever renewal has not yet expired.
+-- velle: a time-dependent refinement (`today`) consulted by a boundary
+-- refusal and by a daily reminder sweep
+expose shape LicenceRenewal {
+    pharmacist: one Staff
+    licenceNumber: text
+    expiresOn: Date
+}
+
+never (LicenceRenewal where not pharmacist is Pharmacist)
+
+shape LicensedPharmacist = Pharmacist where exists (licenceRenewals where expiresOn >= today)
+
+-- A licence within thirty days of lapsing is reminded about weekly.
+shape LicenceExpiringSoon = LicensedPharmacist where
+    not exists (licenceRenewals where expiresOn >= today + 30 days)
+
+shape LicenceReminder {
+    pharmacist: one Staff
+    sentOn: Date
+}
+
+rule RemindLicence
+    when (LicenceExpiringSoon where
+          not exists (LicenceReminder where pharmacist == this and sentOn > today - 7 days))
+    on Daily {
+    LicenceReminder from { pharmacist: this, sentOn: today }
+}
+
+-- ── Drugs, ingredients, interactions, prices ─────────────────────────────────
+
+expose shape Ingredient {
+    name: text
+}
+
+-- A drug: what it is made of, whether it is a controlled substance (DEA
+-- schedules II to V; 0 means not controlled), whether every fill needs the
+-- pharmacist's counselling, and how low its stock may fall before reordering.
+-- velle: a declared `many` edge set (ingredients); stock on hand and the
+-- unit price are derivations, below; the reorder point is the one field an
+-- administrator's or a pharmacist's act changes in place
+expose shape Drug {
+    name: text
+    strength: text
+    form: text
+    schedule: integer
+    requiresCounselling: boolean
+    ingredients: many Ingredient
+    reorderPoint: integer
+    onHand: integer = sum(stockLots, onHand)
+    unitPrice: decimal = if exists (priceChanges where effectiveOn <= today) then
+                             latest(priceChanges where effectiveOn <= today by effectiveOn).unitPrice
+                         else 0
+    interactions: many Interaction = (Interaction where drugA == this or drugB == this)
+}
+
+never (Drug where schedule < 0 or schedule == 1 or schedule > 5)
+
+shape Controlled  = Drug where schedule >= 2
+shape ScheduleTwo = Drug where schedule == 2
+shape LowStock    = Drug where onHand < reorderPoint
+
+-- An interaction between two drugs is one fact about the pair, entered once
+-- in either order.
+-- velle: two `one Drug` fields on one shape — no inverse is inferred (checks
+-- V19); Drug.interactions above is the declared view, with `or` in its
+-- formula so the fact is found from either side
+expose shape Interaction {
+    drugA: one Drug
+    drugB: one Drug
+    severity: text
+}
+
+never (Interaction where drugA == drugB)
+never (Interaction where severity != "major" and severity != "moderate")
+
+-- Prices change on a date, and the history matters for billing disputes:
+-- nothing is overwritten. The price in force is the latest change whose date
+-- has arrived; a change dated in the future waits its turn.
+-- velle: the ledger pattern (README §12) ordered by a business date rather
+-- than a commit timestamp, read through `today`; the date must be unique per
+-- drug so the selector discriminates
+expose shape PriceChange {
+    drug: one Drug
+    effectiveOn: Date
+    unitPrice: decimal
+}
+
+never (PriceChange where unitPrice < 0)
+never (PriceChange where count(drug.priceChanges where effectiveOn == this.effectiveOn) > 1)
+
+-- A change already in force is history and stays; a future-dated change
+-- entered in error may be removed before its day comes.
+-- velle: `undeletable` on a time-dependent state; the deleter's partition is
+-- its syntactic complement; the record of the removal copies what it needs
+shape EffectivePrice = PriceChange where effectiveOn <= today {
+    undeletable
+}
+
+expose transient shape WithdrawPriceChange {
+    priceChange: one PriceChange
+    administrator: one Staff
+    reason: text
+}
+
+never (WithdrawPriceChange where not administrator is Administrator)
+
+shape PriceWithdrawal {
+    drug: one Drug
+    effectiveOn: Date
+    unitPrice: decimal
+    reason: text
+    withdrawnOn: timestamp on create
+}
+
+shape PriceWithdrawalRefusal {
+    priceChange: one PriceChange? initially required
+    reason: text
+    refusedOn: timestamp on create
+}
+
+shape ApplicableWithdrawal = WithdrawPriceChange where not priceChange is EffectivePrice
+shape RefusedWithdrawal    = WithdrawPriceChange where priceChange is EffectivePrice
+
+rule ApplyWithdrawal when ApplicableWithdrawal {
+    PriceWithdrawal from {
+        drug: priceChange.drug
+        effectiveOn: priceChange.effectiveOn
+        unitPrice: priceChange.unitPrice
+        reason: reason
+    }
+    then
+    delete priceChange
+}
+
+rule RefuseWithdrawal when RefusedWithdrawal {
+    PriceWithdrawalRefusal from { priceChange: priceChange, reason: "the price is already in force" }
+}
+
+-- An administrator or a pharmacist raises or lowers a drug's reorder point.
+-- The bound is stated on the act: a prohibition on the drug's field would
+-- fail closed, since a rule writes it (checks V10).
+expose transient shape SetReorderPoint {
+    drug: one Drug
+    requestedBy: one Staff
+    reorderPoint: integer
+}
+
+never (SetReorderPoint where not requestedBy is Administrator and not requestedBy is Pharmacist)
+never (SetReorderPoint where reorderPoint < 0)
+
+rule ApplyReorderPoint when SetReorderPoint {
+    drug.reorderPoint = reorderPoint
+}
+
+-- ── Stock: lots, adjustments, quarantine, recalls, reorders ──────────────────
+
+-- Stock arrives in lots with an expiry date, sometimes against a purchase
+-- order. What a lot has on hand is never stored: it is what was received,
+-- less what has been dispensed from it, plus whatever cycle counts found.
+-- velle: a derivation over a refinement-filtered inverse (`fills where
+-- ConsumingFill`) and a plain inverse; the purchase order reference is
+-- optional, so a cancelled order's lots are never a problem
+expose shape StockLot {
+    drug: one Drug
+    lotNumber: text
+    expiresOn: Date
+    received: integer
+    purchaseOrder: one PurchaseOrder?
+    onHand: integer = received - sum(fills where ConsumingFill, quantity) + sum(stockAdjustments, delta)
+}
+
+never (StockLot where received <= 0)
+
+shape ExpiredLot     = StockLot where expiresOn < today
+shape QuarantinedLot = StockLot where quarantines is not empty
+shape RecalledLot    = StockLot where recalls is not empty
+shape UsableLot      = StockLot where expiresOn >= today and onHand > 0 and
+                       not this is QuarantinedLot
+
+-- A technician counts a lot. If the count matches, the match is on record;
+-- if not, the difference is an adjustment the lot's balance reads.
+-- velle: a transient act partitioned on a comparison against a derived
+-- value, with the complement spelled `not (...)` for V18; the body reads the
+-- balance as it stood before the adjustment landed
+expose transient shape CountLot {
+    lot: one StockLot
+    technician: one Staff
+    counted: integer
+}
+
+never (CountLot where not technician is Technician and not technician is Pharmacist)
+never (CountLot where counted < 0)
+
+shape StockAdjustment {
+    lot: one StockLot
+    delta: integer
+    countedBy: one Staff
+    countedOn: timestamp on create
+}
+
+shape CountConfirmation {
+    lot: one StockLot
+    counted: integer
+    countedBy: one Staff
+    countedOn: timestamp on create
+}
+
+shape MatchingCount    = CountLot where counted == lot.onHand
+shape DiscrepantCount  = CountLot where not counted == lot.onHand
+
+rule ConfirmCount when MatchingCount {
+    CountConfirmation from { lot: lot, counted: counted, countedBy: technician }
+}
+
+rule AdjustCount when DiscrepantCount {
+    StockAdjustment from { lot: lot, delta: counted - lot.onHand, countedBy: technician }
+}
+
+-- An expired lot with stock left is quarantined overnight; a recalled lot is
+-- quarantined the moment the recall lands.
+-- velle: two rules producing one witness shape from triggers that never
+-- coincide — one on the nightly tick, one on commit. The guard is spelled
+-- `not exists Quarantine for this`, not `not this is QuarantinedLot`: the
+-- disarm proof reads the `exists` atom and does not look through a named
+-- refinement over `is not empty`
+shape Quarantine {
+    lot: one StockLot
+    reason: text
+    quarantinedOn: timestamp on create
+}
+
+rule QuarantineExpired when (ExpiredLot where onHand > 0 and not exists Quarantine for this) on Nightly {
+    Quarantine from { lot: this, reason: "expired" }
+}
+
+expose shape Recall {
+    lot: one StockLot
+    reference: text
+    issuedOn: Date
+}
+
+rule QuarantineRecalled when (RecalledLot where not exists Quarantine for this) {
+    Quarantine from { lot: this, reason: "recalled" }
+}
+
+-- Every patient who received medicine from a recalled lot is told, once.
+-- velle: a recall commit flips `lot is RecalledLot` for every fill of the
+-- lot — N entrants, N firings, all in the recall's transaction
+shape RecallNotice {
+    fill: one Fill
+    patient: one Patient
+    reference: text
+    noticedOn: DateTime
+}
+
+rule NoticeRecall when (Fill where lot is RecalledLot and not exists RecallNotice for this) {
+    RecallNotice from {
+        fill: this
+        patient: prescription.order.patient
+        reference: latest(lot.recalls by issuedOn).reference
+        noticedOn: now
+    }
+}
+
+-- A drug below its reorder point is reordered overnight, unless an order is
+-- already open. The order is closed by the lot that arrives against it.
+-- velle: a tick sweep guarded by the evidence it creates, the witness a
+-- refinement (`OpenPurchaseOrder`) of the created shape
+shape PurchaseOrder {
+    drug: one Drug
+    quantity: integer
+    orderedOn: Date initially today
+}
+
+shape OpenPurchaseOrder     = PurchaseOrder where stockLots is empty
+shape ReceivedPurchaseOrder = PurchaseOrder where stockLots is not empty
+
+rule Reorder when (LowStock where not exists OpenPurchaseOrder for this) on Nightly {
+    PurchaseOrder from { drug: this, quantity: reorderPoint * 2 }
+}
+
+-- ── Patients, prescribers, insurance ─────────────────────────────────────────
+
+expose shape InsurancePlan {
+    name: text
+    coversControlled: boolean
+}
+
+-- A patient's allergies are matched against every drug's ingredients.
+-- velle: a declared `many` edge set that two acts below replace or extend;
+-- `prescriptions` is a derived view two hops long, since a prescription
+-- reaches its patient through the prescriber's order
+expose shape Patient {
+    name: text
+    birthDate: Date
+    phone: text
+    allergies: many Ingredient
+    plan: one InsurancePlan?
+    prescriptions: many Prescription = (Prescription where order.patient == this)
+}
+
+expose shape Prescriber {
+    name: text
+    deaNumber: text
+    fax: text
+}
+
+-- A patient reports their allergies afresh, or adds one.
+-- velle: whole-set replacement and `+` union on a declared `many`; two
+-- writers of one field whose triggers never coincide (checks V1)
+expose transient shape SetAllergies {
+    patient: one Patient
+    allergies: many Ingredient
+}
+
+rule ApplyAllergies when SetAllergies {
+    this.patient.allergies = this.allergies
+}
+
+expose transient shape AddAllergy {
+    patient: one Patient
+    ingredient: one Ingredient
+}
+
+rule ApplyAllergy when AddAllergy {
+    this.patient.allergies = this.patient.allergies + this.ingredient
+}
+
+-- Notices go to a patient or to a prescriber. The channel follows who it is:
+-- patients are texted, prescribers are faxed.
+-- velle: a static union as a field type (README §6); per-operand narrowing
+-- in a value expression reads a different field on each side
+shape Recipient = Patient or Prescriber
+
+shape Notice {
+    recipient: one Recipient
+    subject: text
+    sentOn: DateTime
+    contact: text = if recipient is Patient then recipient.phone else recipient.fax
+}
+
+-- ── Prescriptions: the prescriber's order ────────────────────────────────────
+
+-- A prescriber's order arrives — electronically, or typed in from paper by a
+-- technician — carrying one or more prescriptions. The order and its
+-- prescriptions are one commit: a prohibition on any one prescription turns
+-- the whole order away, and the prescriber is told to resend.
+-- velle: the exposure closure (`expose ... with`); the part's back-reference
+-- is language-populated; a refusal rolls back container and parts together
+shape PrescriberOrder {
+    prescriber: one Prescriber
+    patient: one Patient
+    writtenOn: Date
+    enteredBy: one Staff
+}
+
+never (PrescriberOrder where writtenOn > today)
+
+-- A prescription: a drug, a quantity, how many refills the prescriber
+-- allows, and directions. A prescription from the closure cannot carry a
+-- system-maintained field, so what the pharmacy learns later lives on the
+-- records around it. Its states are read off those records.
+-- velle: derived properties mixing a conditional over refinement membership
+-- with Date arithmetic; a selector ordered by a business date with a
+-- sequence number as the tie-breaker; `first(...)`
+shape Prescription {
+    order: one PrescriberOrder
+    drug: one Drug
+    quantity: integer
+    daysSupply: integer
+    refillsAuthorized: integer
+    directions: text
+    expiresOn: Date = if drug is Controlled then order.writtenOn + 180 days else order.writtenOn + 365 days
+    fillsRecorded: integer = count(fills)
+    refillsRemaining: integer = refillsAuthorized + 1 - count(fills where ConsumingFill)
+    lastFilledOn: Date? = if fills is empty then none else latest(fills by filledOn, fillNumber).filledOn
+    firstFilledOn: Date? = if fills is empty then none else first(fills by filledOn, fillNumber).filledOn
+}
+
+expose PrescriberOrder with prescriptions
+
+never (Prescription where quantity <= 0)
+never (Prescription where daysSupply <= 0)
+never (Prescription where refillsAuthorized < 0)
+-- Schedule II allows no refills; schedules III to V allow at most five.
+never (Prescription where drug is ScheduleTwo and refillsAuthorized > 0)
+never (Prescription where drug is Controlled and refillsAuthorized > 5)
+
+-- The prescriber who wrote a prescription may discontinue it.
+-- velle: identity inequality between two paths in a constraint
+expose shape Discontinuation {
+    prescription: one Prescription
+    prescriber: one Prescriber
+    reason: text
+}
+
+never (Discontinuation where prescriber != prescription.order.prescriber)
+
+shape Discontinued = Prescription where discontinuations is not empty
+shape Expired      = Prescription where expiresOn < today
+shape Exhausted    = Prescription where refillsRemaining <= 0
+-- A current prescription is one the patient may still be taking: refills
+-- left, not discontinued, not voided — whatever the paper's date. An active
+-- one is current and not yet expired.
+shape Current = Prescription where refillsRemaining > 0 and not this is Discontinued and not this is Voided
+shape ActivePrescription = Current where expiresOn >= today
+
+-- Once a prescription has been filled, nothing about it changes.
+-- velle: bare `frozen` — every stored field, fields added later included
+shape FilledPrescription = Prescription where fills is not empty {
+    frozen
+}
+
+-- A typing error in an unfilled prescription's directions is corrected in
+-- place; once filled, the correction is refused on record and a new order is
+-- needed. Only the directions: a quantity written by a rule could carry no
+-- prohibition (checks V10 fails closed on a rule-written field), and the
+-- quantity's bounds matter more than correcting it in place.
+-- velle: the writer partitioned on the freeze's syntactic complement (checks V5)
+expose transient shape CorrectEntry {
+    prescription: one Prescription
+    technician: one Staff
+    directions: text
+}
+
+shape CorrectionRefusal {
+    prescription: one Prescription
+    reason: text
+    refusedOn: timestamp on create
+}
+
+shape ApplicableCorrection = CorrectEntry where not prescription is FilledPrescription
+shape RefusedCorrection    = CorrectEntry where prescription is FilledPrescription
+
+rule ApplyCorrection when ApplicableCorrection {
+    prescription.directions = directions
+}
+
+rule RefuseCorrection when RefusedCorrection {
+    CorrectionRefusal from { prescription: prescription, reason: "the prescription has been filled" }
+}
+
+-- A prescription entered against the wrong patient, never filled, is voided
+-- by a pharmacist. Nothing is removed: fourteen shapes refer to a
+-- prescription, so the void is a record and every state reads it.
+-- velle: reversal as data (README §22, "Reversal") where a `delete` would
+-- have to resolve every required reference (checks V24); the void is
+-- refused on record once the prescription has been filled
+expose transient shape VoidEntry {
+    prescription: one Prescription
+    pharmacist: one Staff
+    reason: text
+}
+
+never (VoidEntry where not pharmacist is Pharmacist)
+
+shape EntryVoid {
+    prescription: one Prescription
+    pharmacist: one Staff
+    reason: text
+    voidedOn: timestamp on create
+}
+
+shape VoidRefusal {
+    prescription: one Prescription
+    reason: text
+    refusedOn: timestamp on create
+}
+
+shape ApplicableVoid = VoidEntry where not prescription is FilledPrescription
+shape RefusedVoid    = VoidEntry where prescription is FilledPrescription
+
+rule ApplyVoid when ApplicableVoid {
+    EntryVoid from { prescription: prescription, pharmacist: pharmacist, reason: reason }
+}
+
+rule RefuseVoid when RefusedVoid {
+    VoidRefusal from { prescription: prescription, reason: "the prescription has been filled" }
+}
+
+shape Voided = Prescription where entryVoids is not empty
+
+-- ── Clinical checks: allergies and interactions ──────────────────────────────
+
+-- A prescription conflicts with the patient's allergies when any ingredient
+-- of its drug is one the patient is allergic to.
+-- velle: a sibling join over two `many` edge sets, correlated by identity of
+-- the bound elements
+shape AllergyConflict = Prescription where
+    exists (drug.ingredients as ing, order.patient.allergies as al where ing == al)
+
+-- It conflicts with another prescription when the patient has a different,
+-- active prescription whose drug interacts with this one.
+-- velle: the two-hop derived view on the patient as a collection source, an
+-- alias tested against a refinement and against `this`, and a nested
+-- `exists` over the drug's `or`-formula view
+shape InteractionConflict = Prescription where
+    exists (order.patient.prescriptions as other where
+            other is Current and other != this and
+            exists (this.drug.interactions where drugA == other.drug or drugB == other.drug))
+
+-- A pharmacist may override a conflict with a justification on record.
+expose shape ConflictOverride {
+    prescription: one Prescription
+    pharmacist: one Staff
+    justification: text
+}
+
+never (ConflictOverride where not pharmacist is Pharmacist)
+
+shape Cleared = Prescription where
+    (not this is AllergyConflict and not this is InteractionConflict) or
+    exists ConflictOverride for this
+
+shape Fillable = ActivePrescription and Cleared
+
+-- The pharmacist is alerted to each kind of conflict once per prescription.
+-- velle: two guarded rules whose witnesses are one shape told apart by a
+-- field, firing as siblings when a new prescription has both conflicts
+shape PharmacistAlert {
+    prescription: one Prescription
+    kind: text
+    raisedOn: DateTime
+}
+
+rule AlertAllergy
+    when (AllergyConflict where not exists (PharmacistAlert where prescription == this and kind == "allergy")) {
+    PharmacistAlert from { prescription: this, kind: "allergy", raisedOn: now }
+}
+
+rule AlertInteraction
+    when (InteractionConflict where not exists (PharmacistAlert where prescription == this and kind == "interaction")) {
+    PharmacistAlert from { prescription: this, kind: "interaction", raisedOn: now }
+}
+
+-- Patients on controlled medicines from more than one prescriber are flagged
+-- for the pharmacist's attention. Reporting vocabulary, acted on by people.
+-- velle: a sibling join of one view with itself, both aliases tested against
+-- refinements
+shape MultiplePrescribers = Patient where
+    exists (prescriptions as a, prescriptions as b where
+            a is ActivePrescription and b is ActivePrescription and
+            a.drug is Controlled and b.drug is Controlled and
+            a.order.prescriber != b.order.prescriber)
+
+-- ── Filling: the technician's request and the fill record ────────────────────
+
+-- A technician (or a pharmacist) fills a prescription from a lot. Some
+-- reasons to turn a request away are about the data and are refused with
+-- nothing kept: the wrong drug's lot, an expired or quarantined lot, more
+-- than was prescribed, a controlled fill without a recent clear monitoring
+-- check, or a person who is not allowed to fill. Other reasons are about the
+-- patient and are answered on record so the counter can explain them: no
+-- refills left, expired, discontinued, or an unresolved conflict.
+--
+-- Two things the request must not do are stated elsewhere than on the
+-- request. Fill numbers run 1, 2, 3 with no gaps or repeats: a prohibition is
+-- checked at the settled transaction (README §21), and the request's own fill
+-- is what takes the "next" number, so a refusal reading `fillsRecorded + 1`
+-- through the request would turn its own request away; on the fill record the
+-- same sentence means what it says. And a fill never takes more than the lot
+-- holds: the fill is what lowers the balance, so that is decided in the
+-- partition — evaluated once, at the request, over the shelf as it stands —
+-- and answered on record. (A constraint on the lot, `never (StockLot where
+-- onHand < 0)`, was refused by checks V29: the nightly return to stock
+-- creates a record the balance reads, and v0 cannot see that a return only
+-- raises it.)
+-- velle: refusals (`never` over the transient act) beside a constraint on the
+-- record it produces, beside a rejection-as-data partition on one act whose
+-- two sides are a derived boolean and its negation (checks V18's complement
+-- slice); the correlation key lets the counter find the answer
+expose transient shape FillPrescription {
+    requestKey: text
+    prescription: one Prescription
+    lot: one StockLot
+    quantity: integer
+    fillNumber: integer
+    filledBy: one Staff
+    dispensable: boolean = if prescription is Fillable and quantity <= lot.onHand then true else false
+}
+
+never (FillPrescription where not filledBy is Technician and not filledBy is Pharmacist)
+never (FillPrescription where lot.drug != prescription.drug)
+never (FillPrescription where lot is ExpiredLot or lot is QuarantinedLot)
+never (FillPrescription where quantity <= 0 or quantity > prescription.quantity)
+
+-- velle: a constraint counting the record among its siblings — the arriving
+-- fill is the one whose number must equal how many fills now stand at or
+-- below it
+never (Fill where fillNumber != count(prescription.fills where fillNumber <= this.fillNumber))
+
+-- A controlled fill needs a clear monitoring-programme check by a pharmacist
+-- within the last day.
+-- velle: a windowed `exists` over `now` inside a refusal
+expose shape MonitoringCheck {
+    prescription: one Prescription
+    pharmacist: one Staff
+    checkedAt: DateTime
+    cleared: boolean
+}
+
+never (MonitoringCheck where not pharmacist is Pharmacist)
+
+never (FillPrescription where lot.drug is Controlled and
+       not exists (prescription.monitoringChecks where cleared and checkedAt > now - 24 hours))
+
+-- The fill: what was dispensed, from which lot, by whom, at what price. The
+-- price is copied at the fill, so a later price change never moves it.
+-- velle: `initially today` on the unexposed record; the amount due sums the
+-- paid claims' verdicts, a derived property read through a refinement filter
+shape Fill {
+    prescription: one Prescription
+    lot: one StockLot
+    quantity: integer
+    fillNumber: integer
+    filledBy: one Staff
+    unitPrice: decimal
+    filledOn: Date initially today
+    filledAt: timestamp on create
+    total: decimal = quantity * unitPrice
+    amountDue: decimal = if exists (claims where PaidClaim) then sum(claims where PaidClaim, patientPays) else total
+}
+
+shape FillRefusal {
+    requestKey: text
+    prescription: one Prescription
+    reason: text
+    refusedOn: timestamp on create
+}
+
+shape ApplicableFill = FillPrescription where dispensable
+shape RefusedFill    = FillPrescription where not dispensable
+
+rule RecordFill when ApplicableFill {
+    Fill from {
+        prescription: prescription
+        lot: lot
+        quantity: quantity
+        fillNumber: fillNumber
+        filledBy: filledBy
+        unitPrice: lot.drug.unitPrice
+    }
+}
+
+rule RefuseFill when RefusedFill {
+    FillRefusal from {
+        requestKey: requestKey
+        prescription: prescription
+        reason: (if prescription is Expired then "prescription expired"
+                 else if prescription is Discontinued then "prescription discontinued"
+                 else if prescription is Exhausted then "no refills remaining"
+                 else if not prescription is Cleared then "unresolved allergy or interaction conflict"
+                 else "the lot does not hold that much")
+    }
+}
+
+-- Every controlled fill goes in the controlled-substance log with the
+-- balance as it stood once the fill was taken out.
+-- velle: a value fixed at the moment of the commit — the body reads the
+-- post-state derivation and the record keeps it
+shape ControlledLogEntry {
+    fill: one Fill
+    drug: one Drug
+    quantity: integer
+    balanceAfter: integer
+    loggedAt: timestamp on create
+}
+
+rule LogControlled when (Fill where lot.drug is Controlled) {
+    ControlledLogEntry from { fill: this, drug: lot.drug, quantity: quantity, balanceAfter: lot.drug.onHand }
+}
+
+-- ── Verification: the pharmacist's check ─────────────────────────────────────
+
+-- A pharmacist verifies each fill: approved, or rejected back to stock. Only
+-- a licensed pharmacist may verify; a pharmacist never verifies a controlled
+-- fill they filled themselves; a fill is verified once.
+-- velle: refusals reading a time-dependent refinement (the licence) and an
+-- identity comparison between the act and the fill's field
+expose transient shape VerifyFill {
+    fill: one Fill
+    pharmacist: one Staff
+    outcome: text
+    note: text
+}
+
+never (VerifyFill where not pharmacist is LicensedPharmacist)
+never (VerifyFill where pharmacist == fill.filledBy and fill.lot.drug is Controlled)
+never (VerifyFill where outcome != "approved" and outcome != "rejected")
+
+shape Verification {
+    fill: one Fill
+    pharmacist: one Staff
+    outcome: text
+    note: text
+    verifiedAt: timestamp on create
+}
+
+-- A fill is verified once: stated on the fill, since the request's own
+-- verification is the one that would make "already verified" true.
+never (Fill where count(verifications) > 1)
+
+rule RecordVerification when VerifyFill {
+    Verification from { fill: fill, pharmacist: pharmacist, outcome: outcome, note: note }
+}
+
+shape VerifiedFill = Fill where exists (verifications where outcome == "approved")
+shape RejectedFill = Fill where exists (verifications where outcome == "rejected")
+
+-- A fill consumes stock and a refill unless it was rejected or went back to
+-- the shelf uncollected.
+shape ConsumingFill = Fill where not this is RejectedFill and not exists ReturnToStock for this
+
+-- ── The counter: counselling, pickup, return to stock ────────────────────────
+
+-- A first fill, or any fill of a drug that needs it, is counselled by a
+-- pharmacist before it is handed over.
+expose shape Counselling {
+    fill: one Fill
+    pharmacist: one Staff
+    notes: text
+}
+
+never (Counselling where not pharmacist is Pharmacist)
+
+shape CounsellingDue = VerifiedFill where
+    (lot.drug.requiresCounselling or fillNumber == 1) and not exists Counselling for this
+
+-- A verified fill waits at the counter until it is collected or, after ten
+-- days, returned to stock. The day it reached the counter is remembered for
+-- as long as it waits.
+-- velle: a capture of `today` at entry; a refinement of the refinement reads
+-- the capture in its predicate; the sweep that returns the fill is guarded
+-- by the record it creates
+shape ReadyForPickup = VerifiedFill where not exists Pickup for this and not exists ReturnToStock for this {
+    captured readyOn: Date = today
+}
+
+rule NoticeReady when ReadyForPickup {
+    Notice from { recipient: prescription.order.patient, subject: "ready for pickup", sentOn: now }
+}
+
+shape Uncollected = ReadyForPickup where readyOn < today - 10 days
+
+shape ReturnToStock {
+    fill: one Fill
+    returnedOn: Date
+}
+
+rule ReturnUncollected when Uncollected on Nightly {
+    ReturnToStock from { fill: this, returnedOn: today }
+}
+
+-- Whichever way a fill leaves the counter, the day it arrived there goes on
+-- record with it.
+-- velle: the capture's last reader (README §13)
+shape CounterExit {
+    fill: one Fill
+    readyOn: Date
+    leftOn: Date
+}
+
+rule RecordCounterExit when leaving ReadyForPickup {
+    CounterExit from { fill: this, readyOn: readyOn, leftOn: today }
+}
+
+-- The patient collects and pays what is due. A fill that was never verified
+-- or was rejected, one already returned to stock, one that still owes
+-- counselling, or an underpaid one is not handed over; a fill is collected
+-- once. "At the counter" is not written as `not fill is ReadyForPickup`: the
+-- pickup itself ends that membership, so the refusal would read its own
+-- consequence at the settled transaction. Its stable parts are spelled out,
+-- and "collected once" is a constraint on the fill.
+expose transient shape PickUp {
+    fill: one Fill
+    collectedBy: text
+    amountPaid: decimal
+}
+
+never (PickUp where not fill is VerifiedFill or exists ReturnToStock for fill)
+never (PickUp where fill is CounsellingDue)
+never (PickUp where amountPaid < fill.amountDue)
+
+shape Pickup {
+    fill: one Fill
+    collectedBy: text
+    amountPaid: decimal
+    pickedUpAt: timestamp on create
+}
+
+never (Fill where count(pickups) > 1)
+
+rule RecordPickup when PickUp {
+    Pickup from { fill: fill, collectedBy: collectedBy, amountPaid: amountPaid }
+}
+
+-- An allergy reported while a fill waits at the counter raises an alert on
+-- that fill, once.
+-- velle: drift from a collection write (`patient.allergies`) reaching a rule
+-- through a sibling join two shapes away
+shape CounterAlert {
+    fill: one Fill
+    raisedOn: DateTime
+}
+
+rule AlertCounter when (ReadyForPickup where prescription is AllergyConflict and not exists CounterAlert for this) {
+    CounterAlert from { fill: this, raisedOn: now }
+}
+
+-- ── Refills: patient requests, auto-refill, prescriber authorisation ─────────
+
+-- A patient asks for a refill. An active prescription queues work for the
+-- technicians; anything else is refused on record, with the reason.
+expose transient shape RequestRefill {
+    requestKey: text
+    prescription: one Prescription
+}
+
+shape RefillTask {
+    prescription: one Prescription
+    requestKey: text?
+    fillsAtRequest: integer
+    requestedOn: Date initially today
+}
+
+shape OpenRefillTask    = RefillTask where prescription.fillsRecorded <= fillsAtRequest
+shape OverdueRefillTask = OpenRefillTask where requestedOn < today - 2 days
+
+shape RefillRefusal {
+    requestKey: text
+    prescription: one Prescription
+    reason: text
+    refusedOn: timestamp on create
+}
+
+shape ApplicableRefill = RequestRefill where prescription is ActivePrescription
+shape RefusedRefill    = RequestRefill where not prescription is ActivePrescription
+
+rule QueueRefill when ApplicableRefill {
+    RefillTask from { prescription: prescription, requestKey: requestKey, fillsAtRequest: prescription.fillsRecorded }
+}
+
+rule RefuseRefill when RefusedRefill {
+    RefillRefusal from {
+        requestKey: requestKey
+        prescription: prescription
+        reason: (if prescription is Expired then "prescription expired"
+                 else if prescription is Discontinued then "prescription discontinued"
+                 else "no refills remaining")
+    }
+}
+
+-- When a refill is refused for want of refills, the prescriber is asked to
+-- authorise more — once per prescription.
+-- velle: a rule chained off the refusal record rather than a third partition
+-- of the request (V18's complement slice admits two)
+shape AuthorisationRequest {
+    prescription: one Prescription
+    requestedOn: DateTime
+}
+
+rule AskPrescriber
+    when (RefillRefusal where reason == "no refills remaining" and
+          not exists AuthorisationRequest for prescription) {
+    AuthorisationRequest from { prescription: prescription, requestedOn: now }
+    Notice from { recipient: prescription.order.prescriber, subject: "refill authorisation requested", sentOn: now }
+}
+
+-- Open refill work is nagged daily once it is two days old.
+shape TaskNag {
+    task: one RefillTask
+    sentOn: Date
+}
+
+rule NagRefillTask
+    when (OverdueRefillTask where not exists (TaskNag where task == this and sentOn == today))
+    on Daily {
+    TaskNag from { task: this, sentOn: today }
+}
+
+-- A patient may enrol a prescription in automatic refills, and leave again.
+-- While enrolled, a refill is queued when the last fill is twenty-five days
+-- old and no refill work is open.
+-- velle: enrolment as paired records (simple unordered pairing, README §22);
+-- `is some` narrowing licensing `.`-free comparison on an optional date
+expose shape AutoRefillEnrolment {
+    prescription: one Prescription
+}
+
+expose shape AutoRefillCancellation {
+    prescription: one Prescription
+}
+
+shape AutoRefill = ActivePrescription where
+    autoRefillEnrolments is not empty and autoRefillCancellations is empty
+
+rule QueueAutoRefill
+    when (AutoRefill where lastFilledOn is some and lastFilledOn <= today - 25 days and
+          not exists OpenRefillTask for this)
+    on Daily {
+    RefillTask from { prescription: this, requestKey: none, fillsAtRequest: fillsRecorded }
+}
+
+-- A prescription that expires by age — as opposed to being used up or
+-- discontinued — earns the patient a notice.
+-- velle: a `when leaving` rule naming only a schedule sees the leavers at the
+-- tick itself: exits by aging, never the commit-caused ones
+rule NoticeExpiry when leaving ActivePrescription on Daily {
+    Notice from { recipient: order.patient, subject: "prescription expired", sentOn: now }
+}
+
+-- ── Insurance: claims and adjudication ───────────────────────────────────────
+
+-- A verified fill for an insured patient is claimed once. The claim is the
+-- intent; the insurer's verdict arrives later as an act of its own; a claim
+-- unanswered for a day is followed up hourly.
+-- velle: a refinement-body property narrowed by the predicate's `is some`
+-- and read in the body of a rule on a refinement of that refinement
+shape InsuredFill = VerifiedFill where prescription.order.patient.plan is some {
+    insurer: one InsurancePlan = prescription.order.patient.plan
+}
+
+shape Claim {
+    fill: one Fill
+    plan: one InsurancePlan
+    amount: decimal
+    claimKey: text initially randomUUID
+    submittedAt: timestamp on create
+    patientPays: decimal = if exists (claimResponses where outcome == "paid") then
+                               latest(claimResponses where outcome == "paid" by respondedAt).patientPays
+                           else 0
+}
+
+rule SubmitClaim when (InsuredFill where not exists Claim for this) {
+    Claim from { fill: this, plan: insurer, amount: total }
+}
+
+expose transient shape Adjudication {
+    claim: one Claim
+    outcome: text
+    paidAmount: decimal
+    patientPays: decimal
+}
+
+never (Adjudication where outcome != "paid" and outcome != "rejected")
+never (Adjudication where paidAmount < 0 or patientPays < 0)
+
+shape ClaimResponse {
+    claim: one Claim
+    outcome: text
+    paidAmount: decimal
+    patientPays: decimal
+    respondedAt: timestamp on create
+}
+
+rule RecordAdjudication when Adjudication {
+    ClaimResponse from { claim: claim, outcome: outcome, paidAmount: paidAmount, patientPays: patientPays }
+}
+
+shape PendingClaim = Claim where claimResponses is empty
+shape PaidClaim = Claim where exists (claimResponses where outcome == "paid")
+shape RejectedClaim = Claim where exists (claimResponses where outcome == "rejected") and
+                      not exists (claimResponses where outcome == "paid")
+
+shape StaleClaim = PendingClaim where submittedAt < now - 24 hours
+
+shape ClaimFollowUp {
+    claim: one Claim
+    followedUpAt: DateTime
+}
+
+rule FollowUpClaim
+    when (StaleClaim where not exists (ClaimFollowUp where claim == this and followedUpAt > now - 24 hours))
+    on Hourly {
+    ClaimFollowUp from { claim: this, followedUpAt: now }
+}
+
+-- ── Administration: the monthly controlled-substance snapshot ────────────────
+
+-- Each month the balance of every controlled drug is written down, as the
+-- regulator's inventory.
+-- velle: a tick rule with no guard — one record per tick is the intent
+shape ControlledInventorySnapshot {
+    drug: one Drug
+    onHand: integer
+    takenOn: Date
+}
+
+rule SnapshotControlled when Controlled on Monthly {
+    ControlledInventorySnapshot from { drug: this, onHand: onHand, takenOn: today }
+}

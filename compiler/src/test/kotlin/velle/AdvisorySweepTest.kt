@@ -30,4 +30,9 @@ class AdvisorySweepTest {
     fun `membership's assignment act is transient - no A4`() {
         assertEquals(emptyList(), a4("../examples/membership/membership.velle"))
     }
+
+    @Test
+    fun `pharmacy's request acts are transient - no A4`() {
+        assertEquals(emptyList(), a4("../examples/pharmacy/pharmacy.velle"))
+    }
 }
