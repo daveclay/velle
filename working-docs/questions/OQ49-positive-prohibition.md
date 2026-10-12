@@ -1,10 +1,16 @@
 # OQ49 — `requires`: a requirement stated on a shape, the positive twin of `never`
 
-**Status:** open (2026-10-11) — raised while reading the pharmacy spec's prohibitions; absorbs OQ32 (`requires`, re-derived) the same day
+**Status:** open (2026-10-11) — raised while reading the pharmacy spec's prohibitions; absorbs OQ32 (`requires`, re-derived) the same day; R1–R3 ruled the same day (spelling, rendering, vocabulary), leaving generated cases, the surface changes, and refinement subjects (§10–§12)
 **In plain terms:** `never` says which records may not exist. Should the author also be able to say what every record of a shape must satisfy, so that "only a licensed pharmacist verifies a fill" is written as `VerifyFill requires pharmacist is LicensedPharmacist` instead of as a double negative?
 **See:** README §21 (`never`; refusal, constraint, guarantee) · README §10 (negation; `is not` as the spelling of non-membership) · README §6 (a relationship targets a base shape, never a refinement) · README §4 "Every request gets a response" · README §18 "No guard sugar" and §12 "No act-level sugar" (the two sugars the language refused, and why) · README §22 (the deferred `requires` item) · `grammar.md` `neverDecl`, `declaration` · `checks.md` F2 (the diagnostic that prescribes a `never` on the creating act), A4 · `evaluation.md` U3 (serialization) · `testgen.md` (the `never` row of the case catalog) · `examples/pharmacy/pharmacy.velle`
 
 ---
+
+| ruling | date | one line |
+|---|---|---|
+| R1 | 2026-10-11 | membership after `requires` is spelled `is`; no `to be` alias (§7) |
+| R2 | 2026-10-11 | a violated requirement renders as the requirement unmet, in the author's polarity (§8) |
+| R3 | 2026-10-11 | one noun: a `requires` declares a prohibition, its complement (§9) |
 
 ## 1. The evidence
 
@@ -118,7 +124,7 @@ The alias reads as English in the one position it is allowed. The cost shows up 
 - **Rendering.** The rejection renderer and the validator's diagnostics quote predicates as `is` / `is not` (`compiler/src/main/kotlin/velle/Rejection.kt`, the `evaluation:` block). A requirement written `to be` would be read back as `is`, so the author's sentence and the person's sentence would differ by a word.
 - **Scope.** `by`, `with`, and `required` are contextual words because each reads as a keyword in exactly one grammatical position (`grammar.md`, keywords). `to be` fits that pattern. `to` is otherwise unused.
 
-**Recommendation.** Settle the keyword first with `is`, and take this as a separate yes-or-no afterwards.
+**Ruled (R1, 2026-10-11).** `is`. No alias; the one spelling of membership and of non-membership holds in this position as everywhere else.
 
 ## 8. Diagnostics: how a violation is reported
 
@@ -153,7 +159,7 @@ Rendering (b) is what falls out of normalizing at the parser and changing nothin
 
 The same choice recurs in the validator. The guarantee prover's diagnostic today reads "`SuspendManually` can end a transaction violating `never (Account where balance >= 0 and suspended)`"; for a requirement it should quote the requirement. V29's diagnostic for a scheduled rule that creates a record a constraint consults, likewise.
 
-**Recommendation.** (a). The `evaluation:` block already shows the membership test that failed in `is not` terms, so the complement is visible to anyone who needs it.
+**Ruled (R2, 2026-10-11).** (a). The `Rejection` carries the declaration as written, and the rendering quotes it; the `evaluation:` block already shows the membership test that failed in `is not` terms, so the complement is visible to anyone who needs it. The validator's diagnostics quote the requirement the same way.
 
 ## 9. Vocabulary: what a `requires` declares
 
@@ -181,7 +187,7 @@ Either spelling rejects a shipment arriving for a cancelled order and a cancella
 - **One noun.** "A `never` or a `requires` declares a prohibition; a requirement's prohibition is its complement." Refusal, constraint, and guarantee stay as they are. The glossary's *prohibition* entry grows one clause.
 - **Two nouns.** *Requirement* joins *prohibition* in the glossary, each with the three kinds beneath it. Every sentence in §21 that says "the prohibition" has to say "the prohibition or requirement", or pick one.
 
-**Recommendation.** One noun. The split that matters is by subject, and the polarity is spelling.
+**Ruled (R3, 2026-10-11).** One noun. A `never` or a `requires` declares a prohibition; a requirement's prohibition is its complement. The split that matters is by subject, and the polarity is spelling.
 
 ## 10. Generated cases
 
