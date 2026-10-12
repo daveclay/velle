@@ -14,18 +14,18 @@ import kotlin.test.assertTrue
 class ClosureTest {
 
     private val ORDERS = """
-        shape Customer {
+        act Customer {
             name: text
         }
 
-        shape Product {
+        act Product {
             sku: text
         }
 
-        shape Order {
+        act Order {
             customer: one Customer
             placedOn: Date
-        }
+        } with { orderLines with { customizations } }
 
         shape OrderLine {
             order: one Order
@@ -42,10 +42,6 @@ class ClosureTest {
             line: one OrderLine
             quantity: integer
         }
-
-        expose Customer
-        expose Product
-        expose Order with { orderLines with { customizations } }
 
         rule ReserveStock when OrderLine {
             Reservation from { line: this, quantity: this.quantity }
@@ -73,35 +69,32 @@ class ClosureTest {
     fun `flat and nested with clauses parse`() {
         val decls = Parser.parse(
             """
-            shape A { t: text }
+            act A { t: text } with bs, ds
             shape B { a: one A, t: text }
             shape D { a: one A, t: text }
-            expose A with bs, ds
             """.trimIndent()
         )
-        val expose = decls.filterIsInstance<ExposeDecl>().single()
-        assertEquals(listOf("bs", "ds"), expose.with.map { it.name })
+        val a = decls.filterIsInstance<ShapeDecl>().single { it.name == "A" }
+        assertEquals(listOf("bs", "ds"), a.with.map { it.name })
 
         val nested = Parser.parse(
             """
-            shape A { t: text }
-            shape B { a: one A, t: text }
-            shape C { b: one B, t: text }
-            expose A with {
+            act A { t: text } with {
                 bs with { cs }
             }
+            shape B { a: one A, t: text }
+            shape C { b: one B, t: text }
             """.trimIndent()
-        ).filterIsInstance<ExposeDecl>().single()
+        ).filterIsInstance<ShapeDecl>().single { it.name == "A" }
         assertEquals("bs", nested.with.single().name)
         assertEquals("cs", nested.with.single().children.single().name)
     }
 
     @Test
-    fun `with stays an ordinary identifier outside the expose position`() {
+    fun `with stays an ordinary identifier outside the act position`() {
         val decls = Parser.parse(
             """
-            shape A { with: text }
-            expose A
+            act A { with: text }
             """.trimIndent()
         )
         val a = decls.filterIsInstance<ShapeDecl>().single()
@@ -116,8 +109,7 @@ class ClosureTest {
     fun `an unknown edge name is refused`() {
         val d = diagnostics(
             """
-            shape A { t: text }
-            expose A with nonsense
+            act A { t: text } with nonsense
             """.trimIndent()
         )
         assertTrue(d.any { it.code == "V22" && "no such collection" in it.message }, d.toString())
@@ -127,15 +119,14 @@ class ClosureTest {
     fun `an arbitrary-predicate view cannot ride a closure`() {
         val d = diagnostics(
             """
-            shape A {
+            act A {
                 t: text
                 bigBs: many B = (B where flagged == true)
-            }
+            } with bigBs
             shape B {
                 a: one A
                 flagged: boolean
             }
-            expose A with bigBs
             """.trimIndent()
         )
         assertTrue(d.any { it.code == "V22" && "arbitrary-predicate" in it.message }, d.toString())
@@ -146,17 +137,16 @@ class ClosureTest {
         // two same-target `one` fields: no inverse is inferred (V19's ambiguity
         // posture), and the declared view of recognized form pins the back-reference
         val spec = """
-            shape Account {
+            act Account {
                 name: text
                 outgoing: many Transfer = (Transfer where source == this)
                 incoming: many Transfer = (Transfer where target == this)
-            }
+            } with outgoing
             shape Transfer {
                 source: one Account
                 target: one Account
                 amount: decimal
             }
-            expose Account with outgoing
         """.trimIndent()
         assertTrue(diagnostics(spec).isEmpty(), diagnostics(spec).toString())
         val model = Model(Parser.parse(spec))
@@ -166,13 +156,12 @@ class ClosureTest {
 
         // no view declared — V22 demands one rather than guessing
         val spec2 = """
-            shape Account { name: text }
+            act Account { name: text } with outgoing
             shape Transfer {
                 source: one Account
                 target: one Account
                 amount: decimal
             }
-            expose Account with outgoing
         """.trimIndent()
         assertTrue(diagnostics(spec2).any { it.code == "V22" }, diagnostics(spec2).toString())
     }
@@ -181,9 +170,8 @@ class ClosureTest {
     fun `a transient container refuses a closure`() {
         val d = diagnostics(
             """
-            shape A { t: text }
+            transient act A { t: text } with bs
             shape B { a: one A, t: text }
-            expose transient A with bs
             """.trimIndent()
         )
         assertTrue(d.any { it.code == "V22" && "OQ43" in it.message }, d.toString())
@@ -193,12 +181,11 @@ class ClosureTest {
     fun `an m2m inverse cannot ride a closure`() {
         val d = diagnostics(
             """
-            shape Course { title: text }
+            act Course { title: text } with students
             shape Student {
                 name: text
                 courses: many Course
             }
-            expose Course with students
             """.trimIndent()
         )
         assertTrue(d.any { it.code == "V22" }, d.toString())
@@ -210,14 +197,13 @@ class ClosureTest {
     fun `a part-triggered rule assigning through the back-reference is refused`() {
         val d = diagnostics(
             """
-            shape Order {
+            act Order {
                 flagged: boolean
-            }
+            } with orderLines
             shape OrderLine {
                 order: one Order
                 quantity: integer
             }
-            expose Order with orderLines
             rule FlagOrder when OrderLine {
                 this.order.flagged = true
             }

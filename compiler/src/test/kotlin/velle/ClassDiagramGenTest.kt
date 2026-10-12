@@ -13,9 +13,9 @@ class ClassDiagramGenTest {
     @Test
     fun `shapes render as classes with expose annotations`() {
         assertTrue("class Invoice {" in diagram)
-        assertTrue("<<expose>>" in diagram)
-        assertTrue("class ChangeDueDate {\n        <<expose transient>>" in diagram)
-        assertFalse("class Receipt {\n        <<expose>>" in diagram, "Receipt is not exposed")
+        assertTrue("<<act>>" in diagram)
+        assertTrue("class ChangeDueDate {\n        <<transient act>>" in diagram)
+        assertFalse("class Receipt {\n        <<act>>" in diagram, "Receipt is not an act")
     }
 
     @Test

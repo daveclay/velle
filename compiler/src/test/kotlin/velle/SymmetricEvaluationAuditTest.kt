@@ -31,7 +31,7 @@ class SymmetricEvaluationAuditTest {
     @Test
     fun `an uncorrelated same-base scan widens every commit of that shape`() {
         val a = analysis("""
-            expose shape Stat {
+            act Stat {
                 value: decimal
             }
             never (Stat where count(Stat) > 10)
@@ -46,11 +46,11 @@ class SymmetricEvaluationAuditTest {
     // subject evaluating the same watcher.
 
     private val valueCorr = """
-        expose shape Customer {
+        act Customer {
             email: text
         }
 
-        expose shape Order {
+        act Order {
             customer: one Customer
             contactEmail: text
         }
@@ -85,11 +85,11 @@ class SymmetricEvaluationAuditTest {
     @Test
     fun `a value-correlated watcher with no route back to the writer widens the writer`() {
         val a = analysis("""
-            expose shape Customer {
+            act Customer {
                 email: text
             }
 
-            expose shape Order {
+            act Order {
                 contactEmail: text
             }
 
@@ -115,15 +115,15 @@ class SymmetricEvaluationAuditTest {
     @Test
     fun `a two-hop reverse route keys the middle row and widens for the rest`() {
         val a = analysis("""
-            expose shape Order {
+            act Order {
                 total: decimal
             }
 
-            expose shape Attempt {
+            act Attempt {
                 order: one Order
             }
 
-            expose shape Result {
+            act Result {
                 attempt: one Attempt
             }
 
@@ -149,16 +149,15 @@ class SymmetricEvaluationAuditTest {
     // keys for ApplyCardUpdate.
 
     private fun cardSpec(transient: String) = """
-        shape Card {
+        act Card {
             label: text
         }
-        expose Card
 
-        expose shape Customer {
+        act Customer {
             card: one Card?
         }
 
-        expose $transient shape CardUpdate {
+        $transient act CardUpdate {
             customer: one Customer
             card: one Card
         }
@@ -176,7 +175,7 @@ class SymmetricEvaluationAuditTest {
         rule NoteLoad when LoadedCard {
             LoadNote from { card: this }
         }
-    """.trimIndent().replace("expose  shape", "expose shape")
+    """.trimIndent()
 
     @Test
     fun `a reassignment keys the old row through the pre-state path and the new row through the act`() {
@@ -201,11 +200,11 @@ class SymmetricEvaluationAuditTest {
     // ── case: forward correlation — creates are precise, assigns key the row ─
 
     private val wallets = """
-        expose shape Card {
+        act Card {
             expiresOn: Date
         }
 
-        expose shape Wallet {
+        act Wallet {
             card: one Card
             owner: text
         }
@@ -218,7 +217,7 @@ class SymmetricEvaluationAuditTest {
             Alert from { wallet: this }
         }
 
-        expose shape Extend {
+        act Extend {
             card: one Card
         }
 
@@ -260,19 +259,18 @@ class SymmetricEvaluationAuditTest {
     @Test
     fun `a correlated read hidden behind an is-refinement atom still keys or widens the writer`() {
         val a = analysis("""
-            shape Account {
+            act Account {
                 balance: decimal initially 0
             }
-            expose Account
 
-            expose shape Transfer {
+            act Transfer {
                 source: one Account
                 target: one Account
             }
 
             shape Drained = Account where exists (Transfer where source == this)
 
-            expose shape Review {
+            act Review {
                 account: one Account
             }
 
@@ -296,16 +294,16 @@ class SymmetricEvaluationAuditTest {
     @Test
     fun `sibling-join collections key both acts at the shared owner`() {
         val a = analysis("""
-            expose shape Member {
+            act Member {
                 name: text
             }
 
-            expose shape Ticket {
+            act Ticket {
                 member: one Member
                 subject: text
             }
 
-            expose shape Charge {
+            act Charge {
                 member: one Member
                 reference: text
             }

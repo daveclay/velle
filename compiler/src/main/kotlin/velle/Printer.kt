@@ -3,12 +3,18 @@ package velle
 /** Pretty-prints AST back to Velle source — provenance headers for generated specs. */
 object Printer {
 
+    /** The act's closure as written: `a, b` flat, braces where an entry carries its own closure. */
+    private fun withClause(entries: List<WithEntry>): String = entries.joinToString(", ") {
+        if (it.children.isEmpty()) it.name else "${it.name} with { ${withClause(it.children)} }"
+    }
+
     fun print(d: Decl): String = when (d) {
         is ShapeDecl -> buildString {
-            if (d.exposed) append(if (d.transient) "expose transient " else "expose ")
-            append("shape ${d.name} {\n")
+            append(if (d.exposed) (if (d.transient) "transient act " else "act ") else "shape ")
+            append("${d.name} {\n")
             d.members.forEach { append("    ${member(it)}\n") }
             append("}")
+            if (d.with.isNotEmpty()) append(" with " + withClause(d.with))
         }
         is RefinementDecl -> buildString {
             append("shape ${d.name} = ${refExpr(d.expr)}")
@@ -41,7 +47,6 @@ object Printer {
         }
         is NeverDecl -> prohibition(d) +
             if (d.toleratesContention) " tolerates contention" else ""
-        is ExposeDecl -> "expose ${if (d.transient) "transient " else ""}${d.shape}"
     }
 
     /** The prohibition as the author wrote it, without its tolerance clause:

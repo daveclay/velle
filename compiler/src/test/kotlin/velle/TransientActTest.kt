@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
 class TransientActTest {
 
     private val spec = """
-        expose shape Account {
+        act Account {
             openingBalance: decimal
             balance: decimal = openingBalance - sum(withdrawals, amount)
         }
@@ -26,7 +26,7 @@ class TransientActTest {
 
         shape OverdrawnAccount = Account where balance < 0
 
-        expose transient shape WithdrawRequest {
+        transient act WithdrawRequest {
             account: one Account
             amount: decimal
         }

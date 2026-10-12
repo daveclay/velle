@@ -153,9 +153,9 @@ class DeleteRuntimeTest {
         // bare `when leaving OpenTask` would never fire here — nothing flips
         // `done` — and is V3 (TriggerFamilyTest)
         val source = """
-            expose shape Task { name: text, done: boolean initially false }
+            act Task { name: text, done: boolean initially false }
             shape OpenTask = Task where not done
-            expose transient shape Drop { task: one Task }
+            transient act Drop { task: one Task }
             rule ApplyDrop when Drop { delete task }
             rule LogDrop when deleted OpenTask {
                 ExitLog from { name: name }
@@ -174,7 +174,7 @@ class DeleteRuntimeTest {
     @Test
     fun `a scheduled prune deletes its own subjects and the guard stays quiet`() {
         val source = """
-            expose shape Invoice { code: text, lastRemindedOn: Date? }
+            act Invoice { code: text, lastRemindedOn: Date? }
             shape Reminder { invoice: one Invoice? initially required, sentOn: Date }
             rule RemindOverdue
                 when (Invoice where lastRemindedOn is none or lastRemindedOn <= today - 3 days)

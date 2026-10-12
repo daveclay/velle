@@ -33,12 +33,11 @@ class CommutationSweepTest {
     // ── the corpus: in-file specs plus every example spec ────────────────────
 
     private val deposits = """
-        shape Account {
+        act Account {
             balance: decimal initially 0
         }
-        expose Account
 
-        expose shape Deposit {
+        act Deposit {
             account: one Account
             amount: decimal
         }
@@ -57,18 +56,17 @@ class CommutationSweepTest {
     """.trimIndent()
 
     private val audits = """
-        shape Account {
+        act Account {
             balance: decimal initially 0
         }
-        expose Account
 
-        expose shape Transfer {
+        act Transfer {
             source: one Account
             target: one Account
             amount: decimal
         }
 
-        expose shape AuditRequest {
+        act AuditRequest {
             account: one Account
         }
 
@@ -83,7 +81,7 @@ class CommutationSweepTest {
     """.trimIndent()
 
     private val uniqueness = """
-        expose shape Customer {
+        act Customer {
             email: text
             name: text
         }

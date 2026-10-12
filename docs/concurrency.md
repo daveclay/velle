@@ -13,7 +13,7 @@ Two very different authors receive that warning, and the advisory-versus-require
 Some computations are serial by nature, and no compiler setting can make them concurrent:
 
 ```
-expose shape Order {
+act Order {
     amount: decimal
 }
 
@@ -36,15 +36,14 @@ The consequence for this author: the advisory tells them what they already know,
 The other author writes a read that looks nothing like a lock:
 
 ```
-expose shape Order {
+act Order {
     amount: decimal
 }
 
-shape Promotion {
+act Promotion {
     startsOn: Date
     endsOn: Date
 }
-expose Promotion
 
 shape Discount {
     order: one Order

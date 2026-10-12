@@ -9,4 +9,4 @@ each case below is an executable test.
 
 ## Not yet generated
 
-- never #1: shape not exposed
+- never #1: shape is not an act

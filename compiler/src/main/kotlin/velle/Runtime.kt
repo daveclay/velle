@@ -367,9 +367,9 @@ class VelleSystem(
          *  physically removed at close, unmarked on rollback. */
         val deleted = mutableListOf<Long>()
         var depth = 0
-        /** The exposed act this transaction is for, once inserted; null for a tick or after-commit firing. */
+        /** The act this transaction is for, once inserted; null for a tick or after-commit firing. */
         var act: Long? = null
-        /** The rule firing this transaction is, and its subject; null for an exposed act. */
+        /** The rule firing this transaction is, and its subject; null for an act. */
         var firing: Pair<RuleDecl, Long>? = null
         /** The schedule whose tick this transaction serves; null otherwise. */
         var schedule: String? = null
@@ -570,7 +570,7 @@ class VelleSystem(
         val decl = model.shapes[shape]
             ?: return CommitResult.Refused("type: unknown shape '$shape'")
         if (shape !in model.exposed)
-            return CommitResult.Refused("type: shape '$shape' is not exposed — it enters state only as a rule's effect")
+            return CommitResult.Refused("type: shape '$shape' is not an act — it enters state only as a rule's effect")
 
         duplicateRefusal(decl, suppliedFields)?.let { return CommitResult.Refused(it) }
 

@@ -2,7 +2,7 @@ package velle
 
 /**
  * Rule-graph emission (diagrams.md): the whole system's cause
- * graph as one Mermaid flowchart — nodes are the exposed acts and the rules,
+ * graph as one Mermaid flowchart — nodes are the acts and the rules,
  * and an edge means "this commit's writes can change that rule's condition".
  * It is the sequence diagrams' may-fire derivation rendered once, globally:
  * the one-page map read before any per-act deep dive.
@@ -100,7 +100,7 @@ internal object RuleGraphGen {
             for (rule in model.rules.values) edge(src, CommitKind.Create(act), null, rule)
         }
 
-        /** A `never` compiled to the commit boundary: targets the exposed act
+        /** A `never` compiled to the commit boundary: targets the act
          *  itself and reads nothing beyond the act's own stored fields. */
         private fun boundaryActOf(n: NeverDecl): String? {
             val t = n.target as? RefName ?: return null

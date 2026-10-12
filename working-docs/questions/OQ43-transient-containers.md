@@ -1,8 +1,8 @@
-# OQ43 — Transient containers: a closure whose container is `expose transient`
+# OQ43 — Transient containers: a closure whose container is `transient act`
 
 **Status:** open (2026-08-21) — v0 refuses the combination (`checks.md` V22), fail closed until this settles
-**In plain terms:** an order form that is pure request — the act and the inline parts it arrives with all vanish at transaction close, and only what rules copied survives. Can an `expose transient` container carry a closure at all, what must V17 (transient isolation) be amended to allow before even the coherent version is declarable, and is a durable act ever allowed to carry a transient *branch* — payload that must never be stored?
-**See:** README §6 "Inline part creation" (the closure: one commit = one statically-shaped closure; trees only; the `expose ... with` construct) · README §4 "Transient acts (`expose transient`)" · `checks.md` V17 (transient isolation), V18 (transient totality), V22 (closure declaration legality — carries the current refusal)
+**In plain terms:** an order form that is pure request — the act and the inline parts it arrives with all vanish at transaction close, and only what rules copied survives. Can a `transient act` container carry a closure at all, what must V17 (transient isolation) be amended to allow before even the coherent version is declarable, and is a durable act ever allowed to carry a transient *branch* — payload that must never be stored?
+**See:** README §6 "Inline part creation" (the closure: one commit = one statically-shaped closure; trees only; the `act ... with` construct) · README §4 "Transient acts (`transient act`)" · `checks.md` V17 (transient isolation), V18 (transient totality), V22 (closure declaration legality — carries the current refusal)
 
 ---
 
@@ -19,7 +19,7 @@ V17 as written refuses to let the forced combination be *declared*. Its "anywher
 
 ## The converse mix: durable container, transient branch
 
-Nothing forces this combination out — a transient shape referencing a durable one is the normal direction (README §4, `ChangeDueDate.invoice: one Invoice`). The business case is ephemeral payload riding a durable act: card details that arrive inline with the order, fire the charge-intent rules inside the transaction, and must never be stored. What's missing is a **declaration site**: `transient` is a modifier on the exposure, and parts aren't exposed, so per-branch transience is new surface (a `with transient cardDetails` shape of thing). This is a separate decision from the carve-out, and plausibly deferred past the closure's v0.
+Nothing forces this combination out — a transient shape referencing a durable one is the normal direction (README §4, `ChangeDueDate.invoice: one Invoice`). The business case is ephemeral payload riding a durable act: card details that arrive inline with the order, fire the charge-intent rules inside the transaction, and must never be stored. What's missing is a **declaration site**: `transient` is a modifier on the act, and parts aren't acts, so per-branch transience is new surface (a `with transient cardDetails` shape of thing). This is a separate decision from the carve-out, and plausibly deferred past the closure's v0.
 
 ## What must be decided
 

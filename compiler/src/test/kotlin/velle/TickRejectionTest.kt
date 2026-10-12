@@ -20,11 +20,11 @@ import kotlin.test.assertNull
 class TickRejectionTest {
 
     private val spec = """
-        expose shape Site { name: text }
-        expose shape Permit { site: one Site  expiresOn: Date }
+        act Site { name: text }
+        act Permit { site: one Site  expiresOn: Date }
         shape PermittedSite = Site where exists (Permit where site == this and expiresOn >= today)
 
-        expose shape Planting { site: one Site  plantedOn: Date }
+        act Planting { site: one Site  plantedOn: Date }
         never (Planting where site is not PermittedSite)
 
         shape ScoutingReminder { planting: one Planting  sentOn: Date }

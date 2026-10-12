@@ -1238,12 +1238,12 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
 -- ── Reference data: crops, pathogens, peptides ───────────────────────────────
 
-expose shape Crop {
+act Crop {
     name: text
 }
 
 -- A pathogen is tracked against the crop it attacks.
-expose shape Pathogen {
+act Pathogen {
     name: text
     host: one Crop
 }
@@ -1252,7 +1252,7 @@ expose shape Pathogen {
 -- evidence each stage produces, below.
 -- velle: a derived property testing the instance's own refinement
 -- memberships (`this is FieldValidated`) — classification, not state
-expose shape Peptide {
+act Peptide {
     code: text
     sequence: text
     stage: text = if this is FieldValidated then "field-validated"
@@ -1267,7 +1267,7 @@ never (Peptide where sequence == "")
 
 -- A protocol says how long an assay runs, how many replicate plates an
 -- experiment needs, and what inhibition counts as a hit.
-expose shape AssayProtocol {
+act AssayProtocol {
     name: text
     durationHours: integer
     replicates: integer
@@ -1278,7 +1278,7 @@ expose shape AssayProtocol {
 -- numbers are read off its completed replicates: nothing is totalled by hand.
 -- velle: `sum` over a *derived* field of a refinement-filtered inferred
 -- inverse; the mean is `sum` / `count` guarded against the empty case
-expose shape LabExperiment {
+act LabExperiment {
     peptide: one Peptide
     pathogen: one Pathogen
     protocol: one AssayProtocol
@@ -1290,7 +1290,7 @@ expose shape LabExperiment {
 -- Each replicate is one assay plate the lab reads at hour marks.
 -- velle: the plate's peak is the last point's running peak — a selector read
 -- over the series ordered by the hour mark, never by arrival
-expose shape Assay {
+act Assay {
     experiment: one LabExperiment
     replicate: integer
     peakInhibition: decimal = if assayReadings is empty then 0.0
@@ -1305,7 +1305,7 @@ expose shape Assay {
 -- velle: the predecessor recurrence (README §19): a derived `previous` by
 -- `latest ... by` a creation-fixed datum plus one self-referential hop; V14's
 -- descent certificate; `max` as the duplication- and order-safe fold
-expose shape AssayReading {
+act AssayReading {
     assay: one Assay
     hoursElapsed: integer
     inhibitionPercent: decimal
@@ -1366,13 +1366,13 @@ shape LabValidated = Peptide where exists (labExperiments where HitExperiment)
 
 -- A greenhouse keeps a temperature band its trials depend on, and logs its
 -- climate around the clock.
-expose shape Greenhouse {
+act Greenhouse {
     name: text
     minTemperature: decimal
     maxTemperature: decimal
 }
 
-expose shape ClimateReading {
+act ClimateReading {
     greenhouse: one Greenhouse
     recordedAt: DateTime
     temperature: decimal
@@ -1381,7 +1381,7 @@ expose shape ClimateReading {
 
 -- A greenhouse protocol: how many plots per arm, which day the trial ends on,
 -- and the efficacy that counts as a success.
-expose shape GreenhouseProtocol {
+act GreenhouseProtocol {
     name: text
     plotsPerArm: integer
     finalDay: integer
@@ -1394,7 +1394,7 @@ expose shape GreenhouseProtocol {
 -- otherwise. The request key lets the requester find the answer.
 -- velle: a transient act partitioned on evidence two shapes away; the
 -- complement pair satisfies V18; the correlation-key idiom (README §4)
-expose transient shape RequestGreenhouseTrial {
+transient act RequestGreenhouseTrial {
     requestKey: text
     peptide: one Peptide
     pathogen: one Pathogen
@@ -1451,7 +1451,7 @@ rule RefuseGreenhouseTrial when RefusedGreenhouseRequest {
 }
 
 -- Plots are laid out on benches, each in the peptide arm or the control arm.
-expose shape GreenhousePlot {
+act GreenhousePlot {
     trial: one GreenhouseTrial
     bench: text
     treatment: text
@@ -1465,9 +1465,9 @@ never (GreenhousePlot where treatment != "peptide" and treatment != "control")
 
 -- Treatment day: the plants are inoculated and the peptide applied. The
 -- record is the fact; a trial is treated once.
--- velle: an exposed record rather than an assignment into the trial, so the
+-- velle: an act rather than an assignment into the trial, so the
 -- invariants that read the treatment stay input-constrained (README §21)
-expose shape Treatment {
+act Treatment {
     trial: one GreenhouseTrial
     treatedAt: DateTime
 }
@@ -1485,7 +1485,7 @@ shape TreatedTrial = GreenhouseTrial where treatments is not empty
 -- velle: the ledger pattern (README §12) for the current score; the
 -- recurrence again, over the day mark; mixed decimal and integer arithmetic
 -- in the trapezoid
-expose shape PlotObservation {
+act PlotObservation {
     plot: one GreenhousePlot
     dayAfterTreatment: integer
     recordedSeverity: decimal
@@ -1573,7 +1573,7 @@ shape LockedObservation = PlotObservation where plot.trial is EvaluatedTrial {
 -- velle: rejection as data partitioned on the locked state; the transient
 -- request makes drift structurally impossible; the record reads the score in
 -- force before it lands — a body reads the commit's pre-state
-expose transient shape CorrectObservation {
+transient act CorrectObservation {
     observation: one PlotObservation
     correctedSeverity: decimal
     reason: text
@@ -1615,7 +1615,7 @@ rule RefuseCorrection when RefusedCorrection {
 -- a record of what was removed — unless the trial is locked.
 -- velle: `delete` against a series point; the recurrence over the survivors
 -- re-derives; the correction record's reference absorbs the deletion
-expose transient shape VoidObservation {
+transient act VoidObservation {
     observation: one PlotObservation
     reason: text
 }
@@ -1660,7 +1660,7 @@ shape TreatedPlot = GreenhousePlot where trial is TreatedTrial {
     frozen bench
 }
 
-expose transient shape MovePlot {
+transient act MovePlot {
     plot: one GreenhousePlot
     bench: text
 }
@@ -1758,13 +1758,13 @@ rule RaiseSensorAlert
 
 -- ── Field: permitted sites, planting, scouting, weather, harvest ─────────────
 
-expose shape FieldSite {
+act FieldSite {
     name: text
     region: text
 }
 
 -- Regulators permit a crop at a site for a period.
-expose shape Permit {
+act Permit {
     site: one FieldSite
     crop: one Crop
     issuedOn: Date
@@ -1772,7 +1772,7 @@ expose shape Permit {
 }
 
 -- Weather at a site, one row per day.
-expose shape WeatherObservation {
+act WeatherObservation {
     site: one FieldSite
     observedOn: Date
     rainfallMm: decimal
@@ -1784,7 +1784,7 @@ never (WeatherObservation where count(site.weatherObservations where observedOn 
 -- A field protocol: what yield gain counts as success. When the plots are
 -- scouted is not protocol data — it is scheduled per trial, as collection
 -- tasks (below).
-expose shape FieldProtocol {
+act FieldProtocol {
     name: text
     yieldGainThreshold: decimal
 }
@@ -1794,7 +1794,7 @@ expose shape FieldProtocol {
 -- against this pathogen approves it.
 -- velle: the gate reads the *record* (`GreenhouseResult where effective`),
 -- which cannot drift, where the greenhouse gate read live lab membership
-expose transient shape RequestFieldTrial {
+transient act RequestFieldTrial {
     requestKey: text
     peptide: one Peptide
     pathogen: one Pathogen
@@ -1862,7 +1862,7 @@ shape PermittedTrial = FieldTrial where
 -- velle: an input-constrained `never` over a transient act reading
 -- refinement membership through a relationship, paired with the bare-shape
 -- rule that answers every request (checks.md V18)
-expose transient shape PlantTrial {
+transient act PlantTrial {
     trial: one FieldTrial
     plantedOn: Date
     seedLot: text
@@ -1884,7 +1884,7 @@ rule RecordPlanting when PlantTrial {
 shape PlantedTrial = FieldTrial where plantings is not empty
 
 -- Field plots are blocked replicates; each block has one plot per arm.
-expose shape FieldPlot {
+act FieldPlot {
     trial: one FieldTrial
     block: integer
     treatment: text
@@ -1901,7 +1901,7 @@ never (FieldPlot where treatment != "peptide" and treatment != "control")
 -- washed-off application.
 -- velle: two series correlated through Date arithmetic — the application
 -- date against the site's weather rows; the reminder is the guard witness
-expose transient shape ApplyTreatment {
+transient act ApplyTreatment {
     trial: one FieldTrial
     appliedOn: Date
     rateGramsPerHa: decimal
@@ -1932,7 +1932,7 @@ rule NoticeWashOff when (WashedOffApplication where not exists ReapplicationNoti
 
 -- Scouting: disease incidence and severity per plot at a day mark after
 -- planting, with the same running curve as the greenhouse.
-expose shape Scouting {
+act Scouting {
     plot: one FieldPlot
     daysAfterPlanting: integer
     scoutedOn: Date
@@ -1955,7 +1955,7 @@ shape NeverScouted = PlantedTrial where
     exists (fieldPlots as plot where plot.scoutings is empty)
 
 -- Harvest: yield per plot. The trial's yield gain is treated over control.
-expose shape Harvest {
+act Harvest {
     plot: one FieldPlot
     harvestedOn: Date
     yieldKgPerHa: decimal
@@ -1976,7 +1976,7 @@ shape FieldValidated = Peptide where exists (fieldTrials where SuccessfulFieldTr
 -- further application request may land, and the sponsor is told once.
 -- velle: nested `exists` two relationships down; a boundary `never` over the
 -- transient application request reading the halted state
-expose shape PhytotoxicityReport {
+act PhytotoxicityReport {
     plot: one FieldPlot
     observedOn: Date
     severity: integer
@@ -2020,7 +2020,7 @@ rule NoticeHalt when (HaltedTrial where not exists HaltNotice for this) {
 -- The task's day mark is read through `this.` two filters deep.
 shape Trial = GreenhouseTrial or FieldTrial
 
-expose shape CollectionTask {
+act CollectionTask {
     trial: one Trial
     dayMark: integer
     dueOn: Date
@@ -2057,7 +2057,7 @@ rule RemindTask
 
 -- The admin can move a task's due date until the task is done; on a done
 -- task the change is refused as data.
-expose transient shape RescheduleTask {
+transient act RescheduleTask {
     task: one CollectionTask
     dueOn: Date
 }
@@ -2084,7 +2084,7 @@ rule RefuseReschedule when RefusedReschedule {
 -- velle: `delete` against a shape with a union-typed reference; the
 -- cancellation copies what must survive, since the task will not exist to
 -- reference; the reminders' and refusals' references absorb the deletion
-expose transient shape CancelTask {
+transient act CancelTask {
     task: one CollectionTask
     reason: text
 }

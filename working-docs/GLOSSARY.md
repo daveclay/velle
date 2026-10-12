@@ -4,8 +4,8 @@ Coined terms used across the working docs, one line each, with the pointer that 
 
 ## Acts and the trust boundary
 
-- **act** — a shape instance committed from outside the system through `expose`; a request or message crossing the trust boundary (README §4).
-- **transient act** — an act that exists only within its own commit's transaction (`expose transient`): an input to the state, not a member of it (README §4; decision record `investigate-transient.md`).
+- **act** — a shape declared `act`, whose instances are committed from outside the system; also such an instance, a request or message crossing the trust boundary (README §4, §22).
+- **transient act** — an act that exists only within its own commit's transaction (`transient act`): an input to the state, not a member of it (README §4; decision record `investigate-transient.md`).
 - **prohibition** — what a `never` or a `requires` declares: a configuration that is impossible, stated as the forbidden configuration (`never`) or as what every record satisfies (`requires`, whose prohibition is its complement; inside a requirement, membership may be spelled `to be`). The umbrella noun (adopted 2026-10-10 in place of "invariant", which named only the proven kind); a prohibition is a refusal, a constraint, or a guarantee, by who it binds (README §21).
 - **refusal** — a prohibition that binds the caller: a prohibition over a transient act, checked once, at the request; the record the request leaves carries nothing (README §21).
 - **constraint** — a prohibition that binds the books: a prohibition over a persistent shape, holding at the end of every transaction for as long as the record exists; any act or tick that would leave the books otherwise is rejected (README §21).
@@ -17,7 +17,7 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **anchor / anchored spelling** — the outcome-evidence conjunct (`... where not exists EditApplication for this`) that pins an already-handled act out of its partition.
 - **correlation key** — a client-supplied business key (the idempotency-key pattern) a transient act carries and its outcomes copy, so callers can match responses to requests and duplicate submissions can be recognized (OQ26, settled 2026-08-19 → README §4 "Transient acts"): a documented idiom, deliberately not language machinery — the key's uniqueness is the client's to own, the dedup guard the author's to write.
 - **C0 pinning** — a transient act's partitions are evaluated against the state at its arrival commit and never re-evaluated by its own consequences (`evaluation.md`, "Transient acts").
-- **closure / exposure closure / input closure** — what one commit carries: the exposed act plus the inline parts its `with` declaration says arrive with it, statically shaped, with the single instance as the degenerate case (README §4; §6 "Inline part creation").
+- **closure / exposure closure / input closure** — what one commit carries: the act plus the inline parts its `with` declaration says arrive with it, statically shaped, with the single instance as the degenerate case (README §4; §6 "Inline part creation").
 - **HOLDS / TAX / GAP** — break-doc verdicts: the design handles the case · handles it at a cost · needs a new obligation or fails (`break-b.md`).
 
 ## Patterns

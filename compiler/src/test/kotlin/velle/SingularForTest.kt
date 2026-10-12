@@ -15,11 +15,11 @@ import kotlin.test.assertTrue
 class SingularForTest {
 
     private val src = """
-        expose shape Account {
+        act Account {
             balance: decimal
         }
 
-        expose shape BalanceReport {
+        act BalanceReport {
             account: one Account
             reported: decimal
         }

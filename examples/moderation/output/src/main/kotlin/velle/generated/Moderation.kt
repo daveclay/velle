@@ -216,7 +216,7 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
 
 -- ── Sellers and listings ─────────────────────────────────────────────────────
 
-expose shape Seller {
+act Seller {
     name: text
 }
 
@@ -227,7 +227,7 @@ expose shape Seller {
 -- velle: `? initially required` — read-side optionality and creation-side
 -- requiredness as orthogonal declarations (OQ37-R10); reads ride the existing
 -- narrowing machinery (`is none`, `is some`, `?.`)
-expose shape Listing {
+act Listing {
     title: text
     seller: one Seller? initially required
     isDraft: boolean initially true
@@ -248,7 +248,7 @@ shape PublishedListing = Listing where not isDraft {
     undeletable
 }
 
-expose transient shape Publish {
+transient act Publish {
     listing: one Listing
 }
 
@@ -318,7 +318,7 @@ rule RecordDraftClosure when leaving or deleted Draft {
 -- velle: absorbing reference plus per-field copy — the crux's resolution
 -- (OQ37-R3); the copy is the author declaring, field by field, which slice of
 -- the target was history all along
-expose shape ListingReport {
+act ListingReport {
     listing: one Listing? initially required
     listingTitle: text
     reason: text
@@ -350,7 +350,7 @@ rule NotifyReporter when (OrphanReport where not exists ReporterNotice for this)
 -- a deletion leaves behind is the author's call, never minted for free.
 -- velle: `delete` as an ordinary rule effect; the transient-acts copy idiom
 -- as the deletion record (OQ37-R6: no built-in tombstone)
-expose transient shape DiscardDraft {
+transient act DiscardDraft {
     listing: one Listing
     reason: text
 }
@@ -384,7 +384,7 @@ rule RefuseDiscard when (DiscardDraft where listing is not Draft) {
 
 -- ── Closing a seller's account ───────────────────────────────────────────────
 
-expose transient shape CloseAccount {
+transient act CloseAccount {
     seller: one Seller
 }
 

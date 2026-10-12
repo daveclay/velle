@@ -34,8 +34,8 @@ class Parser(private val tokens: List<Token>) {
             t.isKw("rule") -> parseRule()
             t.isKw("never") -> parseNever()
             t.type == TokType.UIDENT && peekAhead(1).isKw("requires") -> parseRequires()
-            t.isKw("expose") -> parseExpose()
-            else -> fail("expected a declaration (shape/rule/never/requires/expose)", t)
+            t.isKw("act") || t.isKw("transient") -> parseAct()
+            else -> fail("expected a declaration (shape/act/rule/never/requires)", t)
         }
     }
 
@@ -305,7 +305,7 @@ class Parser(private val tokens: List<Token>) {
         }
     }
 
-    // ── never / expose ───────────────────────────────────────────────────────
+    // ── never / act ───────────────────────────────────────────────────────
 
     private fun parseNever(): NeverDecl {
         expectKw("never")
@@ -362,21 +362,21 @@ class Parser(private val tokens: List<Token>) {
 
     private val inverseOp = mapOf("==" to "!=", "!=" to "==", "<" to ">=", ">=" to "<", ">" to "<=", "<=" to ">")
 
-    private fun parseExpose(): Decl {
-        expectKw("expose")
+    /** An act (README §22, "External input"): a base shape whose instances arrive
+     *  from outside, declared in exactly one place — `[transient] act Name { ... } [with ...]`. */
+    private fun parseAct(): Decl {
         val transient = if (peek().isKw("transient")) { next(); true } else false
-        if (peek().isKw("shape")) {
-            val decl = parseShapeOrRefinement()
-            if (decl !is ShapeDecl) fail("only base shapes can be exposed inline", peek())
-            return (decl as ShapeDecl).copy(exposed = true, transient = transient, with = parseWithClause())
-        }
-        val shape = expect(TokType.UIDENT).text
-        return ExposeDecl(shape, transient, parseWithClause())
+        expectKw("act")
+        val name = expect(TokType.UIDENT).text
+        if (!at(TokType.LBRACE))
+            fail("expected '{' after the act's name — an act is a base shape declared with its fields, never a refinement", peek())
+        val members = parseMemberBlock(refinementBody = false)
+        return ShapeDecl(name, members, exposed = true, transient = transient, with = parseWithClause())
     }
 
     // ── the exposure closure (README §6, "Inline part creation") ─────────────
     // `with` is contextual, not reserved (grammar.md): it reads as the closure
-    // keyword only here — after the exposed shape (or a closure entry) — and is
+    // keyword only here — after the act's body (or a closure entry) — and is
     // an ordinary identifier everywhere else.
 
     private fun atWith() = at(TokType.LIDENT) && peek().text == "with"

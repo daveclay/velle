@@ -82,11 +82,11 @@ class SiblingConfluenceAuditTest {
     // ── A. body reads a sibling-assigned field — real, covered ──────────────
 
     private val bodyFieldRead = """
-        expose shape Account {
+        act Account {
             f: decimal initially 0
         }
 
-        expose shape Poke {
+        act Poke {
             account: one Account
             v: decimal
         }
@@ -123,12 +123,12 @@ class SiblingConfluenceAuditTest {
     // check: the existence read is one indirection away from the body text.
 
     private val existenceRead = """
-        expose shape Account {
+        act Account {
             note: text
             hasEvidence: boolean = if exists Evidence for this then true else false
         }
 
-        expose shape Trigger {
+        act Trigger {
             account: one Account
         }
 
@@ -163,11 +163,11 @@ class SiblingConfluenceAuditTest {
     // ── C. body aggregate read through an inferred inverse ──────────────────
 
     private val aggregateRead = """
-        expose shape Account {
+        act Account {
             note: text
         }
 
-        expose shape Trigger {
+        act Trigger {
             account: one Account
         }
 
@@ -203,12 +203,12 @@ class SiblingConfluenceAuditTest {
     // ── D. body timestamp read advanced by a sibling's write ────────────────
 
     private val timestampRead = """
-        expose shape Account {
+        act Account {
             f: decimal initially 0
             touchedAt: timestamp on update
         }
 
-        expose shape Poke {
+        act Poke {
             account: one Account
             v: decimal
         }
@@ -241,12 +241,12 @@ class SiblingConfluenceAuditTest {
     // ── E. a captured value reads a sibling-assigned field ──────────────────
 
     private val captureValue = """
-        expose shape Account {
+        act Account {
             flagged: boolean initially false
             f: decimal initially 0
         }
 
-        expose shape Review {
+        act Review {
             account: one Account
             v: decimal
         }
@@ -277,11 +277,11 @@ class SiblingConfluenceAuditTest {
     // ── F. two after-commit followers of one commit, in queue order ─────────
 
     private val afterPair = """
-        expose shape Account {
+        act Account {
             f: decimal initially 0
         }
 
-        expose shape Poke {
+        act Poke {
             account: one Account
             v: decimal
         }
@@ -321,11 +321,11 @@ class SiblingConfluenceAuditTest {
     // ── G. a sibling creation flips a watched refinement ─────────────────────
 
     private val creationFlip = """
-        expose shape Account {
+        act Account {
             f: decimal initially 0
         }
 
-        expose shape Trigger {
+        act Trigger {
             account: one Account
             v: decimal
         }
@@ -372,11 +372,11 @@ class SiblingConfluenceAuditTest {
     // rejecting it would be pure over-rejection.
 
     private val conditionOnlyRead = """
-        expose shape Account {
+        act Account {
             f: decimal initially 0
         }
 
-        expose shape Poke {
+        act Poke {
             account: one Account
             v: decimal
         }
@@ -410,12 +410,12 @@ class SiblingConfluenceAuditTest {
     // ── I. independent siblings — the confluent baseline ─────────────────────
 
     private val independent = """
-        expose shape Account {
+        act Account {
             f: decimal initially 0
             g: decimal initially 0
         }
 
-        expose shape Poke {
+        act Poke {
             account: one Account
             v: decimal
         }
@@ -457,17 +457,17 @@ class SiblingConfluenceAuditTest {
     // never re-enter ApplicableChange.
 
     private fun releaseSpec(cadence: String) = """
-        expose shape Order {
+        act Order {
             address: text
             givenUp: boolean = if exists GiveUp for this then true else false
             reserved: boolean = if exists Reservation for this then true else false
         }
 
-        expose shape GiveUp {
+        act GiveUp {
             order: one Order
         }
 
-        expose shape Reservation {
+        act Reservation {
             order: one Order
         }
 
@@ -479,7 +479,7 @@ class SiblingConfluenceAuditTest {
 
         shape ReadyOrder = Order where exists (ActiveReservation where order == this)
 
-        expose shape ChangeAddress {
+        act ChangeAddress {
             order: one Order
             newAddress: text
         }

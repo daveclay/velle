@@ -4,14 +4,14 @@ package velle
 
 sealed interface Decl
 
-/** Base shape. `exposed` is set by the inline `expose shape ...` form. */
+/** Base shape. `exposed` is set by the `act` declaration (README §22, "External input"). */
 data class ShapeDecl(
     val name: String,
     val members: List<Member>,
     val exposed: Boolean = false,
-    /** `expose transient` — an input to the state, not a member of it (README §4). */
+    /** `transient act` — an input to the state, not a member of it (README §4). */
     val transient: Boolean = false,
-    /** the exposure's closure — inline `expose shape ... with` (README §6, "Inline part creation") */
+    /** the act's closure — `act ... with` (README §6, "Inline part creation") */
     val with: List<WithEntry> = emptyList(),
 ) : Decl
 
@@ -86,13 +86,6 @@ data class NeverDecl(
 
 /** The requirement spelling of a prohibition, as written: `subject requires predicate`. */
 data class Requirement(val subject: String, val predicate: Expr)
-
-/** Standalone `expose [transient] Shape [with ...]`. */
-data class ExposeDecl(
-    val shape: String,
-    val transient: Boolean = false,
-    val with: List<WithEntry> = emptyList(),
-) : Decl
 
 // ── Shape / refinement members ───────────────────────────────────────────────
 

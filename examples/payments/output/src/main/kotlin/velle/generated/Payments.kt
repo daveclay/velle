@@ -782,23 +782,23 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
 -- A customer may keep a card on file, and the card may carry a billing
 -- contact. Support can put a new card on file at any time.
-expose shape Contact {
+act Contact {
     name: text
     email: text
 }
 
-expose shape Card {
+act Card {
     number: text
     expiresOn: Date
     billingContact: one Contact?
 }
 
-expose shape Customer {
+act Customer {
     name: text
     card: one Card?
 }
 
-expose shape CardUpdate {
+act CardUpdate {
     customer: one Customer
     card: one Card
 }
@@ -815,8 +815,8 @@ rule ApplyCardUpdate when CardUpdate {
 -- velle: filtered `sum` with a named-refinement collection filter; a
 -- multi-link `?.` chain; `first(...)` and `is empty` in a derived property.
 -- Placing the order is the input; the order record carries the commit-stamped
--- `placedOn` on the unexposed side (V21).
-expose transient shape PlaceOrder {
+-- `placedOn` on the rule-created side (V21).
+transient act PlaceOrder {
     customer: one Customer
     amount: decimal
     dueBy: Date
@@ -876,7 +876,7 @@ shape ChargeAttempt {
 -- its own act referencing the attempt — never a write into it. The verdict's
 -- arrival is the input; the response record carries the commit-stamped
 -- `respondedOn`.
-expose transient shape ProcessorVerdict {
+transient act ProcessorVerdict {
     attempt: one ChargeAttempt
     outcome: text
 }
@@ -1039,7 +1039,7 @@ rule ShipOrder when ReadyToShip on Nightly {
 -- partition scoped to *unhandled* acts; a bare state partition would let an
 -- already-applied request drift into RefusedAddressChange the moment the
 -- order becomes ready
-expose shape ChangeShippingAddress {
+act ChangeShippingAddress {
     order: one Order
     newAddress: text
 }
@@ -1074,7 +1074,7 @@ rule RecordAddressRefusal when RefusedAddressChange {
 
 -- A refund is an act with consequences read off the numbers: it can push a
 -- settled order back out of settlement, and the reversal is worth noticing.
-expose transient shape IssueRefund {
+transient act IssueRefund {
     order: one Order
     amount: decimal
 }
@@ -1102,7 +1102,7 @@ rule NoteSettlementReversal when leaving SettledOrder {
 
 -- Support can force a fresh charge — say, after refunding a mistaken order —
 -- which drives a second settlement episode end-to-end.
-expose shape ManualCharge {
+act ManualCharge {
     order: one Order
 }
 
@@ -1124,7 +1124,7 @@ shape OverdueOrder = UnpaidOrder where dueBy < today
 -- stands.
 -- velle: duration addition (`today + 14 days`); the suppression artifact —
 -- one rule creates it, an unrelated rule's guard reads it negatively
-expose shape ExtensionRequest {
+act ExtensionRequest {
     order: one Order
 }
 

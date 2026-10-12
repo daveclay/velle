@@ -25,7 +25,6 @@ class BillingFixtureTest {
         assertEquals(8, all<RefinementDecl>().size)
         assertEquals(8, all<RuleDecl>().size)
         assertEquals(3, all<NeverDecl>().size)
-        assertEquals(0, all<ExposeDecl>().size) // fixture uses only the inline form
     }
 
     @Test

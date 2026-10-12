@@ -1,7 +1,7 @@
 package velle
 
 /**
- * Serialization-domain derivation (OQ40): per exposed act — and per
+ * Serialization-domain derivation (OQ40): per act — and per
  * schedule-fired rule, per firing — the set of **queue keys** the envelope's
  * work revolves around. Two envelopes conflict iff their domains intersect;
  * U3 obligates serialization exactly between conflicting envelopes, so the
@@ -46,7 +46,7 @@ package velle
  */
 class DomainAnalysis(private val model: Model) {
 
-    /** Per exposed act: the derived domain of its commit envelope. */
+    /** Per act: the derived domain of its commit envelope. */
     val actDomains: Map<String, SerializationDomain> by lazy {
         model.exposed.associateWith { act ->
             val acc = Acc()

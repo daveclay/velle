@@ -21,12 +21,12 @@ class ValidatorTest {
     // ── V29: a firing with no caller joins never induction ───────────────────
 
     private val shippingWithNightlyCancel = """
-        expose shape Order { reference: text  placedOn: Date }
-        expose shape Payment { order: one Order  paidOn: Date }
+        act Order { reference: text  placedOn: Date }
+        act Payment { order: one Order  paidOn: Date }
         shape UnpaidOrder = Order where not exists (payments)
-        expose shape Cancellation { order: one Order  requestedOn: Date }
+        act Cancellation { order: one Order  requestedOn: Date }
         shape CancelledOrder = Order where exists (cancellations)
-        expose shape Shipment { order: one Order  shippedOn: Date }
+        act Shipment { order: one Order  shippedOn: Date }
         never (Shipment where order is CancelledOrder)
     """.trimIndent()
 
@@ -62,7 +62,7 @@ class ValidatorTest {
     fun `V29 - an after-commit firing has no caller either`() {
         val src = shippingWithNightlyCancel + """
 
-            expose transient shape Review { order: one Order }
+            transient act Review { order: one Order }
             rule CancelOnReview when (Review where order is UnpaidOrder) after commit {
                 Cancellation from { order: order, requestedOn: today }
             }
@@ -74,7 +74,7 @@ class ValidatorTest {
     fun `V29 - a commit-triggered rule answers its act and is not refused here`() {
         val src = shippingWithNightlyCancel + """
 
-            expose transient shape Review { order: one Order }
+            transient act Review { order: one Order }
             rule CancelOnReview when (Review where order is UnpaidOrder) {
                 Cancellation from { order: order, requestedOn: today }
             }
@@ -87,7 +87,7 @@ class ValidatorTest {
         val src = shippingWithNightlyCancel + """
 
             shape UsableOrder = Order where not exists (cancellations)
-            expose transient shape Ship { order: one Order }
+            transient act Ship { order: one Order }
             never (Ship where order is not UsableOrder)
             rule RecordShipment when Ship {
                 Shipment from { order: order, shippedOn: today }
@@ -131,7 +131,7 @@ class ValidatorTest {
     @Test
     fun `F1 - bare name resolves in the innermost scope only`() {
         val src = """
-            expose shape Customer {
+            act Customer {
                 name: text
                 vip: boolean initially false
             }
@@ -147,15 +147,15 @@ class ValidatorTest {
         // element. The runtime always read it that way; the validator once resolved
         // `this` against the filter's element too (found by examples/peptides).
         val src = """
-            expose shape Protocol {
+            act Protocol {
                 durationHours: integer
             }
 
-            expose shape Assay {
+            act Assay {
                 protocol: one Protocol
             }
 
-            expose shape Reading {
+            act Reading {
                 assay: one Assay
                 hoursElapsed: integer
             }
@@ -168,15 +168,15 @@ class ValidatorTest {
     @Test
     fun `F1 - an as-alias used as a collection source resolves to its element`() {
         val src = """
-            expose shape Trial {
+            act Trial {
                 name: text
             }
 
-            expose shape Plot {
+            act Plot {
                 trial: one Trial
             }
 
-            expose shape Scouting {
+            act Scouting {
                 plot: one Plot
                 scoutedOn: Date
             }
@@ -190,11 +190,11 @@ class ValidatorTest {
     @Test
     fun `F3 - assigning a derived property fails`() {
         val src = """
-            expose shape Account {
+            act Account {
                 balance: decimal = 0 + 0
             }
 
-            expose shape Poke {
+            act Poke {
                 account: one Account
             }
 
@@ -208,7 +208,7 @@ class ValidatorTest {
     @Test
     fun `F4 - from-mapping totality`() {
         val src = """
-            expose shape Order {
+            act Order {
                 total: decimal
             }
 
@@ -227,7 +227,7 @@ class ValidatorTest {
     @Test
     fun `F2 - the function list is closed`() {
         val src = """
-            expose shape Customer {
+            act Customer {
                 name: text
                 shout: text = uppercase(name)
             }
@@ -240,11 +240,11 @@ class ValidatorTest {
     @Test
     fun `V1 - two writers with coinciding triggers`() {
         val src = """
-            expose shape Customer {
+            act Customer {
                 email: text
             }
 
-            expose shape CorrectEmail {
+            act CorrectEmail {
                 customer: one Customer
                 corrected: text
             }
@@ -263,12 +263,12 @@ class ValidatorTest {
     @Test
     fun `V1 - partitioned triggers are provably disjoint`() {
         val src = """
-            expose shape Customer {
+            act Customer {
                 email: text
                 locked: boolean initially false
             }
 
-            expose shape CorrectEmail {
+            act CorrectEmail {
                 customer: one Customer
                 corrected: text
             }
@@ -294,7 +294,7 @@ class ValidatorTest {
     @Test
     fun `V2 - forgetting the disarm is caught`() {
         val src = """
-            expose shape Deposit {
+            act Deposit {
                 amount: decimal
                 applied: boolean initially false
             }
@@ -316,7 +316,7 @@ class ValidatorTest {
     @Test
     fun `V4 - after commit without apparatus is the stranding error`() {
         val src = """
-            expose shape Order {
+            act Order {
                 total: decimal
             }
 
@@ -334,7 +334,7 @@ class ValidatorTest {
     @Test
     fun `V3 - time-dependent condition with no schedule under-fires`() {
         val src = """
-            expose shape Invoice {
+            act Invoice {
                 due: Date
             }
 
@@ -354,13 +354,13 @@ class ValidatorTest {
     @Test
     fun `V3 - a transient act partitioned on a time-dependent state is read at the request, not by aging`() {
         val src = """
-            expose shape Invoice {
+            act Invoice {
                 due: Date
             }
 
             shape Overdue = Invoice where due < today
 
-            expose transient shape PayInvoice {
+            transient act PayInvoice {
                 invoice: one Invoice
                 amount: decimal
             }
@@ -410,11 +410,11 @@ class ValidatorTest {
     @Test
     fun `V5 - writing a frozen field without a partition`() {
         val src = """
-            expose shape Invoice {
+            act Invoice {
                 due: Date
             }
 
-            expose shape Issuance {
+            act Issuance {
                 invoice: one Invoice
             }
 
@@ -422,7 +422,7 @@ class ValidatorTest {
                 frozen due
             }
 
-            expose shape ChangeDue {
+            act ChangeDue {
                 invoice: one Invoice
                 newDue: Date
             }
@@ -437,11 +437,11 @@ class ValidatorTest {
     @Test
     fun `V8 - the unguarded fold double-counts by construction`() {
         val src = """
-            expose shape Account {
+            act Account {
                 balance: decimal initially 0
             }
 
-            expose shape Deposit {
+            act Deposit {
                 account: one Account
                 amount: decimal
             }
@@ -456,12 +456,12 @@ class ValidatorTest {
     @Test
     fun `V10 - a rule-maintained never fails closed in v0`() {
         val src = """
-            expose shape Account {
+            act Account {
                 balance: decimal initially 0
                 suspended: boolean initially false
             }
 
-            expose shape Suspend {
+            act Suspend {
                 account: one Account
             }
 
@@ -477,7 +477,7 @@ class ValidatorTest {
     @Test
     fun `V16 - an unguarded creation cycle may never quiesce`() {
         val src = """
-            expose shape Ping {
+            act Ping {
                 note: text
             }
 
@@ -499,7 +499,7 @@ class ValidatorTest {
     @Test
     fun `V16 - a guarded cycle quiesces`() {
         val src = """
-            expose shape Receipt {
+            act Receipt {
                 total: decimal
             }
 
@@ -519,11 +519,11 @@ class ValidatorTest {
     @Test
     fun `V13 - for-sugar with two matching fields is ambiguous`() {
         val src = """
-            expose shape Customer {
+            act Customer {
                 name: text
             }
 
-            expose shape Referral {
+            act Referral {
                 referrer: one Customer
                 referee: one Customer
             }
@@ -537,11 +537,11 @@ class ValidatorTest {
 
     /** README §20's episodes pattern — the flagship whole-spec singularity proof. */
     private val episodes = """
-        expose shape Account {
+        act Account {
             balance: decimal
         }
 
-        expose shape BalanceReport {
+        act BalanceReport {
             account: one Account
             reported: decimal
         }
@@ -579,8 +579,8 @@ class ValidatorTest {
     }
 
     @Test
-    fun `V12 - exposing the base defeats the proof`() {
-        val src = episodes + "\n\nexpose DelinquencyFlag"
+    fun `V12 - declaring the base an act defeats the proof`() {
+        val src = episodes.replace("shape DelinquencyFlag {", "act DelinquencyFlag {")
         assertTrue(codes(src).contains("V12"), "got: ${diags(src)}")
     }
 
@@ -588,8 +588,7 @@ class ValidatorTest {
     fun `V12 - an unguarded producer defeats the proof`() {
         val src = episodes + """
 
-
-            expose shape ManualFlag {
+            act ManualFlag {
                 account: one Account
             }
 
@@ -603,11 +602,11 @@ class ValidatorTest {
     @Test
     fun `V12 - a false-writer of the flag defeats anti-monotonicity`() {
         val src = """
-            expose shape Account {
+            act Account {
                 balance: decimal
             }
 
-            expose shape BalanceReport {
+            act BalanceReport {
                 account: one Account
                 reported: decimal
             }
@@ -617,7 +616,7 @@ class ValidatorTest {
                 resolved: boolean initially false
             }
 
-            expose shape FlagDispute {
+            act FlagDispute {
                 flag: one DelinquencyFlag
             }
 
@@ -650,17 +649,17 @@ class ValidatorTest {
 
     /** The bare rejection-as-data partition: an is-refinement atom, no anchor. */
     private val barePartition = """
-        expose shape Invoice {
+        act Invoice {
             due: Date
         }
 
-        expose shape Issuance {
+        act Issuance {
             invoice: one Invoice
         }
 
         shape IssuedInvoice = Invoice where exists Issuance for this
 
-        expose shape ChangeDueDate {
+        act ChangeDueDate {
             invoice: one Invoice
             newDue: Date
         }
@@ -721,11 +720,11 @@ class ValidatorTest {
     @Test
     fun `V12 - a one-way latch flag is as provable as the evidence pair`() {
         val src = """
-            expose shape Account {
+            act Account {
                 balance: decimal
             }
 
-            expose shape BalanceReport {
+            act BalanceReport {
                 account: one Account
                 reported: decimal
             }
@@ -765,7 +764,7 @@ class ValidatorTest {
             note: text
         }
 
-        expose shape Payment {
+        act Payment {
             account: one Account
             onTime: boolean
             receivedOn: timestamp on create
@@ -796,7 +795,7 @@ class ValidatorTest {
                 note: text
             }
 
-            expose shape Payment {
+            act Payment {
                 account: one Account
                 onTime: boolean
                 position: integer
@@ -807,7 +806,7 @@ class ValidatorTest {
                     else 1
             }
 
-            expose shape Reorder {
+            act Reorder {
                 payment: one Payment
                 newPosition: integer
             }
@@ -821,7 +820,7 @@ class ValidatorTest {
 
     /** README §7's root/parent example — acyclicity supplied by a spent `never`. */
     private val rootParent = """
-        expose shape Node {
+        act Node {
             parent: one Node?
             root: one Node? =
                 if parent is none then none
@@ -845,8 +844,7 @@ class ValidatorTest {
     fun `V14 - a rule-maintained never cannot be spent`() {
         val src = rootParent + """
 
-
-            expose shape Reparent {
+            act Reparent {
                 node: one Node
                 newParent: one Node?
             }
@@ -877,7 +875,7 @@ class ValidatorTest {
     @Test
     fun `V14 - a refinement cycle has no well-founded reading`() {
         val src = """
-            expose shape Item {
+            act Item {
                 flag: boolean
             }
 
@@ -892,12 +890,12 @@ class ValidatorTest {
     /** OQ16's value-dependent interference case: two siblings write the two
      *  inputs of one watched predicate. */
     private val interference = """
-        expose shape Account {
+        act Account {
             balance: decimal
             creditLimit: decimal
         }
 
-        expose shape AccountReview {
+        act AccountReview {
             account: one Account
             newBalance: decimal
             newLimit: decimal
@@ -950,12 +948,12 @@ class ValidatorTest {
 
     /** OQ16's PromoteBuyer/PromoteReferrer aliasing case. */
     private val promotion = """
-        expose shape Customer {
+        act Customer {
             tier: text
             referrer: one Customer?
         }
 
-        expose shape QualifiedPurchase {
+        act QualifiedPurchase {
             customer: one Customer
         }
 

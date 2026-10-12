@@ -34,14 +34,14 @@ class LeavingRuleDeletionProbeTest {
     // ── Face 1: the product keeps a reference — the validator refuses ────────
 
     private val referenceKeepingSpec = """
-        expose shape Order {
+        act Order {
             total: decimal
             settled: boolean initially false
         }
 
         shape SettledOrder = Order where settled
 
-        expose transient shape Settle {
+        transient act Settle {
             order: one Order
         }
 
@@ -57,7 +57,7 @@ class LeavingRuleDeletionProbeTest {
             SettlementReversal from { order: this }
         }
 
-        expose transient shape Scrap {
+        transient act Scrap {
             order: one Order
         }
 
@@ -75,7 +75,7 @@ class LeavingRuleDeletionProbeTest {
     // ── Face 2: the product copies fields — validates clean, traps at runtime ─
 
     private val fieldCopyingSpec = """
-        expose shape Listing {
+        act Listing {
             title: text
             isDraft: boolean initially true
         }
@@ -92,7 +92,7 @@ class LeavingRuleDeletionProbeTest {
             PublicationNotice from { title: title }
         }
 
-        expose transient shape Publish {
+        transient act Publish {
             listing: one Listing
         }
 
@@ -100,7 +100,7 @@ class LeavingRuleDeletionProbeTest {
             listing.isDraft = false
         }
 
-        expose transient shape DiscardDraft {
+        transient act DiscardDraft {
             listing: one Listing
         }
 
@@ -160,7 +160,7 @@ class LeavingRuleDeletionProbeTest {
     // ── Face 3: a rule meant as "for any reason" — the settled semantics' gap ─
 
     private val forAnyReasonSpec = """
-        expose shape Lead {
+        act Lead {
             company: text
             won: boolean initially false
         }
@@ -177,7 +177,7 @@ class LeavingRuleDeletionProbeTest {
             FollowUpStop from { company: company }
         }
 
-        expose transient shape MarkWon {
+        transient act MarkWon {
             lead: one Lead
         }
 
@@ -185,7 +185,7 @@ class LeavingRuleDeletionProbeTest {
             lead.won = true
         }
 
-        expose transient shape PurgeLead {
+        transient act PurgeLead {
             lead: one Lead
         }
 

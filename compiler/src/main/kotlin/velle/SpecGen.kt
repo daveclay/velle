@@ -82,7 +82,7 @@ object SpecGen {
             val tested = membershipTests(r.expr)
             if (tested.size == 1 && base != null && base in model.exposed)
                 return storyRootOfName(tested.single())
-            // chain heuristic: a state over a produced (unexposed) shape roots with its producer
+            // chain heuristic: a state over a produced shape (not an act) roots with its producer
             if (base != null && base !in model.exposed) {
                 val producer = model.rules.values.firstOrNull { rule ->
                     rule.body.filterIsInstance<Creation>().any { it.shape == base }
@@ -176,7 +176,7 @@ object SpecGen {
 
         /**
          * The act whose commit provably ends membership in a leaving rule's
-         * condition: a `not exists X for this` atom over an exposed shape means
+         * condition: a `not exists X for this` atom over an act means
          * the exit "when" is *derivable* — committing an X — so the test performs
          * the real act instead of demanding an exit given. Drift exits (a value
          * predicate like `balance < 0`) return null: which commit recovers the
@@ -638,7 +638,7 @@ object SpecGen {
             fun skip(ordinal: Int, reason: String) = skip(ordinal, never.keyword, reason)
             val target = never.target as? RefName ?: return skip(ordinal, "composite never")
             val shape = model.shapes[target.name] ?: return skip(ordinal, "never over a refinement")
-            if (target.name !in model.exposed) return skip(ordinal, "shape not exposed")
+            if (target.name !in model.exposed) return skip(ordinal, "shape is not an act")
             val conjunct = target.where?.let { predicateConjuncts(it) } ?: return skip(ordinal, "no predicate")
             if (conjunct.size != 1) return skip(ordinal, "multi-conjunct predicate")
             val cmp = conjunct.single() as? Binary ?: return skip(ordinal, "non-comparison predicate")

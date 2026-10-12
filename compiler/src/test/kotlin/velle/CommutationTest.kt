@@ -76,12 +76,11 @@ class CommutationTest {
     // ── deposits: disjoint account keys commute ──────────────────────────────
 
     private val deposits = """
-        shape Account {
+        act Account {
             balance: decimal initially 0
         }
-        expose Account
 
-        expose shape Deposit {
+        act Deposit {
             account: one Account
             amount: decimal
         }
@@ -117,17 +116,16 @@ class CommutationTest {
     // ── transfers: disjoint {source,target} sets commute ─────────────────────
 
     private val transfers = """
-        shape Account {
+        act Account {
             balance: decimal initially 0
         }
-        expose Account
 
         shape LedgerEntry {
             account: one Account
             amount: decimal
         }
 
-        expose shape Transfer {
+        act Transfer {
             source: one Account
             target: one Account
             amount: decimal
@@ -156,12 +154,11 @@ class CommutationTest {
     // ── branch caps: approvals at different branches commute ─────────────────
 
     private val branchCap = """
-        shape Branch {
+        act Branch {
             lendingCap: decimal
         }
-        expose Branch
 
-        expose shape Loan {
+        act Loan {
             branch: one Branch
             amount: decimal
             approved: boolean initially false
@@ -169,7 +166,7 @@ class CommutationTest {
 
         shape ApprovedLoan = Loan where approved == true
 
-        expose shape ApproveLoan {
+        act ApproveLoan {
             loan: one Loan
         }
 
@@ -200,7 +197,7 @@ class CommutationTest {
     // ── the negative control: a conflicting pair that visibly cannot commute ─
 
     private val uniqueness = """
-        expose shape Customer {
+        act Customer {
             email: text
             name: text
         }
@@ -238,18 +235,17 @@ class CommutationTest {
     // ── body-side correlation: the audit and the transfer meet on the account ─
 
     private val audits = """
-        shape Account {
+        act Account {
             balance: decimal initially 0
         }
-        expose Account
 
-        expose shape Transfer {
+        act Transfer {
             source: one Account
             target: one Account
             amount: decimal
         }
 
-        expose shape AuditRequest {
+        act AuditRequest {
             account: one Account
         }
 

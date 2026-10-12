@@ -163,7 +163,7 @@ class RuntimeTest {
         val sys = newSystem()
         val r = sys.commit("Receipt", mapOf())
         val refused = assertIs<CommitResult.Refused>(r)
-        assertTrue("not exposed" in refused.reason, refused.reason)
+        assertTrue("not an act" in refused.reason, refused.reason)
     }
 
     @Test

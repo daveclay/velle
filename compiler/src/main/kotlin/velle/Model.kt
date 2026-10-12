@@ -18,13 +18,13 @@ class Model(val decls: List<Decl>) {
     val refinements = linkedMapOf<String, RefinementDecl>()
     val rules = linkedMapOf<String, RuleDecl>()
     val nevers = mutableListOf<NeverDecl>()
-    /** externally committable shapes, from inline and standalone expose declarations */
+    /** externally committable shapes — the `act` declarations (README §22) */
     val exposed = linkedSetOf<String>()
 
-    /** shapes exposed `transient` — inputs to the state, not members of it (README §4) */
+    /** shapes declared `transient act` — inputs to the state, not members of it (README §4) */
     val transients = mutableSetOf<String>()
 
-    /** raw `with` declarations per exposed shape, resolved lazily by [closures] */
+    /** raw `with` declarations per act, resolved lazily by [closures] */
     private val withDecls = mutableMapOf<String, List<WithEntry>>()
 
     init {
@@ -41,18 +41,6 @@ class Model(val decls: List<Decl>) {
                 if (rules.put(d.name, d) != null)
                     error("F1", "duplicate rule '${d.name}'")
             is NeverDecl -> nevers.add(d)
-            is ExposeDecl -> {} // second pass, after all shapes exist
-        }
-        for (d in decls) if (d is ExposeDecl) {
-            when {
-                d.shape !in shapes -> error("F1", "expose names unknown shape '${d.shape}'")
-                d.shape in exposed -> error("F1", "shape '${d.shape}' is exposed twice")
-                else -> {
-                    exposed.add(d.shape)
-                    if (d.transient) transients.add(d.shape)
-                    if (d.with.isNotEmpty()) withDecls[d.shape] = d.with
-                }
-            }
         }
     }
 
@@ -236,14 +224,14 @@ class Model(val decls: List<Decl>) {
     // ── the exposure closure (README §6, "Inline part creation"; checks V22) ─
 
     /**
-     * Resolved closure per exposed shape: each `with` entry pinned to its part
+     * Resolved closure per act: each `with` entry pinned to its part
      * shape and language-populated back-reference. Resolution errors land in
      * [diagnostics] as V22 the first time this is read (Validator forces it).
      */
     val closures: Map<String, List<ClosureEdge>> by lazy {
         withDecls.entries.associate { (shape, entries) ->
             if (shape in transients) {
-                error("V22", "expose transient '$shape' with a closure is refused — " +
+                error("V22", "transient act '$shape' with a closure is refused — " +
                     "the combination is open (OQ43); commit the request without inline parts")
                 return@associate shape to emptyList()
             }
@@ -253,7 +241,7 @@ class Model(val decls: List<Decl>) {
 
     private fun resolveClosureLevel(scope: String, entries: List<WithEntry>): List<ClosureEdge> {
         entries.groupBy { it.name }.filterValues { it.size > 1 }.keys.forEach {
-            error("V22", "'expose ... with': closure edge '$it' declared twice on '$scope'")
+            error("V22", "'act ... with': closure edge '$it' declared twice on '$scope'")
         }
         return entries.distinctBy { it.name }.mapNotNull { resolveClosureEdge(scope, it) }
     }
@@ -263,28 +251,28 @@ class Model(val decls: List<Decl>) {
         val fix = "a closure edge must be the inverse of a declared `one` field (README §6)"
         val edge = when {
             m == null -> {
-                error("V22", "'expose ... with ${entry.name}': '$scope' has no such collection — $fix")
+                error("V22", "'act ... with ${entry.name}': '$scope' has no such collection — $fix")
                 null
             }
             m.inverse != null ->
                 if (m.inverse.many) {
-                    error("V22", "'expose ... with ${entry.name}': the inverse of a declared `many` " +
+                    error("V22", "'act ... with ${entry.name}': the inverse of a declared `many` " +
                         "(an m2m edge set) cannot ride a closure — its members are existing instances, " +
                         "named by reference; $fix")
                     null
                 } else m.inverse.shape to m.inverse.field
             m.derived != null -> recognizedInverse(scope, m.derived).also {
-                if (it == null) error("V22", "'expose ... with ${entry.name}': $fix — " +
+                if (it == null) error("V22", "'act ... with ${entry.name}': $fix — " +
                     "an arbitrary-predicate view cannot ride a closure")
             }
             else -> {
-                error("V22", "'expose ... with ${entry.name}': '${entry.name}' is not a collection view of '$scope' — $fix")
+                error("V22", "'act ... with ${entry.name}': '${entry.name}' is not a collection view of '$scope' — $fix")
                 null
             }
         } ?: return null
         val (partShape, backRef) = edge
         if (partShape in transients) {
-            error("V22", "'expose ... with ${entry.name}': part shape '$partShape' is a transient act — " +
+            error("V22", "'act ... with ${entry.name}': part shape '$partShape' is a transient act — " +
                 "closure parts are durable records created at the commit")
             return null
         }
@@ -564,7 +552,7 @@ data class InverseInfo(val shape: String, val field: String, val many: Boolean)
 /** One `delete` statement, resolved: [rule] deletes an instance of [shape] via [stmt]. */
 data class DeleteSite(val rule: RuleDecl, val stmt: DeleteStmt, val shape: String)
 
-/** One resolved closure edge (README §6, "Inline part creation"): the exposed
+/** One resolved closure edge (README §6, "Inline part creation"): the act
  *  commit takes [prop] as inline [partShape] values; [backRef] is the part's
  *  language-populated pointer at the enclosing level. The closure graph is a
  *  tree by construction — entries only name inverse edges of their level. */

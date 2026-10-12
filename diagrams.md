@@ -52,7 +52,7 @@ it doesn't, the picture weakens honestly rather than guessing.
 Shapes and relationships — near-mechanical, with UML's own conventions carrying
 what Velle derives:
 
-- One class per shape, annotated `<<expose>>` / `<<expose transient>>`;
+- One class per shape, acts annotated `<<act>>` / `<<transient act>>`;
   refinements annotated `<<refinement>>`, attached to their base with the
   hollow-triangle arrow, each carrying its membership predicate in a note —
   membership is decided by the predicate, instant by instant, not fixed at
@@ -115,7 +115,7 @@ latent spec fact no sequence view could surface, found by the projection.
 ## The rule graph
 
 The whole system's cause map on one page: a Mermaid flowchart whose nodes are
-the exposed acts and the rules, where an edge means "this commit's writes can
+the acts and the rules, where an edge means "this commit's writes can
 change that rule's condition" — the sequence diagrams' may-fire derivation
 rendered once, globally, instead of per act. Velle has no control flow, so it
 is deliberately *not* a flowchart of steps; the notation is bent to the
@@ -128,7 +128,7 @@ semantics:
   decision nobody makes.
 - **A diamond is a claim of exclusivity, drawn only where proven.** Two places
   qualify: the accept/refuse split a refusal or constraint compiles to (a
-  `never` targeting the exposed act and reading only its own stored fields
+  `never` targeting the act and reading only its own stored fields
   becomes a boundary diamond — violated means refused, nothing begins), and a
   transient act's partitions when their guards are provably exclusive
   (complements get a yes/no diamond annotated "exactly one branch").
@@ -156,7 +156,7 @@ the full predicate in a legend under the fence.
 Velle has no call graph — rules react to commits, nothing calls anything — but
 everything a sequence diagram needs is statically derived, and Velle's
 semantics map onto notation UML already has for exactly the right distinctions.
-One diagram per exposed act, showing the act's **may-fire cascade**:
+One diagram per act, showing the act's **may-fire cascade**:
 
 - **Lifelines** — the committer, the system, each schedule, and any external
   party the cascade involves.
@@ -182,7 +182,7 @@ and nothing begins), and unresolved conditions stay visible as "when
 
 ## Three tiers of concreteness
 
-1. **Static, per exposed act** (compile time — built): the may-fire cascade
+1. **Static, per act** (compile time — built): the may-fire cascade
    from the derived trigger sets, with unresolved conditions left as guards.
    Complete, but branchy for deep cascades.
 2. **Example-grounded** (future — rides the `example` construct, README §22;
@@ -206,8 +206,8 @@ previews) with no toolchain, its syntax carries the whole mapping above
 pseudostates, flowchart diamonds), and one format covers every family member.
 **PlantUML** is the designated opt-in second target where richer frame
 labeling, activation bars, and lifeline destruction (a natural rendering for
-transient acts — a lifeline that ends at its frame's close *is* `expose
-transient`) earn the Java dependency. Both being text formats serves the
+transient acts — a lifeline that ends at its frame's close *is* `transient
+act`) earn the Java dependency. Both being text formats serves the
 determinism principle directly: regenerated artifacts diff in pull requests,
 so a spec edit surfaces as a readable diagram diff in review.
 
@@ -221,7 +221,7 @@ so a spec edit surfaces as a readable diagram diff in review.
 - **The contention map** (OQ40, built — `ContentionMapGen.kt`, emitted in
   `DIAGRAMS-<System>.md` after the rule graph) is the family's *between*-envelope
   member: which acts queue on which keys, and where a system-wide queue forms.
-  Per exposed act and per schedule-fired rule, it states the derived queue keys
+  Per act and per schedule-fired rule, it states the derived queue keys
   in business words, marks an unexamined system-wide width ⚠ (the A5 advisory's
   row), and shows a tolerated width as accepted, naming the declaration that
   carries `tolerates contention`.

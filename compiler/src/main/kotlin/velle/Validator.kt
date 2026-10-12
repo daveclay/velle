@@ -687,7 +687,7 @@ class Validator(private val model: Model) {
         return when (k) {
             is CommitKind.Creates -> {
                 val coCreated = k.byRule?.body?.filterIsInstance<Creation>()?.map { it.shape }?.toSet()
-                    ?: setOf(k.shape) // an exposed commit carries exactly the act
+                    ?: setOf(k.shape) // an act's commit carries exactly the act
                 if (k.shape in bases) {
                     if (rule.leaving) return false // a fresh instance was never a member
                     return positiveCorrelatedExistsTargets(conditionConjuncts(rule.condition))
@@ -1075,7 +1075,7 @@ class Validator(private val model: Model) {
     // Only a fully-discharged invariant is spendable. In v0 that is exactly the
     // input-constrained kind: no rule writes any field its predicate reads, so
     // the invariant is enforced entirely at the boundary (compiled guardrails
-    // at every expose site) and holds in every settled state. A rule-maintained
+    // at the act's boundary) and holds in every settled state. A rule-maintained
     // `never` would need the inductive proof v0 doesn't attempt (V10 fails
     // closed on it), so it is never spent.
 
@@ -1267,12 +1267,12 @@ class Validator(private val model: Model) {
 
     private val commitKindsCache: List<CommitKind> by lazy {
         val kinds = mutableListOf<CommitKind>()
-        model.exposed.forEach { kinds.add(CommitKind.Creates(it, source = "expose $it")) }
+        model.exposed.forEach { kinds.add(CommitKind.Creates(it, source = "act $it")) }
         // closure parts are committable-via-closure (README §6, "Inline part
         // creation"): the closure commit creates them, so they join the trigger,
         // reachability, and co-firability analyses as ordinary creations
         fun addClosure(container: String, e: ClosureEdge) {
-            kinds.add(CommitKind.Creates(e.partShape, source = "expose $container with ${e.prop}"))
+            kinds.add(CommitKind.Creates(e.partShape, source = "act $container with ${e.prop}"))
             e.children.forEach { addClosure(container, it) }
         }
         model.closures.forEach { (container, edges) -> edges.forEach { addClosure(container, it) } }
@@ -1434,7 +1434,7 @@ class Validator(private val model: Model) {
         }
         if (schedules.isNotEmpty()) return // tick-served
         if (commitKinds().none { affects(it, rule) })
-            diags.add(Diagnostic("V3", "rule '${rule.name}' can never fire — no expose, rule effect, or tick " +
+            diags.add(Diagnostic("V3", "rule '${rule.name}' can never fire — no act declaration, rule effect, or tick " +
                 "in the spec can affect its condition (README §11, §22)"))
     }
 
@@ -1932,7 +1932,7 @@ class Validator(private val model: Model) {
             val base = model.baseOf(r) ?: return@forEachSpecExpr
             val demand = "$site — '($r for ...)' needs at-most-one"
             if (base in model.exposed)
-                diags.add(Diagnostic("V12", "$demand, but '$base' is exposed — an external committer " +
+                diags.add(Diagnostic("V12", "$demand, but '$base' is an act — an external committer " +
                     "can create a second member while one exists; use latest/first instead"))
             antiMonotoneFailure(r, base)?.let { why ->
                 diags.add(Diagnostic("V12", "$demand, but membership in '$r' can recur — $why; " +
@@ -2584,14 +2584,14 @@ class Validator(private val model: Model) {
         }
     }
 
-    // ── A4 (advisory): drift-exposed act partitions ──────────────────────────
+    // ── A4 (advisory): drift-act partitions ──────────────────────────
     //
     // An act is data — it persists — so a refinement of an act shape over
     // mutable state is re-evaluated at every later change to that state: an
     // act applied long ago drifts into the refused side when the state flips
     // (a spurious firing per flip) and drifts back when it flips again (a
     // stale re-fire). The signature: a rule triggered by a partition of an
-    // exposed act on an `is <Refinement>` atom, whose body does not disarm
+    // act on an `is <Refinement>` atom, whose body does not disarm
     // its own trigger. Legitimate drift-reactive rules (the compensation
     // pattern, windowed sweeps) pass, because they disarm — the disarm proof
     // doubles as the anchor. Worked exhibit: examples/partition-drift/.
@@ -2613,7 +2613,7 @@ class Validator(private val model: Model) {
             diags.add(Diagnostic("A4", "rule '${rule.name}' partitions act '$base' on mutable state " +
                 "($atom) with no handled-anchor — acts persist, so every later flip of that state " +
                 "re-partitions every '$base' ever committed: spurious firings on entry, stale re-fires " +
-                "on return. Mark the act `expose transient` (the partition then evaluates once, at its " +
+                "on return. Mark the act `transient` (the partition then evaluates once, at its " +
                 "commit), anchor the partition with the outcome evidence the rule produces (scope it to " +
                 "unhandled acts), or accept per-flip re-firing deliberately (examples/partition-drift/)",
                 advisory = true))

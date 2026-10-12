@@ -165,9 +165,9 @@ each case below is an executable test.
 ## Not yet generated
 
 - requires #9: multi-conjunct predicate
-- requires #27: shape not exposed
-- never #33: shape not exposed
-- never #38: shape not exposed
+- requires #27: shape is not an act
+- never #33: shape is not an act
+- never #38: shape is not an act
 - requires #30: non-comparison predicate
 - never #31: multi-conjunct predicate
 - requires #32: multi-conjunct predicate
@@ -185,11 +185,11 @@ each case below is an executable test.
 - requires #8: non-comparison predicate
 - requires #12: multi-conjunct predicate
 - never #14: non-literal bound
-- never #15: shape not exposed
-- never #16: shape not exposed
-- never #17: shape not exposed
-- never #18: shape not exposed
-- never #19: shape not exposed
+- never #15: shape is not an act
+- never #16: shape is not an act
+- never #17: shape is not an act
+- never #18: shape is not an act
+- never #19: shape is not an act
 - requires #20: non-literal bound
 - requires #21: non-comparison predicate
 - requires #22: non-comparison predicate

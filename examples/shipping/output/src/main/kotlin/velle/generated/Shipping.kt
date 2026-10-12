@@ -123,7 +123,7 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
 -- ── Orders ───────────────────────────────────────────────────────────────────
 
-expose shape Order {
+act Order {
     reference: text
 }
 
@@ -134,7 +134,7 @@ expose shape Order {
 -- velle: the inferred inverse `cancellations` on Order (README §6); a named
 -- refinement over its existence, so the rejection can speak in the author's
 -- name for the state rather than in the predicate
-expose shape Cancellation {
+act Cancellation {
     order: one Order
     requestedOn: Date
 }
@@ -143,7 +143,7 @@ shape CancelledOrder = Order where exists (cancellations)
 
 -- ── Shipping ─────────────────────────────────────────────────────────────────
 
-expose shape Shipment {
+act Shipment {
     order: one Order
     shippedOn: Date
 }
@@ -155,7 +155,7 @@ shape ShippedOrder = Order where exists (shipments)
 -- ── The prohibition ──────────────────────────────────────────────────────────
 
 -- A shipment is never on the books for a cancelled order.
--- velle: a `never` over a persistent exposed shape whose predicate reads
+-- velle: a `never` over a persistent act whose predicate reads
 -- through `order` into another shape's records — a constraint, not a refusal
 -- (README §21). It binds every transaction that would leave a Shipment in
 -- this state, whichever record the transaction touched.

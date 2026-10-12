@@ -29,9 +29,9 @@
 -- ── A note that can be locked ────────────────────────────────────────────────
 
 -- The note's `locked` flag is system-maintained (the lock/unlock acts below
--- write it), so it lives on the unexposed record (V21); creating a note is
+-- write it), so it lives on the rule-created record (V21); creating a note is
 -- its own input act.
-expose transient shape CreateNote {
+transient act CreateNote {
     title: text
     body: text
 }
@@ -46,11 +46,11 @@ rule MaterializeNote when CreateNote {
     Note from { title: title, body: body }
 }
 
-expose shape LockNote {
+act LockNote {
     note: one Note
 }
 
-expose shape UnlockNote {
+act UnlockNote {
     note: one Note
 }
 
@@ -67,7 +67,7 @@ shape LockedNote = Note where locked
 -- An admin rename deliberately ignores the lock — a second, lock-exempt
 -- writer of `body`, here so the demonstration can put a newer value on the
 -- note for the stale re-fire to clobber.
-expose shape RenameText {
+act RenameText {
     note: one Note
     newText: text
 }
@@ -85,7 +85,7 @@ rule ApplyRename when RenameText {
 --            (a spurious refusal is recorded for each, per lock)
 --   unlock → every one of them re-enters ApplicableBareEdit
 --            (the rule re-fires, re-writing body text that was already superseded)
-expose shape BareEdit {
+act BareEdit {
     note: one Note
     newText: text
 }
@@ -119,7 +119,7 @@ rule RefuseBareEdit when RefusedBareEdit {
 -- that can drift BOTH families' acts into applicability, two writers at once.
 -- That diagnostic is the drift hazard leaking out sideways; with disjoint
 -- fields, the hazard is fully silent, which is what this exhibit shows.)
-expose shape SafeEdit {
+act SafeEdit {
     note: one Note
     newTitle: text
 }
@@ -160,7 +160,7 @@ rule RefuseSafeEdit when RefusedSafeEdit {
 -- edit gets a response (V18).
 -- This family edits the note's `title`, like SafeEdit — compare the two:
 -- same behavior, and the transient spelling needs no Unhandled scaffolding.
-expose transient shape TransientEdit {
+transient act TransientEdit {
     note: one Note
     newTitle: text
 }

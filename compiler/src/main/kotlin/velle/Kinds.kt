@@ -24,7 +24,7 @@ internal data class Cause(val kind: CommitKind, val label: String)
 internal class KindCatalog(private val model: Model) {
 
     /** Every kind a running system can produce, each with its origin: the
-     *  exposed acts, the rule bodies, and time itself. */
+     *  acts, the rule bodies, and time itself. */
     val causes: List<Cause> by lazy {
         buildList {
             for (act in model.exposed) add(Cause(CommitKind.Create(act), "commit$act"))

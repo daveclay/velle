@@ -106,10 +106,10 @@ class RequirementTest {
     }
 
     private val pharmacy = """
-        expose shape Staff { name: text  role: text }
+        act Staff { name: text  role: text }
         shape Pharmacist = Staff where role == "pharmacist"
-        expose shape Fill { quantity: integer }
-        expose transient shape VerifyFill { fill: one Fill  pharmacist: one Staff }
+        act Fill { quantity: integer }
+        transient act VerifyFill { fill: one Fill  pharmacist: one Staff }
         VerifyFill requires pharmacist is Pharmacist
         shape Verification { fill: one Fill  pharmacist: one Staff }
         rule RecordVerification when VerifyFill {
@@ -159,10 +159,10 @@ class RequirementTest {
     @Test
     fun `V29 quotes the requirement`() {
         val src = """
-            expose shape Order { placedOn: Date }
+            act Order { placedOn: Date }
             shape Cancellation { order: one Order  requestedOn: Date }
             shape CancelledOrder = Order where exists (cancellations)
-            expose shape Shipment { order: one Order }
+            act Shipment { order: one Order }
             Shipment requires order is not CancelledOrder
             rule CancelOld when (Order where placedOn < today - 7 days and not exists (cancellations)) on Nightly {
                 Cancellation from { order: this, requestedOn: today }

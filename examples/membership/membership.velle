@@ -22,13 +22,13 @@
 -- velle: optional self-relationship, `timestamp on update`, a derived property
 -- reading the email-change ledger below. The sign-up is the input; the member
 -- record is what the service keeps, its bookkeeping fields system-maintained
--- on the unexposed record (V21).
-expose shape Plan {
+-- on the rule-created record (V21).
+act Plan {
     name: text
     price: decimal
 }
 
-expose transient shape SignUp {
+transient act SignUp {
     name: text
     signupEmail: text
     plan: one Plan
@@ -82,7 +82,7 @@ rule SendWelcome when Member {
 -- velle: the ledger pattern — ordered by the ledger shape's sole creation
 -- timestamp, derived `email` above selects the latest; the change request is
 -- the input, the ledger entry the durable trace
-expose transient shape ChangeEmail {
+transient act ChangeEmail {
     member: one Member
     newEmail: text
 }
@@ -101,7 +101,7 @@ rule RecordEmailChange when ChangeEmail {
 
 -- Every visit bumps the member's visit counter. The counter feeds
 -- recommendations, so a rare double-count is a shrug, not an incident.
-expose shape Visit {
+act Visit {
     member: one Member
     minutes: integer
 }
@@ -133,8 +133,8 @@ rule PingAnalytics when Visit tolerates loss {
 -- Members top up their balance with deposits. A deposit must land on the
 -- balance exactly once — promptly, and even if the system crashes mid-way.
 -- velle: the flag-witness guard, `after commit` with an hourly backstop; the
--- `applied` flag is system-maintained, so it lives on the unexposed record
-expose transient shape MakeDeposit {
+-- `applied` flag is system-maintained, so it lives on the rule-created record
+transient act MakeDeposit {
     member: one Member
     amount: decimal
 }
@@ -295,12 +295,12 @@ rule ScoreEngagement when Member on Nightly {
 -- unassigned; its contact address falls back to the shared desk until an
 -- agent picks it up. Priority is one of low, normal, high.
 -- velle: optional to-one narrowing — `?.` propagation and `is some`-licensed `.`
-expose shape Agent {
+act Agent {
     name: text
     email: text
 }
 
-expose transient shape RaiseTicket {
+transient act RaiseTicket {
     member: one Member
     subject: text
     due: Date
@@ -333,7 +333,7 @@ rule FileTicket when RaiseTicket {
 -- velle: bare `frozen`, act-sourced captures, and the capture's last reader
 -- at `when leaving`. The close request is the input; the closure is the
 -- durable trace, carrying the commit-stamped `closedOn`.
-expose transient shape CloseTicket {
+transient act CloseTicket {
     ticket: one Ticket
     closedBy: one Agent
 }
@@ -348,7 +348,7 @@ rule RecordTicketClosure when CloseTicket {
     TicketClosure from { ticket: ticket, closedBy: closedBy }
 }
 
-expose shape ReopenTicket {
+act ReopenTicket {
     ticket: one Ticket
 }
 
@@ -377,7 +377,7 @@ rule NoticeReopen when leaving ClosedTicket {
 -- response, and it counts as an answer for V18's every-request-gets-a-response
 -- proof: the rule takes `ticket is not ClosedTicket`, the `never` takes its
 -- complement
-expose transient shape AssignTicket {
+transient act AssignTicket {
     ticket: one Ticket
     agent: one Agent
 }

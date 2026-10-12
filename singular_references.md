@@ -39,7 +39,7 @@ flag: (OpenDelinquencyFlag for this)         -- the one open flag for this accou
 
 The license is an inductive proof over commits with two legs, both checked whole-spec:
 
-1. **Every producer is guarded.** Every rule that creates the base shape must carry the entry guard — `not exists OpenDelinquencyFlag for this` — correlated on the field the creation populates. And the base must not be `expose`d: no guard can stop an external committer from landing a second instance.
+1. **Every producer is guarded.** Every rule that creates the base shape must carry the entry guard — `not exists OpenDelinquencyFlag for this` — correlated on the field the creation populates. And the base must not be an `act`: no guard can stop an external committer from landing a second instance.
 2. **Membership can't recur.** The refinement's predicate must be *anti-monotone* — once an instance leaves, it can never re-enter — so members only ever appear at guarded creation. Two predicate forms are provably anti-monotone:
    - `not exists W for this` — the **evidence pair**. Facts are monotone (Velle has no delete), so once the resolution lands, the flag is closed forever.
    - `not <flag>` where **every** writer assigns `true` — a **one-way latch**. The compiler walks the writers (every assignment targets a literal static path, so it knows them all) and verifies none can re-open.
@@ -84,7 +84,7 @@ rule CloseDelinquencyEpisode when leaving Delinquent {
 }
 ```
 
-Both legs hold: one producer, literally guarded, base unexposed; predicate is an evidence pair. The proof even leans on the reference's own context — the entry rule's guard is what makes the exit rule's singular reference legal, a whole-spec property.
+Both legs hold: one producer, literally guarded, base not an act; predicate is an evidence pair. The proof even leans on the reference's own context — the entry rule's guard is what makes the exit rule's singular reference legal, a whole-spec property.
 
 ## What's illegal, and the fix
 
@@ -95,15 +95,15 @@ flag: (DelinquencyFlag for this)          -- ✘ V12: nothing proves at-most-one
 flag: latest(DelinquencyFlag for this)    -- ✔ the honest spelling
 ```
 
-**An exposed base.** An external committer defeats any guard:
+**A base declared `act`.** An external committer defeats any guard:
 
 ```
-expose DelinquencyFlag
+act DelinquencyFlag { ... }
 -- ✘ V12 at every `(OpenDelinquencyFlag for this)` in the spec:
 --   "an external committer can create a second member while one exists"
 ```
 
-Note this can break *at a distance*: adding the `expose` (or a second, unguarded producing rule) months later, in another file, makes an untouched singular reference stop compiling — deliberately. The claim was whole-spec; the diagnostic connects the new declaration to the reference it invalidates.
+Note this can break *at a distance*: declaring the base `act` (or adding a second, unguarded producing rule) months later, in another file, makes an untouched singular reference stop compiling — deliberately. The claim was whole-spec; the diagnostic connects the new declaration to the reference it invalidates.
 
 **An unguarded producer.** Any rule creating the base without the entry guard:
 

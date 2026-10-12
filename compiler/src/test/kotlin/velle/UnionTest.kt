@@ -17,9 +17,9 @@ class UnionTest {
     private fun diags(source: String): List<Diagnostic> = Validator.validate(source)
 
     private val base = """
-        expose shape Member { name: text }
-        expose shape Post { author: one Member, body: text }
-        expose shape Photo { author: one Member, caption: text }
+        act Member { name: text }
+        act Post { author: one Member, body: text }
+        act Photo { author: one Member, caption: text }
     """.trimIndent()
 
     // ── declarations ─────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ class UnionTest {
     fun `a static union is a legal field type, and infers its inverse onto every operand`() {
         val src = base + """
             shape Content = Post or Photo
-            expose shape Comment { target: one Content, body: text }
+            act Comment { target: one Content, body: text }
             shape Busy = Post where count(comments) > 1
         """.trimIndent()
         assertEquals(emptyList(), diags(src))
@@ -45,7 +45,7 @@ class UnionTest {
         val src = base + """
             shape Unpublished = Photo where caption == ""
             shape Content = Post or Unpublished
-            expose shape Comment { target: one Content, body: text }
+            act Comment { target: one Content, body: text }
         """.trimIndent()
         assertTrue("F2" in codes(src), "got: ${diags(src)}")
     }
@@ -54,14 +54,14 @@ class UnionTest {
     fun `a direct read of an unshared name on the union is refused, a narrowed read is licensed`() {
         val direct = base + """
             shape Content = Post or Photo
-            expose shape Comment { target: one Content, body: text }
+            act Comment { target: one Content, body: text }
             shape Odd = Comment where target.author is some
         """.trimIndent()
         assertTrue("F1" in codes(direct), "got: ${diags(direct)}")
 
         val narrowed = base + """
             shape Content = Post or Photo
-            expose shape Comment { target: one Content, body: text }
+            act Comment { target: one Content, body: text }
             shape OnOwnPost = Comment where target is Post and target.author is some
             shape Notice { excerpt: text }
             rule Note when Comment {
@@ -87,8 +87,8 @@ class UnionTest {
     @Test
     fun `a union with a transient operand is refused until OQ35`() {
         val src = base + """
-            expose transient shape ChangeName { member: one Member, newName: text }
-            expose transient shape ChangeEmail { member: one Member, newEmail: text }
+            transient act ChangeName { member: one Member, newName: text }
+            transient act ChangeEmail { member: one Member, newEmail: text }
             shape ProfileChange = ChangeName or ChangeEmail
             shape Touch { touchedOn: DateTime }
             rule TouchProfile when ProfileChange { Touch from { touchedOn: now } }
@@ -121,7 +121,7 @@ class UnionTest {
     fun `a union rule and an operand rule writing one field are not disjoint`() {
         val src = base + """
             shape Content = Post or Photo
-            expose shape Touch { post: one Post }
+            act Touch { post: one Post }
             rule A when Touch { post.body = "a" }
             rule B when Touch { post.body = "b" }
         """.trimIndent()

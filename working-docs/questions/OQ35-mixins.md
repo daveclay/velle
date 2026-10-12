@@ -23,11 +23,11 @@ shape MemberChange {                      -- a mixin: no instances of its own
     member: one Member
 }
 
-expose transient shape ChangeEmail includes MemberChange {
+transient act ChangeEmail includes MemberChange {
     newEmail: text
 }
 
-expose transient shape ChangeName includes MemberChange {
+transient act ChangeName includes MemberChange {
     newName: text
 }
 
@@ -75,7 +75,7 @@ shape Reminder {
 - **A rule subject and a refinement base.** `when MemberChange` fires once per entrant of any includer; `Dated where due < today` is an ordinary refinement whose base is the mixin. Entry into a bare mixin is creation of an instance of any includer.
 - **A stable field type.** `about: one Dated` is legal by the same test as the static-union field-type rule (README §6): the member set is fixed whole-spec by the `includes` declarations, never by a predicate, so it cannot drift (README §6's base-shape rule, `checks.md` F2).
 - **An open union.** Its members are whoever opts in. README §9's cross-base `or` is the closed form — exactly the named operands. The two compose: `ChangeEmail or ChangeName` is a subset of `MemberChange`, and exposes `member` because both operands inherit it from the mixin.
-- **Not a base shape.** A mixin cannot be created (`MemberChange from { ... }` is refused), cannot be exposed, and has no inverses of its own beyond those its declarations infer.
+- **Not a base shape.** A mixin cannot be created (`MemberChange from { ... }` is refused), cannot be an act, and has no inverses of its own beyond those its declarations infer.
 
 ## 4. Rulings the construct forces
 
@@ -86,10 +86,10 @@ Proposed; each owed a home when this promotes.
 - **Inverses.** `MemberChange.member: one Member` infers one `memberChanges` collection on `Member`, spanning every includer, named from the declaring mixin. A per-includer view (`changeEmails: many ChangeEmail = (ChangeEmail where member == this)`) is the derived spelling. V19's both-sides and collision checks run once, on the mixin's declaration.
 - **Overlap.** Two mixins overlap exactly on the shapes including both; a mixin and a base overlap iff the base includes it; distinct bases stay disjoint. One static axiom for V1, V5, V9, and V27.
 - **Transience.** A mixin included by a transient act is fine as a source of that act's fields. A field typed with the mixin (`about: one Dated`) is refused by V17 if *any* includer is transient — a connected diagnostic naming the field and the transient includer. A rule over a mixin with transient includers is the case README §9 refuses for a union with a transient operand — the mixin is the construct that refusal waits for.
-- **Exposure.** An exposed includer's generated commit function takes the mixin's stored fields as parameters like its own (README §22, "External input"); `initially` and `timestamp` declared in a mixin are V21 errors on an exposed includer exactly as if declared inline.
+- **Acts.** An act includer's generated commit function takes the mixin's stored fields as parameters like its own (README §22, "External input"); `initially` and `timestamp` declared in a mixin are V21 errors on an act includer exactly as if declared inline.
 - **Derived properties in a mixin** read only the mixin's own declarations; `this` is the including instance. A mixin's derived property that needs an includer's field is a refinement over the mixin narrowed by `is <Includer>`, or belongs on the includer.
 - **Refinement bodies over a mixin** are ordinary: `frozen due` names a stored field every member has; `captured` reads at the predicate's entry. The bare mixin's own body carries declarations, not refinement members — `frozen`/`captured` there are position errors (F3).
-- **Closures.** `expose Member with memberChanges` would name a mixin-inferred inverse whose parts are of several shapes; refused — a closure edge's part shape must be one shape (V22). Per-includer views are the served spelling.
+- **Closures.** `act Member { ... } with memberChanges` would name a mixin-inferred inverse whose parts are of several shapes; refused — a closure edge's part shape must be one shape (V22). Per-includer views are the served spelling.
 - **`for` matching.** A mixin-typed field matches an expression of any includer's type; beside a field typed with one includer, V13's two-fields ambiguity applies as is.
 - **Diagrams.** The class diagram needs a mixin notation; the state-flow diagram treats a refinement over a mixin as one machine spanning includers (`diagrams.md`).
 
@@ -101,5 +101,5 @@ README §9 extends `or` across unrelated bases under its unchanged property rule
 
 - **Syntax.** `includes` is a placeholder. Candidates must not collide with `with` (closure) or `=` (refinement), and should read as the product-owner sentence: "a support ticket is dated."
 - **Inverse naming.** Whether the mixin-inferred inverse is named from the mixin (`memberChanges`) or is not inferred at all, demanding per-includer views (V19's demand-intent posture).
-- **Rules and `never` declared over a mixin with an exposed transient includer** as V18 answers — one answer covering several acts.
+- **Rules and `never` declared over a mixin with a transient act includer** as V18 answers — one answer covering several acts.
 - **Whether a mixin may include a mixin**, and whether the diamond is then worth allowing or refused outright.

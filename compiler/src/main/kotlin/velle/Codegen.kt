@@ -3,7 +3,7 @@ package velle
 /**
  * MockHarness codegen (README §22, the milestone scope statement): transpiles a
  * spec to a typed Kotlin surface over the runtime — one commit function per
- * exposed shape, one tick function per schedule, typed views per shape and
+ * act, one tick function per schedule, typed views per shape and
  * refinement, membership tests, and a `main` for driving the system manually.
  * A spike: sugar over VelleSystem, not a standalone compilation.
  */

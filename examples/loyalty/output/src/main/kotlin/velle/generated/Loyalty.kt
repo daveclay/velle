@@ -186,12 +186,12 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
 -- Members join by referral: the join is the input, the member record is what
 -- the club keeps (its `tier` is system-maintained, so it lives on the
--- unexposed record — V21). Nobody recruits themselves — the club says so
+-- rule-created record — V21). Nobody recruits themselves — the club says so
 -- once, as a fact about the data, and the compiler spends that fact twice
 -- below: it is what makes the referral chain provably finite (the
 -- foundingReferrer recurrence) and what proves the two promotion rules write
 -- two different people (the tier rules).
-expose transient shape Join {
+transient act Join {
     name: text
     referrer: one Member?
 }
@@ -242,7 +242,7 @@ never (Member where referrer == this)
 -- selector strictly descends a datum fixed at creation (checks.md V14, the
 -- strict-descent certificate); `streakAfter` as readable history; the current
 -- value as a selector read
-expose shape DuesPayment {
+act DuesPayment {
     member: one Member
     coveredMonth: text
     dueBy: Date
@@ -267,7 +267,7 @@ expose shape DuesPayment {
 -- velle: the instance-aliasing discharge — two writers of one field whose
 -- target routes differ by a to-one self-hop, discharged by a spent `never`
 -- (checks.md V1/V15; OQ16's PromoteBuyer/PromoteReferrer case)
-expose shape Purchase {
+act Purchase {
     member: one Member
     amount: decimal
 }
@@ -316,7 +316,7 @@ rule ThankVip when (VipPurchase where not exists ThankYouNote for this) {
 -- effects are the hazard, same-direction effects are not).
 -- velle: same-direction sibling creations under a watched conjunctive
 -- refinement — accepted by the polarity analysis
-expose shape Enrollment {
+act Enrollment {
     member: one Member
 }
 

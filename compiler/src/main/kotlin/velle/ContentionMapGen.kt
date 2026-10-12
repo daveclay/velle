@@ -2,7 +2,7 @@ package velle
 
 /**
  * The contention map (OQ40): the artifact family's *between*-envelope member.
- * Per exposed act and per schedule-fired rule, the derived serialization
+ * Per act and per schedule-fired rule, the derived serialization
  * domain in business words — which work queues on which keys, what contends
  * with what, and every whole-shape width with the read that caused it.
  * A tolerated width shows as accepted, naming the declaration carrying the

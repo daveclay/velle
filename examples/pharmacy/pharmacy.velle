@@ -49,7 +49,7 @@
 
 -- Everyone who works here is staff with one role. Roles do not change: a
 -- technician who qualifies as a pharmacist is a new staff record.
-expose shape Staff {
+act Staff {
     name: text
     role: text
 }
@@ -64,7 +64,7 @@ shape Administrator = Staff where role == "admin"
 -- whichever renewal has not yet expired.
 -- velle: a time-dependent refinement (`today`) consulted by a boundary
 -- refusal and by a daily reminder sweep
-expose shape LicenceRenewal {
+act LicenceRenewal {
     pharmacist: one Staff
     licenceNumber: text
     expiresOn: Date
@@ -92,7 +92,7 @@ rule RemindLicence
 
 -- ── Drugs, ingredients, interactions, prices ─────────────────────────────────
 
-expose shape Ingredient {
+act Ingredient {
     name: text
 }
 
@@ -102,7 +102,7 @@ expose shape Ingredient {
 -- velle: a declared `many` edge set (ingredients); stock on hand and the
 -- unit price are derivations, below; the reorder point is the one field an
 -- administrator's or a pharmacist's act changes in place
-expose shape Drug {
+act Drug {
     name: text
     strength: text
     form: text
@@ -128,7 +128,7 @@ shape LowStock    = Drug where onHand < reorderPoint
 -- velle: two `one Drug` fields on one shape — no inverse is inferred (checks
 -- V19); Drug.interactions above is the declared view, with `or` in its
 -- formula so the fact is found from either side
-expose shape Interaction {
+act Interaction {
     drugA: one Drug
     drugB: one Drug
     severity: text
@@ -143,7 +143,7 @@ Interaction requires severity == "major" or severity == "moderate"
 -- velle: the ledger pattern (README §12) ordered by a business date rather
 -- than a commit timestamp, read through `today`; the date must be unique per
 -- drug so the selector discriminates
-expose shape PriceChange {
+act PriceChange {
     drug: one Drug
     effectiveOn: Date
     unitPrice: decimal
@@ -160,7 +160,7 @@ shape EffectivePrice = PriceChange where effectiveOn <= today {
     undeletable
 }
 
-expose transient shape WithdrawPriceChange {
+transient act WithdrawPriceChange {
     priceChange: one PriceChange
     administrator: one Staff
     reason: text
@@ -203,7 +203,7 @@ rule RefuseWithdrawal when RefusedWithdrawal {
 -- An administrator or a pharmacist raises or lowers a drug's reorder point.
 -- The bound is stated on the act: a prohibition on the drug's field would
 -- fail closed, since a rule writes it (checks V10).
-expose transient shape SetReorderPoint {
+transient act SetReorderPoint {
     drug: one Drug
     requestedBy: one Staff
     reorderPoint: integer
@@ -224,7 +224,7 @@ rule ApplyReorderPoint when SetReorderPoint {
 -- velle: a derivation over a refinement-filtered inverse (`fills where
 -- ConsumingFill`) and a plain inverse; the purchase order reference is
 -- optional, so a cancelled order's lots are never a problem
-expose shape StockLot {
+act StockLot {
     drug: one Drug
     lotNumber: text
     expiresOn: Date
@@ -246,7 +246,7 @@ shape UsableLot      = StockLot where expiresOn >= today and onHand > 0 and
 -- velle: a transient act partitioned on a comparison against a derived
 -- value, with the complement spelled `not (...)` for V18; the body reads the
 -- balance as it stood before the adjustment landed
-expose transient shape CountLot {
+transient act CountLot {
     lot: one StockLot
     technician: one Staff
     counted: integer
@@ -297,7 +297,7 @@ rule QuarantineExpired when (ExpiredLot where onHand > 0 and not exists Quaranti
     Quarantine from { lot: this, reason: "expired" }
 }
 
-expose shape Recall {
+act Recall {
     lot: one StockLot
     reference: text
     issuedOn: Date
@@ -345,7 +345,7 @@ rule Reorder when (LowStock where not exists OpenPurchaseOrder for this) on Nigh
 
 -- ── Patients, prescribers, insurance ─────────────────────────────────────────
 
-expose shape InsurancePlan {
+act InsurancePlan {
     name: text
     coversControlled: boolean
 }
@@ -354,7 +354,7 @@ expose shape InsurancePlan {
 -- velle: a declared `many` edge set that two acts below replace or extend;
 -- `prescriptions` is a derived view two hops long, since a prescription
 -- reaches its patient through the prescriber's order
-expose shape Patient {
+act Patient {
     name: text
     birthDate: Date
     phone: text
@@ -363,7 +363,7 @@ expose shape Patient {
     prescriptions: many Prescription = (Prescription where order.patient == this)
 }
 
-expose shape Prescriber {
+act Prescriber {
     name: text
     deaNumber: text
     fax: text
@@ -372,7 +372,7 @@ expose shape Prescriber {
 -- A patient reports their allergies afresh, or adds one.
 -- velle: whole-set replacement and `+` union on a declared `many`; two
 -- writers of one field whose triggers never coincide (checks V1)
-expose transient shape SetAllergies {
+transient act SetAllergies {
     patient: one Patient
     allergies: many Ingredient
 }
@@ -381,7 +381,7 @@ rule ApplyAllergies when SetAllergies {
     this.patient.allergies = this.allergies
 }
 
-expose transient shape AddAllergy {
+transient act AddAllergy {
     patient: one Patient
     ingredient: one Ingredient
 }
@@ -409,14 +409,14 @@ shape Notice {
 -- technician — carrying one or more prescriptions. The order and its
 -- prescriptions are one commit: a prohibition on any one prescription turns
 -- the whole order away, and the prescriber is told to resend.
--- velle: the exposure closure (`expose ... with`); the part's back-reference
+-- velle: the exposure closure (`act ... with`); the part's back-reference
 -- is language-populated; a refusal rolls back container and parts together
-shape PrescriberOrder {
+act PrescriberOrder {
     prescriber: one Prescriber
     patient: one Patient
     writtenOn: Date
     enteredBy: one Staff
-}
+} with prescriptions
 
 never (PrescriberOrder where writtenOn > today)
 
@@ -441,8 +441,6 @@ shape Prescription {
     firstFilledOn: Date? = if fills is empty then none else first(fills by filledOn, fillNumber).filledOn
 }
 
-expose PrescriberOrder with prescriptions
-
 never (Prescription where quantity <= 0)
 never (Prescription where daysSupply <= 0)
 never (Prescription where refillsAuthorized < 0)
@@ -452,7 +450,7 @@ never (Prescription where drug is Controlled and refillsAuthorized > 5)
 
 -- The prescriber who wrote a prescription may discontinue it.
 -- velle: identity inequality between two paths in a constraint
-expose shape Discontinuation {
+act Discontinuation {
     prescription: one Prescription
     prescriber: one Prescriber
     reason: text
@@ -481,7 +479,7 @@ shape FilledPrescription = Prescription where fills is not empty {
 -- prohibition (checks V10 fails closed on a rule-written field), and the
 -- quantity's bounds matter more than correcting it in place.
 -- velle: the writer partitioned on the freeze's syntactic complement (checks V5)
-expose transient shape CorrectEntry {
+transient act CorrectEntry {
     prescription: one Prescription
     technician: one Staff
     directions: text
@@ -510,7 +508,7 @@ rule RefuseCorrection when RefusedCorrection {
 -- velle: reversal as data (README §22, "Reversal") where a `delete` would
 -- have to resolve every required reference (checks V24); the void is
 -- refused on record once the prescription has been filled
-expose transient shape VoidEntry {
+transient act VoidEntry {
     prescription: one Prescription
     pharmacist: one Staff
     reason: text
@@ -564,7 +562,7 @@ shape InteractionConflict = Prescription where
             exists (this.drug.interactions where drugA == other.drug or drugB == other.drug))
 
 -- A pharmacist may override a conflict with a justification on record.
-expose shape ConflictOverride {
+act ConflictOverride {
     prescription: one Prescription
     pharmacist: one Staff
     justification: text
@@ -633,7 +631,7 @@ shape MultiplePrescribers = Patient where
 -- record it produces, beside a rejection-as-data partition on one act whose
 -- two sides are a derived boolean and its negation (checks V18's complement
 -- slice); the correlation key lets the counter find the answer
-expose transient shape FillPrescription {
+transient act FillPrescription {
     requestKey: text
     prescription: one Prescription
     lot: one StockLot
@@ -656,7 +654,7 @@ Fill requires fillNumber == count(prescription.fills where fillNumber <= this.fi
 -- A controlled fill needs a clear monitoring-programme check by a pharmacist
 -- within the last day.
 -- velle: a windowed `exists` over `now` inside a refusal
-expose shape MonitoringCheck {
+act MonitoringCheck {
     prescription: one Prescription
     pharmacist: one Staff
     checkedAt: DateTime
@@ -670,7 +668,7 @@ never (FillPrescription where lot.drug is Controlled and
 
 -- The fill: what was dispensed, from which lot, by whom, at what price. The
 -- price is copied at the fill, so a later price change never moves it.
--- velle: `initially today` on the unexposed record; the amount due sums the
+-- velle: `initially today` on the rule-created record; the amount due sums the
 -- paid claims' verdicts, a derived property read through a refinement filter
 shape Fill {
     prescription: one Prescription
@@ -741,7 +739,7 @@ rule LogControlled when (Fill where lot.drug is Controlled) {
 -- fill they filled themselves; a fill is verified once.
 -- velle: refusals reading a time-dependent refinement (the licence) and an
 -- identity comparison between the act and the fill's field
-expose transient shape VerifyFill {
+transient act VerifyFill {
     fill: one Fill
     pharmacist: one Staff
     outcome: text
@@ -779,7 +777,7 @@ shape ConsumingFill = Fill where this is not RejectedFill and not exists ReturnT
 
 -- A first fill, or any fill of a drug that needs it, is counselled by a
 -- pharmacist before it is handed over.
-expose shape Counselling {
+act Counselling {
     fill: one Fill
     pharmacist: one Staff
     notes: text
@@ -835,7 +833,7 @@ rule RecordCounterExit when leaving ReadyForPickup {
 -- pickup itself ends that membership, so the refusal would read its own
 -- consequence at the settled transaction. Its stable parts are spelled out,
 -- and "collected once" is a constraint on the fill.
-expose transient shape PickUp {
+transient act PickUp {
     fill: one Fill
     collectedBy: text
     amountPaid: decimal
@@ -875,7 +873,7 @@ rule AlertCounter when (ReadyForPickup where prescription is AllergyConflict and
 
 -- A patient asks for a refill. An active prescription queues work for the
 -- technicians; anything else is refused on record, with the reason.
-expose transient shape RequestRefill {
+transient act RequestRefill {
     requestKey: text
     prescription: one Prescription
 }
@@ -947,11 +945,11 @@ rule NagRefillTask
 -- old and no refill work is open.
 -- velle: enrolment as paired records (simple unordered pairing, README §22);
 -- `is some` narrowing licensing `.`-free comparison on an optional date
-expose shape AutoRefillEnrolment {
+act AutoRefillEnrolment {
     prescription: one Prescription
 }
 
-expose shape AutoRefillCancellation {
+act AutoRefillCancellation {
     prescription: one Prescription
 }
 
@@ -999,7 +997,7 @@ rule SubmitClaim when (InsuredFill where not exists Claim for this) {
     Claim from { fill: this, plan: insurer, amount: total }
 }
 
-expose transient shape Adjudication {
+transient act Adjudication {
     claim: one Claim
     outcome: text
     paidAmount: decimal

@@ -148,18 +148,18 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
 -- assignment through a one-to-many, derived collection views (the renamed inverse),
 -- and the boundary's duplicate refusal.
 
-expose shape Advisor {
+act Advisor {
     name: text
     -- the renamed-inverse spelling: a derived collection view over the declared side
     advisees: many Student = (Student where advisor == this)
 }
 
-expose shape Course {
+act Course {
     title: text
     capacity: integer
 }
 
-expose shape Student {
+act Student {
     name: text
     advisor: one Advisor?             -- declared side of a one-to-many (child pointer)
     tags: many text                   -- owned collection of values; the committer
@@ -173,7 +173,7 @@ shape Overloaded = Student where count(courses) > 2
 shape Untagged = Student where tags is empty
 
 -- whole-set replacement: the edge set becomes exactly the committed reference set
-expose transient shape SetEnrollment {
+transient act SetEnrollment {
     student: one Student
     courses: many Course
 }
@@ -183,7 +183,7 @@ rule ApplyEnrollmentSet when SetEnrollment {
 }
 
 -- incremental edits: `+` union and `-` removal (set semantics: quiet edge cases)
-expose transient shape Enroll {
+transient act Enroll {
     student: one Student
     course: one Course
 }
@@ -192,7 +192,7 @@ rule ApplyEnroll when Enroll {
     this.student.courses = this.student.courses + this.course
 }
 
-expose transient shape Drop {
+transient act Drop {
     student: one Student
     course: one Course
 }
@@ -201,7 +201,7 @@ rule ApplyDrop when Drop {
     this.student.courses = this.student.courses - this.course
 }
 
-expose transient shape Tag {
+transient act Tag {
     student: one Student
     tag: text
 }
@@ -212,7 +212,7 @@ rule ApplyTag when Tag {
 
 -- fan-out assignment: the act's collection selects the children; one write per
 -- member of the stored pointer (`this.students.advisor`), one hop only
-expose transient shape AssignAdvisor {
+transient act AssignAdvisor {
     advisor: one Advisor
     students: many Student
 }

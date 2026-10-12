@@ -313,10 +313,10 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
 -- A customer signs up with a name and email. The sign-up is the input; the
 -- customer record is what the system keeps about it, with its own system-
--- maintained fields — an exposed shape carries only committer fields (V21).
+-- maintained fields — an act carries only committer fields (V21).
 -- Support can fix a mistyped email on their behalf — the correction is an act
 -- of its own, so there is always a record that it happened and who asked for it.
-expose transient shape SignUp {
+transient act SignUp {
     name: text
     email: text
 }
@@ -332,7 +332,7 @@ rule AdmitCustomer when SignUp {
     Customer from { name: name, email: email }
 }
 
-expose shape CorrectEmail {
+act CorrectEmail {
     customer: one Customer
     corrected: text
 }
@@ -348,8 +348,8 @@ rule ApplyEmailCorrection when CorrectEmail {
 -- and payments on record, never kept by hand.
 -- velle: derived properties over inferred inverse collections; `initially
 -- randomUUID` mints the outward-facing reference at the record's creation —
--- on the unexposed record, where no committer exists to supply it
-expose transient shape BillCustomer {
+-- on the rule-created record, where no committer exists to supply it
+transient act BillCustomer {
     customer: one Customer
     due: Date
 }
@@ -368,7 +368,7 @@ rule OpenInvoice when BillCustomer {
     Invoice from { customer: customer, due: due }
 }
 
-expose shape LineItem {
+act LineItem {
     invoice: one Invoice
     description: text
     price: decimal
@@ -386,7 +386,7 @@ never (LineItem where price < 0)
 
 -- Payments land against an invoice; zero and negative amounts are refused at
 -- the door, before anything is kept.
-expose transient shape SubmitPayment {
+transient act SubmitPayment {
     invoice: one Invoice
     amount: decimal
 }
@@ -468,7 +468,7 @@ rule RemindOverdue
 -- velle: `frozen` write-gate; rejection as data over a `transient` act — the
 -- partition evaluates exactly once, at the act's commit (README §4); the
 -- complement pair (P / not P) is what proves every request gets a response (V18)
-expose shape Issuance {
+act Issuance {
     invoice: one Invoice
 }
 
@@ -476,7 +476,7 @@ shape IssuedInvoice = Invoice where exists Issuance for this {
     frozen due
 }
 
-expose transient shape ChangeDueDate {
+transient act ChangeDueDate {
     invoice: one Invoice
     newDue: Date
 }
@@ -505,11 +505,11 @@ rule RecordDueChangeRefusal when RefusedDueChange {
 -- later. Unarchiving produces a notice that records when the invoice had been
 -- archived — useful when someone asks why it disappeared from reports.
 -- velle: capture at entry (`archivedOn`), read at exit by its last reader
-expose shape ArchiveRequest {
+act ArchiveRequest {
     invoice: one Invoice
 }
 
-expose shape UnarchiveRequest {
+act UnarchiveRequest {
     invoice: one Invoice
 }
 

@@ -26,12 +26,11 @@ class DomainsTest {
     // ── the deposit world (OQ40, solution 1 exercised) ───────────────────────
 
     private val deposits = """
-        shape Account {
+        act Account {
             balance: decimal initially 0
         }
-        expose Account
 
-        expose shape Deposit {
+        act Deposit {
             account: one Account
             amount: decimal
         }
@@ -79,17 +78,16 @@ class DomainsTest {
     // ── the transfer: a domain is a key set, not one key ─────────────────────
 
     private val transfers = """
-        shape Account {
+        act Account {
             balance: decimal initially 0
         }
-        expose Account
 
         shape LedgerEntry {
             account: one Account
             amount: decimal
         }
 
-        expose shape Transfer {
+        act Transfer {
             source: one Account
             target: one Account
             amount: decimal
@@ -112,7 +110,7 @@ class DomainsTest {
     // ── uniqueness: the domain keys on a committed value ─────────────────────
 
     private val uniqueness = """
-        expose shape Customer {
+        act Customer {
             email: text
             name: text
         }
@@ -131,12 +129,11 @@ class DomainsTest {
     // ── the lending cap: correlated scan collapses to the branch ─────────────
 
     private val branchCap = """
-        shape Branch {
+        act Branch {
             lendingCap: decimal
         }
-        expose Branch
 
-        expose shape Loan {
+        act Loan {
             branch: one Branch
             amount: decimal
             approved: boolean initially false
@@ -144,7 +141,7 @@ class DomainsTest {
 
         shape ApprovedLoan = Loan where approved == true
 
-        expose shape ApproveLoan {
+        act ApproveLoan {
             loan: one Loan
         }
 
@@ -170,12 +167,11 @@ class DomainsTest {
     // ── the institution-wide cap: honest widening, named read ────────────────
 
     private val institutionCap = """
-        shape Institution {
+        act Institution {
             lendingCap: decimal
         }
-        expose Institution
 
-        expose shape Loan {
+        act Loan {
             amount: decimal
             approved: boolean initially false
         }
@@ -232,12 +228,11 @@ class DomainsTest {
     // ── the cadence discharge: on a schedule, the width leaves the commits ───
 
     private fun complianceSpec(header: String) = """
-        shape Institution {
+        act Institution {
             alertThreshold: decimal
         }
-        expose Institution
 
-        expose shape Loan {
+        act Loan {
             amount: decimal
             approved: boolean initially false
         }
@@ -293,18 +288,17 @@ class DomainsTest {
         // whose guard reads that membership, even though no rule fires inside
         // the issuance envelope at all
         val src = """
-            shape Invoice {
+            act Invoice {
                 due: Date
             }
-            expose Invoice
 
-            expose shape Issuance {
+            act Issuance {
                 invoice: one Invoice
             }
 
             shape IssuedInvoice = Invoice where exists Issuance for this
 
-            expose transient shape ChangeDueDate {
+            transient act ChangeDueDate {
                 invoice: one Invoice
                 newDue: Date
             }
@@ -325,18 +319,17 @@ class DomainsTest {
     // ── body-side correlation: a reader in a rule body still keys the writer ─
 
     private val audits = """
-        shape Account {
+        act Account {
             balance: decimal initially 0
         }
-        expose Account
 
-        expose shape Transfer {
+        act Transfer {
             source: one Account
             target: one Account
             amount: decimal
         }
 
-        expose shape AuditRequest {
+        act AuditRequest {
             account: one Account
         }
 

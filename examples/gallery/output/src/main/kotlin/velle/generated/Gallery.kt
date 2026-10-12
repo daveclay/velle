@@ -186,16 +186,16 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 -- narrowing in a value expression and in a predicate, and the boundary's
 -- type-level refusal of a reference outside the union.
 
-expose shape Member {
+act Member {
     name: text
 }
 
-expose shape Post {
+act Post {
     author: one Member
     body: text
 }
 
-expose shape Photo {
+act Photo {
     author: one Member
     caption: text
 }
@@ -210,7 +210,7 @@ shape Content = Post or Photo {
 }
 
 -- the polymorphic association: one role, filled by an instance of either shape
-expose shape Comment {
+act Comment {
     target: one Content
     author: one Member
     body: text

@@ -34,7 +34,7 @@ internal object ClassDiagramGen {
         for ((name, shape) in model.shapes) {
             appendLine("    class $name {")
             if (name in model.exposed)
-                appendLine("        <<${if (name in model.transients) "expose transient" else "expose"}>>")
+                appendLine("        <<${if (name in model.transients) "transient act" else "act"}>>")
             for (m in shape.members) {
                 if (m is StoredProp && m.type is RelType) {
                     edges.add(relEdge(model, name, m.name, m.type))

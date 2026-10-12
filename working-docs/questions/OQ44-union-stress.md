@@ -16,7 +16,7 @@ Found while implementing; each wants a spec that demonstrates it and a ruling.
 
 1. **A cross-base refinement with no static union behind it.** `shape NeedsAttention = OverdueTicket or Invoice` composes refinements of different bases. It is a legal rule subject, but no view is generated for it (there is no base and no static union to name the view after), and the generated per-rule spec names an `UnknownView` — the generated test does not compile. Rule: give such a composite a view of its own (shared members only), or refuse it as a rule subject and demand a named static union with a `where`.
 2. **A union-typed edge set.** `tags: many Content`. Inverse inference marks the inverse as many-to-many on every operand, the runtime's m2m inverse scan reads the owner's edge set, and the boundary converts each handle by acceptance — all by construction, none exercised.
-3. **A closure over a union-typed inverse.** `expose Post with comments` where `Comment.target: one Content`: V22 must resolve the inverse to the part shape and the back-reference, and the closure commit must populate `target` with the pending `Post`. Nested: a union-typed field inside a part.
+3. **A closure over a union-typed inverse.** `act Post { ... } with comments` where `Comment.target: one Content`: V22 must resolve the inverse to the part shape and the back-reference, and the closure commit must populate `target` with the pending `Post`. Nested: a union-typed field inside a part.
 4. **Deletion against a union-typed referrer.** Deleting a `Post` that a required `Comment.target` points at: V24's three discharges (delete the referrer, `? initially required`, copy) over a union field; `when deleted Content` as a trigger; the absorbing read of a union field whose target is gone.
 5. **Freezes, captures, and gates on a refinement over a union.** `shape Popular = Content where ... { frozen body }` — `frozen` names stored fields of "the base," and there is none; V5 today skips it silently. Same for a `captured` there (V6, V7 boundedness) and `undeletable` (V27). Rule per check: refuse, or reason per operand.
 6. **A `never` over a union.** `never (Content where count(comments) > 100)`: the runtime enforces it at transaction end; V10's induction and spend-tracking skip it. Is it spendable? Should it be?
@@ -42,7 +42,7 @@ Each is a compile-error today where it should license the read, or an unguarded 
 - **Contention (A5).** A narrowed read is attributed to every operand that declares the name — an over-approximation; and a `never` reading through a union-typed field widens to system-wide, which may be the existing treatment of `never` reads rather than anything union-specific. Decide whether either width is real.
 - **Diagrams.** `--diagrams` on the gallery spec: the class diagram has no union notation, the state-flow generator groups `Popular` onto an axis of *one* base, the rule graph's cause edges through a union-typed field.
 - **`for` beside an operand-typed field.** `Comment for post` where `Comment` has both `target: one Content` and `post: one Post`: V13's two-field ambiguity, by acceptance.
-- **Accidental refusals.** `expose Content` and `Content from { ... }` are refused today as "unknown shape" (F1) because a union is not in the shape table. Right verdict, wrong diagnostic: name the union and say why.
+- **Accidental refusals.** `act Content { ... }` and `Content from { ... }` are refused today as "unknown shape" (F1) because a union is not in the shape table. Right verdict, wrong diagnostic: name the union and say why.
 
 ## 5. Method
 

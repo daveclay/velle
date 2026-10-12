@@ -46,7 +46,7 @@ object DiagramGen {
             appendLine("## Sequence diagrams")
             appendLine()
             appendLine(
-                "One diagram per exposed act. Each diagram is **may-fire**: a rule appears " +
+                "One diagram per act. Each diagram is **may-fire**: a rule appears " +
                     "wherever the commit could affect its condition, with the condition shown as a note — " +
                     "whether it actually fires depends on the data at that commit. Frames (`critical`) are " +
                     "transaction envelopes: everything inside one frame stands or falls together."
@@ -77,7 +77,7 @@ object DiagramGen {
             sb.appendLine("    actor Caller")
             sb.appendLine("    participant S as $systemName")
             sb.appendLine("    Caller->>S: commit$act(${params()})")
-            sb.appendLine("    Note over Caller,S: boundary validation first — type checks and the input-constrained nevers compiled to this expose site, a violation is a refusal and nothing begins")
+            sb.appendLine("    Note over Caller,S: boundary validation first — type checks and the input-constrained nevers compiled to this act's boundary, a violation is a refusal and nothing begins")
 
             val deferred = mutableListOf<Pair<RuleDecl, String>>() // after-commit firings this envelope caused
             renderEnvelope("the $act envelope", deferred, noteIfQuiet = true) {

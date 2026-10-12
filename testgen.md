@@ -19,7 +19,7 @@ plus the rules hanging off it. One generated spec file per **story root**:
   `OverdueInvoice`); a partition refinement over an act shape whose predicate
   tests membership in another refinement roots *there* (`ApplicableDueChange` →
   `IssuedInvoice` — the freeze's story); a chain rule whose trigger shape is
-  produced, not exposed, roots with its producer (`EmailReceipt` → `UnemailedReceipt`
+  produced (not an act), roots with its producer (`EmailReceipt` → `UnemailedReceipt`
   → `Receipt` ← produced by `SendReceipt` → `PaidInvoice`).
 - prohibitions (`never`, `requires`) and act-triggered rules file under their act shape.
 - Every file opens with the **Velle it verifies, quoted verbatim** (pretty-printed
@@ -47,7 +47,7 @@ plus the rules hanging off it. One generated spec file per **story root**:
 | Tick sweep | member at tick → effect + linkage; the guard holds across ticks; a literal time window (`today - 7 days`) is advanced past and the sweep reopens |
 | `when leaving` rule | exit produces the effects; the subject is no longer a member |
 | Partition pair | the act subject is a member of exactly one side |
-| `never` or `requires` (single comparison against a literal, on an exposed act) | a violating act is refused and nothing commits; a boundary-legal act is accepted; the case titles follow the author's spelling |
+| `never` or `requires` (single comparison against a literal, on an act) | a violating act is refused and nothing commits; a boundary-legal act is accepted; the case titles follow the author's spelling |
 
 ## The given/derived split
 
@@ -66,7 +66,7 @@ reach the interesting state* is human judgment. The contract:
   the rule disambiguates (`memberForRestoreService()`). An exit rule's test performs the
   "when" itself and asserts both sides of the transition; the exit commit is
   *derived* when the predicate names it — a `not exists X for this` atom over
-  an exposed act means the test commits the real X (`sys.commitReopenTicket(ticket)`),
+  an act means the test commits the real X (`sys.commitReopenTicket(ticket)`),
   no given owed — and only a drift exit (a value predicate like `balance < 0`)
   demands a human-owned exit action beside the state-given
   (`delinquent()` / `exitDelinquent(member)`), since which commit recovers

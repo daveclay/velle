@@ -134,10 +134,8 @@ class CollectionsTest {
     fun `V19 - declaring both sides of one relationship is refused`() {
         val diags = Validator.validate(
             """
-            shape Student { name: text, courses: many Course }
-            shape Course { title: text, owner: one Student }
-            expose Student
-            expose Course
+            act Student { name: text, courses: many Course }
+            act Course { title: text, owner: one Student }
             """.trimIndent()
         )
         assertTrue(diags.any { it.code == "V19" }, diags.toString())
@@ -147,13 +145,10 @@ class CollectionsTest {
     fun `V20 - a collection path writes a field of the members, never through them`() {
         val diags = Validator.validate(
             """
-            shape Tier { label: text }
-            shape Customer { name: text, tier: one Tier }
-            shape Invoice { customer: one Customer }
-            expose Tier
-            expose Customer
-            expose Invoice
-            expose transient shape Retier { customer: one Customer, tier: one Tier }
+            act Tier { label: text }
+            act Customer { name: text, tier: one Tier }
+            act Invoice { customer: one Customer }
+            transient act Retier { customer: one Customer, tier: one Tier }
             rule ApplyRetier when Retier {
                 this.customer.invoices.customer.tier = this.tier
             }
@@ -166,11 +161,9 @@ class CollectionsTest {
     fun `V20 - an inferred inverse is a view, never an assignment target`() {
         val diags = Validator.validate(
             """
-            shape Customer { name: text }
-            shape Invoice { customer: one Customer }
-            expose Customer
-            expose Invoice
-            expose transient shape Claim { customer: one Customer, invoices: many Invoice }
+            act Customer { name: text }
+            act Invoice { customer: one Customer }
+            transient act Claim { customer: one Customer, invoices: many Invoice }
             rule ApplyClaim when Claim {
                 this.customer.invoices = this.invoices
             }
