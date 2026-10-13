@@ -140,6 +140,78 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun toString() = "Untagged#$id"
     }
 
+    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    val read = Read()
+
+    inner class Read {
+        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
+        val registry = QueryRegistry()
+        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+        val advisors: AdvisorQuery get() = AdvisorQuery(Query("Advisor"))
+        val courses: CourseQuery get() = CourseQuery(Query("Course"))
+        val students: StudentQuery get() = StudentQuery(Query("Student"))
+        val overloadeds: OverloadedQuery get() = OverloadedQuery(Query("Overloaded"))
+        val untaggeds: UntaggedQuery get() = UntaggedQuery(Query("Untagged"))
+    }
+
+    inner class AdvisorQuery(q: Query) : TypedQuery<AdvisorFields, Advisor>(system, q, AdvisorFields(), { materializeAdvisor(it) }) {
+        override fun with(q: Query) = AdvisorQuery(q)
+    }
+
+    inner class CourseQuery(q: Query) : TypedQuery<CourseFields, Course>(system, q, CourseFields(), { materializeCourse(it) }) {
+        override fun with(q: Query) = CourseQuery(q)
+    }
+
+    inner class StudentQuery(q: Query) : TypedQuery<StudentFields, Student>(system, q, StudentFields(), { materializeStudent(it) }) {
+        override fun with(q: Query) = StudentQuery(q)
+    }
+
+    inner class OverloadedQuery(q: Query) : TypedQuery<OverloadedFields, Overloaded>(system, q, OverloadedFields(), { materializeOverloaded(it) }) {
+        override fun with(q: Query) = OverloadedQuery(q)
+    }
+
+    inner class UntaggedQuery(q: Query) : TypedQuery<UntaggedFields, Untagged>(system, q, UntaggedFields(), { materializeUntagged(it) }) {
+        override fun with(q: Query) = UntaggedQuery(q)
+    }
+
+    fun materializeAdvisor(id: Long): Advisor = Advisor(
+        id = id,
+        name = system.get(id, "name") as String,
+        advisees = (system.get(id, "advisees") as List<*>).map { StudentView(it as Long) },
+        students = (system.get(id, "students") as List<*>).map { StudentView(it as Long) },
+    )
+
+    fun materializeCourse(id: Long): Course = Course(
+        id = id,
+        title = system.get(id, "title") as String,
+        capacity = (system.get(id, "capacity") as BigDecimal).intValueExact(),
+        students = (system.get(id, "students") as List<*>).map { StudentView(it as Long) },
+    )
+
+    fun materializeStudent(id: Long): Student = Student(
+        id = id,
+        name = system.get(id, "name") as String,
+        advisor = (system.get(id, "advisor") as Long?)?.let { AdvisorView(it) },
+        tags = (system.get(id, "tags") as List<*>).map { it as String },
+        courses = (system.get(id, "courses") as List<*>).map { CourseView(it as Long) },
+    )
+
+    fun materializeOverloaded(id: Long): Overloaded = Overloaded(
+        id = id,
+        name = system.get(id, "name") as String,
+        advisor = (system.get(id, "advisor") as Long?)?.let { AdvisorView(it) },
+        tags = (system.get(id, "tags") as List<*>).map { it as String },
+        courses = (system.get(id, "courses") as List<*>).map { CourseView(it as Long) },
+    )
+
+    fun materializeUntagged(id: Long): Untagged = Untagged(
+        id = id,
+        name = system.get(id, "name") as String,
+        advisor = (system.get(id, "advisor") as Long?)?.let { AdvisorView(it) },
+        tags = (system.get(id, "tags") as List<*>).map { it as String },
+        courses = (system.get(id, "courses") as List<*>).map { CourseView(it as Long) },
+    )
+
     companion object {
         private val SPEC = """
 -- enrollment.velle — the collection constructs of README §6 exercised end-to-end:
@@ -224,6 +296,77 @@ rule ApplyAdvisor when AssignAdvisor {
 never (Course where capacity < 0)
 """
     }
+}
+
+// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
+// References are typed handles (views); navigating one is a further read.
+
+data class Advisor(
+    override val id: Long,
+    val name: String,
+    val advisees: List<EnrollmentSystem.StudentView>,
+    val students: List<EnrollmentSystem.StudentView>,
+) : View
+
+data class Course(
+    override val id: Long,
+    val title: String,
+    val capacity: Int,
+    val students: List<EnrollmentSystem.StudentView>,
+) : View
+
+data class Student(
+    override val id: Long,
+    val name: String,
+    val advisor: EnrollmentSystem.AdvisorView?,
+    val tags: List<String>,
+    val courses: List<EnrollmentSystem.CourseView>,
+) : View
+
+data class Overloaded(
+    override val id: Long,
+    val name: String,
+    val advisor: EnrollmentSystem.AdvisorView?,
+    val tags: List<String>,
+    val courses: List<EnrollmentSystem.CourseView>,
+) : View
+
+data class Untagged(
+    override val id: Long,
+    val name: String,
+    val advisor: EnrollmentSystem.AdvisorView?,
+    val tags: List<String>,
+    val courses: List<EnrollmentSystem.CourseView>,
+) : View
+
+// ── the builder's vocabulary: one field handle per member, memberships per refinement ──
+
+class AdvisorFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+}
+
+class CourseFields(path: List<String> = emptyList()) : Fields(path) {
+    val title: TextField get() = TextField(fieldPath + "title")
+    val capacity: NumField get() = NumField(fieldPath + "capacity")
+}
+
+class StudentFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val advisor: AdvisorFields get() = AdvisorFields(fieldPath + "advisor")
+    fun isOverloaded(): Expr = isA("Overloaded")
+    fun isUntagged(): Expr = isA("Untagged")
+}
+
+class OverloadedFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val advisor: AdvisorFields get() = AdvisorFields(fieldPath + "advisor")
+    fun isUntagged(): Expr = isA("Untagged")
+}
+
+class UntaggedFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val advisor: AdvisorFields get() = AdvisorFields(fieldPath + "advisor")
+    fun isOverloaded(): Expr = isA("Overloaded")
 }
 
 fun main() {

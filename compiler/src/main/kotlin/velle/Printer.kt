@@ -117,6 +117,16 @@ object Printer {
         is PathExpr -> e.root + e.segs.joinToString("") { (if (it.viaQdot) "?." else ".") + it.name }
         is UnaryMinus -> "-${operand(e.inner)}"
         is Binary -> "${operand(e.left)} ${e.op} ${operand(e.right)}"
+        is ValueLit -> when (val v = e.value) {
+            is Value.VText -> "\"${v.v}\""
+            is Value.VNum -> v.v.toPlainString()
+            is Value.VBool -> v.v.toString()
+            is Value.VDate -> v.v.toString()
+            is Value.VDateTime -> v.v.toString()
+            is Value.VRef -> "#${v.id}"
+            Value.VNone -> "none"
+            else -> v.toString()
+        }
         is NotExpr ->
             if (e.inner is IsExpr && e.inner.kind == "refinement") "${operand(e.inner.subject)} is not ${e.inner.refinement}"
             else "not ${operand(e.inner)}"

@@ -131,6 +131,86 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
         override fun hashCode() = id.hashCode()
     }
 
+    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    val read = Read()
+
+    inner class Read {
+        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
+        val registry = QueryRegistry()
+        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+        val customers: CustomerQuery get() = CustomerQuery(Query("Customer"))
+        val products: ProductQuery get() = ProductQuery(Query("Product"))
+        val orders: OrderQuery get() = OrderQuery(Query("Order"))
+        val orderLines: OrderLineQuery get() = OrderLineQuery(Query("OrderLine"))
+        val customizations: CustomizationQuery get() = CustomizationQuery(Query("Customization"))
+        val reservations: ReservationQuery get() = ReservationQuery(Query("Reservation"))
+    }
+
+    inner class CustomerQuery(q: Query) : TypedQuery<CustomerFields, Customer>(system, q, CustomerFields(), { materializeCustomer(it) }) {
+        override fun with(q: Query) = CustomerQuery(q)
+    }
+
+    inner class ProductQuery(q: Query) : TypedQuery<ProductFields, Product>(system, q, ProductFields(), { materializeProduct(it) }) {
+        override fun with(q: Query) = ProductQuery(q)
+    }
+
+    inner class OrderQuery(q: Query) : TypedQuery<OrderFields, Order>(system, q, OrderFields(), { materializeOrder(it) }) {
+        override fun with(q: Query) = OrderQuery(q)
+    }
+
+    inner class OrderLineQuery(q: Query) : TypedQuery<OrderLineFields, OrderLine>(system, q, OrderLineFields(), { materializeOrderLine(it) }) {
+        override fun with(q: Query) = OrderLineQuery(q)
+    }
+
+    inner class CustomizationQuery(q: Query) : TypedQuery<CustomizationFields, Customization>(system, q, CustomizationFields(), { materializeCustomization(it) }) {
+        override fun with(q: Query) = CustomizationQuery(q)
+    }
+
+    inner class ReservationQuery(q: Query) : TypedQuery<ReservationFields, Reservation>(system, q, ReservationFields(), { materializeReservation(it) }) {
+        override fun with(q: Query) = ReservationQuery(q)
+    }
+
+    fun materializeCustomer(id: Long): Customer = Customer(
+        id = id,
+        name = system.get(id, "name") as String,
+        orders = (system.get(id, "orders") as List<*>).map { OrderView(it as Long) },
+    )
+
+    fun materializeProduct(id: Long): Product = Product(
+        id = id,
+        sku = system.get(id, "sku") as String,
+        orderLines = (system.get(id, "orderLines") as List<*>).map { OrderLineView(it as Long) },
+    )
+
+    fun materializeOrder(id: Long): Order = Order(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        placedOn = system.get(id, "placedOn") as LocalDate,
+        total = (system.get(id, "total") as BigDecimal).intValueExact(),
+        orderLines = (system.get(id, "orderLines") as List<*>).map { OrderLineView(it as Long) },
+    )
+
+    fun materializeOrderLine(id: Long): OrderLine = OrderLine(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        product = ProductView(system.get(id, "product") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        customizations = (system.get(id, "customizations") as List<*>).map { CustomizationView(it as Long) },
+        reservations = (system.get(id, "reservations") as List<*>).map { ReservationView(it as Long) },
+    )
+
+    fun materializeCustomization(id: Long): Customization = Customization(
+        id = id,
+        line = OrderLineView(system.get(id, "line") as Long),
+        note = system.get(id, "note") as String,
+    )
+
+    fun materializeReservation(id: Long): Reservation = Reservation(
+        id = id,
+        line = OrderLineView(system.get(id, "line") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+    )
+
     companion object {
         private val SPEC = """
 -- The exposure closure (README §6, "Inline part creation"): an order arrives
@@ -184,6 +264,82 @@ rule ReserveStock when OrderLine {
 never (OrderLine where quantity <= 0)
 """
     }
+}
+
+// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
+// References are typed handles (views); navigating one is a further read.
+
+data class Customer(
+    override val id: Long,
+    val name: String,
+    val orders: List<OrdersSystem.OrderView>,
+) : View
+
+data class Product(
+    override val id: Long,
+    val sku: String,
+    val orderLines: List<OrdersSystem.OrderLineView>,
+) : View
+
+data class Order(
+    override val id: Long,
+    val customer: OrdersSystem.CustomerView,
+    val placedOn: LocalDate,
+    val total: Int,
+    val orderLines: List<OrdersSystem.OrderLineView>,
+) : View
+
+data class OrderLine(
+    override val id: Long,
+    val order: OrdersSystem.OrderView,
+    val product: OrdersSystem.ProductView,
+    val quantity: Int,
+    val customizations: List<OrdersSystem.CustomizationView>,
+    val reservations: List<OrdersSystem.ReservationView>,
+) : View
+
+data class Customization(
+    override val id: Long,
+    val line: OrdersSystem.OrderLineView,
+    val note: String,
+) : View
+
+data class Reservation(
+    override val id: Long,
+    val line: OrdersSystem.OrderLineView,
+    val quantity: Int,
+) : View
+
+// ── the builder's vocabulary: one field handle per member, memberships per refinement ──
+
+class CustomerFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+}
+
+class ProductFields(path: List<String> = emptyList()) : Fields(path) {
+    val sku: TextField get() = TextField(fieldPath + "sku")
+}
+
+class OrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val placedOn: DateField get() = DateField(fieldPath + "placedOn")
+    val total: NumField get() = NumField(fieldPath + "total")
+}
+
+class OrderLineFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val product: ProductFields get() = ProductFields(fieldPath + "product")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+}
+
+class CustomizationFields(path: List<String> = emptyList()) : Fields(path) {
+    val line: OrderLineFields get() = OrderLineFields(fieldPath + "line")
+    val note: TextField get() = TextField(fieldPath + "note")
+}
+
+class ReservationFields(path: List<String> = emptyList()) : Fields(path) {
+    val line: OrderLineFields get() = OrderLineFields(fieldPath + "line")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
 }
 
 fun main() {

@@ -171,6 +171,12 @@ data object TodayLit : Expr
 data object EmptyLit : Expr
 data class DurationLit(val amount: Long, val unit: String) : Expr
 
+/** A constant the parser never produces: a value the query API (README §22,
+ *  the composed query) supplies at the moment of asking — a date, a decimal,
+ *  or an instance (`Value.VRef`) standing for "this customer". Evaluates to
+ *  itself; the pre-filter compiler folds it like any literal. */
+data class ValueLit(val value: Value) : Expr
+
 /** Set denotation as a value: `(Shape where pred)` / `(this.invoices where Overdue)` —
  *  legal in `many`-typed derived-property position and collection-valued contexts (README §6). */
 data class SetExpr(val collection: CollectionExpr) : Expr

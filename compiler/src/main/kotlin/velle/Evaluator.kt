@@ -128,6 +128,7 @@ class Evaluator(private val system: VelleSystem) {
         NowLit -> Value.VDateTime(system.effectiveNow)
         TodayLit -> Value.VDate(system.effectiveToday)
         is DurationLit -> Value.VDuration(e.amount, e.unit)
+        is ValueLit -> e.value
         is PathExpr -> evalPath(e, ctx)
         is UnaryMinus -> {
             val v = eval(e.inner, ctx) as? Value.VNum ?: throw VelleRuntimeError("unary minus on non-number")
@@ -434,6 +435,24 @@ class Evaluator(private val system: VelleSystem) {
                     }
                 )
             }
+            // the text operators (README §10; OQ51 R1): exact, case-sensitive;
+            // an absent operand satisfies none of them, like every ordered comparison
+            in TEXT_OPERATORS -> {
+                val a = (l as? Value.VText)?.v
+                val b = (r as? Value.VText)?.v
+                if (a == null || b == null) {
+                    if (l != Value.VNone && r != Value.VNone)
+                        throw VelleRuntimeError("'${e.op}' on non-text")
+                    Value.VBool(false)
+                } else Value.VBool(
+                    when (e.op) {
+                        "contains" -> a.contains(b)
+                        "starts with" -> a.startsWith(b)
+                        "ends with" -> a.endsWith(b)
+                        else -> likePattern(b).matches(a)
+                    }
+                )
+            }
             else -> throw VelleRuntimeError("unknown operator '${e.op}'")
         }
     }
@@ -501,6 +520,33 @@ class Evaluator(private val system: VelleSystem) {
         "days" -> 86_400
         "weeks" -> 604_800
         else -> throw VelleRuntimeError("unknown duration unit '$unit'")
+    }
+
+    /** `like`'s pattern as a regex: `%` any run (empty included), `_` any one
+     *  character, `\` escaping either (or itself); everything else literal. */
+    private fun likePattern(p: String): Regex {
+        val sb = StringBuilder()
+        var i = 0
+        while (i < p.length) {
+            val c = p[i]
+            when {
+                c == '\\' && i + 1 < p.length -> { sb.append(Regex.escape(p[i + 1].toString())); i++ }
+                c == '%' -> sb.append(".*")
+                c == '_' -> sb.append(".")
+                else -> sb.append(Regex.escape(c.toString()))
+            }
+            i++
+        }
+        return Regex(sb.toString(), RegexOption.DOT_MATCHES_ALL)
+    }
+
+    /** Ordering for the query API (README §22; OQ51 R10): orderable values
+     *  compare by value, and an absent value sorts after every present one. */
+    internal fun orderCompare(l: Value, r: Value): Int = when {
+        l == Value.VNone && r == Value.VNone -> 0
+        l == Value.VNone -> 1
+        r == Value.VNone -> -1
+        else -> compareValues(l, r)
     }
 
     private fun valueEquals(l: Value, r: Value): Boolean = when {

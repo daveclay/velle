@@ -757,6 +757,842 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         override fun toString() = "ClosableDunningFlag#$id"
     }
 
+    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    val read = Read()
+
+    inner class Read {
+        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
+        val registry = QueryRegistry()
+        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+        val contacts: ContactQuery get() = ContactQuery(Query("Contact"))
+        val cards: CardQuery get() = CardQuery(Query("Card"))
+        val customers: CustomerQuery get() = CustomerQuery(Query("Customer"))
+        val cardUpdates: CardUpdateQuery get() = CardUpdateQuery(Query("CardUpdate"))
+        val orders: OrderQuery get() = OrderQuery(Query("Order"))
+        val chargeAttempts: ChargeAttemptQuery get() = ChargeAttemptQuery(Query("ChargeAttempt"))
+        val chargeResponses: ChargeResponseQuery get() = ChargeResponseQuery(Query("ChargeResponse"))
+        val attemptTimeouts: AttemptTimeoutQuery get() = AttemptTimeoutQuery(Query("AttemptTimeout"))
+        val stockReservations: StockReservationQuery get() = StockReservationQuery(Query("StockReservation"))
+        val reservationReleases: ReservationReleaseQuery get() = ReservationReleaseQuery(Query("ReservationRelease"))
+        val receipts: ReceiptQuery get() = ReceiptQuery(Query("Receipt"))
+        val shipments: ShipmentQuery get() = ShipmentQuery(Query("Shipment"))
+        val changeShippingAddresss: ChangeShippingAddressQuery get() = ChangeShippingAddressQuery(Query("ChangeShippingAddress"))
+        val addressChangeApplications: AddressChangeApplicationQuery get() = AddressChangeApplicationQuery(Query("AddressChangeApplication"))
+        val addressChangeRefusals: AddressChangeRefusalQuery get() = AddressChangeRefusalQuery(Query("AddressChangeRefusal"))
+        val refunds: RefundQuery get() = RefundQuery(Query("Refund"))
+        val settlementReversals: SettlementReversalQuery get() = SettlementReversalQuery(Query("SettlementReversal"))
+        val manualCharges: ManualChargeQuery get() = ManualChargeQuery(Query("ManualCharge"))
+        val extensionRequests: ExtensionRequestQuery get() = ExtensionRequestQuery(Query("ExtensionRequest"))
+        val paymentExtensions: PaymentExtensionQuery get() = PaymentExtensionQuery(Query("PaymentExtension"))
+        val paymentReminders: PaymentReminderQuery get() = PaymentReminderQuery(Query("PaymentReminder"))
+        val dunningFlags: DunningFlagQuery get() = DunningFlagQuery(Query("DunningFlag"))
+        val dunningResolutions: DunningResolutionQuery get() = DunningResolutionQuery(Query("DunningResolution"))
+        val settledOrders: SettledOrderQuery get() = SettledOrderQuery(Query("SettledOrder"))
+        val neverChargeds: NeverChargedQuery get() = NeverChargedQuery(Query("NeverCharged"))
+        val unpaidOrders: UnpaidOrderQuery get() = UnpaidOrderQuery(Query("UnpaidOrder"))
+        val refundedOrders: RefundedOrderQuery get() = RefundedOrderQuery(Query("RefundedOrder"))
+        val chargeableOrders: ChargeableOrderQuery get() = ChargeableOrderQuery(Query("ChargeableOrder"))
+        val pendingAttempts: PendingAttemptQuery get() = PendingAttemptQuery(Query("PendingAttempt"))
+        val completedAttempts: CompletedAttemptQuery get() = CompletedAttemptQuery(Query("CompletedAttempt"))
+        val successfulCharges: SuccessfulChargeQuery get() = SuccessfulChargeQuery(Query("SuccessfulCharge"))
+        val failedCharges: FailedChargeQuery get() = FailedChargeQuery(Query("FailedCharge"))
+        val timedOutAttempts: TimedOutAttemptQuery get() = TimedOutAttemptQuery(Query("TimedOutAttempt"))
+        val activeReservations: ActiveReservationQuery get() = ActiveReservationQuery(Query("ActiveReservation"))
+        val retryableOrders: RetryableOrderQuery get() = RetryableOrderQuery(Query("RetryableOrder"))
+        val stalePendingAttempts: StalePendingAttemptQuery get() = StalePendingAttemptQuery(Query("StalePendingAttempt"))
+        val exhaustedOrders: ExhaustedOrderQuery get() = ExhaustedOrderQuery(Query("ExhaustedOrder"))
+        val reservedOrders: ReservedOrderQuery get() = ReservedOrderQuery(Query("ReservedOrder"))
+        val unshippedOrders: UnshippedOrderQuery get() = UnshippedOrderQuery(Query("UnshippedOrder"))
+        val readyToShips: ReadyToShipQuery get() = ReadyToShipQuery(Query("ReadyToShip"))
+        val unhandledAddressChanges: UnhandledAddressChangeQuery get() = UnhandledAddressChangeQuery(Query("UnhandledAddressChange"))
+        val applicableAddressChanges: ApplicableAddressChangeQuery get() = ApplicableAddressChangeQuery(Query("ApplicableAddressChange"))
+        val refusedAddressChanges: RefusedAddressChangeQuery get() = RefusedAddressChangeQuery(Query("RefusedAddressChange"))
+        val refundAfterFailures: RefundAfterFailureQuery get() = RefundAfterFailureQuery(Query("RefundAfterFailure"))
+        val overdueOrders: OverdueOrderQuery get() = OverdueOrderQuery(Query("OverdueOrder"))
+        val inGracePeriods: InGracePeriodQuery get() = InGracePeriodQuery(Query("InGracePeriod"))
+        val openDunningFlags: OpenDunningFlagQuery get() = OpenDunningFlagQuery(Query("OpenDunningFlag"))
+        val closableDunningFlags: ClosableDunningFlagQuery get() = ClosableDunningFlagQuery(Query("ClosableDunningFlag"))
+    }
+
+    inner class ContactQuery(q: Query) : TypedQuery<ContactFields, Contact>(system, q, ContactFields(), { materializeContact(it) }) {
+        override fun with(q: Query) = ContactQuery(q)
+    }
+
+    inner class CardQuery(q: Query) : TypedQuery<CardFields, Card>(system, q, CardFields(), { materializeCard(it) }) {
+        override fun with(q: Query) = CardQuery(q)
+    }
+
+    inner class CustomerQuery(q: Query) : TypedQuery<CustomerFields, Customer>(system, q, CustomerFields(), { materializeCustomer(it) }) {
+        override fun with(q: Query) = CustomerQuery(q)
+    }
+
+    inner class CardUpdateQuery(q: Query) : TypedQuery<CardUpdateFields, CardUpdate>(system, q, CardUpdateFields(), { materializeCardUpdate(it) }) {
+        override fun with(q: Query) = CardUpdateQuery(q)
+    }
+
+    inner class OrderQuery(q: Query) : TypedQuery<OrderFields, Order>(system, q, OrderFields(), { materializeOrder(it) }) {
+        override fun with(q: Query) = OrderQuery(q)
+    }
+
+    inner class ChargeAttemptQuery(q: Query) : TypedQuery<ChargeAttemptFields, ChargeAttempt>(system, q, ChargeAttemptFields(), { materializeChargeAttempt(it) }) {
+        override fun with(q: Query) = ChargeAttemptQuery(q)
+    }
+
+    inner class ChargeResponseQuery(q: Query) : TypedQuery<ChargeResponseFields, ChargeResponse>(system, q, ChargeResponseFields(), { materializeChargeResponse(it) }) {
+        override fun with(q: Query) = ChargeResponseQuery(q)
+    }
+
+    inner class AttemptTimeoutQuery(q: Query) : TypedQuery<AttemptTimeoutFields, AttemptTimeout>(system, q, AttemptTimeoutFields(), { materializeAttemptTimeout(it) }) {
+        override fun with(q: Query) = AttemptTimeoutQuery(q)
+    }
+
+    inner class StockReservationQuery(q: Query) : TypedQuery<StockReservationFields, StockReservation>(system, q, StockReservationFields(), { materializeStockReservation(it) }) {
+        override fun with(q: Query) = StockReservationQuery(q)
+    }
+
+    inner class ReservationReleaseQuery(q: Query) : TypedQuery<ReservationReleaseFields, ReservationRelease>(system, q, ReservationReleaseFields(), { materializeReservationRelease(it) }) {
+        override fun with(q: Query) = ReservationReleaseQuery(q)
+    }
+
+    inner class ReceiptQuery(q: Query) : TypedQuery<ReceiptFields, Receipt>(system, q, ReceiptFields(), { materializeReceipt(it) }) {
+        override fun with(q: Query) = ReceiptQuery(q)
+    }
+
+    inner class ShipmentQuery(q: Query) : TypedQuery<ShipmentFields, Shipment>(system, q, ShipmentFields(), { materializeShipment(it) }) {
+        override fun with(q: Query) = ShipmentQuery(q)
+    }
+
+    inner class ChangeShippingAddressQuery(q: Query) : TypedQuery<ChangeShippingAddressFields, ChangeShippingAddress>(system, q, ChangeShippingAddressFields(), { materializeChangeShippingAddress(it) }) {
+        override fun with(q: Query) = ChangeShippingAddressQuery(q)
+    }
+
+    inner class AddressChangeApplicationQuery(q: Query) : TypedQuery<AddressChangeApplicationFields, AddressChangeApplication>(system, q, AddressChangeApplicationFields(), { materializeAddressChangeApplication(it) }) {
+        override fun with(q: Query) = AddressChangeApplicationQuery(q)
+    }
+
+    inner class AddressChangeRefusalQuery(q: Query) : TypedQuery<AddressChangeRefusalFields, AddressChangeRefusal>(system, q, AddressChangeRefusalFields(), { materializeAddressChangeRefusal(it) }) {
+        override fun with(q: Query) = AddressChangeRefusalQuery(q)
+    }
+
+    inner class RefundQuery(q: Query) : TypedQuery<RefundFields, Refund>(system, q, RefundFields(), { materializeRefund(it) }) {
+        override fun with(q: Query) = RefundQuery(q)
+    }
+
+    inner class SettlementReversalQuery(q: Query) : TypedQuery<SettlementReversalFields, SettlementReversal>(system, q, SettlementReversalFields(), { materializeSettlementReversal(it) }) {
+        override fun with(q: Query) = SettlementReversalQuery(q)
+    }
+
+    inner class ManualChargeQuery(q: Query) : TypedQuery<ManualChargeFields, ManualCharge>(system, q, ManualChargeFields(), { materializeManualCharge(it) }) {
+        override fun with(q: Query) = ManualChargeQuery(q)
+    }
+
+    inner class ExtensionRequestQuery(q: Query) : TypedQuery<ExtensionRequestFields, ExtensionRequest>(system, q, ExtensionRequestFields(), { materializeExtensionRequest(it) }) {
+        override fun with(q: Query) = ExtensionRequestQuery(q)
+    }
+
+    inner class PaymentExtensionQuery(q: Query) : TypedQuery<PaymentExtensionFields, PaymentExtension>(system, q, PaymentExtensionFields(), { materializePaymentExtension(it) }) {
+        override fun with(q: Query) = PaymentExtensionQuery(q)
+    }
+
+    inner class PaymentReminderQuery(q: Query) : TypedQuery<PaymentReminderFields, PaymentReminder>(system, q, PaymentReminderFields(), { materializePaymentReminder(it) }) {
+        override fun with(q: Query) = PaymentReminderQuery(q)
+    }
+
+    inner class DunningFlagQuery(q: Query) : TypedQuery<DunningFlagFields, DunningFlag>(system, q, DunningFlagFields(), { materializeDunningFlag(it) }) {
+        override fun with(q: Query) = DunningFlagQuery(q)
+    }
+
+    inner class DunningResolutionQuery(q: Query) : TypedQuery<DunningResolutionFields, DunningResolution>(system, q, DunningResolutionFields(), { materializeDunningResolution(it) }) {
+        override fun with(q: Query) = DunningResolutionQuery(q)
+    }
+
+    inner class SettledOrderQuery(q: Query) : TypedQuery<SettledOrderFields, SettledOrder>(system, q, SettledOrderFields(), { materializeSettledOrder(it) }) {
+        override fun with(q: Query) = SettledOrderQuery(q)
+    }
+
+    inner class NeverChargedQuery(q: Query) : TypedQuery<NeverChargedFields, NeverCharged>(system, q, NeverChargedFields(), { materializeNeverCharged(it) }) {
+        override fun with(q: Query) = NeverChargedQuery(q)
+    }
+
+    inner class UnpaidOrderQuery(q: Query) : TypedQuery<UnpaidOrderFields, UnpaidOrder>(system, q, UnpaidOrderFields(), { materializeUnpaidOrder(it) }) {
+        override fun with(q: Query) = UnpaidOrderQuery(q)
+    }
+
+    inner class RefundedOrderQuery(q: Query) : TypedQuery<RefundedOrderFields, RefundedOrder>(system, q, RefundedOrderFields(), { materializeRefundedOrder(it) }) {
+        override fun with(q: Query) = RefundedOrderQuery(q)
+    }
+
+    inner class ChargeableOrderQuery(q: Query) : TypedQuery<ChargeableOrderFields, ChargeableOrder>(system, q, ChargeableOrderFields(), { materializeChargeableOrder(it) }) {
+        override fun with(q: Query) = ChargeableOrderQuery(q)
+    }
+
+    inner class PendingAttemptQuery(q: Query) : TypedQuery<PendingAttemptFields, PendingAttempt>(system, q, PendingAttemptFields(), { materializePendingAttempt(it) }) {
+        override fun with(q: Query) = PendingAttemptQuery(q)
+    }
+
+    inner class CompletedAttemptQuery(q: Query) : TypedQuery<CompletedAttemptFields, CompletedAttempt>(system, q, CompletedAttemptFields(), { materializeCompletedAttempt(it) }) {
+        override fun with(q: Query) = CompletedAttemptQuery(q)
+    }
+
+    inner class SuccessfulChargeQuery(q: Query) : TypedQuery<SuccessfulChargeFields, SuccessfulCharge>(system, q, SuccessfulChargeFields(), { materializeSuccessfulCharge(it) }) {
+        override fun with(q: Query) = SuccessfulChargeQuery(q)
+    }
+
+    inner class FailedChargeQuery(q: Query) : TypedQuery<FailedChargeFields, FailedCharge>(system, q, FailedChargeFields(), { materializeFailedCharge(it) }) {
+        override fun with(q: Query) = FailedChargeQuery(q)
+    }
+
+    inner class TimedOutAttemptQuery(q: Query) : TypedQuery<TimedOutAttemptFields, TimedOutAttempt>(system, q, TimedOutAttemptFields(), { materializeTimedOutAttempt(it) }) {
+        override fun with(q: Query) = TimedOutAttemptQuery(q)
+    }
+
+    inner class ActiveReservationQuery(q: Query) : TypedQuery<ActiveReservationFields, ActiveReservation>(system, q, ActiveReservationFields(), { materializeActiveReservation(it) }) {
+        override fun with(q: Query) = ActiveReservationQuery(q)
+    }
+
+    inner class RetryableOrderQuery(q: Query) : TypedQuery<RetryableOrderFields, RetryableOrder>(system, q, RetryableOrderFields(), { materializeRetryableOrder(it) }) {
+        override fun with(q: Query) = RetryableOrderQuery(q)
+    }
+
+    inner class StalePendingAttemptQuery(q: Query) : TypedQuery<StalePendingAttemptFields, StalePendingAttempt>(system, q, StalePendingAttemptFields(), { materializeStalePendingAttempt(it) }) {
+        override fun with(q: Query) = StalePendingAttemptQuery(q)
+    }
+
+    inner class ExhaustedOrderQuery(q: Query) : TypedQuery<ExhaustedOrderFields, ExhaustedOrder>(system, q, ExhaustedOrderFields(), { materializeExhaustedOrder(it) }) {
+        override fun with(q: Query) = ExhaustedOrderQuery(q)
+    }
+
+    inner class ReservedOrderQuery(q: Query) : TypedQuery<ReservedOrderFields, ReservedOrder>(system, q, ReservedOrderFields(), { materializeReservedOrder(it) }) {
+        override fun with(q: Query) = ReservedOrderQuery(q)
+    }
+
+    inner class UnshippedOrderQuery(q: Query) : TypedQuery<UnshippedOrderFields, UnshippedOrder>(system, q, UnshippedOrderFields(), { materializeUnshippedOrder(it) }) {
+        override fun with(q: Query) = UnshippedOrderQuery(q)
+    }
+
+    inner class ReadyToShipQuery(q: Query) : TypedQuery<ReadyToShipFields, ReadyToShip>(system, q, ReadyToShipFields(), { materializeReadyToShip(it) }) {
+        override fun with(q: Query) = ReadyToShipQuery(q)
+    }
+
+    inner class UnhandledAddressChangeQuery(q: Query) : TypedQuery<UnhandledAddressChangeFields, UnhandledAddressChange>(system, q, UnhandledAddressChangeFields(), { materializeUnhandledAddressChange(it) }) {
+        override fun with(q: Query) = UnhandledAddressChangeQuery(q)
+    }
+
+    inner class ApplicableAddressChangeQuery(q: Query) : TypedQuery<ApplicableAddressChangeFields, ApplicableAddressChange>(system, q, ApplicableAddressChangeFields(), { materializeApplicableAddressChange(it) }) {
+        override fun with(q: Query) = ApplicableAddressChangeQuery(q)
+    }
+
+    inner class RefusedAddressChangeQuery(q: Query) : TypedQuery<RefusedAddressChangeFields, RefusedAddressChange>(system, q, RefusedAddressChangeFields(), { materializeRefusedAddressChange(it) }) {
+        override fun with(q: Query) = RefusedAddressChangeQuery(q)
+    }
+
+    inner class RefundAfterFailureQuery(q: Query) : TypedQuery<RefundAfterFailureFields, RefundAfterFailure>(system, q, RefundAfterFailureFields(), { materializeRefundAfterFailure(it) }) {
+        override fun with(q: Query) = RefundAfterFailureQuery(q)
+    }
+
+    inner class OverdueOrderQuery(q: Query) : TypedQuery<OverdueOrderFields, OverdueOrder>(system, q, OverdueOrderFields(), { materializeOverdueOrder(it) }) {
+        override fun with(q: Query) = OverdueOrderQuery(q)
+    }
+
+    inner class InGracePeriodQuery(q: Query) : TypedQuery<InGracePeriodFields, InGracePeriod>(system, q, InGracePeriodFields(), { materializeInGracePeriod(it) }) {
+        override fun with(q: Query) = InGracePeriodQuery(q)
+    }
+
+    inner class OpenDunningFlagQuery(q: Query) : TypedQuery<OpenDunningFlagFields, OpenDunningFlag>(system, q, OpenDunningFlagFields(), { materializeOpenDunningFlag(it) }) {
+        override fun with(q: Query) = OpenDunningFlagQuery(q)
+    }
+
+    inner class ClosableDunningFlagQuery(q: Query) : TypedQuery<ClosableDunningFlagFields, ClosableDunningFlag>(system, q, ClosableDunningFlagFields(), { materializeClosableDunningFlag(it) }) {
+        override fun with(q: Query) = ClosableDunningFlagQuery(q)
+    }
+
+    fun materializeContact(id: Long): Contact = Contact(
+        id = id,
+        name = system.get(id, "name") as String,
+        email = system.get(id, "email") as String,
+        cards = (system.get(id, "cards") as List<*>).map { CardView(it as Long) },
+    )
+
+    fun materializeCard(id: Long): Card = Card(
+        id = id,
+        number = system.get(id, "number") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        billingContact = (system.get(id, "billingContact") as Long?)?.let { ContactView(it) },
+        customers = (system.get(id, "customers") as List<*>).map { CustomerView(it as Long) },
+        cardUpdates = (system.get(id, "cardUpdates") as List<*>).map { CardUpdateView(it as Long) },
+    )
+
+    fun materializeCustomer(id: Long): Customer = Customer(
+        id = id,
+        name = system.get(id, "name") as String,
+        card = (system.get(id, "card") as Long?)?.let { CardView(it) },
+        cardUpdates = (system.get(id, "cardUpdates") as List<*>).map { CardUpdateView(it as Long) },
+        orders = (system.get(id, "orders") as List<*>).map { OrderView(it as Long) },
+    )
+
+    fun materializeCardUpdate(id: Long): CardUpdate = CardUpdate(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        card = CardView(system.get(id, "card") as Long),
+    )
+
+    fun materializeOrder(id: Long): Order = Order(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        dueBy = system.get(id, "dueBy") as LocalDate,
+        shippingAddress = system.get(id, "shippingAddress") as String,
+        placedOn = system.get(id, "placedOn") as Instant,
+        netPaid = system.get(id, "netPaid") as BigDecimal,
+        receiptEmail = system.get(id, "receiptEmail") as String?,
+        firstAttemptedOn = system.get(id, "firstAttemptedOn") as Instant?,
+        chargeAttempts = (system.get(id, "chargeAttempts") as List<*>).map { ChargeAttemptView(it as Long) },
+        stockReservations = (system.get(id, "stockReservations") as List<*>).map { StockReservationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        changeShippingAddresss = (system.get(id, "changeShippingAddresss") as List<*>).map { ChangeShippingAddressView(it as Long) },
+        refunds = (system.get(id, "refunds") as List<*>).map { RefundView(it as Long) },
+        settlementReversals = (system.get(id, "settlementReversals") as List<*>).map { SettlementReversalView(it as Long) },
+        manualCharges = (system.get(id, "manualCharges") as List<*>).map { ManualChargeView(it as Long) },
+        extensionRequests = (system.get(id, "extensionRequests") as List<*>).map { ExtensionRequestView(it as Long) },
+        paymentExtensions = (system.get(id, "paymentExtensions") as List<*>).map { PaymentExtensionView(it as Long) },
+        paymentReminders = (system.get(id, "paymentReminders") as List<*>).map { PaymentReminderView(it as Long) },
+        dunningFlags = (system.get(id, "dunningFlags") as List<*>).map { DunningFlagView(it as Long) },
+    )
+
+    fun materializeChargeAttempt(id: Long): ChargeAttempt = ChargeAttempt(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        attemptKey = system.get(id, "attemptKey") as String,
+        requestedOn = system.get(id, "requestedOn") as Instant,
+        chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { ChargeResponseView(it as Long) },
+        attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { AttemptTimeoutView(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
+    )
+
+    fun materializeChargeResponse(id: Long): ChargeResponse = ChargeResponse(
+        id = id,
+        attempt = ChargeAttemptView(system.get(id, "attempt") as Long),
+        outcome = system.get(id, "outcome") as String,
+        respondedOn = system.get(id, "respondedOn") as Instant,
+    )
+
+    fun materializeAttemptTimeout(id: Long): AttemptTimeout = AttemptTimeout(
+        id = id,
+        attempt = ChargeAttemptView(system.get(id, "attempt") as Long),
+        noticedOn = system.get(id, "noticedOn") as Instant,
+    )
+
+    fun materializeStockReservation(id: Long): StockReservation = StockReservation(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        reservedOn = system.get(id, "reservedOn") as Instant,
+        reservationReleases = (system.get(id, "reservationReleases") as List<*>).map { ReservationReleaseView(it as Long) },
+    )
+
+    fun materializeReservationRelease(id: Long): ReservationRelease = ReservationRelease(
+        id = id,
+        reservation = StockReservationView(system.get(id, "reservation") as Long),
+        releasedOn = system.get(id, "releasedOn") as Instant,
+    )
+
+    fun materializeReceipt(id: Long): Receipt = Receipt(
+        id = id,
+        attempt = ChargeAttemptView(system.get(id, "attempt") as Long),
+        sentOn = system.get(id, "sentOn") as Instant,
+    )
+
+    fun materializeShipment(id: Long): Shipment = Shipment(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        shippedOn = system.get(id, "shippedOn") as Instant,
+    )
+
+    fun materializeChangeShippingAddress(id: Long): ChangeShippingAddress = ChangeShippingAddress(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        newAddress = system.get(id, "newAddress") as String,
+        addressChangeApplications = (system.get(id, "addressChangeApplications") as List<*>).map { AddressChangeApplicationView(it as Long) },
+        addressChangeRefusals = (system.get(id, "addressChangeRefusals") as List<*>).map { AddressChangeRefusalView(it as Long) },
+    )
+
+    fun materializeAddressChangeApplication(id: Long): AddressChangeApplication = AddressChangeApplication(
+        id = id,
+        change = ChangeShippingAddressView(system.get(id, "change") as Long),
+        appliedOn = system.get(id, "appliedOn") as Instant,
+    )
+
+    fun materializeAddressChangeRefusal(id: Long): AddressChangeRefusal = AddressChangeRefusal(
+        id = id,
+        change = ChangeShippingAddressView(system.get(id, "change") as Long),
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeRefund(id: Long): Refund = Refund(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        refundedOn = system.get(id, "refundedOn") as Instant,
+    )
+
+    fun materializeSettlementReversal(id: Long): SettlementReversal = SettlementReversal(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        noticedOn = system.get(id, "noticedOn") as Instant,
+    )
+
+    fun materializeManualCharge(id: Long): ManualCharge = ManualCharge(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+    )
+
+    fun materializeExtensionRequest(id: Long): ExtensionRequest = ExtensionRequest(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+    )
+
+    fun materializePaymentExtension(id: Long): PaymentExtension = PaymentExtension(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        endsOn = system.get(id, "endsOn") as LocalDate,
+    )
+
+    fun materializePaymentReminder(id: Long): PaymentReminder = PaymentReminder(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        sentOn = system.get(id, "sentOn") as LocalDate,
+    )
+
+    fun materializeDunningFlag(id: Long): DunningFlag = DunningFlag(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        openedOn = system.get(id, "openedOn") as LocalDate,
+        dunningResolutions = (system.get(id, "dunningResolutions") as List<*>).map { DunningResolutionView(it as Long) },
+    )
+
+    fun materializeDunningResolution(id: Long): DunningResolution = DunningResolution(
+        id = id,
+        flag = DunningFlagView(system.get(id, "flag") as Long),
+        resolvedOn = system.get(id, "resolvedOn") as LocalDate,
+    )
+
+    fun materializeSettledOrder(id: Long): SettledOrder = SettledOrder(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        dueBy = system.get(id, "dueBy") as LocalDate,
+        shippingAddress = system.get(id, "shippingAddress") as String,
+        placedOn = system.get(id, "placedOn") as Instant,
+        netPaid = system.get(id, "netPaid") as BigDecimal,
+        receiptEmail = system.get(id, "receiptEmail") as String?,
+        firstAttemptedOn = system.get(id, "firstAttemptedOn") as Instant?,
+        chargeAttempts = (system.get(id, "chargeAttempts") as List<*>).map { ChargeAttemptView(it as Long) },
+        stockReservations = (system.get(id, "stockReservations") as List<*>).map { StockReservationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        changeShippingAddresss = (system.get(id, "changeShippingAddresss") as List<*>).map { ChangeShippingAddressView(it as Long) },
+        refunds = (system.get(id, "refunds") as List<*>).map { RefundView(it as Long) },
+        settlementReversals = (system.get(id, "settlementReversals") as List<*>).map { SettlementReversalView(it as Long) },
+        manualCharges = (system.get(id, "manualCharges") as List<*>).map { ManualChargeView(it as Long) },
+        extensionRequests = (system.get(id, "extensionRequests") as List<*>).map { ExtensionRequestView(it as Long) },
+        paymentExtensions = (system.get(id, "paymentExtensions") as List<*>).map { PaymentExtensionView(it as Long) },
+        paymentReminders = (system.get(id, "paymentReminders") as List<*>).map { PaymentReminderView(it as Long) },
+        dunningFlags = (system.get(id, "dunningFlags") as List<*>).map { DunningFlagView(it as Long) },
+        surplus = system.getAs(id, "SettledOrder", "surplus") as BigDecimal,
+    )
+
+    fun materializeNeverCharged(id: Long): NeverCharged = NeverCharged(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        dueBy = system.get(id, "dueBy") as LocalDate,
+        shippingAddress = system.get(id, "shippingAddress") as String,
+        placedOn = system.get(id, "placedOn") as Instant,
+        netPaid = system.get(id, "netPaid") as BigDecimal,
+        receiptEmail = system.get(id, "receiptEmail") as String?,
+        firstAttemptedOn = system.get(id, "firstAttemptedOn") as Instant?,
+        chargeAttempts = (system.get(id, "chargeAttempts") as List<*>).map { ChargeAttemptView(it as Long) },
+        stockReservations = (system.get(id, "stockReservations") as List<*>).map { StockReservationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        changeShippingAddresss = (system.get(id, "changeShippingAddresss") as List<*>).map { ChangeShippingAddressView(it as Long) },
+        refunds = (system.get(id, "refunds") as List<*>).map { RefundView(it as Long) },
+        settlementReversals = (system.get(id, "settlementReversals") as List<*>).map { SettlementReversalView(it as Long) },
+        manualCharges = (system.get(id, "manualCharges") as List<*>).map { ManualChargeView(it as Long) },
+        extensionRequests = (system.get(id, "extensionRequests") as List<*>).map { ExtensionRequestView(it as Long) },
+        paymentExtensions = (system.get(id, "paymentExtensions") as List<*>).map { PaymentExtensionView(it as Long) },
+        paymentReminders = (system.get(id, "paymentReminders") as List<*>).map { PaymentReminderView(it as Long) },
+        dunningFlags = (system.get(id, "dunningFlags") as List<*>).map { DunningFlagView(it as Long) },
+    )
+
+    fun materializeUnpaidOrder(id: Long): UnpaidOrder = UnpaidOrder(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        dueBy = system.get(id, "dueBy") as LocalDate,
+        shippingAddress = system.get(id, "shippingAddress") as String,
+        placedOn = system.get(id, "placedOn") as Instant,
+        netPaid = system.get(id, "netPaid") as BigDecimal,
+        receiptEmail = system.get(id, "receiptEmail") as String?,
+        firstAttemptedOn = system.get(id, "firstAttemptedOn") as Instant?,
+        chargeAttempts = (system.get(id, "chargeAttempts") as List<*>).map { ChargeAttemptView(it as Long) },
+        stockReservations = (system.get(id, "stockReservations") as List<*>).map { StockReservationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        changeShippingAddresss = (system.get(id, "changeShippingAddresss") as List<*>).map { ChangeShippingAddressView(it as Long) },
+        refunds = (system.get(id, "refunds") as List<*>).map { RefundView(it as Long) },
+        settlementReversals = (system.get(id, "settlementReversals") as List<*>).map { SettlementReversalView(it as Long) },
+        manualCharges = (system.get(id, "manualCharges") as List<*>).map { ManualChargeView(it as Long) },
+        extensionRequests = (system.get(id, "extensionRequests") as List<*>).map { ExtensionRequestView(it as Long) },
+        paymentExtensions = (system.get(id, "paymentExtensions") as List<*>).map { PaymentExtensionView(it as Long) },
+        paymentReminders = (system.get(id, "paymentReminders") as List<*>).map { PaymentReminderView(it as Long) },
+        dunningFlags = (system.get(id, "dunningFlags") as List<*>).map { DunningFlagView(it as Long) },
+    )
+
+    fun materializeRefundedOrder(id: Long): RefundedOrder = RefundedOrder(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        dueBy = system.get(id, "dueBy") as LocalDate,
+        shippingAddress = system.get(id, "shippingAddress") as String,
+        placedOn = system.get(id, "placedOn") as Instant,
+        netPaid = system.get(id, "netPaid") as BigDecimal,
+        receiptEmail = system.get(id, "receiptEmail") as String?,
+        firstAttemptedOn = system.get(id, "firstAttemptedOn") as Instant?,
+        chargeAttempts = (system.get(id, "chargeAttempts") as List<*>).map { ChargeAttemptView(it as Long) },
+        stockReservations = (system.get(id, "stockReservations") as List<*>).map { StockReservationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        changeShippingAddresss = (system.get(id, "changeShippingAddresss") as List<*>).map { ChangeShippingAddressView(it as Long) },
+        refunds = (system.get(id, "refunds") as List<*>).map { RefundView(it as Long) },
+        settlementReversals = (system.get(id, "settlementReversals") as List<*>).map { SettlementReversalView(it as Long) },
+        manualCharges = (system.get(id, "manualCharges") as List<*>).map { ManualChargeView(it as Long) },
+        extensionRequests = (system.get(id, "extensionRequests") as List<*>).map { ExtensionRequestView(it as Long) },
+        paymentExtensions = (system.get(id, "paymentExtensions") as List<*>).map { PaymentExtensionView(it as Long) },
+        paymentReminders = (system.get(id, "paymentReminders") as List<*>).map { PaymentReminderView(it as Long) },
+        dunningFlags = (system.get(id, "dunningFlags") as List<*>).map { DunningFlagView(it as Long) },
+    )
+
+    fun materializeChargeableOrder(id: Long): ChargeableOrder = ChargeableOrder(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        dueBy = system.get(id, "dueBy") as LocalDate,
+        shippingAddress = system.get(id, "shippingAddress") as String,
+        placedOn = system.get(id, "placedOn") as Instant,
+        netPaid = system.get(id, "netPaid") as BigDecimal,
+        receiptEmail = system.get(id, "receiptEmail") as String?,
+        firstAttemptedOn = system.get(id, "firstAttemptedOn") as Instant?,
+        chargeAttempts = (system.get(id, "chargeAttempts") as List<*>).map { ChargeAttemptView(it as Long) },
+        stockReservations = (system.get(id, "stockReservations") as List<*>).map { StockReservationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        changeShippingAddresss = (system.get(id, "changeShippingAddresss") as List<*>).map { ChangeShippingAddressView(it as Long) },
+        refunds = (system.get(id, "refunds") as List<*>).map { RefundView(it as Long) },
+        settlementReversals = (system.get(id, "settlementReversals") as List<*>).map { SettlementReversalView(it as Long) },
+        manualCharges = (system.get(id, "manualCharges") as List<*>).map { ManualChargeView(it as Long) },
+        extensionRequests = (system.get(id, "extensionRequests") as List<*>).map { ExtensionRequestView(it as Long) },
+        paymentExtensions = (system.get(id, "paymentExtensions") as List<*>).map { PaymentExtensionView(it as Long) },
+        paymentReminders = (system.get(id, "paymentReminders") as List<*>).map { PaymentReminderView(it as Long) },
+        dunningFlags = (system.get(id, "dunningFlags") as List<*>).map { DunningFlagView(it as Long) },
+    )
+
+    fun materializePendingAttempt(id: Long): PendingAttempt = PendingAttempt(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        attemptKey = system.get(id, "attemptKey") as String,
+        requestedOn = system.get(id, "requestedOn") as Instant,
+        chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { ChargeResponseView(it as Long) },
+        attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { AttemptTimeoutView(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
+    )
+
+    fun materializeCompletedAttempt(id: Long): CompletedAttempt = CompletedAttempt(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        attemptKey = system.get(id, "attemptKey") as String,
+        requestedOn = system.get(id, "requestedOn") as Instant,
+        chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { ChargeResponseView(it as Long) },
+        attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { AttemptTimeoutView(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
+        outcome = system.getAs(id, "CompletedAttempt", "outcome") as String,
+    )
+
+    fun materializeSuccessfulCharge(id: Long): SuccessfulCharge = SuccessfulCharge(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        attemptKey = system.get(id, "attemptKey") as String,
+        requestedOn = system.get(id, "requestedOn") as Instant,
+        chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { ChargeResponseView(it as Long) },
+        attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { AttemptTimeoutView(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
+        outcome = system.get(id, "outcome") as String,
+    )
+
+    fun materializeFailedCharge(id: Long): FailedCharge = FailedCharge(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        attemptKey = system.get(id, "attemptKey") as String,
+        requestedOn = system.get(id, "requestedOn") as Instant,
+        chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { ChargeResponseView(it as Long) },
+        attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { AttemptTimeoutView(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
+        outcome = system.get(id, "outcome") as String,
+    )
+
+    fun materializeTimedOutAttempt(id: Long): TimedOutAttempt = TimedOutAttempt(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        attemptKey = system.get(id, "attemptKey") as String,
+        requestedOn = system.get(id, "requestedOn") as Instant,
+        chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { ChargeResponseView(it as Long) },
+        attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { AttemptTimeoutView(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
+    )
+
+    fun materializeActiveReservation(id: Long): ActiveReservation = ActiveReservation(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        reservedOn = system.get(id, "reservedOn") as Instant,
+        reservationReleases = (system.get(id, "reservationReleases") as List<*>).map { ReservationReleaseView(it as Long) },
+    )
+
+    fun materializeRetryableOrder(id: Long): RetryableOrder = RetryableOrder(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        dueBy = system.get(id, "dueBy") as LocalDate,
+        shippingAddress = system.get(id, "shippingAddress") as String,
+        placedOn = system.get(id, "placedOn") as Instant,
+        netPaid = system.get(id, "netPaid") as BigDecimal,
+        receiptEmail = system.get(id, "receiptEmail") as String?,
+        firstAttemptedOn = system.get(id, "firstAttemptedOn") as Instant?,
+        chargeAttempts = (system.get(id, "chargeAttempts") as List<*>).map { ChargeAttemptView(it as Long) },
+        stockReservations = (system.get(id, "stockReservations") as List<*>).map { StockReservationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        changeShippingAddresss = (system.get(id, "changeShippingAddresss") as List<*>).map { ChangeShippingAddressView(it as Long) },
+        refunds = (system.get(id, "refunds") as List<*>).map { RefundView(it as Long) },
+        settlementReversals = (system.get(id, "settlementReversals") as List<*>).map { SettlementReversalView(it as Long) },
+        manualCharges = (system.get(id, "manualCharges") as List<*>).map { ManualChargeView(it as Long) },
+        extensionRequests = (system.get(id, "extensionRequests") as List<*>).map { ExtensionRequestView(it as Long) },
+        paymentExtensions = (system.get(id, "paymentExtensions") as List<*>).map { PaymentExtensionView(it as Long) },
+        paymentReminders = (system.get(id, "paymentReminders") as List<*>).map { PaymentReminderView(it as Long) },
+        dunningFlags = (system.get(id, "dunningFlags") as List<*>).map { DunningFlagView(it as Long) },
+    )
+
+    fun materializeStalePendingAttempt(id: Long): StalePendingAttempt = StalePendingAttempt(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        attemptKey = system.get(id, "attemptKey") as String,
+        requestedOn = system.get(id, "requestedOn") as Instant,
+        chargeResponses = (system.get(id, "chargeResponses") as List<*>).map { ChargeResponseView(it as Long) },
+        attemptTimeouts = (system.get(id, "attemptTimeouts") as List<*>).map { AttemptTimeoutView(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
+    )
+
+    fun materializeExhaustedOrder(id: Long): ExhaustedOrder = ExhaustedOrder(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        dueBy = system.get(id, "dueBy") as LocalDate,
+        shippingAddress = system.get(id, "shippingAddress") as String,
+        placedOn = system.get(id, "placedOn") as Instant,
+        netPaid = system.get(id, "netPaid") as BigDecimal,
+        receiptEmail = system.get(id, "receiptEmail") as String?,
+        firstAttemptedOn = system.get(id, "firstAttemptedOn") as Instant?,
+        chargeAttempts = (system.get(id, "chargeAttempts") as List<*>).map { ChargeAttemptView(it as Long) },
+        stockReservations = (system.get(id, "stockReservations") as List<*>).map { StockReservationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        changeShippingAddresss = (system.get(id, "changeShippingAddresss") as List<*>).map { ChangeShippingAddressView(it as Long) },
+        refunds = (system.get(id, "refunds") as List<*>).map { RefundView(it as Long) },
+        settlementReversals = (system.get(id, "settlementReversals") as List<*>).map { SettlementReversalView(it as Long) },
+        manualCharges = (system.get(id, "manualCharges") as List<*>).map { ManualChargeView(it as Long) },
+        extensionRequests = (system.get(id, "extensionRequests") as List<*>).map { ExtensionRequestView(it as Long) },
+        paymentExtensions = (system.get(id, "paymentExtensions") as List<*>).map { PaymentExtensionView(it as Long) },
+        paymentReminders = (system.get(id, "paymentReminders") as List<*>).map { PaymentReminderView(it as Long) },
+        dunningFlags = (system.get(id, "dunningFlags") as List<*>).map { DunningFlagView(it as Long) },
+    )
+
+    fun materializeReservedOrder(id: Long): ReservedOrder = ReservedOrder(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        dueBy = system.get(id, "dueBy") as LocalDate,
+        shippingAddress = system.get(id, "shippingAddress") as String,
+        placedOn = system.get(id, "placedOn") as Instant,
+        netPaid = system.get(id, "netPaid") as BigDecimal,
+        receiptEmail = system.get(id, "receiptEmail") as String?,
+        firstAttemptedOn = system.get(id, "firstAttemptedOn") as Instant?,
+        chargeAttempts = (system.get(id, "chargeAttempts") as List<*>).map { ChargeAttemptView(it as Long) },
+        stockReservations = (system.get(id, "stockReservations") as List<*>).map { StockReservationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        changeShippingAddresss = (system.get(id, "changeShippingAddresss") as List<*>).map { ChangeShippingAddressView(it as Long) },
+        refunds = (system.get(id, "refunds") as List<*>).map { RefundView(it as Long) },
+        settlementReversals = (system.get(id, "settlementReversals") as List<*>).map { SettlementReversalView(it as Long) },
+        manualCharges = (system.get(id, "manualCharges") as List<*>).map { ManualChargeView(it as Long) },
+        extensionRequests = (system.get(id, "extensionRequests") as List<*>).map { ExtensionRequestView(it as Long) },
+        paymentExtensions = (system.get(id, "paymentExtensions") as List<*>).map { PaymentExtensionView(it as Long) },
+        paymentReminders = (system.get(id, "paymentReminders") as List<*>).map { PaymentReminderView(it as Long) },
+        dunningFlags = (system.get(id, "dunningFlags") as List<*>).map { DunningFlagView(it as Long) },
+    )
+
+    fun materializeUnshippedOrder(id: Long): UnshippedOrder = UnshippedOrder(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        dueBy = system.get(id, "dueBy") as LocalDate,
+        shippingAddress = system.get(id, "shippingAddress") as String,
+        placedOn = system.get(id, "placedOn") as Instant,
+        netPaid = system.get(id, "netPaid") as BigDecimal,
+        receiptEmail = system.get(id, "receiptEmail") as String?,
+        firstAttemptedOn = system.get(id, "firstAttemptedOn") as Instant?,
+        chargeAttempts = (system.get(id, "chargeAttempts") as List<*>).map { ChargeAttemptView(it as Long) },
+        stockReservations = (system.get(id, "stockReservations") as List<*>).map { StockReservationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        changeShippingAddresss = (system.get(id, "changeShippingAddresss") as List<*>).map { ChangeShippingAddressView(it as Long) },
+        refunds = (system.get(id, "refunds") as List<*>).map { RefundView(it as Long) },
+        settlementReversals = (system.get(id, "settlementReversals") as List<*>).map { SettlementReversalView(it as Long) },
+        manualCharges = (system.get(id, "manualCharges") as List<*>).map { ManualChargeView(it as Long) },
+        extensionRequests = (system.get(id, "extensionRequests") as List<*>).map { ExtensionRequestView(it as Long) },
+        paymentExtensions = (system.get(id, "paymentExtensions") as List<*>).map { PaymentExtensionView(it as Long) },
+        paymentReminders = (system.get(id, "paymentReminders") as List<*>).map { PaymentReminderView(it as Long) },
+        dunningFlags = (system.get(id, "dunningFlags") as List<*>).map { DunningFlagView(it as Long) },
+    )
+
+    fun materializeReadyToShip(id: Long): ReadyToShip = ReadyToShip(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        dueBy = system.get(id, "dueBy") as LocalDate,
+        shippingAddress = system.get(id, "shippingAddress") as String,
+        placedOn = system.get(id, "placedOn") as Instant,
+        netPaid = system.get(id, "netPaid") as BigDecimal,
+        receiptEmail = system.get(id, "receiptEmail") as String?,
+        firstAttemptedOn = system.get(id, "firstAttemptedOn") as Instant?,
+        chargeAttempts = (system.get(id, "chargeAttempts") as List<*>).map { ChargeAttemptView(it as Long) },
+        stockReservations = (system.get(id, "stockReservations") as List<*>).map { StockReservationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        changeShippingAddresss = (system.get(id, "changeShippingAddresss") as List<*>).map { ChangeShippingAddressView(it as Long) },
+        refunds = (system.get(id, "refunds") as List<*>).map { RefundView(it as Long) },
+        settlementReversals = (system.get(id, "settlementReversals") as List<*>).map { SettlementReversalView(it as Long) },
+        manualCharges = (system.get(id, "manualCharges") as List<*>).map { ManualChargeView(it as Long) },
+        extensionRequests = (system.get(id, "extensionRequests") as List<*>).map { ExtensionRequestView(it as Long) },
+        paymentExtensions = (system.get(id, "paymentExtensions") as List<*>).map { PaymentExtensionView(it as Long) },
+        paymentReminders = (system.get(id, "paymentReminders") as List<*>).map { PaymentReminderView(it as Long) },
+        dunningFlags = (system.get(id, "dunningFlags") as List<*>).map { DunningFlagView(it as Long) },
+        surplus = system.get(id, "surplus") as BigDecimal,
+        refundDueOnShip = system.getAs(id, "ReadyToShip", "refundDueOnShip") as BigDecimal,
+    )
+
+    fun materializeUnhandledAddressChange(id: Long): UnhandledAddressChange = UnhandledAddressChange(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        newAddress = system.get(id, "newAddress") as String,
+        addressChangeApplications = (system.get(id, "addressChangeApplications") as List<*>).map { AddressChangeApplicationView(it as Long) },
+        addressChangeRefusals = (system.get(id, "addressChangeRefusals") as List<*>).map { AddressChangeRefusalView(it as Long) },
+    )
+
+    fun materializeApplicableAddressChange(id: Long): ApplicableAddressChange = ApplicableAddressChange(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        newAddress = system.get(id, "newAddress") as String,
+        addressChangeApplications = (system.get(id, "addressChangeApplications") as List<*>).map { AddressChangeApplicationView(it as Long) },
+        addressChangeRefusals = (system.get(id, "addressChangeRefusals") as List<*>).map { AddressChangeRefusalView(it as Long) },
+    )
+
+    fun materializeRefusedAddressChange(id: Long): RefusedAddressChange = RefusedAddressChange(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        newAddress = system.get(id, "newAddress") as String,
+        addressChangeApplications = (system.get(id, "addressChangeApplications") as List<*>).map { AddressChangeApplicationView(it as Long) },
+        addressChangeRefusals = (system.get(id, "addressChangeRefusals") as List<*>).map { AddressChangeRefusalView(it as Long) },
+    )
+
+    fun materializeRefundAfterFailure(id: Long): RefundAfterFailure = RefundAfterFailure(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        dueBy = system.get(id, "dueBy") as LocalDate,
+        shippingAddress = system.get(id, "shippingAddress") as String,
+        placedOn = system.get(id, "placedOn") as Instant,
+        netPaid = system.get(id, "netPaid") as BigDecimal,
+        receiptEmail = system.get(id, "receiptEmail") as String?,
+        firstAttemptedOn = system.get(id, "firstAttemptedOn") as Instant?,
+        chargeAttempts = (system.get(id, "chargeAttempts") as List<*>).map { ChargeAttemptView(it as Long) },
+        stockReservations = (system.get(id, "stockReservations") as List<*>).map { StockReservationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        changeShippingAddresss = (system.get(id, "changeShippingAddresss") as List<*>).map { ChangeShippingAddressView(it as Long) },
+        refunds = (system.get(id, "refunds") as List<*>).map { RefundView(it as Long) },
+        settlementReversals = (system.get(id, "settlementReversals") as List<*>).map { SettlementReversalView(it as Long) },
+        manualCharges = (system.get(id, "manualCharges") as List<*>).map { ManualChargeView(it as Long) },
+        extensionRequests = (system.get(id, "extensionRequests") as List<*>).map { ExtensionRequestView(it as Long) },
+        paymentExtensions = (system.get(id, "paymentExtensions") as List<*>).map { PaymentExtensionView(it as Long) },
+        paymentReminders = (system.get(id, "paymentReminders") as List<*>).map { PaymentReminderView(it as Long) },
+        dunningFlags = (system.get(id, "dunningFlags") as List<*>).map { DunningFlagView(it as Long) },
+    )
+
+    fun materializeOverdueOrder(id: Long): OverdueOrder = OverdueOrder(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        dueBy = system.get(id, "dueBy") as LocalDate,
+        shippingAddress = system.get(id, "shippingAddress") as String,
+        placedOn = system.get(id, "placedOn") as Instant,
+        netPaid = system.get(id, "netPaid") as BigDecimal,
+        receiptEmail = system.get(id, "receiptEmail") as String?,
+        firstAttemptedOn = system.get(id, "firstAttemptedOn") as Instant?,
+        chargeAttempts = (system.get(id, "chargeAttempts") as List<*>).map { ChargeAttemptView(it as Long) },
+        stockReservations = (system.get(id, "stockReservations") as List<*>).map { StockReservationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        changeShippingAddresss = (system.get(id, "changeShippingAddresss") as List<*>).map { ChangeShippingAddressView(it as Long) },
+        refunds = (system.get(id, "refunds") as List<*>).map { RefundView(it as Long) },
+        settlementReversals = (system.get(id, "settlementReversals") as List<*>).map { SettlementReversalView(it as Long) },
+        manualCharges = (system.get(id, "manualCharges") as List<*>).map { ManualChargeView(it as Long) },
+        extensionRequests = (system.get(id, "extensionRequests") as List<*>).map { ExtensionRequestView(it as Long) },
+        paymentExtensions = (system.get(id, "paymentExtensions") as List<*>).map { PaymentExtensionView(it as Long) },
+        paymentReminders = (system.get(id, "paymentReminders") as List<*>).map { PaymentReminderView(it as Long) },
+        dunningFlags = (system.get(id, "dunningFlags") as List<*>).map { DunningFlagView(it as Long) },
+    )
+
+    fun materializeInGracePeriod(id: Long): InGracePeriod = InGracePeriod(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        dueBy = system.get(id, "dueBy") as LocalDate,
+        shippingAddress = system.get(id, "shippingAddress") as String,
+        placedOn = system.get(id, "placedOn") as Instant,
+        netPaid = system.get(id, "netPaid") as BigDecimal,
+        receiptEmail = system.get(id, "receiptEmail") as String?,
+        firstAttemptedOn = system.get(id, "firstAttemptedOn") as Instant?,
+        chargeAttempts = (system.get(id, "chargeAttempts") as List<*>).map { ChargeAttemptView(it as Long) },
+        stockReservations = (system.get(id, "stockReservations") as List<*>).map { StockReservationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        changeShippingAddresss = (system.get(id, "changeShippingAddresss") as List<*>).map { ChangeShippingAddressView(it as Long) },
+        refunds = (system.get(id, "refunds") as List<*>).map { RefundView(it as Long) },
+        settlementReversals = (system.get(id, "settlementReversals") as List<*>).map { SettlementReversalView(it as Long) },
+        manualCharges = (system.get(id, "manualCharges") as List<*>).map { ManualChargeView(it as Long) },
+        extensionRequests = (system.get(id, "extensionRequests") as List<*>).map { ExtensionRequestView(it as Long) },
+        paymentExtensions = (system.get(id, "paymentExtensions") as List<*>).map { PaymentExtensionView(it as Long) },
+        paymentReminders = (system.get(id, "paymentReminders") as List<*>).map { PaymentReminderView(it as Long) },
+        dunningFlags = (system.get(id, "dunningFlags") as List<*>).map { DunningFlagView(it as Long) },
+    )
+
+    fun materializeOpenDunningFlag(id: Long): OpenDunningFlag = OpenDunningFlag(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        openedOn = system.get(id, "openedOn") as LocalDate,
+        dunningResolutions = (system.get(id, "dunningResolutions") as List<*>).map { DunningResolutionView(it as Long) },
+    )
+
+    fun materializeClosableDunningFlag(id: Long): ClosableDunningFlag = ClosableDunningFlag(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        openedOn = system.get(id, "openedOn") as LocalDate,
+        dunningResolutions = (system.get(id, "dunningResolutions") as List<*>).map { DunningResolutionView(it as Long) },
+    )
+
     companion object {
         private val SPEC = """
 -- Payments: an order-payment system charging through an external card
@@ -1185,6 +2021,1163 @@ rule CloseDunningEpisode when ClosableDunningFlag on Daily {
 }
 """
     }
+}
+
+// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
+// References are typed handles (views); navigating one is a further read.
+
+data class Contact(
+    override val id: Long,
+    val name: String,
+    val email: String,
+    val cards: List<PaymentsSystem.CardView>,
+) : View
+
+data class Card(
+    override val id: Long,
+    val number: String,
+    val expiresOn: LocalDate,
+    val billingContact: PaymentsSystem.ContactView?,
+    val customers: List<PaymentsSystem.CustomerView>,
+    val cardUpdates: List<PaymentsSystem.CardUpdateView>,
+) : View
+
+data class Customer(
+    override val id: Long,
+    val name: String,
+    val card: PaymentsSystem.CardView?,
+    val cardUpdates: List<PaymentsSystem.CardUpdateView>,
+    val orders: List<PaymentsSystem.OrderView>,
+) : View
+
+data class CardUpdate(
+    override val id: Long,
+    val customer: PaymentsSystem.CustomerView,
+    val card: PaymentsSystem.CardView,
+) : View
+
+data class Order(
+    override val id: Long,
+    val customer: PaymentsSystem.CustomerView,
+    val amount: BigDecimal,
+    val dueBy: LocalDate,
+    val shippingAddress: String,
+    val placedOn: Instant,
+    val netPaid: BigDecimal,
+    val receiptEmail: String?,
+    val firstAttemptedOn: Instant?,
+    val chargeAttempts: List<PaymentsSystem.ChargeAttemptView>,
+    val stockReservations: List<PaymentsSystem.StockReservationView>,
+    val shipments: List<PaymentsSystem.ShipmentView>,
+    val changeShippingAddresss: List<PaymentsSystem.ChangeShippingAddressView>,
+    val refunds: List<PaymentsSystem.RefundView>,
+    val settlementReversals: List<PaymentsSystem.SettlementReversalView>,
+    val manualCharges: List<PaymentsSystem.ManualChargeView>,
+    val extensionRequests: List<PaymentsSystem.ExtensionRequestView>,
+    val paymentExtensions: List<PaymentsSystem.PaymentExtensionView>,
+    val paymentReminders: List<PaymentsSystem.PaymentReminderView>,
+    val dunningFlags: List<PaymentsSystem.DunningFlagView>,
+) : View
+
+data class ChargeAttempt(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val amount: BigDecimal,
+    val attemptKey: String,
+    val requestedOn: Instant,
+    val chargeResponses: List<PaymentsSystem.ChargeResponseView>,
+    val attemptTimeouts: List<PaymentsSystem.AttemptTimeoutView>,
+    val receipts: List<PaymentsSystem.ReceiptView>,
+) : View
+
+data class ChargeResponse(
+    override val id: Long,
+    val attempt: PaymentsSystem.ChargeAttemptView,
+    val outcome: String,
+    val respondedOn: Instant,
+) : View
+
+data class AttemptTimeout(
+    override val id: Long,
+    val attempt: PaymentsSystem.ChargeAttemptView,
+    val noticedOn: Instant,
+) : View
+
+data class StockReservation(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val reservedOn: Instant,
+    val reservationReleases: List<PaymentsSystem.ReservationReleaseView>,
+) : View
+
+data class ReservationRelease(
+    override val id: Long,
+    val reservation: PaymentsSystem.StockReservationView,
+    val releasedOn: Instant,
+) : View
+
+data class Receipt(
+    override val id: Long,
+    val attempt: PaymentsSystem.ChargeAttemptView,
+    val sentOn: Instant,
+) : View
+
+data class Shipment(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val shippedOn: Instant,
+) : View
+
+data class ChangeShippingAddress(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val newAddress: String,
+    val addressChangeApplications: List<PaymentsSystem.AddressChangeApplicationView>,
+    val addressChangeRefusals: List<PaymentsSystem.AddressChangeRefusalView>,
+) : View
+
+data class AddressChangeApplication(
+    override val id: Long,
+    val change: PaymentsSystem.ChangeShippingAddressView,
+    val appliedOn: Instant,
+) : View
+
+data class AddressChangeRefusal(
+    override val id: Long,
+    val change: PaymentsSystem.ChangeShippingAddressView,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class Refund(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val amount: BigDecimal,
+    val refundedOn: Instant,
+) : View
+
+data class SettlementReversal(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val noticedOn: Instant,
+) : View
+
+data class ManualCharge(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+) : View
+
+data class ExtensionRequest(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+) : View
+
+data class PaymentExtension(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val endsOn: LocalDate,
+) : View
+
+data class PaymentReminder(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val sentOn: LocalDate,
+) : View
+
+data class DunningFlag(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val openedOn: LocalDate,
+    val dunningResolutions: List<PaymentsSystem.DunningResolutionView>,
+) : View
+
+data class DunningResolution(
+    override val id: Long,
+    val flag: PaymentsSystem.DunningFlagView,
+    val resolvedOn: LocalDate,
+) : View
+
+data class SettledOrder(
+    override val id: Long,
+    val customer: PaymentsSystem.CustomerView,
+    val amount: BigDecimal,
+    val dueBy: LocalDate,
+    val shippingAddress: String,
+    val placedOn: Instant,
+    val netPaid: BigDecimal,
+    val receiptEmail: String?,
+    val firstAttemptedOn: Instant?,
+    val chargeAttempts: List<PaymentsSystem.ChargeAttemptView>,
+    val stockReservations: List<PaymentsSystem.StockReservationView>,
+    val shipments: List<PaymentsSystem.ShipmentView>,
+    val changeShippingAddresss: List<PaymentsSystem.ChangeShippingAddressView>,
+    val refunds: List<PaymentsSystem.RefundView>,
+    val settlementReversals: List<PaymentsSystem.SettlementReversalView>,
+    val manualCharges: List<PaymentsSystem.ManualChargeView>,
+    val extensionRequests: List<PaymentsSystem.ExtensionRequestView>,
+    val paymentExtensions: List<PaymentsSystem.PaymentExtensionView>,
+    val paymentReminders: List<PaymentsSystem.PaymentReminderView>,
+    val dunningFlags: List<PaymentsSystem.DunningFlagView>,
+    val surplus: BigDecimal,
+) : View
+
+data class NeverCharged(
+    override val id: Long,
+    val customer: PaymentsSystem.CustomerView,
+    val amount: BigDecimal,
+    val dueBy: LocalDate,
+    val shippingAddress: String,
+    val placedOn: Instant,
+    val netPaid: BigDecimal,
+    val receiptEmail: String?,
+    val firstAttemptedOn: Instant?,
+    val chargeAttempts: List<PaymentsSystem.ChargeAttemptView>,
+    val stockReservations: List<PaymentsSystem.StockReservationView>,
+    val shipments: List<PaymentsSystem.ShipmentView>,
+    val changeShippingAddresss: List<PaymentsSystem.ChangeShippingAddressView>,
+    val refunds: List<PaymentsSystem.RefundView>,
+    val settlementReversals: List<PaymentsSystem.SettlementReversalView>,
+    val manualCharges: List<PaymentsSystem.ManualChargeView>,
+    val extensionRequests: List<PaymentsSystem.ExtensionRequestView>,
+    val paymentExtensions: List<PaymentsSystem.PaymentExtensionView>,
+    val paymentReminders: List<PaymentsSystem.PaymentReminderView>,
+    val dunningFlags: List<PaymentsSystem.DunningFlagView>,
+) : View
+
+data class UnpaidOrder(
+    override val id: Long,
+    val customer: PaymentsSystem.CustomerView,
+    val amount: BigDecimal,
+    val dueBy: LocalDate,
+    val shippingAddress: String,
+    val placedOn: Instant,
+    val netPaid: BigDecimal,
+    val receiptEmail: String?,
+    val firstAttemptedOn: Instant?,
+    val chargeAttempts: List<PaymentsSystem.ChargeAttemptView>,
+    val stockReservations: List<PaymentsSystem.StockReservationView>,
+    val shipments: List<PaymentsSystem.ShipmentView>,
+    val changeShippingAddresss: List<PaymentsSystem.ChangeShippingAddressView>,
+    val refunds: List<PaymentsSystem.RefundView>,
+    val settlementReversals: List<PaymentsSystem.SettlementReversalView>,
+    val manualCharges: List<PaymentsSystem.ManualChargeView>,
+    val extensionRequests: List<PaymentsSystem.ExtensionRequestView>,
+    val paymentExtensions: List<PaymentsSystem.PaymentExtensionView>,
+    val paymentReminders: List<PaymentsSystem.PaymentReminderView>,
+    val dunningFlags: List<PaymentsSystem.DunningFlagView>,
+) : View
+
+data class RefundedOrder(
+    override val id: Long,
+    val customer: PaymentsSystem.CustomerView,
+    val amount: BigDecimal,
+    val dueBy: LocalDate,
+    val shippingAddress: String,
+    val placedOn: Instant,
+    val netPaid: BigDecimal,
+    val receiptEmail: String?,
+    val firstAttemptedOn: Instant?,
+    val chargeAttempts: List<PaymentsSystem.ChargeAttemptView>,
+    val stockReservations: List<PaymentsSystem.StockReservationView>,
+    val shipments: List<PaymentsSystem.ShipmentView>,
+    val changeShippingAddresss: List<PaymentsSystem.ChangeShippingAddressView>,
+    val refunds: List<PaymentsSystem.RefundView>,
+    val settlementReversals: List<PaymentsSystem.SettlementReversalView>,
+    val manualCharges: List<PaymentsSystem.ManualChargeView>,
+    val extensionRequests: List<PaymentsSystem.ExtensionRequestView>,
+    val paymentExtensions: List<PaymentsSystem.PaymentExtensionView>,
+    val paymentReminders: List<PaymentsSystem.PaymentReminderView>,
+    val dunningFlags: List<PaymentsSystem.DunningFlagView>,
+) : View
+
+data class ChargeableOrder(
+    override val id: Long,
+    val customer: PaymentsSystem.CustomerView,
+    val amount: BigDecimal,
+    val dueBy: LocalDate,
+    val shippingAddress: String,
+    val placedOn: Instant,
+    val netPaid: BigDecimal,
+    val receiptEmail: String?,
+    val firstAttemptedOn: Instant?,
+    val chargeAttempts: List<PaymentsSystem.ChargeAttemptView>,
+    val stockReservations: List<PaymentsSystem.StockReservationView>,
+    val shipments: List<PaymentsSystem.ShipmentView>,
+    val changeShippingAddresss: List<PaymentsSystem.ChangeShippingAddressView>,
+    val refunds: List<PaymentsSystem.RefundView>,
+    val settlementReversals: List<PaymentsSystem.SettlementReversalView>,
+    val manualCharges: List<PaymentsSystem.ManualChargeView>,
+    val extensionRequests: List<PaymentsSystem.ExtensionRequestView>,
+    val paymentExtensions: List<PaymentsSystem.PaymentExtensionView>,
+    val paymentReminders: List<PaymentsSystem.PaymentReminderView>,
+    val dunningFlags: List<PaymentsSystem.DunningFlagView>,
+) : View
+
+data class PendingAttempt(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val amount: BigDecimal,
+    val attemptKey: String,
+    val requestedOn: Instant,
+    val chargeResponses: List<PaymentsSystem.ChargeResponseView>,
+    val attemptTimeouts: List<PaymentsSystem.AttemptTimeoutView>,
+    val receipts: List<PaymentsSystem.ReceiptView>,
+) : View
+
+data class CompletedAttempt(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val amount: BigDecimal,
+    val attemptKey: String,
+    val requestedOn: Instant,
+    val chargeResponses: List<PaymentsSystem.ChargeResponseView>,
+    val attemptTimeouts: List<PaymentsSystem.AttemptTimeoutView>,
+    val receipts: List<PaymentsSystem.ReceiptView>,
+    val outcome: String,
+) : View
+
+data class SuccessfulCharge(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val amount: BigDecimal,
+    val attemptKey: String,
+    val requestedOn: Instant,
+    val chargeResponses: List<PaymentsSystem.ChargeResponseView>,
+    val attemptTimeouts: List<PaymentsSystem.AttemptTimeoutView>,
+    val receipts: List<PaymentsSystem.ReceiptView>,
+    val outcome: String,
+) : View
+
+data class FailedCharge(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val amount: BigDecimal,
+    val attemptKey: String,
+    val requestedOn: Instant,
+    val chargeResponses: List<PaymentsSystem.ChargeResponseView>,
+    val attemptTimeouts: List<PaymentsSystem.AttemptTimeoutView>,
+    val receipts: List<PaymentsSystem.ReceiptView>,
+    val outcome: String,
+) : View
+
+data class TimedOutAttempt(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val amount: BigDecimal,
+    val attemptKey: String,
+    val requestedOn: Instant,
+    val chargeResponses: List<PaymentsSystem.ChargeResponseView>,
+    val attemptTimeouts: List<PaymentsSystem.AttemptTimeoutView>,
+    val receipts: List<PaymentsSystem.ReceiptView>,
+) : View
+
+data class ActiveReservation(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val reservedOn: Instant,
+    val reservationReleases: List<PaymentsSystem.ReservationReleaseView>,
+) : View
+
+data class RetryableOrder(
+    override val id: Long,
+    val customer: PaymentsSystem.CustomerView,
+    val amount: BigDecimal,
+    val dueBy: LocalDate,
+    val shippingAddress: String,
+    val placedOn: Instant,
+    val netPaid: BigDecimal,
+    val receiptEmail: String?,
+    val firstAttemptedOn: Instant?,
+    val chargeAttempts: List<PaymentsSystem.ChargeAttemptView>,
+    val stockReservations: List<PaymentsSystem.StockReservationView>,
+    val shipments: List<PaymentsSystem.ShipmentView>,
+    val changeShippingAddresss: List<PaymentsSystem.ChangeShippingAddressView>,
+    val refunds: List<PaymentsSystem.RefundView>,
+    val settlementReversals: List<PaymentsSystem.SettlementReversalView>,
+    val manualCharges: List<PaymentsSystem.ManualChargeView>,
+    val extensionRequests: List<PaymentsSystem.ExtensionRequestView>,
+    val paymentExtensions: List<PaymentsSystem.PaymentExtensionView>,
+    val paymentReminders: List<PaymentsSystem.PaymentReminderView>,
+    val dunningFlags: List<PaymentsSystem.DunningFlagView>,
+) : View
+
+data class StalePendingAttempt(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val amount: BigDecimal,
+    val attemptKey: String,
+    val requestedOn: Instant,
+    val chargeResponses: List<PaymentsSystem.ChargeResponseView>,
+    val attemptTimeouts: List<PaymentsSystem.AttemptTimeoutView>,
+    val receipts: List<PaymentsSystem.ReceiptView>,
+) : View
+
+data class ExhaustedOrder(
+    override val id: Long,
+    val customer: PaymentsSystem.CustomerView,
+    val amount: BigDecimal,
+    val dueBy: LocalDate,
+    val shippingAddress: String,
+    val placedOn: Instant,
+    val netPaid: BigDecimal,
+    val receiptEmail: String?,
+    val firstAttemptedOn: Instant?,
+    val chargeAttempts: List<PaymentsSystem.ChargeAttemptView>,
+    val stockReservations: List<PaymentsSystem.StockReservationView>,
+    val shipments: List<PaymentsSystem.ShipmentView>,
+    val changeShippingAddresss: List<PaymentsSystem.ChangeShippingAddressView>,
+    val refunds: List<PaymentsSystem.RefundView>,
+    val settlementReversals: List<PaymentsSystem.SettlementReversalView>,
+    val manualCharges: List<PaymentsSystem.ManualChargeView>,
+    val extensionRequests: List<PaymentsSystem.ExtensionRequestView>,
+    val paymentExtensions: List<PaymentsSystem.PaymentExtensionView>,
+    val paymentReminders: List<PaymentsSystem.PaymentReminderView>,
+    val dunningFlags: List<PaymentsSystem.DunningFlagView>,
+) : View
+
+data class ReservedOrder(
+    override val id: Long,
+    val customer: PaymentsSystem.CustomerView,
+    val amount: BigDecimal,
+    val dueBy: LocalDate,
+    val shippingAddress: String,
+    val placedOn: Instant,
+    val netPaid: BigDecimal,
+    val receiptEmail: String?,
+    val firstAttemptedOn: Instant?,
+    val chargeAttempts: List<PaymentsSystem.ChargeAttemptView>,
+    val stockReservations: List<PaymentsSystem.StockReservationView>,
+    val shipments: List<PaymentsSystem.ShipmentView>,
+    val changeShippingAddresss: List<PaymentsSystem.ChangeShippingAddressView>,
+    val refunds: List<PaymentsSystem.RefundView>,
+    val settlementReversals: List<PaymentsSystem.SettlementReversalView>,
+    val manualCharges: List<PaymentsSystem.ManualChargeView>,
+    val extensionRequests: List<PaymentsSystem.ExtensionRequestView>,
+    val paymentExtensions: List<PaymentsSystem.PaymentExtensionView>,
+    val paymentReminders: List<PaymentsSystem.PaymentReminderView>,
+    val dunningFlags: List<PaymentsSystem.DunningFlagView>,
+) : View
+
+data class UnshippedOrder(
+    override val id: Long,
+    val customer: PaymentsSystem.CustomerView,
+    val amount: BigDecimal,
+    val dueBy: LocalDate,
+    val shippingAddress: String,
+    val placedOn: Instant,
+    val netPaid: BigDecimal,
+    val receiptEmail: String?,
+    val firstAttemptedOn: Instant?,
+    val chargeAttempts: List<PaymentsSystem.ChargeAttemptView>,
+    val stockReservations: List<PaymentsSystem.StockReservationView>,
+    val shipments: List<PaymentsSystem.ShipmentView>,
+    val changeShippingAddresss: List<PaymentsSystem.ChangeShippingAddressView>,
+    val refunds: List<PaymentsSystem.RefundView>,
+    val settlementReversals: List<PaymentsSystem.SettlementReversalView>,
+    val manualCharges: List<PaymentsSystem.ManualChargeView>,
+    val extensionRequests: List<PaymentsSystem.ExtensionRequestView>,
+    val paymentExtensions: List<PaymentsSystem.PaymentExtensionView>,
+    val paymentReminders: List<PaymentsSystem.PaymentReminderView>,
+    val dunningFlags: List<PaymentsSystem.DunningFlagView>,
+) : View
+
+data class ReadyToShip(
+    override val id: Long,
+    val customer: PaymentsSystem.CustomerView,
+    val amount: BigDecimal,
+    val dueBy: LocalDate,
+    val shippingAddress: String,
+    val placedOn: Instant,
+    val netPaid: BigDecimal,
+    val receiptEmail: String?,
+    val firstAttemptedOn: Instant?,
+    val chargeAttempts: List<PaymentsSystem.ChargeAttemptView>,
+    val stockReservations: List<PaymentsSystem.StockReservationView>,
+    val shipments: List<PaymentsSystem.ShipmentView>,
+    val changeShippingAddresss: List<PaymentsSystem.ChangeShippingAddressView>,
+    val refunds: List<PaymentsSystem.RefundView>,
+    val settlementReversals: List<PaymentsSystem.SettlementReversalView>,
+    val manualCharges: List<PaymentsSystem.ManualChargeView>,
+    val extensionRequests: List<PaymentsSystem.ExtensionRequestView>,
+    val paymentExtensions: List<PaymentsSystem.PaymentExtensionView>,
+    val paymentReminders: List<PaymentsSystem.PaymentReminderView>,
+    val dunningFlags: List<PaymentsSystem.DunningFlagView>,
+    val surplus: BigDecimal,
+    val refundDueOnShip: BigDecimal,
+) : View
+
+data class UnhandledAddressChange(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val newAddress: String,
+    val addressChangeApplications: List<PaymentsSystem.AddressChangeApplicationView>,
+    val addressChangeRefusals: List<PaymentsSystem.AddressChangeRefusalView>,
+) : View
+
+data class ApplicableAddressChange(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val newAddress: String,
+    val addressChangeApplications: List<PaymentsSystem.AddressChangeApplicationView>,
+    val addressChangeRefusals: List<PaymentsSystem.AddressChangeRefusalView>,
+) : View
+
+data class RefusedAddressChange(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val newAddress: String,
+    val addressChangeApplications: List<PaymentsSystem.AddressChangeApplicationView>,
+    val addressChangeRefusals: List<PaymentsSystem.AddressChangeRefusalView>,
+) : View
+
+data class RefundAfterFailure(
+    override val id: Long,
+    val customer: PaymentsSystem.CustomerView,
+    val amount: BigDecimal,
+    val dueBy: LocalDate,
+    val shippingAddress: String,
+    val placedOn: Instant,
+    val netPaid: BigDecimal,
+    val receiptEmail: String?,
+    val firstAttemptedOn: Instant?,
+    val chargeAttempts: List<PaymentsSystem.ChargeAttemptView>,
+    val stockReservations: List<PaymentsSystem.StockReservationView>,
+    val shipments: List<PaymentsSystem.ShipmentView>,
+    val changeShippingAddresss: List<PaymentsSystem.ChangeShippingAddressView>,
+    val refunds: List<PaymentsSystem.RefundView>,
+    val settlementReversals: List<PaymentsSystem.SettlementReversalView>,
+    val manualCharges: List<PaymentsSystem.ManualChargeView>,
+    val extensionRequests: List<PaymentsSystem.ExtensionRequestView>,
+    val paymentExtensions: List<PaymentsSystem.PaymentExtensionView>,
+    val paymentReminders: List<PaymentsSystem.PaymentReminderView>,
+    val dunningFlags: List<PaymentsSystem.DunningFlagView>,
+) : View
+
+data class OverdueOrder(
+    override val id: Long,
+    val customer: PaymentsSystem.CustomerView,
+    val amount: BigDecimal,
+    val dueBy: LocalDate,
+    val shippingAddress: String,
+    val placedOn: Instant,
+    val netPaid: BigDecimal,
+    val receiptEmail: String?,
+    val firstAttemptedOn: Instant?,
+    val chargeAttempts: List<PaymentsSystem.ChargeAttemptView>,
+    val stockReservations: List<PaymentsSystem.StockReservationView>,
+    val shipments: List<PaymentsSystem.ShipmentView>,
+    val changeShippingAddresss: List<PaymentsSystem.ChangeShippingAddressView>,
+    val refunds: List<PaymentsSystem.RefundView>,
+    val settlementReversals: List<PaymentsSystem.SettlementReversalView>,
+    val manualCharges: List<PaymentsSystem.ManualChargeView>,
+    val extensionRequests: List<PaymentsSystem.ExtensionRequestView>,
+    val paymentExtensions: List<PaymentsSystem.PaymentExtensionView>,
+    val paymentReminders: List<PaymentsSystem.PaymentReminderView>,
+    val dunningFlags: List<PaymentsSystem.DunningFlagView>,
+) : View
+
+data class InGracePeriod(
+    override val id: Long,
+    val customer: PaymentsSystem.CustomerView,
+    val amount: BigDecimal,
+    val dueBy: LocalDate,
+    val shippingAddress: String,
+    val placedOn: Instant,
+    val netPaid: BigDecimal,
+    val receiptEmail: String?,
+    val firstAttemptedOn: Instant?,
+    val chargeAttempts: List<PaymentsSystem.ChargeAttemptView>,
+    val stockReservations: List<PaymentsSystem.StockReservationView>,
+    val shipments: List<PaymentsSystem.ShipmentView>,
+    val changeShippingAddresss: List<PaymentsSystem.ChangeShippingAddressView>,
+    val refunds: List<PaymentsSystem.RefundView>,
+    val settlementReversals: List<PaymentsSystem.SettlementReversalView>,
+    val manualCharges: List<PaymentsSystem.ManualChargeView>,
+    val extensionRequests: List<PaymentsSystem.ExtensionRequestView>,
+    val paymentExtensions: List<PaymentsSystem.PaymentExtensionView>,
+    val paymentReminders: List<PaymentsSystem.PaymentReminderView>,
+    val dunningFlags: List<PaymentsSystem.DunningFlagView>,
+) : View
+
+data class OpenDunningFlag(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val openedOn: LocalDate,
+    val dunningResolutions: List<PaymentsSystem.DunningResolutionView>,
+) : View
+
+data class ClosableDunningFlag(
+    override val id: Long,
+    val order: PaymentsSystem.OrderView,
+    val openedOn: LocalDate,
+    val dunningResolutions: List<PaymentsSystem.DunningResolutionView>,
+) : View
+
+// ── the builder's vocabulary: one field handle per member, memberships per refinement ──
+
+class ContactFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val email: TextField get() = TextField(fieldPath + "email")
+}
+
+class CardFields(path: List<String> = emptyList()) : Fields(path) {
+    val number: TextField get() = TextField(fieldPath + "number")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val billingContact: ContactFields get() = ContactFields(fieldPath + "billingContact")
+}
+
+class CustomerFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val card: CardFields get() = CardFields(fieldPath + "card")
+}
+
+class CardUpdateFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val card: CardFields get() = CardFields(fieldPath + "card")
+}
+
+class OrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val dueBy: DateField get() = DateField(fieldPath + "dueBy")
+    val shippingAddress: TextField get() = TextField(fieldPath + "shippingAddress")
+    val placedOn: DateTimeField get() = DateTimeField(fieldPath + "placedOn")
+    val netPaid: NumField get() = NumField(fieldPath + "netPaid")
+    val receiptEmail: TextField get() = TextField(fieldPath + "receiptEmail")
+    val firstAttemptedOn: DateTimeField get() = DateTimeField(fieldPath + "firstAttemptedOn")
+    fun isSettledOrder(): Expr = isA("SettledOrder")
+    fun isNeverCharged(): Expr = isA("NeverCharged")
+    fun isUnpaidOrder(): Expr = isA("UnpaidOrder")
+    fun isRefundedOrder(): Expr = isA("RefundedOrder")
+    fun isChargeableOrder(): Expr = isA("ChargeableOrder")
+    fun isRetryableOrder(): Expr = isA("RetryableOrder")
+    fun isExhaustedOrder(): Expr = isA("ExhaustedOrder")
+    fun isReservedOrder(): Expr = isA("ReservedOrder")
+    fun isUnshippedOrder(): Expr = isA("UnshippedOrder")
+    fun isReadyToShip(): Expr = isA("ReadyToShip")
+    fun isRefundAfterFailure(): Expr = isA("RefundAfterFailure")
+    fun isOverdueOrder(): Expr = isA("OverdueOrder")
+    fun isInGracePeriod(): Expr = isA("InGracePeriod")
+}
+
+class ChargeAttemptFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val attemptKey: TextField get() = TextField(fieldPath + "attemptKey")
+    val requestedOn: DateTimeField get() = DateTimeField(fieldPath + "requestedOn")
+    fun isPendingAttempt(): Expr = isA("PendingAttempt")
+    fun isCompletedAttempt(): Expr = isA("CompletedAttempt")
+    fun isSuccessfulCharge(): Expr = isA("SuccessfulCharge")
+    fun isFailedCharge(): Expr = isA("FailedCharge")
+    fun isTimedOutAttempt(): Expr = isA("TimedOutAttempt")
+    fun isStalePendingAttempt(): Expr = isA("StalePendingAttempt")
+}
+
+class ChargeResponseFields(path: List<String> = emptyList()) : Fields(path) {
+    val attempt: ChargeAttemptFields get() = ChargeAttemptFields(fieldPath + "attempt")
+    val outcome: TextField get() = TextField(fieldPath + "outcome")
+    val respondedOn: DateTimeField get() = DateTimeField(fieldPath + "respondedOn")
+}
+
+class AttemptTimeoutFields(path: List<String> = emptyList()) : Fields(path) {
+    val attempt: ChargeAttemptFields get() = ChargeAttemptFields(fieldPath + "attempt")
+    val noticedOn: DateTimeField get() = DateTimeField(fieldPath + "noticedOn")
+}
+
+class StockReservationFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val reservedOn: DateTimeField get() = DateTimeField(fieldPath + "reservedOn")
+    fun isActiveReservation(): Expr = isA("ActiveReservation")
+}
+
+class ReservationReleaseFields(path: List<String> = emptyList()) : Fields(path) {
+    val reservation: StockReservationFields get() = StockReservationFields(fieldPath + "reservation")
+    val releasedOn: DateTimeField get() = DateTimeField(fieldPath + "releasedOn")
+}
+
+class ReceiptFields(path: List<String> = emptyList()) : Fields(path) {
+    val attempt: ChargeAttemptFields get() = ChargeAttemptFields(fieldPath + "attempt")
+    val sentOn: DateTimeField get() = DateTimeField(fieldPath + "sentOn")
+}
+
+class ShipmentFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val shippedOn: DateTimeField get() = DateTimeField(fieldPath + "shippedOn")
+}
+
+class ChangeShippingAddressFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val newAddress: TextField get() = TextField(fieldPath + "newAddress")
+    fun isUnhandledAddressChange(): Expr = isA("UnhandledAddressChange")
+    fun isApplicableAddressChange(): Expr = isA("ApplicableAddressChange")
+    fun isRefusedAddressChange(): Expr = isA("RefusedAddressChange")
+}
+
+class AddressChangeApplicationFields(path: List<String> = emptyList()) : Fields(path) {
+    val change: ChangeShippingAddressFields get() = ChangeShippingAddressFields(fieldPath + "change")
+    val appliedOn: DateTimeField get() = DateTimeField(fieldPath + "appliedOn")
+}
+
+class AddressChangeRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val change: ChangeShippingAddressFields get() = ChangeShippingAddressFields(fieldPath + "change")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class RefundFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val refundedOn: DateTimeField get() = DateTimeField(fieldPath + "refundedOn")
+}
+
+class SettlementReversalFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val noticedOn: DateTimeField get() = DateTimeField(fieldPath + "noticedOn")
+}
+
+class ManualChargeFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+}
+
+class ExtensionRequestFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+}
+
+class PaymentExtensionFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val endsOn: DateField get() = DateField(fieldPath + "endsOn")
+}
+
+class PaymentReminderFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val sentOn: DateField get() = DateField(fieldPath + "sentOn")
+}
+
+class DunningFlagFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val openedOn: DateField get() = DateField(fieldPath + "openedOn")
+    fun isOpenDunningFlag(): Expr = isA("OpenDunningFlag")
+    fun isClosableDunningFlag(): Expr = isA("ClosableDunningFlag")
+}
+
+class DunningResolutionFields(path: List<String> = emptyList()) : Fields(path) {
+    val flag: DunningFlagFields get() = DunningFlagFields(fieldPath + "flag")
+    val resolvedOn: DateField get() = DateField(fieldPath + "resolvedOn")
+}
+
+class SettledOrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val dueBy: DateField get() = DateField(fieldPath + "dueBy")
+    val shippingAddress: TextField get() = TextField(fieldPath + "shippingAddress")
+    val placedOn: DateTimeField get() = DateTimeField(fieldPath + "placedOn")
+    val netPaid: NumField get() = NumField(fieldPath + "netPaid")
+    val receiptEmail: TextField get() = TextField(fieldPath + "receiptEmail")
+    val firstAttemptedOn: DateTimeField get() = DateTimeField(fieldPath + "firstAttemptedOn")
+    val surplus: NumField get() = NumField(fieldPath + "surplus")
+    fun isNeverCharged(): Expr = isA("NeverCharged")
+    fun isUnpaidOrder(): Expr = isA("UnpaidOrder")
+    fun isRefundedOrder(): Expr = isA("RefundedOrder")
+    fun isChargeableOrder(): Expr = isA("ChargeableOrder")
+    fun isRetryableOrder(): Expr = isA("RetryableOrder")
+    fun isExhaustedOrder(): Expr = isA("ExhaustedOrder")
+    fun isReservedOrder(): Expr = isA("ReservedOrder")
+    fun isUnshippedOrder(): Expr = isA("UnshippedOrder")
+    fun isReadyToShip(): Expr = isA("ReadyToShip")
+    fun isRefundAfterFailure(): Expr = isA("RefundAfterFailure")
+    fun isOverdueOrder(): Expr = isA("OverdueOrder")
+    fun isInGracePeriod(): Expr = isA("InGracePeriod")
+}
+
+class NeverChargedFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val dueBy: DateField get() = DateField(fieldPath + "dueBy")
+    val shippingAddress: TextField get() = TextField(fieldPath + "shippingAddress")
+    val placedOn: DateTimeField get() = DateTimeField(fieldPath + "placedOn")
+    val netPaid: NumField get() = NumField(fieldPath + "netPaid")
+    val receiptEmail: TextField get() = TextField(fieldPath + "receiptEmail")
+    val firstAttemptedOn: DateTimeField get() = DateTimeField(fieldPath + "firstAttemptedOn")
+    fun isSettledOrder(): Expr = isA("SettledOrder")
+    fun isUnpaidOrder(): Expr = isA("UnpaidOrder")
+    fun isRefundedOrder(): Expr = isA("RefundedOrder")
+    fun isChargeableOrder(): Expr = isA("ChargeableOrder")
+    fun isRetryableOrder(): Expr = isA("RetryableOrder")
+    fun isExhaustedOrder(): Expr = isA("ExhaustedOrder")
+    fun isReservedOrder(): Expr = isA("ReservedOrder")
+    fun isUnshippedOrder(): Expr = isA("UnshippedOrder")
+    fun isReadyToShip(): Expr = isA("ReadyToShip")
+    fun isRefundAfterFailure(): Expr = isA("RefundAfterFailure")
+    fun isOverdueOrder(): Expr = isA("OverdueOrder")
+    fun isInGracePeriod(): Expr = isA("InGracePeriod")
+}
+
+class UnpaidOrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val dueBy: DateField get() = DateField(fieldPath + "dueBy")
+    val shippingAddress: TextField get() = TextField(fieldPath + "shippingAddress")
+    val placedOn: DateTimeField get() = DateTimeField(fieldPath + "placedOn")
+    val netPaid: NumField get() = NumField(fieldPath + "netPaid")
+    val receiptEmail: TextField get() = TextField(fieldPath + "receiptEmail")
+    val firstAttemptedOn: DateTimeField get() = DateTimeField(fieldPath + "firstAttemptedOn")
+    fun isSettledOrder(): Expr = isA("SettledOrder")
+    fun isNeverCharged(): Expr = isA("NeverCharged")
+    fun isRefundedOrder(): Expr = isA("RefundedOrder")
+    fun isChargeableOrder(): Expr = isA("ChargeableOrder")
+    fun isRetryableOrder(): Expr = isA("RetryableOrder")
+    fun isExhaustedOrder(): Expr = isA("ExhaustedOrder")
+    fun isReservedOrder(): Expr = isA("ReservedOrder")
+    fun isUnshippedOrder(): Expr = isA("UnshippedOrder")
+    fun isReadyToShip(): Expr = isA("ReadyToShip")
+    fun isRefundAfterFailure(): Expr = isA("RefundAfterFailure")
+    fun isOverdueOrder(): Expr = isA("OverdueOrder")
+    fun isInGracePeriod(): Expr = isA("InGracePeriod")
+}
+
+class RefundedOrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val dueBy: DateField get() = DateField(fieldPath + "dueBy")
+    val shippingAddress: TextField get() = TextField(fieldPath + "shippingAddress")
+    val placedOn: DateTimeField get() = DateTimeField(fieldPath + "placedOn")
+    val netPaid: NumField get() = NumField(fieldPath + "netPaid")
+    val receiptEmail: TextField get() = TextField(fieldPath + "receiptEmail")
+    val firstAttemptedOn: DateTimeField get() = DateTimeField(fieldPath + "firstAttemptedOn")
+    fun isSettledOrder(): Expr = isA("SettledOrder")
+    fun isNeverCharged(): Expr = isA("NeverCharged")
+    fun isUnpaidOrder(): Expr = isA("UnpaidOrder")
+    fun isChargeableOrder(): Expr = isA("ChargeableOrder")
+    fun isRetryableOrder(): Expr = isA("RetryableOrder")
+    fun isExhaustedOrder(): Expr = isA("ExhaustedOrder")
+    fun isReservedOrder(): Expr = isA("ReservedOrder")
+    fun isUnshippedOrder(): Expr = isA("UnshippedOrder")
+    fun isReadyToShip(): Expr = isA("ReadyToShip")
+    fun isRefundAfterFailure(): Expr = isA("RefundAfterFailure")
+    fun isOverdueOrder(): Expr = isA("OverdueOrder")
+    fun isInGracePeriod(): Expr = isA("InGracePeriod")
+}
+
+class ChargeableOrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val dueBy: DateField get() = DateField(fieldPath + "dueBy")
+    val shippingAddress: TextField get() = TextField(fieldPath + "shippingAddress")
+    val placedOn: DateTimeField get() = DateTimeField(fieldPath + "placedOn")
+    val netPaid: NumField get() = NumField(fieldPath + "netPaid")
+    val receiptEmail: TextField get() = TextField(fieldPath + "receiptEmail")
+    val firstAttemptedOn: DateTimeField get() = DateTimeField(fieldPath + "firstAttemptedOn")
+    fun isSettledOrder(): Expr = isA("SettledOrder")
+    fun isNeverCharged(): Expr = isA("NeverCharged")
+    fun isUnpaidOrder(): Expr = isA("UnpaidOrder")
+    fun isRefundedOrder(): Expr = isA("RefundedOrder")
+    fun isRetryableOrder(): Expr = isA("RetryableOrder")
+    fun isExhaustedOrder(): Expr = isA("ExhaustedOrder")
+    fun isReservedOrder(): Expr = isA("ReservedOrder")
+    fun isUnshippedOrder(): Expr = isA("UnshippedOrder")
+    fun isReadyToShip(): Expr = isA("ReadyToShip")
+    fun isRefundAfterFailure(): Expr = isA("RefundAfterFailure")
+    fun isOverdueOrder(): Expr = isA("OverdueOrder")
+    fun isInGracePeriod(): Expr = isA("InGracePeriod")
+}
+
+class PendingAttemptFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val attemptKey: TextField get() = TextField(fieldPath + "attemptKey")
+    val requestedOn: DateTimeField get() = DateTimeField(fieldPath + "requestedOn")
+    fun isCompletedAttempt(): Expr = isA("CompletedAttempt")
+    fun isSuccessfulCharge(): Expr = isA("SuccessfulCharge")
+    fun isFailedCharge(): Expr = isA("FailedCharge")
+    fun isTimedOutAttempt(): Expr = isA("TimedOutAttempt")
+    fun isStalePendingAttempt(): Expr = isA("StalePendingAttempt")
+}
+
+class CompletedAttemptFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val attemptKey: TextField get() = TextField(fieldPath + "attemptKey")
+    val requestedOn: DateTimeField get() = DateTimeField(fieldPath + "requestedOn")
+    val outcome: TextField get() = TextField(fieldPath + "outcome")
+    fun isPendingAttempt(): Expr = isA("PendingAttempt")
+    fun isSuccessfulCharge(): Expr = isA("SuccessfulCharge")
+    fun isFailedCharge(): Expr = isA("FailedCharge")
+    fun isTimedOutAttempt(): Expr = isA("TimedOutAttempt")
+    fun isStalePendingAttempt(): Expr = isA("StalePendingAttempt")
+}
+
+class SuccessfulChargeFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val attemptKey: TextField get() = TextField(fieldPath + "attemptKey")
+    val requestedOn: DateTimeField get() = DateTimeField(fieldPath + "requestedOn")
+    val outcome: TextField get() = TextField(fieldPath + "outcome")
+    fun isPendingAttempt(): Expr = isA("PendingAttempt")
+    fun isCompletedAttempt(): Expr = isA("CompletedAttempt")
+    fun isFailedCharge(): Expr = isA("FailedCharge")
+    fun isTimedOutAttempt(): Expr = isA("TimedOutAttempt")
+    fun isStalePendingAttempt(): Expr = isA("StalePendingAttempt")
+}
+
+class FailedChargeFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val attemptKey: TextField get() = TextField(fieldPath + "attemptKey")
+    val requestedOn: DateTimeField get() = DateTimeField(fieldPath + "requestedOn")
+    val outcome: TextField get() = TextField(fieldPath + "outcome")
+    fun isPendingAttempt(): Expr = isA("PendingAttempt")
+    fun isCompletedAttempt(): Expr = isA("CompletedAttempt")
+    fun isSuccessfulCharge(): Expr = isA("SuccessfulCharge")
+    fun isTimedOutAttempt(): Expr = isA("TimedOutAttempt")
+    fun isStalePendingAttempt(): Expr = isA("StalePendingAttempt")
+}
+
+class TimedOutAttemptFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val attemptKey: TextField get() = TextField(fieldPath + "attemptKey")
+    val requestedOn: DateTimeField get() = DateTimeField(fieldPath + "requestedOn")
+    fun isPendingAttempt(): Expr = isA("PendingAttempt")
+    fun isCompletedAttempt(): Expr = isA("CompletedAttempt")
+    fun isSuccessfulCharge(): Expr = isA("SuccessfulCharge")
+    fun isFailedCharge(): Expr = isA("FailedCharge")
+    fun isStalePendingAttempt(): Expr = isA("StalePendingAttempt")
+}
+
+class ActiveReservationFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val reservedOn: DateTimeField get() = DateTimeField(fieldPath + "reservedOn")
+}
+
+class RetryableOrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val dueBy: DateField get() = DateField(fieldPath + "dueBy")
+    val shippingAddress: TextField get() = TextField(fieldPath + "shippingAddress")
+    val placedOn: DateTimeField get() = DateTimeField(fieldPath + "placedOn")
+    val netPaid: NumField get() = NumField(fieldPath + "netPaid")
+    val receiptEmail: TextField get() = TextField(fieldPath + "receiptEmail")
+    val firstAttemptedOn: DateTimeField get() = DateTimeField(fieldPath + "firstAttemptedOn")
+    fun isSettledOrder(): Expr = isA("SettledOrder")
+    fun isNeverCharged(): Expr = isA("NeverCharged")
+    fun isUnpaidOrder(): Expr = isA("UnpaidOrder")
+    fun isRefundedOrder(): Expr = isA("RefundedOrder")
+    fun isChargeableOrder(): Expr = isA("ChargeableOrder")
+    fun isExhaustedOrder(): Expr = isA("ExhaustedOrder")
+    fun isReservedOrder(): Expr = isA("ReservedOrder")
+    fun isUnshippedOrder(): Expr = isA("UnshippedOrder")
+    fun isReadyToShip(): Expr = isA("ReadyToShip")
+    fun isRefundAfterFailure(): Expr = isA("RefundAfterFailure")
+    fun isOverdueOrder(): Expr = isA("OverdueOrder")
+    fun isInGracePeriod(): Expr = isA("InGracePeriod")
+}
+
+class StalePendingAttemptFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val attemptKey: TextField get() = TextField(fieldPath + "attemptKey")
+    val requestedOn: DateTimeField get() = DateTimeField(fieldPath + "requestedOn")
+    fun isPendingAttempt(): Expr = isA("PendingAttempt")
+    fun isCompletedAttempt(): Expr = isA("CompletedAttempt")
+    fun isSuccessfulCharge(): Expr = isA("SuccessfulCharge")
+    fun isFailedCharge(): Expr = isA("FailedCharge")
+    fun isTimedOutAttempt(): Expr = isA("TimedOutAttempt")
+}
+
+class ExhaustedOrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val dueBy: DateField get() = DateField(fieldPath + "dueBy")
+    val shippingAddress: TextField get() = TextField(fieldPath + "shippingAddress")
+    val placedOn: DateTimeField get() = DateTimeField(fieldPath + "placedOn")
+    val netPaid: NumField get() = NumField(fieldPath + "netPaid")
+    val receiptEmail: TextField get() = TextField(fieldPath + "receiptEmail")
+    val firstAttemptedOn: DateTimeField get() = DateTimeField(fieldPath + "firstAttemptedOn")
+    fun isSettledOrder(): Expr = isA("SettledOrder")
+    fun isNeverCharged(): Expr = isA("NeverCharged")
+    fun isUnpaidOrder(): Expr = isA("UnpaidOrder")
+    fun isRefundedOrder(): Expr = isA("RefundedOrder")
+    fun isChargeableOrder(): Expr = isA("ChargeableOrder")
+    fun isRetryableOrder(): Expr = isA("RetryableOrder")
+    fun isReservedOrder(): Expr = isA("ReservedOrder")
+    fun isUnshippedOrder(): Expr = isA("UnshippedOrder")
+    fun isReadyToShip(): Expr = isA("ReadyToShip")
+    fun isRefundAfterFailure(): Expr = isA("RefundAfterFailure")
+    fun isOverdueOrder(): Expr = isA("OverdueOrder")
+    fun isInGracePeriod(): Expr = isA("InGracePeriod")
+}
+
+class ReservedOrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val dueBy: DateField get() = DateField(fieldPath + "dueBy")
+    val shippingAddress: TextField get() = TextField(fieldPath + "shippingAddress")
+    val placedOn: DateTimeField get() = DateTimeField(fieldPath + "placedOn")
+    val netPaid: NumField get() = NumField(fieldPath + "netPaid")
+    val receiptEmail: TextField get() = TextField(fieldPath + "receiptEmail")
+    val firstAttemptedOn: DateTimeField get() = DateTimeField(fieldPath + "firstAttemptedOn")
+    fun isSettledOrder(): Expr = isA("SettledOrder")
+    fun isNeverCharged(): Expr = isA("NeverCharged")
+    fun isUnpaidOrder(): Expr = isA("UnpaidOrder")
+    fun isRefundedOrder(): Expr = isA("RefundedOrder")
+    fun isChargeableOrder(): Expr = isA("ChargeableOrder")
+    fun isRetryableOrder(): Expr = isA("RetryableOrder")
+    fun isExhaustedOrder(): Expr = isA("ExhaustedOrder")
+    fun isUnshippedOrder(): Expr = isA("UnshippedOrder")
+    fun isReadyToShip(): Expr = isA("ReadyToShip")
+    fun isRefundAfterFailure(): Expr = isA("RefundAfterFailure")
+    fun isOverdueOrder(): Expr = isA("OverdueOrder")
+    fun isInGracePeriod(): Expr = isA("InGracePeriod")
+}
+
+class UnshippedOrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val dueBy: DateField get() = DateField(fieldPath + "dueBy")
+    val shippingAddress: TextField get() = TextField(fieldPath + "shippingAddress")
+    val placedOn: DateTimeField get() = DateTimeField(fieldPath + "placedOn")
+    val netPaid: NumField get() = NumField(fieldPath + "netPaid")
+    val receiptEmail: TextField get() = TextField(fieldPath + "receiptEmail")
+    val firstAttemptedOn: DateTimeField get() = DateTimeField(fieldPath + "firstAttemptedOn")
+    fun isSettledOrder(): Expr = isA("SettledOrder")
+    fun isNeverCharged(): Expr = isA("NeverCharged")
+    fun isUnpaidOrder(): Expr = isA("UnpaidOrder")
+    fun isRefundedOrder(): Expr = isA("RefundedOrder")
+    fun isChargeableOrder(): Expr = isA("ChargeableOrder")
+    fun isRetryableOrder(): Expr = isA("RetryableOrder")
+    fun isExhaustedOrder(): Expr = isA("ExhaustedOrder")
+    fun isReservedOrder(): Expr = isA("ReservedOrder")
+    fun isReadyToShip(): Expr = isA("ReadyToShip")
+    fun isRefundAfterFailure(): Expr = isA("RefundAfterFailure")
+    fun isOverdueOrder(): Expr = isA("OverdueOrder")
+    fun isInGracePeriod(): Expr = isA("InGracePeriod")
+}
+
+class ReadyToShipFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val dueBy: DateField get() = DateField(fieldPath + "dueBy")
+    val shippingAddress: TextField get() = TextField(fieldPath + "shippingAddress")
+    val placedOn: DateTimeField get() = DateTimeField(fieldPath + "placedOn")
+    val netPaid: NumField get() = NumField(fieldPath + "netPaid")
+    val receiptEmail: TextField get() = TextField(fieldPath + "receiptEmail")
+    val firstAttemptedOn: DateTimeField get() = DateTimeField(fieldPath + "firstAttemptedOn")
+    val surplus: NumField get() = NumField(fieldPath + "surplus")
+    val refundDueOnShip: NumField get() = NumField(fieldPath + "refundDueOnShip")
+    fun isSettledOrder(): Expr = isA("SettledOrder")
+    fun isNeverCharged(): Expr = isA("NeverCharged")
+    fun isUnpaidOrder(): Expr = isA("UnpaidOrder")
+    fun isRefundedOrder(): Expr = isA("RefundedOrder")
+    fun isChargeableOrder(): Expr = isA("ChargeableOrder")
+    fun isRetryableOrder(): Expr = isA("RetryableOrder")
+    fun isExhaustedOrder(): Expr = isA("ExhaustedOrder")
+    fun isReservedOrder(): Expr = isA("ReservedOrder")
+    fun isUnshippedOrder(): Expr = isA("UnshippedOrder")
+    fun isRefundAfterFailure(): Expr = isA("RefundAfterFailure")
+    fun isOverdueOrder(): Expr = isA("OverdueOrder")
+    fun isInGracePeriod(): Expr = isA("InGracePeriod")
+}
+
+class UnhandledAddressChangeFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val newAddress: TextField get() = TextField(fieldPath + "newAddress")
+    fun isApplicableAddressChange(): Expr = isA("ApplicableAddressChange")
+    fun isRefusedAddressChange(): Expr = isA("RefusedAddressChange")
+}
+
+class ApplicableAddressChangeFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val newAddress: TextField get() = TextField(fieldPath + "newAddress")
+    fun isUnhandledAddressChange(): Expr = isA("UnhandledAddressChange")
+    fun isRefusedAddressChange(): Expr = isA("RefusedAddressChange")
+}
+
+class RefusedAddressChangeFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val newAddress: TextField get() = TextField(fieldPath + "newAddress")
+    fun isUnhandledAddressChange(): Expr = isA("UnhandledAddressChange")
+    fun isApplicableAddressChange(): Expr = isA("ApplicableAddressChange")
+}
+
+class RefundAfterFailureFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val dueBy: DateField get() = DateField(fieldPath + "dueBy")
+    val shippingAddress: TextField get() = TextField(fieldPath + "shippingAddress")
+    val placedOn: DateTimeField get() = DateTimeField(fieldPath + "placedOn")
+    val netPaid: NumField get() = NumField(fieldPath + "netPaid")
+    val receiptEmail: TextField get() = TextField(fieldPath + "receiptEmail")
+    val firstAttemptedOn: DateTimeField get() = DateTimeField(fieldPath + "firstAttemptedOn")
+    fun isSettledOrder(): Expr = isA("SettledOrder")
+    fun isNeverCharged(): Expr = isA("NeverCharged")
+    fun isUnpaidOrder(): Expr = isA("UnpaidOrder")
+    fun isRefundedOrder(): Expr = isA("RefundedOrder")
+    fun isChargeableOrder(): Expr = isA("ChargeableOrder")
+    fun isRetryableOrder(): Expr = isA("RetryableOrder")
+    fun isExhaustedOrder(): Expr = isA("ExhaustedOrder")
+    fun isReservedOrder(): Expr = isA("ReservedOrder")
+    fun isUnshippedOrder(): Expr = isA("UnshippedOrder")
+    fun isReadyToShip(): Expr = isA("ReadyToShip")
+    fun isOverdueOrder(): Expr = isA("OverdueOrder")
+    fun isInGracePeriod(): Expr = isA("InGracePeriod")
+}
+
+class OverdueOrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val dueBy: DateField get() = DateField(fieldPath + "dueBy")
+    val shippingAddress: TextField get() = TextField(fieldPath + "shippingAddress")
+    val placedOn: DateTimeField get() = DateTimeField(fieldPath + "placedOn")
+    val netPaid: NumField get() = NumField(fieldPath + "netPaid")
+    val receiptEmail: TextField get() = TextField(fieldPath + "receiptEmail")
+    val firstAttemptedOn: DateTimeField get() = DateTimeField(fieldPath + "firstAttemptedOn")
+    fun isSettledOrder(): Expr = isA("SettledOrder")
+    fun isNeverCharged(): Expr = isA("NeverCharged")
+    fun isUnpaidOrder(): Expr = isA("UnpaidOrder")
+    fun isRefundedOrder(): Expr = isA("RefundedOrder")
+    fun isChargeableOrder(): Expr = isA("ChargeableOrder")
+    fun isRetryableOrder(): Expr = isA("RetryableOrder")
+    fun isExhaustedOrder(): Expr = isA("ExhaustedOrder")
+    fun isReservedOrder(): Expr = isA("ReservedOrder")
+    fun isUnshippedOrder(): Expr = isA("UnshippedOrder")
+    fun isReadyToShip(): Expr = isA("ReadyToShip")
+    fun isRefundAfterFailure(): Expr = isA("RefundAfterFailure")
+    fun isInGracePeriod(): Expr = isA("InGracePeriod")
+}
+
+class InGracePeriodFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val dueBy: DateField get() = DateField(fieldPath + "dueBy")
+    val shippingAddress: TextField get() = TextField(fieldPath + "shippingAddress")
+    val placedOn: DateTimeField get() = DateTimeField(fieldPath + "placedOn")
+    val netPaid: NumField get() = NumField(fieldPath + "netPaid")
+    val receiptEmail: TextField get() = TextField(fieldPath + "receiptEmail")
+    val firstAttemptedOn: DateTimeField get() = DateTimeField(fieldPath + "firstAttemptedOn")
+    fun isSettledOrder(): Expr = isA("SettledOrder")
+    fun isNeverCharged(): Expr = isA("NeverCharged")
+    fun isUnpaidOrder(): Expr = isA("UnpaidOrder")
+    fun isRefundedOrder(): Expr = isA("RefundedOrder")
+    fun isChargeableOrder(): Expr = isA("ChargeableOrder")
+    fun isRetryableOrder(): Expr = isA("RetryableOrder")
+    fun isExhaustedOrder(): Expr = isA("ExhaustedOrder")
+    fun isReservedOrder(): Expr = isA("ReservedOrder")
+    fun isUnshippedOrder(): Expr = isA("UnshippedOrder")
+    fun isReadyToShip(): Expr = isA("ReadyToShip")
+    fun isRefundAfterFailure(): Expr = isA("RefundAfterFailure")
+    fun isOverdueOrder(): Expr = isA("OverdueOrder")
+}
+
+class OpenDunningFlagFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val openedOn: DateField get() = DateField(fieldPath + "openedOn")
+    fun isClosableDunningFlag(): Expr = isA("ClosableDunningFlag")
+}
+
+class ClosableDunningFlagFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val openedOn: DateField get() = DateField(fieldPath + "openedOn")
+    fun isOpenDunningFlag(): Expr = isA("OpenDunningFlag")
 }
 
 fun main() {

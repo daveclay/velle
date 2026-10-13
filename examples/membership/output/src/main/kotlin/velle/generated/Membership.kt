@@ -486,6 +486,679 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun toString() = "LateEscalatedMember#$id"
     }
 
+    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    val read = Read()
+
+    inner class Read {
+        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
+        val registry = QueryRegistry()
+        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+        val plans: PlanQuery get() = PlanQuery(Query("Plan"))
+        val members: MemberQuery get() = MemberQuery(Query("Member"))
+        val welcomeNotes: WelcomeNoteQuery get() = WelcomeNoteQuery(Query("WelcomeNote"))
+        val emailChanges: EmailChangeQuery get() = EmailChangeQuery(Query("EmailChange"))
+        val visits: VisitQuery get() = VisitQuery(Query("Visit"))
+        val analyticsPings: AnalyticsPingQuery get() = AnalyticsPingQuery(Query("AnalyticsPing"))
+        val deposits: DepositQuery get() = DepositQuery(Query("Deposit"))
+        val charges: ChargeQuery get() = ChargeQuery(Query("Charge"))
+        val chargeApplications: ChargeApplicationQuery get() = ChargeApplicationQuery(Query("ChargeApplication"))
+        val delinquencyFlags: DelinquencyFlagQuery get() = DelinquencyFlagQuery(Query("DelinquencyFlag"))
+        val delinquencyResolutions: DelinquencyResolutionQuery get() = DelinquencyResolutionQuery(Query("DelinquencyResolution"))
+        val auditEntrys: AuditEntryQuery get() = AuditEntryQuery(Query("AuditEntry"))
+        val accountReviews: AccountReviewQuery get() = AccountReviewQuery(Query("AccountReview"))
+        val agents: AgentQuery get() = AgentQuery(Query("Agent"))
+        val tickets: TicketQuery get() = TicketQuery(Query("Ticket"))
+        val ticketClosures: TicketClosureQuery get() = TicketClosureQuery(Query("TicketClosure"))
+        val reopenTickets: ReopenTicketQuery get() = ReopenTicketQuery(Query("ReopenTicket"))
+        val reopenNotices: ReopenNoticeQuery get() = ReopenNoticeQuery(Query("ReopenNotice"))
+        val escalations: EscalationQuery get() = EscalationQuery(Query("Escalation"))
+        val selfReferrals: SelfReferralQuery get() = SelfReferralQuery(Query("SelfReferral"))
+        val unappliedDeposits: UnappliedDepositQuery get() = UnappliedDepositQuery(Query("UnappliedDeposit"))
+        val activeMembers: ActiveMemberQuery get() = ActiveMemberQuery(Query("ActiveMember"))
+        val unappliedCharges: UnappliedChargeQuery get() = UnappliedChargeQuery(Query("UnappliedCharge"))
+        val delinquents: DelinquentQuery get() = DelinquentQuery(Query("Delinquent"))
+        val deepDelinquents: DeepDelinquentQuery get() = DeepDelinquentQuery(Query("DeepDelinquent"))
+        val openDelinquencyFlags: OpenDelinquencyFlagQuery get() = OpenDelinquencyFlagQuery(Query("OpenDelinquencyFlag"))
+        val chronicDelinquents: ChronicDelinquentQuery get() = ChronicDelinquentQuery(Query("ChronicDelinquent"))
+        val closedTickets: ClosedTicketQuery get() = ClosedTicketQuery(Query("ClosedTicket"))
+        val openTickets: OpenTicketQuery get() = OpenTicketQuery(Query("OpenTicket"))
+        val overdueTickets: OverdueTicketQuery get() = OverdueTicketQuery(Query("OverdueTicket"))
+        val highPrioritys: HighPriorityQuery get() = HighPriorityQuery(Query("HighPriority"))
+        val unassigneds: UnassignedQuery get() = UnassignedQuery(Query("Unassigned"))
+        val needsAttentions: NeedsAttentionQuery get() = NeedsAttentionQuery(Query("NeedsAttention"))
+        val urgentQueues: UrgentQueueQuery get() = UrgentQueueQuery(Query("UrgentQueue"))
+        val memberWithDisputedCharges: MemberWithDisputedChargeQuery get() = MemberWithDisputedChargeQuery(Query("MemberWithDisputedCharge"))
+        val lateEscalatedMembers: LateEscalatedMemberQuery get() = LateEscalatedMemberQuery(Query("LateEscalatedMember"))
+    }
+
+    inner class PlanQuery(q: Query) : TypedQuery<PlanFields, Plan>(system, q, PlanFields(), { materializePlan(it) }) {
+        override fun with(q: Query) = PlanQuery(q)
+    }
+
+    inner class MemberQuery(q: Query) : TypedQuery<MemberFields, Member>(system, q, MemberFields(), { materializeMember(it) }) {
+        override fun with(q: Query) = MemberQuery(q)
+    }
+
+    inner class WelcomeNoteQuery(q: Query) : TypedQuery<WelcomeNoteFields, WelcomeNote>(system, q, WelcomeNoteFields(), { materializeWelcomeNote(it) }) {
+        override fun with(q: Query) = WelcomeNoteQuery(q)
+    }
+
+    inner class EmailChangeQuery(q: Query) : TypedQuery<EmailChangeFields, EmailChange>(system, q, EmailChangeFields(), { materializeEmailChange(it) }) {
+        override fun with(q: Query) = EmailChangeQuery(q)
+    }
+
+    inner class VisitQuery(q: Query) : TypedQuery<VisitFields, Visit>(system, q, VisitFields(), { materializeVisit(it) }) {
+        override fun with(q: Query) = VisitQuery(q)
+    }
+
+    inner class AnalyticsPingQuery(q: Query) : TypedQuery<AnalyticsPingFields, AnalyticsPing>(system, q, AnalyticsPingFields(), { materializeAnalyticsPing(it) }) {
+        override fun with(q: Query) = AnalyticsPingQuery(q)
+    }
+
+    inner class DepositQuery(q: Query) : TypedQuery<DepositFields, Deposit>(system, q, DepositFields(), { materializeDeposit(it) }) {
+        override fun with(q: Query) = DepositQuery(q)
+    }
+
+    inner class ChargeQuery(q: Query) : TypedQuery<ChargeFields, Charge>(system, q, ChargeFields(), { materializeCharge(it) }) {
+        override fun with(q: Query) = ChargeQuery(q)
+    }
+
+    inner class ChargeApplicationQuery(q: Query) : TypedQuery<ChargeApplicationFields, ChargeApplication>(system, q, ChargeApplicationFields(), { materializeChargeApplication(it) }) {
+        override fun with(q: Query) = ChargeApplicationQuery(q)
+    }
+
+    inner class DelinquencyFlagQuery(q: Query) : TypedQuery<DelinquencyFlagFields, DelinquencyFlag>(system, q, DelinquencyFlagFields(), { materializeDelinquencyFlag(it) }) {
+        override fun with(q: Query) = DelinquencyFlagQuery(q)
+    }
+
+    inner class DelinquencyResolutionQuery(q: Query) : TypedQuery<DelinquencyResolutionFields, DelinquencyResolution>(system, q, DelinquencyResolutionFields(), { materializeDelinquencyResolution(it) }) {
+        override fun with(q: Query) = DelinquencyResolutionQuery(q)
+    }
+
+    inner class AuditEntryQuery(q: Query) : TypedQuery<AuditEntryFields, AuditEntry>(system, q, AuditEntryFields(), { materializeAuditEntry(it) }) {
+        override fun with(q: Query) = AuditEntryQuery(q)
+    }
+
+    inner class AccountReviewQuery(q: Query) : TypedQuery<AccountReviewFields, AccountReview>(system, q, AccountReviewFields(), { materializeAccountReview(it) }) {
+        override fun with(q: Query) = AccountReviewQuery(q)
+    }
+
+    inner class AgentQuery(q: Query) : TypedQuery<AgentFields, Agent>(system, q, AgentFields(), { materializeAgent(it) }) {
+        override fun with(q: Query) = AgentQuery(q)
+    }
+
+    inner class TicketQuery(q: Query) : TypedQuery<TicketFields, Ticket>(system, q, TicketFields(), { materializeTicket(it) }) {
+        override fun with(q: Query) = TicketQuery(q)
+    }
+
+    inner class TicketClosureQuery(q: Query) : TypedQuery<TicketClosureFields, TicketClosure>(system, q, TicketClosureFields(), { materializeTicketClosure(it) }) {
+        override fun with(q: Query) = TicketClosureQuery(q)
+    }
+
+    inner class ReopenTicketQuery(q: Query) : TypedQuery<ReopenTicketFields, ReopenTicket>(system, q, ReopenTicketFields(), { materializeReopenTicket(it) }) {
+        override fun with(q: Query) = ReopenTicketQuery(q)
+    }
+
+    inner class ReopenNoticeQuery(q: Query) : TypedQuery<ReopenNoticeFields, ReopenNotice>(system, q, ReopenNoticeFields(), { materializeReopenNotice(it) }) {
+        override fun with(q: Query) = ReopenNoticeQuery(q)
+    }
+
+    inner class EscalationQuery(q: Query) : TypedQuery<EscalationFields, Escalation>(system, q, EscalationFields(), { materializeEscalation(it) }) {
+        override fun with(q: Query) = EscalationQuery(q)
+    }
+
+    inner class SelfReferralQuery(q: Query) : TypedQuery<SelfReferralFields, SelfReferral>(system, q, SelfReferralFields(), { materializeSelfReferral(it) }) {
+        override fun with(q: Query) = SelfReferralQuery(q)
+    }
+
+    inner class UnappliedDepositQuery(q: Query) : TypedQuery<UnappliedDepositFields, UnappliedDeposit>(system, q, UnappliedDepositFields(), { materializeUnappliedDeposit(it) }) {
+        override fun with(q: Query) = UnappliedDepositQuery(q)
+    }
+
+    inner class ActiveMemberQuery(q: Query) : TypedQuery<ActiveMemberFields, ActiveMember>(system, q, ActiveMemberFields(), { materializeActiveMember(it) }) {
+        override fun with(q: Query) = ActiveMemberQuery(q)
+    }
+
+    inner class UnappliedChargeQuery(q: Query) : TypedQuery<UnappliedChargeFields, UnappliedCharge>(system, q, UnappliedChargeFields(), { materializeUnappliedCharge(it) }) {
+        override fun with(q: Query) = UnappliedChargeQuery(q)
+    }
+
+    inner class DelinquentQuery(q: Query) : TypedQuery<DelinquentFields, Delinquent>(system, q, DelinquentFields(), { materializeDelinquent(it) }) {
+        override fun with(q: Query) = DelinquentQuery(q)
+    }
+
+    inner class DeepDelinquentQuery(q: Query) : TypedQuery<DeepDelinquentFields, DeepDelinquent>(system, q, DeepDelinquentFields(), { materializeDeepDelinquent(it) }) {
+        override fun with(q: Query) = DeepDelinquentQuery(q)
+    }
+
+    inner class OpenDelinquencyFlagQuery(q: Query) : TypedQuery<OpenDelinquencyFlagFields, OpenDelinquencyFlag>(system, q, OpenDelinquencyFlagFields(), { materializeOpenDelinquencyFlag(it) }) {
+        override fun with(q: Query) = OpenDelinquencyFlagQuery(q)
+    }
+
+    inner class ChronicDelinquentQuery(q: Query) : TypedQuery<ChronicDelinquentFields, ChronicDelinquent>(system, q, ChronicDelinquentFields(), { materializeChronicDelinquent(it) }) {
+        override fun with(q: Query) = ChronicDelinquentQuery(q)
+    }
+
+    inner class ClosedTicketQuery(q: Query) : TypedQuery<ClosedTicketFields, ClosedTicket>(system, q, ClosedTicketFields(), { materializeClosedTicket(it) }) {
+        override fun with(q: Query) = ClosedTicketQuery(q)
+    }
+
+    inner class OpenTicketQuery(q: Query) : TypedQuery<OpenTicketFields, OpenTicket>(system, q, OpenTicketFields(), { materializeOpenTicket(it) }) {
+        override fun with(q: Query) = OpenTicketQuery(q)
+    }
+
+    inner class OverdueTicketQuery(q: Query) : TypedQuery<OverdueTicketFields, OverdueTicket>(system, q, OverdueTicketFields(), { materializeOverdueTicket(it) }) {
+        override fun with(q: Query) = OverdueTicketQuery(q)
+    }
+
+    inner class HighPriorityQuery(q: Query) : TypedQuery<HighPriorityFields, HighPriority>(system, q, HighPriorityFields(), { materializeHighPriority(it) }) {
+        override fun with(q: Query) = HighPriorityQuery(q)
+    }
+
+    inner class UnassignedQuery(q: Query) : TypedQuery<UnassignedFields, Unassigned>(system, q, UnassignedFields(), { materializeUnassigned(it) }) {
+        override fun with(q: Query) = UnassignedQuery(q)
+    }
+
+    inner class NeedsAttentionQuery(q: Query) : TypedQuery<NeedsAttentionFields, NeedsAttention>(system, q, NeedsAttentionFields(), { materializeNeedsAttention(it) }) {
+        override fun with(q: Query) = NeedsAttentionQuery(q)
+    }
+
+    inner class UrgentQueueQuery(q: Query) : TypedQuery<UrgentQueueFields, UrgentQueue>(system, q, UrgentQueueFields(), { materializeUrgentQueue(it) }) {
+        override fun with(q: Query) = UrgentQueueQuery(q)
+    }
+
+    inner class MemberWithDisputedChargeQuery(q: Query) : TypedQuery<MemberWithDisputedChargeFields, MemberWithDisputedCharge>(system, q, MemberWithDisputedChargeFields(), { materializeMemberWithDisputedCharge(it) }) {
+        override fun with(q: Query) = MemberWithDisputedChargeQuery(q)
+    }
+
+    inner class LateEscalatedMemberQuery(q: Query) : TypedQuery<LateEscalatedMemberFields, LateEscalatedMember>(system, q, LateEscalatedMemberFields(), { materializeLateEscalatedMember(it) }) {
+        override fun with(q: Query) = LateEscalatedMemberQuery(q)
+    }
+
+    fun materializePlan(id: Long): Plan = Plan(
+        id = id,
+        name = system.get(id, "name") as String,
+        price = system.get(id, "price") as BigDecimal,
+        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
+    )
+
+    fun materializeMember(id: Long): Member = Member(
+        id = id,
+        name = system.get(id, "name") as String,
+        signupEmail = system.get(id, "signupEmail") as String,
+        plan = PlanView(system.get(id, "plan") as Long),
+        referredBy = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) },
+        joinedOn = system.get(id, "joinedOn") as Instant,
+        lastChangedOn = system.get(id, "lastChangedOn") as Instant,
+        balance = system.get(id, "balance") as BigDecimal,
+        lowestBalance = system.get(id, "lowestBalance") as BigDecimal,
+        visitCount = (system.get(id, "visitCount") as BigDecimal).longValueExact(),
+        suspended = system.get(id, "suspended") as Boolean,
+        engagementScore = (system.get(id, "engagementScore") as BigDecimal).toDouble(),
+        totalDeposited = system.get(id, "totalDeposited") as BigDecimal,
+        email = system.get(id, "email") as String,
+        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
+        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) },
+        emailChanges = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) },
+        visits = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) },
+        deposits = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) },
+        charges = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) },
+        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) },
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) },
+        accountReviews = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+    )
+
+    fun materializeWelcomeNote(id: Long): WelcomeNote = WelcomeNote(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        sentOn = system.get(id, "sentOn") as Instant,
+    )
+
+    fun materializeEmailChange(id: Long): EmailChange = EmailChange(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        newEmail = system.get(id, "newEmail") as String,
+        changedOn = system.get(id, "changedOn") as Instant,
+    )
+
+    fun materializeVisit(id: Long): Visit = Visit(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        minutes = (system.get(id, "minutes") as BigDecimal).intValueExact(),
+        analyticsPings = (system.get(id, "analyticsPings") as List<*>).map { AnalyticsPingView(it as Long) },
+    )
+
+    fun materializeAnalyticsPing(id: Long): AnalyticsPing = AnalyticsPing(
+        id = id,
+        visit = VisitView(system.get(id, "visit") as Long),
+        pingedOn = system.get(id, "pingedOn") as Instant,
+    )
+
+    fun materializeDeposit(id: Long): Deposit = Deposit(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        applied = system.get(id, "applied") as Boolean,
+    )
+
+    fun materializeCharge(id: Long): Charge = Charge(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        reference = system.get(id, "reference") as String,
+        requestedOn = system.get(id, "requestedOn") as LocalDate,
+        chargeApplications = (system.get(id, "chargeApplications") as List<*>).map { ChargeApplicationView(it as Long) },
+    )
+
+    fun materializeChargeApplication(id: Long): ChargeApplication = ChargeApplication(
+        id = id,
+        charge = ChargeView(system.get(id, "charge") as Long),
+        appliedOn = system.get(id, "appliedOn") as Instant,
+    )
+
+    fun materializeDelinquencyFlag(id: Long): DelinquencyFlag = DelinquencyFlag(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        flaggedOn = system.get(id, "flaggedOn") as LocalDate,
+        delinquencyResolutions = (system.get(id, "delinquencyResolutions") as List<*>).map { DelinquencyResolutionView(it as Long) },
+    )
+
+    fun materializeDelinquencyResolution(id: Long): DelinquencyResolution = DelinquencyResolution(
+        id = id,
+        flag = DelinquencyFlagView(system.get(id, "flag") as Long),
+        resolvedOn = system.get(id, "resolvedOn") as LocalDate,
+    )
+
+    fun materializeAuditEntry(id: Long): AuditEntry = AuditEntry(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        note = system.get(id, "note") as String,
+        loggedOn = system.get(id, "loggedOn") as Instant,
+    )
+
+    fun materializeAccountReview(id: Long): AccountReview = AccountReview(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        openedOn = system.get(id, "openedOn") as Instant,
+    )
+
+    fun materializeAgent(id: Long): Agent = Agent(
+        id = id,
+        name = system.get(id, "name") as String,
+        email = system.get(id, "email") as String,
+        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
+    )
+
+    fun materializeTicket(id: Long): Ticket = Ticket(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        subject = system.get(id, "subject") as String,
+        due = system.get(id, "due") as LocalDate,
+        priority = system.get(id, "priority") as String,
+        assignee = (system.get(id, "assignee") as Long?)?.let { AgentView(it) },
+        openedOn = system.get(id, "openedOn") as Instant,
+        assigneeEmail = system.get(id, "assigneeEmail") as String?,
+        contact = system.get(id, "contact") as String,
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
+        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
+        escalations = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) },
+    )
+
+    fun materializeTicketClosure(id: Long): TicketClosure = TicketClosure(
+        id = id,
+        ticket = TicketView(system.get(id, "ticket") as Long),
+        closedBy = AgentView(system.get(id, "closedBy") as Long),
+        closedOn = system.get(id, "closedOn") as Instant,
+    )
+
+    fun materializeReopenTicket(id: Long): ReopenTicket = ReopenTicket(
+        id = id,
+        ticket = TicketView(system.get(id, "ticket") as Long),
+    )
+
+    fun materializeReopenNotice(id: Long): ReopenNotice = ReopenNotice(
+        id = id,
+        ticket = TicketView(system.get(id, "ticket") as Long),
+        reassignTo = AgentView(system.get(id, "reassignTo") as Long),
+        noticedOn = system.get(id, "noticedOn") as Instant,
+    )
+
+    fun materializeEscalation(id: Long): Escalation = Escalation(
+        id = id,
+        ticket = TicketView(system.get(id, "ticket") as Long),
+        raisedOn = system.get(id, "raisedOn") as LocalDate,
+    )
+
+    fun materializeSelfReferral(id: Long): SelfReferral = SelfReferral(
+        id = id,
+        name = system.get(id, "name") as String,
+        signupEmail = system.get(id, "signupEmail") as String,
+        plan = PlanView(system.get(id, "plan") as Long),
+        referredBy = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) },
+        joinedOn = system.get(id, "joinedOn") as Instant,
+        lastChangedOn = system.get(id, "lastChangedOn") as Instant,
+        balance = system.get(id, "balance") as BigDecimal,
+        lowestBalance = system.get(id, "lowestBalance") as BigDecimal,
+        visitCount = (system.get(id, "visitCount") as BigDecimal).longValueExact(),
+        suspended = system.get(id, "suspended") as Boolean,
+        engagementScore = (system.get(id, "engagementScore") as BigDecimal).toDouble(),
+        totalDeposited = system.get(id, "totalDeposited") as BigDecimal,
+        email = system.get(id, "email") as String,
+        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
+        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) },
+        emailChanges = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) },
+        visits = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) },
+        deposits = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) },
+        charges = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) },
+        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) },
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) },
+        accountReviews = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+    )
+
+    fun materializeUnappliedDeposit(id: Long): UnappliedDeposit = UnappliedDeposit(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        applied = system.get(id, "applied") as Boolean,
+    )
+
+    fun materializeActiveMember(id: Long): ActiveMember = ActiveMember(
+        id = id,
+        name = system.get(id, "name") as String,
+        signupEmail = system.get(id, "signupEmail") as String,
+        plan = PlanView(system.get(id, "plan") as Long),
+        referredBy = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) },
+        joinedOn = system.get(id, "joinedOn") as Instant,
+        lastChangedOn = system.get(id, "lastChangedOn") as Instant,
+        balance = system.get(id, "balance") as BigDecimal,
+        lowestBalance = system.get(id, "lowestBalance") as BigDecimal,
+        visitCount = (system.get(id, "visitCount") as BigDecimal).longValueExact(),
+        suspended = system.get(id, "suspended") as Boolean,
+        engagementScore = (system.get(id, "engagementScore") as BigDecimal).toDouble(),
+        totalDeposited = system.get(id, "totalDeposited") as BigDecimal,
+        email = system.get(id, "email") as String,
+        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
+        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) },
+        emailChanges = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) },
+        visits = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) },
+        deposits = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) },
+        charges = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) },
+        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) },
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) },
+        accountReviews = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+    )
+
+    fun materializeUnappliedCharge(id: Long): UnappliedCharge = UnappliedCharge(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        reference = system.get(id, "reference") as String,
+        requestedOn = system.get(id, "requestedOn") as LocalDate,
+        chargeApplications = (system.get(id, "chargeApplications") as List<*>).map { ChargeApplicationView(it as Long) },
+    )
+
+    fun materializeDelinquent(id: Long): Delinquent = Delinquent(
+        id = id,
+        name = system.get(id, "name") as String,
+        signupEmail = system.get(id, "signupEmail") as String,
+        plan = PlanView(system.get(id, "plan") as Long),
+        referredBy = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) },
+        joinedOn = system.get(id, "joinedOn") as Instant,
+        lastChangedOn = system.get(id, "lastChangedOn") as Instant,
+        balance = system.get(id, "balance") as BigDecimal,
+        lowestBalance = system.get(id, "lowestBalance") as BigDecimal,
+        visitCount = (system.get(id, "visitCount") as BigDecimal).longValueExact(),
+        suspended = system.get(id, "suspended") as Boolean,
+        engagementScore = (system.get(id, "engagementScore") as BigDecimal).toDouble(),
+        totalDeposited = system.get(id, "totalDeposited") as BigDecimal,
+        email = system.get(id, "email") as String,
+        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
+        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) },
+        emailChanges = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) },
+        visits = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) },
+        deposits = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) },
+        charges = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) },
+        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) },
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) },
+        accountReviews = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+    )
+
+    fun materializeDeepDelinquent(id: Long): DeepDelinquent = DeepDelinquent(
+        id = id,
+        name = system.get(id, "name") as String,
+        signupEmail = system.get(id, "signupEmail") as String,
+        plan = PlanView(system.get(id, "plan") as Long),
+        referredBy = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) },
+        joinedOn = system.get(id, "joinedOn") as Instant,
+        lastChangedOn = system.get(id, "lastChangedOn") as Instant,
+        balance = system.get(id, "balance") as BigDecimal,
+        lowestBalance = system.get(id, "lowestBalance") as BigDecimal,
+        visitCount = (system.get(id, "visitCount") as BigDecimal).longValueExact(),
+        suspended = system.get(id, "suspended") as Boolean,
+        engagementScore = (system.get(id, "engagementScore") as BigDecimal).toDouble(),
+        totalDeposited = system.get(id, "totalDeposited") as BigDecimal,
+        email = system.get(id, "email") as String,
+        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
+        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) },
+        emailChanges = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) },
+        visits = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) },
+        deposits = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) },
+        charges = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) },
+        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) },
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) },
+        accountReviews = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+    )
+
+    fun materializeOpenDelinquencyFlag(id: Long): OpenDelinquencyFlag = OpenDelinquencyFlag(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        flaggedOn = system.get(id, "flaggedOn") as LocalDate,
+        delinquencyResolutions = (system.get(id, "delinquencyResolutions") as List<*>).map { DelinquencyResolutionView(it as Long) },
+    )
+
+    fun materializeChronicDelinquent(id: Long): ChronicDelinquent = ChronicDelinquent(
+        id = id,
+        name = system.get(id, "name") as String,
+        signupEmail = system.get(id, "signupEmail") as String,
+        plan = PlanView(system.get(id, "plan") as Long),
+        referredBy = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) },
+        joinedOn = system.get(id, "joinedOn") as Instant,
+        lastChangedOn = system.get(id, "lastChangedOn") as Instant,
+        balance = system.get(id, "balance") as BigDecimal,
+        lowestBalance = system.get(id, "lowestBalance") as BigDecimal,
+        visitCount = (system.get(id, "visitCount") as BigDecimal).longValueExact(),
+        suspended = system.get(id, "suspended") as Boolean,
+        engagementScore = (system.get(id, "engagementScore") as BigDecimal).toDouble(),
+        totalDeposited = system.get(id, "totalDeposited") as BigDecimal,
+        email = system.get(id, "email") as String,
+        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
+        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) },
+        emailChanges = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) },
+        visits = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) },
+        deposits = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) },
+        charges = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) },
+        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) },
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) },
+        accountReviews = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+    )
+
+    fun materializeClosedTicket(id: Long): ClosedTicket = ClosedTicket(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        subject = system.get(id, "subject") as String,
+        due = system.get(id, "due") as LocalDate,
+        priority = system.get(id, "priority") as String,
+        assignee = (system.get(id, "assignee") as Long?)?.let { AgentView(it) },
+        openedOn = system.get(id, "openedOn") as Instant,
+        assigneeEmail = system.get(id, "assigneeEmail") as String?,
+        contact = system.get(id, "contact") as String,
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
+        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
+        escalations = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) },
+        closedOn = system.getAs(id, "ClosedTicket", "closedOn") as LocalDate,
+        closedBy = AgentView(system.getAs(id, "ClosedTicket", "closedBy") as Long),
+    )
+
+    fun materializeOpenTicket(id: Long): OpenTicket = OpenTicket(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        subject = system.get(id, "subject") as String,
+        due = system.get(id, "due") as LocalDate,
+        priority = system.get(id, "priority") as String,
+        assignee = (system.get(id, "assignee") as Long?)?.let { AgentView(it) },
+        openedOn = system.get(id, "openedOn") as Instant,
+        assigneeEmail = system.get(id, "assigneeEmail") as String?,
+        contact = system.get(id, "contact") as String,
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
+        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
+        escalations = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) },
+    )
+
+    fun materializeOverdueTicket(id: Long): OverdueTicket = OverdueTicket(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        subject = system.get(id, "subject") as String,
+        due = system.get(id, "due") as LocalDate,
+        priority = system.get(id, "priority") as String,
+        assignee = (system.get(id, "assignee") as Long?)?.let { AgentView(it) },
+        openedOn = system.get(id, "openedOn") as Instant,
+        assigneeEmail = system.get(id, "assigneeEmail") as String?,
+        contact = system.get(id, "contact") as String,
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
+        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
+        escalations = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) },
+    )
+
+    fun materializeHighPriority(id: Long): HighPriority = HighPriority(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        subject = system.get(id, "subject") as String,
+        due = system.get(id, "due") as LocalDate,
+        priority = system.get(id, "priority") as String,
+        assignee = (system.get(id, "assignee") as Long?)?.let { AgentView(it) },
+        openedOn = system.get(id, "openedOn") as Instant,
+        assigneeEmail = system.get(id, "assigneeEmail") as String?,
+        contact = system.get(id, "contact") as String,
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
+        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
+        escalations = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) },
+    )
+
+    fun materializeUnassigned(id: Long): Unassigned = Unassigned(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        subject = system.get(id, "subject") as String,
+        due = system.get(id, "due") as LocalDate,
+        priority = system.get(id, "priority") as String,
+        assignee = (system.get(id, "assignee") as Long?)?.let { AgentView(it) },
+        openedOn = system.get(id, "openedOn") as Instant,
+        assigneeEmail = system.get(id, "assigneeEmail") as String?,
+        contact = system.get(id, "contact") as String,
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
+        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
+        escalations = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) },
+    )
+
+    fun materializeNeedsAttention(id: Long): NeedsAttention = NeedsAttention(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        subject = system.get(id, "subject") as String,
+        due = system.get(id, "due") as LocalDate,
+        priority = system.get(id, "priority") as String,
+        assignee = (system.get(id, "assignee") as Long?)?.let { AgentView(it) },
+        openedOn = system.get(id, "openedOn") as Instant,
+        assigneeEmail = system.get(id, "assigneeEmail") as String?,
+        contact = system.get(id, "contact") as String,
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
+        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
+        escalations = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) },
+    )
+
+    fun materializeUrgentQueue(id: Long): UrgentQueue = UrgentQueue(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        subject = system.get(id, "subject") as String,
+        due = system.get(id, "due") as LocalDate,
+        priority = system.get(id, "priority") as String,
+        assignee = (system.get(id, "assignee") as Long?)?.let { AgentView(it) },
+        openedOn = system.get(id, "openedOn") as Instant,
+        assigneeEmail = system.get(id, "assigneeEmail") as String?,
+        contact = system.get(id, "contact") as String,
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
+        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
+        escalations = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) },
+    )
+
+    fun materializeMemberWithDisputedCharge(id: Long): MemberWithDisputedCharge = MemberWithDisputedCharge(
+        id = id,
+        name = system.get(id, "name") as String,
+        signupEmail = system.get(id, "signupEmail") as String,
+        plan = PlanView(system.get(id, "plan") as Long),
+        referredBy = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) },
+        joinedOn = system.get(id, "joinedOn") as Instant,
+        lastChangedOn = system.get(id, "lastChangedOn") as Instant,
+        balance = system.get(id, "balance") as BigDecimal,
+        lowestBalance = system.get(id, "lowestBalance") as BigDecimal,
+        visitCount = (system.get(id, "visitCount") as BigDecimal).longValueExact(),
+        suspended = system.get(id, "suspended") as Boolean,
+        engagementScore = (system.get(id, "engagementScore") as BigDecimal).toDouble(),
+        totalDeposited = system.get(id, "totalDeposited") as BigDecimal,
+        email = system.get(id, "email") as String,
+        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
+        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) },
+        emailChanges = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) },
+        visits = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) },
+        deposits = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) },
+        charges = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) },
+        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) },
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) },
+        accountReviews = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+    )
+
+    fun materializeLateEscalatedMember(id: Long): LateEscalatedMember = LateEscalatedMember(
+        id = id,
+        name = system.get(id, "name") as String,
+        signupEmail = system.get(id, "signupEmail") as String,
+        plan = PlanView(system.get(id, "plan") as Long),
+        referredBy = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) },
+        joinedOn = system.get(id, "joinedOn") as Instant,
+        lastChangedOn = system.get(id, "lastChangedOn") as Instant,
+        balance = system.get(id, "balance") as BigDecimal,
+        lowestBalance = system.get(id, "lowestBalance") as BigDecimal,
+        visitCount = (system.get(id, "visitCount") as BigDecimal).longValueExact(),
+        suspended = system.get(id, "suspended") as Boolean,
+        engagementScore = (system.get(id, "engagementScore") as BigDecimal).toDouble(),
+        totalDeposited = system.get(id, "totalDeposited") as BigDecimal,
+        email = system.get(id, "email") as String,
+        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
+        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) },
+        emailChanges = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) },
+        visits = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) },
+        deposits = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) },
+        charges = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) },
+        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) },
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) },
+        accountReviews = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+    )
+
     companion object {
         private val SPEC = """
 -- Membership: a streaming-service membership system — the second Velle spec.
@@ -920,6 +1593,923 @@ shape LateEscalatedMember = Member where
     exists (tickets as tix where count(escalations where raisedOn > tix.due) >= 1)
 """
     }
+}
+
+// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
+// References are typed handles (views); navigating one is a further read.
+
+data class Plan(
+    override val id: Long,
+    val name: String,
+    val price: BigDecimal,
+    val members: List<MembershipSystem.MemberView>,
+) : View
+
+data class Member(
+    override val id: Long,
+    val name: String,
+    val signupEmail: String,
+    val plan: MembershipSystem.PlanView,
+    val referredBy: MembershipSystem.MemberView?,
+    val joinedOn: Instant,
+    val lastChangedOn: Instant,
+    val balance: BigDecimal,
+    val lowestBalance: BigDecimal,
+    val visitCount: Long,
+    val suspended: Boolean,
+    val engagementScore: Double,
+    val totalDeposited: BigDecimal,
+    val email: String,
+    val members: List<MembershipSystem.MemberView>,
+    val welcomeNotes: List<MembershipSystem.WelcomeNoteView>,
+    val emailChanges: List<MembershipSystem.EmailChangeView>,
+    val visits: List<MembershipSystem.VisitView>,
+    val deposits: List<MembershipSystem.DepositView>,
+    val charges: List<MembershipSystem.ChargeView>,
+    val delinquencyFlags: List<MembershipSystem.DelinquencyFlagView>,
+    val auditEntrys: List<MembershipSystem.AuditEntryView>,
+    val accountReviews: List<MembershipSystem.AccountReviewView>,
+    val tickets: List<MembershipSystem.TicketView>,
+) : View
+
+data class WelcomeNote(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val sentOn: Instant,
+) : View
+
+data class EmailChange(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val newEmail: String,
+    val changedOn: Instant,
+) : View
+
+data class Visit(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val minutes: Int,
+    val analyticsPings: List<MembershipSystem.AnalyticsPingView>,
+) : View
+
+data class AnalyticsPing(
+    override val id: Long,
+    val visit: MembershipSystem.VisitView,
+    val pingedOn: Instant,
+) : View
+
+data class Deposit(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val amount: BigDecimal,
+    val applied: Boolean,
+) : View
+
+data class Charge(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val amount: BigDecimal,
+    val reference: String,
+    val requestedOn: LocalDate,
+    val chargeApplications: List<MembershipSystem.ChargeApplicationView>,
+) : View
+
+data class ChargeApplication(
+    override val id: Long,
+    val charge: MembershipSystem.ChargeView,
+    val appliedOn: Instant,
+) : View
+
+data class DelinquencyFlag(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val flaggedOn: LocalDate,
+    val delinquencyResolutions: List<MembershipSystem.DelinquencyResolutionView>,
+) : View
+
+data class DelinquencyResolution(
+    override val id: Long,
+    val flag: MembershipSystem.DelinquencyFlagView,
+    val resolvedOn: LocalDate,
+) : View
+
+data class AuditEntry(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val note: String,
+    val loggedOn: Instant,
+) : View
+
+data class AccountReview(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val openedOn: Instant,
+) : View
+
+data class Agent(
+    override val id: Long,
+    val name: String,
+    val email: String,
+    val tickets: List<MembershipSystem.TicketView>,
+    val ticketClosures: List<MembershipSystem.TicketClosureView>,
+    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
+) : View
+
+data class Ticket(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val subject: String,
+    val due: LocalDate,
+    val priority: String,
+    val assignee: MembershipSystem.AgentView?,
+    val openedOn: Instant,
+    val assigneeEmail: String?,
+    val contact: String,
+    val ticketClosures: List<MembershipSystem.TicketClosureView>,
+    val reopenTickets: List<MembershipSystem.ReopenTicketView>,
+    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
+    val escalations: List<MembershipSystem.EscalationView>,
+) : View
+
+data class TicketClosure(
+    override val id: Long,
+    val ticket: MembershipSystem.TicketView,
+    val closedBy: MembershipSystem.AgentView,
+    val closedOn: Instant,
+) : View
+
+data class ReopenTicket(
+    override val id: Long,
+    val ticket: MembershipSystem.TicketView,
+) : View
+
+data class ReopenNotice(
+    override val id: Long,
+    val ticket: MembershipSystem.TicketView,
+    val reassignTo: MembershipSystem.AgentView,
+    val noticedOn: Instant,
+) : View
+
+data class Escalation(
+    override val id: Long,
+    val ticket: MembershipSystem.TicketView,
+    val raisedOn: LocalDate,
+) : View
+
+data class SelfReferral(
+    override val id: Long,
+    val name: String,
+    val signupEmail: String,
+    val plan: MembershipSystem.PlanView,
+    val referredBy: MembershipSystem.MemberView?,
+    val joinedOn: Instant,
+    val lastChangedOn: Instant,
+    val balance: BigDecimal,
+    val lowestBalance: BigDecimal,
+    val visitCount: Long,
+    val suspended: Boolean,
+    val engagementScore: Double,
+    val totalDeposited: BigDecimal,
+    val email: String,
+    val members: List<MembershipSystem.MemberView>,
+    val welcomeNotes: List<MembershipSystem.WelcomeNoteView>,
+    val emailChanges: List<MembershipSystem.EmailChangeView>,
+    val visits: List<MembershipSystem.VisitView>,
+    val deposits: List<MembershipSystem.DepositView>,
+    val charges: List<MembershipSystem.ChargeView>,
+    val delinquencyFlags: List<MembershipSystem.DelinquencyFlagView>,
+    val auditEntrys: List<MembershipSystem.AuditEntryView>,
+    val accountReviews: List<MembershipSystem.AccountReviewView>,
+    val tickets: List<MembershipSystem.TicketView>,
+) : View
+
+data class UnappliedDeposit(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val amount: BigDecimal,
+    val applied: Boolean,
+) : View
+
+data class ActiveMember(
+    override val id: Long,
+    val name: String,
+    val signupEmail: String,
+    val plan: MembershipSystem.PlanView,
+    val referredBy: MembershipSystem.MemberView?,
+    val joinedOn: Instant,
+    val lastChangedOn: Instant,
+    val balance: BigDecimal,
+    val lowestBalance: BigDecimal,
+    val visitCount: Long,
+    val suspended: Boolean,
+    val engagementScore: Double,
+    val totalDeposited: BigDecimal,
+    val email: String,
+    val members: List<MembershipSystem.MemberView>,
+    val welcomeNotes: List<MembershipSystem.WelcomeNoteView>,
+    val emailChanges: List<MembershipSystem.EmailChangeView>,
+    val visits: List<MembershipSystem.VisitView>,
+    val deposits: List<MembershipSystem.DepositView>,
+    val charges: List<MembershipSystem.ChargeView>,
+    val delinquencyFlags: List<MembershipSystem.DelinquencyFlagView>,
+    val auditEntrys: List<MembershipSystem.AuditEntryView>,
+    val accountReviews: List<MembershipSystem.AccountReviewView>,
+    val tickets: List<MembershipSystem.TicketView>,
+) : View
+
+data class UnappliedCharge(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val amount: BigDecimal,
+    val reference: String,
+    val requestedOn: LocalDate,
+    val chargeApplications: List<MembershipSystem.ChargeApplicationView>,
+) : View
+
+data class Delinquent(
+    override val id: Long,
+    val name: String,
+    val signupEmail: String,
+    val plan: MembershipSystem.PlanView,
+    val referredBy: MembershipSystem.MemberView?,
+    val joinedOn: Instant,
+    val lastChangedOn: Instant,
+    val balance: BigDecimal,
+    val lowestBalance: BigDecimal,
+    val visitCount: Long,
+    val suspended: Boolean,
+    val engagementScore: Double,
+    val totalDeposited: BigDecimal,
+    val email: String,
+    val members: List<MembershipSystem.MemberView>,
+    val welcomeNotes: List<MembershipSystem.WelcomeNoteView>,
+    val emailChanges: List<MembershipSystem.EmailChangeView>,
+    val visits: List<MembershipSystem.VisitView>,
+    val deposits: List<MembershipSystem.DepositView>,
+    val charges: List<MembershipSystem.ChargeView>,
+    val delinquencyFlags: List<MembershipSystem.DelinquencyFlagView>,
+    val auditEntrys: List<MembershipSystem.AuditEntryView>,
+    val accountReviews: List<MembershipSystem.AccountReviewView>,
+    val tickets: List<MembershipSystem.TicketView>,
+) : View
+
+data class DeepDelinquent(
+    override val id: Long,
+    val name: String,
+    val signupEmail: String,
+    val plan: MembershipSystem.PlanView,
+    val referredBy: MembershipSystem.MemberView?,
+    val joinedOn: Instant,
+    val lastChangedOn: Instant,
+    val balance: BigDecimal,
+    val lowestBalance: BigDecimal,
+    val visitCount: Long,
+    val suspended: Boolean,
+    val engagementScore: Double,
+    val totalDeposited: BigDecimal,
+    val email: String,
+    val members: List<MembershipSystem.MemberView>,
+    val welcomeNotes: List<MembershipSystem.WelcomeNoteView>,
+    val emailChanges: List<MembershipSystem.EmailChangeView>,
+    val visits: List<MembershipSystem.VisitView>,
+    val deposits: List<MembershipSystem.DepositView>,
+    val charges: List<MembershipSystem.ChargeView>,
+    val delinquencyFlags: List<MembershipSystem.DelinquencyFlagView>,
+    val auditEntrys: List<MembershipSystem.AuditEntryView>,
+    val accountReviews: List<MembershipSystem.AccountReviewView>,
+    val tickets: List<MembershipSystem.TicketView>,
+) : View
+
+data class OpenDelinquencyFlag(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val flaggedOn: LocalDate,
+    val delinquencyResolutions: List<MembershipSystem.DelinquencyResolutionView>,
+) : View
+
+data class ChronicDelinquent(
+    override val id: Long,
+    val name: String,
+    val signupEmail: String,
+    val plan: MembershipSystem.PlanView,
+    val referredBy: MembershipSystem.MemberView?,
+    val joinedOn: Instant,
+    val lastChangedOn: Instant,
+    val balance: BigDecimal,
+    val lowestBalance: BigDecimal,
+    val visitCount: Long,
+    val suspended: Boolean,
+    val engagementScore: Double,
+    val totalDeposited: BigDecimal,
+    val email: String,
+    val members: List<MembershipSystem.MemberView>,
+    val welcomeNotes: List<MembershipSystem.WelcomeNoteView>,
+    val emailChanges: List<MembershipSystem.EmailChangeView>,
+    val visits: List<MembershipSystem.VisitView>,
+    val deposits: List<MembershipSystem.DepositView>,
+    val charges: List<MembershipSystem.ChargeView>,
+    val delinquencyFlags: List<MembershipSystem.DelinquencyFlagView>,
+    val auditEntrys: List<MembershipSystem.AuditEntryView>,
+    val accountReviews: List<MembershipSystem.AccountReviewView>,
+    val tickets: List<MembershipSystem.TicketView>,
+) : View
+
+data class ClosedTicket(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val subject: String,
+    val due: LocalDate,
+    val priority: String,
+    val assignee: MembershipSystem.AgentView?,
+    val openedOn: Instant,
+    val assigneeEmail: String?,
+    val contact: String,
+    val ticketClosures: List<MembershipSystem.TicketClosureView>,
+    val reopenTickets: List<MembershipSystem.ReopenTicketView>,
+    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
+    val escalations: List<MembershipSystem.EscalationView>,
+    val closedOn: LocalDate,
+    val closedBy: MembershipSystem.AgentView,
+) : View
+
+data class OpenTicket(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val subject: String,
+    val due: LocalDate,
+    val priority: String,
+    val assignee: MembershipSystem.AgentView?,
+    val openedOn: Instant,
+    val assigneeEmail: String?,
+    val contact: String,
+    val ticketClosures: List<MembershipSystem.TicketClosureView>,
+    val reopenTickets: List<MembershipSystem.ReopenTicketView>,
+    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
+    val escalations: List<MembershipSystem.EscalationView>,
+) : View
+
+data class OverdueTicket(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val subject: String,
+    val due: LocalDate,
+    val priority: String,
+    val assignee: MembershipSystem.AgentView?,
+    val openedOn: Instant,
+    val assigneeEmail: String?,
+    val contact: String,
+    val ticketClosures: List<MembershipSystem.TicketClosureView>,
+    val reopenTickets: List<MembershipSystem.ReopenTicketView>,
+    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
+    val escalations: List<MembershipSystem.EscalationView>,
+) : View
+
+data class HighPriority(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val subject: String,
+    val due: LocalDate,
+    val priority: String,
+    val assignee: MembershipSystem.AgentView?,
+    val openedOn: Instant,
+    val assigneeEmail: String?,
+    val contact: String,
+    val ticketClosures: List<MembershipSystem.TicketClosureView>,
+    val reopenTickets: List<MembershipSystem.ReopenTicketView>,
+    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
+    val escalations: List<MembershipSystem.EscalationView>,
+) : View
+
+data class Unassigned(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val subject: String,
+    val due: LocalDate,
+    val priority: String,
+    val assignee: MembershipSystem.AgentView?,
+    val openedOn: Instant,
+    val assigneeEmail: String?,
+    val contact: String,
+    val ticketClosures: List<MembershipSystem.TicketClosureView>,
+    val reopenTickets: List<MembershipSystem.ReopenTicketView>,
+    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
+    val escalations: List<MembershipSystem.EscalationView>,
+) : View
+
+data class NeedsAttention(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val subject: String,
+    val due: LocalDate,
+    val priority: String,
+    val assignee: MembershipSystem.AgentView?,
+    val openedOn: Instant,
+    val assigneeEmail: String?,
+    val contact: String,
+    val ticketClosures: List<MembershipSystem.TicketClosureView>,
+    val reopenTickets: List<MembershipSystem.ReopenTicketView>,
+    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
+    val escalations: List<MembershipSystem.EscalationView>,
+) : View
+
+data class UrgentQueue(
+    override val id: Long,
+    val member: MembershipSystem.MemberView,
+    val subject: String,
+    val due: LocalDate,
+    val priority: String,
+    val assignee: MembershipSystem.AgentView?,
+    val openedOn: Instant,
+    val assigneeEmail: String?,
+    val contact: String,
+    val ticketClosures: List<MembershipSystem.TicketClosureView>,
+    val reopenTickets: List<MembershipSystem.ReopenTicketView>,
+    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
+    val escalations: List<MembershipSystem.EscalationView>,
+) : View
+
+data class MemberWithDisputedCharge(
+    override val id: Long,
+    val name: String,
+    val signupEmail: String,
+    val plan: MembershipSystem.PlanView,
+    val referredBy: MembershipSystem.MemberView?,
+    val joinedOn: Instant,
+    val lastChangedOn: Instant,
+    val balance: BigDecimal,
+    val lowestBalance: BigDecimal,
+    val visitCount: Long,
+    val suspended: Boolean,
+    val engagementScore: Double,
+    val totalDeposited: BigDecimal,
+    val email: String,
+    val members: List<MembershipSystem.MemberView>,
+    val welcomeNotes: List<MembershipSystem.WelcomeNoteView>,
+    val emailChanges: List<MembershipSystem.EmailChangeView>,
+    val visits: List<MembershipSystem.VisitView>,
+    val deposits: List<MembershipSystem.DepositView>,
+    val charges: List<MembershipSystem.ChargeView>,
+    val delinquencyFlags: List<MembershipSystem.DelinquencyFlagView>,
+    val auditEntrys: List<MembershipSystem.AuditEntryView>,
+    val accountReviews: List<MembershipSystem.AccountReviewView>,
+    val tickets: List<MembershipSystem.TicketView>,
+) : View
+
+data class LateEscalatedMember(
+    override val id: Long,
+    val name: String,
+    val signupEmail: String,
+    val plan: MembershipSystem.PlanView,
+    val referredBy: MembershipSystem.MemberView?,
+    val joinedOn: Instant,
+    val lastChangedOn: Instant,
+    val balance: BigDecimal,
+    val lowestBalance: BigDecimal,
+    val visitCount: Long,
+    val suspended: Boolean,
+    val engagementScore: Double,
+    val totalDeposited: BigDecimal,
+    val email: String,
+    val members: List<MembershipSystem.MemberView>,
+    val welcomeNotes: List<MembershipSystem.WelcomeNoteView>,
+    val emailChanges: List<MembershipSystem.EmailChangeView>,
+    val visits: List<MembershipSystem.VisitView>,
+    val deposits: List<MembershipSystem.DepositView>,
+    val charges: List<MembershipSystem.ChargeView>,
+    val delinquencyFlags: List<MembershipSystem.DelinquencyFlagView>,
+    val auditEntrys: List<MembershipSystem.AuditEntryView>,
+    val accountReviews: List<MembershipSystem.AccountReviewView>,
+    val tickets: List<MembershipSystem.TicketView>,
+) : View
+
+// ── the builder's vocabulary: one field handle per member, memberships per refinement ──
+
+class PlanFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val price: NumField get() = NumField(fieldPath + "price")
+}
+
+class MemberFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val signupEmail: TextField get() = TextField(fieldPath + "signupEmail")
+    val plan: PlanFields get() = PlanFields(fieldPath + "plan")
+    val referredBy: MemberFields get() = MemberFields(fieldPath + "referredBy")
+    val joinedOn: DateTimeField get() = DateTimeField(fieldPath + "joinedOn")
+    val lastChangedOn: DateTimeField get() = DateTimeField(fieldPath + "lastChangedOn")
+    val balance: NumField get() = NumField(fieldPath + "balance")
+    val lowestBalance: NumField get() = NumField(fieldPath + "lowestBalance")
+    val visitCount: NumField get() = NumField(fieldPath + "visitCount")
+    val suspended: BoolField get() = BoolField(fieldPath + "suspended")
+    val engagementScore: NumField get() = NumField(fieldPath + "engagementScore")
+    val totalDeposited: NumField get() = NumField(fieldPath + "totalDeposited")
+    val email: TextField get() = TextField(fieldPath + "email")
+    fun isSelfReferral(): Expr = isA("SelfReferral")
+    fun isActiveMember(): Expr = isA("ActiveMember")
+    fun isDelinquent(): Expr = isA("Delinquent")
+    fun isDeepDelinquent(): Expr = isA("DeepDelinquent")
+    fun isChronicDelinquent(): Expr = isA("ChronicDelinquent")
+    fun isMemberWithDisputedCharge(): Expr = isA("MemberWithDisputedCharge")
+    fun isLateEscalatedMember(): Expr = isA("LateEscalatedMember")
+}
+
+class WelcomeNoteFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val sentOn: DateTimeField get() = DateTimeField(fieldPath + "sentOn")
+}
+
+class EmailChangeFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val newEmail: TextField get() = TextField(fieldPath + "newEmail")
+    val changedOn: DateTimeField get() = DateTimeField(fieldPath + "changedOn")
+}
+
+class VisitFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val minutes: NumField get() = NumField(fieldPath + "minutes")
+}
+
+class AnalyticsPingFields(path: List<String> = emptyList()) : Fields(path) {
+    val visit: VisitFields get() = VisitFields(fieldPath + "visit")
+    val pingedOn: DateTimeField get() = DateTimeField(fieldPath + "pingedOn")
+}
+
+class DepositFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val applied: BoolField get() = BoolField(fieldPath + "applied")
+    fun isUnappliedDeposit(): Expr = isA("UnappliedDeposit")
+}
+
+class ChargeFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val reference: TextField get() = TextField(fieldPath + "reference")
+    val requestedOn: DateField get() = DateField(fieldPath + "requestedOn")
+    fun isUnappliedCharge(): Expr = isA("UnappliedCharge")
+}
+
+class ChargeApplicationFields(path: List<String> = emptyList()) : Fields(path) {
+    val charge: ChargeFields get() = ChargeFields(fieldPath + "charge")
+    val appliedOn: DateTimeField get() = DateTimeField(fieldPath + "appliedOn")
+}
+
+class DelinquencyFlagFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val flaggedOn: DateField get() = DateField(fieldPath + "flaggedOn")
+    fun isOpenDelinquencyFlag(): Expr = isA("OpenDelinquencyFlag")
+}
+
+class DelinquencyResolutionFields(path: List<String> = emptyList()) : Fields(path) {
+    val flag: DelinquencyFlagFields get() = DelinquencyFlagFields(fieldPath + "flag")
+    val resolvedOn: DateField get() = DateField(fieldPath + "resolvedOn")
+}
+
+class AuditEntryFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val note: TextField get() = TextField(fieldPath + "note")
+    val loggedOn: DateTimeField get() = DateTimeField(fieldPath + "loggedOn")
+}
+
+class AccountReviewFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
+}
+
+class AgentFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val email: TextField get() = TextField(fieldPath + "email")
+}
+
+class TicketFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val subject: TextField get() = TextField(fieldPath + "subject")
+    val due: DateField get() = DateField(fieldPath + "due")
+    val priority: TextField get() = TextField(fieldPath + "priority")
+    val assignee: AgentFields get() = AgentFields(fieldPath + "assignee")
+    val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
+    val assigneeEmail: TextField get() = TextField(fieldPath + "assigneeEmail")
+    val contact: TextField get() = TextField(fieldPath + "contact")
+    fun isClosedTicket(): Expr = isA("ClosedTicket")
+    fun isOpenTicket(): Expr = isA("OpenTicket")
+    fun isOverdueTicket(): Expr = isA("OverdueTicket")
+    fun isHighPriority(): Expr = isA("HighPriority")
+    fun isUnassigned(): Expr = isA("Unassigned")
+    fun isNeedsAttention(): Expr = isA("NeedsAttention")
+    fun isUrgentQueue(): Expr = isA("UrgentQueue")
+}
+
+class TicketClosureFields(path: List<String> = emptyList()) : Fields(path) {
+    val ticket: TicketFields get() = TicketFields(fieldPath + "ticket")
+    val closedBy: AgentFields get() = AgentFields(fieldPath + "closedBy")
+    val closedOn: DateTimeField get() = DateTimeField(fieldPath + "closedOn")
+}
+
+class ReopenTicketFields(path: List<String> = emptyList()) : Fields(path) {
+    val ticket: TicketFields get() = TicketFields(fieldPath + "ticket")
+}
+
+class ReopenNoticeFields(path: List<String> = emptyList()) : Fields(path) {
+    val ticket: TicketFields get() = TicketFields(fieldPath + "ticket")
+    val reassignTo: AgentFields get() = AgentFields(fieldPath + "reassignTo")
+    val noticedOn: DateTimeField get() = DateTimeField(fieldPath + "noticedOn")
+}
+
+class EscalationFields(path: List<String> = emptyList()) : Fields(path) {
+    val ticket: TicketFields get() = TicketFields(fieldPath + "ticket")
+    val raisedOn: DateField get() = DateField(fieldPath + "raisedOn")
+}
+
+class SelfReferralFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val signupEmail: TextField get() = TextField(fieldPath + "signupEmail")
+    val plan: PlanFields get() = PlanFields(fieldPath + "plan")
+    val referredBy: MemberFields get() = MemberFields(fieldPath + "referredBy")
+    val joinedOn: DateTimeField get() = DateTimeField(fieldPath + "joinedOn")
+    val lastChangedOn: DateTimeField get() = DateTimeField(fieldPath + "lastChangedOn")
+    val balance: NumField get() = NumField(fieldPath + "balance")
+    val lowestBalance: NumField get() = NumField(fieldPath + "lowestBalance")
+    val visitCount: NumField get() = NumField(fieldPath + "visitCount")
+    val suspended: BoolField get() = BoolField(fieldPath + "suspended")
+    val engagementScore: NumField get() = NumField(fieldPath + "engagementScore")
+    val totalDeposited: NumField get() = NumField(fieldPath + "totalDeposited")
+    val email: TextField get() = TextField(fieldPath + "email")
+    fun isActiveMember(): Expr = isA("ActiveMember")
+    fun isDelinquent(): Expr = isA("Delinquent")
+    fun isDeepDelinquent(): Expr = isA("DeepDelinquent")
+    fun isChronicDelinquent(): Expr = isA("ChronicDelinquent")
+    fun isMemberWithDisputedCharge(): Expr = isA("MemberWithDisputedCharge")
+    fun isLateEscalatedMember(): Expr = isA("LateEscalatedMember")
+}
+
+class UnappliedDepositFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val applied: BoolField get() = BoolField(fieldPath + "applied")
+}
+
+class ActiveMemberFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val signupEmail: TextField get() = TextField(fieldPath + "signupEmail")
+    val plan: PlanFields get() = PlanFields(fieldPath + "plan")
+    val referredBy: MemberFields get() = MemberFields(fieldPath + "referredBy")
+    val joinedOn: DateTimeField get() = DateTimeField(fieldPath + "joinedOn")
+    val lastChangedOn: DateTimeField get() = DateTimeField(fieldPath + "lastChangedOn")
+    val balance: NumField get() = NumField(fieldPath + "balance")
+    val lowestBalance: NumField get() = NumField(fieldPath + "lowestBalance")
+    val visitCount: NumField get() = NumField(fieldPath + "visitCount")
+    val suspended: BoolField get() = BoolField(fieldPath + "suspended")
+    val engagementScore: NumField get() = NumField(fieldPath + "engagementScore")
+    val totalDeposited: NumField get() = NumField(fieldPath + "totalDeposited")
+    val email: TextField get() = TextField(fieldPath + "email")
+    fun isSelfReferral(): Expr = isA("SelfReferral")
+    fun isDelinquent(): Expr = isA("Delinquent")
+    fun isDeepDelinquent(): Expr = isA("DeepDelinquent")
+    fun isChronicDelinquent(): Expr = isA("ChronicDelinquent")
+    fun isMemberWithDisputedCharge(): Expr = isA("MemberWithDisputedCharge")
+    fun isLateEscalatedMember(): Expr = isA("LateEscalatedMember")
+}
+
+class UnappliedChargeFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val reference: TextField get() = TextField(fieldPath + "reference")
+    val requestedOn: DateField get() = DateField(fieldPath + "requestedOn")
+}
+
+class DelinquentFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val signupEmail: TextField get() = TextField(fieldPath + "signupEmail")
+    val plan: PlanFields get() = PlanFields(fieldPath + "plan")
+    val referredBy: MemberFields get() = MemberFields(fieldPath + "referredBy")
+    val joinedOn: DateTimeField get() = DateTimeField(fieldPath + "joinedOn")
+    val lastChangedOn: DateTimeField get() = DateTimeField(fieldPath + "lastChangedOn")
+    val balance: NumField get() = NumField(fieldPath + "balance")
+    val lowestBalance: NumField get() = NumField(fieldPath + "lowestBalance")
+    val visitCount: NumField get() = NumField(fieldPath + "visitCount")
+    val suspended: BoolField get() = BoolField(fieldPath + "suspended")
+    val engagementScore: NumField get() = NumField(fieldPath + "engagementScore")
+    val totalDeposited: NumField get() = NumField(fieldPath + "totalDeposited")
+    val email: TextField get() = TextField(fieldPath + "email")
+    fun isSelfReferral(): Expr = isA("SelfReferral")
+    fun isActiveMember(): Expr = isA("ActiveMember")
+    fun isDeepDelinquent(): Expr = isA("DeepDelinquent")
+    fun isChronicDelinquent(): Expr = isA("ChronicDelinquent")
+    fun isMemberWithDisputedCharge(): Expr = isA("MemberWithDisputedCharge")
+    fun isLateEscalatedMember(): Expr = isA("LateEscalatedMember")
+}
+
+class DeepDelinquentFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val signupEmail: TextField get() = TextField(fieldPath + "signupEmail")
+    val plan: PlanFields get() = PlanFields(fieldPath + "plan")
+    val referredBy: MemberFields get() = MemberFields(fieldPath + "referredBy")
+    val joinedOn: DateTimeField get() = DateTimeField(fieldPath + "joinedOn")
+    val lastChangedOn: DateTimeField get() = DateTimeField(fieldPath + "lastChangedOn")
+    val balance: NumField get() = NumField(fieldPath + "balance")
+    val lowestBalance: NumField get() = NumField(fieldPath + "lowestBalance")
+    val visitCount: NumField get() = NumField(fieldPath + "visitCount")
+    val suspended: BoolField get() = BoolField(fieldPath + "suspended")
+    val engagementScore: NumField get() = NumField(fieldPath + "engagementScore")
+    val totalDeposited: NumField get() = NumField(fieldPath + "totalDeposited")
+    val email: TextField get() = TextField(fieldPath + "email")
+    fun isSelfReferral(): Expr = isA("SelfReferral")
+    fun isActiveMember(): Expr = isA("ActiveMember")
+    fun isDelinquent(): Expr = isA("Delinquent")
+    fun isChronicDelinquent(): Expr = isA("ChronicDelinquent")
+    fun isMemberWithDisputedCharge(): Expr = isA("MemberWithDisputedCharge")
+    fun isLateEscalatedMember(): Expr = isA("LateEscalatedMember")
+}
+
+class OpenDelinquencyFlagFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val flaggedOn: DateField get() = DateField(fieldPath + "flaggedOn")
+}
+
+class ChronicDelinquentFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val signupEmail: TextField get() = TextField(fieldPath + "signupEmail")
+    val plan: PlanFields get() = PlanFields(fieldPath + "plan")
+    val referredBy: MemberFields get() = MemberFields(fieldPath + "referredBy")
+    val joinedOn: DateTimeField get() = DateTimeField(fieldPath + "joinedOn")
+    val lastChangedOn: DateTimeField get() = DateTimeField(fieldPath + "lastChangedOn")
+    val balance: NumField get() = NumField(fieldPath + "balance")
+    val lowestBalance: NumField get() = NumField(fieldPath + "lowestBalance")
+    val visitCount: NumField get() = NumField(fieldPath + "visitCount")
+    val suspended: BoolField get() = BoolField(fieldPath + "suspended")
+    val engagementScore: NumField get() = NumField(fieldPath + "engagementScore")
+    val totalDeposited: NumField get() = NumField(fieldPath + "totalDeposited")
+    val email: TextField get() = TextField(fieldPath + "email")
+    fun isSelfReferral(): Expr = isA("SelfReferral")
+    fun isActiveMember(): Expr = isA("ActiveMember")
+    fun isDelinquent(): Expr = isA("Delinquent")
+    fun isDeepDelinquent(): Expr = isA("DeepDelinquent")
+    fun isMemberWithDisputedCharge(): Expr = isA("MemberWithDisputedCharge")
+    fun isLateEscalatedMember(): Expr = isA("LateEscalatedMember")
+}
+
+class ClosedTicketFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val subject: TextField get() = TextField(fieldPath + "subject")
+    val due: DateField get() = DateField(fieldPath + "due")
+    val priority: TextField get() = TextField(fieldPath + "priority")
+    val assignee: AgentFields get() = AgentFields(fieldPath + "assignee")
+    val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
+    val assigneeEmail: TextField get() = TextField(fieldPath + "assigneeEmail")
+    val contact: TextField get() = TextField(fieldPath + "contact")
+    val closedOn: DateField get() = DateField(fieldPath + "closedOn")
+    val closedBy: AgentFields get() = AgentFields(fieldPath + "closedBy")
+    fun isOpenTicket(): Expr = isA("OpenTicket")
+    fun isOverdueTicket(): Expr = isA("OverdueTicket")
+    fun isHighPriority(): Expr = isA("HighPriority")
+    fun isUnassigned(): Expr = isA("Unassigned")
+    fun isNeedsAttention(): Expr = isA("NeedsAttention")
+    fun isUrgentQueue(): Expr = isA("UrgentQueue")
+}
+
+class OpenTicketFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val subject: TextField get() = TextField(fieldPath + "subject")
+    val due: DateField get() = DateField(fieldPath + "due")
+    val priority: TextField get() = TextField(fieldPath + "priority")
+    val assignee: AgentFields get() = AgentFields(fieldPath + "assignee")
+    val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
+    val assigneeEmail: TextField get() = TextField(fieldPath + "assigneeEmail")
+    val contact: TextField get() = TextField(fieldPath + "contact")
+    fun isClosedTicket(): Expr = isA("ClosedTicket")
+    fun isOverdueTicket(): Expr = isA("OverdueTicket")
+    fun isHighPriority(): Expr = isA("HighPriority")
+    fun isUnassigned(): Expr = isA("Unassigned")
+    fun isNeedsAttention(): Expr = isA("NeedsAttention")
+    fun isUrgentQueue(): Expr = isA("UrgentQueue")
+}
+
+class OverdueTicketFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val subject: TextField get() = TextField(fieldPath + "subject")
+    val due: DateField get() = DateField(fieldPath + "due")
+    val priority: TextField get() = TextField(fieldPath + "priority")
+    val assignee: AgentFields get() = AgentFields(fieldPath + "assignee")
+    val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
+    val assigneeEmail: TextField get() = TextField(fieldPath + "assigneeEmail")
+    val contact: TextField get() = TextField(fieldPath + "contact")
+    fun isClosedTicket(): Expr = isA("ClosedTicket")
+    fun isOpenTicket(): Expr = isA("OpenTicket")
+    fun isHighPriority(): Expr = isA("HighPriority")
+    fun isUnassigned(): Expr = isA("Unassigned")
+    fun isNeedsAttention(): Expr = isA("NeedsAttention")
+    fun isUrgentQueue(): Expr = isA("UrgentQueue")
+}
+
+class HighPriorityFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val subject: TextField get() = TextField(fieldPath + "subject")
+    val due: DateField get() = DateField(fieldPath + "due")
+    val priority: TextField get() = TextField(fieldPath + "priority")
+    val assignee: AgentFields get() = AgentFields(fieldPath + "assignee")
+    val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
+    val assigneeEmail: TextField get() = TextField(fieldPath + "assigneeEmail")
+    val contact: TextField get() = TextField(fieldPath + "contact")
+    fun isClosedTicket(): Expr = isA("ClosedTicket")
+    fun isOpenTicket(): Expr = isA("OpenTicket")
+    fun isOverdueTicket(): Expr = isA("OverdueTicket")
+    fun isUnassigned(): Expr = isA("Unassigned")
+    fun isNeedsAttention(): Expr = isA("NeedsAttention")
+    fun isUrgentQueue(): Expr = isA("UrgentQueue")
+}
+
+class UnassignedFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val subject: TextField get() = TextField(fieldPath + "subject")
+    val due: DateField get() = DateField(fieldPath + "due")
+    val priority: TextField get() = TextField(fieldPath + "priority")
+    val assignee: AgentFields get() = AgentFields(fieldPath + "assignee")
+    val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
+    val assigneeEmail: TextField get() = TextField(fieldPath + "assigneeEmail")
+    val contact: TextField get() = TextField(fieldPath + "contact")
+    fun isClosedTicket(): Expr = isA("ClosedTicket")
+    fun isOpenTicket(): Expr = isA("OpenTicket")
+    fun isOverdueTicket(): Expr = isA("OverdueTicket")
+    fun isHighPriority(): Expr = isA("HighPriority")
+    fun isNeedsAttention(): Expr = isA("NeedsAttention")
+    fun isUrgentQueue(): Expr = isA("UrgentQueue")
+}
+
+class NeedsAttentionFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val subject: TextField get() = TextField(fieldPath + "subject")
+    val due: DateField get() = DateField(fieldPath + "due")
+    val priority: TextField get() = TextField(fieldPath + "priority")
+    val assignee: AgentFields get() = AgentFields(fieldPath + "assignee")
+    val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
+    val assigneeEmail: TextField get() = TextField(fieldPath + "assigneeEmail")
+    val contact: TextField get() = TextField(fieldPath + "contact")
+    fun isClosedTicket(): Expr = isA("ClosedTicket")
+    fun isOpenTicket(): Expr = isA("OpenTicket")
+    fun isOverdueTicket(): Expr = isA("OverdueTicket")
+    fun isHighPriority(): Expr = isA("HighPriority")
+    fun isUnassigned(): Expr = isA("Unassigned")
+    fun isUrgentQueue(): Expr = isA("UrgentQueue")
+}
+
+class UrgentQueueFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val subject: TextField get() = TextField(fieldPath + "subject")
+    val due: DateField get() = DateField(fieldPath + "due")
+    val priority: TextField get() = TextField(fieldPath + "priority")
+    val assignee: AgentFields get() = AgentFields(fieldPath + "assignee")
+    val openedOn: DateTimeField get() = DateTimeField(fieldPath + "openedOn")
+    val assigneeEmail: TextField get() = TextField(fieldPath + "assigneeEmail")
+    val contact: TextField get() = TextField(fieldPath + "contact")
+    fun isClosedTicket(): Expr = isA("ClosedTicket")
+    fun isOpenTicket(): Expr = isA("OpenTicket")
+    fun isOverdueTicket(): Expr = isA("OverdueTicket")
+    fun isHighPriority(): Expr = isA("HighPriority")
+    fun isUnassigned(): Expr = isA("Unassigned")
+    fun isNeedsAttention(): Expr = isA("NeedsAttention")
+}
+
+class MemberWithDisputedChargeFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val signupEmail: TextField get() = TextField(fieldPath + "signupEmail")
+    val plan: PlanFields get() = PlanFields(fieldPath + "plan")
+    val referredBy: MemberFields get() = MemberFields(fieldPath + "referredBy")
+    val joinedOn: DateTimeField get() = DateTimeField(fieldPath + "joinedOn")
+    val lastChangedOn: DateTimeField get() = DateTimeField(fieldPath + "lastChangedOn")
+    val balance: NumField get() = NumField(fieldPath + "balance")
+    val lowestBalance: NumField get() = NumField(fieldPath + "lowestBalance")
+    val visitCount: NumField get() = NumField(fieldPath + "visitCount")
+    val suspended: BoolField get() = BoolField(fieldPath + "suspended")
+    val engagementScore: NumField get() = NumField(fieldPath + "engagementScore")
+    val totalDeposited: NumField get() = NumField(fieldPath + "totalDeposited")
+    val email: TextField get() = TextField(fieldPath + "email")
+    fun isSelfReferral(): Expr = isA("SelfReferral")
+    fun isActiveMember(): Expr = isA("ActiveMember")
+    fun isDelinquent(): Expr = isA("Delinquent")
+    fun isDeepDelinquent(): Expr = isA("DeepDelinquent")
+    fun isChronicDelinquent(): Expr = isA("ChronicDelinquent")
+    fun isLateEscalatedMember(): Expr = isA("LateEscalatedMember")
+}
+
+class LateEscalatedMemberFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val signupEmail: TextField get() = TextField(fieldPath + "signupEmail")
+    val plan: PlanFields get() = PlanFields(fieldPath + "plan")
+    val referredBy: MemberFields get() = MemberFields(fieldPath + "referredBy")
+    val joinedOn: DateTimeField get() = DateTimeField(fieldPath + "joinedOn")
+    val lastChangedOn: DateTimeField get() = DateTimeField(fieldPath + "lastChangedOn")
+    val balance: NumField get() = NumField(fieldPath + "balance")
+    val lowestBalance: NumField get() = NumField(fieldPath + "lowestBalance")
+    val visitCount: NumField get() = NumField(fieldPath + "visitCount")
+    val suspended: BoolField get() = BoolField(fieldPath + "suspended")
+    val engagementScore: NumField get() = NumField(fieldPath + "engagementScore")
+    val totalDeposited: NumField get() = NumField(fieldPath + "totalDeposited")
+    val email: TextField get() = TextField(fieldPath + "email")
+    fun isSelfReferral(): Expr = isA("SelfReferral")
+    fun isActiveMember(): Expr = isA("ActiveMember")
+    fun isDelinquent(): Expr = isA("Delinquent")
+    fun isDeepDelinquent(): Expr = isA("DeepDelinquent")
+    fun isChronicDelinquent(): Expr = isA("ChronicDelinquent")
+    fun isMemberWithDisputedCharge(): Expr = isA("MemberWithDisputedCharge")
 }
 
 fun main() {

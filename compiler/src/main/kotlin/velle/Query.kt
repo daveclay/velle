@@ -27,7 +27,9 @@ sealed interface QF {
     data class Not(val inner: QF) : QF
 
     /** The subject row's stored (or timestamp) column [field] compared to a
-     *  constant; op is one of `==`, `!=`, `<`, `<=`, `>`, `>=`. */
+     *  constant; op is one of `==`, `!=`, `<`, `<=`, `>`, `>=`, or a text
+     *  operator (`contains`, `starts with`, `ends with`, `like` — README §10),
+     *  whose constant is always the right operand and always text. */
     data class Cmp(val field: String, val op: String, val value: QConst) : QF
 
     /** `is none` / `is some` on an optional column ([isNull] = the `none` side). */
@@ -50,6 +52,9 @@ sealed interface QConst {
     data class QBool(val v: Boolean) : QConst
     data class QDate(val v: LocalDate) : QConst
     data class QDateTime(val v: Instant) : QConst
+    /** An instance the store already holds — the query API's "this customer"
+     *  (README §22) against a to-one reference column. */
+    data class QRef(val ref: Ref.Persisted) : QConst
 }
 
 /**
@@ -65,7 +70,14 @@ sealed interface QConst {
  * them) fold to constants, so a filter is built per evaluation moment — per
  * envelope or per tick — and never cached across clock changes.
  */
-class QueryCompiler(private val model: Model, private val today: LocalDate, private val now: Instant) {
+class QueryCompiler(
+    private val model: Model,
+    private val today: LocalDate,
+    private val now: Instant,
+    /** The store key of a session handle, when it has one — how an instance
+     *  constant (`ValueLit` of a `VRef`, the query API) reaches the row. */
+    private val keyOf: (Long) -> Ref.Persisted? = { null },
+) {
 
     /** Pre-filter for candidates of [cond] over its base shape's table. */
     fun filterFor(cond: RefExpr): QF = simplify(compileRef(cond, positive = true))
@@ -104,6 +116,7 @@ class QueryCompiler(private val model: Model, private val today: LocalDate, priv
                 "and" -> QF.And(compileExpr(e.left, scope, positive, depth), compileExpr(e.right, scope, positive, depth))
                 "or" -> QF.Or(compileExpr(e.left, scope, positive, depth), compileExpr(e.right, scope, positive, depth))
                 "==", "!=", "<", "<=", ">", ">=" -> compileCmp(e, scope, positive)
+                in TEXT_OPERATORS -> compileCmp(e, scope, positive)
                 else -> fail(positive)
             }
             is NotExpr -> QF.Not(compileExpr(e.inner, scope, !positive, depth))
@@ -239,15 +252,20 @@ class QueryCompiler(private val model: Model, private val today: LocalDate, priv
 
     private fun compileCmp(e: Binary, scope: String, positive: Boolean): QF {
         tryCmp(e.left, e.op, e.right, scope)?.let { return it }
-        tryCmp(e.right, flip(e.op), e.left, scope)?.let { return it }
+        // a text operator is not symmetric: only `column op constant` is a column test
+        if (e.op !in TEXT_OPERATORS) tryCmp(e.right, flip(e.op), e.left, scope)?.let { return it }
         return fail(positive)
     }
 
     private fun tryCmp(pathSide: Expr, op: String, constSide: Expr, scope: String): QF? {
         val p = pathSide as? PathExpr ?: return null
-        val hops = resolveHops(p, scope) ?: return null
         val const = constFold(constSide) ?: return null
+        // an instance constant tests a to-one reference column by key: `==` / `!=` only
+        val wantInstance = const is QConst.QRef
+        if (wantInstance && op != "==" && op != "!=") return null
+        val hops = resolveHops(p, scope, wantInstance = wantInstance) ?: return null
         if (!typesMatch(hops.last().second.type.strip(), const)) return null
+        if (op in TEXT_OPERATORS && const !is QConst.QText) return null
         return wrapHops(hops.dropLast(1), QF.Cmp(hops.last().first, op, const))
     }
 
@@ -261,6 +279,7 @@ class QueryCompiler(private val model: Model, private val today: LocalDate, priv
         is QConst.QBool -> t == VType.Bool
         is QConst.QDate -> t == VType.DateT
         is QConst.QDateTime -> t == VType.DateTimeT
+        is QConst.QRef -> t is VType.Inst && model.typeAccepts(t.shape, c.ref.shape)
     }
 
     // ── paths ────────────────────────────────────────────────────────────────
@@ -317,6 +336,16 @@ class QueryCompiler(private val model: Model, private val today: LocalDate, priv
         NowLit -> QConst.QDateTime(now)
         is UnaryMinus -> (constFold(e.inner) as? QConst.QNum)?.let { QConst.QNum(it.v.negate()) }
         is Binary -> foldBinary(e)
+        // the query API's constants (ValueLit): a value supplied at the moment of asking
+        is ValueLit -> when (val v = e.value) {
+            is Value.VNum -> QConst.QNum(v.v)
+            is Value.VText -> QConst.QText(v.v)
+            is Value.VBool -> QConst.QBool(v.v)
+            is Value.VDate -> QConst.QDate(v.v)
+            is Value.VDateTime -> QConst.QDateTime(v.v)
+            is Value.VRef -> keyOf(v.id)?.let { QConst.QRef(it) } // unpersisted: nothing to test in the store
+            else -> null
+        }
         else -> null
     }
 

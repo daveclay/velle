@@ -1200,6 +1200,1236 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         override fun toString() = "OverdueTask#$id"
     }
 
+    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    val read = Read()
+
+    inner class Read {
+        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
+        val registry = QueryRegistry()
+        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+        val crops: CropQuery get() = CropQuery(Query("Crop"))
+        val pathogens: PathogenQuery get() = PathogenQuery(Query("Pathogen"))
+        val peptides: PeptideQuery get() = PeptideQuery(Query("Peptide"))
+        val assayProtocols: AssayProtocolQuery get() = AssayProtocolQuery(Query("AssayProtocol"))
+        val labExperiments: LabExperimentQuery get() = LabExperimentQuery(Query("LabExperiment"))
+        val assays: AssayQuery get() = AssayQuery(Query("Assay"))
+        val assayReadings: AssayReadingQuery get() = AssayReadingQuery(Query("AssayReading"))
+        val labHits: LabHitQuery get() = LabHitQuery(Query("LabHit"))
+        val labHitRetractions: LabHitRetractionQuery get() = LabHitRetractionQuery(Query("LabHitRetraction"))
+        val greenhouses: GreenhouseQuery get() = GreenhouseQuery(Query("Greenhouse"))
+        val climateReadings: ClimateReadingQuery get() = ClimateReadingQuery(Query("ClimateReading"))
+        val greenhouseProtocols: GreenhouseProtocolQuery get() = GreenhouseProtocolQuery(Query("GreenhouseProtocol"))
+        val greenhouseTrials: GreenhouseTrialQuery get() = GreenhouseTrialQuery(Query("GreenhouseTrial"))
+        val greenhouseRefusals: GreenhouseRefusalQuery get() = GreenhouseRefusalQuery(Query("GreenhouseRefusal"))
+        val greenhousePlots: GreenhousePlotQuery get() = GreenhousePlotQuery(Query("GreenhousePlot"))
+        val treatments: TreatmentQuery get() = TreatmentQuery(Query("Treatment"))
+        val plotObservations: PlotObservationQuery get() = PlotObservationQuery(Query("PlotObservation"))
+        val greenhouseResults: GreenhouseResultQuery get() = GreenhouseResultQuery(Query("GreenhouseResult"))
+        val observationCorrections: ObservationCorrectionQuery get() = ObservationCorrectionQuery(Query("ObservationCorrection"))
+        val correctionRefusals: CorrectionRefusalQuery get() = CorrectionRefusalQuery(Query("CorrectionRefusal"))
+        val voidRecords: VoidRecordQuery get() = VoidRecordQuery(Query("VoidRecord"))
+        val voidRefusals: VoidRefusalQuery get() = VoidRefusalQuery(Query("VoidRefusal"))
+        val moveRefusals: MoveRefusalQuery get() = MoveRefusalQuery(Query("MoveRefusal"))
+        val climateExcursions: ClimateExcursionQuery get() = ClimateExcursionQuery(Query("ClimateExcursion"))
+        val excursionEnds: ExcursionEndQuery get() = ExcursionEndQuery(Query("ExcursionEnd"))
+        val sensorAlerts: SensorAlertQuery get() = SensorAlertQuery(Query("SensorAlert"))
+        val fieldSites: FieldSiteQuery get() = FieldSiteQuery(Query("FieldSite"))
+        val permits: PermitQuery get() = PermitQuery(Query("Permit"))
+        val weatherObservations: WeatherObservationQuery get() = WeatherObservationQuery(Query("WeatherObservation"))
+        val fieldProtocols: FieldProtocolQuery get() = FieldProtocolQuery(Query("FieldProtocol"))
+        val fieldTrials: FieldTrialQuery get() = FieldTrialQuery(Query("FieldTrial"))
+        val fieldRefusals: FieldRefusalQuery get() = FieldRefusalQuery(Query("FieldRefusal"))
+        val plantings: PlantingQuery get() = PlantingQuery(Query("Planting"))
+        val fieldPlots: FieldPlotQuery get() = FieldPlotQuery(Query("FieldPlot"))
+        val treatmentApplications: TreatmentApplicationQuery get() = TreatmentApplicationQuery(Query("TreatmentApplication"))
+        val reapplicationNotices: ReapplicationNoticeQuery get() = ReapplicationNoticeQuery(Query("ReapplicationNotice"))
+        val scoutings: ScoutingQuery get() = ScoutingQuery(Query("Scouting"))
+        val harvests: HarvestQuery get() = HarvestQuery(Query("Harvest"))
+        val phytotoxicityReports: PhytotoxicityReportQuery get() = PhytotoxicityReportQuery(Query("PhytotoxicityReport"))
+        val haltNotices: HaltNoticeQuery get() = HaltNoticeQuery(Query("HaltNotice"))
+        val collectionTasks: CollectionTaskQuery get() = CollectionTaskQuery(Query("CollectionTask"))
+        val taskReminders: TaskReminderQuery get() = TaskReminderQuery(Query("TaskReminder"))
+        val rescheduleRefusals: RescheduleRefusalQuery get() = RescheduleRefusalQuery(Query("RescheduleRefusal"))
+        val taskCancellations: TaskCancellationQuery get() = TaskCancellationQuery(Query("TaskCancellation"))
+        val cancelRefusals: CancelRefusalQuery get() = CancelRefusalQuery(Query("CancelRefusal"))
+        val completedAssays: CompletedAssayQuery get() = CompletedAssayQuery(Query("CompletedAssay"))
+        val hitExperiments: HitExperimentQuery get() = HitExperimentQuery(Query("HitExperiment"))
+        val labValidateds: LabValidatedQuery get() = LabValidatedQuery(Query("LabValidated"))
+        val treatedTrials: TreatedTrialQuery get() = TreatedTrialQuery(Query("TreatedTrial"))
+        val laidOutTrials: LaidOutTrialQuery get() = LaidOutTrialQuery(Query("LaidOutTrial"))
+        val observedToEnds: ObservedToEndQuery get() = ObservedToEndQuery(Query("ObservedToEnd"))
+        val completeTrials: CompleteTrialQuery get() = CompleteTrialQuery(Query("CompleteTrial"))
+        val effectiveTrials: EffectiveTrialQuery get() = EffectiveTrialQuery(Query("EffectiveTrial"))
+        val evaluatedTrials: EvaluatedTrialQuery get() = EvaluatedTrialQuery(Query("EvaluatedTrial"))
+        val greenhouseValidateds: GreenhouseValidatedQuery get() = GreenhouseValidatedQuery(Query("GreenhouseValidated"))
+        val deprioritizeds: DeprioritizedQuery get() = DeprioritizedQuery(Query("Deprioritized"))
+        val lockedObservations: LockedObservationQuery get() = LockedObservationQuery(Query("LockedObservation"))
+        val treatedPlots: TreatedPlotQuery get() = TreatedPlotQuery(Query("TreatedPlot"))
+        val activeTrials: ActiveTrialQuery get() = ActiveTrialQuery(Query("ActiveTrial"))
+        val outOfBands: OutOfBandQuery get() = OutOfBandQuery(Query("OutOfBand"))
+        val openExcursions: OpenExcursionQuery get() = OpenExcursionQuery(Query("OpenExcursion"))
+        val closableExcursions: ClosableExcursionQuery get() = ClosableExcursionQuery(Query("ClosableExcursion"))
+        val compromisedTrials: CompromisedTrialQuery get() = CompromisedTrialQuery(Query("CompromisedTrial"))
+        val silentGreenhouses: SilentGreenhouseQuery get() = SilentGreenhouseQuery(Query("SilentGreenhouse"))
+        val permittedTrials: PermittedTrialQuery get() = PermittedTrialQuery(Query("PermittedTrial"))
+        val plantedTrials: PlantedTrialQuery get() = PlantedTrialQuery(Query("PlantedTrial"))
+        val washedOffApplications: WashedOffApplicationQuery get() = WashedOffApplicationQuery(Query("WashedOffApplication"))
+        val neverScouteds: NeverScoutedQuery get() = NeverScoutedQuery(Query("NeverScouted"))
+        val harvestedTrials: HarvestedTrialQuery get() = HarvestedTrialQuery(Query("HarvestedTrial"))
+        val successfulFieldTrials: SuccessfulFieldTrialQuery get() = SuccessfulFieldTrialQuery(Query("SuccessfulFieldTrial"))
+        val fieldValidateds: FieldValidatedQuery get() = FieldValidatedQuery(Query("FieldValidated"))
+        val haltedTrials: HaltedTrialQuery get() = HaltedTrialQuery(Query("HaltedTrial"))
+        val doneTasks: DoneTaskQuery get() = DoneTaskQuery(Query("DoneTask"))
+        val openTasks: OpenTaskQuery get() = OpenTaskQuery(Query("OpenTask"))
+        val overdueTasks: OverdueTaskQuery get() = OverdueTaskQuery(Query("OverdueTask"))
+    }
+
+    inner class CropQuery(q: Query) : TypedQuery<CropFields, Crop>(system, q, CropFields(), { materializeCrop(it) }) {
+        override fun with(q: Query) = CropQuery(q)
+    }
+
+    inner class PathogenQuery(q: Query) : TypedQuery<PathogenFields, Pathogen>(system, q, PathogenFields(), { materializePathogen(it) }) {
+        override fun with(q: Query) = PathogenQuery(q)
+    }
+
+    inner class PeptideQuery(q: Query) : TypedQuery<PeptideFields, Peptide>(system, q, PeptideFields(), { materializePeptide(it) }) {
+        override fun with(q: Query) = PeptideQuery(q)
+    }
+
+    inner class AssayProtocolQuery(q: Query) : TypedQuery<AssayProtocolFields, AssayProtocol>(system, q, AssayProtocolFields(), { materializeAssayProtocol(it) }) {
+        override fun with(q: Query) = AssayProtocolQuery(q)
+    }
+
+    inner class LabExperimentQuery(q: Query) : TypedQuery<LabExperimentFields, LabExperiment>(system, q, LabExperimentFields(), { materializeLabExperiment(it) }) {
+        override fun with(q: Query) = LabExperimentQuery(q)
+    }
+
+    inner class AssayQuery(q: Query) : TypedQuery<AssayFields, Assay>(system, q, AssayFields(), { materializeAssay(it) }) {
+        override fun with(q: Query) = AssayQuery(q)
+    }
+
+    inner class AssayReadingQuery(q: Query) : TypedQuery<AssayReadingFields, AssayReading>(system, q, AssayReadingFields(), { materializeAssayReading(it) }) {
+        override fun with(q: Query) = AssayReadingQuery(q)
+    }
+
+    inner class LabHitQuery(q: Query) : TypedQuery<LabHitFields, LabHit>(system, q, LabHitFields(), { materializeLabHit(it) }) {
+        override fun with(q: Query) = LabHitQuery(q)
+    }
+
+    inner class LabHitRetractionQuery(q: Query) : TypedQuery<LabHitRetractionFields, LabHitRetraction>(system, q, LabHitRetractionFields(), { materializeLabHitRetraction(it) }) {
+        override fun with(q: Query) = LabHitRetractionQuery(q)
+    }
+
+    inner class GreenhouseQuery(q: Query) : TypedQuery<GreenhouseFields, Greenhouse>(system, q, GreenhouseFields(), { materializeGreenhouse(it) }) {
+        override fun with(q: Query) = GreenhouseQuery(q)
+    }
+
+    inner class ClimateReadingQuery(q: Query) : TypedQuery<ClimateReadingFields, ClimateReading>(system, q, ClimateReadingFields(), { materializeClimateReading(it) }) {
+        override fun with(q: Query) = ClimateReadingQuery(q)
+    }
+
+    inner class GreenhouseProtocolQuery(q: Query) : TypedQuery<GreenhouseProtocolFields, GreenhouseProtocol>(system, q, GreenhouseProtocolFields(), { materializeGreenhouseProtocol(it) }) {
+        override fun with(q: Query) = GreenhouseProtocolQuery(q)
+    }
+
+    inner class GreenhouseTrialQuery(q: Query) : TypedQuery<GreenhouseTrialFields, GreenhouseTrial>(system, q, GreenhouseTrialFields(), { materializeGreenhouseTrial(it) }) {
+        override fun with(q: Query) = GreenhouseTrialQuery(q)
+    }
+
+    inner class GreenhouseRefusalQuery(q: Query) : TypedQuery<GreenhouseRefusalFields, GreenhouseRefusal>(system, q, GreenhouseRefusalFields(), { materializeGreenhouseRefusal(it) }) {
+        override fun with(q: Query) = GreenhouseRefusalQuery(q)
+    }
+
+    inner class GreenhousePlotQuery(q: Query) : TypedQuery<GreenhousePlotFields, GreenhousePlot>(system, q, GreenhousePlotFields(), { materializeGreenhousePlot(it) }) {
+        override fun with(q: Query) = GreenhousePlotQuery(q)
+    }
+
+    inner class TreatmentQuery(q: Query) : TypedQuery<TreatmentFields, Treatment>(system, q, TreatmentFields(), { materializeTreatment(it) }) {
+        override fun with(q: Query) = TreatmentQuery(q)
+    }
+
+    inner class PlotObservationQuery(q: Query) : TypedQuery<PlotObservationFields, PlotObservation>(system, q, PlotObservationFields(), { materializePlotObservation(it) }) {
+        override fun with(q: Query) = PlotObservationQuery(q)
+    }
+
+    inner class GreenhouseResultQuery(q: Query) : TypedQuery<GreenhouseResultFields, GreenhouseResult>(system, q, GreenhouseResultFields(), { materializeGreenhouseResult(it) }) {
+        override fun with(q: Query) = GreenhouseResultQuery(q)
+    }
+
+    inner class ObservationCorrectionQuery(q: Query) : TypedQuery<ObservationCorrectionFields, ObservationCorrection>(system, q, ObservationCorrectionFields(), { materializeObservationCorrection(it) }) {
+        override fun with(q: Query) = ObservationCorrectionQuery(q)
+    }
+
+    inner class CorrectionRefusalQuery(q: Query) : TypedQuery<CorrectionRefusalFields, CorrectionRefusal>(system, q, CorrectionRefusalFields(), { materializeCorrectionRefusal(it) }) {
+        override fun with(q: Query) = CorrectionRefusalQuery(q)
+    }
+
+    inner class VoidRecordQuery(q: Query) : TypedQuery<VoidRecordFields, VoidRecord>(system, q, VoidRecordFields(), { materializeVoidRecord(it) }) {
+        override fun with(q: Query) = VoidRecordQuery(q)
+    }
+
+    inner class VoidRefusalQuery(q: Query) : TypedQuery<VoidRefusalFields, VoidRefusal>(system, q, VoidRefusalFields(), { materializeVoidRefusal(it) }) {
+        override fun with(q: Query) = VoidRefusalQuery(q)
+    }
+
+    inner class MoveRefusalQuery(q: Query) : TypedQuery<MoveRefusalFields, MoveRefusal>(system, q, MoveRefusalFields(), { materializeMoveRefusal(it) }) {
+        override fun with(q: Query) = MoveRefusalQuery(q)
+    }
+
+    inner class ClimateExcursionQuery(q: Query) : TypedQuery<ClimateExcursionFields, ClimateExcursion>(system, q, ClimateExcursionFields(), { materializeClimateExcursion(it) }) {
+        override fun with(q: Query) = ClimateExcursionQuery(q)
+    }
+
+    inner class ExcursionEndQuery(q: Query) : TypedQuery<ExcursionEndFields, ExcursionEnd>(system, q, ExcursionEndFields(), { materializeExcursionEnd(it) }) {
+        override fun with(q: Query) = ExcursionEndQuery(q)
+    }
+
+    inner class SensorAlertQuery(q: Query) : TypedQuery<SensorAlertFields, SensorAlert>(system, q, SensorAlertFields(), { materializeSensorAlert(it) }) {
+        override fun with(q: Query) = SensorAlertQuery(q)
+    }
+
+    inner class FieldSiteQuery(q: Query) : TypedQuery<FieldSiteFields, FieldSite>(system, q, FieldSiteFields(), { materializeFieldSite(it) }) {
+        override fun with(q: Query) = FieldSiteQuery(q)
+    }
+
+    inner class PermitQuery(q: Query) : TypedQuery<PermitFields, Permit>(system, q, PermitFields(), { materializePermit(it) }) {
+        override fun with(q: Query) = PermitQuery(q)
+    }
+
+    inner class WeatherObservationQuery(q: Query) : TypedQuery<WeatherObservationFields, WeatherObservation>(system, q, WeatherObservationFields(), { materializeWeatherObservation(it) }) {
+        override fun with(q: Query) = WeatherObservationQuery(q)
+    }
+
+    inner class FieldProtocolQuery(q: Query) : TypedQuery<FieldProtocolFields, FieldProtocol>(system, q, FieldProtocolFields(), { materializeFieldProtocol(it) }) {
+        override fun with(q: Query) = FieldProtocolQuery(q)
+    }
+
+    inner class FieldTrialQuery(q: Query) : TypedQuery<FieldTrialFields, FieldTrial>(system, q, FieldTrialFields(), { materializeFieldTrial(it) }) {
+        override fun with(q: Query) = FieldTrialQuery(q)
+    }
+
+    inner class FieldRefusalQuery(q: Query) : TypedQuery<FieldRefusalFields, FieldRefusal>(system, q, FieldRefusalFields(), { materializeFieldRefusal(it) }) {
+        override fun with(q: Query) = FieldRefusalQuery(q)
+    }
+
+    inner class PlantingQuery(q: Query) : TypedQuery<PlantingFields, Planting>(system, q, PlantingFields(), { materializePlanting(it) }) {
+        override fun with(q: Query) = PlantingQuery(q)
+    }
+
+    inner class FieldPlotQuery(q: Query) : TypedQuery<FieldPlotFields, FieldPlot>(system, q, FieldPlotFields(), { materializeFieldPlot(it) }) {
+        override fun with(q: Query) = FieldPlotQuery(q)
+    }
+
+    inner class TreatmentApplicationQuery(q: Query) : TypedQuery<TreatmentApplicationFields, TreatmentApplication>(system, q, TreatmentApplicationFields(), { materializeTreatmentApplication(it) }) {
+        override fun with(q: Query) = TreatmentApplicationQuery(q)
+    }
+
+    inner class ReapplicationNoticeQuery(q: Query) : TypedQuery<ReapplicationNoticeFields, ReapplicationNotice>(system, q, ReapplicationNoticeFields(), { materializeReapplicationNotice(it) }) {
+        override fun with(q: Query) = ReapplicationNoticeQuery(q)
+    }
+
+    inner class ScoutingQuery(q: Query) : TypedQuery<ScoutingFields, Scouting>(system, q, ScoutingFields(), { materializeScouting(it) }) {
+        override fun with(q: Query) = ScoutingQuery(q)
+    }
+
+    inner class HarvestQuery(q: Query) : TypedQuery<HarvestFields, Harvest>(system, q, HarvestFields(), { materializeHarvest(it) }) {
+        override fun with(q: Query) = HarvestQuery(q)
+    }
+
+    inner class PhytotoxicityReportQuery(q: Query) : TypedQuery<PhytotoxicityReportFields, PhytotoxicityReport>(system, q, PhytotoxicityReportFields(), { materializePhytotoxicityReport(it) }) {
+        override fun with(q: Query) = PhytotoxicityReportQuery(q)
+    }
+
+    inner class HaltNoticeQuery(q: Query) : TypedQuery<HaltNoticeFields, HaltNotice>(system, q, HaltNoticeFields(), { materializeHaltNotice(it) }) {
+        override fun with(q: Query) = HaltNoticeQuery(q)
+    }
+
+    inner class CollectionTaskQuery(q: Query) : TypedQuery<CollectionTaskFields, CollectionTask>(system, q, CollectionTaskFields(), { materializeCollectionTask(it) }) {
+        override fun with(q: Query) = CollectionTaskQuery(q)
+    }
+
+    inner class TaskReminderQuery(q: Query) : TypedQuery<TaskReminderFields, TaskReminder>(system, q, TaskReminderFields(), { materializeTaskReminder(it) }) {
+        override fun with(q: Query) = TaskReminderQuery(q)
+    }
+
+    inner class RescheduleRefusalQuery(q: Query) : TypedQuery<RescheduleRefusalFields, RescheduleRefusal>(system, q, RescheduleRefusalFields(), { materializeRescheduleRefusal(it) }) {
+        override fun with(q: Query) = RescheduleRefusalQuery(q)
+    }
+
+    inner class TaskCancellationQuery(q: Query) : TypedQuery<TaskCancellationFields, TaskCancellation>(system, q, TaskCancellationFields(), { materializeTaskCancellation(it) }) {
+        override fun with(q: Query) = TaskCancellationQuery(q)
+    }
+
+    inner class CancelRefusalQuery(q: Query) : TypedQuery<CancelRefusalFields, CancelRefusal>(system, q, CancelRefusalFields(), { materializeCancelRefusal(it) }) {
+        override fun with(q: Query) = CancelRefusalQuery(q)
+    }
+
+    inner class CompletedAssayQuery(q: Query) : TypedQuery<CompletedAssayFields, CompletedAssay>(system, q, CompletedAssayFields(), { materializeCompletedAssay(it) }) {
+        override fun with(q: Query) = CompletedAssayQuery(q)
+    }
+
+    inner class HitExperimentQuery(q: Query) : TypedQuery<HitExperimentFields, HitExperiment>(system, q, HitExperimentFields(), { materializeHitExperiment(it) }) {
+        override fun with(q: Query) = HitExperimentQuery(q)
+    }
+
+    inner class LabValidatedQuery(q: Query) : TypedQuery<LabValidatedFields, LabValidated>(system, q, LabValidatedFields(), { materializeLabValidated(it) }) {
+        override fun with(q: Query) = LabValidatedQuery(q)
+    }
+
+    inner class TreatedTrialQuery(q: Query) : TypedQuery<TreatedTrialFields, TreatedTrial>(system, q, TreatedTrialFields(), { materializeTreatedTrial(it) }) {
+        override fun with(q: Query) = TreatedTrialQuery(q)
+    }
+
+    inner class LaidOutTrialQuery(q: Query) : TypedQuery<LaidOutTrialFields, LaidOutTrial>(system, q, LaidOutTrialFields(), { materializeLaidOutTrial(it) }) {
+        override fun with(q: Query) = LaidOutTrialQuery(q)
+    }
+
+    inner class ObservedToEndQuery(q: Query) : TypedQuery<ObservedToEndFields, ObservedToEnd>(system, q, ObservedToEndFields(), { materializeObservedToEnd(it) }) {
+        override fun with(q: Query) = ObservedToEndQuery(q)
+    }
+
+    inner class CompleteTrialQuery(q: Query) : TypedQuery<CompleteTrialFields, CompleteTrial>(system, q, CompleteTrialFields(), { materializeCompleteTrial(it) }) {
+        override fun with(q: Query) = CompleteTrialQuery(q)
+    }
+
+    inner class EffectiveTrialQuery(q: Query) : TypedQuery<EffectiveTrialFields, EffectiveTrial>(system, q, EffectiveTrialFields(), { materializeEffectiveTrial(it) }) {
+        override fun with(q: Query) = EffectiveTrialQuery(q)
+    }
+
+    inner class EvaluatedTrialQuery(q: Query) : TypedQuery<EvaluatedTrialFields, EvaluatedTrial>(system, q, EvaluatedTrialFields(), { materializeEvaluatedTrial(it) }) {
+        override fun with(q: Query) = EvaluatedTrialQuery(q)
+    }
+
+    inner class GreenhouseValidatedQuery(q: Query) : TypedQuery<GreenhouseValidatedFields, GreenhouseValidated>(system, q, GreenhouseValidatedFields(), { materializeGreenhouseValidated(it) }) {
+        override fun with(q: Query) = GreenhouseValidatedQuery(q)
+    }
+
+    inner class DeprioritizedQuery(q: Query) : TypedQuery<DeprioritizedFields, Deprioritized>(system, q, DeprioritizedFields(), { materializeDeprioritized(it) }) {
+        override fun with(q: Query) = DeprioritizedQuery(q)
+    }
+
+    inner class LockedObservationQuery(q: Query) : TypedQuery<LockedObservationFields, LockedObservation>(system, q, LockedObservationFields(), { materializeLockedObservation(it) }) {
+        override fun with(q: Query) = LockedObservationQuery(q)
+    }
+
+    inner class TreatedPlotQuery(q: Query) : TypedQuery<TreatedPlotFields, TreatedPlot>(system, q, TreatedPlotFields(), { materializeTreatedPlot(it) }) {
+        override fun with(q: Query) = TreatedPlotQuery(q)
+    }
+
+    inner class ActiveTrialQuery(q: Query) : TypedQuery<ActiveTrialFields, ActiveTrial>(system, q, ActiveTrialFields(), { materializeActiveTrial(it) }) {
+        override fun with(q: Query) = ActiveTrialQuery(q)
+    }
+
+    inner class OutOfBandQuery(q: Query) : TypedQuery<OutOfBandFields, OutOfBand>(system, q, OutOfBandFields(), { materializeOutOfBand(it) }) {
+        override fun with(q: Query) = OutOfBandQuery(q)
+    }
+
+    inner class OpenExcursionQuery(q: Query) : TypedQuery<OpenExcursionFields, OpenExcursion>(system, q, OpenExcursionFields(), { materializeOpenExcursion(it) }) {
+        override fun with(q: Query) = OpenExcursionQuery(q)
+    }
+
+    inner class ClosableExcursionQuery(q: Query) : TypedQuery<ClosableExcursionFields, ClosableExcursion>(system, q, ClosableExcursionFields(), { materializeClosableExcursion(it) }) {
+        override fun with(q: Query) = ClosableExcursionQuery(q)
+    }
+
+    inner class CompromisedTrialQuery(q: Query) : TypedQuery<CompromisedTrialFields, CompromisedTrial>(system, q, CompromisedTrialFields(), { materializeCompromisedTrial(it) }) {
+        override fun with(q: Query) = CompromisedTrialQuery(q)
+    }
+
+    inner class SilentGreenhouseQuery(q: Query) : TypedQuery<SilentGreenhouseFields, SilentGreenhouse>(system, q, SilentGreenhouseFields(), { materializeSilentGreenhouse(it) }) {
+        override fun with(q: Query) = SilentGreenhouseQuery(q)
+    }
+
+    inner class PermittedTrialQuery(q: Query) : TypedQuery<PermittedTrialFields, PermittedTrial>(system, q, PermittedTrialFields(), { materializePermittedTrial(it) }) {
+        override fun with(q: Query) = PermittedTrialQuery(q)
+    }
+
+    inner class PlantedTrialQuery(q: Query) : TypedQuery<PlantedTrialFields, PlantedTrial>(system, q, PlantedTrialFields(), { materializePlantedTrial(it) }) {
+        override fun with(q: Query) = PlantedTrialQuery(q)
+    }
+
+    inner class WashedOffApplicationQuery(q: Query) : TypedQuery<WashedOffApplicationFields, WashedOffApplication>(system, q, WashedOffApplicationFields(), { materializeWashedOffApplication(it) }) {
+        override fun with(q: Query) = WashedOffApplicationQuery(q)
+    }
+
+    inner class NeverScoutedQuery(q: Query) : TypedQuery<NeverScoutedFields, NeverScouted>(system, q, NeverScoutedFields(), { materializeNeverScouted(it) }) {
+        override fun with(q: Query) = NeverScoutedQuery(q)
+    }
+
+    inner class HarvestedTrialQuery(q: Query) : TypedQuery<HarvestedTrialFields, HarvestedTrial>(system, q, HarvestedTrialFields(), { materializeHarvestedTrial(it) }) {
+        override fun with(q: Query) = HarvestedTrialQuery(q)
+    }
+
+    inner class SuccessfulFieldTrialQuery(q: Query) : TypedQuery<SuccessfulFieldTrialFields, SuccessfulFieldTrial>(system, q, SuccessfulFieldTrialFields(), { materializeSuccessfulFieldTrial(it) }) {
+        override fun with(q: Query) = SuccessfulFieldTrialQuery(q)
+    }
+
+    inner class FieldValidatedQuery(q: Query) : TypedQuery<FieldValidatedFields, FieldValidated>(system, q, FieldValidatedFields(), { materializeFieldValidated(it) }) {
+        override fun with(q: Query) = FieldValidatedQuery(q)
+    }
+
+    inner class HaltedTrialQuery(q: Query) : TypedQuery<HaltedTrialFields, HaltedTrial>(system, q, HaltedTrialFields(), { materializeHaltedTrial(it) }) {
+        override fun with(q: Query) = HaltedTrialQuery(q)
+    }
+
+    inner class DoneTaskQuery(q: Query) : TypedQuery<DoneTaskFields, DoneTask>(system, q, DoneTaskFields(), { materializeDoneTask(it) }) {
+        override fun with(q: Query) = DoneTaskQuery(q)
+    }
+
+    inner class OpenTaskQuery(q: Query) : TypedQuery<OpenTaskFields, OpenTask>(system, q, OpenTaskFields(), { materializeOpenTask(it) }) {
+        override fun with(q: Query) = OpenTaskQuery(q)
+    }
+
+    inner class OverdueTaskQuery(q: Query) : TypedQuery<OverdueTaskFields, OverdueTask>(system, q, OverdueTaskFields(), { materializeOverdueTask(it) }) {
+        override fun with(q: Query) = OverdueTaskQuery(q)
+    }
+
+    fun materializeCrop(id: Long): Crop = Crop(
+        id = id,
+        name = system.get(id, "name") as String,
+        pathogens = (system.get(id, "pathogens") as List<*>).map { PathogenView(it as Long) },
+        permits = (system.get(id, "permits") as List<*>).map { PermitView(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+    )
+
+    fun materializePathogen(id: Long): Pathogen = Pathogen(
+        id = id,
+        name = system.get(id, "name") as String,
+        host = CropView(system.get(id, "host") as Long),
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+    )
+
+    fun materializePeptide(id: Long): Peptide = Peptide(
+        id = id,
+        code = system.get(id, "code") as String,
+        sequence = system.get(id, "sequence") as String,
+        stage = system.get(id, "stage") as String,
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+    )
+
+    fun materializeAssayProtocol(id: Long): AssayProtocol = AssayProtocol(
+        id = id,
+        name = system.get(id, "name") as String,
+        durationHours = (system.get(id, "durationHours") as BigDecimal).intValueExact(),
+        replicates = (system.get(id, "replicates") as BigDecimal).intValueExact(),
+        hitThreshold = system.get(id, "hitThreshold") as BigDecimal,
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) },
+    )
+
+    fun materializeLabExperiment(id: Long): LabExperiment = LabExperiment(
+        id = id,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        protocol = AssayProtocolView(system.get(id, "protocol") as Long),
+        completedReplicates = (system.get(id, "completedReplicates") as BigDecimal).intValueExact(),
+        meanPeakInhibition = system.get(id, "meanPeakInhibition") as BigDecimal,
+        assays = (system.get(id, "assays") as List<*>).map { AssayView(it as Long) },
+        labHits = (system.get(id, "labHits") as List<*>).map { LabHitView(it as Long) },
+        labHitRetractions = (system.get(id, "labHitRetractions") as List<*>).map { LabHitRetractionView(it as Long) },
+    )
+
+    fun materializeAssay(id: Long): Assay = Assay(
+        id = id,
+        experiment = LabExperimentView(system.get(id, "experiment") as Long),
+        replicate = (system.get(id, "replicate") as BigDecimal).intValueExact(),
+        peakInhibition = system.get(id, "peakInhibition") as BigDecimal,
+        assayReadings = (system.get(id, "assayReadings") as List<*>).map { AssayReadingView(it as Long) },
+    )
+
+    fun materializeAssayReading(id: Long): AssayReading = AssayReading(
+        id = id,
+        assay = AssayView(system.get(id, "assay") as Long),
+        hoursElapsed = (system.get(id, "hoursElapsed") as BigDecimal).intValueExact(),
+        inhibitionPercent = system.get(id, "inhibitionPercent") as BigDecimal,
+        previous = (system.get(id, "previous") as Long?)?.let { AssayReadingView(it) },
+        runningPeak = system.get(id, "runningPeak") as BigDecimal,
+    )
+
+    fun materializeLabHit(id: Long): LabHit = LabHit(
+        id = id,
+        experiment = LabExperimentView(system.get(id, "experiment") as Long),
+        meanPeakInhibition = system.get(id, "meanPeakInhibition") as BigDecimal,
+        recordedOn = system.get(id, "recordedOn") as Instant,
+    )
+
+    fun materializeLabHitRetraction(id: Long): LabHitRetraction = LabHitRetraction(
+        id = id,
+        experiment = LabExperimentView(system.get(id, "experiment") as Long),
+        retractedOn = system.get(id, "retractedOn") as Instant,
+    )
+
+    fun materializeGreenhouse(id: Long): Greenhouse = Greenhouse(
+        id = id,
+        name = system.get(id, "name") as String,
+        minTemperature = system.get(id, "minTemperature") as BigDecimal,
+        maxTemperature = system.get(id, "maxTemperature") as BigDecimal,
+        climateReadings = (system.get(id, "climateReadings") as List<*>).map { ClimateReadingView(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
+        climateExcursions = (system.get(id, "climateExcursions") as List<*>).map { ClimateExcursionView(it as Long) },
+        sensorAlerts = (system.get(id, "sensorAlerts") as List<*>).map { SensorAlertView(it as Long) },
+    )
+
+    fun materializeClimateReading(id: Long): ClimateReading = ClimateReading(
+        id = id,
+        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        recordedAt = system.get(id, "recordedAt") as Instant,
+        temperature = system.get(id, "temperature") as BigDecimal,
+        humidity = system.get(id, "humidity") as BigDecimal,
+    )
+
+    fun materializeGreenhouseProtocol(id: Long): GreenhouseProtocol = GreenhouseProtocol(
+        id = id,
+        name = system.get(id, "name") as String,
+        plotsPerArm = (system.get(id, "plotsPerArm") as BigDecimal).intValueExact(),
+        finalDay = (system.get(id, "finalDay") as BigDecimal).intValueExact(),
+        efficacyThreshold = system.get(id, "efficacyThreshold") as BigDecimal,
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
+    )
+
+    fun materializeGreenhouseTrial(id: Long): GreenhouseTrial = GreenhouseTrial(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
+        treatedAt = system.get(id, "treatedAt") as Instant?,
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
+        meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
+        efficacy = system.get(id, "efficacy") as BigDecimal,
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+    )
+
+    fun materializeGreenhouseRefusal(id: Long): GreenhouseRefusal = GreenhouseRefusal(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeGreenhousePlot(id: Long): GreenhousePlot = GreenhousePlot(
+        id = id,
+        trial = GreenhouseTrialView(system.get(id, "trial") as Long),
+        bench = system.get(id, "bench") as String,
+        treatment = system.get(id, "treatment") as String,
+        lastObservedDay = (system.get(id, "lastObservedDay") as BigDecimal).intValueExact(),
+        audpc = system.get(id, "audpc") as BigDecimal,
+        plotObservations = (system.get(id, "plotObservations") as List<*>).map { PlotObservationView(it as Long) },
+        moveRefusals = (system.get(id, "moveRefusals") as List<*>).map { MoveRefusalView(it as Long) },
+    )
+
+    fun materializeTreatment(id: Long): Treatment = Treatment(
+        id = id,
+        trial = GreenhouseTrialView(system.get(id, "trial") as Long),
+        treatedAt = system.get(id, "treatedAt") as Instant,
+    )
+
+    fun materializePlotObservation(id: Long): PlotObservation = PlotObservation(
+        id = id,
+        plot = GreenhousePlotView(system.get(id, "plot") as Long),
+        dayAfterTreatment = (system.get(id, "dayAfterTreatment") as BigDecimal).intValueExact(),
+        recordedSeverity = system.get(id, "recordedSeverity") as BigDecimal,
+        observedOn = system.get(id, "observedOn") as LocalDate,
+        diseaseSeverity = system.get(id, "diseaseSeverity") as BigDecimal,
+        previous = (system.get(id, "previous") as Long?)?.let { PlotObservationView(it) },
+        audpcSoFar = system.get(id, "audpcSoFar") as BigDecimal,
+        observationCorrections = (system.get(id, "observationCorrections") as List<*>).map { ObservationCorrectionView(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+    )
+
+    fun materializeGreenhouseResult(id: Long): GreenhouseResult = GreenhouseResult(
+        id = id,
+        trial = GreenhouseTrialView(system.get(id, "trial") as Long),
+        efficacy = system.get(id, "efficacy") as BigDecimal,
+        effective = system.get(id, "effective") as Boolean,
+        recordedOn = system.get(id, "recordedOn") as Instant,
+    )
+
+    fun materializeObservationCorrection(id: Long): ObservationCorrection = ObservationCorrection(
+        id = id,
+        observation = (system.get(id, "observation") as Long?)?.let { PlotObservationView(it) },
+        previousSeverity = system.get(id, "previousSeverity") as BigDecimal,
+        correctedSeverity = system.get(id, "correctedSeverity") as BigDecimal,
+        reason = system.get(id, "reason") as String,
+        correctedOn = system.get(id, "correctedOn") as Instant,
+    )
+
+    fun materializeCorrectionRefusal(id: Long): CorrectionRefusal = CorrectionRefusal(
+        id = id,
+        observation = (system.get(id, "observation") as Long?)?.let { PlotObservationView(it) },
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeVoidRecord(id: Long): VoidRecord = VoidRecord(
+        id = id,
+        bench = system.get(id, "bench") as String,
+        dayAfterTreatment = (system.get(id, "dayAfterTreatment") as BigDecimal).intValueExact(),
+        diseaseSeverity = system.get(id, "diseaseSeverity") as BigDecimal,
+        reason = system.get(id, "reason") as String,
+        voidedOn = system.get(id, "voidedOn") as Instant,
+    )
+
+    fun materializeVoidRefusal(id: Long): VoidRefusal = VoidRefusal(
+        id = id,
+        observation = (system.get(id, "observation") as Long?)?.let { PlotObservationView(it) },
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeMoveRefusal(id: Long): MoveRefusal = MoveRefusal(
+        id = id,
+        plot = GreenhousePlotView(system.get(id, "plot") as Long),
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeClimateExcursion(id: Long): ClimateExcursion = ClimateExcursion(
+        id = id,
+        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        startedAt = system.get(id, "startedAt") as Instant,
+        temperature = system.get(id, "temperature") as BigDecimal,
+        excursionEnds = (system.get(id, "excursionEnds") as List<*>).map { ExcursionEndView(it as Long) },
+    )
+
+    fun materializeExcursionEnd(id: Long): ExcursionEnd = ExcursionEnd(
+        id = id,
+        excursion = ClimateExcursionView(system.get(id, "excursion") as Long),
+        endedAt = system.get(id, "endedAt") as Instant,
+    )
+
+    fun materializeSensorAlert(id: Long): SensorAlert = SensorAlert(
+        id = id,
+        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        raisedAt = system.get(id, "raisedAt") as Instant,
+    )
+
+    fun materializeFieldSite(id: Long): FieldSite = FieldSite(
+        id = id,
+        name = system.get(id, "name") as String,
+        region = system.get(id, "region") as String,
+        permits = (system.get(id, "permits") as List<*>).map { PermitView(it as Long) },
+        weatherObservations = (system.get(id, "weatherObservations") as List<*>).map { WeatherObservationView(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+    )
+
+    fun materializePermit(id: Long): Permit = Permit(
+        id = id,
+        site = FieldSiteView(system.get(id, "site") as Long),
+        crop = CropView(system.get(id, "crop") as Long),
+        issuedOn = system.get(id, "issuedOn") as LocalDate,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+    )
+
+    fun materializeWeatherObservation(id: Long): WeatherObservation = WeatherObservation(
+        id = id,
+        site = FieldSiteView(system.get(id, "site") as Long),
+        observedOn = system.get(id, "observedOn") as LocalDate,
+        rainfallMm = system.get(id, "rainfallMm") as BigDecimal,
+        maxTemperature = system.get(id, "maxTemperature") as BigDecimal,
+    )
+
+    fun materializeFieldProtocol(id: Long): FieldProtocol = FieldProtocol(
+        id = id,
+        name = system.get(id, "name") as String,
+        yieldGainThreshold = system.get(id, "yieldGainThreshold") as BigDecimal,
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+    )
+
+    fun materializeFieldTrial(id: Long): FieldTrial = FieldTrial(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        crop = CropView(system.get(id, "crop") as Long),
+        site = FieldSiteView(system.get(id, "site") as Long),
+        protocol = FieldProtocolView(system.get(id, "protocol") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { FieldPlotView(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { FieldPlotView(it as Long) },
+        meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
+        meanControlYield = system.get(id, "meanControlYield") as BigDecimal,
+        yieldGain = system.get(id, "yieldGain") as BigDecimal,
+        plantings = (system.get(id, "plantings") as List<*>).map { PlantingView(it as Long) },
+        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { FieldPlotView(it as Long) },
+        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { TreatmentApplicationView(it as Long) },
+        haltNotices = (system.get(id, "haltNotices") as List<*>).map { HaltNoticeView(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+    )
+
+    fun materializeFieldRefusal(id: Long): FieldRefusal = FieldRefusal(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializePlanting(id: Long): Planting = Planting(
+        id = id,
+        trial = FieldTrialView(system.get(id, "trial") as Long),
+        plantedOn = system.get(id, "plantedOn") as LocalDate,
+        seedLot = system.get(id, "seedLot") as String,
+        recordedOn = system.get(id, "recordedOn") as Instant,
+    )
+
+    fun materializeFieldPlot(id: Long): FieldPlot = FieldPlot(
+        id = id,
+        trial = FieldTrialView(system.get(id, "trial") as Long),
+        block = (system.get(id, "block") as BigDecimal).intValueExact(),
+        treatment = system.get(id, "treatment") as String,
+        yieldKgPerHa = system.get(id, "yieldKgPerHa") as BigDecimal,
+        scoutings = (system.get(id, "scoutings") as List<*>).map { ScoutingView(it as Long) },
+        harvests = (system.get(id, "harvests") as List<*>).map { HarvestView(it as Long) },
+        phytotoxicityReports = (system.get(id, "phytotoxicityReports") as List<*>).map { PhytotoxicityReportView(it as Long) },
+    )
+
+    fun materializeTreatmentApplication(id: Long): TreatmentApplication = TreatmentApplication(
+        id = id,
+        trial = FieldTrialView(system.get(id, "trial") as Long),
+        appliedOn = system.get(id, "appliedOn") as LocalDate,
+        rateGramsPerHa = system.get(id, "rateGramsPerHa") as BigDecimal,
+        recordedOn = system.get(id, "recordedOn") as Instant,
+        reapplicationNotices = (system.get(id, "reapplicationNotices") as List<*>).map { ReapplicationNoticeView(it as Long) },
+    )
+
+    fun materializeReapplicationNotice(id: Long): ReapplicationNotice = ReapplicationNotice(
+        id = id,
+        application = TreatmentApplicationView(system.get(id, "application") as Long),
+        noticedOn = system.get(id, "noticedOn") as LocalDate,
+    )
+
+    fun materializeScouting(id: Long): Scouting = Scouting(
+        id = id,
+        plot = FieldPlotView(system.get(id, "plot") as Long),
+        daysAfterPlanting = (system.get(id, "daysAfterPlanting") as BigDecimal).intValueExact(),
+        scoutedOn = system.get(id, "scoutedOn") as LocalDate,
+        incidencePercent = system.get(id, "incidencePercent") as BigDecimal,
+        severity = system.get(id, "severity") as BigDecimal,
+        previous = (system.get(id, "previous") as Long?)?.let { ScoutingView(it) },
+        audpcSoFar = system.get(id, "audpcSoFar") as BigDecimal,
+    )
+
+    fun materializeHarvest(id: Long): Harvest = Harvest(
+        id = id,
+        plot = FieldPlotView(system.get(id, "plot") as Long),
+        harvestedOn = system.get(id, "harvestedOn") as LocalDate,
+        yieldKgPerHa = system.get(id, "yieldKgPerHa") as BigDecimal,
+    )
+
+    fun materializePhytotoxicityReport(id: Long): PhytotoxicityReport = PhytotoxicityReport(
+        id = id,
+        plot = FieldPlotView(system.get(id, "plot") as Long),
+        observedOn = system.get(id, "observedOn") as LocalDate,
+        severity = (system.get(id, "severity") as BigDecimal).intValueExact(),
+    )
+
+    fun materializeHaltNotice(id: Long): HaltNotice = HaltNotice(
+        id = id,
+        trial = FieldTrialView(system.get(id, "trial") as Long),
+        noticedOn = system.get(id, "noticedOn") as Instant,
+    )
+
+    fun materializeCollectionTask(id: Long): CollectionTask = CollectionTask(
+        id = id,
+        trial = TrialView(system.get(id, "trial") as Long),
+        dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
+        dueOn = system.get(id, "dueOn") as LocalDate,
+        plotsPending = (system.get(id, "plotsPending") as BigDecimal).intValueExact(),
+        taskReminders = (system.get(id, "taskReminders") as List<*>).map { TaskReminderView(it as Long) },
+        rescheduleRefusals = (system.get(id, "rescheduleRefusals") as List<*>).map { RescheduleRefusalView(it as Long) },
+        cancelRefusals = (system.get(id, "cancelRefusals") as List<*>).map { CancelRefusalView(it as Long) },
+    )
+
+    fun materializeTaskReminder(id: Long): TaskReminder = TaskReminder(
+        id = id,
+        task = (system.get(id, "task") as Long?)?.let { CollectionTaskView(it) },
+        sentOn = system.get(id, "sentOn") as LocalDate,
+    )
+
+    fun materializeRescheduleRefusal(id: Long): RescheduleRefusal = RescheduleRefusal(
+        id = id,
+        task = (system.get(id, "task") as Long?)?.let { CollectionTaskView(it) },
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeTaskCancellation(id: Long): TaskCancellation = TaskCancellation(
+        id = id,
+        dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
+        dueOn = system.get(id, "dueOn") as LocalDate,
+        reason = system.get(id, "reason") as String,
+        cancelledOn = system.get(id, "cancelledOn") as Instant,
+    )
+
+    fun materializeCancelRefusal(id: Long): CancelRefusal = CancelRefusal(
+        id = id,
+        task = (system.get(id, "task") as Long?)?.let { CollectionTaskView(it) },
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeCompletedAssay(id: Long): CompletedAssay = CompletedAssay(
+        id = id,
+        experiment = LabExperimentView(system.get(id, "experiment") as Long),
+        replicate = (system.get(id, "replicate") as BigDecimal).intValueExact(),
+        peakInhibition = system.get(id, "peakInhibition") as BigDecimal,
+        assayReadings = (system.get(id, "assayReadings") as List<*>).map { AssayReadingView(it as Long) },
+    )
+
+    fun materializeHitExperiment(id: Long): HitExperiment = HitExperiment(
+        id = id,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        protocol = AssayProtocolView(system.get(id, "protocol") as Long),
+        completedReplicates = (system.get(id, "completedReplicates") as BigDecimal).intValueExact(),
+        meanPeakInhibition = system.get(id, "meanPeakInhibition") as BigDecimal,
+        assays = (system.get(id, "assays") as List<*>).map { AssayView(it as Long) },
+        labHits = (system.get(id, "labHits") as List<*>).map { LabHitView(it as Long) },
+        labHitRetractions = (system.get(id, "labHitRetractions") as List<*>).map { LabHitRetractionView(it as Long) },
+    )
+
+    fun materializeLabValidated(id: Long): LabValidated = LabValidated(
+        id = id,
+        code = system.get(id, "code") as String,
+        sequence = system.get(id, "sequence") as String,
+        stage = system.get(id, "stage") as String,
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+    )
+
+    fun materializeTreatedTrial(id: Long): TreatedTrial = TreatedTrial(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
+        treatedAt = system.get(id, "treatedAt") as Instant?,
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
+        meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
+        efficacy = system.get(id, "efficacy") as BigDecimal,
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+    )
+
+    fun materializeLaidOutTrial(id: Long): LaidOutTrial = LaidOutTrial(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
+        treatedAt = system.get(id, "treatedAt") as Instant?,
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
+        meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
+        efficacy = system.get(id, "efficacy") as BigDecimal,
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+    )
+
+    fun materializeObservedToEnd(id: Long): ObservedToEnd = ObservedToEnd(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
+        treatedAt = system.get(id, "treatedAt") as Instant?,
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
+        meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
+        efficacy = system.get(id, "efficacy") as BigDecimal,
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+    )
+
+    fun materializeCompleteTrial(id: Long): CompleteTrial = CompleteTrial(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
+        treatedAt = system.get(id, "treatedAt") as Instant?,
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
+        meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
+        efficacy = system.get(id, "efficacy") as BigDecimal,
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+    )
+
+    fun materializeEffectiveTrial(id: Long): EffectiveTrial = EffectiveTrial(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
+        treatedAt = system.get(id, "treatedAt") as Instant?,
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
+        meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
+        efficacy = system.get(id, "efficacy") as BigDecimal,
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+    )
+
+    fun materializeEvaluatedTrial(id: Long): EvaluatedTrial = EvaluatedTrial(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
+        treatedAt = system.get(id, "treatedAt") as Instant?,
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
+        meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
+        efficacy = system.get(id, "efficacy") as BigDecimal,
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+    )
+
+    fun materializeGreenhouseValidated(id: Long): GreenhouseValidated = GreenhouseValidated(
+        id = id,
+        code = system.get(id, "code") as String,
+        sequence = system.get(id, "sequence") as String,
+        stage = system.get(id, "stage") as String,
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+    )
+
+    fun materializeDeprioritized(id: Long): Deprioritized = Deprioritized(
+        id = id,
+        code = system.get(id, "code") as String,
+        sequence = system.get(id, "sequence") as String,
+        stage = system.get(id, "stage") as String,
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+    )
+
+    fun materializeLockedObservation(id: Long): LockedObservation = LockedObservation(
+        id = id,
+        plot = GreenhousePlotView(system.get(id, "plot") as Long),
+        dayAfterTreatment = (system.get(id, "dayAfterTreatment") as BigDecimal).intValueExact(),
+        recordedSeverity = system.get(id, "recordedSeverity") as BigDecimal,
+        observedOn = system.get(id, "observedOn") as LocalDate,
+        diseaseSeverity = system.get(id, "diseaseSeverity") as BigDecimal,
+        previous = (system.get(id, "previous") as Long?)?.let { PlotObservationView(it) },
+        audpcSoFar = system.get(id, "audpcSoFar") as BigDecimal,
+        observationCorrections = (system.get(id, "observationCorrections") as List<*>).map { ObservationCorrectionView(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+    )
+
+    fun materializeTreatedPlot(id: Long): TreatedPlot = TreatedPlot(
+        id = id,
+        trial = GreenhouseTrialView(system.get(id, "trial") as Long),
+        bench = system.get(id, "bench") as String,
+        treatment = system.get(id, "treatment") as String,
+        lastObservedDay = (system.get(id, "lastObservedDay") as BigDecimal).intValueExact(),
+        audpc = system.get(id, "audpc") as BigDecimal,
+        plotObservations = (system.get(id, "plotObservations") as List<*>).map { PlotObservationView(it as Long) },
+        moveRefusals = (system.get(id, "moveRefusals") as List<*>).map { MoveRefusalView(it as Long) },
+    )
+
+    fun materializeActiveTrial(id: Long): ActiveTrial = ActiveTrial(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
+        treatedAt = system.get(id, "treatedAt") as Instant?,
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
+        meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
+        efficacy = system.get(id, "efficacy") as BigDecimal,
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+    )
+
+    fun materializeOutOfBand(id: Long): OutOfBand = OutOfBand(
+        id = id,
+        name = system.get(id, "name") as String,
+        minTemperature = system.get(id, "minTemperature") as BigDecimal,
+        maxTemperature = system.get(id, "maxTemperature") as BigDecimal,
+        climateReadings = (system.get(id, "climateReadings") as List<*>).map { ClimateReadingView(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
+        climateExcursions = (system.get(id, "climateExcursions") as List<*>).map { ClimateExcursionView(it as Long) },
+        sensorAlerts = (system.get(id, "sensorAlerts") as List<*>).map { SensorAlertView(it as Long) },
+    )
+
+    fun materializeOpenExcursion(id: Long): OpenExcursion = OpenExcursion(
+        id = id,
+        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        startedAt = system.get(id, "startedAt") as Instant,
+        temperature = system.get(id, "temperature") as BigDecimal,
+        excursionEnds = (system.get(id, "excursionEnds") as List<*>).map { ExcursionEndView(it as Long) },
+    )
+
+    fun materializeClosableExcursion(id: Long): ClosableExcursion = ClosableExcursion(
+        id = id,
+        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        startedAt = system.get(id, "startedAt") as Instant,
+        temperature = system.get(id, "temperature") as BigDecimal,
+        excursionEnds = (system.get(id, "excursionEnds") as List<*>).map { ExcursionEndView(it as Long) },
+    )
+
+    fun materializeCompromisedTrial(id: Long): CompromisedTrial = CompromisedTrial(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
+        treatedAt = system.get(id, "treatedAt") as Instant?,
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
+        meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
+        efficacy = system.get(id, "efficacy") as BigDecimal,
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+    )
+
+    fun materializeSilentGreenhouse(id: Long): SilentGreenhouse = SilentGreenhouse(
+        id = id,
+        name = system.get(id, "name") as String,
+        minTemperature = system.get(id, "minTemperature") as BigDecimal,
+        maxTemperature = system.get(id, "maxTemperature") as BigDecimal,
+        climateReadings = (system.get(id, "climateReadings") as List<*>).map { ClimateReadingView(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
+        climateExcursions = (system.get(id, "climateExcursions") as List<*>).map { ClimateExcursionView(it as Long) },
+        sensorAlerts = (system.get(id, "sensorAlerts") as List<*>).map { SensorAlertView(it as Long) },
+    )
+
+    fun materializePermittedTrial(id: Long): PermittedTrial = PermittedTrial(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        crop = CropView(system.get(id, "crop") as Long),
+        site = FieldSiteView(system.get(id, "site") as Long),
+        protocol = FieldProtocolView(system.get(id, "protocol") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { FieldPlotView(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { FieldPlotView(it as Long) },
+        meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
+        meanControlYield = system.get(id, "meanControlYield") as BigDecimal,
+        yieldGain = system.get(id, "yieldGain") as BigDecimal,
+        plantings = (system.get(id, "plantings") as List<*>).map { PlantingView(it as Long) },
+        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { FieldPlotView(it as Long) },
+        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { TreatmentApplicationView(it as Long) },
+        haltNotices = (system.get(id, "haltNotices") as List<*>).map { HaltNoticeView(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+    )
+
+    fun materializePlantedTrial(id: Long): PlantedTrial = PlantedTrial(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        crop = CropView(system.get(id, "crop") as Long),
+        site = FieldSiteView(system.get(id, "site") as Long),
+        protocol = FieldProtocolView(system.get(id, "protocol") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { FieldPlotView(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { FieldPlotView(it as Long) },
+        meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
+        meanControlYield = system.get(id, "meanControlYield") as BigDecimal,
+        yieldGain = system.get(id, "yieldGain") as BigDecimal,
+        plantings = (system.get(id, "plantings") as List<*>).map { PlantingView(it as Long) },
+        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { FieldPlotView(it as Long) },
+        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { TreatmentApplicationView(it as Long) },
+        haltNotices = (system.get(id, "haltNotices") as List<*>).map { HaltNoticeView(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+    )
+
+    fun materializeWashedOffApplication(id: Long): WashedOffApplication = WashedOffApplication(
+        id = id,
+        trial = FieldTrialView(system.get(id, "trial") as Long),
+        appliedOn = system.get(id, "appliedOn") as LocalDate,
+        rateGramsPerHa = system.get(id, "rateGramsPerHa") as BigDecimal,
+        recordedOn = system.get(id, "recordedOn") as Instant,
+        reapplicationNotices = (system.get(id, "reapplicationNotices") as List<*>).map { ReapplicationNoticeView(it as Long) },
+    )
+
+    fun materializeNeverScouted(id: Long): NeverScouted = NeverScouted(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        crop = CropView(system.get(id, "crop") as Long),
+        site = FieldSiteView(system.get(id, "site") as Long),
+        protocol = FieldProtocolView(system.get(id, "protocol") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { FieldPlotView(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { FieldPlotView(it as Long) },
+        meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
+        meanControlYield = system.get(id, "meanControlYield") as BigDecimal,
+        yieldGain = system.get(id, "yieldGain") as BigDecimal,
+        plantings = (system.get(id, "plantings") as List<*>).map { PlantingView(it as Long) },
+        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { FieldPlotView(it as Long) },
+        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { TreatmentApplicationView(it as Long) },
+        haltNotices = (system.get(id, "haltNotices") as List<*>).map { HaltNoticeView(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+    )
+
+    fun materializeHarvestedTrial(id: Long): HarvestedTrial = HarvestedTrial(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        crop = CropView(system.get(id, "crop") as Long),
+        site = FieldSiteView(system.get(id, "site") as Long),
+        protocol = FieldProtocolView(system.get(id, "protocol") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { FieldPlotView(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { FieldPlotView(it as Long) },
+        meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
+        meanControlYield = system.get(id, "meanControlYield") as BigDecimal,
+        yieldGain = system.get(id, "yieldGain") as BigDecimal,
+        plantings = (system.get(id, "plantings") as List<*>).map { PlantingView(it as Long) },
+        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { FieldPlotView(it as Long) },
+        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { TreatmentApplicationView(it as Long) },
+        haltNotices = (system.get(id, "haltNotices") as List<*>).map { HaltNoticeView(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+    )
+
+    fun materializeSuccessfulFieldTrial(id: Long): SuccessfulFieldTrial = SuccessfulFieldTrial(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        crop = CropView(system.get(id, "crop") as Long),
+        site = FieldSiteView(system.get(id, "site") as Long),
+        protocol = FieldProtocolView(system.get(id, "protocol") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { FieldPlotView(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { FieldPlotView(it as Long) },
+        meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
+        meanControlYield = system.get(id, "meanControlYield") as BigDecimal,
+        yieldGain = system.get(id, "yieldGain") as BigDecimal,
+        plantings = (system.get(id, "plantings") as List<*>).map { PlantingView(it as Long) },
+        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { FieldPlotView(it as Long) },
+        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { TreatmentApplicationView(it as Long) },
+        haltNotices = (system.get(id, "haltNotices") as List<*>).map { HaltNoticeView(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+    )
+
+    fun materializeFieldValidated(id: Long): FieldValidated = FieldValidated(
+        id = id,
+        code = system.get(id, "code") as String,
+        sequence = system.get(id, "sequence") as String,
+        stage = system.get(id, "stage") as String,
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+    )
+
+    fun materializeHaltedTrial(id: Long): HaltedTrial = HaltedTrial(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        peptide = PeptideView(system.get(id, "peptide") as Long),
+        pathogen = PathogenView(system.get(id, "pathogen") as Long),
+        crop = CropView(system.get(id, "crop") as Long),
+        site = FieldSiteView(system.get(id, "site") as Long),
+        protocol = FieldProtocolView(system.get(id, "protocol") as Long),
+        approvedOn = system.get(id, "approvedOn") as Instant,
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { FieldPlotView(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { FieldPlotView(it as Long) },
+        meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
+        meanControlYield = system.get(id, "meanControlYield") as BigDecimal,
+        yieldGain = system.get(id, "yieldGain") as BigDecimal,
+        plantings = (system.get(id, "plantings") as List<*>).map { PlantingView(it as Long) },
+        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { FieldPlotView(it as Long) },
+        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { TreatmentApplicationView(it as Long) },
+        haltNotices = (system.get(id, "haltNotices") as List<*>).map { HaltNoticeView(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+    )
+
+    fun materializeDoneTask(id: Long): DoneTask = DoneTask(
+        id = id,
+        trial = TrialView(system.get(id, "trial") as Long),
+        dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
+        dueOn = system.get(id, "dueOn") as LocalDate,
+        plotsPending = (system.get(id, "plotsPending") as BigDecimal).intValueExact(),
+        taskReminders = (system.get(id, "taskReminders") as List<*>).map { TaskReminderView(it as Long) },
+        rescheduleRefusals = (system.get(id, "rescheduleRefusals") as List<*>).map { RescheduleRefusalView(it as Long) },
+        cancelRefusals = (system.get(id, "cancelRefusals") as List<*>).map { CancelRefusalView(it as Long) },
+    )
+
+    fun materializeOpenTask(id: Long): OpenTask = OpenTask(
+        id = id,
+        trial = TrialView(system.get(id, "trial") as Long),
+        dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
+        dueOn = system.get(id, "dueOn") as LocalDate,
+        plotsPending = (system.get(id, "plotsPending") as BigDecimal).intValueExact(),
+        taskReminders = (system.get(id, "taskReminders") as List<*>).map { TaskReminderView(it as Long) },
+        rescheduleRefusals = (system.get(id, "rescheduleRefusals") as List<*>).map { RescheduleRefusalView(it as Long) },
+        cancelRefusals = (system.get(id, "cancelRefusals") as List<*>).map { CancelRefusalView(it as Long) },
+    )
+
+    fun materializeOverdueTask(id: Long): OverdueTask = OverdueTask(
+        id = id,
+        trial = TrialView(system.get(id, "trial") as Long),
+        dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
+        dueOn = system.get(id, "dueOn") as LocalDate,
+        plotsPending = (system.get(id, "plotsPending") as BigDecimal).intValueExact(),
+        taskReminders = (system.get(id, "taskReminders") as List<*>).map { TaskReminderView(it as Long) },
+        rescheduleRefusals = (system.get(id, "rescheduleRefusals") as List<*>).map { RescheduleRefusalView(it as Long) },
+        cancelRefusals = (system.get(id, "cancelRefusals") as List<*>).map { CancelRefusalView(it as Long) },
+    )
+
     companion object {
         private val SPEC = """
 -- Peptides: a crop-protection discovery pipeline — candidate peptides screened
@@ -2115,6 +3345,1586 @@ rule RefuseCancel when RefusedCancel {
 }
 """
     }
+}
+
+// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
+// References are typed handles (views); navigating one is a further read.
+
+data class Crop(
+    override val id: Long,
+    val name: String,
+    val pathogens: List<PeptidesSystem.PathogenView>,
+    val permits: List<PeptidesSystem.PermitView>,
+    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
+) : View
+
+data class Pathogen(
+    override val id: Long,
+    val name: String,
+    val host: PeptidesSystem.CropView,
+    val labExperiments: List<PeptidesSystem.LabExperimentView>,
+    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
+    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
+) : View
+
+data class Peptide(
+    override val id: Long,
+    val code: String,
+    val sequence: String,
+    val stage: String,
+    val labExperiments: List<PeptidesSystem.LabExperimentView>,
+    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
+    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
+) : View
+
+data class AssayProtocol(
+    override val id: Long,
+    val name: String,
+    val durationHours: Int,
+    val replicates: Int,
+    val hitThreshold: BigDecimal,
+    val labExperiments: List<PeptidesSystem.LabExperimentView>,
+) : View
+
+data class LabExperiment(
+    override val id: Long,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val protocol: PeptidesSystem.AssayProtocolView,
+    val completedReplicates: Int,
+    val meanPeakInhibition: BigDecimal,
+    val assays: List<PeptidesSystem.AssayView>,
+    val labHits: List<PeptidesSystem.LabHitView>,
+    val labHitRetractions: List<PeptidesSystem.LabHitRetractionView>,
+) : View
+
+data class Assay(
+    override val id: Long,
+    val experiment: PeptidesSystem.LabExperimentView,
+    val replicate: Int,
+    val peakInhibition: BigDecimal,
+    val assayReadings: List<PeptidesSystem.AssayReadingView>,
+) : View
+
+data class AssayReading(
+    override val id: Long,
+    val assay: PeptidesSystem.AssayView,
+    val hoursElapsed: Int,
+    val inhibitionPercent: BigDecimal,
+    val previous: PeptidesSystem.AssayReadingView?,
+    val runningPeak: BigDecimal,
+) : View
+
+data class LabHit(
+    override val id: Long,
+    val experiment: PeptidesSystem.LabExperimentView,
+    val meanPeakInhibition: BigDecimal,
+    val recordedOn: Instant,
+) : View
+
+data class LabHitRetraction(
+    override val id: Long,
+    val experiment: PeptidesSystem.LabExperimentView,
+    val retractedOn: Instant,
+) : View
+
+data class Greenhouse(
+    override val id: Long,
+    val name: String,
+    val minTemperature: BigDecimal,
+    val maxTemperature: BigDecimal,
+    val climateReadings: List<PeptidesSystem.ClimateReadingView>,
+    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
+    val climateExcursions: List<PeptidesSystem.ClimateExcursionView>,
+    val sensorAlerts: List<PeptidesSystem.SensorAlertView>,
+) : View
+
+data class ClimateReading(
+    override val id: Long,
+    val greenhouse: PeptidesSystem.GreenhouseView,
+    val recordedAt: Instant,
+    val temperature: BigDecimal,
+    val humidity: BigDecimal,
+) : View
+
+data class GreenhouseProtocol(
+    override val id: Long,
+    val name: String,
+    val plotsPerArm: Int,
+    val finalDay: Int,
+    val efficacyThreshold: BigDecimal,
+    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
+) : View
+
+data class GreenhouseTrial(
+    override val id: Long,
+    val requestKey: String,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val greenhouse: PeptidesSystem.GreenhouseView,
+    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val approvedOn: Instant,
+    val treatedAt: Instant?,
+    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val meanTreatedAudpc: BigDecimal,
+    val meanControlAudpc: BigDecimal,
+    val efficacy: BigDecimal,
+    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatments: List<PeptidesSystem.TreatmentView>,
+    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
+    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
+) : View
+
+data class GreenhouseRefusal(
+    override val id: Long,
+    val requestKey: String,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class GreenhousePlot(
+    override val id: Long,
+    val trial: PeptidesSystem.GreenhouseTrialView,
+    val bench: String,
+    val treatment: String,
+    val lastObservedDay: Int,
+    val audpc: BigDecimal,
+    val plotObservations: List<PeptidesSystem.PlotObservationView>,
+    val moveRefusals: List<PeptidesSystem.MoveRefusalView>,
+) : View
+
+data class Treatment(
+    override val id: Long,
+    val trial: PeptidesSystem.GreenhouseTrialView,
+    val treatedAt: Instant,
+) : View
+
+data class PlotObservation(
+    override val id: Long,
+    val plot: PeptidesSystem.GreenhousePlotView,
+    val dayAfterTreatment: Int,
+    val recordedSeverity: BigDecimal,
+    val observedOn: LocalDate,
+    val diseaseSeverity: BigDecimal,
+    val previous: PeptidesSystem.PlotObservationView?,
+    val audpcSoFar: BigDecimal,
+    val observationCorrections: List<PeptidesSystem.ObservationCorrectionView>,
+    val correctionRefusals: List<PeptidesSystem.CorrectionRefusalView>,
+    val voidRefusals: List<PeptidesSystem.VoidRefusalView>,
+) : View
+
+data class GreenhouseResult(
+    override val id: Long,
+    val trial: PeptidesSystem.GreenhouseTrialView,
+    val efficacy: BigDecimal,
+    val effective: Boolean,
+    val recordedOn: Instant,
+) : View
+
+data class ObservationCorrection(
+    override val id: Long,
+    val observation: PeptidesSystem.PlotObservationView?,
+    val previousSeverity: BigDecimal,
+    val correctedSeverity: BigDecimal,
+    val reason: String,
+    val correctedOn: Instant,
+) : View
+
+data class CorrectionRefusal(
+    override val id: Long,
+    val observation: PeptidesSystem.PlotObservationView?,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class VoidRecord(
+    override val id: Long,
+    val bench: String,
+    val dayAfterTreatment: Int,
+    val diseaseSeverity: BigDecimal,
+    val reason: String,
+    val voidedOn: Instant,
+) : View
+
+data class VoidRefusal(
+    override val id: Long,
+    val observation: PeptidesSystem.PlotObservationView?,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class MoveRefusal(
+    override val id: Long,
+    val plot: PeptidesSystem.GreenhousePlotView,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class ClimateExcursion(
+    override val id: Long,
+    val greenhouse: PeptidesSystem.GreenhouseView,
+    val startedAt: Instant,
+    val temperature: BigDecimal,
+    val excursionEnds: List<PeptidesSystem.ExcursionEndView>,
+) : View
+
+data class ExcursionEnd(
+    override val id: Long,
+    val excursion: PeptidesSystem.ClimateExcursionView,
+    val endedAt: Instant,
+) : View
+
+data class SensorAlert(
+    override val id: Long,
+    val greenhouse: PeptidesSystem.GreenhouseView,
+    val raisedAt: Instant,
+) : View
+
+data class FieldSite(
+    override val id: Long,
+    val name: String,
+    val region: String,
+    val permits: List<PeptidesSystem.PermitView>,
+    val weatherObservations: List<PeptidesSystem.WeatherObservationView>,
+    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
+) : View
+
+data class Permit(
+    override val id: Long,
+    val site: PeptidesSystem.FieldSiteView,
+    val crop: PeptidesSystem.CropView,
+    val issuedOn: LocalDate,
+    val expiresOn: LocalDate,
+) : View
+
+data class WeatherObservation(
+    override val id: Long,
+    val site: PeptidesSystem.FieldSiteView,
+    val observedOn: LocalDate,
+    val rainfallMm: BigDecimal,
+    val maxTemperature: BigDecimal,
+) : View
+
+data class FieldProtocol(
+    override val id: Long,
+    val name: String,
+    val yieldGainThreshold: BigDecimal,
+    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
+) : View
+
+data class FieldTrial(
+    override val id: Long,
+    val requestKey: String,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val crop: PeptidesSystem.CropView,
+    val site: PeptidesSystem.FieldSiteView,
+    val protocol: PeptidesSystem.FieldProtocolView,
+    val approvedOn: Instant,
+    val treatedPlots: List<PeptidesSystem.FieldPlotView>,
+    val controlPlots: List<PeptidesSystem.FieldPlotView>,
+    val meanTreatedYield: BigDecimal,
+    val meanControlYield: BigDecimal,
+    val yieldGain: BigDecimal,
+    val plantings: List<PeptidesSystem.PlantingView>,
+    val fieldPlots: List<PeptidesSystem.FieldPlotView>,
+    val treatmentApplications: List<PeptidesSystem.TreatmentApplicationView>,
+    val haltNotices: List<PeptidesSystem.HaltNoticeView>,
+    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
+) : View
+
+data class FieldRefusal(
+    override val id: Long,
+    val requestKey: String,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class Planting(
+    override val id: Long,
+    val trial: PeptidesSystem.FieldTrialView,
+    val plantedOn: LocalDate,
+    val seedLot: String,
+    val recordedOn: Instant,
+) : View
+
+data class FieldPlot(
+    override val id: Long,
+    val trial: PeptidesSystem.FieldTrialView,
+    val block: Int,
+    val treatment: String,
+    val yieldKgPerHa: BigDecimal,
+    val scoutings: List<PeptidesSystem.ScoutingView>,
+    val harvests: List<PeptidesSystem.HarvestView>,
+    val phytotoxicityReports: List<PeptidesSystem.PhytotoxicityReportView>,
+) : View
+
+data class TreatmentApplication(
+    override val id: Long,
+    val trial: PeptidesSystem.FieldTrialView,
+    val appliedOn: LocalDate,
+    val rateGramsPerHa: BigDecimal,
+    val recordedOn: Instant,
+    val reapplicationNotices: List<PeptidesSystem.ReapplicationNoticeView>,
+) : View
+
+data class ReapplicationNotice(
+    override val id: Long,
+    val application: PeptidesSystem.TreatmentApplicationView,
+    val noticedOn: LocalDate,
+) : View
+
+data class Scouting(
+    override val id: Long,
+    val plot: PeptidesSystem.FieldPlotView,
+    val daysAfterPlanting: Int,
+    val scoutedOn: LocalDate,
+    val incidencePercent: BigDecimal,
+    val severity: BigDecimal,
+    val previous: PeptidesSystem.ScoutingView?,
+    val audpcSoFar: BigDecimal,
+) : View
+
+data class Harvest(
+    override val id: Long,
+    val plot: PeptidesSystem.FieldPlotView,
+    val harvestedOn: LocalDate,
+    val yieldKgPerHa: BigDecimal,
+) : View
+
+data class PhytotoxicityReport(
+    override val id: Long,
+    val plot: PeptidesSystem.FieldPlotView,
+    val observedOn: LocalDate,
+    val severity: Int,
+) : View
+
+data class HaltNotice(
+    override val id: Long,
+    val trial: PeptidesSystem.FieldTrialView,
+    val noticedOn: Instant,
+) : View
+
+data class CollectionTask(
+    override val id: Long,
+    val trial: PeptidesSystem.TrialView,
+    val dayMark: Int,
+    val dueOn: LocalDate,
+    val plotsPending: Int,
+    val taskReminders: List<PeptidesSystem.TaskReminderView>,
+    val rescheduleRefusals: List<PeptidesSystem.RescheduleRefusalView>,
+    val cancelRefusals: List<PeptidesSystem.CancelRefusalView>,
+) : View
+
+data class TaskReminder(
+    override val id: Long,
+    val task: PeptidesSystem.CollectionTaskView?,
+    val sentOn: LocalDate,
+) : View
+
+data class RescheduleRefusal(
+    override val id: Long,
+    val task: PeptidesSystem.CollectionTaskView?,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class TaskCancellation(
+    override val id: Long,
+    val dayMark: Int,
+    val dueOn: LocalDate,
+    val reason: String,
+    val cancelledOn: Instant,
+) : View
+
+data class CancelRefusal(
+    override val id: Long,
+    val task: PeptidesSystem.CollectionTaskView?,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class CompletedAssay(
+    override val id: Long,
+    val experiment: PeptidesSystem.LabExperimentView,
+    val replicate: Int,
+    val peakInhibition: BigDecimal,
+    val assayReadings: List<PeptidesSystem.AssayReadingView>,
+) : View
+
+data class HitExperiment(
+    override val id: Long,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val protocol: PeptidesSystem.AssayProtocolView,
+    val completedReplicates: Int,
+    val meanPeakInhibition: BigDecimal,
+    val assays: List<PeptidesSystem.AssayView>,
+    val labHits: List<PeptidesSystem.LabHitView>,
+    val labHitRetractions: List<PeptidesSystem.LabHitRetractionView>,
+) : View
+
+data class LabValidated(
+    override val id: Long,
+    val code: String,
+    val sequence: String,
+    val stage: String,
+    val labExperiments: List<PeptidesSystem.LabExperimentView>,
+    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
+    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
+) : View
+
+data class TreatedTrial(
+    override val id: Long,
+    val requestKey: String,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val greenhouse: PeptidesSystem.GreenhouseView,
+    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val approvedOn: Instant,
+    val treatedAt: Instant?,
+    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val meanTreatedAudpc: BigDecimal,
+    val meanControlAudpc: BigDecimal,
+    val efficacy: BigDecimal,
+    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatments: List<PeptidesSystem.TreatmentView>,
+    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
+    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
+) : View
+
+data class LaidOutTrial(
+    override val id: Long,
+    val requestKey: String,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val greenhouse: PeptidesSystem.GreenhouseView,
+    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val approvedOn: Instant,
+    val treatedAt: Instant?,
+    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val meanTreatedAudpc: BigDecimal,
+    val meanControlAudpc: BigDecimal,
+    val efficacy: BigDecimal,
+    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatments: List<PeptidesSystem.TreatmentView>,
+    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
+    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
+) : View
+
+data class ObservedToEnd(
+    override val id: Long,
+    val requestKey: String,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val greenhouse: PeptidesSystem.GreenhouseView,
+    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val approvedOn: Instant,
+    val treatedAt: Instant?,
+    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val meanTreatedAudpc: BigDecimal,
+    val meanControlAudpc: BigDecimal,
+    val efficacy: BigDecimal,
+    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatments: List<PeptidesSystem.TreatmentView>,
+    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
+    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
+) : View
+
+data class CompleteTrial(
+    override val id: Long,
+    val requestKey: String,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val greenhouse: PeptidesSystem.GreenhouseView,
+    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val approvedOn: Instant,
+    val treatedAt: Instant?,
+    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val meanTreatedAudpc: BigDecimal,
+    val meanControlAudpc: BigDecimal,
+    val efficacy: BigDecimal,
+    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatments: List<PeptidesSystem.TreatmentView>,
+    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
+    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
+) : View
+
+data class EffectiveTrial(
+    override val id: Long,
+    val requestKey: String,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val greenhouse: PeptidesSystem.GreenhouseView,
+    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val approvedOn: Instant,
+    val treatedAt: Instant?,
+    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val meanTreatedAudpc: BigDecimal,
+    val meanControlAudpc: BigDecimal,
+    val efficacy: BigDecimal,
+    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatments: List<PeptidesSystem.TreatmentView>,
+    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
+    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
+) : View
+
+data class EvaluatedTrial(
+    override val id: Long,
+    val requestKey: String,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val greenhouse: PeptidesSystem.GreenhouseView,
+    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val approvedOn: Instant,
+    val treatedAt: Instant?,
+    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val meanTreatedAudpc: BigDecimal,
+    val meanControlAudpc: BigDecimal,
+    val efficacy: BigDecimal,
+    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatments: List<PeptidesSystem.TreatmentView>,
+    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
+    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
+) : View
+
+data class GreenhouseValidated(
+    override val id: Long,
+    val code: String,
+    val sequence: String,
+    val stage: String,
+    val labExperiments: List<PeptidesSystem.LabExperimentView>,
+    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
+    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
+) : View
+
+data class Deprioritized(
+    override val id: Long,
+    val code: String,
+    val sequence: String,
+    val stage: String,
+    val labExperiments: List<PeptidesSystem.LabExperimentView>,
+    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
+    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
+) : View
+
+data class LockedObservation(
+    override val id: Long,
+    val plot: PeptidesSystem.GreenhousePlotView,
+    val dayAfterTreatment: Int,
+    val recordedSeverity: BigDecimal,
+    val observedOn: LocalDate,
+    val diseaseSeverity: BigDecimal,
+    val previous: PeptidesSystem.PlotObservationView?,
+    val audpcSoFar: BigDecimal,
+    val observationCorrections: List<PeptidesSystem.ObservationCorrectionView>,
+    val correctionRefusals: List<PeptidesSystem.CorrectionRefusalView>,
+    val voidRefusals: List<PeptidesSystem.VoidRefusalView>,
+) : View
+
+data class TreatedPlot(
+    override val id: Long,
+    val trial: PeptidesSystem.GreenhouseTrialView,
+    val bench: String,
+    val treatment: String,
+    val lastObservedDay: Int,
+    val audpc: BigDecimal,
+    val plotObservations: List<PeptidesSystem.PlotObservationView>,
+    val moveRefusals: List<PeptidesSystem.MoveRefusalView>,
+) : View
+
+data class ActiveTrial(
+    override val id: Long,
+    val requestKey: String,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val greenhouse: PeptidesSystem.GreenhouseView,
+    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val approvedOn: Instant,
+    val treatedAt: Instant?,
+    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val meanTreatedAudpc: BigDecimal,
+    val meanControlAudpc: BigDecimal,
+    val efficacy: BigDecimal,
+    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatments: List<PeptidesSystem.TreatmentView>,
+    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
+    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
+) : View
+
+data class OutOfBand(
+    override val id: Long,
+    val name: String,
+    val minTemperature: BigDecimal,
+    val maxTemperature: BigDecimal,
+    val climateReadings: List<PeptidesSystem.ClimateReadingView>,
+    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
+    val climateExcursions: List<PeptidesSystem.ClimateExcursionView>,
+    val sensorAlerts: List<PeptidesSystem.SensorAlertView>,
+) : View
+
+data class OpenExcursion(
+    override val id: Long,
+    val greenhouse: PeptidesSystem.GreenhouseView,
+    val startedAt: Instant,
+    val temperature: BigDecimal,
+    val excursionEnds: List<PeptidesSystem.ExcursionEndView>,
+) : View
+
+data class ClosableExcursion(
+    override val id: Long,
+    val greenhouse: PeptidesSystem.GreenhouseView,
+    val startedAt: Instant,
+    val temperature: BigDecimal,
+    val excursionEnds: List<PeptidesSystem.ExcursionEndView>,
+) : View
+
+data class CompromisedTrial(
+    override val id: Long,
+    val requestKey: String,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val greenhouse: PeptidesSystem.GreenhouseView,
+    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val approvedOn: Instant,
+    val treatedAt: Instant?,
+    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val meanTreatedAudpc: BigDecimal,
+    val meanControlAudpc: BigDecimal,
+    val efficacy: BigDecimal,
+    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatments: List<PeptidesSystem.TreatmentView>,
+    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
+    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
+) : View
+
+data class SilentGreenhouse(
+    override val id: Long,
+    val name: String,
+    val minTemperature: BigDecimal,
+    val maxTemperature: BigDecimal,
+    val climateReadings: List<PeptidesSystem.ClimateReadingView>,
+    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
+    val climateExcursions: List<PeptidesSystem.ClimateExcursionView>,
+    val sensorAlerts: List<PeptidesSystem.SensorAlertView>,
+) : View
+
+data class PermittedTrial(
+    override val id: Long,
+    val requestKey: String,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val crop: PeptidesSystem.CropView,
+    val site: PeptidesSystem.FieldSiteView,
+    val protocol: PeptidesSystem.FieldProtocolView,
+    val approvedOn: Instant,
+    val treatedPlots: List<PeptidesSystem.FieldPlotView>,
+    val controlPlots: List<PeptidesSystem.FieldPlotView>,
+    val meanTreatedYield: BigDecimal,
+    val meanControlYield: BigDecimal,
+    val yieldGain: BigDecimal,
+    val plantings: List<PeptidesSystem.PlantingView>,
+    val fieldPlots: List<PeptidesSystem.FieldPlotView>,
+    val treatmentApplications: List<PeptidesSystem.TreatmentApplicationView>,
+    val haltNotices: List<PeptidesSystem.HaltNoticeView>,
+    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
+) : View
+
+data class PlantedTrial(
+    override val id: Long,
+    val requestKey: String,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val crop: PeptidesSystem.CropView,
+    val site: PeptidesSystem.FieldSiteView,
+    val protocol: PeptidesSystem.FieldProtocolView,
+    val approvedOn: Instant,
+    val treatedPlots: List<PeptidesSystem.FieldPlotView>,
+    val controlPlots: List<PeptidesSystem.FieldPlotView>,
+    val meanTreatedYield: BigDecimal,
+    val meanControlYield: BigDecimal,
+    val yieldGain: BigDecimal,
+    val plantings: List<PeptidesSystem.PlantingView>,
+    val fieldPlots: List<PeptidesSystem.FieldPlotView>,
+    val treatmentApplications: List<PeptidesSystem.TreatmentApplicationView>,
+    val haltNotices: List<PeptidesSystem.HaltNoticeView>,
+    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
+) : View
+
+data class WashedOffApplication(
+    override val id: Long,
+    val trial: PeptidesSystem.FieldTrialView,
+    val appliedOn: LocalDate,
+    val rateGramsPerHa: BigDecimal,
+    val recordedOn: Instant,
+    val reapplicationNotices: List<PeptidesSystem.ReapplicationNoticeView>,
+) : View
+
+data class NeverScouted(
+    override val id: Long,
+    val requestKey: String,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val crop: PeptidesSystem.CropView,
+    val site: PeptidesSystem.FieldSiteView,
+    val protocol: PeptidesSystem.FieldProtocolView,
+    val approvedOn: Instant,
+    val treatedPlots: List<PeptidesSystem.FieldPlotView>,
+    val controlPlots: List<PeptidesSystem.FieldPlotView>,
+    val meanTreatedYield: BigDecimal,
+    val meanControlYield: BigDecimal,
+    val yieldGain: BigDecimal,
+    val plantings: List<PeptidesSystem.PlantingView>,
+    val fieldPlots: List<PeptidesSystem.FieldPlotView>,
+    val treatmentApplications: List<PeptidesSystem.TreatmentApplicationView>,
+    val haltNotices: List<PeptidesSystem.HaltNoticeView>,
+    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
+) : View
+
+data class HarvestedTrial(
+    override val id: Long,
+    val requestKey: String,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val crop: PeptidesSystem.CropView,
+    val site: PeptidesSystem.FieldSiteView,
+    val protocol: PeptidesSystem.FieldProtocolView,
+    val approvedOn: Instant,
+    val treatedPlots: List<PeptidesSystem.FieldPlotView>,
+    val controlPlots: List<PeptidesSystem.FieldPlotView>,
+    val meanTreatedYield: BigDecimal,
+    val meanControlYield: BigDecimal,
+    val yieldGain: BigDecimal,
+    val plantings: List<PeptidesSystem.PlantingView>,
+    val fieldPlots: List<PeptidesSystem.FieldPlotView>,
+    val treatmentApplications: List<PeptidesSystem.TreatmentApplicationView>,
+    val haltNotices: List<PeptidesSystem.HaltNoticeView>,
+    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
+) : View
+
+data class SuccessfulFieldTrial(
+    override val id: Long,
+    val requestKey: String,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val crop: PeptidesSystem.CropView,
+    val site: PeptidesSystem.FieldSiteView,
+    val protocol: PeptidesSystem.FieldProtocolView,
+    val approvedOn: Instant,
+    val treatedPlots: List<PeptidesSystem.FieldPlotView>,
+    val controlPlots: List<PeptidesSystem.FieldPlotView>,
+    val meanTreatedYield: BigDecimal,
+    val meanControlYield: BigDecimal,
+    val yieldGain: BigDecimal,
+    val plantings: List<PeptidesSystem.PlantingView>,
+    val fieldPlots: List<PeptidesSystem.FieldPlotView>,
+    val treatmentApplications: List<PeptidesSystem.TreatmentApplicationView>,
+    val haltNotices: List<PeptidesSystem.HaltNoticeView>,
+    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
+) : View
+
+data class FieldValidated(
+    override val id: Long,
+    val code: String,
+    val sequence: String,
+    val stage: String,
+    val labExperiments: List<PeptidesSystem.LabExperimentView>,
+    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
+    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
+) : View
+
+data class HaltedTrial(
+    override val id: Long,
+    val requestKey: String,
+    val peptide: PeptidesSystem.PeptideView,
+    val pathogen: PeptidesSystem.PathogenView,
+    val crop: PeptidesSystem.CropView,
+    val site: PeptidesSystem.FieldSiteView,
+    val protocol: PeptidesSystem.FieldProtocolView,
+    val approvedOn: Instant,
+    val treatedPlots: List<PeptidesSystem.FieldPlotView>,
+    val controlPlots: List<PeptidesSystem.FieldPlotView>,
+    val meanTreatedYield: BigDecimal,
+    val meanControlYield: BigDecimal,
+    val yieldGain: BigDecimal,
+    val plantings: List<PeptidesSystem.PlantingView>,
+    val fieldPlots: List<PeptidesSystem.FieldPlotView>,
+    val treatmentApplications: List<PeptidesSystem.TreatmentApplicationView>,
+    val haltNotices: List<PeptidesSystem.HaltNoticeView>,
+    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
+) : View
+
+data class DoneTask(
+    override val id: Long,
+    val trial: PeptidesSystem.TrialView,
+    val dayMark: Int,
+    val dueOn: LocalDate,
+    val plotsPending: Int,
+    val taskReminders: List<PeptidesSystem.TaskReminderView>,
+    val rescheduleRefusals: List<PeptidesSystem.RescheduleRefusalView>,
+    val cancelRefusals: List<PeptidesSystem.CancelRefusalView>,
+) : View
+
+data class OpenTask(
+    override val id: Long,
+    val trial: PeptidesSystem.TrialView,
+    val dayMark: Int,
+    val dueOn: LocalDate,
+    val plotsPending: Int,
+    val taskReminders: List<PeptidesSystem.TaskReminderView>,
+    val rescheduleRefusals: List<PeptidesSystem.RescheduleRefusalView>,
+    val cancelRefusals: List<PeptidesSystem.CancelRefusalView>,
+) : View
+
+data class OverdueTask(
+    override val id: Long,
+    val trial: PeptidesSystem.TrialView,
+    val dayMark: Int,
+    val dueOn: LocalDate,
+    val plotsPending: Int,
+    val taskReminders: List<PeptidesSystem.TaskReminderView>,
+    val rescheduleRefusals: List<PeptidesSystem.RescheduleRefusalView>,
+    val cancelRefusals: List<PeptidesSystem.CancelRefusalView>,
+) : View
+
+// ── the builder's vocabulary: one field handle per member, memberships per refinement ──
+
+class CropFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+}
+
+class PathogenFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val host: CropFields get() = CropFields(fieldPath + "host")
+}
+
+class PeptideFields(path: List<String> = emptyList()) : Fields(path) {
+    val code: TextField get() = TextField(fieldPath + "code")
+    val sequence: TextField get() = TextField(fieldPath + "sequence")
+    val stage: TextField get() = TextField(fieldPath + "stage")
+    fun isLabValidated(): Expr = isA("LabValidated")
+    fun isGreenhouseValidated(): Expr = isA("GreenhouseValidated")
+    fun isDeprioritized(): Expr = isA("Deprioritized")
+    fun isFieldValidated(): Expr = isA("FieldValidated")
+}
+
+class AssayProtocolFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val durationHours: NumField get() = NumField(fieldPath + "durationHours")
+    val replicates: NumField get() = NumField(fieldPath + "replicates")
+    val hitThreshold: NumField get() = NumField(fieldPath + "hitThreshold")
+}
+
+class LabExperimentFields(path: List<String> = emptyList()) : Fields(path) {
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val protocol: AssayProtocolFields get() = AssayProtocolFields(fieldPath + "protocol")
+    val completedReplicates: NumField get() = NumField(fieldPath + "completedReplicates")
+    val meanPeakInhibition: NumField get() = NumField(fieldPath + "meanPeakInhibition")
+    fun isHitExperiment(): Expr = isA("HitExperiment")
+}
+
+class AssayFields(path: List<String> = emptyList()) : Fields(path) {
+    val experiment: LabExperimentFields get() = LabExperimentFields(fieldPath + "experiment")
+    val replicate: NumField get() = NumField(fieldPath + "replicate")
+    val peakInhibition: NumField get() = NumField(fieldPath + "peakInhibition")
+    fun isCompletedAssay(): Expr = isA("CompletedAssay")
+}
+
+class AssayReadingFields(path: List<String> = emptyList()) : Fields(path) {
+    val assay: AssayFields get() = AssayFields(fieldPath + "assay")
+    val hoursElapsed: NumField get() = NumField(fieldPath + "hoursElapsed")
+    val inhibitionPercent: NumField get() = NumField(fieldPath + "inhibitionPercent")
+    val previous: AssayReadingFields get() = AssayReadingFields(fieldPath + "previous")
+    val runningPeak: NumField get() = NumField(fieldPath + "runningPeak")
+}
+
+class LabHitFields(path: List<String> = emptyList()) : Fields(path) {
+    val experiment: LabExperimentFields get() = LabExperimentFields(fieldPath + "experiment")
+    val meanPeakInhibition: NumField get() = NumField(fieldPath + "meanPeakInhibition")
+    val recordedOn: DateTimeField get() = DateTimeField(fieldPath + "recordedOn")
+}
+
+class LabHitRetractionFields(path: List<String> = emptyList()) : Fields(path) {
+    val experiment: LabExperimentFields get() = LabExperimentFields(fieldPath + "experiment")
+    val retractedOn: DateTimeField get() = DateTimeField(fieldPath + "retractedOn")
+}
+
+class GreenhouseFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val minTemperature: NumField get() = NumField(fieldPath + "minTemperature")
+    val maxTemperature: NumField get() = NumField(fieldPath + "maxTemperature")
+    fun isOutOfBand(): Expr = isA("OutOfBand")
+    fun isSilentGreenhouse(): Expr = isA("SilentGreenhouse")
+}
+
+class ClimateReadingFields(path: List<String> = emptyList()) : Fields(path) {
+    val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
+    val recordedAt: DateTimeField get() = DateTimeField(fieldPath + "recordedAt")
+    val temperature: NumField get() = NumField(fieldPath + "temperature")
+    val humidity: NumField get() = NumField(fieldPath + "humidity")
+}
+
+class GreenhouseProtocolFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val plotsPerArm: NumField get() = NumField(fieldPath + "plotsPerArm")
+    val finalDay: NumField get() = NumField(fieldPath + "finalDay")
+    val efficacyThreshold: NumField get() = NumField(fieldPath + "efficacyThreshold")
+}
+
+class GreenhouseTrialFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
+    val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+    val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
+    val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
+    val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
+    val efficacy: NumField get() = NumField(fieldPath + "efficacy")
+    fun isTreatedTrial(): Expr = isA("TreatedTrial")
+    fun isLaidOutTrial(): Expr = isA("LaidOutTrial")
+    fun isObservedToEnd(): Expr = isA("ObservedToEnd")
+    fun isCompleteTrial(): Expr = isA("CompleteTrial")
+    fun isEffectiveTrial(): Expr = isA("EffectiveTrial")
+    fun isEvaluatedTrial(): Expr = isA("EvaluatedTrial")
+    fun isActiveTrial(): Expr = isA("ActiveTrial")
+    fun isCompromisedTrial(): Expr = isA("CompromisedTrial")
+}
+
+class GreenhouseRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class GreenhousePlotFields(path: List<String> = emptyList()) : Fields(path) {
+    val trial: GreenhouseTrialFields get() = GreenhouseTrialFields(fieldPath + "trial")
+    val bench: TextField get() = TextField(fieldPath + "bench")
+    val treatment: TextField get() = TextField(fieldPath + "treatment")
+    val lastObservedDay: NumField get() = NumField(fieldPath + "lastObservedDay")
+    val audpc: NumField get() = NumField(fieldPath + "audpc")
+    fun isTreatedPlot(): Expr = isA("TreatedPlot")
+}
+
+class TreatmentFields(path: List<String> = emptyList()) : Fields(path) {
+    val trial: GreenhouseTrialFields get() = GreenhouseTrialFields(fieldPath + "trial")
+    val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
+}
+
+class PlotObservationFields(path: List<String> = emptyList()) : Fields(path) {
+    val plot: GreenhousePlotFields get() = GreenhousePlotFields(fieldPath + "plot")
+    val dayAfterTreatment: NumField get() = NumField(fieldPath + "dayAfterTreatment")
+    val recordedSeverity: NumField get() = NumField(fieldPath + "recordedSeverity")
+    val observedOn: DateField get() = DateField(fieldPath + "observedOn")
+    val diseaseSeverity: NumField get() = NumField(fieldPath + "diseaseSeverity")
+    val previous: PlotObservationFields get() = PlotObservationFields(fieldPath + "previous")
+    val audpcSoFar: NumField get() = NumField(fieldPath + "audpcSoFar")
+    fun isLockedObservation(): Expr = isA("LockedObservation")
+}
+
+class GreenhouseResultFields(path: List<String> = emptyList()) : Fields(path) {
+    val trial: GreenhouseTrialFields get() = GreenhouseTrialFields(fieldPath + "trial")
+    val efficacy: NumField get() = NumField(fieldPath + "efficacy")
+    val effective: BoolField get() = BoolField(fieldPath + "effective")
+    val recordedOn: DateTimeField get() = DateTimeField(fieldPath + "recordedOn")
+}
+
+class ObservationCorrectionFields(path: List<String> = emptyList()) : Fields(path) {
+    val observation: PlotObservationFields get() = PlotObservationFields(fieldPath + "observation")
+    val previousSeverity: NumField get() = NumField(fieldPath + "previousSeverity")
+    val correctedSeverity: NumField get() = NumField(fieldPath + "correctedSeverity")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val correctedOn: DateTimeField get() = DateTimeField(fieldPath + "correctedOn")
+}
+
+class CorrectionRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val observation: PlotObservationFields get() = PlotObservationFields(fieldPath + "observation")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class VoidRecordFields(path: List<String> = emptyList()) : Fields(path) {
+    val bench: TextField get() = TextField(fieldPath + "bench")
+    val dayAfterTreatment: NumField get() = NumField(fieldPath + "dayAfterTreatment")
+    val diseaseSeverity: NumField get() = NumField(fieldPath + "diseaseSeverity")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val voidedOn: DateTimeField get() = DateTimeField(fieldPath + "voidedOn")
+}
+
+class VoidRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val observation: PlotObservationFields get() = PlotObservationFields(fieldPath + "observation")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class MoveRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val plot: GreenhousePlotFields get() = GreenhousePlotFields(fieldPath + "plot")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class ClimateExcursionFields(path: List<String> = emptyList()) : Fields(path) {
+    val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
+    val startedAt: DateTimeField get() = DateTimeField(fieldPath + "startedAt")
+    val temperature: NumField get() = NumField(fieldPath + "temperature")
+    fun isOpenExcursion(): Expr = isA("OpenExcursion")
+    fun isClosableExcursion(): Expr = isA("ClosableExcursion")
+}
+
+class ExcursionEndFields(path: List<String> = emptyList()) : Fields(path) {
+    val excursion: ClimateExcursionFields get() = ClimateExcursionFields(fieldPath + "excursion")
+    val endedAt: DateTimeField get() = DateTimeField(fieldPath + "endedAt")
+}
+
+class SensorAlertFields(path: List<String> = emptyList()) : Fields(path) {
+    val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
+    val raisedAt: DateTimeField get() = DateTimeField(fieldPath + "raisedAt")
+}
+
+class FieldSiteFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val region: TextField get() = TextField(fieldPath + "region")
+}
+
+class PermitFields(path: List<String> = emptyList()) : Fields(path) {
+    val site: FieldSiteFields get() = FieldSiteFields(fieldPath + "site")
+    val crop: CropFields get() = CropFields(fieldPath + "crop")
+    val issuedOn: DateField get() = DateField(fieldPath + "issuedOn")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+}
+
+class WeatherObservationFields(path: List<String> = emptyList()) : Fields(path) {
+    val site: FieldSiteFields get() = FieldSiteFields(fieldPath + "site")
+    val observedOn: DateField get() = DateField(fieldPath + "observedOn")
+    val rainfallMm: NumField get() = NumField(fieldPath + "rainfallMm")
+    val maxTemperature: NumField get() = NumField(fieldPath + "maxTemperature")
+}
+
+class FieldProtocolFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val yieldGainThreshold: NumField get() = NumField(fieldPath + "yieldGainThreshold")
+}
+
+class FieldTrialFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val crop: CropFields get() = CropFields(fieldPath + "crop")
+    val site: FieldSiteFields get() = FieldSiteFields(fieldPath + "site")
+    val protocol: FieldProtocolFields get() = FieldProtocolFields(fieldPath + "protocol")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+    val meanTreatedYield: NumField get() = NumField(fieldPath + "meanTreatedYield")
+    val meanControlYield: NumField get() = NumField(fieldPath + "meanControlYield")
+    val yieldGain: NumField get() = NumField(fieldPath + "yieldGain")
+    fun isPermittedTrial(): Expr = isA("PermittedTrial")
+    fun isPlantedTrial(): Expr = isA("PlantedTrial")
+    fun isNeverScouted(): Expr = isA("NeverScouted")
+    fun isHarvestedTrial(): Expr = isA("HarvestedTrial")
+    fun isSuccessfulFieldTrial(): Expr = isA("SuccessfulFieldTrial")
+    fun isHaltedTrial(): Expr = isA("HaltedTrial")
+}
+
+class FieldRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class PlantingFields(path: List<String> = emptyList()) : Fields(path) {
+    val trial: FieldTrialFields get() = FieldTrialFields(fieldPath + "trial")
+    val plantedOn: DateField get() = DateField(fieldPath + "plantedOn")
+    val seedLot: TextField get() = TextField(fieldPath + "seedLot")
+    val recordedOn: DateTimeField get() = DateTimeField(fieldPath + "recordedOn")
+}
+
+class FieldPlotFields(path: List<String> = emptyList()) : Fields(path) {
+    val trial: FieldTrialFields get() = FieldTrialFields(fieldPath + "trial")
+    val block: NumField get() = NumField(fieldPath + "block")
+    val treatment: TextField get() = TextField(fieldPath + "treatment")
+    val yieldKgPerHa: NumField get() = NumField(fieldPath + "yieldKgPerHa")
+}
+
+class TreatmentApplicationFields(path: List<String> = emptyList()) : Fields(path) {
+    val trial: FieldTrialFields get() = FieldTrialFields(fieldPath + "trial")
+    val appliedOn: DateField get() = DateField(fieldPath + "appliedOn")
+    val rateGramsPerHa: NumField get() = NumField(fieldPath + "rateGramsPerHa")
+    val recordedOn: DateTimeField get() = DateTimeField(fieldPath + "recordedOn")
+    fun isWashedOffApplication(): Expr = isA("WashedOffApplication")
+}
+
+class ReapplicationNoticeFields(path: List<String> = emptyList()) : Fields(path) {
+    val application: TreatmentApplicationFields get() = TreatmentApplicationFields(fieldPath + "application")
+    val noticedOn: DateField get() = DateField(fieldPath + "noticedOn")
+}
+
+class ScoutingFields(path: List<String> = emptyList()) : Fields(path) {
+    val plot: FieldPlotFields get() = FieldPlotFields(fieldPath + "plot")
+    val daysAfterPlanting: NumField get() = NumField(fieldPath + "daysAfterPlanting")
+    val scoutedOn: DateField get() = DateField(fieldPath + "scoutedOn")
+    val incidencePercent: NumField get() = NumField(fieldPath + "incidencePercent")
+    val severity: NumField get() = NumField(fieldPath + "severity")
+    val previous: ScoutingFields get() = ScoutingFields(fieldPath + "previous")
+    val audpcSoFar: NumField get() = NumField(fieldPath + "audpcSoFar")
+}
+
+class HarvestFields(path: List<String> = emptyList()) : Fields(path) {
+    val plot: FieldPlotFields get() = FieldPlotFields(fieldPath + "plot")
+    val harvestedOn: DateField get() = DateField(fieldPath + "harvestedOn")
+    val yieldKgPerHa: NumField get() = NumField(fieldPath + "yieldKgPerHa")
+}
+
+class PhytotoxicityReportFields(path: List<String> = emptyList()) : Fields(path) {
+    val plot: FieldPlotFields get() = FieldPlotFields(fieldPath + "plot")
+    val observedOn: DateField get() = DateField(fieldPath + "observedOn")
+    val severity: NumField get() = NumField(fieldPath + "severity")
+}
+
+class HaltNoticeFields(path: List<String> = emptyList()) : Fields(path) {
+    val trial: FieldTrialFields get() = FieldTrialFields(fieldPath + "trial")
+    val noticedOn: DateTimeField get() = DateTimeField(fieldPath + "noticedOn")
+}
+
+class CollectionTaskFields(path: List<String> = emptyList()) : Fields(path) {
+    val trial: RefField get() = RefField(fieldPath + "trial")
+    val dayMark: NumField get() = NumField(fieldPath + "dayMark")
+    val dueOn: DateField get() = DateField(fieldPath + "dueOn")
+    val plotsPending: NumField get() = NumField(fieldPath + "plotsPending")
+    fun isDoneTask(): Expr = isA("DoneTask")
+    fun isOpenTask(): Expr = isA("OpenTask")
+    fun isOverdueTask(): Expr = isA("OverdueTask")
+}
+
+class TaskReminderFields(path: List<String> = emptyList()) : Fields(path) {
+    val task: CollectionTaskFields get() = CollectionTaskFields(fieldPath + "task")
+    val sentOn: DateField get() = DateField(fieldPath + "sentOn")
+}
+
+class RescheduleRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val task: CollectionTaskFields get() = CollectionTaskFields(fieldPath + "task")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class TaskCancellationFields(path: List<String> = emptyList()) : Fields(path) {
+    val dayMark: NumField get() = NumField(fieldPath + "dayMark")
+    val dueOn: DateField get() = DateField(fieldPath + "dueOn")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val cancelledOn: DateTimeField get() = DateTimeField(fieldPath + "cancelledOn")
+}
+
+class CancelRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val task: CollectionTaskFields get() = CollectionTaskFields(fieldPath + "task")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class CompletedAssayFields(path: List<String> = emptyList()) : Fields(path) {
+    val experiment: LabExperimentFields get() = LabExperimentFields(fieldPath + "experiment")
+    val replicate: NumField get() = NumField(fieldPath + "replicate")
+    val peakInhibition: NumField get() = NumField(fieldPath + "peakInhibition")
+}
+
+class HitExperimentFields(path: List<String> = emptyList()) : Fields(path) {
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val protocol: AssayProtocolFields get() = AssayProtocolFields(fieldPath + "protocol")
+    val completedReplicates: NumField get() = NumField(fieldPath + "completedReplicates")
+    val meanPeakInhibition: NumField get() = NumField(fieldPath + "meanPeakInhibition")
+}
+
+class LabValidatedFields(path: List<String> = emptyList()) : Fields(path) {
+    val code: TextField get() = TextField(fieldPath + "code")
+    val sequence: TextField get() = TextField(fieldPath + "sequence")
+    val stage: TextField get() = TextField(fieldPath + "stage")
+    fun isGreenhouseValidated(): Expr = isA("GreenhouseValidated")
+    fun isDeprioritized(): Expr = isA("Deprioritized")
+    fun isFieldValidated(): Expr = isA("FieldValidated")
+}
+
+class TreatedTrialFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
+    val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+    val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
+    val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
+    val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
+    val efficacy: NumField get() = NumField(fieldPath + "efficacy")
+    fun isLaidOutTrial(): Expr = isA("LaidOutTrial")
+    fun isObservedToEnd(): Expr = isA("ObservedToEnd")
+    fun isCompleteTrial(): Expr = isA("CompleteTrial")
+    fun isEffectiveTrial(): Expr = isA("EffectiveTrial")
+    fun isEvaluatedTrial(): Expr = isA("EvaluatedTrial")
+    fun isActiveTrial(): Expr = isA("ActiveTrial")
+    fun isCompromisedTrial(): Expr = isA("CompromisedTrial")
+}
+
+class LaidOutTrialFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
+    val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+    val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
+    val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
+    val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
+    val efficacy: NumField get() = NumField(fieldPath + "efficacy")
+    fun isTreatedTrial(): Expr = isA("TreatedTrial")
+    fun isObservedToEnd(): Expr = isA("ObservedToEnd")
+    fun isCompleteTrial(): Expr = isA("CompleteTrial")
+    fun isEffectiveTrial(): Expr = isA("EffectiveTrial")
+    fun isEvaluatedTrial(): Expr = isA("EvaluatedTrial")
+    fun isActiveTrial(): Expr = isA("ActiveTrial")
+    fun isCompromisedTrial(): Expr = isA("CompromisedTrial")
+}
+
+class ObservedToEndFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
+    val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+    val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
+    val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
+    val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
+    val efficacy: NumField get() = NumField(fieldPath + "efficacy")
+    fun isTreatedTrial(): Expr = isA("TreatedTrial")
+    fun isLaidOutTrial(): Expr = isA("LaidOutTrial")
+    fun isCompleteTrial(): Expr = isA("CompleteTrial")
+    fun isEffectiveTrial(): Expr = isA("EffectiveTrial")
+    fun isEvaluatedTrial(): Expr = isA("EvaluatedTrial")
+    fun isActiveTrial(): Expr = isA("ActiveTrial")
+    fun isCompromisedTrial(): Expr = isA("CompromisedTrial")
+}
+
+class CompleteTrialFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
+    val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+    val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
+    val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
+    val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
+    val efficacy: NumField get() = NumField(fieldPath + "efficacy")
+    fun isTreatedTrial(): Expr = isA("TreatedTrial")
+    fun isLaidOutTrial(): Expr = isA("LaidOutTrial")
+    fun isObservedToEnd(): Expr = isA("ObservedToEnd")
+    fun isEffectiveTrial(): Expr = isA("EffectiveTrial")
+    fun isEvaluatedTrial(): Expr = isA("EvaluatedTrial")
+    fun isActiveTrial(): Expr = isA("ActiveTrial")
+    fun isCompromisedTrial(): Expr = isA("CompromisedTrial")
+}
+
+class EffectiveTrialFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
+    val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+    val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
+    val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
+    val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
+    val efficacy: NumField get() = NumField(fieldPath + "efficacy")
+    fun isTreatedTrial(): Expr = isA("TreatedTrial")
+    fun isLaidOutTrial(): Expr = isA("LaidOutTrial")
+    fun isObservedToEnd(): Expr = isA("ObservedToEnd")
+    fun isCompleteTrial(): Expr = isA("CompleteTrial")
+    fun isEvaluatedTrial(): Expr = isA("EvaluatedTrial")
+    fun isActiveTrial(): Expr = isA("ActiveTrial")
+    fun isCompromisedTrial(): Expr = isA("CompromisedTrial")
+}
+
+class EvaluatedTrialFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
+    val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+    val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
+    val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
+    val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
+    val efficacy: NumField get() = NumField(fieldPath + "efficacy")
+    fun isTreatedTrial(): Expr = isA("TreatedTrial")
+    fun isLaidOutTrial(): Expr = isA("LaidOutTrial")
+    fun isObservedToEnd(): Expr = isA("ObservedToEnd")
+    fun isCompleteTrial(): Expr = isA("CompleteTrial")
+    fun isEffectiveTrial(): Expr = isA("EffectiveTrial")
+    fun isActiveTrial(): Expr = isA("ActiveTrial")
+    fun isCompromisedTrial(): Expr = isA("CompromisedTrial")
+}
+
+class GreenhouseValidatedFields(path: List<String> = emptyList()) : Fields(path) {
+    val code: TextField get() = TextField(fieldPath + "code")
+    val sequence: TextField get() = TextField(fieldPath + "sequence")
+    val stage: TextField get() = TextField(fieldPath + "stage")
+    fun isLabValidated(): Expr = isA("LabValidated")
+    fun isDeprioritized(): Expr = isA("Deprioritized")
+    fun isFieldValidated(): Expr = isA("FieldValidated")
+}
+
+class DeprioritizedFields(path: List<String> = emptyList()) : Fields(path) {
+    val code: TextField get() = TextField(fieldPath + "code")
+    val sequence: TextField get() = TextField(fieldPath + "sequence")
+    val stage: TextField get() = TextField(fieldPath + "stage")
+    fun isLabValidated(): Expr = isA("LabValidated")
+    fun isGreenhouseValidated(): Expr = isA("GreenhouseValidated")
+    fun isFieldValidated(): Expr = isA("FieldValidated")
+}
+
+class LockedObservationFields(path: List<String> = emptyList()) : Fields(path) {
+    val plot: GreenhousePlotFields get() = GreenhousePlotFields(fieldPath + "plot")
+    val dayAfterTreatment: NumField get() = NumField(fieldPath + "dayAfterTreatment")
+    val recordedSeverity: NumField get() = NumField(fieldPath + "recordedSeverity")
+    val observedOn: DateField get() = DateField(fieldPath + "observedOn")
+    val diseaseSeverity: NumField get() = NumField(fieldPath + "diseaseSeverity")
+    val previous: PlotObservationFields get() = PlotObservationFields(fieldPath + "previous")
+    val audpcSoFar: NumField get() = NumField(fieldPath + "audpcSoFar")
+}
+
+class TreatedPlotFields(path: List<String> = emptyList()) : Fields(path) {
+    val trial: GreenhouseTrialFields get() = GreenhouseTrialFields(fieldPath + "trial")
+    val bench: TextField get() = TextField(fieldPath + "bench")
+    val treatment: TextField get() = TextField(fieldPath + "treatment")
+    val lastObservedDay: NumField get() = NumField(fieldPath + "lastObservedDay")
+    val audpc: NumField get() = NumField(fieldPath + "audpc")
+}
+
+class ActiveTrialFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
+    val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+    val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
+    val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
+    val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
+    val efficacy: NumField get() = NumField(fieldPath + "efficacy")
+    fun isTreatedTrial(): Expr = isA("TreatedTrial")
+    fun isLaidOutTrial(): Expr = isA("LaidOutTrial")
+    fun isObservedToEnd(): Expr = isA("ObservedToEnd")
+    fun isCompleteTrial(): Expr = isA("CompleteTrial")
+    fun isEffectiveTrial(): Expr = isA("EffectiveTrial")
+    fun isEvaluatedTrial(): Expr = isA("EvaluatedTrial")
+    fun isCompromisedTrial(): Expr = isA("CompromisedTrial")
+}
+
+class OutOfBandFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val minTemperature: NumField get() = NumField(fieldPath + "minTemperature")
+    val maxTemperature: NumField get() = NumField(fieldPath + "maxTemperature")
+    fun isSilentGreenhouse(): Expr = isA("SilentGreenhouse")
+}
+
+class OpenExcursionFields(path: List<String> = emptyList()) : Fields(path) {
+    val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
+    val startedAt: DateTimeField get() = DateTimeField(fieldPath + "startedAt")
+    val temperature: NumField get() = NumField(fieldPath + "temperature")
+    fun isClosableExcursion(): Expr = isA("ClosableExcursion")
+}
+
+class ClosableExcursionFields(path: List<String> = emptyList()) : Fields(path) {
+    val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
+    val startedAt: DateTimeField get() = DateTimeField(fieldPath + "startedAt")
+    val temperature: NumField get() = NumField(fieldPath + "temperature")
+    fun isOpenExcursion(): Expr = isA("OpenExcursion")
+}
+
+class CompromisedTrialFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val greenhouse: GreenhouseFields get() = GreenhouseFields(fieldPath + "greenhouse")
+    val protocol: GreenhouseProtocolFields get() = GreenhouseProtocolFields(fieldPath + "protocol")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+    val treatedAt: DateTimeField get() = DateTimeField(fieldPath + "treatedAt")
+    val meanTreatedAudpc: NumField get() = NumField(fieldPath + "meanTreatedAudpc")
+    val meanControlAudpc: NumField get() = NumField(fieldPath + "meanControlAudpc")
+    val efficacy: NumField get() = NumField(fieldPath + "efficacy")
+    fun isTreatedTrial(): Expr = isA("TreatedTrial")
+    fun isLaidOutTrial(): Expr = isA("LaidOutTrial")
+    fun isObservedToEnd(): Expr = isA("ObservedToEnd")
+    fun isCompleteTrial(): Expr = isA("CompleteTrial")
+    fun isEffectiveTrial(): Expr = isA("EffectiveTrial")
+    fun isEvaluatedTrial(): Expr = isA("EvaluatedTrial")
+    fun isActiveTrial(): Expr = isA("ActiveTrial")
+}
+
+class SilentGreenhouseFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val minTemperature: NumField get() = NumField(fieldPath + "minTemperature")
+    val maxTemperature: NumField get() = NumField(fieldPath + "maxTemperature")
+    fun isOutOfBand(): Expr = isA("OutOfBand")
+}
+
+class PermittedTrialFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val crop: CropFields get() = CropFields(fieldPath + "crop")
+    val site: FieldSiteFields get() = FieldSiteFields(fieldPath + "site")
+    val protocol: FieldProtocolFields get() = FieldProtocolFields(fieldPath + "protocol")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+    val meanTreatedYield: NumField get() = NumField(fieldPath + "meanTreatedYield")
+    val meanControlYield: NumField get() = NumField(fieldPath + "meanControlYield")
+    val yieldGain: NumField get() = NumField(fieldPath + "yieldGain")
+    fun isPlantedTrial(): Expr = isA("PlantedTrial")
+    fun isNeverScouted(): Expr = isA("NeverScouted")
+    fun isHarvestedTrial(): Expr = isA("HarvestedTrial")
+    fun isSuccessfulFieldTrial(): Expr = isA("SuccessfulFieldTrial")
+    fun isHaltedTrial(): Expr = isA("HaltedTrial")
+}
+
+class PlantedTrialFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val crop: CropFields get() = CropFields(fieldPath + "crop")
+    val site: FieldSiteFields get() = FieldSiteFields(fieldPath + "site")
+    val protocol: FieldProtocolFields get() = FieldProtocolFields(fieldPath + "protocol")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+    val meanTreatedYield: NumField get() = NumField(fieldPath + "meanTreatedYield")
+    val meanControlYield: NumField get() = NumField(fieldPath + "meanControlYield")
+    val yieldGain: NumField get() = NumField(fieldPath + "yieldGain")
+    fun isPermittedTrial(): Expr = isA("PermittedTrial")
+    fun isNeverScouted(): Expr = isA("NeverScouted")
+    fun isHarvestedTrial(): Expr = isA("HarvestedTrial")
+    fun isSuccessfulFieldTrial(): Expr = isA("SuccessfulFieldTrial")
+    fun isHaltedTrial(): Expr = isA("HaltedTrial")
+}
+
+class WashedOffApplicationFields(path: List<String> = emptyList()) : Fields(path) {
+    val trial: FieldTrialFields get() = FieldTrialFields(fieldPath + "trial")
+    val appliedOn: DateField get() = DateField(fieldPath + "appliedOn")
+    val rateGramsPerHa: NumField get() = NumField(fieldPath + "rateGramsPerHa")
+    val recordedOn: DateTimeField get() = DateTimeField(fieldPath + "recordedOn")
+}
+
+class NeverScoutedFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val crop: CropFields get() = CropFields(fieldPath + "crop")
+    val site: FieldSiteFields get() = FieldSiteFields(fieldPath + "site")
+    val protocol: FieldProtocolFields get() = FieldProtocolFields(fieldPath + "protocol")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+    val meanTreatedYield: NumField get() = NumField(fieldPath + "meanTreatedYield")
+    val meanControlYield: NumField get() = NumField(fieldPath + "meanControlYield")
+    val yieldGain: NumField get() = NumField(fieldPath + "yieldGain")
+    fun isPermittedTrial(): Expr = isA("PermittedTrial")
+    fun isPlantedTrial(): Expr = isA("PlantedTrial")
+    fun isHarvestedTrial(): Expr = isA("HarvestedTrial")
+    fun isSuccessfulFieldTrial(): Expr = isA("SuccessfulFieldTrial")
+    fun isHaltedTrial(): Expr = isA("HaltedTrial")
+}
+
+class HarvestedTrialFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val crop: CropFields get() = CropFields(fieldPath + "crop")
+    val site: FieldSiteFields get() = FieldSiteFields(fieldPath + "site")
+    val protocol: FieldProtocolFields get() = FieldProtocolFields(fieldPath + "protocol")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+    val meanTreatedYield: NumField get() = NumField(fieldPath + "meanTreatedYield")
+    val meanControlYield: NumField get() = NumField(fieldPath + "meanControlYield")
+    val yieldGain: NumField get() = NumField(fieldPath + "yieldGain")
+    fun isPermittedTrial(): Expr = isA("PermittedTrial")
+    fun isPlantedTrial(): Expr = isA("PlantedTrial")
+    fun isNeverScouted(): Expr = isA("NeverScouted")
+    fun isSuccessfulFieldTrial(): Expr = isA("SuccessfulFieldTrial")
+    fun isHaltedTrial(): Expr = isA("HaltedTrial")
+}
+
+class SuccessfulFieldTrialFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val crop: CropFields get() = CropFields(fieldPath + "crop")
+    val site: FieldSiteFields get() = FieldSiteFields(fieldPath + "site")
+    val protocol: FieldProtocolFields get() = FieldProtocolFields(fieldPath + "protocol")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+    val meanTreatedYield: NumField get() = NumField(fieldPath + "meanTreatedYield")
+    val meanControlYield: NumField get() = NumField(fieldPath + "meanControlYield")
+    val yieldGain: NumField get() = NumField(fieldPath + "yieldGain")
+    fun isPermittedTrial(): Expr = isA("PermittedTrial")
+    fun isPlantedTrial(): Expr = isA("PlantedTrial")
+    fun isNeverScouted(): Expr = isA("NeverScouted")
+    fun isHarvestedTrial(): Expr = isA("HarvestedTrial")
+    fun isHaltedTrial(): Expr = isA("HaltedTrial")
+}
+
+class FieldValidatedFields(path: List<String> = emptyList()) : Fields(path) {
+    val code: TextField get() = TextField(fieldPath + "code")
+    val sequence: TextField get() = TextField(fieldPath + "sequence")
+    val stage: TextField get() = TextField(fieldPath + "stage")
+    fun isLabValidated(): Expr = isA("LabValidated")
+    fun isGreenhouseValidated(): Expr = isA("GreenhouseValidated")
+    fun isDeprioritized(): Expr = isA("Deprioritized")
+}
+
+class HaltedTrialFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
+    val pathogen: PathogenFields get() = PathogenFields(fieldPath + "pathogen")
+    val crop: CropFields get() = CropFields(fieldPath + "crop")
+    val site: FieldSiteFields get() = FieldSiteFields(fieldPath + "site")
+    val protocol: FieldProtocolFields get() = FieldProtocolFields(fieldPath + "protocol")
+    val approvedOn: DateTimeField get() = DateTimeField(fieldPath + "approvedOn")
+    val meanTreatedYield: NumField get() = NumField(fieldPath + "meanTreatedYield")
+    val meanControlYield: NumField get() = NumField(fieldPath + "meanControlYield")
+    val yieldGain: NumField get() = NumField(fieldPath + "yieldGain")
+    fun isPermittedTrial(): Expr = isA("PermittedTrial")
+    fun isPlantedTrial(): Expr = isA("PlantedTrial")
+    fun isNeverScouted(): Expr = isA("NeverScouted")
+    fun isHarvestedTrial(): Expr = isA("HarvestedTrial")
+    fun isSuccessfulFieldTrial(): Expr = isA("SuccessfulFieldTrial")
+}
+
+class DoneTaskFields(path: List<String> = emptyList()) : Fields(path) {
+    val trial: RefField get() = RefField(fieldPath + "trial")
+    val dayMark: NumField get() = NumField(fieldPath + "dayMark")
+    val dueOn: DateField get() = DateField(fieldPath + "dueOn")
+    val plotsPending: NumField get() = NumField(fieldPath + "plotsPending")
+    fun isOpenTask(): Expr = isA("OpenTask")
+    fun isOverdueTask(): Expr = isA("OverdueTask")
+}
+
+class OpenTaskFields(path: List<String> = emptyList()) : Fields(path) {
+    val trial: RefField get() = RefField(fieldPath + "trial")
+    val dayMark: NumField get() = NumField(fieldPath + "dayMark")
+    val dueOn: DateField get() = DateField(fieldPath + "dueOn")
+    val plotsPending: NumField get() = NumField(fieldPath + "plotsPending")
+    fun isDoneTask(): Expr = isA("DoneTask")
+    fun isOverdueTask(): Expr = isA("OverdueTask")
+}
+
+class OverdueTaskFields(path: List<String> = emptyList()) : Fields(path) {
+    val trial: RefField get() = RefField(fieldPath + "trial")
+    val dayMark: NumField get() = NumField(fieldPath + "dayMark")
+    val dueOn: DateField get() = DateField(fieldPath + "dueOn")
+    val plotsPending: NumField get() = NumField(fieldPath + "plotsPending")
+    fun isDoneTask(): Expr = isA("DoneTask")
+    fun isOpenTask(): Expr = isA("OpenTask")
 }
 
 fun main() {

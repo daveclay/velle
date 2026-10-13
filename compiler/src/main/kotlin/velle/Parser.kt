@@ -473,6 +473,20 @@ class Parser(private val tokens: List<Token>) {
                 skipNewlines()
                 Binary(op, left, parseValue())
             }
+            // the text operators are contextual words (Tokens.kt, TEXT_OPERATORS):
+            // `contains` / `like`, and `starts with` / `ends with` as two words
+            t.type == TokType.LIDENT && (t.text == "contains" || t.text == "like") -> {
+                val op = next().text
+                skipNewlines()
+                Binary(op, left, parseValue())
+            }
+            t.type == TokType.LIDENT && (t.text == "starts" || t.text == "ends") &&
+                peekAhead(1).let { it.type == TokType.LIDENT && it.text == "with" } -> {
+                val op = next().text + " with"
+                next()
+                skipNewlines()
+                Binary(op, left, parseValue())
+            }
             else -> left // boolean atom, or a plain value in value position
         }
     }

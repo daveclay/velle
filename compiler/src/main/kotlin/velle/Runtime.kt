@@ -265,7 +265,9 @@ class VelleSystem(
     }
 
     /** Filters fold `today`/`now` to constants, so a compiler is built per evaluation moment. */
-    private fun queryCompiler() = QueryCompiler(model, effectiveToday, effectiveNow)
+    internal fun queryCompiler() = QueryCompiler(model, effectiveToday, effectiveNow) { id ->
+        keyOf[id]?.let { key -> idShape[id]?.let { Ref.Persisted(it, key) } }
+    }
 
     /** Join read: fault in the instances of [shape] whose [field] references [targetId]. */
     internal fun ensureReferencing(shape: String, field: String, targetId: Long) {
@@ -1268,6 +1270,34 @@ class VelleSystem(
             today = if (w.summary.readsTime) effectiveToday.toString() else null,
         )
     }
+
+    // ── the read protocol (README §22, the composed query; Read.kt) ──────────
+
+    private val queries by lazy { QueryEngine(this) }
+
+    /**
+     * A read is a read-only snapshot (evaluation.md): outside a transaction it
+     * starts from a fresh snapshot of settled state, so a query never reads an
+     * envelope's working set left over from the last commit. Inside one (a
+     * query issued from engineer code while a commit runs) it reads the
+     * envelope's state, like any read there.
+     */
+    internal fun openReadSnapshot() { if (txn == null) beginSnapshot() }
+
+    /** The hidden tie-break (R2): the store key when the row has one, else the session handle. */
+    @Suppress("UNCHECKED_CAST")
+    internal fun orderKeyOf(id: Long): Comparable<Any> =
+        (keyOf[id]?.value as? Comparable<Any>) ?: (id as Comparable<Any>)
+
+    /** The query's diagnostics without running it; empty means it is well-formed. */
+    fun check(q: Query): List<Diagnostic> = queries.check(q)
+
+    /** Answers a query: handles in the requested order, plus the next page's cursor. Throws [QueryRefused]. */
+    fun query(q: Query): QueryResult = queries.run(q)
+
+    fun count(q: Query): Int = queries.count(q)
+
+    fun sum(q: Query, member: String): BigDecimal = queries.sum(q, member)
 
     // ── query surface (read-only; the typed-accessor codegen wraps this) ─────
 

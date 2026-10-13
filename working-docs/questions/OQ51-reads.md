@@ -1,6 +1,6 @@
 # OQ51 — Reading the system: the spec is the schema, the caller composes the query
 
-**Status:** answered 2026-10-12 (rulings R1–R11 in `investigate-reads.md`); implementation against `examples/billing/` in progress; stays open until built and promoted
+**Status:** answered and built 2026-10-12 (rulings R1–R11 in `investigate-reads.md`; README §22 states the query API; `Read.kt`, the codegen, `QueryApiTest.kt`); open only for the follow-on items in `TODO.md` (a registered query's store method and generated test, the generated specs' ordering datum, collection filters)
 **In plain terms:** every shape can already be read by key and by following its declared references, but nothing lets a caller compose its own query (which fields, which filter, what order, how many) the way a GraphQL client does against a schema. The spec already is the schema. A read takes part in no proof, so a query gains nothing by living in the spec; the question is what the caller may compose, how a query an engineer owns is checked against the spec at build time, and what the generated read API promises.
 
 ---

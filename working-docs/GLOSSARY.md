@@ -79,3 +79,9 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **scan floor** — the fallback fetch: all of a shape, when no keyed or filtered path applies.
 - **retraction** — deletion of a capture row at the exit commit's close: the contract's one sanctioned delete, legal because a capture is memory, not a record of the world (§7).
 - **session handle / store key** — runtime identity is process-local; durable identity belongs to the store and round-trips as `Ref.Persisted`/`StoreKey` (§8).
+
+## Reads (`investigate-reads.md`, OQ51)
+
+- **query** — one read request: a root (a shape or refinement), a filter in the spec's predicate language over the root's members, a required order, a page; composed by whoever asks, never declared in the spec (README §22; `Read.kt`). Called a "query", never a "question".
+- **registered query** — a query the engineer writes with the typed builder and registers under a name (`QueryRegistry`), so it is checked against the spec at the engineer's build and can be named for the store (`investigate-reads.md` R9).
+- **hidden tie-break** — the store key carried inside a page cursor beside the last row's order datums, so pages stay stable when the caller's order does not tell two rows apart; never exposed as an ordering datum (`investigate-reads.md` R2; README §5).

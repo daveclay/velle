@@ -232,6 +232,217 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         override fun toString() = "RefusedSafeEdit#$id"
     }
 
+    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    val read = Read()
+
+    inner class Read {
+        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
+        val registry = QueryRegistry()
+        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+        val notes: NoteQuery get() = NoteQuery(Query("Note"))
+        val lockNotes: LockNoteQuery get() = LockNoteQuery(Query("LockNote"))
+        val unlockNotes: UnlockNoteQuery get() = UnlockNoteQuery(Query("UnlockNote"))
+        val renameTexts: RenameTextQuery get() = RenameTextQuery(Query("RenameText"))
+        val bareEdits: BareEditQuery get() = BareEditQuery(Query("BareEdit"))
+        val bareEditRefusals: BareEditRefusalQuery get() = BareEditRefusalQuery(Query("BareEditRefusal"))
+        val safeEdits: SafeEditQuery get() = SafeEditQuery(Query("SafeEdit"))
+        val editApplications: EditApplicationQuery get() = EditApplicationQuery(Query("EditApplication"))
+        val editRefusals: EditRefusalQuery get() = EditRefusalQuery(Query("EditRefusal"))
+        val transientEditRefusals: TransientEditRefusalQuery get() = TransientEditRefusalQuery(Query("TransientEditRefusal"))
+        val lockedNotes: LockedNoteQuery get() = LockedNoteQuery(Query("LockedNote"))
+        val applicableBareEdits: ApplicableBareEditQuery get() = ApplicableBareEditQuery(Query("ApplicableBareEdit"))
+        val refusedBareEdits: RefusedBareEditQuery get() = RefusedBareEditQuery(Query("RefusedBareEdit"))
+        val unhandledSafeEdits: UnhandledSafeEditQuery get() = UnhandledSafeEditQuery(Query("UnhandledSafeEdit"))
+        val applicableSafeEdits: ApplicableSafeEditQuery get() = ApplicableSafeEditQuery(Query("ApplicableSafeEdit"))
+        val refusedSafeEdits: RefusedSafeEditQuery get() = RefusedSafeEditQuery(Query("RefusedSafeEdit"))
+    }
+
+    inner class NoteQuery(q: Query) : TypedQuery<NoteFields, Note>(system, q, NoteFields(), { materializeNote(it) }) {
+        override fun with(q: Query) = NoteQuery(q)
+    }
+
+    inner class LockNoteQuery(q: Query) : TypedQuery<LockNoteFields, LockNote>(system, q, LockNoteFields(), { materializeLockNote(it) }) {
+        override fun with(q: Query) = LockNoteQuery(q)
+    }
+
+    inner class UnlockNoteQuery(q: Query) : TypedQuery<UnlockNoteFields, UnlockNote>(system, q, UnlockNoteFields(), { materializeUnlockNote(it) }) {
+        override fun with(q: Query) = UnlockNoteQuery(q)
+    }
+
+    inner class RenameTextQuery(q: Query) : TypedQuery<RenameTextFields, RenameText>(system, q, RenameTextFields(), { materializeRenameText(it) }) {
+        override fun with(q: Query) = RenameTextQuery(q)
+    }
+
+    inner class BareEditQuery(q: Query) : TypedQuery<BareEditFields, BareEdit>(system, q, BareEditFields(), { materializeBareEdit(it) }) {
+        override fun with(q: Query) = BareEditQuery(q)
+    }
+
+    inner class BareEditRefusalQuery(q: Query) : TypedQuery<BareEditRefusalFields, BareEditRefusal>(system, q, BareEditRefusalFields(), { materializeBareEditRefusal(it) }) {
+        override fun with(q: Query) = BareEditRefusalQuery(q)
+    }
+
+    inner class SafeEditQuery(q: Query) : TypedQuery<SafeEditFields, SafeEdit>(system, q, SafeEditFields(), { materializeSafeEdit(it) }) {
+        override fun with(q: Query) = SafeEditQuery(q)
+    }
+
+    inner class EditApplicationQuery(q: Query) : TypedQuery<EditApplicationFields, EditApplication>(system, q, EditApplicationFields(), { materializeEditApplication(it) }) {
+        override fun with(q: Query) = EditApplicationQuery(q)
+    }
+
+    inner class EditRefusalQuery(q: Query) : TypedQuery<EditRefusalFields, EditRefusal>(system, q, EditRefusalFields(), { materializeEditRefusal(it) }) {
+        override fun with(q: Query) = EditRefusalQuery(q)
+    }
+
+    inner class TransientEditRefusalQuery(q: Query) : TypedQuery<TransientEditRefusalFields, TransientEditRefusal>(system, q, TransientEditRefusalFields(), { materializeTransientEditRefusal(it) }) {
+        override fun with(q: Query) = TransientEditRefusalQuery(q)
+    }
+
+    inner class LockedNoteQuery(q: Query) : TypedQuery<LockedNoteFields, LockedNote>(system, q, LockedNoteFields(), { materializeLockedNote(it) }) {
+        override fun with(q: Query) = LockedNoteQuery(q)
+    }
+
+    inner class ApplicableBareEditQuery(q: Query) : TypedQuery<ApplicableBareEditFields, ApplicableBareEdit>(system, q, ApplicableBareEditFields(), { materializeApplicableBareEdit(it) }) {
+        override fun with(q: Query) = ApplicableBareEditQuery(q)
+    }
+
+    inner class RefusedBareEditQuery(q: Query) : TypedQuery<RefusedBareEditFields, RefusedBareEdit>(system, q, RefusedBareEditFields(), { materializeRefusedBareEdit(it) }) {
+        override fun with(q: Query) = RefusedBareEditQuery(q)
+    }
+
+    inner class UnhandledSafeEditQuery(q: Query) : TypedQuery<UnhandledSafeEditFields, UnhandledSafeEdit>(system, q, UnhandledSafeEditFields(), { materializeUnhandledSafeEdit(it) }) {
+        override fun with(q: Query) = UnhandledSafeEditQuery(q)
+    }
+
+    inner class ApplicableSafeEditQuery(q: Query) : TypedQuery<ApplicableSafeEditFields, ApplicableSafeEdit>(system, q, ApplicableSafeEditFields(), { materializeApplicableSafeEdit(it) }) {
+        override fun with(q: Query) = ApplicableSafeEditQuery(q)
+    }
+
+    inner class RefusedSafeEditQuery(q: Query) : TypedQuery<RefusedSafeEditFields, RefusedSafeEdit>(system, q, RefusedSafeEditFields(), { materializeRefusedSafeEdit(it) }) {
+        override fun with(q: Query) = RefusedSafeEditQuery(q)
+    }
+
+    fun materializeNote(id: Long): Note = Note(
+        id = id,
+        title = system.get(id, "title") as String,
+        body = system.get(id, "body") as String,
+        locked = system.get(id, "locked") as Boolean,
+        lockNotes = (system.get(id, "lockNotes") as List<*>).map { LockNoteView(it as Long) },
+        unlockNotes = (system.get(id, "unlockNotes") as List<*>).map { UnlockNoteView(it as Long) },
+        renameTexts = (system.get(id, "renameTexts") as List<*>).map { RenameTextView(it as Long) },
+        bareEdits = (system.get(id, "bareEdits") as List<*>).map { BareEditView(it as Long) },
+        safeEdits = (system.get(id, "safeEdits") as List<*>).map { SafeEditView(it as Long) },
+        transientEditRefusals = (system.get(id, "transientEditRefusals") as List<*>).map { TransientEditRefusalView(it as Long) },
+    )
+
+    fun materializeLockNote(id: Long): LockNote = LockNote(
+        id = id,
+        note = NoteView(system.get(id, "note") as Long),
+    )
+
+    fun materializeUnlockNote(id: Long): UnlockNote = UnlockNote(
+        id = id,
+        note = NoteView(system.get(id, "note") as Long),
+    )
+
+    fun materializeRenameText(id: Long): RenameText = RenameText(
+        id = id,
+        note = NoteView(system.get(id, "note") as Long),
+        newText = system.get(id, "newText") as String,
+    )
+
+    fun materializeBareEdit(id: Long): BareEdit = BareEdit(
+        id = id,
+        note = NoteView(system.get(id, "note") as Long),
+        newText = system.get(id, "newText") as String,
+        bareEditRefusals = (system.get(id, "bareEditRefusals") as List<*>).map { BareEditRefusalView(it as Long) },
+    )
+
+    fun materializeBareEditRefusal(id: Long): BareEditRefusal = BareEditRefusal(
+        id = id,
+        edit = BareEditView(system.get(id, "edit") as Long),
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeSafeEdit(id: Long): SafeEdit = SafeEdit(
+        id = id,
+        note = NoteView(system.get(id, "note") as Long),
+        newTitle = system.get(id, "newTitle") as String,
+        editApplications = (system.get(id, "editApplications") as List<*>).map { EditApplicationView(it as Long) },
+        editRefusals = (system.get(id, "editRefusals") as List<*>).map { EditRefusalView(it as Long) },
+    )
+
+    fun materializeEditApplication(id: Long): EditApplication = EditApplication(
+        id = id,
+        edit = SafeEditView(system.get(id, "edit") as Long),
+        appliedOn = system.get(id, "appliedOn") as Instant,
+    )
+
+    fun materializeEditRefusal(id: Long): EditRefusal = EditRefusal(
+        id = id,
+        edit = SafeEditView(system.get(id, "edit") as Long),
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeTransientEditRefusal(id: Long): TransientEditRefusal = TransientEditRefusal(
+        id = id,
+        note = NoteView(system.get(id, "note") as Long),
+        requestedTitle = system.get(id, "requestedTitle") as String,
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeLockedNote(id: Long): LockedNote = LockedNote(
+        id = id,
+        title = system.get(id, "title") as String,
+        body = system.get(id, "body") as String,
+        locked = system.get(id, "locked") as Boolean,
+        lockNotes = (system.get(id, "lockNotes") as List<*>).map { LockNoteView(it as Long) },
+        unlockNotes = (system.get(id, "unlockNotes") as List<*>).map { UnlockNoteView(it as Long) },
+        renameTexts = (system.get(id, "renameTexts") as List<*>).map { RenameTextView(it as Long) },
+        bareEdits = (system.get(id, "bareEdits") as List<*>).map { BareEditView(it as Long) },
+        safeEdits = (system.get(id, "safeEdits") as List<*>).map { SafeEditView(it as Long) },
+        transientEditRefusals = (system.get(id, "transientEditRefusals") as List<*>).map { TransientEditRefusalView(it as Long) },
+    )
+
+    fun materializeApplicableBareEdit(id: Long): ApplicableBareEdit = ApplicableBareEdit(
+        id = id,
+        note = NoteView(system.get(id, "note") as Long),
+        newText = system.get(id, "newText") as String,
+        bareEditRefusals = (system.get(id, "bareEditRefusals") as List<*>).map { BareEditRefusalView(it as Long) },
+    )
+
+    fun materializeRefusedBareEdit(id: Long): RefusedBareEdit = RefusedBareEdit(
+        id = id,
+        note = NoteView(system.get(id, "note") as Long),
+        newText = system.get(id, "newText") as String,
+        bareEditRefusals = (system.get(id, "bareEditRefusals") as List<*>).map { BareEditRefusalView(it as Long) },
+    )
+
+    fun materializeUnhandledSafeEdit(id: Long): UnhandledSafeEdit = UnhandledSafeEdit(
+        id = id,
+        note = NoteView(system.get(id, "note") as Long),
+        newTitle = system.get(id, "newTitle") as String,
+        editApplications = (system.get(id, "editApplications") as List<*>).map { EditApplicationView(it as Long) },
+        editRefusals = (system.get(id, "editRefusals") as List<*>).map { EditRefusalView(it as Long) },
+    )
+
+    fun materializeApplicableSafeEdit(id: Long): ApplicableSafeEdit = ApplicableSafeEdit(
+        id = id,
+        note = NoteView(system.get(id, "note") as Long),
+        newTitle = system.get(id, "newTitle") as String,
+        editApplications = (system.get(id, "editApplications") as List<*>).map { EditApplicationView(it as Long) },
+        editRefusals = (system.get(id, "editRefusals") as List<*>).map { EditRefusalView(it as Long) },
+    )
+
+    fun materializeRefusedSafeEdit(id: Long): RefusedSafeEdit = RefusedSafeEdit(
+        id = id,
+        note = NoteView(system.get(id, "note") as Long),
+        newTitle = system.get(id, "newTitle") as String,
+        editApplications = (system.get(id, "editApplications") as List<*>).map { EditApplicationView(it as Long) },
+        editRefusals = (system.get(id, "editRefusals") as List<*>).map { EditRefusalView(it as Long) },
+    )
+
     companion object {
         private val SPEC = """
 -- Partition drift: a deliberately defective exhibit, not a pattern to copy.
@@ -420,6 +631,230 @@ rule RefuseTransientEdit when RefusedTransientEdit {
 }
 """
     }
+}
+
+// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
+// References are typed handles (views); navigating one is a further read.
+
+data class Note(
+    override val id: Long,
+    val title: String,
+    val body: String,
+    val locked: Boolean,
+    val lockNotes: List<PartitionDriftSystem.LockNoteView>,
+    val unlockNotes: List<PartitionDriftSystem.UnlockNoteView>,
+    val renameTexts: List<PartitionDriftSystem.RenameTextView>,
+    val bareEdits: List<PartitionDriftSystem.BareEditView>,
+    val safeEdits: List<PartitionDriftSystem.SafeEditView>,
+    val transientEditRefusals: List<PartitionDriftSystem.TransientEditRefusalView>,
+) : View
+
+data class LockNote(
+    override val id: Long,
+    val note: PartitionDriftSystem.NoteView,
+) : View
+
+data class UnlockNote(
+    override val id: Long,
+    val note: PartitionDriftSystem.NoteView,
+) : View
+
+data class RenameText(
+    override val id: Long,
+    val note: PartitionDriftSystem.NoteView,
+    val newText: String,
+) : View
+
+data class BareEdit(
+    override val id: Long,
+    val note: PartitionDriftSystem.NoteView,
+    val newText: String,
+    val bareEditRefusals: List<PartitionDriftSystem.BareEditRefusalView>,
+) : View
+
+data class BareEditRefusal(
+    override val id: Long,
+    val edit: PartitionDriftSystem.BareEditView,
+    val refusedOn: Instant,
+) : View
+
+data class SafeEdit(
+    override val id: Long,
+    val note: PartitionDriftSystem.NoteView,
+    val newTitle: String,
+    val editApplications: List<PartitionDriftSystem.EditApplicationView>,
+    val editRefusals: List<PartitionDriftSystem.EditRefusalView>,
+) : View
+
+data class EditApplication(
+    override val id: Long,
+    val edit: PartitionDriftSystem.SafeEditView,
+    val appliedOn: Instant,
+) : View
+
+data class EditRefusal(
+    override val id: Long,
+    val edit: PartitionDriftSystem.SafeEditView,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class TransientEditRefusal(
+    override val id: Long,
+    val note: PartitionDriftSystem.NoteView,
+    val requestedTitle: String,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class LockedNote(
+    override val id: Long,
+    val title: String,
+    val body: String,
+    val locked: Boolean,
+    val lockNotes: List<PartitionDriftSystem.LockNoteView>,
+    val unlockNotes: List<PartitionDriftSystem.UnlockNoteView>,
+    val renameTexts: List<PartitionDriftSystem.RenameTextView>,
+    val bareEdits: List<PartitionDriftSystem.BareEditView>,
+    val safeEdits: List<PartitionDriftSystem.SafeEditView>,
+    val transientEditRefusals: List<PartitionDriftSystem.TransientEditRefusalView>,
+) : View
+
+data class ApplicableBareEdit(
+    override val id: Long,
+    val note: PartitionDriftSystem.NoteView,
+    val newText: String,
+    val bareEditRefusals: List<PartitionDriftSystem.BareEditRefusalView>,
+) : View
+
+data class RefusedBareEdit(
+    override val id: Long,
+    val note: PartitionDriftSystem.NoteView,
+    val newText: String,
+    val bareEditRefusals: List<PartitionDriftSystem.BareEditRefusalView>,
+) : View
+
+data class UnhandledSafeEdit(
+    override val id: Long,
+    val note: PartitionDriftSystem.NoteView,
+    val newTitle: String,
+    val editApplications: List<PartitionDriftSystem.EditApplicationView>,
+    val editRefusals: List<PartitionDriftSystem.EditRefusalView>,
+) : View
+
+data class ApplicableSafeEdit(
+    override val id: Long,
+    val note: PartitionDriftSystem.NoteView,
+    val newTitle: String,
+    val editApplications: List<PartitionDriftSystem.EditApplicationView>,
+    val editRefusals: List<PartitionDriftSystem.EditRefusalView>,
+) : View
+
+data class RefusedSafeEdit(
+    override val id: Long,
+    val note: PartitionDriftSystem.NoteView,
+    val newTitle: String,
+    val editApplications: List<PartitionDriftSystem.EditApplicationView>,
+    val editRefusals: List<PartitionDriftSystem.EditRefusalView>,
+) : View
+
+// ── the builder's vocabulary: one field handle per member, memberships per refinement ──
+
+class NoteFields(path: List<String> = emptyList()) : Fields(path) {
+    val title: TextField get() = TextField(fieldPath + "title")
+    val body: TextField get() = TextField(fieldPath + "body")
+    val locked: BoolField get() = BoolField(fieldPath + "locked")
+    fun isLockedNote(): Expr = isA("LockedNote")
+}
+
+class LockNoteFields(path: List<String> = emptyList()) : Fields(path) {
+    val note: NoteFields get() = NoteFields(fieldPath + "note")
+}
+
+class UnlockNoteFields(path: List<String> = emptyList()) : Fields(path) {
+    val note: NoteFields get() = NoteFields(fieldPath + "note")
+}
+
+class RenameTextFields(path: List<String> = emptyList()) : Fields(path) {
+    val note: NoteFields get() = NoteFields(fieldPath + "note")
+    val newText: TextField get() = TextField(fieldPath + "newText")
+}
+
+class BareEditFields(path: List<String> = emptyList()) : Fields(path) {
+    val note: NoteFields get() = NoteFields(fieldPath + "note")
+    val newText: TextField get() = TextField(fieldPath + "newText")
+    fun isApplicableBareEdit(): Expr = isA("ApplicableBareEdit")
+    fun isRefusedBareEdit(): Expr = isA("RefusedBareEdit")
+}
+
+class BareEditRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val edit: BareEditFields get() = BareEditFields(fieldPath + "edit")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class SafeEditFields(path: List<String> = emptyList()) : Fields(path) {
+    val note: NoteFields get() = NoteFields(fieldPath + "note")
+    val newTitle: TextField get() = TextField(fieldPath + "newTitle")
+    fun isUnhandledSafeEdit(): Expr = isA("UnhandledSafeEdit")
+    fun isApplicableSafeEdit(): Expr = isA("ApplicableSafeEdit")
+    fun isRefusedSafeEdit(): Expr = isA("RefusedSafeEdit")
+}
+
+class EditApplicationFields(path: List<String> = emptyList()) : Fields(path) {
+    val edit: SafeEditFields get() = SafeEditFields(fieldPath + "edit")
+    val appliedOn: DateTimeField get() = DateTimeField(fieldPath + "appliedOn")
+}
+
+class EditRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val edit: SafeEditFields get() = SafeEditFields(fieldPath + "edit")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class TransientEditRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val note: NoteFields get() = NoteFields(fieldPath + "note")
+    val requestedTitle: TextField get() = TextField(fieldPath + "requestedTitle")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class LockedNoteFields(path: List<String> = emptyList()) : Fields(path) {
+    val title: TextField get() = TextField(fieldPath + "title")
+    val body: TextField get() = TextField(fieldPath + "body")
+    val locked: BoolField get() = BoolField(fieldPath + "locked")
+}
+
+class ApplicableBareEditFields(path: List<String> = emptyList()) : Fields(path) {
+    val note: NoteFields get() = NoteFields(fieldPath + "note")
+    val newText: TextField get() = TextField(fieldPath + "newText")
+    fun isRefusedBareEdit(): Expr = isA("RefusedBareEdit")
+}
+
+class RefusedBareEditFields(path: List<String> = emptyList()) : Fields(path) {
+    val note: NoteFields get() = NoteFields(fieldPath + "note")
+    val newText: TextField get() = TextField(fieldPath + "newText")
+    fun isApplicableBareEdit(): Expr = isA("ApplicableBareEdit")
+}
+
+class UnhandledSafeEditFields(path: List<String> = emptyList()) : Fields(path) {
+    val note: NoteFields get() = NoteFields(fieldPath + "note")
+    val newTitle: TextField get() = TextField(fieldPath + "newTitle")
+    fun isApplicableSafeEdit(): Expr = isA("ApplicableSafeEdit")
+    fun isRefusedSafeEdit(): Expr = isA("RefusedSafeEdit")
+}
+
+class ApplicableSafeEditFields(path: List<String> = emptyList()) : Fields(path) {
+    val note: NoteFields get() = NoteFields(fieldPath + "note")
+    val newTitle: TextField get() = TextField(fieldPath + "newTitle")
+    fun isUnhandledSafeEdit(): Expr = isA("UnhandledSafeEdit")
+    fun isRefusedSafeEdit(): Expr = isA("RefusedSafeEdit")
+}
+
+class RefusedSafeEditFields(path: List<String> = emptyList()) : Fields(path) {
+    val note: NoteFields get() = NoteFields(fieldPath + "note")
+    val newTitle: TextField get() = TextField(fieldPath + "newTitle")
+    fun isUnhandledSafeEdit(): Expr = isA("UnhandledSafeEdit")
+    fun isApplicableSafeEdit(): Expr = isA("ApplicableSafeEdit")
 }
 
 fun main() {

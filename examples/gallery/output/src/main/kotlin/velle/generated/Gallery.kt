@@ -177,6 +177,117 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun toString() = "PhotoComment#$id"
     }
 
+    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    val read = Read()
+
+    inner class Read {
+        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
+        val registry = QueryRegistry()
+        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+        val members: MemberQuery get() = MemberQuery(Query("Member"))
+        val posts: PostQuery get() = PostQuery(Query("Post"))
+        val photos: PhotoQuery get() = PhotoQuery(Query("Photo"))
+        val comments: CommentQuery get() = CommentQuery(Query("Comment"))
+        val popularityNotices: PopularityNoticeQuery get() = PopularityNoticeQuery(Query("PopularityNotice"))
+        val commentNotices: CommentNoticeQuery get() = CommentNoticeQuery(Query("CommentNotice"))
+        val postComments: PostCommentQuery get() = PostCommentQuery(Query("PostComment"))
+        val photoComments: PhotoCommentQuery get() = PhotoCommentQuery(Query("PhotoComment"))
+    }
+
+    inner class MemberQuery(q: Query) : TypedQuery<MemberFields, Member>(system, q, MemberFields(), { materializeMember(it) }) {
+        override fun with(q: Query) = MemberQuery(q)
+    }
+
+    inner class PostQuery(q: Query) : TypedQuery<PostFields, Post>(system, q, PostFields(), { materializePost(it) }) {
+        override fun with(q: Query) = PostQuery(q)
+    }
+
+    inner class PhotoQuery(q: Query) : TypedQuery<PhotoFields, Photo>(system, q, PhotoFields(), { materializePhoto(it) }) {
+        override fun with(q: Query) = PhotoQuery(q)
+    }
+
+    inner class CommentQuery(q: Query) : TypedQuery<CommentFields, Comment>(system, q, CommentFields(), { materializeComment(it) }) {
+        override fun with(q: Query) = CommentQuery(q)
+    }
+
+    inner class PopularityNoticeQuery(q: Query) : TypedQuery<PopularityNoticeFields, PopularityNotice>(system, q, PopularityNoticeFields(), { materializePopularityNotice(it) }) {
+        override fun with(q: Query) = PopularityNoticeQuery(q)
+    }
+
+    inner class CommentNoticeQuery(q: Query) : TypedQuery<CommentNoticeFields, CommentNotice>(system, q, CommentNoticeFields(), { materializeCommentNotice(it) }) {
+        override fun with(q: Query) = CommentNoticeQuery(q)
+    }
+
+    inner class PostCommentQuery(q: Query) : TypedQuery<PostCommentFields, PostComment>(system, q, PostCommentFields(), { materializePostComment(it) }) {
+        override fun with(q: Query) = PostCommentQuery(q)
+    }
+
+    inner class PhotoCommentQuery(q: Query) : TypedQuery<PhotoCommentFields, PhotoComment>(system, q, PhotoCommentFields(), { materializePhotoComment(it) }) {
+        override fun with(q: Query) = PhotoCommentQuery(q)
+    }
+
+    fun materializeMember(id: Long): Member = Member(
+        id = id,
+        name = system.get(id, "name") as String,
+        posts = (system.get(id, "posts") as List<*>).map { PostView(it as Long) },
+        photos = (system.get(id, "photos") as List<*>).map { PhotoView(it as Long) },
+        comments = (system.get(id, "comments") as List<*>).map { CommentView(it as Long) },
+        commentNotices = (system.get(id, "commentNotices") as List<*>).map { CommentNoticeView(it as Long) },
+    )
+
+    fun materializePost(id: Long): Post = Post(
+        id = id,
+        author = MemberView(system.get(id, "author") as Long),
+        body = system.get(id, "body") as String,
+        comments = (system.get(id, "comments") as List<*>).map { CommentView(it as Long) },
+        popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { PopularityNoticeView(it as Long) },
+    )
+
+    fun materializePhoto(id: Long): Photo = Photo(
+        id = id,
+        author = MemberView(system.get(id, "author") as Long),
+        caption = system.get(id, "caption") as String,
+        comments = (system.get(id, "comments") as List<*>).map { CommentView(it as Long) },
+        popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { PopularityNoticeView(it as Long) },
+    )
+
+    fun materializeComment(id: Long): Comment = Comment(
+        id = id,
+        target = ContentView(system.get(id, "target") as Long),
+        author = MemberView(system.get(id, "author") as Long),
+        body = system.get(id, "body") as String,
+        commentNotices = (system.get(id, "commentNotices") as List<*>).map { CommentNoticeView(it as Long) },
+    )
+
+    fun materializePopularityNotice(id: Long): PopularityNotice = PopularityNotice(
+        id = id,
+        content = ContentView(system.get(id, "content") as Long),
+        noticedOn = system.get(id, "noticedOn") as Instant,
+    )
+
+    fun materializeCommentNotice(id: Long): CommentNotice = CommentNotice(
+        id = id,
+        recipient = MemberView(system.get(id, "recipient") as Long),
+        comment = CommentView(system.get(id, "comment") as Long),
+        excerpt = system.get(id, "excerpt") as String,
+    )
+
+    fun materializePostComment(id: Long): PostComment = PostComment(
+        id = id,
+        target = ContentView(system.get(id, "target") as Long),
+        author = MemberView(system.get(id, "author") as Long),
+        body = system.get(id, "body") as String,
+        commentNotices = (system.get(id, "commentNotices") as List<*>).map { CommentNoticeView(it as Long) },
+    )
+
+    fun materializePhotoComment(id: Long): PhotoComment = PhotoComment(
+        id = id,
+        target = ContentView(system.get(id, "target") as Long),
+        author = MemberView(system.get(id, "author") as Long),
+        body = system.get(id, "body") as String,
+        commentNotices = (system.get(id, "commentNotices") as List<*>).map { CommentNoticeView(it as Long) },
+    )
+
     companion object {
         private val SPEC = """
 -- gallery.velle — cross-base unions exercised end-to-end (README §9 extended
@@ -255,6 +366,120 @@ shape PostComment  = Comment where target is Post
 shape PhotoComment = Comment where target is Photo
 """
     }
+}
+
+// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
+// References are typed handles (views); navigating one is a further read.
+
+data class Member(
+    override val id: Long,
+    val name: String,
+    val posts: List<GallerySystem.PostView>,
+    val photos: List<GallerySystem.PhotoView>,
+    val comments: List<GallerySystem.CommentView>,
+    val commentNotices: List<GallerySystem.CommentNoticeView>,
+) : View
+
+data class Post(
+    override val id: Long,
+    val author: GallerySystem.MemberView,
+    val body: String,
+    val comments: List<GallerySystem.CommentView>,
+    val popularityNotices: List<GallerySystem.PopularityNoticeView>,
+) : View
+
+data class Photo(
+    override val id: Long,
+    val author: GallerySystem.MemberView,
+    val caption: String,
+    val comments: List<GallerySystem.CommentView>,
+    val popularityNotices: List<GallerySystem.PopularityNoticeView>,
+) : View
+
+data class Comment(
+    override val id: Long,
+    val target: GallerySystem.ContentView,
+    val author: GallerySystem.MemberView,
+    val body: String,
+    val commentNotices: List<GallerySystem.CommentNoticeView>,
+) : View
+
+data class PopularityNotice(
+    override val id: Long,
+    val content: GallerySystem.ContentView,
+    val noticedOn: Instant,
+) : View
+
+data class CommentNotice(
+    override val id: Long,
+    val recipient: GallerySystem.MemberView,
+    val comment: GallerySystem.CommentView,
+    val excerpt: String,
+) : View
+
+data class PostComment(
+    override val id: Long,
+    val target: GallerySystem.ContentView,
+    val author: GallerySystem.MemberView,
+    val body: String,
+    val commentNotices: List<GallerySystem.CommentNoticeView>,
+) : View
+
+data class PhotoComment(
+    override val id: Long,
+    val target: GallerySystem.ContentView,
+    val author: GallerySystem.MemberView,
+    val body: String,
+    val commentNotices: List<GallerySystem.CommentNoticeView>,
+) : View
+
+// ── the builder's vocabulary: one field handle per member, memberships per refinement ──
+
+class MemberFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+}
+
+class PostFields(path: List<String> = emptyList()) : Fields(path) {
+    val author: MemberFields get() = MemberFields(fieldPath + "author")
+    val body: TextField get() = TextField(fieldPath + "body")
+}
+
+class PhotoFields(path: List<String> = emptyList()) : Fields(path) {
+    val author: MemberFields get() = MemberFields(fieldPath + "author")
+    val caption: TextField get() = TextField(fieldPath + "caption")
+}
+
+class CommentFields(path: List<String> = emptyList()) : Fields(path) {
+    val target: RefField get() = RefField(fieldPath + "target")
+    val author: MemberFields get() = MemberFields(fieldPath + "author")
+    val body: TextField get() = TextField(fieldPath + "body")
+    fun isPostComment(): Expr = isA("PostComment")
+    fun isPhotoComment(): Expr = isA("PhotoComment")
+}
+
+class PopularityNoticeFields(path: List<String> = emptyList()) : Fields(path) {
+    val content: RefField get() = RefField(fieldPath + "content")
+    val noticedOn: DateTimeField get() = DateTimeField(fieldPath + "noticedOn")
+}
+
+class CommentNoticeFields(path: List<String> = emptyList()) : Fields(path) {
+    val recipient: MemberFields get() = MemberFields(fieldPath + "recipient")
+    val comment: CommentFields get() = CommentFields(fieldPath + "comment")
+    val excerpt: TextField get() = TextField(fieldPath + "excerpt")
+}
+
+class PostCommentFields(path: List<String> = emptyList()) : Fields(path) {
+    val target: RefField get() = RefField(fieldPath + "target")
+    val author: MemberFields get() = MemberFields(fieldPath + "author")
+    val body: TextField get() = TextField(fieldPath + "body")
+    fun isPhotoComment(): Expr = isA("PhotoComment")
+}
+
+class PhotoCommentFields(path: List<String> = emptyList()) : Fields(path) {
+    val target: RefField get() = RefField(fieldPath + "target")
+    val author: MemberFields get() = MemberFields(fieldPath + "author")
+    val body: TextField get() = TextField(fieldPath + "body")
+    fun isPostComment(): Expr = isA("PostComment")
 }
 
 fun main() {

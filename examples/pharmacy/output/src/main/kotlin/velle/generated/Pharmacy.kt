@@ -1508,6 +1508,1717 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         override fun toString() = "StaleClaim#$id"
     }
 
+    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    val read = Read()
+
+    inner class Read {
+        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
+        val registry = QueryRegistry()
+        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+        val staffs: StaffQuery get() = StaffQuery(Query("Staff"))
+        val licenceRenewals: LicenceRenewalQuery get() = LicenceRenewalQuery(Query("LicenceRenewal"))
+        val licenceReminders: LicenceReminderQuery get() = LicenceReminderQuery(Query("LicenceReminder"))
+        val ingredients: IngredientQuery get() = IngredientQuery(Query("Ingredient"))
+        val drugs: DrugQuery get() = DrugQuery(Query("Drug"))
+        val interactions: InteractionQuery get() = InteractionQuery(Query("Interaction"))
+        val priceChanges: PriceChangeQuery get() = PriceChangeQuery(Query("PriceChange"))
+        val priceWithdrawals: PriceWithdrawalQuery get() = PriceWithdrawalQuery(Query("PriceWithdrawal"))
+        val priceWithdrawalRefusals: PriceWithdrawalRefusalQuery get() = PriceWithdrawalRefusalQuery(Query("PriceWithdrawalRefusal"))
+        val stockLots: StockLotQuery get() = StockLotQuery(Query("StockLot"))
+        val stockAdjustments: StockAdjustmentQuery get() = StockAdjustmentQuery(Query("StockAdjustment"))
+        val countConfirmations: CountConfirmationQuery get() = CountConfirmationQuery(Query("CountConfirmation"))
+        val quarantines: QuarantineQuery get() = QuarantineQuery(Query("Quarantine"))
+        val recalls: RecallQuery get() = RecallQuery(Query("Recall"))
+        val recallNotices: RecallNoticeQuery get() = RecallNoticeQuery(Query("RecallNotice"))
+        val purchaseOrders: PurchaseOrderQuery get() = PurchaseOrderQuery(Query("PurchaseOrder"))
+        val insurancePlans: InsurancePlanQuery get() = InsurancePlanQuery(Query("InsurancePlan"))
+        val patients: PatientQuery get() = PatientQuery(Query("Patient"))
+        val prescribers: PrescriberQuery get() = PrescriberQuery(Query("Prescriber"))
+        val notices: NoticeQuery get() = NoticeQuery(Query("Notice"))
+        val prescriberOrders: PrescriberOrderQuery get() = PrescriberOrderQuery(Query("PrescriberOrder"))
+        val prescriptions: PrescriptionQuery get() = PrescriptionQuery(Query("Prescription"))
+        val discontinuations: DiscontinuationQuery get() = DiscontinuationQuery(Query("Discontinuation"))
+        val correctionRefusals: CorrectionRefusalQuery get() = CorrectionRefusalQuery(Query("CorrectionRefusal"))
+        val entryVoids: EntryVoidQuery get() = EntryVoidQuery(Query("EntryVoid"))
+        val voidRefusals: VoidRefusalQuery get() = VoidRefusalQuery(Query("VoidRefusal"))
+        val conflictOverrides: ConflictOverrideQuery get() = ConflictOverrideQuery(Query("ConflictOverride"))
+        val pharmacistAlerts: PharmacistAlertQuery get() = PharmacistAlertQuery(Query("PharmacistAlert"))
+        val monitoringChecks: MonitoringCheckQuery get() = MonitoringCheckQuery(Query("MonitoringCheck"))
+        val fills: FillQuery get() = FillQuery(Query("Fill"))
+        val fillRefusals: FillRefusalQuery get() = FillRefusalQuery(Query("FillRefusal"))
+        val controlledLogEntrys: ControlledLogEntryQuery get() = ControlledLogEntryQuery(Query("ControlledLogEntry"))
+        val verifications: VerificationQuery get() = VerificationQuery(Query("Verification"))
+        val counsellings: CounsellingQuery get() = CounsellingQuery(Query("Counselling"))
+        val returnToStocks: ReturnToStockQuery get() = ReturnToStockQuery(Query("ReturnToStock"))
+        val counterExits: CounterExitQuery get() = CounterExitQuery(Query("CounterExit"))
+        val pickups: PickupQuery get() = PickupQuery(Query("Pickup"))
+        val counterAlerts: CounterAlertQuery get() = CounterAlertQuery(Query("CounterAlert"))
+        val refillTasks: RefillTaskQuery get() = RefillTaskQuery(Query("RefillTask"))
+        val refillRefusals: RefillRefusalQuery get() = RefillRefusalQuery(Query("RefillRefusal"))
+        val authorisationRequests: AuthorisationRequestQuery get() = AuthorisationRequestQuery(Query("AuthorisationRequest"))
+        val taskNags: TaskNagQuery get() = TaskNagQuery(Query("TaskNag"))
+        val autoRefillEnrolments: AutoRefillEnrolmentQuery get() = AutoRefillEnrolmentQuery(Query("AutoRefillEnrolment"))
+        val autoRefillCancellations: AutoRefillCancellationQuery get() = AutoRefillCancellationQuery(Query("AutoRefillCancellation"))
+        val claims: ClaimQuery get() = ClaimQuery(Query("Claim"))
+        val claimResponses: ClaimResponseQuery get() = ClaimResponseQuery(Query("ClaimResponse"))
+        val claimFollowUps: ClaimFollowUpQuery get() = ClaimFollowUpQuery(Query("ClaimFollowUp"))
+        val controlledInventorySnapshots: ControlledInventorySnapshotQuery get() = ControlledInventorySnapshotQuery(Query("ControlledInventorySnapshot"))
+        val pharmacists: PharmacistQuery get() = PharmacistQuery(Query("Pharmacist"))
+        val technicians: TechnicianQuery get() = TechnicianQuery(Query("Technician"))
+        val administrators: AdministratorQuery get() = AdministratorQuery(Query("Administrator"))
+        val licensedPharmacists: LicensedPharmacistQuery get() = LicensedPharmacistQuery(Query("LicensedPharmacist"))
+        val licenceExpiringSoons: LicenceExpiringSoonQuery get() = LicenceExpiringSoonQuery(Query("LicenceExpiringSoon"))
+        val controlleds: ControlledQuery get() = ControlledQuery(Query("Controlled"))
+        val scheduleTwos: ScheduleTwoQuery get() = ScheduleTwoQuery(Query("ScheduleTwo"))
+        val lowStocks: LowStockQuery get() = LowStockQuery(Query("LowStock"))
+        val effectivePrices: EffectivePriceQuery get() = EffectivePriceQuery(Query("EffectivePrice"))
+        val expiredLots: ExpiredLotQuery get() = ExpiredLotQuery(Query("ExpiredLot"))
+        val quarantinedLots: QuarantinedLotQuery get() = QuarantinedLotQuery(Query("QuarantinedLot"))
+        val recalledLots: RecalledLotQuery get() = RecalledLotQuery(Query("RecalledLot"))
+        val usableLots: UsableLotQuery get() = UsableLotQuery(Query("UsableLot"))
+        val openPurchaseOrders: OpenPurchaseOrderQuery get() = OpenPurchaseOrderQuery(Query("OpenPurchaseOrder"))
+        val receivedPurchaseOrders: ReceivedPurchaseOrderQuery get() = ReceivedPurchaseOrderQuery(Query("ReceivedPurchaseOrder"))
+        val discontinueds: DiscontinuedQuery get() = DiscontinuedQuery(Query("Discontinued"))
+        val expireds: ExpiredQuery get() = ExpiredQuery(Query("Expired"))
+        val exhausteds: ExhaustedQuery get() = ExhaustedQuery(Query("Exhausted"))
+        val currents: CurrentQuery get() = CurrentQuery(Query("Current"))
+        val activePrescriptions: ActivePrescriptionQuery get() = ActivePrescriptionQuery(Query("ActivePrescription"))
+        val filledPrescriptions: FilledPrescriptionQuery get() = FilledPrescriptionQuery(Query("FilledPrescription"))
+        val voideds: VoidedQuery get() = VoidedQuery(Query("Voided"))
+        val allergyConflicts: AllergyConflictQuery get() = AllergyConflictQuery(Query("AllergyConflict"))
+        val interactionConflicts: InteractionConflictQuery get() = InteractionConflictQuery(Query("InteractionConflict"))
+        val cleareds: ClearedQuery get() = ClearedQuery(Query("Cleared"))
+        val fillables: FillableQuery get() = FillableQuery(Query("Fillable"))
+        val multiplePrescriberss: MultiplePrescribersQuery get() = MultiplePrescribersQuery(Query("MultiplePrescribers"))
+        val verifiedFills: VerifiedFillQuery get() = VerifiedFillQuery(Query("VerifiedFill"))
+        val rejectedFills: RejectedFillQuery get() = RejectedFillQuery(Query("RejectedFill"))
+        val consumingFills: ConsumingFillQuery get() = ConsumingFillQuery(Query("ConsumingFill"))
+        val counsellingDues: CounsellingDueQuery get() = CounsellingDueQuery(Query("CounsellingDue"))
+        val readyForPickups: ReadyForPickupQuery get() = ReadyForPickupQuery(Query("ReadyForPickup"))
+        val uncollecteds: UncollectedQuery get() = UncollectedQuery(Query("Uncollected"))
+        val openRefillTasks: OpenRefillTaskQuery get() = OpenRefillTaskQuery(Query("OpenRefillTask"))
+        val overdueRefillTasks: OverdueRefillTaskQuery get() = OverdueRefillTaskQuery(Query("OverdueRefillTask"))
+        val autoRefills: AutoRefillQuery get() = AutoRefillQuery(Query("AutoRefill"))
+        val insuredFills: InsuredFillQuery get() = InsuredFillQuery(Query("InsuredFill"))
+        val pendingClaims: PendingClaimQuery get() = PendingClaimQuery(Query("PendingClaim"))
+        val paidClaims: PaidClaimQuery get() = PaidClaimQuery(Query("PaidClaim"))
+        val rejectedClaims: RejectedClaimQuery get() = RejectedClaimQuery(Query("RejectedClaim"))
+        val staleClaims: StaleClaimQuery get() = StaleClaimQuery(Query("StaleClaim"))
+    }
+
+    inner class StaffQuery(q: Query) : TypedQuery<StaffFields, Staff>(system, q, StaffFields(), { materializeStaff(it) }) {
+        override fun with(q: Query) = StaffQuery(q)
+    }
+
+    inner class LicenceRenewalQuery(q: Query) : TypedQuery<LicenceRenewalFields, LicenceRenewal>(system, q, LicenceRenewalFields(), { materializeLicenceRenewal(it) }) {
+        override fun with(q: Query) = LicenceRenewalQuery(q)
+    }
+
+    inner class LicenceReminderQuery(q: Query) : TypedQuery<LicenceReminderFields, LicenceReminder>(system, q, LicenceReminderFields(), { materializeLicenceReminder(it) }) {
+        override fun with(q: Query) = LicenceReminderQuery(q)
+    }
+
+    inner class IngredientQuery(q: Query) : TypedQuery<IngredientFields, Ingredient>(system, q, IngredientFields(), { materializeIngredient(it) }) {
+        override fun with(q: Query) = IngredientQuery(q)
+    }
+
+    inner class DrugQuery(q: Query) : TypedQuery<DrugFields, Drug>(system, q, DrugFields(), { materializeDrug(it) }) {
+        override fun with(q: Query) = DrugQuery(q)
+    }
+
+    inner class InteractionQuery(q: Query) : TypedQuery<InteractionFields, Interaction>(system, q, InteractionFields(), { materializeInteraction(it) }) {
+        override fun with(q: Query) = InteractionQuery(q)
+    }
+
+    inner class PriceChangeQuery(q: Query) : TypedQuery<PriceChangeFields, PriceChange>(system, q, PriceChangeFields(), { materializePriceChange(it) }) {
+        override fun with(q: Query) = PriceChangeQuery(q)
+    }
+
+    inner class PriceWithdrawalQuery(q: Query) : TypedQuery<PriceWithdrawalFields, PriceWithdrawal>(system, q, PriceWithdrawalFields(), { materializePriceWithdrawal(it) }) {
+        override fun with(q: Query) = PriceWithdrawalQuery(q)
+    }
+
+    inner class PriceWithdrawalRefusalQuery(q: Query) : TypedQuery<PriceWithdrawalRefusalFields, PriceWithdrawalRefusal>(system, q, PriceWithdrawalRefusalFields(), { materializePriceWithdrawalRefusal(it) }) {
+        override fun with(q: Query) = PriceWithdrawalRefusalQuery(q)
+    }
+
+    inner class StockLotQuery(q: Query) : TypedQuery<StockLotFields, StockLot>(system, q, StockLotFields(), { materializeStockLot(it) }) {
+        override fun with(q: Query) = StockLotQuery(q)
+    }
+
+    inner class StockAdjustmentQuery(q: Query) : TypedQuery<StockAdjustmentFields, StockAdjustment>(system, q, StockAdjustmentFields(), { materializeStockAdjustment(it) }) {
+        override fun with(q: Query) = StockAdjustmentQuery(q)
+    }
+
+    inner class CountConfirmationQuery(q: Query) : TypedQuery<CountConfirmationFields, CountConfirmation>(system, q, CountConfirmationFields(), { materializeCountConfirmation(it) }) {
+        override fun with(q: Query) = CountConfirmationQuery(q)
+    }
+
+    inner class QuarantineQuery(q: Query) : TypedQuery<QuarantineFields, Quarantine>(system, q, QuarantineFields(), { materializeQuarantine(it) }) {
+        override fun with(q: Query) = QuarantineQuery(q)
+    }
+
+    inner class RecallQuery(q: Query) : TypedQuery<RecallFields, Recall>(system, q, RecallFields(), { materializeRecall(it) }) {
+        override fun with(q: Query) = RecallQuery(q)
+    }
+
+    inner class RecallNoticeQuery(q: Query) : TypedQuery<RecallNoticeFields, RecallNotice>(system, q, RecallNoticeFields(), { materializeRecallNotice(it) }) {
+        override fun with(q: Query) = RecallNoticeQuery(q)
+    }
+
+    inner class PurchaseOrderQuery(q: Query) : TypedQuery<PurchaseOrderFields, PurchaseOrder>(system, q, PurchaseOrderFields(), { materializePurchaseOrder(it) }) {
+        override fun with(q: Query) = PurchaseOrderQuery(q)
+    }
+
+    inner class InsurancePlanQuery(q: Query) : TypedQuery<InsurancePlanFields, InsurancePlan>(system, q, InsurancePlanFields(), { materializeInsurancePlan(it) }) {
+        override fun with(q: Query) = InsurancePlanQuery(q)
+    }
+
+    inner class PatientQuery(q: Query) : TypedQuery<PatientFields, Patient>(system, q, PatientFields(), { materializePatient(it) }) {
+        override fun with(q: Query) = PatientQuery(q)
+    }
+
+    inner class PrescriberQuery(q: Query) : TypedQuery<PrescriberFields, Prescriber>(system, q, PrescriberFields(), { materializePrescriber(it) }) {
+        override fun with(q: Query) = PrescriberQuery(q)
+    }
+
+    inner class NoticeQuery(q: Query) : TypedQuery<NoticeFields, Notice>(system, q, NoticeFields(), { materializeNotice(it) }) {
+        override fun with(q: Query) = NoticeQuery(q)
+    }
+
+    inner class PrescriberOrderQuery(q: Query) : TypedQuery<PrescriberOrderFields, PrescriberOrder>(system, q, PrescriberOrderFields(), { materializePrescriberOrder(it) }) {
+        override fun with(q: Query) = PrescriberOrderQuery(q)
+    }
+
+    inner class PrescriptionQuery(q: Query) : TypedQuery<PrescriptionFields, Prescription>(system, q, PrescriptionFields(), { materializePrescription(it) }) {
+        override fun with(q: Query) = PrescriptionQuery(q)
+    }
+
+    inner class DiscontinuationQuery(q: Query) : TypedQuery<DiscontinuationFields, Discontinuation>(system, q, DiscontinuationFields(), { materializeDiscontinuation(it) }) {
+        override fun with(q: Query) = DiscontinuationQuery(q)
+    }
+
+    inner class CorrectionRefusalQuery(q: Query) : TypedQuery<CorrectionRefusalFields, CorrectionRefusal>(system, q, CorrectionRefusalFields(), { materializeCorrectionRefusal(it) }) {
+        override fun with(q: Query) = CorrectionRefusalQuery(q)
+    }
+
+    inner class EntryVoidQuery(q: Query) : TypedQuery<EntryVoidFields, EntryVoid>(system, q, EntryVoidFields(), { materializeEntryVoid(it) }) {
+        override fun with(q: Query) = EntryVoidQuery(q)
+    }
+
+    inner class VoidRefusalQuery(q: Query) : TypedQuery<VoidRefusalFields, VoidRefusal>(system, q, VoidRefusalFields(), { materializeVoidRefusal(it) }) {
+        override fun with(q: Query) = VoidRefusalQuery(q)
+    }
+
+    inner class ConflictOverrideQuery(q: Query) : TypedQuery<ConflictOverrideFields, ConflictOverride>(system, q, ConflictOverrideFields(), { materializeConflictOverride(it) }) {
+        override fun with(q: Query) = ConflictOverrideQuery(q)
+    }
+
+    inner class PharmacistAlertQuery(q: Query) : TypedQuery<PharmacistAlertFields, PharmacistAlert>(system, q, PharmacistAlertFields(), { materializePharmacistAlert(it) }) {
+        override fun with(q: Query) = PharmacistAlertQuery(q)
+    }
+
+    inner class MonitoringCheckQuery(q: Query) : TypedQuery<MonitoringCheckFields, MonitoringCheck>(system, q, MonitoringCheckFields(), { materializeMonitoringCheck(it) }) {
+        override fun with(q: Query) = MonitoringCheckQuery(q)
+    }
+
+    inner class FillQuery(q: Query) : TypedQuery<FillFields, Fill>(system, q, FillFields(), { materializeFill(it) }) {
+        override fun with(q: Query) = FillQuery(q)
+    }
+
+    inner class FillRefusalQuery(q: Query) : TypedQuery<FillRefusalFields, FillRefusal>(system, q, FillRefusalFields(), { materializeFillRefusal(it) }) {
+        override fun with(q: Query) = FillRefusalQuery(q)
+    }
+
+    inner class ControlledLogEntryQuery(q: Query) : TypedQuery<ControlledLogEntryFields, ControlledLogEntry>(system, q, ControlledLogEntryFields(), { materializeControlledLogEntry(it) }) {
+        override fun with(q: Query) = ControlledLogEntryQuery(q)
+    }
+
+    inner class VerificationQuery(q: Query) : TypedQuery<VerificationFields, Verification>(system, q, VerificationFields(), { materializeVerification(it) }) {
+        override fun with(q: Query) = VerificationQuery(q)
+    }
+
+    inner class CounsellingQuery(q: Query) : TypedQuery<CounsellingFields, Counselling>(system, q, CounsellingFields(), { materializeCounselling(it) }) {
+        override fun with(q: Query) = CounsellingQuery(q)
+    }
+
+    inner class ReturnToStockQuery(q: Query) : TypedQuery<ReturnToStockFields, ReturnToStock>(system, q, ReturnToStockFields(), { materializeReturnToStock(it) }) {
+        override fun with(q: Query) = ReturnToStockQuery(q)
+    }
+
+    inner class CounterExitQuery(q: Query) : TypedQuery<CounterExitFields, CounterExit>(system, q, CounterExitFields(), { materializeCounterExit(it) }) {
+        override fun with(q: Query) = CounterExitQuery(q)
+    }
+
+    inner class PickupQuery(q: Query) : TypedQuery<PickupFields, Pickup>(system, q, PickupFields(), { materializePickup(it) }) {
+        override fun with(q: Query) = PickupQuery(q)
+    }
+
+    inner class CounterAlertQuery(q: Query) : TypedQuery<CounterAlertFields, CounterAlert>(system, q, CounterAlertFields(), { materializeCounterAlert(it) }) {
+        override fun with(q: Query) = CounterAlertQuery(q)
+    }
+
+    inner class RefillTaskQuery(q: Query) : TypedQuery<RefillTaskFields, RefillTask>(system, q, RefillTaskFields(), { materializeRefillTask(it) }) {
+        override fun with(q: Query) = RefillTaskQuery(q)
+    }
+
+    inner class RefillRefusalQuery(q: Query) : TypedQuery<RefillRefusalFields, RefillRefusal>(system, q, RefillRefusalFields(), { materializeRefillRefusal(it) }) {
+        override fun with(q: Query) = RefillRefusalQuery(q)
+    }
+
+    inner class AuthorisationRequestQuery(q: Query) : TypedQuery<AuthorisationRequestFields, AuthorisationRequest>(system, q, AuthorisationRequestFields(), { materializeAuthorisationRequest(it) }) {
+        override fun with(q: Query) = AuthorisationRequestQuery(q)
+    }
+
+    inner class TaskNagQuery(q: Query) : TypedQuery<TaskNagFields, TaskNag>(system, q, TaskNagFields(), { materializeTaskNag(it) }) {
+        override fun with(q: Query) = TaskNagQuery(q)
+    }
+
+    inner class AutoRefillEnrolmentQuery(q: Query) : TypedQuery<AutoRefillEnrolmentFields, AutoRefillEnrolment>(system, q, AutoRefillEnrolmentFields(), { materializeAutoRefillEnrolment(it) }) {
+        override fun with(q: Query) = AutoRefillEnrolmentQuery(q)
+    }
+
+    inner class AutoRefillCancellationQuery(q: Query) : TypedQuery<AutoRefillCancellationFields, AutoRefillCancellation>(system, q, AutoRefillCancellationFields(), { materializeAutoRefillCancellation(it) }) {
+        override fun with(q: Query) = AutoRefillCancellationQuery(q)
+    }
+
+    inner class ClaimQuery(q: Query) : TypedQuery<ClaimFields, Claim>(system, q, ClaimFields(), { materializeClaim(it) }) {
+        override fun with(q: Query) = ClaimQuery(q)
+    }
+
+    inner class ClaimResponseQuery(q: Query) : TypedQuery<ClaimResponseFields, ClaimResponse>(system, q, ClaimResponseFields(), { materializeClaimResponse(it) }) {
+        override fun with(q: Query) = ClaimResponseQuery(q)
+    }
+
+    inner class ClaimFollowUpQuery(q: Query) : TypedQuery<ClaimFollowUpFields, ClaimFollowUp>(system, q, ClaimFollowUpFields(), { materializeClaimFollowUp(it) }) {
+        override fun with(q: Query) = ClaimFollowUpQuery(q)
+    }
+
+    inner class ControlledInventorySnapshotQuery(q: Query) : TypedQuery<ControlledInventorySnapshotFields, ControlledInventorySnapshot>(system, q, ControlledInventorySnapshotFields(), { materializeControlledInventorySnapshot(it) }) {
+        override fun with(q: Query) = ControlledInventorySnapshotQuery(q)
+    }
+
+    inner class PharmacistQuery(q: Query) : TypedQuery<PharmacistFields, Pharmacist>(system, q, PharmacistFields(), { materializePharmacist(it) }) {
+        override fun with(q: Query) = PharmacistQuery(q)
+    }
+
+    inner class TechnicianQuery(q: Query) : TypedQuery<TechnicianFields, Technician>(system, q, TechnicianFields(), { materializeTechnician(it) }) {
+        override fun with(q: Query) = TechnicianQuery(q)
+    }
+
+    inner class AdministratorQuery(q: Query) : TypedQuery<AdministratorFields, Administrator>(system, q, AdministratorFields(), { materializeAdministrator(it) }) {
+        override fun with(q: Query) = AdministratorQuery(q)
+    }
+
+    inner class LicensedPharmacistQuery(q: Query) : TypedQuery<LicensedPharmacistFields, LicensedPharmacist>(system, q, LicensedPharmacistFields(), { materializeLicensedPharmacist(it) }) {
+        override fun with(q: Query) = LicensedPharmacistQuery(q)
+    }
+
+    inner class LicenceExpiringSoonQuery(q: Query) : TypedQuery<LicenceExpiringSoonFields, LicenceExpiringSoon>(system, q, LicenceExpiringSoonFields(), { materializeLicenceExpiringSoon(it) }) {
+        override fun with(q: Query) = LicenceExpiringSoonQuery(q)
+    }
+
+    inner class ControlledQuery(q: Query) : TypedQuery<ControlledFields, Controlled>(system, q, ControlledFields(), { materializeControlled(it) }) {
+        override fun with(q: Query) = ControlledQuery(q)
+    }
+
+    inner class ScheduleTwoQuery(q: Query) : TypedQuery<ScheduleTwoFields, ScheduleTwo>(system, q, ScheduleTwoFields(), { materializeScheduleTwo(it) }) {
+        override fun with(q: Query) = ScheduleTwoQuery(q)
+    }
+
+    inner class LowStockQuery(q: Query) : TypedQuery<LowStockFields, LowStock>(system, q, LowStockFields(), { materializeLowStock(it) }) {
+        override fun with(q: Query) = LowStockQuery(q)
+    }
+
+    inner class EffectivePriceQuery(q: Query) : TypedQuery<EffectivePriceFields, EffectivePrice>(system, q, EffectivePriceFields(), { materializeEffectivePrice(it) }) {
+        override fun with(q: Query) = EffectivePriceQuery(q)
+    }
+
+    inner class ExpiredLotQuery(q: Query) : TypedQuery<ExpiredLotFields, ExpiredLot>(system, q, ExpiredLotFields(), { materializeExpiredLot(it) }) {
+        override fun with(q: Query) = ExpiredLotQuery(q)
+    }
+
+    inner class QuarantinedLotQuery(q: Query) : TypedQuery<QuarantinedLotFields, QuarantinedLot>(system, q, QuarantinedLotFields(), { materializeQuarantinedLot(it) }) {
+        override fun with(q: Query) = QuarantinedLotQuery(q)
+    }
+
+    inner class RecalledLotQuery(q: Query) : TypedQuery<RecalledLotFields, RecalledLot>(system, q, RecalledLotFields(), { materializeRecalledLot(it) }) {
+        override fun with(q: Query) = RecalledLotQuery(q)
+    }
+
+    inner class UsableLotQuery(q: Query) : TypedQuery<UsableLotFields, UsableLot>(system, q, UsableLotFields(), { materializeUsableLot(it) }) {
+        override fun with(q: Query) = UsableLotQuery(q)
+    }
+
+    inner class OpenPurchaseOrderQuery(q: Query) : TypedQuery<OpenPurchaseOrderFields, OpenPurchaseOrder>(system, q, OpenPurchaseOrderFields(), { materializeOpenPurchaseOrder(it) }) {
+        override fun with(q: Query) = OpenPurchaseOrderQuery(q)
+    }
+
+    inner class ReceivedPurchaseOrderQuery(q: Query) : TypedQuery<ReceivedPurchaseOrderFields, ReceivedPurchaseOrder>(system, q, ReceivedPurchaseOrderFields(), { materializeReceivedPurchaseOrder(it) }) {
+        override fun with(q: Query) = ReceivedPurchaseOrderQuery(q)
+    }
+
+    inner class DiscontinuedQuery(q: Query) : TypedQuery<DiscontinuedFields, Discontinued>(system, q, DiscontinuedFields(), { materializeDiscontinued(it) }) {
+        override fun with(q: Query) = DiscontinuedQuery(q)
+    }
+
+    inner class ExpiredQuery(q: Query) : TypedQuery<ExpiredFields, Expired>(system, q, ExpiredFields(), { materializeExpired(it) }) {
+        override fun with(q: Query) = ExpiredQuery(q)
+    }
+
+    inner class ExhaustedQuery(q: Query) : TypedQuery<ExhaustedFields, Exhausted>(system, q, ExhaustedFields(), { materializeExhausted(it) }) {
+        override fun with(q: Query) = ExhaustedQuery(q)
+    }
+
+    inner class CurrentQuery(q: Query) : TypedQuery<CurrentFields, Current>(system, q, CurrentFields(), { materializeCurrent(it) }) {
+        override fun with(q: Query) = CurrentQuery(q)
+    }
+
+    inner class ActivePrescriptionQuery(q: Query) : TypedQuery<ActivePrescriptionFields, ActivePrescription>(system, q, ActivePrescriptionFields(), { materializeActivePrescription(it) }) {
+        override fun with(q: Query) = ActivePrescriptionQuery(q)
+    }
+
+    inner class FilledPrescriptionQuery(q: Query) : TypedQuery<FilledPrescriptionFields, FilledPrescription>(system, q, FilledPrescriptionFields(), { materializeFilledPrescription(it) }) {
+        override fun with(q: Query) = FilledPrescriptionQuery(q)
+    }
+
+    inner class VoidedQuery(q: Query) : TypedQuery<VoidedFields, Voided>(system, q, VoidedFields(), { materializeVoided(it) }) {
+        override fun with(q: Query) = VoidedQuery(q)
+    }
+
+    inner class AllergyConflictQuery(q: Query) : TypedQuery<AllergyConflictFields, AllergyConflict>(system, q, AllergyConflictFields(), { materializeAllergyConflict(it) }) {
+        override fun with(q: Query) = AllergyConflictQuery(q)
+    }
+
+    inner class InteractionConflictQuery(q: Query) : TypedQuery<InteractionConflictFields, InteractionConflict>(system, q, InteractionConflictFields(), { materializeInteractionConflict(it) }) {
+        override fun with(q: Query) = InteractionConflictQuery(q)
+    }
+
+    inner class ClearedQuery(q: Query) : TypedQuery<ClearedFields, Cleared>(system, q, ClearedFields(), { materializeCleared(it) }) {
+        override fun with(q: Query) = ClearedQuery(q)
+    }
+
+    inner class FillableQuery(q: Query) : TypedQuery<FillableFields, Fillable>(system, q, FillableFields(), { materializeFillable(it) }) {
+        override fun with(q: Query) = FillableQuery(q)
+    }
+
+    inner class MultiplePrescribersQuery(q: Query) : TypedQuery<MultiplePrescribersFields, MultiplePrescribers>(system, q, MultiplePrescribersFields(), { materializeMultiplePrescribers(it) }) {
+        override fun with(q: Query) = MultiplePrescribersQuery(q)
+    }
+
+    inner class VerifiedFillQuery(q: Query) : TypedQuery<VerifiedFillFields, VerifiedFill>(system, q, VerifiedFillFields(), { materializeVerifiedFill(it) }) {
+        override fun with(q: Query) = VerifiedFillQuery(q)
+    }
+
+    inner class RejectedFillQuery(q: Query) : TypedQuery<RejectedFillFields, RejectedFill>(system, q, RejectedFillFields(), { materializeRejectedFill(it) }) {
+        override fun with(q: Query) = RejectedFillQuery(q)
+    }
+
+    inner class ConsumingFillQuery(q: Query) : TypedQuery<ConsumingFillFields, ConsumingFill>(system, q, ConsumingFillFields(), { materializeConsumingFill(it) }) {
+        override fun with(q: Query) = ConsumingFillQuery(q)
+    }
+
+    inner class CounsellingDueQuery(q: Query) : TypedQuery<CounsellingDueFields, CounsellingDue>(system, q, CounsellingDueFields(), { materializeCounsellingDue(it) }) {
+        override fun with(q: Query) = CounsellingDueQuery(q)
+    }
+
+    inner class ReadyForPickupQuery(q: Query) : TypedQuery<ReadyForPickupFields, ReadyForPickup>(system, q, ReadyForPickupFields(), { materializeReadyForPickup(it) }) {
+        override fun with(q: Query) = ReadyForPickupQuery(q)
+    }
+
+    inner class UncollectedQuery(q: Query) : TypedQuery<UncollectedFields, Uncollected>(system, q, UncollectedFields(), { materializeUncollected(it) }) {
+        override fun with(q: Query) = UncollectedQuery(q)
+    }
+
+    inner class OpenRefillTaskQuery(q: Query) : TypedQuery<OpenRefillTaskFields, OpenRefillTask>(system, q, OpenRefillTaskFields(), { materializeOpenRefillTask(it) }) {
+        override fun with(q: Query) = OpenRefillTaskQuery(q)
+    }
+
+    inner class OverdueRefillTaskQuery(q: Query) : TypedQuery<OverdueRefillTaskFields, OverdueRefillTask>(system, q, OverdueRefillTaskFields(), { materializeOverdueRefillTask(it) }) {
+        override fun with(q: Query) = OverdueRefillTaskQuery(q)
+    }
+
+    inner class AutoRefillQuery(q: Query) : TypedQuery<AutoRefillFields, AutoRefill>(system, q, AutoRefillFields(), { materializeAutoRefill(it) }) {
+        override fun with(q: Query) = AutoRefillQuery(q)
+    }
+
+    inner class InsuredFillQuery(q: Query) : TypedQuery<InsuredFillFields, InsuredFill>(system, q, InsuredFillFields(), { materializeInsuredFill(it) }) {
+        override fun with(q: Query) = InsuredFillQuery(q)
+    }
+
+    inner class PendingClaimQuery(q: Query) : TypedQuery<PendingClaimFields, PendingClaim>(system, q, PendingClaimFields(), { materializePendingClaim(it) }) {
+        override fun with(q: Query) = PendingClaimQuery(q)
+    }
+
+    inner class PaidClaimQuery(q: Query) : TypedQuery<PaidClaimFields, PaidClaim>(system, q, PaidClaimFields(), { materializePaidClaim(it) }) {
+        override fun with(q: Query) = PaidClaimQuery(q)
+    }
+
+    inner class RejectedClaimQuery(q: Query) : TypedQuery<RejectedClaimFields, RejectedClaim>(system, q, RejectedClaimFields(), { materializeRejectedClaim(it) }) {
+        override fun with(q: Query) = RejectedClaimQuery(q)
+    }
+
+    inner class StaleClaimQuery(q: Query) : TypedQuery<StaleClaimFields, StaleClaim>(system, q, StaleClaimFields(), { materializeStaleClaim(it) }) {
+        override fun with(q: Query) = StaleClaimQuery(q)
+    }
+
+    fun materializeStaff(id: Long): Staff = Staff(
+        id = id,
+        name = system.get(id, "name") as String,
+        role = system.get(id, "role") as String,
+        licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { LicenceRenewalView(it as Long) },
+        licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { LicenceReminderView(it as Long) },
+        stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { StockAdjustmentView(it as Long) },
+        countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { CountConfirmationView(it as Long) },
+        prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { PrescriberOrderView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        verifications = (system.get(id, "verifications") as List<*>).map { VerificationView(it as Long) },
+        counsellings = (system.get(id, "counsellings") as List<*>).map { CounsellingView(it as Long) },
+    )
+
+    fun materializeLicenceRenewal(id: Long): LicenceRenewal = LicenceRenewal(
+        id = id,
+        pharmacist = StaffView(system.get(id, "pharmacist") as Long),
+        licenceNumber = system.get(id, "licenceNumber") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+    )
+
+    fun materializeLicenceReminder(id: Long): LicenceReminder = LicenceReminder(
+        id = id,
+        pharmacist = StaffView(system.get(id, "pharmacist") as Long),
+        sentOn = system.get(id, "sentOn") as LocalDate,
+    )
+
+    fun materializeIngredient(id: Long): Ingredient = Ingredient(
+        id = id,
+        name = system.get(id, "name") as String,
+        drugs = (system.get(id, "drugs") as List<*>).map { DrugView(it as Long) },
+        patients = (system.get(id, "patients") as List<*>).map { PatientView(it as Long) },
+    )
+
+    fun materializeDrug(id: Long): Drug = Drug(
+        id = id,
+        name = system.get(id, "name") as String,
+        strength = system.get(id, "strength") as String,
+        form = system.get(id, "form") as String,
+        schedule = (system.get(id, "schedule") as BigDecimal).intValueExact(),
+        requiresCounselling = system.get(id, "requiresCounselling") as Boolean,
+        ingredients = (system.get(id, "ingredients") as List<*>).map { IngredientView(it as Long) },
+        reorderPoint = (system.get(id, "reorderPoint") as BigDecimal).intValueExact(),
+        onHand = (system.get(id, "onHand") as BigDecimal).intValueExact(),
+        unitPrice = system.get(id, "unitPrice") as BigDecimal,
+        interactions = (system.get(id, "interactions") as List<*>).map { InteractionView(it as Long) },
+        priceChanges = (system.get(id, "priceChanges") as List<*>).map { PriceChangeView(it as Long) },
+        priceWithdrawals = (system.get(id, "priceWithdrawals") as List<*>).map { PriceWithdrawalView(it as Long) },
+        stockLots = (system.get(id, "stockLots") as List<*>).map { StockLotView(it as Long) },
+        purchaseOrders = (system.get(id, "purchaseOrders") as List<*>).map { PurchaseOrderView(it as Long) },
+        prescriptions = (system.get(id, "prescriptions") as List<*>).map { PrescriptionView(it as Long) },
+        controlledLogEntrys = (system.get(id, "controlledLogEntrys") as List<*>).map { ControlledLogEntryView(it as Long) },
+        controlledInventorySnapshots = (system.get(id, "controlledInventorySnapshots") as List<*>).map { ControlledInventorySnapshotView(it as Long) },
+    )
+
+    fun materializeInteraction(id: Long): Interaction = Interaction(
+        id = id,
+        drugA = DrugView(system.get(id, "drugA") as Long),
+        drugB = DrugView(system.get(id, "drugB") as Long),
+        severity = system.get(id, "severity") as String,
+    )
+
+    fun materializePriceChange(id: Long): PriceChange = PriceChange(
+        id = id,
+        drug = DrugView(system.get(id, "drug") as Long),
+        effectiveOn = system.get(id, "effectiveOn") as LocalDate,
+        unitPrice = system.get(id, "unitPrice") as BigDecimal,
+        priceWithdrawalRefusals = (system.get(id, "priceWithdrawalRefusals") as List<*>).map { PriceWithdrawalRefusalView(it as Long) },
+    )
+
+    fun materializePriceWithdrawal(id: Long): PriceWithdrawal = PriceWithdrawal(
+        id = id,
+        drug = DrugView(system.get(id, "drug") as Long),
+        effectiveOn = system.get(id, "effectiveOn") as LocalDate,
+        unitPrice = system.get(id, "unitPrice") as BigDecimal,
+        reason = system.get(id, "reason") as String,
+        withdrawnOn = system.get(id, "withdrawnOn") as Instant,
+    )
+
+    fun materializePriceWithdrawalRefusal(id: Long): PriceWithdrawalRefusal = PriceWithdrawalRefusal(
+        id = id,
+        priceChange = (system.get(id, "priceChange") as Long?)?.let { PriceChangeView(it) },
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeStockLot(id: Long): StockLot = StockLot(
+        id = id,
+        drug = DrugView(system.get(id, "drug") as Long),
+        lotNumber = system.get(id, "lotNumber") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        received = (system.get(id, "received") as BigDecimal).intValueExact(),
+        purchaseOrder = (system.get(id, "purchaseOrder") as Long?)?.let { PurchaseOrderView(it) },
+        onHand = (system.get(id, "onHand") as BigDecimal).intValueExact(),
+        stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { StockAdjustmentView(it as Long) },
+        countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { CountConfirmationView(it as Long) },
+        quarantines = (system.get(id, "quarantines") as List<*>).map { QuarantineView(it as Long) },
+        recalls = (system.get(id, "recalls") as List<*>).map { RecallView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+    )
+
+    fun materializeStockAdjustment(id: Long): StockAdjustment = StockAdjustment(
+        id = id,
+        lot = StockLotView(system.get(id, "lot") as Long),
+        delta = (system.get(id, "delta") as BigDecimal).intValueExact(),
+        countedBy = StaffView(system.get(id, "countedBy") as Long),
+        countedOn = system.get(id, "countedOn") as Instant,
+    )
+
+    fun materializeCountConfirmation(id: Long): CountConfirmation = CountConfirmation(
+        id = id,
+        lot = StockLotView(system.get(id, "lot") as Long),
+        counted = (system.get(id, "counted") as BigDecimal).intValueExact(),
+        countedBy = StaffView(system.get(id, "countedBy") as Long),
+        countedOn = system.get(id, "countedOn") as Instant,
+    )
+
+    fun materializeQuarantine(id: Long): Quarantine = Quarantine(
+        id = id,
+        lot = StockLotView(system.get(id, "lot") as Long),
+        reason = system.get(id, "reason") as String,
+        quarantinedOn = system.get(id, "quarantinedOn") as Instant,
+    )
+
+    fun materializeRecall(id: Long): Recall = Recall(
+        id = id,
+        lot = StockLotView(system.get(id, "lot") as Long),
+        reference = system.get(id, "reference") as String,
+        issuedOn = system.get(id, "issuedOn") as LocalDate,
+    )
+
+    fun materializeRecallNotice(id: Long): RecallNotice = RecallNotice(
+        id = id,
+        fill = FillView(system.get(id, "fill") as Long),
+        patient = PatientView(system.get(id, "patient") as Long),
+        reference = system.get(id, "reference") as String,
+        noticedOn = system.get(id, "noticedOn") as Instant,
+    )
+
+    fun materializePurchaseOrder(id: Long): PurchaseOrder = PurchaseOrder(
+        id = id,
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        orderedOn = system.get(id, "orderedOn") as LocalDate,
+        stockLots = (system.get(id, "stockLots") as List<*>).map { StockLotView(it as Long) },
+    )
+
+    fun materializeInsurancePlan(id: Long): InsurancePlan = InsurancePlan(
+        id = id,
+        name = system.get(id, "name") as String,
+        coversControlled = system.get(id, "coversControlled") as Boolean,
+        patients = (system.get(id, "patients") as List<*>).map { PatientView(it as Long) },
+        claims = (system.get(id, "claims") as List<*>).map { ClaimView(it as Long) },
+    )
+
+    fun materializePatient(id: Long): Patient = Patient(
+        id = id,
+        name = system.get(id, "name") as String,
+        birthDate = system.get(id, "birthDate") as LocalDate,
+        phone = system.get(id, "phone") as String,
+        allergies = (system.get(id, "allergies") as List<*>).map { IngredientView(it as Long) },
+        plan = (system.get(id, "plan") as Long?)?.let { InsurancePlanView(it) },
+        prescriptions = (system.get(id, "prescriptions") as List<*>).map { PrescriptionView(it as Long) },
+        recallNotices = (system.get(id, "recallNotices") as List<*>).map { RecallNoticeView(it as Long) },
+        notices = (system.get(id, "notices") as List<*>).map { NoticeView(it as Long) },
+        prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { PrescriberOrderView(it as Long) },
+    )
+
+    fun materializePrescriber(id: Long): Prescriber = Prescriber(
+        id = id,
+        name = system.get(id, "name") as String,
+        deaNumber = system.get(id, "deaNumber") as String,
+        fax = system.get(id, "fax") as String,
+        notices = (system.get(id, "notices") as List<*>).map { NoticeView(it as Long) },
+        prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { PrescriberOrderView(it as Long) },
+        discontinuations = (system.get(id, "discontinuations") as List<*>).map { DiscontinuationView(it as Long) },
+    )
+
+    fun materializeNotice(id: Long): Notice = Notice(
+        id = id,
+        recipient = RecipientView(system.get(id, "recipient") as Long),
+        subject = system.get(id, "subject") as String,
+        sentOn = system.get(id, "sentOn") as Instant,
+        contact = system.get(id, "contact") as String,
+    )
+
+    fun materializePrescriberOrder(id: Long): PrescriberOrder = PrescriberOrder(
+        id = id,
+        prescriber = PrescriberView(system.get(id, "prescriber") as Long),
+        patient = PatientView(system.get(id, "patient") as Long),
+        writtenOn = system.get(id, "writtenOn") as LocalDate,
+        enteredBy = StaffView(system.get(id, "enteredBy") as Long),
+        prescriptions = (system.get(id, "prescriptions") as List<*>).map { PrescriptionView(it as Long) },
+    )
+
+    fun materializePrescription(id: Long): Prescription = Prescription(
+        id = id,
+        order = PrescriberOrderView(system.get(id, "order") as Long),
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        daysSupply = (system.get(id, "daysSupply") as BigDecimal).intValueExact(),
+        refillsAuthorized = (system.get(id, "refillsAuthorized") as BigDecimal).intValueExact(),
+        directions = system.get(id, "directions") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        fillsRecorded = (system.get(id, "fillsRecorded") as BigDecimal).intValueExact(),
+        refillsRemaining = (system.get(id, "refillsRemaining") as BigDecimal).intValueExact(),
+        lastFilledOn = system.get(id, "lastFilledOn") as LocalDate?,
+        firstFilledOn = system.get(id, "firstFilledOn") as LocalDate?,
+        discontinuations = (system.get(id, "discontinuations") as List<*>).map { DiscontinuationView(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        pharmacistAlerts = (system.get(id, "pharmacistAlerts") as List<*>).map { PharmacistAlertView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        fillRefusals = (system.get(id, "fillRefusals") as List<*>).map { FillRefusalView(it as Long) },
+        refillTasks = (system.get(id, "refillTasks") as List<*>).map { RefillTaskView(it as Long) },
+        refillRefusals = (system.get(id, "refillRefusals") as List<*>).map { RefillRefusalView(it as Long) },
+        authorisationRequests = (system.get(id, "authorisationRequests") as List<*>).map { AuthorisationRequestView(it as Long) },
+        autoRefillEnrolments = (system.get(id, "autoRefillEnrolments") as List<*>).map { AutoRefillEnrolmentView(it as Long) },
+        autoRefillCancellations = (system.get(id, "autoRefillCancellations") as List<*>).map { AutoRefillCancellationView(it as Long) },
+    )
+
+    fun materializeDiscontinuation(id: Long): Discontinuation = Discontinuation(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        prescriber = PrescriberView(system.get(id, "prescriber") as Long),
+        reason = system.get(id, "reason") as String,
+    )
+
+    fun materializeCorrectionRefusal(id: Long): CorrectionRefusal = CorrectionRefusal(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeEntryVoid(id: Long): EntryVoid = EntryVoid(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        pharmacist = StaffView(system.get(id, "pharmacist") as Long),
+        reason = system.get(id, "reason") as String,
+        voidedOn = system.get(id, "voidedOn") as Instant,
+    )
+
+    fun materializeVoidRefusal(id: Long): VoidRefusal = VoidRefusal(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeConflictOverride(id: Long): ConflictOverride = ConflictOverride(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        pharmacist = StaffView(system.get(id, "pharmacist") as Long),
+        justification = system.get(id, "justification") as String,
+    )
+
+    fun materializePharmacistAlert(id: Long): PharmacistAlert = PharmacistAlert(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        kind = system.get(id, "kind") as String,
+        raisedOn = system.get(id, "raisedOn") as Instant,
+    )
+
+    fun materializeMonitoringCheck(id: Long): MonitoringCheck = MonitoringCheck(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        pharmacist = StaffView(system.get(id, "pharmacist") as Long),
+        checkedAt = system.get(id, "checkedAt") as Instant,
+        cleared = system.get(id, "cleared") as Boolean,
+    )
+
+    fun materializeFill(id: Long): Fill = Fill(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        lot = StockLotView(system.get(id, "lot") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        fillNumber = (system.get(id, "fillNumber") as BigDecimal).intValueExact(),
+        filledBy = StaffView(system.get(id, "filledBy") as Long),
+        unitPrice = system.get(id, "unitPrice") as BigDecimal,
+        filledOn = system.get(id, "filledOn") as LocalDate,
+        filledAt = system.get(id, "filledAt") as Instant,
+        total = system.get(id, "total") as BigDecimal,
+        amountDue = system.get(id, "amountDue") as BigDecimal,
+        recallNotices = (system.get(id, "recallNotices") as List<*>).map { RecallNoticeView(it as Long) },
+        controlledLogEntrys = (system.get(id, "controlledLogEntrys") as List<*>).map { ControlledLogEntryView(it as Long) },
+        verifications = (system.get(id, "verifications") as List<*>).map { VerificationView(it as Long) },
+        counsellings = (system.get(id, "counsellings") as List<*>).map { CounsellingView(it as Long) },
+        returnToStocks = (system.get(id, "returnToStocks") as List<*>).map { ReturnToStockView(it as Long) },
+        counterExits = (system.get(id, "counterExits") as List<*>).map { CounterExitView(it as Long) },
+        pickups = (system.get(id, "pickups") as List<*>).map { PickupView(it as Long) },
+        counterAlerts = (system.get(id, "counterAlerts") as List<*>).map { CounterAlertView(it as Long) },
+        claims = (system.get(id, "claims") as List<*>).map { ClaimView(it as Long) },
+    )
+
+    fun materializeFillRefusal(id: Long): FillRefusal = FillRefusal(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeControlledLogEntry(id: Long): ControlledLogEntry = ControlledLogEntry(
+        id = id,
+        fill = FillView(system.get(id, "fill") as Long),
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        balanceAfter = (system.get(id, "balanceAfter") as BigDecimal).intValueExact(),
+        loggedAt = system.get(id, "loggedAt") as Instant,
+    )
+
+    fun materializeVerification(id: Long): Verification = Verification(
+        id = id,
+        fill = FillView(system.get(id, "fill") as Long),
+        pharmacist = StaffView(system.get(id, "pharmacist") as Long),
+        outcome = system.get(id, "outcome") as String,
+        note = system.get(id, "note") as String,
+        verifiedAt = system.get(id, "verifiedAt") as Instant,
+    )
+
+    fun materializeCounselling(id: Long): Counselling = Counselling(
+        id = id,
+        fill = FillView(system.get(id, "fill") as Long),
+        pharmacist = StaffView(system.get(id, "pharmacist") as Long),
+        notes = system.get(id, "notes") as String,
+    )
+
+    fun materializeReturnToStock(id: Long): ReturnToStock = ReturnToStock(
+        id = id,
+        fill = FillView(system.get(id, "fill") as Long),
+        returnedOn = system.get(id, "returnedOn") as LocalDate,
+    )
+
+    fun materializeCounterExit(id: Long): CounterExit = CounterExit(
+        id = id,
+        fill = FillView(system.get(id, "fill") as Long),
+        readyOn = system.get(id, "readyOn") as LocalDate,
+        leftOn = system.get(id, "leftOn") as LocalDate,
+    )
+
+    fun materializePickup(id: Long): Pickup = Pickup(
+        id = id,
+        fill = FillView(system.get(id, "fill") as Long),
+        collectedBy = system.get(id, "collectedBy") as String,
+        amountPaid = system.get(id, "amountPaid") as BigDecimal,
+        pickedUpAt = system.get(id, "pickedUpAt") as Instant,
+    )
+
+    fun materializeCounterAlert(id: Long): CounterAlert = CounterAlert(
+        id = id,
+        fill = FillView(system.get(id, "fill") as Long),
+        raisedOn = system.get(id, "raisedOn") as Instant,
+    )
+
+    fun materializeRefillTask(id: Long): RefillTask = RefillTask(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        requestKey = system.get(id, "requestKey") as String?,
+        fillsAtRequest = (system.get(id, "fillsAtRequest") as BigDecimal).intValueExact(),
+        requestedOn = system.get(id, "requestedOn") as LocalDate,
+        taskNags = (system.get(id, "taskNags") as List<*>).map { TaskNagView(it as Long) },
+    )
+
+    fun materializeRefillRefusal(id: Long): RefillRefusal = RefillRefusal(
+        id = id,
+        requestKey = system.get(id, "requestKey") as String,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeAuthorisationRequest(id: Long): AuthorisationRequest = AuthorisationRequest(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        requestedOn = system.get(id, "requestedOn") as Instant,
+    )
+
+    fun materializeTaskNag(id: Long): TaskNag = TaskNag(
+        id = id,
+        task = RefillTaskView(system.get(id, "task") as Long),
+        sentOn = system.get(id, "sentOn") as LocalDate,
+    )
+
+    fun materializeAutoRefillEnrolment(id: Long): AutoRefillEnrolment = AutoRefillEnrolment(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+    )
+
+    fun materializeAutoRefillCancellation(id: Long): AutoRefillCancellation = AutoRefillCancellation(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+    )
+
+    fun materializeClaim(id: Long): Claim = Claim(
+        id = id,
+        fill = FillView(system.get(id, "fill") as Long),
+        plan = InsurancePlanView(system.get(id, "plan") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        claimKey = system.get(id, "claimKey") as String,
+        submittedAt = system.get(id, "submittedAt") as Instant,
+        patientPays = system.get(id, "patientPays") as BigDecimal,
+        claimResponses = (system.get(id, "claimResponses") as List<*>).map { ClaimResponseView(it as Long) },
+        claimFollowUps = (system.get(id, "claimFollowUps") as List<*>).map { ClaimFollowUpView(it as Long) },
+    )
+
+    fun materializeClaimResponse(id: Long): ClaimResponse = ClaimResponse(
+        id = id,
+        claim = ClaimView(system.get(id, "claim") as Long),
+        outcome = system.get(id, "outcome") as String,
+        paidAmount = system.get(id, "paidAmount") as BigDecimal,
+        patientPays = system.get(id, "patientPays") as BigDecimal,
+        respondedAt = system.get(id, "respondedAt") as Instant,
+    )
+
+    fun materializeClaimFollowUp(id: Long): ClaimFollowUp = ClaimFollowUp(
+        id = id,
+        claim = ClaimView(system.get(id, "claim") as Long),
+        followedUpAt = system.get(id, "followedUpAt") as Instant,
+    )
+
+    fun materializeControlledInventorySnapshot(id: Long): ControlledInventorySnapshot = ControlledInventorySnapshot(
+        id = id,
+        drug = DrugView(system.get(id, "drug") as Long),
+        onHand = (system.get(id, "onHand") as BigDecimal).intValueExact(),
+        takenOn = system.get(id, "takenOn") as LocalDate,
+    )
+
+    fun materializePharmacist(id: Long): Pharmacist = Pharmacist(
+        id = id,
+        name = system.get(id, "name") as String,
+        role = system.get(id, "role") as String,
+        licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { LicenceRenewalView(it as Long) },
+        licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { LicenceReminderView(it as Long) },
+        stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { StockAdjustmentView(it as Long) },
+        countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { CountConfirmationView(it as Long) },
+        prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { PrescriberOrderView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        verifications = (system.get(id, "verifications") as List<*>).map { VerificationView(it as Long) },
+        counsellings = (system.get(id, "counsellings") as List<*>).map { CounsellingView(it as Long) },
+    )
+
+    fun materializeTechnician(id: Long): Technician = Technician(
+        id = id,
+        name = system.get(id, "name") as String,
+        role = system.get(id, "role") as String,
+        licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { LicenceRenewalView(it as Long) },
+        licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { LicenceReminderView(it as Long) },
+        stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { StockAdjustmentView(it as Long) },
+        countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { CountConfirmationView(it as Long) },
+        prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { PrescriberOrderView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        verifications = (system.get(id, "verifications") as List<*>).map { VerificationView(it as Long) },
+        counsellings = (system.get(id, "counsellings") as List<*>).map { CounsellingView(it as Long) },
+    )
+
+    fun materializeAdministrator(id: Long): Administrator = Administrator(
+        id = id,
+        name = system.get(id, "name") as String,
+        role = system.get(id, "role") as String,
+        licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { LicenceRenewalView(it as Long) },
+        licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { LicenceReminderView(it as Long) },
+        stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { StockAdjustmentView(it as Long) },
+        countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { CountConfirmationView(it as Long) },
+        prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { PrescriberOrderView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        verifications = (system.get(id, "verifications") as List<*>).map { VerificationView(it as Long) },
+        counsellings = (system.get(id, "counsellings") as List<*>).map { CounsellingView(it as Long) },
+    )
+
+    fun materializeLicensedPharmacist(id: Long): LicensedPharmacist = LicensedPharmacist(
+        id = id,
+        name = system.get(id, "name") as String,
+        role = system.get(id, "role") as String,
+        licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { LicenceRenewalView(it as Long) },
+        licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { LicenceReminderView(it as Long) },
+        stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { StockAdjustmentView(it as Long) },
+        countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { CountConfirmationView(it as Long) },
+        prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { PrescriberOrderView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        verifications = (system.get(id, "verifications") as List<*>).map { VerificationView(it as Long) },
+        counsellings = (system.get(id, "counsellings") as List<*>).map { CounsellingView(it as Long) },
+    )
+
+    fun materializeLicenceExpiringSoon(id: Long): LicenceExpiringSoon = LicenceExpiringSoon(
+        id = id,
+        name = system.get(id, "name") as String,
+        role = system.get(id, "role") as String,
+        licenceRenewals = (system.get(id, "licenceRenewals") as List<*>).map { LicenceRenewalView(it as Long) },
+        licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { LicenceReminderView(it as Long) },
+        stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { StockAdjustmentView(it as Long) },
+        countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { CountConfirmationView(it as Long) },
+        prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { PrescriberOrderView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        verifications = (system.get(id, "verifications") as List<*>).map { VerificationView(it as Long) },
+        counsellings = (system.get(id, "counsellings") as List<*>).map { CounsellingView(it as Long) },
+    )
+
+    fun materializeControlled(id: Long): Controlled = Controlled(
+        id = id,
+        name = system.get(id, "name") as String,
+        strength = system.get(id, "strength") as String,
+        form = system.get(id, "form") as String,
+        schedule = (system.get(id, "schedule") as BigDecimal).intValueExact(),
+        requiresCounselling = system.get(id, "requiresCounselling") as Boolean,
+        ingredients = (system.get(id, "ingredients") as List<*>).map { IngredientView(it as Long) },
+        reorderPoint = (system.get(id, "reorderPoint") as BigDecimal).intValueExact(),
+        onHand = (system.get(id, "onHand") as BigDecimal).intValueExact(),
+        unitPrice = system.get(id, "unitPrice") as BigDecimal,
+        interactions = (system.get(id, "interactions") as List<*>).map { InteractionView(it as Long) },
+        priceChanges = (system.get(id, "priceChanges") as List<*>).map { PriceChangeView(it as Long) },
+        priceWithdrawals = (system.get(id, "priceWithdrawals") as List<*>).map { PriceWithdrawalView(it as Long) },
+        stockLots = (system.get(id, "stockLots") as List<*>).map { StockLotView(it as Long) },
+        purchaseOrders = (system.get(id, "purchaseOrders") as List<*>).map { PurchaseOrderView(it as Long) },
+        prescriptions = (system.get(id, "prescriptions") as List<*>).map { PrescriptionView(it as Long) },
+        controlledLogEntrys = (system.get(id, "controlledLogEntrys") as List<*>).map { ControlledLogEntryView(it as Long) },
+        controlledInventorySnapshots = (system.get(id, "controlledInventorySnapshots") as List<*>).map { ControlledInventorySnapshotView(it as Long) },
+    )
+
+    fun materializeScheduleTwo(id: Long): ScheduleTwo = ScheduleTwo(
+        id = id,
+        name = system.get(id, "name") as String,
+        strength = system.get(id, "strength") as String,
+        form = system.get(id, "form") as String,
+        schedule = (system.get(id, "schedule") as BigDecimal).intValueExact(),
+        requiresCounselling = system.get(id, "requiresCounselling") as Boolean,
+        ingredients = (system.get(id, "ingredients") as List<*>).map { IngredientView(it as Long) },
+        reorderPoint = (system.get(id, "reorderPoint") as BigDecimal).intValueExact(),
+        onHand = (system.get(id, "onHand") as BigDecimal).intValueExact(),
+        unitPrice = system.get(id, "unitPrice") as BigDecimal,
+        interactions = (system.get(id, "interactions") as List<*>).map { InteractionView(it as Long) },
+        priceChanges = (system.get(id, "priceChanges") as List<*>).map { PriceChangeView(it as Long) },
+        priceWithdrawals = (system.get(id, "priceWithdrawals") as List<*>).map { PriceWithdrawalView(it as Long) },
+        stockLots = (system.get(id, "stockLots") as List<*>).map { StockLotView(it as Long) },
+        purchaseOrders = (system.get(id, "purchaseOrders") as List<*>).map { PurchaseOrderView(it as Long) },
+        prescriptions = (system.get(id, "prescriptions") as List<*>).map { PrescriptionView(it as Long) },
+        controlledLogEntrys = (system.get(id, "controlledLogEntrys") as List<*>).map { ControlledLogEntryView(it as Long) },
+        controlledInventorySnapshots = (system.get(id, "controlledInventorySnapshots") as List<*>).map { ControlledInventorySnapshotView(it as Long) },
+    )
+
+    fun materializeLowStock(id: Long): LowStock = LowStock(
+        id = id,
+        name = system.get(id, "name") as String,
+        strength = system.get(id, "strength") as String,
+        form = system.get(id, "form") as String,
+        schedule = (system.get(id, "schedule") as BigDecimal).intValueExact(),
+        requiresCounselling = system.get(id, "requiresCounselling") as Boolean,
+        ingredients = (system.get(id, "ingredients") as List<*>).map { IngredientView(it as Long) },
+        reorderPoint = (system.get(id, "reorderPoint") as BigDecimal).intValueExact(),
+        onHand = (system.get(id, "onHand") as BigDecimal).intValueExact(),
+        unitPrice = system.get(id, "unitPrice") as BigDecimal,
+        interactions = (system.get(id, "interactions") as List<*>).map { InteractionView(it as Long) },
+        priceChanges = (system.get(id, "priceChanges") as List<*>).map { PriceChangeView(it as Long) },
+        priceWithdrawals = (system.get(id, "priceWithdrawals") as List<*>).map { PriceWithdrawalView(it as Long) },
+        stockLots = (system.get(id, "stockLots") as List<*>).map { StockLotView(it as Long) },
+        purchaseOrders = (system.get(id, "purchaseOrders") as List<*>).map { PurchaseOrderView(it as Long) },
+        prescriptions = (system.get(id, "prescriptions") as List<*>).map { PrescriptionView(it as Long) },
+        controlledLogEntrys = (system.get(id, "controlledLogEntrys") as List<*>).map { ControlledLogEntryView(it as Long) },
+        controlledInventorySnapshots = (system.get(id, "controlledInventorySnapshots") as List<*>).map { ControlledInventorySnapshotView(it as Long) },
+    )
+
+    fun materializeEffectivePrice(id: Long): EffectivePrice = EffectivePrice(
+        id = id,
+        drug = DrugView(system.get(id, "drug") as Long),
+        effectiveOn = system.get(id, "effectiveOn") as LocalDate,
+        unitPrice = system.get(id, "unitPrice") as BigDecimal,
+        priceWithdrawalRefusals = (system.get(id, "priceWithdrawalRefusals") as List<*>).map { PriceWithdrawalRefusalView(it as Long) },
+    )
+
+    fun materializeExpiredLot(id: Long): ExpiredLot = ExpiredLot(
+        id = id,
+        drug = DrugView(system.get(id, "drug") as Long),
+        lotNumber = system.get(id, "lotNumber") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        received = (system.get(id, "received") as BigDecimal).intValueExact(),
+        purchaseOrder = (system.get(id, "purchaseOrder") as Long?)?.let { PurchaseOrderView(it) },
+        onHand = (system.get(id, "onHand") as BigDecimal).intValueExact(),
+        stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { StockAdjustmentView(it as Long) },
+        countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { CountConfirmationView(it as Long) },
+        quarantines = (system.get(id, "quarantines") as List<*>).map { QuarantineView(it as Long) },
+        recalls = (system.get(id, "recalls") as List<*>).map { RecallView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+    )
+
+    fun materializeQuarantinedLot(id: Long): QuarantinedLot = QuarantinedLot(
+        id = id,
+        drug = DrugView(system.get(id, "drug") as Long),
+        lotNumber = system.get(id, "lotNumber") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        received = (system.get(id, "received") as BigDecimal).intValueExact(),
+        purchaseOrder = (system.get(id, "purchaseOrder") as Long?)?.let { PurchaseOrderView(it) },
+        onHand = (system.get(id, "onHand") as BigDecimal).intValueExact(),
+        stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { StockAdjustmentView(it as Long) },
+        countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { CountConfirmationView(it as Long) },
+        quarantines = (system.get(id, "quarantines") as List<*>).map { QuarantineView(it as Long) },
+        recalls = (system.get(id, "recalls") as List<*>).map { RecallView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+    )
+
+    fun materializeRecalledLot(id: Long): RecalledLot = RecalledLot(
+        id = id,
+        drug = DrugView(system.get(id, "drug") as Long),
+        lotNumber = system.get(id, "lotNumber") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        received = (system.get(id, "received") as BigDecimal).intValueExact(),
+        purchaseOrder = (system.get(id, "purchaseOrder") as Long?)?.let { PurchaseOrderView(it) },
+        onHand = (system.get(id, "onHand") as BigDecimal).intValueExact(),
+        stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { StockAdjustmentView(it as Long) },
+        countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { CountConfirmationView(it as Long) },
+        quarantines = (system.get(id, "quarantines") as List<*>).map { QuarantineView(it as Long) },
+        recalls = (system.get(id, "recalls") as List<*>).map { RecallView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+    )
+
+    fun materializeUsableLot(id: Long): UsableLot = UsableLot(
+        id = id,
+        drug = DrugView(system.get(id, "drug") as Long),
+        lotNumber = system.get(id, "lotNumber") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        received = (system.get(id, "received") as BigDecimal).intValueExact(),
+        purchaseOrder = (system.get(id, "purchaseOrder") as Long?)?.let { PurchaseOrderView(it) },
+        onHand = (system.get(id, "onHand") as BigDecimal).intValueExact(),
+        stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { StockAdjustmentView(it as Long) },
+        countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { CountConfirmationView(it as Long) },
+        quarantines = (system.get(id, "quarantines") as List<*>).map { QuarantineView(it as Long) },
+        recalls = (system.get(id, "recalls") as List<*>).map { RecallView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+    )
+
+    fun materializeOpenPurchaseOrder(id: Long): OpenPurchaseOrder = OpenPurchaseOrder(
+        id = id,
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        orderedOn = system.get(id, "orderedOn") as LocalDate,
+        stockLots = (system.get(id, "stockLots") as List<*>).map { StockLotView(it as Long) },
+    )
+
+    fun materializeReceivedPurchaseOrder(id: Long): ReceivedPurchaseOrder = ReceivedPurchaseOrder(
+        id = id,
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        orderedOn = system.get(id, "orderedOn") as LocalDate,
+        stockLots = (system.get(id, "stockLots") as List<*>).map { StockLotView(it as Long) },
+    )
+
+    fun materializeDiscontinued(id: Long): Discontinued = Discontinued(
+        id = id,
+        order = PrescriberOrderView(system.get(id, "order") as Long),
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        daysSupply = (system.get(id, "daysSupply") as BigDecimal).intValueExact(),
+        refillsAuthorized = (system.get(id, "refillsAuthorized") as BigDecimal).intValueExact(),
+        directions = system.get(id, "directions") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        fillsRecorded = (system.get(id, "fillsRecorded") as BigDecimal).intValueExact(),
+        refillsRemaining = (system.get(id, "refillsRemaining") as BigDecimal).intValueExact(),
+        lastFilledOn = system.get(id, "lastFilledOn") as LocalDate?,
+        firstFilledOn = system.get(id, "firstFilledOn") as LocalDate?,
+        discontinuations = (system.get(id, "discontinuations") as List<*>).map { DiscontinuationView(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        pharmacistAlerts = (system.get(id, "pharmacistAlerts") as List<*>).map { PharmacistAlertView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        fillRefusals = (system.get(id, "fillRefusals") as List<*>).map { FillRefusalView(it as Long) },
+        refillTasks = (system.get(id, "refillTasks") as List<*>).map { RefillTaskView(it as Long) },
+        refillRefusals = (system.get(id, "refillRefusals") as List<*>).map { RefillRefusalView(it as Long) },
+        authorisationRequests = (system.get(id, "authorisationRequests") as List<*>).map { AuthorisationRequestView(it as Long) },
+        autoRefillEnrolments = (system.get(id, "autoRefillEnrolments") as List<*>).map { AutoRefillEnrolmentView(it as Long) },
+        autoRefillCancellations = (system.get(id, "autoRefillCancellations") as List<*>).map { AutoRefillCancellationView(it as Long) },
+    )
+
+    fun materializeExpired(id: Long): Expired = Expired(
+        id = id,
+        order = PrescriberOrderView(system.get(id, "order") as Long),
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        daysSupply = (system.get(id, "daysSupply") as BigDecimal).intValueExact(),
+        refillsAuthorized = (system.get(id, "refillsAuthorized") as BigDecimal).intValueExact(),
+        directions = system.get(id, "directions") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        fillsRecorded = (system.get(id, "fillsRecorded") as BigDecimal).intValueExact(),
+        refillsRemaining = (system.get(id, "refillsRemaining") as BigDecimal).intValueExact(),
+        lastFilledOn = system.get(id, "lastFilledOn") as LocalDate?,
+        firstFilledOn = system.get(id, "firstFilledOn") as LocalDate?,
+        discontinuations = (system.get(id, "discontinuations") as List<*>).map { DiscontinuationView(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        pharmacistAlerts = (system.get(id, "pharmacistAlerts") as List<*>).map { PharmacistAlertView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        fillRefusals = (system.get(id, "fillRefusals") as List<*>).map { FillRefusalView(it as Long) },
+        refillTasks = (system.get(id, "refillTasks") as List<*>).map { RefillTaskView(it as Long) },
+        refillRefusals = (system.get(id, "refillRefusals") as List<*>).map { RefillRefusalView(it as Long) },
+        authorisationRequests = (system.get(id, "authorisationRequests") as List<*>).map { AuthorisationRequestView(it as Long) },
+        autoRefillEnrolments = (system.get(id, "autoRefillEnrolments") as List<*>).map { AutoRefillEnrolmentView(it as Long) },
+        autoRefillCancellations = (system.get(id, "autoRefillCancellations") as List<*>).map { AutoRefillCancellationView(it as Long) },
+    )
+
+    fun materializeExhausted(id: Long): Exhausted = Exhausted(
+        id = id,
+        order = PrescriberOrderView(system.get(id, "order") as Long),
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        daysSupply = (system.get(id, "daysSupply") as BigDecimal).intValueExact(),
+        refillsAuthorized = (system.get(id, "refillsAuthorized") as BigDecimal).intValueExact(),
+        directions = system.get(id, "directions") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        fillsRecorded = (system.get(id, "fillsRecorded") as BigDecimal).intValueExact(),
+        refillsRemaining = (system.get(id, "refillsRemaining") as BigDecimal).intValueExact(),
+        lastFilledOn = system.get(id, "lastFilledOn") as LocalDate?,
+        firstFilledOn = system.get(id, "firstFilledOn") as LocalDate?,
+        discontinuations = (system.get(id, "discontinuations") as List<*>).map { DiscontinuationView(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        pharmacistAlerts = (system.get(id, "pharmacistAlerts") as List<*>).map { PharmacistAlertView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        fillRefusals = (system.get(id, "fillRefusals") as List<*>).map { FillRefusalView(it as Long) },
+        refillTasks = (system.get(id, "refillTasks") as List<*>).map { RefillTaskView(it as Long) },
+        refillRefusals = (system.get(id, "refillRefusals") as List<*>).map { RefillRefusalView(it as Long) },
+        authorisationRequests = (system.get(id, "authorisationRequests") as List<*>).map { AuthorisationRequestView(it as Long) },
+        autoRefillEnrolments = (system.get(id, "autoRefillEnrolments") as List<*>).map { AutoRefillEnrolmentView(it as Long) },
+        autoRefillCancellations = (system.get(id, "autoRefillCancellations") as List<*>).map { AutoRefillCancellationView(it as Long) },
+    )
+
+    fun materializeCurrent(id: Long): Current = Current(
+        id = id,
+        order = PrescriberOrderView(system.get(id, "order") as Long),
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        daysSupply = (system.get(id, "daysSupply") as BigDecimal).intValueExact(),
+        refillsAuthorized = (system.get(id, "refillsAuthorized") as BigDecimal).intValueExact(),
+        directions = system.get(id, "directions") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        fillsRecorded = (system.get(id, "fillsRecorded") as BigDecimal).intValueExact(),
+        refillsRemaining = (system.get(id, "refillsRemaining") as BigDecimal).intValueExact(),
+        lastFilledOn = system.get(id, "lastFilledOn") as LocalDate?,
+        firstFilledOn = system.get(id, "firstFilledOn") as LocalDate?,
+        discontinuations = (system.get(id, "discontinuations") as List<*>).map { DiscontinuationView(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        pharmacistAlerts = (system.get(id, "pharmacistAlerts") as List<*>).map { PharmacistAlertView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        fillRefusals = (system.get(id, "fillRefusals") as List<*>).map { FillRefusalView(it as Long) },
+        refillTasks = (system.get(id, "refillTasks") as List<*>).map { RefillTaskView(it as Long) },
+        refillRefusals = (system.get(id, "refillRefusals") as List<*>).map { RefillRefusalView(it as Long) },
+        authorisationRequests = (system.get(id, "authorisationRequests") as List<*>).map { AuthorisationRequestView(it as Long) },
+        autoRefillEnrolments = (system.get(id, "autoRefillEnrolments") as List<*>).map { AutoRefillEnrolmentView(it as Long) },
+        autoRefillCancellations = (system.get(id, "autoRefillCancellations") as List<*>).map { AutoRefillCancellationView(it as Long) },
+    )
+
+    fun materializeActivePrescription(id: Long): ActivePrescription = ActivePrescription(
+        id = id,
+        order = PrescriberOrderView(system.get(id, "order") as Long),
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        daysSupply = (system.get(id, "daysSupply") as BigDecimal).intValueExact(),
+        refillsAuthorized = (system.get(id, "refillsAuthorized") as BigDecimal).intValueExact(),
+        directions = system.get(id, "directions") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        fillsRecorded = (system.get(id, "fillsRecorded") as BigDecimal).intValueExact(),
+        refillsRemaining = (system.get(id, "refillsRemaining") as BigDecimal).intValueExact(),
+        lastFilledOn = system.get(id, "lastFilledOn") as LocalDate?,
+        firstFilledOn = system.get(id, "firstFilledOn") as LocalDate?,
+        discontinuations = (system.get(id, "discontinuations") as List<*>).map { DiscontinuationView(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        pharmacistAlerts = (system.get(id, "pharmacistAlerts") as List<*>).map { PharmacistAlertView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        fillRefusals = (system.get(id, "fillRefusals") as List<*>).map { FillRefusalView(it as Long) },
+        refillTasks = (system.get(id, "refillTasks") as List<*>).map { RefillTaskView(it as Long) },
+        refillRefusals = (system.get(id, "refillRefusals") as List<*>).map { RefillRefusalView(it as Long) },
+        authorisationRequests = (system.get(id, "authorisationRequests") as List<*>).map { AuthorisationRequestView(it as Long) },
+        autoRefillEnrolments = (system.get(id, "autoRefillEnrolments") as List<*>).map { AutoRefillEnrolmentView(it as Long) },
+        autoRefillCancellations = (system.get(id, "autoRefillCancellations") as List<*>).map { AutoRefillCancellationView(it as Long) },
+    )
+
+    fun materializeFilledPrescription(id: Long): FilledPrescription = FilledPrescription(
+        id = id,
+        order = PrescriberOrderView(system.get(id, "order") as Long),
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        daysSupply = (system.get(id, "daysSupply") as BigDecimal).intValueExact(),
+        refillsAuthorized = (system.get(id, "refillsAuthorized") as BigDecimal).intValueExact(),
+        directions = system.get(id, "directions") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        fillsRecorded = (system.get(id, "fillsRecorded") as BigDecimal).intValueExact(),
+        refillsRemaining = (system.get(id, "refillsRemaining") as BigDecimal).intValueExact(),
+        lastFilledOn = system.get(id, "lastFilledOn") as LocalDate?,
+        firstFilledOn = system.get(id, "firstFilledOn") as LocalDate?,
+        discontinuations = (system.get(id, "discontinuations") as List<*>).map { DiscontinuationView(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        pharmacistAlerts = (system.get(id, "pharmacistAlerts") as List<*>).map { PharmacistAlertView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        fillRefusals = (system.get(id, "fillRefusals") as List<*>).map { FillRefusalView(it as Long) },
+        refillTasks = (system.get(id, "refillTasks") as List<*>).map { RefillTaskView(it as Long) },
+        refillRefusals = (system.get(id, "refillRefusals") as List<*>).map { RefillRefusalView(it as Long) },
+        authorisationRequests = (system.get(id, "authorisationRequests") as List<*>).map { AuthorisationRequestView(it as Long) },
+        autoRefillEnrolments = (system.get(id, "autoRefillEnrolments") as List<*>).map { AutoRefillEnrolmentView(it as Long) },
+        autoRefillCancellations = (system.get(id, "autoRefillCancellations") as List<*>).map { AutoRefillCancellationView(it as Long) },
+    )
+
+    fun materializeVoided(id: Long): Voided = Voided(
+        id = id,
+        order = PrescriberOrderView(system.get(id, "order") as Long),
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        daysSupply = (system.get(id, "daysSupply") as BigDecimal).intValueExact(),
+        refillsAuthorized = (system.get(id, "refillsAuthorized") as BigDecimal).intValueExact(),
+        directions = system.get(id, "directions") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        fillsRecorded = (system.get(id, "fillsRecorded") as BigDecimal).intValueExact(),
+        refillsRemaining = (system.get(id, "refillsRemaining") as BigDecimal).intValueExact(),
+        lastFilledOn = system.get(id, "lastFilledOn") as LocalDate?,
+        firstFilledOn = system.get(id, "firstFilledOn") as LocalDate?,
+        discontinuations = (system.get(id, "discontinuations") as List<*>).map { DiscontinuationView(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        pharmacistAlerts = (system.get(id, "pharmacistAlerts") as List<*>).map { PharmacistAlertView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        fillRefusals = (system.get(id, "fillRefusals") as List<*>).map { FillRefusalView(it as Long) },
+        refillTasks = (system.get(id, "refillTasks") as List<*>).map { RefillTaskView(it as Long) },
+        refillRefusals = (system.get(id, "refillRefusals") as List<*>).map { RefillRefusalView(it as Long) },
+        authorisationRequests = (system.get(id, "authorisationRequests") as List<*>).map { AuthorisationRequestView(it as Long) },
+        autoRefillEnrolments = (system.get(id, "autoRefillEnrolments") as List<*>).map { AutoRefillEnrolmentView(it as Long) },
+        autoRefillCancellations = (system.get(id, "autoRefillCancellations") as List<*>).map { AutoRefillCancellationView(it as Long) },
+    )
+
+    fun materializeAllergyConflict(id: Long): AllergyConflict = AllergyConflict(
+        id = id,
+        order = PrescriberOrderView(system.get(id, "order") as Long),
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        daysSupply = (system.get(id, "daysSupply") as BigDecimal).intValueExact(),
+        refillsAuthorized = (system.get(id, "refillsAuthorized") as BigDecimal).intValueExact(),
+        directions = system.get(id, "directions") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        fillsRecorded = (system.get(id, "fillsRecorded") as BigDecimal).intValueExact(),
+        refillsRemaining = (system.get(id, "refillsRemaining") as BigDecimal).intValueExact(),
+        lastFilledOn = system.get(id, "lastFilledOn") as LocalDate?,
+        firstFilledOn = system.get(id, "firstFilledOn") as LocalDate?,
+        discontinuations = (system.get(id, "discontinuations") as List<*>).map { DiscontinuationView(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        pharmacistAlerts = (system.get(id, "pharmacistAlerts") as List<*>).map { PharmacistAlertView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        fillRefusals = (system.get(id, "fillRefusals") as List<*>).map { FillRefusalView(it as Long) },
+        refillTasks = (system.get(id, "refillTasks") as List<*>).map { RefillTaskView(it as Long) },
+        refillRefusals = (system.get(id, "refillRefusals") as List<*>).map { RefillRefusalView(it as Long) },
+        authorisationRequests = (system.get(id, "authorisationRequests") as List<*>).map { AuthorisationRequestView(it as Long) },
+        autoRefillEnrolments = (system.get(id, "autoRefillEnrolments") as List<*>).map { AutoRefillEnrolmentView(it as Long) },
+        autoRefillCancellations = (system.get(id, "autoRefillCancellations") as List<*>).map { AutoRefillCancellationView(it as Long) },
+    )
+
+    fun materializeInteractionConflict(id: Long): InteractionConflict = InteractionConflict(
+        id = id,
+        order = PrescriberOrderView(system.get(id, "order") as Long),
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        daysSupply = (system.get(id, "daysSupply") as BigDecimal).intValueExact(),
+        refillsAuthorized = (system.get(id, "refillsAuthorized") as BigDecimal).intValueExact(),
+        directions = system.get(id, "directions") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        fillsRecorded = (system.get(id, "fillsRecorded") as BigDecimal).intValueExact(),
+        refillsRemaining = (system.get(id, "refillsRemaining") as BigDecimal).intValueExact(),
+        lastFilledOn = system.get(id, "lastFilledOn") as LocalDate?,
+        firstFilledOn = system.get(id, "firstFilledOn") as LocalDate?,
+        discontinuations = (system.get(id, "discontinuations") as List<*>).map { DiscontinuationView(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        pharmacistAlerts = (system.get(id, "pharmacistAlerts") as List<*>).map { PharmacistAlertView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        fillRefusals = (system.get(id, "fillRefusals") as List<*>).map { FillRefusalView(it as Long) },
+        refillTasks = (system.get(id, "refillTasks") as List<*>).map { RefillTaskView(it as Long) },
+        refillRefusals = (system.get(id, "refillRefusals") as List<*>).map { RefillRefusalView(it as Long) },
+        authorisationRequests = (system.get(id, "authorisationRequests") as List<*>).map { AuthorisationRequestView(it as Long) },
+        autoRefillEnrolments = (system.get(id, "autoRefillEnrolments") as List<*>).map { AutoRefillEnrolmentView(it as Long) },
+        autoRefillCancellations = (system.get(id, "autoRefillCancellations") as List<*>).map { AutoRefillCancellationView(it as Long) },
+    )
+
+    fun materializeCleared(id: Long): Cleared = Cleared(
+        id = id,
+        order = PrescriberOrderView(system.get(id, "order") as Long),
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        daysSupply = (system.get(id, "daysSupply") as BigDecimal).intValueExact(),
+        refillsAuthorized = (system.get(id, "refillsAuthorized") as BigDecimal).intValueExact(),
+        directions = system.get(id, "directions") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        fillsRecorded = (system.get(id, "fillsRecorded") as BigDecimal).intValueExact(),
+        refillsRemaining = (system.get(id, "refillsRemaining") as BigDecimal).intValueExact(),
+        lastFilledOn = system.get(id, "lastFilledOn") as LocalDate?,
+        firstFilledOn = system.get(id, "firstFilledOn") as LocalDate?,
+        discontinuations = (system.get(id, "discontinuations") as List<*>).map { DiscontinuationView(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        pharmacistAlerts = (system.get(id, "pharmacistAlerts") as List<*>).map { PharmacistAlertView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        fillRefusals = (system.get(id, "fillRefusals") as List<*>).map { FillRefusalView(it as Long) },
+        refillTasks = (system.get(id, "refillTasks") as List<*>).map { RefillTaskView(it as Long) },
+        refillRefusals = (system.get(id, "refillRefusals") as List<*>).map { RefillRefusalView(it as Long) },
+        authorisationRequests = (system.get(id, "authorisationRequests") as List<*>).map { AuthorisationRequestView(it as Long) },
+        autoRefillEnrolments = (system.get(id, "autoRefillEnrolments") as List<*>).map { AutoRefillEnrolmentView(it as Long) },
+        autoRefillCancellations = (system.get(id, "autoRefillCancellations") as List<*>).map { AutoRefillCancellationView(it as Long) },
+    )
+
+    fun materializeFillable(id: Long): Fillable = Fillable(
+        id = id,
+        order = PrescriberOrderView(system.get(id, "order") as Long),
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        daysSupply = (system.get(id, "daysSupply") as BigDecimal).intValueExact(),
+        refillsAuthorized = (system.get(id, "refillsAuthorized") as BigDecimal).intValueExact(),
+        directions = system.get(id, "directions") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        fillsRecorded = (system.get(id, "fillsRecorded") as BigDecimal).intValueExact(),
+        refillsRemaining = (system.get(id, "refillsRemaining") as BigDecimal).intValueExact(),
+        lastFilledOn = system.get(id, "lastFilledOn") as LocalDate?,
+        firstFilledOn = system.get(id, "firstFilledOn") as LocalDate?,
+        discontinuations = (system.get(id, "discontinuations") as List<*>).map { DiscontinuationView(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        pharmacistAlerts = (system.get(id, "pharmacistAlerts") as List<*>).map { PharmacistAlertView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        fillRefusals = (system.get(id, "fillRefusals") as List<*>).map { FillRefusalView(it as Long) },
+        refillTasks = (system.get(id, "refillTasks") as List<*>).map { RefillTaskView(it as Long) },
+        refillRefusals = (system.get(id, "refillRefusals") as List<*>).map { RefillRefusalView(it as Long) },
+        authorisationRequests = (system.get(id, "authorisationRequests") as List<*>).map { AuthorisationRequestView(it as Long) },
+        autoRefillEnrolments = (system.get(id, "autoRefillEnrolments") as List<*>).map { AutoRefillEnrolmentView(it as Long) },
+        autoRefillCancellations = (system.get(id, "autoRefillCancellations") as List<*>).map { AutoRefillCancellationView(it as Long) },
+    )
+
+    fun materializeMultiplePrescribers(id: Long): MultiplePrescribers = MultiplePrescribers(
+        id = id,
+        name = system.get(id, "name") as String,
+        birthDate = system.get(id, "birthDate") as LocalDate,
+        phone = system.get(id, "phone") as String,
+        allergies = (system.get(id, "allergies") as List<*>).map { IngredientView(it as Long) },
+        plan = (system.get(id, "plan") as Long?)?.let { InsurancePlanView(it) },
+        prescriptions = (system.get(id, "prescriptions") as List<*>).map { PrescriptionView(it as Long) },
+        recallNotices = (system.get(id, "recallNotices") as List<*>).map { RecallNoticeView(it as Long) },
+        notices = (system.get(id, "notices") as List<*>).map { NoticeView(it as Long) },
+        prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { PrescriberOrderView(it as Long) },
+    )
+
+    fun materializeVerifiedFill(id: Long): VerifiedFill = VerifiedFill(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        lot = StockLotView(system.get(id, "lot") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        fillNumber = (system.get(id, "fillNumber") as BigDecimal).intValueExact(),
+        filledBy = StaffView(system.get(id, "filledBy") as Long),
+        unitPrice = system.get(id, "unitPrice") as BigDecimal,
+        filledOn = system.get(id, "filledOn") as LocalDate,
+        filledAt = system.get(id, "filledAt") as Instant,
+        total = system.get(id, "total") as BigDecimal,
+        amountDue = system.get(id, "amountDue") as BigDecimal,
+        recallNotices = (system.get(id, "recallNotices") as List<*>).map { RecallNoticeView(it as Long) },
+        controlledLogEntrys = (system.get(id, "controlledLogEntrys") as List<*>).map { ControlledLogEntryView(it as Long) },
+        verifications = (system.get(id, "verifications") as List<*>).map { VerificationView(it as Long) },
+        counsellings = (system.get(id, "counsellings") as List<*>).map { CounsellingView(it as Long) },
+        returnToStocks = (system.get(id, "returnToStocks") as List<*>).map { ReturnToStockView(it as Long) },
+        counterExits = (system.get(id, "counterExits") as List<*>).map { CounterExitView(it as Long) },
+        pickups = (system.get(id, "pickups") as List<*>).map { PickupView(it as Long) },
+        counterAlerts = (system.get(id, "counterAlerts") as List<*>).map { CounterAlertView(it as Long) },
+        claims = (system.get(id, "claims") as List<*>).map { ClaimView(it as Long) },
+    )
+
+    fun materializeRejectedFill(id: Long): RejectedFill = RejectedFill(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        lot = StockLotView(system.get(id, "lot") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        fillNumber = (system.get(id, "fillNumber") as BigDecimal).intValueExact(),
+        filledBy = StaffView(system.get(id, "filledBy") as Long),
+        unitPrice = system.get(id, "unitPrice") as BigDecimal,
+        filledOn = system.get(id, "filledOn") as LocalDate,
+        filledAt = system.get(id, "filledAt") as Instant,
+        total = system.get(id, "total") as BigDecimal,
+        amountDue = system.get(id, "amountDue") as BigDecimal,
+        recallNotices = (system.get(id, "recallNotices") as List<*>).map { RecallNoticeView(it as Long) },
+        controlledLogEntrys = (system.get(id, "controlledLogEntrys") as List<*>).map { ControlledLogEntryView(it as Long) },
+        verifications = (system.get(id, "verifications") as List<*>).map { VerificationView(it as Long) },
+        counsellings = (system.get(id, "counsellings") as List<*>).map { CounsellingView(it as Long) },
+        returnToStocks = (system.get(id, "returnToStocks") as List<*>).map { ReturnToStockView(it as Long) },
+        counterExits = (system.get(id, "counterExits") as List<*>).map { CounterExitView(it as Long) },
+        pickups = (system.get(id, "pickups") as List<*>).map { PickupView(it as Long) },
+        counterAlerts = (system.get(id, "counterAlerts") as List<*>).map { CounterAlertView(it as Long) },
+        claims = (system.get(id, "claims") as List<*>).map { ClaimView(it as Long) },
+    )
+
+    fun materializeConsumingFill(id: Long): ConsumingFill = ConsumingFill(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        lot = StockLotView(system.get(id, "lot") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        fillNumber = (system.get(id, "fillNumber") as BigDecimal).intValueExact(),
+        filledBy = StaffView(system.get(id, "filledBy") as Long),
+        unitPrice = system.get(id, "unitPrice") as BigDecimal,
+        filledOn = system.get(id, "filledOn") as LocalDate,
+        filledAt = system.get(id, "filledAt") as Instant,
+        total = system.get(id, "total") as BigDecimal,
+        amountDue = system.get(id, "amountDue") as BigDecimal,
+        recallNotices = (system.get(id, "recallNotices") as List<*>).map { RecallNoticeView(it as Long) },
+        controlledLogEntrys = (system.get(id, "controlledLogEntrys") as List<*>).map { ControlledLogEntryView(it as Long) },
+        verifications = (system.get(id, "verifications") as List<*>).map { VerificationView(it as Long) },
+        counsellings = (system.get(id, "counsellings") as List<*>).map { CounsellingView(it as Long) },
+        returnToStocks = (system.get(id, "returnToStocks") as List<*>).map { ReturnToStockView(it as Long) },
+        counterExits = (system.get(id, "counterExits") as List<*>).map { CounterExitView(it as Long) },
+        pickups = (system.get(id, "pickups") as List<*>).map { PickupView(it as Long) },
+        counterAlerts = (system.get(id, "counterAlerts") as List<*>).map { CounterAlertView(it as Long) },
+        claims = (system.get(id, "claims") as List<*>).map { ClaimView(it as Long) },
+    )
+
+    fun materializeCounsellingDue(id: Long): CounsellingDue = CounsellingDue(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        lot = StockLotView(system.get(id, "lot") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        fillNumber = (system.get(id, "fillNumber") as BigDecimal).intValueExact(),
+        filledBy = StaffView(system.get(id, "filledBy") as Long),
+        unitPrice = system.get(id, "unitPrice") as BigDecimal,
+        filledOn = system.get(id, "filledOn") as LocalDate,
+        filledAt = system.get(id, "filledAt") as Instant,
+        total = system.get(id, "total") as BigDecimal,
+        amountDue = system.get(id, "amountDue") as BigDecimal,
+        recallNotices = (system.get(id, "recallNotices") as List<*>).map { RecallNoticeView(it as Long) },
+        controlledLogEntrys = (system.get(id, "controlledLogEntrys") as List<*>).map { ControlledLogEntryView(it as Long) },
+        verifications = (system.get(id, "verifications") as List<*>).map { VerificationView(it as Long) },
+        counsellings = (system.get(id, "counsellings") as List<*>).map { CounsellingView(it as Long) },
+        returnToStocks = (system.get(id, "returnToStocks") as List<*>).map { ReturnToStockView(it as Long) },
+        counterExits = (system.get(id, "counterExits") as List<*>).map { CounterExitView(it as Long) },
+        pickups = (system.get(id, "pickups") as List<*>).map { PickupView(it as Long) },
+        counterAlerts = (system.get(id, "counterAlerts") as List<*>).map { CounterAlertView(it as Long) },
+        claims = (system.get(id, "claims") as List<*>).map { ClaimView(it as Long) },
+    )
+
+    fun materializeReadyForPickup(id: Long): ReadyForPickup = ReadyForPickup(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        lot = StockLotView(system.get(id, "lot") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        fillNumber = (system.get(id, "fillNumber") as BigDecimal).intValueExact(),
+        filledBy = StaffView(system.get(id, "filledBy") as Long),
+        unitPrice = system.get(id, "unitPrice") as BigDecimal,
+        filledOn = system.get(id, "filledOn") as LocalDate,
+        filledAt = system.get(id, "filledAt") as Instant,
+        total = system.get(id, "total") as BigDecimal,
+        amountDue = system.get(id, "amountDue") as BigDecimal,
+        recallNotices = (system.get(id, "recallNotices") as List<*>).map { RecallNoticeView(it as Long) },
+        controlledLogEntrys = (system.get(id, "controlledLogEntrys") as List<*>).map { ControlledLogEntryView(it as Long) },
+        verifications = (system.get(id, "verifications") as List<*>).map { VerificationView(it as Long) },
+        counsellings = (system.get(id, "counsellings") as List<*>).map { CounsellingView(it as Long) },
+        returnToStocks = (system.get(id, "returnToStocks") as List<*>).map { ReturnToStockView(it as Long) },
+        counterExits = (system.get(id, "counterExits") as List<*>).map { CounterExitView(it as Long) },
+        pickups = (system.get(id, "pickups") as List<*>).map { PickupView(it as Long) },
+        counterAlerts = (system.get(id, "counterAlerts") as List<*>).map { CounterAlertView(it as Long) },
+        claims = (system.get(id, "claims") as List<*>).map { ClaimView(it as Long) },
+        readyOn = system.getAs(id, "ReadyForPickup", "readyOn") as LocalDate,
+    )
+
+    fun materializeUncollected(id: Long): Uncollected = Uncollected(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        lot = StockLotView(system.get(id, "lot") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        fillNumber = (system.get(id, "fillNumber") as BigDecimal).intValueExact(),
+        filledBy = StaffView(system.get(id, "filledBy") as Long),
+        unitPrice = system.get(id, "unitPrice") as BigDecimal,
+        filledOn = system.get(id, "filledOn") as LocalDate,
+        filledAt = system.get(id, "filledAt") as Instant,
+        total = system.get(id, "total") as BigDecimal,
+        amountDue = system.get(id, "amountDue") as BigDecimal,
+        recallNotices = (system.get(id, "recallNotices") as List<*>).map { RecallNoticeView(it as Long) },
+        controlledLogEntrys = (system.get(id, "controlledLogEntrys") as List<*>).map { ControlledLogEntryView(it as Long) },
+        verifications = (system.get(id, "verifications") as List<*>).map { VerificationView(it as Long) },
+        counsellings = (system.get(id, "counsellings") as List<*>).map { CounsellingView(it as Long) },
+        returnToStocks = (system.get(id, "returnToStocks") as List<*>).map { ReturnToStockView(it as Long) },
+        counterExits = (system.get(id, "counterExits") as List<*>).map { CounterExitView(it as Long) },
+        pickups = (system.get(id, "pickups") as List<*>).map { PickupView(it as Long) },
+        counterAlerts = (system.get(id, "counterAlerts") as List<*>).map { CounterAlertView(it as Long) },
+        claims = (system.get(id, "claims") as List<*>).map { ClaimView(it as Long) },
+        readyOn = system.get(id, "readyOn") as LocalDate,
+    )
+
+    fun materializeOpenRefillTask(id: Long): OpenRefillTask = OpenRefillTask(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        requestKey = system.get(id, "requestKey") as String?,
+        fillsAtRequest = (system.get(id, "fillsAtRequest") as BigDecimal).intValueExact(),
+        requestedOn = system.get(id, "requestedOn") as LocalDate,
+        taskNags = (system.get(id, "taskNags") as List<*>).map { TaskNagView(it as Long) },
+    )
+
+    fun materializeOverdueRefillTask(id: Long): OverdueRefillTask = OverdueRefillTask(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        requestKey = system.get(id, "requestKey") as String?,
+        fillsAtRequest = (system.get(id, "fillsAtRequest") as BigDecimal).intValueExact(),
+        requestedOn = system.get(id, "requestedOn") as LocalDate,
+        taskNags = (system.get(id, "taskNags") as List<*>).map { TaskNagView(it as Long) },
+    )
+
+    fun materializeAutoRefill(id: Long): AutoRefill = AutoRefill(
+        id = id,
+        order = PrescriberOrderView(system.get(id, "order") as Long),
+        drug = DrugView(system.get(id, "drug") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        daysSupply = (system.get(id, "daysSupply") as BigDecimal).intValueExact(),
+        refillsAuthorized = (system.get(id, "refillsAuthorized") as BigDecimal).intValueExact(),
+        directions = system.get(id, "directions") as String,
+        expiresOn = system.get(id, "expiresOn") as LocalDate,
+        fillsRecorded = (system.get(id, "fillsRecorded") as BigDecimal).intValueExact(),
+        refillsRemaining = (system.get(id, "refillsRemaining") as BigDecimal).intValueExact(),
+        lastFilledOn = system.get(id, "lastFilledOn") as LocalDate?,
+        firstFilledOn = system.get(id, "firstFilledOn") as LocalDate?,
+        discontinuations = (system.get(id, "discontinuations") as List<*>).map { DiscontinuationView(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
+        entryVoids = (system.get(id, "entryVoids") as List<*>).map { EntryVoidView(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { ConflictOverrideView(it as Long) },
+        pharmacistAlerts = (system.get(id, "pharmacistAlerts") as List<*>).map { PharmacistAlertView(it as Long) },
+        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { MonitoringCheckView(it as Long) },
+        fills = (system.get(id, "fills") as List<*>).map { FillView(it as Long) },
+        fillRefusals = (system.get(id, "fillRefusals") as List<*>).map { FillRefusalView(it as Long) },
+        refillTasks = (system.get(id, "refillTasks") as List<*>).map { RefillTaskView(it as Long) },
+        refillRefusals = (system.get(id, "refillRefusals") as List<*>).map { RefillRefusalView(it as Long) },
+        authorisationRequests = (system.get(id, "authorisationRequests") as List<*>).map { AuthorisationRequestView(it as Long) },
+        autoRefillEnrolments = (system.get(id, "autoRefillEnrolments") as List<*>).map { AutoRefillEnrolmentView(it as Long) },
+        autoRefillCancellations = (system.get(id, "autoRefillCancellations") as List<*>).map { AutoRefillCancellationView(it as Long) },
+    )
+
+    fun materializeInsuredFill(id: Long): InsuredFill = InsuredFill(
+        id = id,
+        prescription = PrescriptionView(system.get(id, "prescription") as Long),
+        lot = StockLotView(system.get(id, "lot") as Long),
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        fillNumber = (system.get(id, "fillNumber") as BigDecimal).intValueExact(),
+        filledBy = StaffView(system.get(id, "filledBy") as Long),
+        unitPrice = system.get(id, "unitPrice") as BigDecimal,
+        filledOn = system.get(id, "filledOn") as LocalDate,
+        filledAt = system.get(id, "filledAt") as Instant,
+        total = system.get(id, "total") as BigDecimal,
+        amountDue = system.get(id, "amountDue") as BigDecimal,
+        recallNotices = (system.get(id, "recallNotices") as List<*>).map { RecallNoticeView(it as Long) },
+        controlledLogEntrys = (system.get(id, "controlledLogEntrys") as List<*>).map { ControlledLogEntryView(it as Long) },
+        verifications = (system.get(id, "verifications") as List<*>).map { VerificationView(it as Long) },
+        counsellings = (system.get(id, "counsellings") as List<*>).map { CounsellingView(it as Long) },
+        returnToStocks = (system.get(id, "returnToStocks") as List<*>).map { ReturnToStockView(it as Long) },
+        counterExits = (system.get(id, "counterExits") as List<*>).map { CounterExitView(it as Long) },
+        pickups = (system.get(id, "pickups") as List<*>).map { PickupView(it as Long) },
+        counterAlerts = (system.get(id, "counterAlerts") as List<*>).map { CounterAlertView(it as Long) },
+        claims = (system.get(id, "claims") as List<*>).map { ClaimView(it as Long) },
+        insurer = InsurancePlanView(system.getAs(id, "InsuredFill", "insurer") as Long),
+    )
+
+    fun materializePendingClaim(id: Long): PendingClaim = PendingClaim(
+        id = id,
+        fill = FillView(system.get(id, "fill") as Long),
+        plan = InsurancePlanView(system.get(id, "plan") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        claimKey = system.get(id, "claimKey") as String,
+        submittedAt = system.get(id, "submittedAt") as Instant,
+        patientPays = system.get(id, "patientPays") as BigDecimal,
+        claimResponses = (system.get(id, "claimResponses") as List<*>).map { ClaimResponseView(it as Long) },
+        claimFollowUps = (system.get(id, "claimFollowUps") as List<*>).map { ClaimFollowUpView(it as Long) },
+    )
+
+    fun materializePaidClaim(id: Long): PaidClaim = PaidClaim(
+        id = id,
+        fill = FillView(system.get(id, "fill") as Long),
+        plan = InsurancePlanView(system.get(id, "plan") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        claimKey = system.get(id, "claimKey") as String,
+        submittedAt = system.get(id, "submittedAt") as Instant,
+        patientPays = system.get(id, "patientPays") as BigDecimal,
+        claimResponses = (system.get(id, "claimResponses") as List<*>).map { ClaimResponseView(it as Long) },
+        claimFollowUps = (system.get(id, "claimFollowUps") as List<*>).map { ClaimFollowUpView(it as Long) },
+    )
+
+    fun materializeRejectedClaim(id: Long): RejectedClaim = RejectedClaim(
+        id = id,
+        fill = FillView(system.get(id, "fill") as Long),
+        plan = InsurancePlanView(system.get(id, "plan") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        claimKey = system.get(id, "claimKey") as String,
+        submittedAt = system.get(id, "submittedAt") as Instant,
+        patientPays = system.get(id, "patientPays") as BigDecimal,
+        claimResponses = (system.get(id, "claimResponses") as List<*>).map { ClaimResponseView(it as Long) },
+        claimFollowUps = (system.get(id, "claimFollowUps") as List<*>).map { ClaimFollowUpView(it as Long) },
+    )
+
+    fun materializeStaleClaim(id: Long): StaleClaim = StaleClaim(
+        id = id,
+        fill = FillView(system.get(id, "fill") as Long),
+        plan = InsurancePlanView(system.get(id, "plan") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        claimKey = system.get(id, "claimKey") as String,
+        submittedAt = system.get(id, "submittedAt") as Instant,
+        patientPays = system.get(id, "patientPays") as BigDecimal,
+        claimResponses = (system.get(id, "claimResponses") as List<*>).map { ClaimResponseView(it as Long) },
+        claimFollowUps = (system.get(id, "claimFollowUps") as List<*>).map { ClaimFollowUpView(it as Long) },
+    )
+
     companion object {
         private val SPEC = """
 -- Pharmacy: a retail pharmacy — prescriptions arriving from prescribers,
@@ -2565,6 +4276,2288 @@ rule SnapshotControlled when Controlled on Monthly {
 }
 """
     }
+}
+
+// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
+// References are typed handles (views); navigating one is a further read.
+
+data class Staff(
+    override val id: Long,
+    val name: String,
+    val role: String,
+    val licenceRenewals: List<PharmacySystem.LicenceRenewalView>,
+    val licenceReminders: List<PharmacySystem.LicenceReminderView>,
+    val stockAdjustments: List<PharmacySystem.StockAdjustmentView>,
+    val countConfirmations: List<PharmacySystem.CountConfirmationView>,
+    val prescriberOrders: List<PharmacySystem.PrescriberOrderView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val verifications: List<PharmacySystem.VerificationView>,
+    val counsellings: List<PharmacySystem.CounsellingView>,
+) : View
+
+data class LicenceRenewal(
+    override val id: Long,
+    val pharmacist: PharmacySystem.StaffView,
+    val licenceNumber: String,
+    val expiresOn: LocalDate,
+) : View
+
+data class LicenceReminder(
+    override val id: Long,
+    val pharmacist: PharmacySystem.StaffView,
+    val sentOn: LocalDate,
+) : View
+
+data class Ingredient(
+    override val id: Long,
+    val name: String,
+    val drugs: List<PharmacySystem.DrugView>,
+    val patients: List<PharmacySystem.PatientView>,
+) : View
+
+data class Drug(
+    override val id: Long,
+    val name: String,
+    val strength: String,
+    val form: String,
+    val schedule: Int,
+    val requiresCounselling: Boolean,
+    val ingredients: List<PharmacySystem.IngredientView>,
+    val reorderPoint: Int,
+    val onHand: Int,
+    val unitPrice: BigDecimal,
+    val interactions: List<PharmacySystem.InteractionView>,
+    val priceChanges: List<PharmacySystem.PriceChangeView>,
+    val priceWithdrawals: List<PharmacySystem.PriceWithdrawalView>,
+    val stockLots: List<PharmacySystem.StockLotView>,
+    val purchaseOrders: List<PharmacySystem.PurchaseOrderView>,
+    val prescriptions: List<PharmacySystem.PrescriptionView>,
+    val controlledLogEntrys: List<PharmacySystem.ControlledLogEntryView>,
+    val controlledInventorySnapshots: List<PharmacySystem.ControlledInventorySnapshotView>,
+) : View
+
+data class Interaction(
+    override val id: Long,
+    val drugA: PharmacySystem.DrugView,
+    val drugB: PharmacySystem.DrugView,
+    val severity: String,
+) : View
+
+data class PriceChange(
+    override val id: Long,
+    val drug: PharmacySystem.DrugView,
+    val effectiveOn: LocalDate,
+    val unitPrice: BigDecimal,
+    val priceWithdrawalRefusals: List<PharmacySystem.PriceWithdrawalRefusalView>,
+) : View
+
+data class PriceWithdrawal(
+    override val id: Long,
+    val drug: PharmacySystem.DrugView,
+    val effectiveOn: LocalDate,
+    val unitPrice: BigDecimal,
+    val reason: String,
+    val withdrawnOn: Instant,
+) : View
+
+data class PriceWithdrawalRefusal(
+    override val id: Long,
+    val priceChange: PharmacySystem.PriceChangeView?,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class StockLot(
+    override val id: Long,
+    val drug: PharmacySystem.DrugView,
+    val lotNumber: String,
+    val expiresOn: LocalDate,
+    val received: Int,
+    val purchaseOrder: PharmacySystem.PurchaseOrderView?,
+    val onHand: Int,
+    val stockAdjustments: List<PharmacySystem.StockAdjustmentView>,
+    val countConfirmations: List<PharmacySystem.CountConfirmationView>,
+    val quarantines: List<PharmacySystem.QuarantineView>,
+    val recalls: List<PharmacySystem.RecallView>,
+    val fills: List<PharmacySystem.FillView>,
+) : View
+
+data class StockAdjustment(
+    override val id: Long,
+    val lot: PharmacySystem.StockLotView,
+    val delta: Int,
+    val countedBy: PharmacySystem.StaffView,
+    val countedOn: Instant,
+) : View
+
+data class CountConfirmation(
+    override val id: Long,
+    val lot: PharmacySystem.StockLotView,
+    val counted: Int,
+    val countedBy: PharmacySystem.StaffView,
+    val countedOn: Instant,
+) : View
+
+data class Quarantine(
+    override val id: Long,
+    val lot: PharmacySystem.StockLotView,
+    val reason: String,
+    val quarantinedOn: Instant,
+) : View
+
+data class Recall(
+    override val id: Long,
+    val lot: PharmacySystem.StockLotView,
+    val reference: String,
+    val issuedOn: LocalDate,
+) : View
+
+data class RecallNotice(
+    override val id: Long,
+    val fill: PharmacySystem.FillView,
+    val patient: PharmacySystem.PatientView,
+    val reference: String,
+    val noticedOn: Instant,
+) : View
+
+data class PurchaseOrder(
+    override val id: Long,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val orderedOn: LocalDate,
+    val stockLots: List<PharmacySystem.StockLotView>,
+) : View
+
+data class InsurancePlan(
+    override val id: Long,
+    val name: String,
+    val coversControlled: Boolean,
+    val patients: List<PharmacySystem.PatientView>,
+    val claims: List<PharmacySystem.ClaimView>,
+) : View
+
+data class Patient(
+    override val id: Long,
+    val name: String,
+    val birthDate: LocalDate,
+    val phone: String,
+    val allergies: List<PharmacySystem.IngredientView>,
+    val plan: PharmacySystem.InsurancePlanView?,
+    val prescriptions: List<PharmacySystem.PrescriptionView>,
+    val recallNotices: List<PharmacySystem.RecallNoticeView>,
+    val notices: List<PharmacySystem.NoticeView>,
+    val prescriberOrders: List<PharmacySystem.PrescriberOrderView>,
+) : View
+
+data class Prescriber(
+    override val id: Long,
+    val name: String,
+    val deaNumber: String,
+    val fax: String,
+    val notices: List<PharmacySystem.NoticeView>,
+    val prescriberOrders: List<PharmacySystem.PrescriberOrderView>,
+    val discontinuations: List<PharmacySystem.DiscontinuationView>,
+) : View
+
+data class Notice(
+    override val id: Long,
+    val recipient: PharmacySystem.RecipientView,
+    val subject: String,
+    val sentOn: Instant,
+    val contact: String,
+) : View
+
+data class PrescriberOrder(
+    override val id: Long,
+    val prescriber: PharmacySystem.PrescriberView,
+    val patient: PharmacySystem.PatientView,
+    val writtenOn: LocalDate,
+    val enteredBy: PharmacySystem.StaffView,
+    val prescriptions: List<PharmacySystem.PrescriptionView>,
+) : View
+
+data class Prescription(
+    override val id: Long,
+    val order: PharmacySystem.PrescriberOrderView,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val daysSupply: Int,
+    val refillsAuthorized: Int,
+    val directions: String,
+    val expiresOn: LocalDate,
+    val fillsRecorded: Int,
+    val refillsRemaining: Int,
+    val lastFilledOn: LocalDate?,
+    val firstFilledOn: LocalDate?,
+    val discontinuations: List<PharmacySystem.DiscontinuationView>,
+    val correctionRefusals: List<PharmacySystem.CorrectionRefusalView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val voidRefusals: List<PharmacySystem.VoidRefusalView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val pharmacistAlerts: List<PharmacySystem.PharmacistAlertView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val fillRefusals: List<PharmacySystem.FillRefusalView>,
+    val refillTasks: List<PharmacySystem.RefillTaskView>,
+    val refillRefusals: List<PharmacySystem.RefillRefusalView>,
+    val authorisationRequests: List<PharmacySystem.AuthorisationRequestView>,
+    val autoRefillEnrolments: List<PharmacySystem.AutoRefillEnrolmentView>,
+    val autoRefillCancellations: List<PharmacySystem.AutoRefillCancellationView>,
+) : View
+
+data class Discontinuation(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val prescriber: PharmacySystem.PrescriberView,
+    val reason: String,
+) : View
+
+data class CorrectionRefusal(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class EntryVoid(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val pharmacist: PharmacySystem.StaffView,
+    val reason: String,
+    val voidedOn: Instant,
+) : View
+
+data class VoidRefusal(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class ConflictOverride(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val pharmacist: PharmacySystem.StaffView,
+    val justification: String,
+) : View
+
+data class PharmacistAlert(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val kind: String,
+    val raisedOn: Instant,
+) : View
+
+data class MonitoringCheck(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val pharmacist: PharmacySystem.StaffView,
+    val checkedAt: Instant,
+    val cleared: Boolean,
+) : View
+
+data class Fill(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val lot: PharmacySystem.StockLotView,
+    val quantity: Int,
+    val fillNumber: Int,
+    val filledBy: PharmacySystem.StaffView,
+    val unitPrice: BigDecimal,
+    val filledOn: LocalDate,
+    val filledAt: Instant,
+    val total: BigDecimal,
+    val amountDue: BigDecimal,
+    val recallNotices: List<PharmacySystem.RecallNoticeView>,
+    val controlledLogEntrys: List<PharmacySystem.ControlledLogEntryView>,
+    val verifications: List<PharmacySystem.VerificationView>,
+    val counsellings: List<PharmacySystem.CounsellingView>,
+    val returnToStocks: List<PharmacySystem.ReturnToStockView>,
+    val counterExits: List<PharmacySystem.CounterExitView>,
+    val pickups: List<PharmacySystem.PickupView>,
+    val counterAlerts: List<PharmacySystem.CounterAlertView>,
+    val claims: List<PharmacySystem.ClaimView>,
+) : View
+
+data class FillRefusal(
+    override val id: Long,
+    val requestKey: String,
+    val prescription: PharmacySystem.PrescriptionView,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class ControlledLogEntry(
+    override val id: Long,
+    val fill: PharmacySystem.FillView,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val balanceAfter: Int,
+    val loggedAt: Instant,
+) : View
+
+data class Verification(
+    override val id: Long,
+    val fill: PharmacySystem.FillView,
+    val pharmacist: PharmacySystem.StaffView,
+    val outcome: String,
+    val note: String,
+    val verifiedAt: Instant,
+) : View
+
+data class Counselling(
+    override val id: Long,
+    val fill: PharmacySystem.FillView,
+    val pharmacist: PharmacySystem.StaffView,
+    val notes: String,
+) : View
+
+data class ReturnToStock(
+    override val id: Long,
+    val fill: PharmacySystem.FillView,
+    val returnedOn: LocalDate,
+) : View
+
+data class CounterExit(
+    override val id: Long,
+    val fill: PharmacySystem.FillView,
+    val readyOn: LocalDate,
+    val leftOn: LocalDate,
+) : View
+
+data class Pickup(
+    override val id: Long,
+    val fill: PharmacySystem.FillView,
+    val collectedBy: String,
+    val amountPaid: BigDecimal,
+    val pickedUpAt: Instant,
+) : View
+
+data class CounterAlert(
+    override val id: Long,
+    val fill: PharmacySystem.FillView,
+    val raisedOn: Instant,
+) : View
+
+data class RefillTask(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val requestKey: String?,
+    val fillsAtRequest: Int,
+    val requestedOn: LocalDate,
+    val taskNags: List<PharmacySystem.TaskNagView>,
+) : View
+
+data class RefillRefusal(
+    override val id: Long,
+    val requestKey: String,
+    val prescription: PharmacySystem.PrescriptionView,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class AuthorisationRequest(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val requestedOn: Instant,
+) : View
+
+data class TaskNag(
+    override val id: Long,
+    val task: PharmacySystem.RefillTaskView,
+    val sentOn: LocalDate,
+) : View
+
+data class AutoRefillEnrolment(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+) : View
+
+data class AutoRefillCancellation(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+) : View
+
+data class Claim(
+    override val id: Long,
+    val fill: PharmacySystem.FillView,
+    val plan: PharmacySystem.InsurancePlanView,
+    val amount: BigDecimal,
+    val claimKey: String,
+    val submittedAt: Instant,
+    val patientPays: BigDecimal,
+    val claimResponses: List<PharmacySystem.ClaimResponseView>,
+    val claimFollowUps: List<PharmacySystem.ClaimFollowUpView>,
+) : View
+
+data class ClaimResponse(
+    override val id: Long,
+    val claim: PharmacySystem.ClaimView,
+    val outcome: String,
+    val paidAmount: BigDecimal,
+    val patientPays: BigDecimal,
+    val respondedAt: Instant,
+) : View
+
+data class ClaimFollowUp(
+    override val id: Long,
+    val claim: PharmacySystem.ClaimView,
+    val followedUpAt: Instant,
+) : View
+
+data class ControlledInventorySnapshot(
+    override val id: Long,
+    val drug: PharmacySystem.DrugView,
+    val onHand: Int,
+    val takenOn: LocalDate,
+) : View
+
+data class Pharmacist(
+    override val id: Long,
+    val name: String,
+    val role: String,
+    val licenceRenewals: List<PharmacySystem.LicenceRenewalView>,
+    val licenceReminders: List<PharmacySystem.LicenceReminderView>,
+    val stockAdjustments: List<PharmacySystem.StockAdjustmentView>,
+    val countConfirmations: List<PharmacySystem.CountConfirmationView>,
+    val prescriberOrders: List<PharmacySystem.PrescriberOrderView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val verifications: List<PharmacySystem.VerificationView>,
+    val counsellings: List<PharmacySystem.CounsellingView>,
+) : View
+
+data class Technician(
+    override val id: Long,
+    val name: String,
+    val role: String,
+    val licenceRenewals: List<PharmacySystem.LicenceRenewalView>,
+    val licenceReminders: List<PharmacySystem.LicenceReminderView>,
+    val stockAdjustments: List<PharmacySystem.StockAdjustmentView>,
+    val countConfirmations: List<PharmacySystem.CountConfirmationView>,
+    val prescriberOrders: List<PharmacySystem.PrescriberOrderView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val verifications: List<PharmacySystem.VerificationView>,
+    val counsellings: List<PharmacySystem.CounsellingView>,
+) : View
+
+data class Administrator(
+    override val id: Long,
+    val name: String,
+    val role: String,
+    val licenceRenewals: List<PharmacySystem.LicenceRenewalView>,
+    val licenceReminders: List<PharmacySystem.LicenceReminderView>,
+    val stockAdjustments: List<PharmacySystem.StockAdjustmentView>,
+    val countConfirmations: List<PharmacySystem.CountConfirmationView>,
+    val prescriberOrders: List<PharmacySystem.PrescriberOrderView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val verifications: List<PharmacySystem.VerificationView>,
+    val counsellings: List<PharmacySystem.CounsellingView>,
+) : View
+
+data class LicensedPharmacist(
+    override val id: Long,
+    val name: String,
+    val role: String,
+    val licenceRenewals: List<PharmacySystem.LicenceRenewalView>,
+    val licenceReminders: List<PharmacySystem.LicenceReminderView>,
+    val stockAdjustments: List<PharmacySystem.StockAdjustmentView>,
+    val countConfirmations: List<PharmacySystem.CountConfirmationView>,
+    val prescriberOrders: List<PharmacySystem.PrescriberOrderView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val verifications: List<PharmacySystem.VerificationView>,
+    val counsellings: List<PharmacySystem.CounsellingView>,
+) : View
+
+data class LicenceExpiringSoon(
+    override val id: Long,
+    val name: String,
+    val role: String,
+    val licenceRenewals: List<PharmacySystem.LicenceRenewalView>,
+    val licenceReminders: List<PharmacySystem.LicenceReminderView>,
+    val stockAdjustments: List<PharmacySystem.StockAdjustmentView>,
+    val countConfirmations: List<PharmacySystem.CountConfirmationView>,
+    val prescriberOrders: List<PharmacySystem.PrescriberOrderView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val verifications: List<PharmacySystem.VerificationView>,
+    val counsellings: List<PharmacySystem.CounsellingView>,
+) : View
+
+data class Controlled(
+    override val id: Long,
+    val name: String,
+    val strength: String,
+    val form: String,
+    val schedule: Int,
+    val requiresCounselling: Boolean,
+    val ingredients: List<PharmacySystem.IngredientView>,
+    val reorderPoint: Int,
+    val onHand: Int,
+    val unitPrice: BigDecimal,
+    val interactions: List<PharmacySystem.InteractionView>,
+    val priceChanges: List<PharmacySystem.PriceChangeView>,
+    val priceWithdrawals: List<PharmacySystem.PriceWithdrawalView>,
+    val stockLots: List<PharmacySystem.StockLotView>,
+    val purchaseOrders: List<PharmacySystem.PurchaseOrderView>,
+    val prescriptions: List<PharmacySystem.PrescriptionView>,
+    val controlledLogEntrys: List<PharmacySystem.ControlledLogEntryView>,
+    val controlledInventorySnapshots: List<PharmacySystem.ControlledInventorySnapshotView>,
+) : View
+
+data class ScheduleTwo(
+    override val id: Long,
+    val name: String,
+    val strength: String,
+    val form: String,
+    val schedule: Int,
+    val requiresCounselling: Boolean,
+    val ingredients: List<PharmacySystem.IngredientView>,
+    val reorderPoint: Int,
+    val onHand: Int,
+    val unitPrice: BigDecimal,
+    val interactions: List<PharmacySystem.InteractionView>,
+    val priceChanges: List<PharmacySystem.PriceChangeView>,
+    val priceWithdrawals: List<PharmacySystem.PriceWithdrawalView>,
+    val stockLots: List<PharmacySystem.StockLotView>,
+    val purchaseOrders: List<PharmacySystem.PurchaseOrderView>,
+    val prescriptions: List<PharmacySystem.PrescriptionView>,
+    val controlledLogEntrys: List<PharmacySystem.ControlledLogEntryView>,
+    val controlledInventorySnapshots: List<PharmacySystem.ControlledInventorySnapshotView>,
+) : View
+
+data class LowStock(
+    override val id: Long,
+    val name: String,
+    val strength: String,
+    val form: String,
+    val schedule: Int,
+    val requiresCounselling: Boolean,
+    val ingredients: List<PharmacySystem.IngredientView>,
+    val reorderPoint: Int,
+    val onHand: Int,
+    val unitPrice: BigDecimal,
+    val interactions: List<PharmacySystem.InteractionView>,
+    val priceChanges: List<PharmacySystem.PriceChangeView>,
+    val priceWithdrawals: List<PharmacySystem.PriceWithdrawalView>,
+    val stockLots: List<PharmacySystem.StockLotView>,
+    val purchaseOrders: List<PharmacySystem.PurchaseOrderView>,
+    val prescriptions: List<PharmacySystem.PrescriptionView>,
+    val controlledLogEntrys: List<PharmacySystem.ControlledLogEntryView>,
+    val controlledInventorySnapshots: List<PharmacySystem.ControlledInventorySnapshotView>,
+) : View
+
+data class EffectivePrice(
+    override val id: Long,
+    val drug: PharmacySystem.DrugView,
+    val effectiveOn: LocalDate,
+    val unitPrice: BigDecimal,
+    val priceWithdrawalRefusals: List<PharmacySystem.PriceWithdrawalRefusalView>,
+) : View
+
+data class ExpiredLot(
+    override val id: Long,
+    val drug: PharmacySystem.DrugView,
+    val lotNumber: String,
+    val expiresOn: LocalDate,
+    val received: Int,
+    val purchaseOrder: PharmacySystem.PurchaseOrderView?,
+    val onHand: Int,
+    val stockAdjustments: List<PharmacySystem.StockAdjustmentView>,
+    val countConfirmations: List<PharmacySystem.CountConfirmationView>,
+    val quarantines: List<PharmacySystem.QuarantineView>,
+    val recalls: List<PharmacySystem.RecallView>,
+    val fills: List<PharmacySystem.FillView>,
+) : View
+
+data class QuarantinedLot(
+    override val id: Long,
+    val drug: PharmacySystem.DrugView,
+    val lotNumber: String,
+    val expiresOn: LocalDate,
+    val received: Int,
+    val purchaseOrder: PharmacySystem.PurchaseOrderView?,
+    val onHand: Int,
+    val stockAdjustments: List<PharmacySystem.StockAdjustmentView>,
+    val countConfirmations: List<PharmacySystem.CountConfirmationView>,
+    val quarantines: List<PharmacySystem.QuarantineView>,
+    val recalls: List<PharmacySystem.RecallView>,
+    val fills: List<PharmacySystem.FillView>,
+) : View
+
+data class RecalledLot(
+    override val id: Long,
+    val drug: PharmacySystem.DrugView,
+    val lotNumber: String,
+    val expiresOn: LocalDate,
+    val received: Int,
+    val purchaseOrder: PharmacySystem.PurchaseOrderView?,
+    val onHand: Int,
+    val stockAdjustments: List<PharmacySystem.StockAdjustmentView>,
+    val countConfirmations: List<PharmacySystem.CountConfirmationView>,
+    val quarantines: List<PharmacySystem.QuarantineView>,
+    val recalls: List<PharmacySystem.RecallView>,
+    val fills: List<PharmacySystem.FillView>,
+) : View
+
+data class UsableLot(
+    override val id: Long,
+    val drug: PharmacySystem.DrugView,
+    val lotNumber: String,
+    val expiresOn: LocalDate,
+    val received: Int,
+    val purchaseOrder: PharmacySystem.PurchaseOrderView?,
+    val onHand: Int,
+    val stockAdjustments: List<PharmacySystem.StockAdjustmentView>,
+    val countConfirmations: List<PharmacySystem.CountConfirmationView>,
+    val quarantines: List<PharmacySystem.QuarantineView>,
+    val recalls: List<PharmacySystem.RecallView>,
+    val fills: List<PharmacySystem.FillView>,
+) : View
+
+data class OpenPurchaseOrder(
+    override val id: Long,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val orderedOn: LocalDate,
+    val stockLots: List<PharmacySystem.StockLotView>,
+) : View
+
+data class ReceivedPurchaseOrder(
+    override val id: Long,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val orderedOn: LocalDate,
+    val stockLots: List<PharmacySystem.StockLotView>,
+) : View
+
+data class Discontinued(
+    override val id: Long,
+    val order: PharmacySystem.PrescriberOrderView,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val daysSupply: Int,
+    val refillsAuthorized: Int,
+    val directions: String,
+    val expiresOn: LocalDate,
+    val fillsRecorded: Int,
+    val refillsRemaining: Int,
+    val lastFilledOn: LocalDate?,
+    val firstFilledOn: LocalDate?,
+    val discontinuations: List<PharmacySystem.DiscontinuationView>,
+    val correctionRefusals: List<PharmacySystem.CorrectionRefusalView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val voidRefusals: List<PharmacySystem.VoidRefusalView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val pharmacistAlerts: List<PharmacySystem.PharmacistAlertView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val fillRefusals: List<PharmacySystem.FillRefusalView>,
+    val refillTasks: List<PharmacySystem.RefillTaskView>,
+    val refillRefusals: List<PharmacySystem.RefillRefusalView>,
+    val authorisationRequests: List<PharmacySystem.AuthorisationRequestView>,
+    val autoRefillEnrolments: List<PharmacySystem.AutoRefillEnrolmentView>,
+    val autoRefillCancellations: List<PharmacySystem.AutoRefillCancellationView>,
+) : View
+
+data class Expired(
+    override val id: Long,
+    val order: PharmacySystem.PrescriberOrderView,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val daysSupply: Int,
+    val refillsAuthorized: Int,
+    val directions: String,
+    val expiresOn: LocalDate,
+    val fillsRecorded: Int,
+    val refillsRemaining: Int,
+    val lastFilledOn: LocalDate?,
+    val firstFilledOn: LocalDate?,
+    val discontinuations: List<PharmacySystem.DiscontinuationView>,
+    val correctionRefusals: List<PharmacySystem.CorrectionRefusalView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val voidRefusals: List<PharmacySystem.VoidRefusalView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val pharmacistAlerts: List<PharmacySystem.PharmacistAlertView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val fillRefusals: List<PharmacySystem.FillRefusalView>,
+    val refillTasks: List<PharmacySystem.RefillTaskView>,
+    val refillRefusals: List<PharmacySystem.RefillRefusalView>,
+    val authorisationRequests: List<PharmacySystem.AuthorisationRequestView>,
+    val autoRefillEnrolments: List<PharmacySystem.AutoRefillEnrolmentView>,
+    val autoRefillCancellations: List<PharmacySystem.AutoRefillCancellationView>,
+) : View
+
+data class Exhausted(
+    override val id: Long,
+    val order: PharmacySystem.PrescriberOrderView,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val daysSupply: Int,
+    val refillsAuthorized: Int,
+    val directions: String,
+    val expiresOn: LocalDate,
+    val fillsRecorded: Int,
+    val refillsRemaining: Int,
+    val lastFilledOn: LocalDate?,
+    val firstFilledOn: LocalDate?,
+    val discontinuations: List<PharmacySystem.DiscontinuationView>,
+    val correctionRefusals: List<PharmacySystem.CorrectionRefusalView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val voidRefusals: List<PharmacySystem.VoidRefusalView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val pharmacistAlerts: List<PharmacySystem.PharmacistAlertView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val fillRefusals: List<PharmacySystem.FillRefusalView>,
+    val refillTasks: List<PharmacySystem.RefillTaskView>,
+    val refillRefusals: List<PharmacySystem.RefillRefusalView>,
+    val authorisationRequests: List<PharmacySystem.AuthorisationRequestView>,
+    val autoRefillEnrolments: List<PharmacySystem.AutoRefillEnrolmentView>,
+    val autoRefillCancellations: List<PharmacySystem.AutoRefillCancellationView>,
+) : View
+
+data class Current(
+    override val id: Long,
+    val order: PharmacySystem.PrescriberOrderView,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val daysSupply: Int,
+    val refillsAuthorized: Int,
+    val directions: String,
+    val expiresOn: LocalDate,
+    val fillsRecorded: Int,
+    val refillsRemaining: Int,
+    val lastFilledOn: LocalDate?,
+    val firstFilledOn: LocalDate?,
+    val discontinuations: List<PharmacySystem.DiscontinuationView>,
+    val correctionRefusals: List<PharmacySystem.CorrectionRefusalView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val voidRefusals: List<PharmacySystem.VoidRefusalView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val pharmacistAlerts: List<PharmacySystem.PharmacistAlertView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val fillRefusals: List<PharmacySystem.FillRefusalView>,
+    val refillTasks: List<PharmacySystem.RefillTaskView>,
+    val refillRefusals: List<PharmacySystem.RefillRefusalView>,
+    val authorisationRequests: List<PharmacySystem.AuthorisationRequestView>,
+    val autoRefillEnrolments: List<PharmacySystem.AutoRefillEnrolmentView>,
+    val autoRefillCancellations: List<PharmacySystem.AutoRefillCancellationView>,
+) : View
+
+data class ActivePrescription(
+    override val id: Long,
+    val order: PharmacySystem.PrescriberOrderView,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val daysSupply: Int,
+    val refillsAuthorized: Int,
+    val directions: String,
+    val expiresOn: LocalDate,
+    val fillsRecorded: Int,
+    val refillsRemaining: Int,
+    val lastFilledOn: LocalDate?,
+    val firstFilledOn: LocalDate?,
+    val discontinuations: List<PharmacySystem.DiscontinuationView>,
+    val correctionRefusals: List<PharmacySystem.CorrectionRefusalView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val voidRefusals: List<PharmacySystem.VoidRefusalView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val pharmacistAlerts: List<PharmacySystem.PharmacistAlertView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val fillRefusals: List<PharmacySystem.FillRefusalView>,
+    val refillTasks: List<PharmacySystem.RefillTaskView>,
+    val refillRefusals: List<PharmacySystem.RefillRefusalView>,
+    val authorisationRequests: List<PharmacySystem.AuthorisationRequestView>,
+    val autoRefillEnrolments: List<PharmacySystem.AutoRefillEnrolmentView>,
+    val autoRefillCancellations: List<PharmacySystem.AutoRefillCancellationView>,
+) : View
+
+data class FilledPrescription(
+    override val id: Long,
+    val order: PharmacySystem.PrescriberOrderView,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val daysSupply: Int,
+    val refillsAuthorized: Int,
+    val directions: String,
+    val expiresOn: LocalDate,
+    val fillsRecorded: Int,
+    val refillsRemaining: Int,
+    val lastFilledOn: LocalDate?,
+    val firstFilledOn: LocalDate?,
+    val discontinuations: List<PharmacySystem.DiscontinuationView>,
+    val correctionRefusals: List<PharmacySystem.CorrectionRefusalView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val voidRefusals: List<PharmacySystem.VoidRefusalView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val pharmacistAlerts: List<PharmacySystem.PharmacistAlertView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val fillRefusals: List<PharmacySystem.FillRefusalView>,
+    val refillTasks: List<PharmacySystem.RefillTaskView>,
+    val refillRefusals: List<PharmacySystem.RefillRefusalView>,
+    val authorisationRequests: List<PharmacySystem.AuthorisationRequestView>,
+    val autoRefillEnrolments: List<PharmacySystem.AutoRefillEnrolmentView>,
+    val autoRefillCancellations: List<PharmacySystem.AutoRefillCancellationView>,
+) : View
+
+data class Voided(
+    override val id: Long,
+    val order: PharmacySystem.PrescriberOrderView,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val daysSupply: Int,
+    val refillsAuthorized: Int,
+    val directions: String,
+    val expiresOn: LocalDate,
+    val fillsRecorded: Int,
+    val refillsRemaining: Int,
+    val lastFilledOn: LocalDate?,
+    val firstFilledOn: LocalDate?,
+    val discontinuations: List<PharmacySystem.DiscontinuationView>,
+    val correctionRefusals: List<PharmacySystem.CorrectionRefusalView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val voidRefusals: List<PharmacySystem.VoidRefusalView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val pharmacistAlerts: List<PharmacySystem.PharmacistAlertView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val fillRefusals: List<PharmacySystem.FillRefusalView>,
+    val refillTasks: List<PharmacySystem.RefillTaskView>,
+    val refillRefusals: List<PharmacySystem.RefillRefusalView>,
+    val authorisationRequests: List<PharmacySystem.AuthorisationRequestView>,
+    val autoRefillEnrolments: List<PharmacySystem.AutoRefillEnrolmentView>,
+    val autoRefillCancellations: List<PharmacySystem.AutoRefillCancellationView>,
+) : View
+
+data class AllergyConflict(
+    override val id: Long,
+    val order: PharmacySystem.PrescriberOrderView,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val daysSupply: Int,
+    val refillsAuthorized: Int,
+    val directions: String,
+    val expiresOn: LocalDate,
+    val fillsRecorded: Int,
+    val refillsRemaining: Int,
+    val lastFilledOn: LocalDate?,
+    val firstFilledOn: LocalDate?,
+    val discontinuations: List<PharmacySystem.DiscontinuationView>,
+    val correctionRefusals: List<PharmacySystem.CorrectionRefusalView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val voidRefusals: List<PharmacySystem.VoidRefusalView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val pharmacistAlerts: List<PharmacySystem.PharmacistAlertView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val fillRefusals: List<PharmacySystem.FillRefusalView>,
+    val refillTasks: List<PharmacySystem.RefillTaskView>,
+    val refillRefusals: List<PharmacySystem.RefillRefusalView>,
+    val authorisationRequests: List<PharmacySystem.AuthorisationRequestView>,
+    val autoRefillEnrolments: List<PharmacySystem.AutoRefillEnrolmentView>,
+    val autoRefillCancellations: List<PharmacySystem.AutoRefillCancellationView>,
+) : View
+
+data class InteractionConflict(
+    override val id: Long,
+    val order: PharmacySystem.PrescriberOrderView,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val daysSupply: Int,
+    val refillsAuthorized: Int,
+    val directions: String,
+    val expiresOn: LocalDate,
+    val fillsRecorded: Int,
+    val refillsRemaining: Int,
+    val lastFilledOn: LocalDate?,
+    val firstFilledOn: LocalDate?,
+    val discontinuations: List<PharmacySystem.DiscontinuationView>,
+    val correctionRefusals: List<PharmacySystem.CorrectionRefusalView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val voidRefusals: List<PharmacySystem.VoidRefusalView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val pharmacistAlerts: List<PharmacySystem.PharmacistAlertView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val fillRefusals: List<PharmacySystem.FillRefusalView>,
+    val refillTasks: List<PharmacySystem.RefillTaskView>,
+    val refillRefusals: List<PharmacySystem.RefillRefusalView>,
+    val authorisationRequests: List<PharmacySystem.AuthorisationRequestView>,
+    val autoRefillEnrolments: List<PharmacySystem.AutoRefillEnrolmentView>,
+    val autoRefillCancellations: List<PharmacySystem.AutoRefillCancellationView>,
+) : View
+
+data class Cleared(
+    override val id: Long,
+    val order: PharmacySystem.PrescriberOrderView,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val daysSupply: Int,
+    val refillsAuthorized: Int,
+    val directions: String,
+    val expiresOn: LocalDate,
+    val fillsRecorded: Int,
+    val refillsRemaining: Int,
+    val lastFilledOn: LocalDate?,
+    val firstFilledOn: LocalDate?,
+    val discontinuations: List<PharmacySystem.DiscontinuationView>,
+    val correctionRefusals: List<PharmacySystem.CorrectionRefusalView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val voidRefusals: List<PharmacySystem.VoidRefusalView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val pharmacistAlerts: List<PharmacySystem.PharmacistAlertView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val fillRefusals: List<PharmacySystem.FillRefusalView>,
+    val refillTasks: List<PharmacySystem.RefillTaskView>,
+    val refillRefusals: List<PharmacySystem.RefillRefusalView>,
+    val authorisationRequests: List<PharmacySystem.AuthorisationRequestView>,
+    val autoRefillEnrolments: List<PharmacySystem.AutoRefillEnrolmentView>,
+    val autoRefillCancellations: List<PharmacySystem.AutoRefillCancellationView>,
+) : View
+
+data class Fillable(
+    override val id: Long,
+    val order: PharmacySystem.PrescriberOrderView,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val daysSupply: Int,
+    val refillsAuthorized: Int,
+    val directions: String,
+    val expiresOn: LocalDate,
+    val fillsRecorded: Int,
+    val refillsRemaining: Int,
+    val lastFilledOn: LocalDate?,
+    val firstFilledOn: LocalDate?,
+    val discontinuations: List<PharmacySystem.DiscontinuationView>,
+    val correctionRefusals: List<PharmacySystem.CorrectionRefusalView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val voidRefusals: List<PharmacySystem.VoidRefusalView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val pharmacistAlerts: List<PharmacySystem.PharmacistAlertView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val fillRefusals: List<PharmacySystem.FillRefusalView>,
+    val refillTasks: List<PharmacySystem.RefillTaskView>,
+    val refillRefusals: List<PharmacySystem.RefillRefusalView>,
+    val authorisationRequests: List<PharmacySystem.AuthorisationRequestView>,
+    val autoRefillEnrolments: List<PharmacySystem.AutoRefillEnrolmentView>,
+    val autoRefillCancellations: List<PharmacySystem.AutoRefillCancellationView>,
+) : View
+
+data class MultiplePrescribers(
+    override val id: Long,
+    val name: String,
+    val birthDate: LocalDate,
+    val phone: String,
+    val allergies: List<PharmacySystem.IngredientView>,
+    val plan: PharmacySystem.InsurancePlanView?,
+    val prescriptions: List<PharmacySystem.PrescriptionView>,
+    val recallNotices: List<PharmacySystem.RecallNoticeView>,
+    val notices: List<PharmacySystem.NoticeView>,
+    val prescriberOrders: List<PharmacySystem.PrescriberOrderView>,
+) : View
+
+data class VerifiedFill(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val lot: PharmacySystem.StockLotView,
+    val quantity: Int,
+    val fillNumber: Int,
+    val filledBy: PharmacySystem.StaffView,
+    val unitPrice: BigDecimal,
+    val filledOn: LocalDate,
+    val filledAt: Instant,
+    val total: BigDecimal,
+    val amountDue: BigDecimal,
+    val recallNotices: List<PharmacySystem.RecallNoticeView>,
+    val controlledLogEntrys: List<PharmacySystem.ControlledLogEntryView>,
+    val verifications: List<PharmacySystem.VerificationView>,
+    val counsellings: List<PharmacySystem.CounsellingView>,
+    val returnToStocks: List<PharmacySystem.ReturnToStockView>,
+    val counterExits: List<PharmacySystem.CounterExitView>,
+    val pickups: List<PharmacySystem.PickupView>,
+    val counterAlerts: List<PharmacySystem.CounterAlertView>,
+    val claims: List<PharmacySystem.ClaimView>,
+) : View
+
+data class RejectedFill(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val lot: PharmacySystem.StockLotView,
+    val quantity: Int,
+    val fillNumber: Int,
+    val filledBy: PharmacySystem.StaffView,
+    val unitPrice: BigDecimal,
+    val filledOn: LocalDate,
+    val filledAt: Instant,
+    val total: BigDecimal,
+    val amountDue: BigDecimal,
+    val recallNotices: List<PharmacySystem.RecallNoticeView>,
+    val controlledLogEntrys: List<PharmacySystem.ControlledLogEntryView>,
+    val verifications: List<PharmacySystem.VerificationView>,
+    val counsellings: List<PharmacySystem.CounsellingView>,
+    val returnToStocks: List<PharmacySystem.ReturnToStockView>,
+    val counterExits: List<PharmacySystem.CounterExitView>,
+    val pickups: List<PharmacySystem.PickupView>,
+    val counterAlerts: List<PharmacySystem.CounterAlertView>,
+    val claims: List<PharmacySystem.ClaimView>,
+) : View
+
+data class ConsumingFill(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val lot: PharmacySystem.StockLotView,
+    val quantity: Int,
+    val fillNumber: Int,
+    val filledBy: PharmacySystem.StaffView,
+    val unitPrice: BigDecimal,
+    val filledOn: LocalDate,
+    val filledAt: Instant,
+    val total: BigDecimal,
+    val amountDue: BigDecimal,
+    val recallNotices: List<PharmacySystem.RecallNoticeView>,
+    val controlledLogEntrys: List<PharmacySystem.ControlledLogEntryView>,
+    val verifications: List<PharmacySystem.VerificationView>,
+    val counsellings: List<PharmacySystem.CounsellingView>,
+    val returnToStocks: List<PharmacySystem.ReturnToStockView>,
+    val counterExits: List<PharmacySystem.CounterExitView>,
+    val pickups: List<PharmacySystem.PickupView>,
+    val counterAlerts: List<PharmacySystem.CounterAlertView>,
+    val claims: List<PharmacySystem.ClaimView>,
+) : View
+
+data class CounsellingDue(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val lot: PharmacySystem.StockLotView,
+    val quantity: Int,
+    val fillNumber: Int,
+    val filledBy: PharmacySystem.StaffView,
+    val unitPrice: BigDecimal,
+    val filledOn: LocalDate,
+    val filledAt: Instant,
+    val total: BigDecimal,
+    val amountDue: BigDecimal,
+    val recallNotices: List<PharmacySystem.RecallNoticeView>,
+    val controlledLogEntrys: List<PharmacySystem.ControlledLogEntryView>,
+    val verifications: List<PharmacySystem.VerificationView>,
+    val counsellings: List<PharmacySystem.CounsellingView>,
+    val returnToStocks: List<PharmacySystem.ReturnToStockView>,
+    val counterExits: List<PharmacySystem.CounterExitView>,
+    val pickups: List<PharmacySystem.PickupView>,
+    val counterAlerts: List<PharmacySystem.CounterAlertView>,
+    val claims: List<PharmacySystem.ClaimView>,
+) : View
+
+data class ReadyForPickup(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val lot: PharmacySystem.StockLotView,
+    val quantity: Int,
+    val fillNumber: Int,
+    val filledBy: PharmacySystem.StaffView,
+    val unitPrice: BigDecimal,
+    val filledOn: LocalDate,
+    val filledAt: Instant,
+    val total: BigDecimal,
+    val amountDue: BigDecimal,
+    val recallNotices: List<PharmacySystem.RecallNoticeView>,
+    val controlledLogEntrys: List<PharmacySystem.ControlledLogEntryView>,
+    val verifications: List<PharmacySystem.VerificationView>,
+    val counsellings: List<PharmacySystem.CounsellingView>,
+    val returnToStocks: List<PharmacySystem.ReturnToStockView>,
+    val counterExits: List<PharmacySystem.CounterExitView>,
+    val pickups: List<PharmacySystem.PickupView>,
+    val counterAlerts: List<PharmacySystem.CounterAlertView>,
+    val claims: List<PharmacySystem.ClaimView>,
+    val readyOn: LocalDate,
+) : View
+
+data class Uncollected(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val lot: PharmacySystem.StockLotView,
+    val quantity: Int,
+    val fillNumber: Int,
+    val filledBy: PharmacySystem.StaffView,
+    val unitPrice: BigDecimal,
+    val filledOn: LocalDate,
+    val filledAt: Instant,
+    val total: BigDecimal,
+    val amountDue: BigDecimal,
+    val recallNotices: List<PharmacySystem.RecallNoticeView>,
+    val controlledLogEntrys: List<PharmacySystem.ControlledLogEntryView>,
+    val verifications: List<PharmacySystem.VerificationView>,
+    val counsellings: List<PharmacySystem.CounsellingView>,
+    val returnToStocks: List<PharmacySystem.ReturnToStockView>,
+    val counterExits: List<PharmacySystem.CounterExitView>,
+    val pickups: List<PharmacySystem.PickupView>,
+    val counterAlerts: List<PharmacySystem.CounterAlertView>,
+    val claims: List<PharmacySystem.ClaimView>,
+    val readyOn: LocalDate,
+) : View
+
+data class OpenRefillTask(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val requestKey: String?,
+    val fillsAtRequest: Int,
+    val requestedOn: LocalDate,
+    val taskNags: List<PharmacySystem.TaskNagView>,
+) : View
+
+data class OverdueRefillTask(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val requestKey: String?,
+    val fillsAtRequest: Int,
+    val requestedOn: LocalDate,
+    val taskNags: List<PharmacySystem.TaskNagView>,
+) : View
+
+data class AutoRefill(
+    override val id: Long,
+    val order: PharmacySystem.PrescriberOrderView,
+    val drug: PharmacySystem.DrugView,
+    val quantity: Int,
+    val daysSupply: Int,
+    val refillsAuthorized: Int,
+    val directions: String,
+    val expiresOn: LocalDate,
+    val fillsRecorded: Int,
+    val refillsRemaining: Int,
+    val lastFilledOn: LocalDate?,
+    val firstFilledOn: LocalDate?,
+    val discontinuations: List<PharmacySystem.DiscontinuationView>,
+    val correctionRefusals: List<PharmacySystem.CorrectionRefusalView>,
+    val entryVoids: List<PharmacySystem.EntryVoidView>,
+    val voidRefusals: List<PharmacySystem.VoidRefusalView>,
+    val conflictOverrides: List<PharmacySystem.ConflictOverrideView>,
+    val pharmacistAlerts: List<PharmacySystem.PharmacistAlertView>,
+    val monitoringChecks: List<PharmacySystem.MonitoringCheckView>,
+    val fills: List<PharmacySystem.FillView>,
+    val fillRefusals: List<PharmacySystem.FillRefusalView>,
+    val refillTasks: List<PharmacySystem.RefillTaskView>,
+    val refillRefusals: List<PharmacySystem.RefillRefusalView>,
+    val authorisationRequests: List<PharmacySystem.AuthorisationRequestView>,
+    val autoRefillEnrolments: List<PharmacySystem.AutoRefillEnrolmentView>,
+    val autoRefillCancellations: List<PharmacySystem.AutoRefillCancellationView>,
+) : View
+
+data class InsuredFill(
+    override val id: Long,
+    val prescription: PharmacySystem.PrescriptionView,
+    val lot: PharmacySystem.StockLotView,
+    val quantity: Int,
+    val fillNumber: Int,
+    val filledBy: PharmacySystem.StaffView,
+    val unitPrice: BigDecimal,
+    val filledOn: LocalDate,
+    val filledAt: Instant,
+    val total: BigDecimal,
+    val amountDue: BigDecimal,
+    val recallNotices: List<PharmacySystem.RecallNoticeView>,
+    val controlledLogEntrys: List<PharmacySystem.ControlledLogEntryView>,
+    val verifications: List<PharmacySystem.VerificationView>,
+    val counsellings: List<PharmacySystem.CounsellingView>,
+    val returnToStocks: List<PharmacySystem.ReturnToStockView>,
+    val counterExits: List<PharmacySystem.CounterExitView>,
+    val pickups: List<PharmacySystem.PickupView>,
+    val counterAlerts: List<PharmacySystem.CounterAlertView>,
+    val claims: List<PharmacySystem.ClaimView>,
+    val insurer: PharmacySystem.InsurancePlanView,
+) : View
+
+data class PendingClaim(
+    override val id: Long,
+    val fill: PharmacySystem.FillView,
+    val plan: PharmacySystem.InsurancePlanView,
+    val amount: BigDecimal,
+    val claimKey: String,
+    val submittedAt: Instant,
+    val patientPays: BigDecimal,
+    val claimResponses: List<PharmacySystem.ClaimResponseView>,
+    val claimFollowUps: List<PharmacySystem.ClaimFollowUpView>,
+) : View
+
+data class PaidClaim(
+    override val id: Long,
+    val fill: PharmacySystem.FillView,
+    val plan: PharmacySystem.InsurancePlanView,
+    val amount: BigDecimal,
+    val claimKey: String,
+    val submittedAt: Instant,
+    val patientPays: BigDecimal,
+    val claimResponses: List<PharmacySystem.ClaimResponseView>,
+    val claimFollowUps: List<PharmacySystem.ClaimFollowUpView>,
+) : View
+
+data class RejectedClaim(
+    override val id: Long,
+    val fill: PharmacySystem.FillView,
+    val plan: PharmacySystem.InsurancePlanView,
+    val amount: BigDecimal,
+    val claimKey: String,
+    val submittedAt: Instant,
+    val patientPays: BigDecimal,
+    val claimResponses: List<PharmacySystem.ClaimResponseView>,
+    val claimFollowUps: List<PharmacySystem.ClaimFollowUpView>,
+) : View
+
+data class StaleClaim(
+    override val id: Long,
+    val fill: PharmacySystem.FillView,
+    val plan: PharmacySystem.InsurancePlanView,
+    val amount: BigDecimal,
+    val claimKey: String,
+    val submittedAt: Instant,
+    val patientPays: BigDecimal,
+    val claimResponses: List<PharmacySystem.ClaimResponseView>,
+    val claimFollowUps: List<PharmacySystem.ClaimFollowUpView>,
+) : View
+
+// ── the builder's vocabulary: one field handle per member, memberships per refinement ──
+
+class StaffFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val role: TextField get() = TextField(fieldPath + "role")
+    fun isPharmacist(): Expr = isA("Pharmacist")
+    fun isTechnician(): Expr = isA("Technician")
+    fun isAdministrator(): Expr = isA("Administrator")
+    fun isLicensedPharmacist(): Expr = isA("LicensedPharmacist")
+    fun isLicenceExpiringSoon(): Expr = isA("LicenceExpiringSoon")
+}
+
+class LicenceRenewalFields(path: List<String> = emptyList()) : Fields(path) {
+    val pharmacist: StaffFields get() = StaffFields(fieldPath + "pharmacist")
+    val licenceNumber: TextField get() = TextField(fieldPath + "licenceNumber")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+}
+
+class LicenceReminderFields(path: List<String> = emptyList()) : Fields(path) {
+    val pharmacist: StaffFields get() = StaffFields(fieldPath + "pharmacist")
+    val sentOn: DateField get() = DateField(fieldPath + "sentOn")
+}
+
+class IngredientFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+}
+
+class DrugFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val strength: TextField get() = TextField(fieldPath + "strength")
+    val form: TextField get() = TextField(fieldPath + "form")
+    val schedule: NumField get() = NumField(fieldPath + "schedule")
+    val requiresCounselling: BoolField get() = BoolField(fieldPath + "requiresCounselling")
+    val reorderPoint: NumField get() = NumField(fieldPath + "reorderPoint")
+    val onHand: NumField get() = NumField(fieldPath + "onHand")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+    fun isControlled(): Expr = isA("Controlled")
+    fun isScheduleTwo(): Expr = isA("ScheduleTwo")
+    fun isLowStock(): Expr = isA("LowStock")
+}
+
+class InteractionFields(path: List<String> = emptyList()) : Fields(path) {
+    val drugA: DrugFields get() = DrugFields(fieldPath + "drugA")
+    val drugB: DrugFields get() = DrugFields(fieldPath + "drugB")
+    val severity: TextField get() = TextField(fieldPath + "severity")
+}
+
+class PriceChangeFields(path: List<String> = emptyList()) : Fields(path) {
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val effectiveOn: DateField get() = DateField(fieldPath + "effectiveOn")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+    fun isEffectivePrice(): Expr = isA("EffectivePrice")
+}
+
+class PriceWithdrawalFields(path: List<String> = emptyList()) : Fields(path) {
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val effectiveOn: DateField get() = DateField(fieldPath + "effectiveOn")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val withdrawnOn: DateTimeField get() = DateTimeField(fieldPath + "withdrawnOn")
+}
+
+class PriceWithdrawalRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val priceChange: PriceChangeFields get() = PriceChangeFields(fieldPath + "priceChange")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class StockLotFields(path: List<String> = emptyList()) : Fields(path) {
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val lotNumber: TextField get() = TextField(fieldPath + "lotNumber")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val received: NumField get() = NumField(fieldPath + "received")
+    val purchaseOrder: PurchaseOrderFields get() = PurchaseOrderFields(fieldPath + "purchaseOrder")
+    val onHand: NumField get() = NumField(fieldPath + "onHand")
+    fun isExpiredLot(): Expr = isA("ExpiredLot")
+    fun isQuarantinedLot(): Expr = isA("QuarantinedLot")
+    fun isRecalledLot(): Expr = isA("RecalledLot")
+    fun isUsableLot(): Expr = isA("UsableLot")
+}
+
+class StockAdjustmentFields(path: List<String> = emptyList()) : Fields(path) {
+    val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
+    val delta: NumField get() = NumField(fieldPath + "delta")
+    val countedBy: StaffFields get() = StaffFields(fieldPath + "countedBy")
+    val countedOn: DateTimeField get() = DateTimeField(fieldPath + "countedOn")
+}
+
+class CountConfirmationFields(path: List<String> = emptyList()) : Fields(path) {
+    val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
+    val counted: NumField get() = NumField(fieldPath + "counted")
+    val countedBy: StaffFields get() = StaffFields(fieldPath + "countedBy")
+    val countedOn: DateTimeField get() = DateTimeField(fieldPath + "countedOn")
+}
+
+class QuarantineFields(path: List<String> = emptyList()) : Fields(path) {
+    val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val quarantinedOn: DateTimeField get() = DateTimeField(fieldPath + "quarantinedOn")
+}
+
+class RecallFields(path: List<String> = emptyList()) : Fields(path) {
+    val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
+    val reference: TextField get() = TextField(fieldPath + "reference")
+    val issuedOn: DateField get() = DateField(fieldPath + "issuedOn")
+}
+
+class RecallNoticeFields(path: List<String> = emptyList()) : Fields(path) {
+    val fill: FillFields get() = FillFields(fieldPath + "fill")
+    val patient: PatientFields get() = PatientFields(fieldPath + "patient")
+    val reference: TextField get() = TextField(fieldPath + "reference")
+    val noticedOn: DateTimeField get() = DateTimeField(fieldPath + "noticedOn")
+}
+
+class PurchaseOrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val orderedOn: DateField get() = DateField(fieldPath + "orderedOn")
+    fun isOpenPurchaseOrder(): Expr = isA("OpenPurchaseOrder")
+    fun isReceivedPurchaseOrder(): Expr = isA("ReceivedPurchaseOrder")
+}
+
+class InsurancePlanFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val coversControlled: BoolField get() = BoolField(fieldPath + "coversControlled")
+}
+
+class PatientFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val birthDate: DateField get() = DateField(fieldPath + "birthDate")
+    val phone: TextField get() = TextField(fieldPath + "phone")
+    val plan: InsurancePlanFields get() = InsurancePlanFields(fieldPath + "plan")
+    fun isMultiplePrescribers(): Expr = isA("MultiplePrescribers")
+}
+
+class PrescriberFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val deaNumber: TextField get() = TextField(fieldPath + "deaNumber")
+    val fax: TextField get() = TextField(fieldPath + "fax")
+}
+
+class NoticeFields(path: List<String> = emptyList()) : Fields(path) {
+    val recipient: RefField get() = RefField(fieldPath + "recipient")
+    val subject: TextField get() = TextField(fieldPath + "subject")
+    val sentOn: DateTimeField get() = DateTimeField(fieldPath + "sentOn")
+    val contact: TextField get() = TextField(fieldPath + "contact")
+}
+
+class PrescriberOrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescriber: PrescriberFields get() = PrescriberFields(fieldPath + "prescriber")
+    val patient: PatientFields get() = PatientFields(fieldPath + "patient")
+    val writtenOn: DateField get() = DateField(fieldPath + "writtenOn")
+    val enteredBy: StaffFields get() = StaffFields(fieldPath + "enteredBy")
+}
+
+class PrescriptionFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: PrescriberOrderFields get() = PrescriberOrderFields(fieldPath + "order")
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val daysSupply: NumField get() = NumField(fieldPath + "daysSupply")
+    val refillsAuthorized: NumField get() = NumField(fieldPath + "refillsAuthorized")
+    val directions: TextField get() = TextField(fieldPath + "directions")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val fillsRecorded: NumField get() = NumField(fieldPath + "fillsRecorded")
+    val refillsRemaining: NumField get() = NumField(fieldPath + "refillsRemaining")
+    val lastFilledOn: DateField get() = DateField(fieldPath + "lastFilledOn")
+    val firstFilledOn: DateField get() = DateField(fieldPath + "firstFilledOn")
+    fun isDiscontinued(): Expr = isA("Discontinued")
+    fun isExpired(): Expr = isA("Expired")
+    fun isExhausted(): Expr = isA("Exhausted")
+    fun isCurrent(): Expr = isA("Current")
+    fun isActivePrescription(): Expr = isA("ActivePrescription")
+    fun isFilledPrescription(): Expr = isA("FilledPrescription")
+    fun isVoided(): Expr = isA("Voided")
+    fun isAllergyConflict(): Expr = isA("AllergyConflict")
+    fun isInteractionConflict(): Expr = isA("InteractionConflict")
+    fun isCleared(): Expr = isA("Cleared")
+    fun isFillable(): Expr = isA("Fillable")
+    fun isAutoRefill(): Expr = isA("AutoRefill")
+}
+
+class DiscontinuationFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val prescriber: PrescriberFields get() = PrescriberFields(fieldPath + "prescriber")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+}
+
+class CorrectionRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class EntryVoidFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val pharmacist: StaffFields get() = StaffFields(fieldPath + "pharmacist")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val voidedOn: DateTimeField get() = DateTimeField(fieldPath + "voidedOn")
+}
+
+class VoidRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class ConflictOverrideFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val pharmacist: StaffFields get() = StaffFields(fieldPath + "pharmacist")
+    val justification: TextField get() = TextField(fieldPath + "justification")
+}
+
+class PharmacistAlertFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val kind: TextField get() = TextField(fieldPath + "kind")
+    val raisedOn: DateTimeField get() = DateTimeField(fieldPath + "raisedOn")
+}
+
+class MonitoringCheckFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val pharmacist: StaffFields get() = StaffFields(fieldPath + "pharmacist")
+    val checkedAt: DateTimeField get() = DateTimeField(fieldPath + "checkedAt")
+    val cleared: BoolField get() = BoolField(fieldPath + "cleared")
+}
+
+class FillFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val fillNumber: NumField get() = NumField(fieldPath + "fillNumber")
+    val filledBy: StaffFields get() = StaffFields(fieldPath + "filledBy")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+    val filledOn: DateField get() = DateField(fieldPath + "filledOn")
+    val filledAt: DateTimeField get() = DateTimeField(fieldPath + "filledAt")
+    val total: NumField get() = NumField(fieldPath + "total")
+    val amountDue: NumField get() = NumField(fieldPath + "amountDue")
+    fun isVerifiedFill(): Expr = isA("VerifiedFill")
+    fun isRejectedFill(): Expr = isA("RejectedFill")
+    fun isConsumingFill(): Expr = isA("ConsumingFill")
+    fun isCounsellingDue(): Expr = isA("CounsellingDue")
+    fun isReadyForPickup(): Expr = isA("ReadyForPickup")
+    fun isUncollected(): Expr = isA("Uncollected")
+    fun isInsuredFill(): Expr = isA("InsuredFill")
+}
+
+class FillRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class ControlledLogEntryFields(path: List<String> = emptyList()) : Fields(path) {
+    val fill: FillFields get() = FillFields(fieldPath + "fill")
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val balanceAfter: NumField get() = NumField(fieldPath + "balanceAfter")
+    val loggedAt: DateTimeField get() = DateTimeField(fieldPath + "loggedAt")
+}
+
+class VerificationFields(path: List<String> = emptyList()) : Fields(path) {
+    val fill: FillFields get() = FillFields(fieldPath + "fill")
+    val pharmacist: StaffFields get() = StaffFields(fieldPath + "pharmacist")
+    val outcome: TextField get() = TextField(fieldPath + "outcome")
+    val note: TextField get() = TextField(fieldPath + "note")
+    val verifiedAt: DateTimeField get() = DateTimeField(fieldPath + "verifiedAt")
+}
+
+class CounsellingFields(path: List<String> = emptyList()) : Fields(path) {
+    val fill: FillFields get() = FillFields(fieldPath + "fill")
+    val pharmacist: StaffFields get() = StaffFields(fieldPath + "pharmacist")
+    val notes: TextField get() = TextField(fieldPath + "notes")
+}
+
+class ReturnToStockFields(path: List<String> = emptyList()) : Fields(path) {
+    val fill: FillFields get() = FillFields(fieldPath + "fill")
+    val returnedOn: DateField get() = DateField(fieldPath + "returnedOn")
+}
+
+class CounterExitFields(path: List<String> = emptyList()) : Fields(path) {
+    val fill: FillFields get() = FillFields(fieldPath + "fill")
+    val readyOn: DateField get() = DateField(fieldPath + "readyOn")
+    val leftOn: DateField get() = DateField(fieldPath + "leftOn")
+}
+
+class PickupFields(path: List<String> = emptyList()) : Fields(path) {
+    val fill: FillFields get() = FillFields(fieldPath + "fill")
+    val collectedBy: TextField get() = TextField(fieldPath + "collectedBy")
+    val amountPaid: NumField get() = NumField(fieldPath + "amountPaid")
+    val pickedUpAt: DateTimeField get() = DateTimeField(fieldPath + "pickedUpAt")
+}
+
+class CounterAlertFields(path: List<String> = emptyList()) : Fields(path) {
+    val fill: FillFields get() = FillFields(fieldPath + "fill")
+    val raisedOn: DateTimeField get() = DateTimeField(fieldPath + "raisedOn")
+}
+
+class RefillTaskFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val fillsAtRequest: NumField get() = NumField(fieldPath + "fillsAtRequest")
+    val requestedOn: DateField get() = DateField(fieldPath + "requestedOn")
+    fun isOpenRefillTask(): Expr = isA("OpenRefillTask")
+    fun isOverdueRefillTask(): Expr = isA("OverdueRefillTask")
+}
+
+class RefillRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class AuthorisationRequestFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val requestedOn: DateTimeField get() = DateTimeField(fieldPath + "requestedOn")
+}
+
+class TaskNagFields(path: List<String> = emptyList()) : Fields(path) {
+    val task: RefillTaskFields get() = RefillTaskFields(fieldPath + "task")
+    val sentOn: DateField get() = DateField(fieldPath + "sentOn")
+}
+
+class AutoRefillEnrolmentFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+}
+
+class AutoRefillCancellationFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+}
+
+class ClaimFields(path: List<String> = emptyList()) : Fields(path) {
+    val fill: FillFields get() = FillFields(fieldPath + "fill")
+    val plan: InsurancePlanFields get() = InsurancePlanFields(fieldPath + "plan")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val claimKey: TextField get() = TextField(fieldPath + "claimKey")
+    val submittedAt: DateTimeField get() = DateTimeField(fieldPath + "submittedAt")
+    val patientPays: NumField get() = NumField(fieldPath + "patientPays")
+    fun isPendingClaim(): Expr = isA("PendingClaim")
+    fun isPaidClaim(): Expr = isA("PaidClaim")
+    fun isRejectedClaim(): Expr = isA("RejectedClaim")
+    fun isStaleClaim(): Expr = isA("StaleClaim")
+}
+
+class ClaimResponseFields(path: List<String> = emptyList()) : Fields(path) {
+    val claim: ClaimFields get() = ClaimFields(fieldPath + "claim")
+    val outcome: TextField get() = TextField(fieldPath + "outcome")
+    val paidAmount: NumField get() = NumField(fieldPath + "paidAmount")
+    val patientPays: NumField get() = NumField(fieldPath + "patientPays")
+    val respondedAt: DateTimeField get() = DateTimeField(fieldPath + "respondedAt")
+}
+
+class ClaimFollowUpFields(path: List<String> = emptyList()) : Fields(path) {
+    val claim: ClaimFields get() = ClaimFields(fieldPath + "claim")
+    val followedUpAt: DateTimeField get() = DateTimeField(fieldPath + "followedUpAt")
+}
+
+class ControlledInventorySnapshotFields(path: List<String> = emptyList()) : Fields(path) {
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val onHand: NumField get() = NumField(fieldPath + "onHand")
+    val takenOn: DateField get() = DateField(fieldPath + "takenOn")
+}
+
+class PharmacistFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val role: TextField get() = TextField(fieldPath + "role")
+    fun isTechnician(): Expr = isA("Technician")
+    fun isAdministrator(): Expr = isA("Administrator")
+    fun isLicensedPharmacist(): Expr = isA("LicensedPharmacist")
+    fun isLicenceExpiringSoon(): Expr = isA("LicenceExpiringSoon")
+}
+
+class TechnicianFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val role: TextField get() = TextField(fieldPath + "role")
+    fun isPharmacist(): Expr = isA("Pharmacist")
+    fun isAdministrator(): Expr = isA("Administrator")
+    fun isLicensedPharmacist(): Expr = isA("LicensedPharmacist")
+    fun isLicenceExpiringSoon(): Expr = isA("LicenceExpiringSoon")
+}
+
+class AdministratorFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val role: TextField get() = TextField(fieldPath + "role")
+    fun isPharmacist(): Expr = isA("Pharmacist")
+    fun isTechnician(): Expr = isA("Technician")
+    fun isLicensedPharmacist(): Expr = isA("LicensedPharmacist")
+    fun isLicenceExpiringSoon(): Expr = isA("LicenceExpiringSoon")
+}
+
+class LicensedPharmacistFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val role: TextField get() = TextField(fieldPath + "role")
+    fun isPharmacist(): Expr = isA("Pharmacist")
+    fun isTechnician(): Expr = isA("Technician")
+    fun isAdministrator(): Expr = isA("Administrator")
+    fun isLicenceExpiringSoon(): Expr = isA("LicenceExpiringSoon")
+}
+
+class LicenceExpiringSoonFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val role: TextField get() = TextField(fieldPath + "role")
+    fun isPharmacist(): Expr = isA("Pharmacist")
+    fun isTechnician(): Expr = isA("Technician")
+    fun isAdministrator(): Expr = isA("Administrator")
+    fun isLicensedPharmacist(): Expr = isA("LicensedPharmacist")
+}
+
+class ControlledFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val strength: TextField get() = TextField(fieldPath + "strength")
+    val form: TextField get() = TextField(fieldPath + "form")
+    val schedule: NumField get() = NumField(fieldPath + "schedule")
+    val requiresCounselling: BoolField get() = BoolField(fieldPath + "requiresCounselling")
+    val reorderPoint: NumField get() = NumField(fieldPath + "reorderPoint")
+    val onHand: NumField get() = NumField(fieldPath + "onHand")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+    fun isScheduleTwo(): Expr = isA("ScheduleTwo")
+    fun isLowStock(): Expr = isA("LowStock")
+}
+
+class ScheduleTwoFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val strength: TextField get() = TextField(fieldPath + "strength")
+    val form: TextField get() = TextField(fieldPath + "form")
+    val schedule: NumField get() = NumField(fieldPath + "schedule")
+    val requiresCounselling: BoolField get() = BoolField(fieldPath + "requiresCounselling")
+    val reorderPoint: NumField get() = NumField(fieldPath + "reorderPoint")
+    val onHand: NumField get() = NumField(fieldPath + "onHand")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+    fun isControlled(): Expr = isA("Controlled")
+    fun isLowStock(): Expr = isA("LowStock")
+}
+
+class LowStockFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val strength: TextField get() = TextField(fieldPath + "strength")
+    val form: TextField get() = TextField(fieldPath + "form")
+    val schedule: NumField get() = NumField(fieldPath + "schedule")
+    val requiresCounselling: BoolField get() = BoolField(fieldPath + "requiresCounselling")
+    val reorderPoint: NumField get() = NumField(fieldPath + "reorderPoint")
+    val onHand: NumField get() = NumField(fieldPath + "onHand")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+    fun isControlled(): Expr = isA("Controlled")
+    fun isScheduleTwo(): Expr = isA("ScheduleTwo")
+}
+
+class EffectivePriceFields(path: List<String> = emptyList()) : Fields(path) {
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val effectiveOn: DateField get() = DateField(fieldPath + "effectiveOn")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+}
+
+class ExpiredLotFields(path: List<String> = emptyList()) : Fields(path) {
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val lotNumber: TextField get() = TextField(fieldPath + "lotNumber")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val received: NumField get() = NumField(fieldPath + "received")
+    val purchaseOrder: PurchaseOrderFields get() = PurchaseOrderFields(fieldPath + "purchaseOrder")
+    val onHand: NumField get() = NumField(fieldPath + "onHand")
+    fun isQuarantinedLot(): Expr = isA("QuarantinedLot")
+    fun isRecalledLot(): Expr = isA("RecalledLot")
+    fun isUsableLot(): Expr = isA("UsableLot")
+}
+
+class QuarantinedLotFields(path: List<String> = emptyList()) : Fields(path) {
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val lotNumber: TextField get() = TextField(fieldPath + "lotNumber")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val received: NumField get() = NumField(fieldPath + "received")
+    val purchaseOrder: PurchaseOrderFields get() = PurchaseOrderFields(fieldPath + "purchaseOrder")
+    val onHand: NumField get() = NumField(fieldPath + "onHand")
+    fun isExpiredLot(): Expr = isA("ExpiredLot")
+    fun isRecalledLot(): Expr = isA("RecalledLot")
+    fun isUsableLot(): Expr = isA("UsableLot")
+}
+
+class RecalledLotFields(path: List<String> = emptyList()) : Fields(path) {
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val lotNumber: TextField get() = TextField(fieldPath + "lotNumber")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val received: NumField get() = NumField(fieldPath + "received")
+    val purchaseOrder: PurchaseOrderFields get() = PurchaseOrderFields(fieldPath + "purchaseOrder")
+    val onHand: NumField get() = NumField(fieldPath + "onHand")
+    fun isExpiredLot(): Expr = isA("ExpiredLot")
+    fun isQuarantinedLot(): Expr = isA("QuarantinedLot")
+    fun isUsableLot(): Expr = isA("UsableLot")
+}
+
+class UsableLotFields(path: List<String> = emptyList()) : Fields(path) {
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val lotNumber: TextField get() = TextField(fieldPath + "lotNumber")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val received: NumField get() = NumField(fieldPath + "received")
+    val purchaseOrder: PurchaseOrderFields get() = PurchaseOrderFields(fieldPath + "purchaseOrder")
+    val onHand: NumField get() = NumField(fieldPath + "onHand")
+    fun isExpiredLot(): Expr = isA("ExpiredLot")
+    fun isQuarantinedLot(): Expr = isA("QuarantinedLot")
+    fun isRecalledLot(): Expr = isA("RecalledLot")
+}
+
+class OpenPurchaseOrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val orderedOn: DateField get() = DateField(fieldPath + "orderedOn")
+    fun isReceivedPurchaseOrder(): Expr = isA("ReceivedPurchaseOrder")
+}
+
+class ReceivedPurchaseOrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val orderedOn: DateField get() = DateField(fieldPath + "orderedOn")
+    fun isOpenPurchaseOrder(): Expr = isA("OpenPurchaseOrder")
+}
+
+class DiscontinuedFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: PrescriberOrderFields get() = PrescriberOrderFields(fieldPath + "order")
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val daysSupply: NumField get() = NumField(fieldPath + "daysSupply")
+    val refillsAuthorized: NumField get() = NumField(fieldPath + "refillsAuthorized")
+    val directions: TextField get() = TextField(fieldPath + "directions")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val fillsRecorded: NumField get() = NumField(fieldPath + "fillsRecorded")
+    val refillsRemaining: NumField get() = NumField(fieldPath + "refillsRemaining")
+    val lastFilledOn: DateField get() = DateField(fieldPath + "lastFilledOn")
+    val firstFilledOn: DateField get() = DateField(fieldPath + "firstFilledOn")
+    fun isExpired(): Expr = isA("Expired")
+    fun isExhausted(): Expr = isA("Exhausted")
+    fun isCurrent(): Expr = isA("Current")
+    fun isActivePrescription(): Expr = isA("ActivePrescription")
+    fun isFilledPrescription(): Expr = isA("FilledPrescription")
+    fun isVoided(): Expr = isA("Voided")
+    fun isAllergyConflict(): Expr = isA("AllergyConflict")
+    fun isInteractionConflict(): Expr = isA("InteractionConflict")
+    fun isCleared(): Expr = isA("Cleared")
+    fun isFillable(): Expr = isA("Fillable")
+    fun isAutoRefill(): Expr = isA("AutoRefill")
+}
+
+class ExpiredFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: PrescriberOrderFields get() = PrescriberOrderFields(fieldPath + "order")
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val daysSupply: NumField get() = NumField(fieldPath + "daysSupply")
+    val refillsAuthorized: NumField get() = NumField(fieldPath + "refillsAuthorized")
+    val directions: TextField get() = TextField(fieldPath + "directions")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val fillsRecorded: NumField get() = NumField(fieldPath + "fillsRecorded")
+    val refillsRemaining: NumField get() = NumField(fieldPath + "refillsRemaining")
+    val lastFilledOn: DateField get() = DateField(fieldPath + "lastFilledOn")
+    val firstFilledOn: DateField get() = DateField(fieldPath + "firstFilledOn")
+    fun isDiscontinued(): Expr = isA("Discontinued")
+    fun isExhausted(): Expr = isA("Exhausted")
+    fun isCurrent(): Expr = isA("Current")
+    fun isActivePrescription(): Expr = isA("ActivePrescription")
+    fun isFilledPrescription(): Expr = isA("FilledPrescription")
+    fun isVoided(): Expr = isA("Voided")
+    fun isAllergyConflict(): Expr = isA("AllergyConflict")
+    fun isInteractionConflict(): Expr = isA("InteractionConflict")
+    fun isCleared(): Expr = isA("Cleared")
+    fun isFillable(): Expr = isA("Fillable")
+    fun isAutoRefill(): Expr = isA("AutoRefill")
+}
+
+class ExhaustedFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: PrescriberOrderFields get() = PrescriberOrderFields(fieldPath + "order")
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val daysSupply: NumField get() = NumField(fieldPath + "daysSupply")
+    val refillsAuthorized: NumField get() = NumField(fieldPath + "refillsAuthorized")
+    val directions: TextField get() = TextField(fieldPath + "directions")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val fillsRecorded: NumField get() = NumField(fieldPath + "fillsRecorded")
+    val refillsRemaining: NumField get() = NumField(fieldPath + "refillsRemaining")
+    val lastFilledOn: DateField get() = DateField(fieldPath + "lastFilledOn")
+    val firstFilledOn: DateField get() = DateField(fieldPath + "firstFilledOn")
+    fun isDiscontinued(): Expr = isA("Discontinued")
+    fun isExpired(): Expr = isA("Expired")
+    fun isCurrent(): Expr = isA("Current")
+    fun isActivePrescription(): Expr = isA("ActivePrescription")
+    fun isFilledPrescription(): Expr = isA("FilledPrescription")
+    fun isVoided(): Expr = isA("Voided")
+    fun isAllergyConflict(): Expr = isA("AllergyConflict")
+    fun isInteractionConflict(): Expr = isA("InteractionConflict")
+    fun isCleared(): Expr = isA("Cleared")
+    fun isFillable(): Expr = isA("Fillable")
+    fun isAutoRefill(): Expr = isA("AutoRefill")
+}
+
+class CurrentFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: PrescriberOrderFields get() = PrescriberOrderFields(fieldPath + "order")
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val daysSupply: NumField get() = NumField(fieldPath + "daysSupply")
+    val refillsAuthorized: NumField get() = NumField(fieldPath + "refillsAuthorized")
+    val directions: TextField get() = TextField(fieldPath + "directions")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val fillsRecorded: NumField get() = NumField(fieldPath + "fillsRecorded")
+    val refillsRemaining: NumField get() = NumField(fieldPath + "refillsRemaining")
+    val lastFilledOn: DateField get() = DateField(fieldPath + "lastFilledOn")
+    val firstFilledOn: DateField get() = DateField(fieldPath + "firstFilledOn")
+    fun isDiscontinued(): Expr = isA("Discontinued")
+    fun isExpired(): Expr = isA("Expired")
+    fun isExhausted(): Expr = isA("Exhausted")
+    fun isActivePrescription(): Expr = isA("ActivePrescription")
+    fun isFilledPrescription(): Expr = isA("FilledPrescription")
+    fun isVoided(): Expr = isA("Voided")
+    fun isAllergyConflict(): Expr = isA("AllergyConflict")
+    fun isInteractionConflict(): Expr = isA("InteractionConflict")
+    fun isCleared(): Expr = isA("Cleared")
+    fun isFillable(): Expr = isA("Fillable")
+    fun isAutoRefill(): Expr = isA("AutoRefill")
+}
+
+class ActivePrescriptionFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: PrescriberOrderFields get() = PrescriberOrderFields(fieldPath + "order")
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val daysSupply: NumField get() = NumField(fieldPath + "daysSupply")
+    val refillsAuthorized: NumField get() = NumField(fieldPath + "refillsAuthorized")
+    val directions: TextField get() = TextField(fieldPath + "directions")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val fillsRecorded: NumField get() = NumField(fieldPath + "fillsRecorded")
+    val refillsRemaining: NumField get() = NumField(fieldPath + "refillsRemaining")
+    val lastFilledOn: DateField get() = DateField(fieldPath + "lastFilledOn")
+    val firstFilledOn: DateField get() = DateField(fieldPath + "firstFilledOn")
+    fun isDiscontinued(): Expr = isA("Discontinued")
+    fun isExpired(): Expr = isA("Expired")
+    fun isExhausted(): Expr = isA("Exhausted")
+    fun isCurrent(): Expr = isA("Current")
+    fun isFilledPrescription(): Expr = isA("FilledPrescription")
+    fun isVoided(): Expr = isA("Voided")
+    fun isAllergyConflict(): Expr = isA("AllergyConflict")
+    fun isInteractionConflict(): Expr = isA("InteractionConflict")
+    fun isCleared(): Expr = isA("Cleared")
+    fun isFillable(): Expr = isA("Fillable")
+    fun isAutoRefill(): Expr = isA("AutoRefill")
+}
+
+class FilledPrescriptionFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: PrescriberOrderFields get() = PrescriberOrderFields(fieldPath + "order")
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val daysSupply: NumField get() = NumField(fieldPath + "daysSupply")
+    val refillsAuthorized: NumField get() = NumField(fieldPath + "refillsAuthorized")
+    val directions: TextField get() = TextField(fieldPath + "directions")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val fillsRecorded: NumField get() = NumField(fieldPath + "fillsRecorded")
+    val refillsRemaining: NumField get() = NumField(fieldPath + "refillsRemaining")
+    val lastFilledOn: DateField get() = DateField(fieldPath + "lastFilledOn")
+    val firstFilledOn: DateField get() = DateField(fieldPath + "firstFilledOn")
+    fun isDiscontinued(): Expr = isA("Discontinued")
+    fun isExpired(): Expr = isA("Expired")
+    fun isExhausted(): Expr = isA("Exhausted")
+    fun isCurrent(): Expr = isA("Current")
+    fun isActivePrescription(): Expr = isA("ActivePrescription")
+    fun isVoided(): Expr = isA("Voided")
+    fun isAllergyConflict(): Expr = isA("AllergyConflict")
+    fun isInteractionConflict(): Expr = isA("InteractionConflict")
+    fun isCleared(): Expr = isA("Cleared")
+    fun isFillable(): Expr = isA("Fillable")
+    fun isAutoRefill(): Expr = isA("AutoRefill")
+}
+
+class VoidedFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: PrescriberOrderFields get() = PrescriberOrderFields(fieldPath + "order")
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val daysSupply: NumField get() = NumField(fieldPath + "daysSupply")
+    val refillsAuthorized: NumField get() = NumField(fieldPath + "refillsAuthorized")
+    val directions: TextField get() = TextField(fieldPath + "directions")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val fillsRecorded: NumField get() = NumField(fieldPath + "fillsRecorded")
+    val refillsRemaining: NumField get() = NumField(fieldPath + "refillsRemaining")
+    val lastFilledOn: DateField get() = DateField(fieldPath + "lastFilledOn")
+    val firstFilledOn: DateField get() = DateField(fieldPath + "firstFilledOn")
+    fun isDiscontinued(): Expr = isA("Discontinued")
+    fun isExpired(): Expr = isA("Expired")
+    fun isExhausted(): Expr = isA("Exhausted")
+    fun isCurrent(): Expr = isA("Current")
+    fun isActivePrescription(): Expr = isA("ActivePrescription")
+    fun isFilledPrescription(): Expr = isA("FilledPrescription")
+    fun isAllergyConflict(): Expr = isA("AllergyConflict")
+    fun isInteractionConflict(): Expr = isA("InteractionConflict")
+    fun isCleared(): Expr = isA("Cleared")
+    fun isFillable(): Expr = isA("Fillable")
+    fun isAutoRefill(): Expr = isA("AutoRefill")
+}
+
+class AllergyConflictFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: PrescriberOrderFields get() = PrescriberOrderFields(fieldPath + "order")
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val daysSupply: NumField get() = NumField(fieldPath + "daysSupply")
+    val refillsAuthorized: NumField get() = NumField(fieldPath + "refillsAuthorized")
+    val directions: TextField get() = TextField(fieldPath + "directions")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val fillsRecorded: NumField get() = NumField(fieldPath + "fillsRecorded")
+    val refillsRemaining: NumField get() = NumField(fieldPath + "refillsRemaining")
+    val lastFilledOn: DateField get() = DateField(fieldPath + "lastFilledOn")
+    val firstFilledOn: DateField get() = DateField(fieldPath + "firstFilledOn")
+    fun isDiscontinued(): Expr = isA("Discontinued")
+    fun isExpired(): Expr = isA("Expired")
+    fun isExhausted(): Expr = isA("Exhausted")
+    fun isCurrent(): Expr = isA("Current")
+    fun isActivePrescription(): Expr = isA("ActivePrescription")
+    fun isFilledPrescription(): Expr = isA("FilledPrescription")
+    fun isVoided(): Expr = isA("Voided")
+    fun isInteractionConflict(): Expr = isA("InteractionConflict")
+    fun isCleared(): Expr = isA("Cleared")
+    fun isFillable(): Expr = isA("Fillable")
+    fun isAutoRefill(): Expr = isA("AutoRefill")
+}
+
+class InteractionConflictFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: PrescriberOrderFields get() = PrescriberOrderFields(fieldPath + "order")
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val daysSupply: NumField get() = NumField(fieldPath + "daysSupply")
+    val refillsAuthorized: NumField get() = NumField(fieldPath + "refillsAuthorized")
+    val directions: TextField get() = TextField(fieldPath + "directions")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val fillsRecorded: NumField get() = NumField(fieldPath + "fillsRecorded")
+    val refillsRemaining: NumField get() = NumField(fieldPath + "refillsRemaining")
+    val lastFilledOn: DateField get() = DateField(fieldPath + "lastFilledOn")
+    val firstFilledOn: DateField get() = DateField(fieldPath + "firstFilledOn")
+    fun isDiscontinued(): Expr = isA("Discontinued")
+    fun isExpired(): Expr = isA("Expired")
+    fun isExhausted(): Expr = isA("Exhausted")
+    fun isCurrent(): Expr = isA("Current")
+    fun isActivePrescription(): Expr = isA("ActivePrescription")
+    fun isFilledPrescription(): Expr = isA("FilledPrescription")
+    fun isVoided(): Expr = isA("Voided")
+    fun isAllergyConflict(): Expr = isA("AllergyConflict")
+    fun isCleared(): Expr = isA("Cleared")
+    fun isFillable(): Expr = isA("Fillable")
+    fun isAutoRefill(): Expr = isA("AutoRefill")
+}
+
+class ClearedFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: PrescriberOrderFields get() = PrescriberOrderFields(fieldPath + "order")
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val daysSupply: NumField get() = NumField(fieldPath + "daysSupply")
+    val refillsAuthorized: NumField get() = NumField(fieldPath + "refillsAuthorized")
+    val directions: TextField get() = TextField(fieldPath + "directions")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val fillsRecorded: NumField get() = NumField(fieldPath + "fillsRecorded")
+    val refillsRemaining: NumField get() = NumField(fieldPath + "refillsRemaining")
+    val lastFilledOn: DateField get() = DateField(fieldPath + "lastFilledOn")
+    val firstFilledOn: DateField get() = DateField(fieldPath + "firstFilledOn")
+    fun isDiscontinued(): Expr = isA("Discontinued")
+    fun isExpired(): Expr = isA("Expired")
+    fun isExhausted(): Expr = isA("Exhausted")
+    fun isCurrent(): Expr = isA("Current")
+    fun isActivePrescription(): Expr = isA("ActivePrescription")
+    fun isFilledPrescription(): Expr = isA("FilledPrescription")
+    fun isVoided(): Expr = isA("Voided")
+    fun isAllergyConflict(): Expr = isA("AllergyConflict")
+    fun isInteractionConflict(): Expr = isA("InteractionConflict")
+    fun isFillable(): Expr = isA("Fillable")
+    fun isAutoRefill(): Expr = isA("AutoRefill")
+}
+
+class FillableFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: PrescriberOrderFields get() = PrescriberOrderFields(fieldPath + "order")
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val daysSupply: NumField get() = NumField(fieldPath + "daysSupply")
+    val refillsAuthorized: NumField get() = NumField(fieldPath + "refillsAuthorized")
+    val directions: TextField get() = TextField(fieldPath + "directions")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val fillsRecorded: NumField get() = NumField(fieldPath + "fillsRecorded")
+    val refillsRemaining: NumField get() = NumField(fieldPath + "refillsRemaining")
+    val lastFilledOn: DateField get() = DateField(fieldPath + "lastFilledOn")
+    val firstFilledOn: DateField get() = DateField(fieldPath + "firstFilledOn")
+    fun isDiscontinued(): Expr = isA("Discontinued")
+    fun isExpired(): Expr = isA("Expired")
+    fun isExhausted(): Expr = isA("Exhausted")
+    fun isCurrent(): Expr = isA("Current")
+    fun isActivePrescription(): Expr = isA("ActivePrescription")
+    fun isFilledPrescription(): Expr = isA("FilledPrescription")
+    fun isVoided(): Expr = isA("Voided")
+    fun isAllergyConflict(): Expr = isA("AllergyConflict")
+    fun isInteractionConflict(): Expr = isA("InteractionConflict")
+    fun isCleared(): Expr = isA("Cleared")
+    fun isAutoRefill(): Expr = isA("AutoRefill")
+}
+
+class MultiplePrescribersFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val birthDate: DateField get() = DateField(fieldPath + "birthDate")
+    val phone: TextField get() = TextField(fieldPath + "phone")
+    val plan: InsurancePlanFields get() = InsurancePlanFields(fieldPath + "plan")
+}
+
+class VerifiedFillFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val fillNumber: NumField get() = NumField(fieldPath + "fillNumber")
+    val filledBy: StaffFields get() = StaffFields(fieldPath + "filledBy")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+    val filledOn: DateField get() = DateField(fieldPath + "filledOn")
+    val filledAt: DateTimeField get() = DateTimeField(fieldPath + "filledAt")
+    val total: NumField get() = NumField(fieldPath + "total")
+    val amountDue: NumField get() = NumField(fieldPath + "amountDue")
+    fun isRejectedFill(): Expr = isA("RejectedFill")
+    fun isConsumingFill(): Expr = isA("ConsumingFill")
+    fun isCounsellingDue(): Expr = isA("CounsellingDue")
+    fun isReadyForPickup(): Expr = isA("ReadyForPickup")
+    fun isUncollected(): Expr = isA("Uncollected")
+    fun isInsuredFill(): Expr = isA("InsuredFill")
+}
+
+class RejectedFillFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val fillNumber: NumField get() = NumField(fieldPath + "fillNumber")
+    val filledBy: StaffFields get() = StaffFields(fieldPath + "filledBy")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+    val filledOn: DateField get() = DateField(fieldPath + "filledOn")
+    val filledAt: DateTimeField get() = DateTimeField(fieldPath + "filledAt")
+    val total: NumField get() = NumField(fieldPath + "total")
+    val amountDue: NumField get() = NumField(fieldPath + "amountDue")
+    fun isVerifiedFill(): Expr = isA("VerifiedFill")
+    fun isConsumingFill(): Expr = isA("ConsumingFill")
+    fun isCounsellingDue(): Expr = isA("CounsellingDue")
+    fun isReadyForPickup(): Expr = isA("ReadyForPickup")
+    fun isUncollected(): Expr = isA("Uncollected")
+    fun isInsuredFill(): Expr = isA("InsuredFill")
+}
+
+class ConsumingFillFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val fillNumber: NumField get() = NumField(fieldPath + "fillNumber")
+    val filledBy: StaffFields get() = StaffFields(fieldPath + "filledBy")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+    val filledOn: DateField get() = DateField(fieldPath + "filledOn")
+    val filledAt: DateTimeField get() = DateTimeField(fieldPath + "filledAt")
+    val total: NumField get() = NumField(fieldPath + "total")
+    val amountDue: NumField get() = NumField(fieldPath + "amountDue")
+    fun isVerifiedFill(): Expr = isA("VerifiedFill")
+    fun isRejectedFill(): Expr = isA("RejectedFill")
+    fun isCounsellingDue(): Expr = isA("CounsellingDue")
+    fun isReadyForPickup(): Expr = isA("ReadyForPickup")
+    fun isUncollected(): Expr = isA("Uncollected")
+    fun isInsuredFill(): Expr = isA("InsuredFill")
+}
+
+class CounsellingDueFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val fillNumber: NumField get() = NumField(fieldPath + "fillNumber")
+    val filledBy: StaffFields get() = StaffFields(fieldPath + "filledBy")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+    val filledOn: DateField get() = DateField(fieldPath + "filledOn")
+    val filledAt: DateTimeField get() = DateTimeField(fieldPath + "filledAt")
+    val total: NumField get() = NumField(fieldPath + "total")
+    val amountDue: NumField get() = NumField(fieldPath + "amountDue")
+    fun isVerifiedFill(): Expr = isA("VerifiedFill")
+    fun isRejectedFill(): Expr = isA("RejectedFill")
+    fun isConsumingFill(): Expr = isA("ConsumingFill")
+    fun isReadyForPickup(): Expr = isA("ReadyForPickup")
+    fun isUncollected(): Expr = isA("Uncollected")
+    fun isInsuredFill(): Expr = isA("InsuredFill")
+}
+
+class ReadyForPickupFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val fillNumber: NumField get() = NumField(fieldPath + "fillNumber")
+    val filledBy: StaffFields get() = StaffFields(fieldPath + "filledBy")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+    val filledOn: DateField get() = DateField(fieldPath + "filledOn")
+    val filledAt: DateTimeField get() = DateTimeField(fieldPath + "filledAt")
+    val total: NumField get() = NumField(fieldPath + "total")
+    val amountDue: NumField get() = NumField(fieldPath + "amountDue")
+    val readyOn: DateField get() = DateField(fieldPath + "readyOn")
+    fun isVerifiedFill(): Expr = isA("VerifiedFill")
+    fun isRejectedFill(): Expr = isA("RejectedFill")
+    fun isConsumingFill(): Expr = isA("ConsumingFill")
+    fun isCounsellingDue(): Expr = isA("CounsellingDue")
+    fun isUncollected(): Expr = isA("Uncollected")
+    fun isInsuredFill(): Expr = isA("InsuredFill")
+}
+
+class UncollectedFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val fillNumber: NumField get() = NumField(fieldPath + "fillNumber")
+    val filledBy: StaffFields get() = StaffFields(fieldPath + "filledBy")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+    val filledOn: DateField get() = DateField(fieldPath + "filledOn")
+    val filledAt: DateTimeField get() = DateTimeField(fieldPath + "filledAt")
+    val total: NumField get() = NumField(fieldPath + "total")
+    val amountDue: NumField get() = NumField(fieldPath + "amountDue")
+    val readyOn: DateField get() = DateField(fieldPath + "readyOn")
+    fun isVerifiedFill(): Expr = isA("VerifiedFill")
+    fun isRejectedFill(): Expr = isA("RejectedFill")
+    fun isConsumingFill(): Expr = isA("ConsumingFill")
+    fun isCounsellingDue(): Expr = isA("CounsellingDue")
+    fun isReadyForPickup(): Expr = isA("ReadyForPickup")
+    fun isInsuredFill(): Expr = isA("InsuredFill")
+}
+
+class OpenRefillTaskFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val fillsAtRequest: NumField get() = NumField(fieldPath + "fillsAtRequest")
+    val requestedOn: DateField get() = DateField(fieldPath + "requestedOn")
+    fun isOverdueRefillTask(): Expr = isA("OverdueRefillTask")
+}
+
+class OverdueRefillTaskFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val requestKey: TextField get() = TextField(fieldPath + "requestKey")
+    val fillsAtRequest: NumField get() = NumField(fieldPath + "fillsAtRequest")
+    val requestedOn: DateField get() = DateField(fieldPath + "requestedOn")
+    fun isOpenRefillTask(): Expr = isA("OpenRefillTask")
+}
+
+class AutoRefillFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: PrescriberOrderFields get() = PrescriberOrderFields(fieldPath + "order")
+    val drug: DrugFields get() = DrugFields(fieldPath + "drug")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val daysSupply: NumField get() = NumField(fieldPath + "daysSupply")
+    val refillsAuthorized: NumField get() = NumField(fieldPath + "refillsAuthorized")
+    val directions: TextField get() = TextField(fieldPath + "directions")
+    val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
+    val fillsRecorded: NumField get() = NumField(fieldPath + "fillsRecorded")
+    val refillsRemaining: NumField get() = NumField(fieldPath + "refillsRemaining")
+    val lastFilledOn: DateField get() = DateField(fieldPath + "lastFilledOn")
+    val firstFilledOn: DateField get() = DateField(fieldPath + "firstFilledOn")
+    fun isDiscontinued(): Expr = isA("Discontinued")
+    fun isExpired(): Expr = isA("Expired")
+    fun isExhausted(): Expr = isA("Exhausted")
+    fun isCurrent(): Expr = isA("Current")
+    fun isActivePrescription(): Expr = isA("ActivePrescription")
+    fun isFilledPrescription(): Expr = isA("FilledPrescription")
+    fun isVoided(): Expr = isA("Voided")
+    fun isAllergyConflict(): Expr = isA("AllergyConflict")
+    fun isInteractionConflict(): Expr = isA("InteractionConflict")
+    fun isCleared(): Expr = isA("Cleared")
+    fun isFillable(): Expr = isA("Fillable")
+}
+
+class InsuredFillFields(path: List<String> = emptyList()) : Fields(path) {
+    val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
+    val lot: StockLotFields get() = StockLotFields(fieldPath + "lot")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val fillNumber: NumField get() = NumField(fieldPath + "fillNumber")
+    val filledBy: StaffFields get() = StaffFields(fieldPath + "filledBy")
+    val unitPrice: NumField get() = NumField(fieldPath + "unitPrice")
+    val filledOn: DateField get() = DateField(fieldPath + "filledOn")
+    val filledAt: DateTimeField get() = DateTimeField(fieldPath + "filledAt")
+    val total: NumField get() = NumField(fieldPath + "total")
+    val amountDue: NumField get() = NumField(fieldPath + "amountDue")
+    val insurer: InsurancePlanFields get() = InsurancePlanFields(fieldPath + "insurer")
+    fun isVerifiedFill(): Expr = isA("VerifiedFill")
+    fun isRejectedFill(): Expr = isA("RejectedFill")
+    fun isConsumingFill(): Expr = isA("ConsumingFill")
+    fun isCounsellingDue(): Expr = isA("CounsellingDue")
+    fun isReadyForPickup(): Expr = isA("ReadyForPickup")
+    fun isUncollected(): Expr = isA("Uncollected")
+}
+
+class PendingClaimFields(path: List<String> = emptyList()) : Fields(path) {
+    val fill: FillFields get() = FillFields(fieldPath + "fill")
+    val plan: InsurancePlanFields get() = InsurancePlanFields(fieldPath + "plan")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val claimKey: TextField get() = TextField(fieldPath + "claimKey")
+    val submittedAt: DateTimeField get() = DateTimeField(fieldPath + "submittedAt")
+    val patientPays: NumField get() = NumField(fieldPath + "patientPays")
+    fun isPaidClaim(): Expr = isA("PaidClaim")
+    fun isRejectedClaim(): Expr = isA("RejectedClaim")
+    fun isStaleClaim(): Expr = isA("StaleClaim")
+}
+
+class PaidClaimFields(path: List<String> = emptyList()) : Fields(path) {
+    val fill: FillFields get() = FillFields(fieldPath + "fill")
+    val plan: InsurancePlanFields get() = InsurancePlanFields(fieldPath + "plan")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val claimKey: TextField get() = TextField(fieldPath + "claimKey")
+    val submittedAt: DateTimeField get() = DateTimeField(fieldPath + "submittedAt")
+    val patientPays: NumField get() = NumField(fieldPath + "patientPays")
+    fun isPendingClaim(): Expr = isA("PendingClaim")
+    fun isRejectedClaim(): Expr = isA("RejectedClaim")
+    fun isStaleClaim(): Expr = isA("StaleClaim")
+}
+
+class RejectedClaimFields(path: List<String> = emptyList()) : Fields(path) {
+    val fill: FillFields get() = FillFields(fieldPath + "fill")
+    val plan: InsurancePlanFields get() = InsurancePlanFields(fieldPath + "plan")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val claimKey: TextField get() = TextField(fieldPath + "claimKey")
+    val submittedAt: DateTimeField get() = DateTimeField(fieldPath + "submittedAt")
+    val patientPays: NumField get() = NumField(fieldPath + "patientPays")
+    fun isPendingClaim(): Expr = isA("PendingClaim")
+    fun isPaidClaim(): Expr = isA("PaidClaim")
+    fun isStaleClaim(): Expr = isA("StaleClaim")
+}
+
+class StaleClaimFields(path: List<String> = emptyList()) : Fields(path) {
+    val fill: FillFields get() = FillFields(fieldPath + "fill")
+    val plan: InsurancePlanFields get() = InsurancePlanFields(fieldPath + "plan")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val claimKey: TextField get() = TextField(fieldPath + "claimKey")
+    val submittedAt: DateTimeField get() = DateTimeField(fieldPath + "submittedAt")
+    val patientPays: NumField get() = NumField(fieldPath + "patientPays")
+    fun isPendingClaim(): Expr = isA("PendingClaim")
+    fun isPaidClaim(): Expr = isA("PaidClaim")
+    fun isRejectedClaim(): Expr = isA("RejectedClaim")
 }
 
 fun main() {

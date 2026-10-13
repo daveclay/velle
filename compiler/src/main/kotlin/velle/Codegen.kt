@@ -43,8 +43,11 @@ object Codegen {
             model.refinements.keys.forEach { refinementAccessors(it) }
             model.shapes.keys.forEach { shapeView(it) }
             model.refinements.keys.forEach { refinementView(it) }
+            readSurface()
             specConstant()
             line("}")
+            dataClasses()
+            fieldsClasses()
             mainFn()
             return sb.toString()
         }
@@ -258,6 +261,114 @@ object Codegen {
             line("        override fun equals(other: Any?) = other is View && other.id == id")
             line("        override fun hashCode() = id.hashCode()")
             line("    }")
+        }
+
+        // ── the query API (README §22, the composed query; Read.kt; OQ51) ─────
+        // Per shape and per single-base refinement: a data class (R5), a fields
+        // class for the builder's lambdas, a typed query, and the `read` holder
+        // with the registry (R9). Nothing here is a query: the spec declares
+        // definitions, the caller composes.
+
+        /** The roots a query may name: every readable shape, every single-base refinement. */
+        val queryRoots: List<String> =
+            model.shapes.keys.filterNot { it in model.transients } +
+                model.refinements.keys.filter { r ->
+                    val scope = model.viewScopeOf(r)
+                    scope != null && scope != r && !model.isCrossBase(r) &&
+                        model.basesOf(r).none { it in model.transients }
+                }
+
+        fun isRoot(name: String) = name in queryRoots
+
+        /** The members a data class carries and a fields class exposes: everything but `id`. */
+        fun dataMembers(scope: String): List<Pair<String, MemberInfo>> =
+            model.membersOf(scope).entries.filter { it.key != "id" }.map { it.key to it.value }
+
+        fun readSurface() {
+            line()
+            line("    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──")
+            line("    val read = Read()")
+            line()
+            line("    inner class Read {")
+            line("        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */")
+            line("        val registry = QueryRegistry()")
+            line("        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())")
+            queryRoots.forEach { root ->
+                line("        val ${plural(root)}: ${root}Query get() = ${root}Query(Query(\"$root\"))")
+            }
+            line("    }")
+            queryRoots.forEach { root ->
+                line()
+                line("    inner class ${root}Query(q: Query) : TypedQuery<${root}Fields, $root>(system, q, ${root}Fields(), { materialize$root(it) }) {")
+                line("        override fun with(q: Query) = ${root}Query(q)")
+                line("    }")
+            }
+            queryRoots.forEach { root -> materializer(root) }
+        }
+
+        /** The data class from a handle: every member read at the moment of the query (R5). */
+        fun materializer(root: String) {
+            val own = model.refinements[root]?.members?.filterIsInstance<DerivedProp>()?.map { it.name }?.toSet().orEmpty()
+            line()
+            line("    fun materialize$root(id: Long): $root = $root(")
+            line("        id = id,")
+            for ((name, m) in dataMembers(root)) {
+                val call = if (name in own) "system.getAs(id, \"$root\", \"$name\")" else "system.get(id, \"$name\")"
+                line("        $name = ${readExpr(call, m.type)},")
+            }
+            line("    )")
+        }
+
+        fun dataClasses() {
+            line()
+            line("// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──")
+            line("// References are typed handles (views); navigating one is a further read.")
+            for (root in queryRoots) {
+                line()
+                line("data class $root(")
+                line("    override val id: Long,")
+                for ((name, m) in dataMembers(root)) line("    val $name: ${dataType(m.type)},")
+                line(") : View")
+            }
+        }
+
+        /** Data-class field types: as the views, but views are named through the system class. */
+        fun dataType(t: VType): String = when (t) {
+            is VType.Inst -> "${name}System.${t.shape}View"
+            is VType.Coll -> "List<${name}System.${t.shape}View>"
+            is VType.Optional -> dataType(t.inner) + "?"
+            else -> kotlinType(t)
+        }
+
+        fun fieldsClasses() {
+            line()
+            line("// ── the builder's vocabulary: one field handle per member, memberships per refinement ──")
+            for (root in queryRoots) {
+                line()
+                line("class ${root}Fields(path: List<String> = emptyList()) : Fields(path) {")
+                for ((memberName, m) in dataMembers(root)) {
+                    val handle = fieldHandle(m.type) ?: continue
+                    line("    val $memberName: $handle get() = $handle(fieldPath + \"$memberName\")")
+                }
+                // memberships of every refinement over this root's base (`isOverdueInvoice()`)
+                val base = model.baseOf(root) ?: root
+                model.refinements.keys.filter { r -> isRoot(r) && model.baseOf(r) == base && r != root }.forEach { r ->
+                    line("    fun is$r(): Expr = isA(\"$r\")")
+                }
+                line("}")
+            }
+        }
+
+        /** The field-handle class for a member's type; null for members the builder does not filter on (collections). */
+        fun fieldHandle(t: VType): String? = when (t) {
+            is VType.Num -> "NumField"
+            VType.Text -> "TextField"
+            VType.Bool -> "BoolField"
+            VType.DateT -> "DateField"
+            VType.DateTimeT -> "DateTimeField"
+            is VType.Inst -> if (isRoot(t.shape)) "${t.shape}Fields" else "RefField"
+            is VType.Optional -> fieldHandle(t.inner)
+            else -> null
         }
 
         fun specConstant() {

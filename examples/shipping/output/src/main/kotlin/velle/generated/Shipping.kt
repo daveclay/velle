@@ -91,6 +91,73 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         override fun toString() = "ShippedOrder#$id"
     }
 
+    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    val read = Read()
+
+    inner class Read {
+        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
+        val registry = QueryRegistry()
+        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+        val orders: OrderQuery get() = OrderQuery(Query("Order"))
+        val cancellations: CancellationQuery get() = CancellationQuery(Query("Cancellation"))
+        val shipments: ShipmentQuery get() = ShipmentQuery(Query("Shipment"))
+        val cancelledOrders: CancelledOrderQuery get() = CancelledOrderQuery(Query("CancelledOrder"))
+        val shippedOrders: ShippedOrderQuery get() = ShippedOrderQuery(Query("ShippedOrder"))
+    }
+
+    inner class OrderQuery(q: Query) : TypedQuery<OrderFields, Order>(system, q, OrderFields(), { materializeOrder(it) }) {
+        override fun with(q: Query) = OrderQuery(q)
+    }
+
+    inner class CancellationQuery(q: Query) : TypedQuery<CancellationFields, Cancellation>(system, q, CancellationFields(), { materializeCancellation(it) }) {
+        override fun with(q: Query) = CancellationQuery(q)
+    }
+
+    inner class ShipmentQuery(q: Query) : TypedQuery<ShipmentFields, Shipment>(system, q, ShipmentFields(), { materializeShipment(it) }) {
+        override fun with(q: Query) = ShipmentQuery(q)
+    }
+
+    inner class CancelledOrderQuery(q: Query) : TypedQuery<CancelledOrderFields, CancelledOrder>(system, q, CancelledOrderFields(), { materializeCancelledOrder(it) }) {
+        override fun with(q: Query) = CancelledOrderQuery(q)
+    }
+
+    inner class ShippedOrderQuery(q: Query) : TypedQuery<ShippedOrderFields, ShippedOrder>(system, q, ShippedOrderFields(), { materializeShippedOrder(it) }) {
+        override fun with(q: Query) = ShippedOrderQuery(q)
+    }
+
+    fun materializeOrder(id: Long): Order = Order(
+        id = id,
+        reference = system.get(id, "reference") as String,
+        cancellations = (system.get(id, "cancellations") as List<*>).map { CancellationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+    )
+
+    fun materializeCancellation(id: Long): Cancellation = Cancellation(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        requestedOn = system.get(id, "requestedOn") as LocalDate,
+    )
+
+    fun materializeShipment(id: Long): Shipment = Shipment(
+        id = id,
+        order = OrderView(system.get(id, "order") as Long),
+        shippedOn = system.get(id, "shippedOn") as LocalDate,
+    )
+
+    fun materializeCancelledOrder(id: Long): CancelledOrder = CancelledOrder(
+        id = id,
+        reference = system.get(id, "reference") as String,
+        cancellations = (system.get(id, "cancellations") as List<*>).map { CancellationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+    )
+
+    fun materializeShippedOrder(id: Long): ShippedOrder = ShippedOrder(
+        id = id,
+        reference = system.get(id, "reference") as String,
+        cancellations = (system.get(id, "cancellations") as List<*>).map { CancellationView(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+    )
+
     companion object {
         private val SPEC = """
 -- Shipping: orders, shipments, and cancellations. A deliberately small spec
@@ -162,6 +229,70 @@ shape ShippedOrder = Order where exists (shipments)
 never (Shipment where order is CancelledOrder)
 """
     }
+}
+
+// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
+// References are typed handles (views); navigating one is a further read.
+
+data class Order(
+    override val id: Long,
+    val reference: String,
+    val cancellations: List<ShippingSystem.CancellationView>,
+    val shipments: List<ShippingSystem.ShipmentView>,
+) : View
+
+data class Cancellation(
+    override val id: Long,
+    val order: ShippingSystem.OrderView,
+    val requestedOn: LocalDate,
+) : View
+
+data class Shipment(
+    override val id: Long,
+    val order: ShippingSystem.OrderView,
+    val shippedOn: LocalDate,
+) : View
+
+data class CancelledOrder(
+    override val id: Long,
+    val reference: String,
+    val cancellations: List<ShippingSystem.CancellationView>,
+    val shipments: List<ShippingSystem.ShipmentView>,
+) : View
+
+data class ShippedOrder(
+    override val id: Long,
+    val reference: String,
+    val cancellations: List<ShippingSystem.CancellationView>,
+    val shipments: List<ShippingSystem.ShipmentView>,
+) : View
+
+// ── the builder's vocabulary: one field handle per member, memberships per refinement ──
+
+class OrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val reference: TextField get() = TextField(fieldPath + "reference")
+    fun isCancelledOrder(): Expr = isA("CancelledOrder")
+    fun isShippedOrder(): Expr = isA("ShippedOrder")
+}
+
+class CancellationFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val requestedOn: DateField get() = DateField(fieldPath + "requestedOn")
+}
+
+class ShipmentFields(path: List<String> = emptyList()) : Fields(path) {
+    val order: OrderFields get() = OrderFields(fieldPath + "order")
+    val shippedOn: DateField get() = DateField(fieldPath + "shippedOn")
+}
+
+class CancelledOrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val reference: TextField get() = TextField(fieldPath + "reference")
+    fun isShippedOrder(): Expr = isA("ShippedOrder")
+}
+
+class ShippedOrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val reference: TextField get() = TextField(fieldPath + "reference")
+    fun isCancelledOrder(): Expr = isA("CancelledOrder")
 }
 
 fun main() {

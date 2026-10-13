@@ -167,6 +167,159 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun toString() = "CertifiedMember#$id"
     }
 
+    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    val read = Read()
+
+    inner class Read {
+        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
+        val registry = QueryRegistry()
+        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+        val members: MemberQuery get() = MemberQuery(Query("Member"))
+        val duesPayments: DuesPaymentQuery get() = DuesPaymentQuery(Query("DuesPayment"))
+        val purchases: PurchaseQuery get() = PurchaseQuery(Query("Purchase"))
+        val thankYouNotes: ThankYouNoteQuery get() = ThankYouNoteQuery(Query("ThankYouNote"))
+        val enrollments: EnrollmentQuery get() = EnrollmentQuery(Query("Enrollment"))
+        val safetyWaivers: SafetyWaiverQuery get() = SafetyWaiverQuery(Query("SafetyWaiver"))
+        val orientationRecords: OrientationRecordQuery get() = OrientationRecordQuery(Query("OrientationRecord"))
+        val keycards: KeycardQuery get() = KeycardQuery(Query("Keycard"))
+        val qualifiedPurchases: QualifiedPurchaseQuery get() = QualifiedPurchaseQuery(Query("QualifiedPurchase"))
+        val vipPurchases: VipPurchaseQuery get() = VipPurchaseQuery(Query("VipPurchase"))
+        val certifiedMembers: CertifiedMemberQuery get() = CertifiedMemberQuery(Query("CertifiedMember"))
+    }
+
+    inner class MemberQuery(q: Query) : TypedQuery<MemberFields, Member>(system, q, MemberFields(), { materializeMember(it) }) {
+        override fun with(q: Query) = MemberQuery(q)
+    }
+
+    inner class DuesPaymentQuery(q: Query) : TypedQuery<DuesPaymentFields, DuesPayment>(system, q, DuesPaymentFields(), { materializeDuesPayment(it) }) {
+        override fun with(q: Query) = DuesPaymentQuery(q)
+    }
+
+    inner class PurchaseQuery(q: Query) : TypedQuery<PurchaseFields, Purchase>(system, q, PurchaseFields(), { materializePurchase(it) }) {
+        override fun with(q: Query) = PurchaseQuery(q)
+    }
+
+    inner class ThankYouNoteQuery(q: Query) : TypedQuery<ThankYouNoteFields, ThankYouNote>(system, q, ThankYouNoteFields(), { materializeThankYouNote(it) }) {
+        override fun with(q: Query) = ThankYouNoteQuery(q)
+    }
+
+    inner class EnrollmentQuery(q: Query) : TypedQuery<EnrollmentFields, Enrollment>(system, q, EnrollmentFields(), { materializeEnrollment(it) }) {
+        override fun with(q: Query) = EnrollmentQuery(q)
+    }
+
+    inner class SafetyWaiverQuery(q: Query) : TypedQuery<SafetyWaiverFields, SafetyWaiver>(system, q, SafetyWaiverFields(), { materializeSafetyWaiver(it) }) {
+        override fun with(q: Query) = SafetyWaiverQuery(q)
+    }
+
+    inner class OrientationRecordQuery(q: Query) : TypedQuery<OrientationRecordFields, OrientationRecord>(system, q, OrientationRecordFields(), { materializeOrientationRecord(it) }) {
+        override fun with(q: Query) = OrientationRecordQuery(q)
+    }
+
+    inner class KeycardQuery(q: Query) : TypedQuery<KeycardFields, Keycard>(system, q, KeycardFields(), { materializeKeycard(it) }) {
+        override fun with(q: Query) = KeycardQuery(q)
+    }
+
+    inner class QualifiedPurchaseQuery(q: Query) : TypedQuery<QualifiedPurchaseFields, QualifiedPurchase>(system, q, QualifiedPurchaseFields(), { materializeQualifiedPurchase(it) }) {
+        override fun with(q: Query) = QualifiedPurchaseQuery(q)
+    }
+
+    inner class VipPurchaseQuery(q: Query) : TypedQuery<VipPurchaseFields, VipPurchase>(system, q, VipPurchaseFields(), { materializeVipPurchase(it) }) {
+        override fun with(q: Query) = VipPurchaseQuery(q)
+    }
+
+    inner class CertifiedMemberQuery(q: Query) : TypedQuery<CertifiedMemberFields, CertifiedMember>(system, q, CertifiedMemberFields(), { materializeCertifiedMember(it) }) {
+        override fun with(q: Query) = CertifiedMemberQuery(q)
+    }
+
+    fun materializeMember(id: Long): Member = Member(
+        id = id,
+        name = system.get(id, "name") as String,
+        referrer = (system.get(id, "referrer") as Long?)?.let { MemberView(it) },
+        tier = system.get(id, "tier") as String,
+        foundingReferrer = (system.get(id, "foundingReferrer") as Long?)?.let { MemberView(it) },
+        streak = (system.get(id, "streak") as BigDecimal).intValueExact(),
+        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
+        duesPayments = (system.get(id, "duesPayments") as List<*>).map { DuesPaymentView(it as Long) },
+        purchases = (system.get(id, "purchases") as List<*>).map { PurchaseView(it as Long) },
+        enrollments = (system.get(id, "enrollments") as List<*>).map { EnrollmentView(it as Long) },
+        safetyWaivers = (system.get(id, "safetyWaivers") as List<*>).map { SafetyWaiverView(it as Long) },
+        orientationRecords = (system.get(id, "orientationRecords") as List<*>).map { OrientationRecordView(it as Long) },
+        keycards = (system.get(id, "keycards") as List<*>).map { KeycardView(it as Long) },
+    )
+
+    fun materializeDuesPayment(id: Long): DuesPayment = DuesPayment(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        coveredMonth = system.get(id, "coveredMonth") as String,
+        dueBy = system.get(id, "dueBy") as LocalDate,
+        paidOn = system.get(id, "paidOn") as LocalDate,
+        onTime = system.get(id, "onTime") as Boolean,
+        previous = (system.get(id, "previous") as Long?)?.let { DuesPaymentView(it) },
+        streakAfter = (system.get(id, "streakAfter") as BigDecimal).intValueExact(),
+    )
+
+    fun materializePurchase(id: Long): Purchase = Purchase(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        thankYouNotes = (system.get(id, "thankYouNotes") as List<*>).map { ThankYouNoteView(it as Long) },
+    )
+
+    fun materializeThankYouNote(id: Long): ThankYouNote = ThankYouNote(
+        id = id,
+        purchase = PurchaseView(system.get(id, "purchase") as Long),
+    )
+
+    fun materializeEnrollment(id: Long): Enrollment = Enrollment(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+    )
+
+    fun materializeSafetyWaiver(id: Long): SafetyWaiver = SafetyWaiver(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+    )
+
+    fun materializeOrientationRecord(id: Long): OrientationRecord = OrientationRecord(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+    )
+
+    fun materializeKeycard(id: Long): Keycard = Keycard(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+    )
+
+    fun materializeQualifiedPurchase(id: Long): QualifiedPurchase = QualifiedPurchase(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        thankYouNotes = (system.get(id, "thankYouNotes") as List<*>).map { ThankYouNoteView(it as Long) },
+    )
+
+    fun materializeVipPurchase(id: Long): VipPurchase = VipPurchase(
+        id = id,
+        member = MemberView(system.get(id, "member") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        thankYouNotes = (system.get(id, "thankYouNotes") as List<*>).map { ThankYouNoteView(it as Long) },
+    )
+
+    fun materializeCertifiedMember(id: Long): CertifiedMember = CertifiedMember(
+        id = id,
+        name = system.get(id, "name") as String,
+        referrer = (system.get(id, "referrer") as Long?)?.let { MemberView(it) },
+        tier = system.get(id, "tier") as String,
+        foundingReferrer = (system.get(id, "foundingReferrer") as Long?)?.let { MemberView(it) },
+        streak = (system.get(id, "streak") as BigDecimal).intValueExact(),
+        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
+        duesPayments = (system.get(id, "duesPayments") as List<*>).map { DuesPaymentView(it as Long) },
+        purchases = (system.get(id, "purchases") as List<*>).map { PurchaseView(it as Long) },
+        enrollments = (system.get(id, "enrollments") as List<*>).map { EnrollmentView(it as Long) },
+        safetyWaivers = (system.get(id, "safetyWaivers") as List<*>).map { SafetyWaiverView(it as Long) },
+        orientationRecords = (system.get(id, "orientationRecords") as List<*>).map { OrientationRecordView(it as Long) },
+        keycards = (system.get(id, "keycards") as List<*>).map { KeycardView(it as Long) },
+    )
+
     companion object {
         private val SPEC = """
 -- Loyalty: a climbing club with referrals, monthly dues, and gear purchases —
@@ -348,6 +501,166 @@ rule IssueKeycard when (CertifiedMember where not exists Keycard for this) {
 }
 """
     }
+}
+
+// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
+// References are typed handles (views); navigating one is a further read.
+
+data class Member(
+    override val id: Long,
+    val name: String,
+    val referrer: LoyaltySystem.MemberView?,
+    val tier: String,
+    val foundingReferrer: LoyaltySystem.MemberView?,
+    val streak: Int,
+    val members: List<LoyaltySystem.MemberView>,
+    val duesPayments: List<LoyaltySystem.DuesPaymentView>,
+    val purchases: List<LoyaltySystem.PurchaseView>,
+    val enrollments: List<LoyaltySystem.EnrollmentView>,
+    val safetyWaivers: List<LoyaltySystem.SafetyWaiverView>,
+    val orientationRecords: List<LoyaltySystem.OrientationRecordView>,
+    val keycards: List<LoyaltySystem.KeycardView>,
+) : View
+
+data class DuesPayment(
+    override val id: Long,
+    val member: LoyaltySystem.MemberView,
+    val coveredMonth: String,
+    val dueBy: LocalDate,
+    val paidOn: LocalDate,
+    val onTime: Boolean,
+    val previous: LoyaltySystem.DuesPaymentView?,
+    val streakAfter: Int,
+) : View
+
+data class Purchase(
+    override val id: Long,
+    val member: LoyaltySystem.MemberView,
+    val amount: BigDecimal,
+    val thankYouNotes: List<LoyaltySystem.ThankYouNoteView>,
+) : View
+
+data class ThankYouNote(
+    override val id: Long,
+    val purchase: LoyaltySystem.PurchaseView,
+) : View
+
+data class Enrollment(
+    override val id: Long,
+    val member: LoyaltySystem.MemberView,
+) : View
+
+data class SafetyWaiver(
+    override val id: Long,
+    val member: LoyaltySystem.MemberView,
+) : View
+
+data class OrientationRecord(
+    override val id: Long,
+    val member: LoyaltySystem.MemberView,
+) : View
+
+data class Keycard(
+    override val id: Long,
+    val member: LoyaltySystem.MemberView,
+) : View
+
+data class QualifiedPurchase(
+    override val id: Long,
+    val member: LoyaltySystem.MemberView,
+    val amount: BigDecimal,
+    val thankYouNotes: List<LoyaltySystem.ThankYouNoteView>,
+) : View
+
+data class VipPurchase(
+    override val id: Long,
+    val member: LoyaltySystem.MemberView,
+    val amount: BigDecimal,
+    val thankYouNotes: List<LoyaltySystem.ThankYouNoteView>,
+) : View
+
+data class CertifiedMember(
+    override val id: Long,
+    val name: String,
+    val referrer: LoyaltySystem.MemberView?,
+    val tier: String,
+    val foundingReferrer: LoyaltySystem.MemberView?,
+    val streak: Int,
+    val members: List<LoyaltySystem.MemberView>,
+    val duesPayments: List<LoyaltySystem.DuesPaymentView>,
+    val purchases: List<LoyaltySystem.PurchaseView>,
+    val enrollments: List<LoyaltySystem.EnrollmentView>,
+    val safetyWaivers: List<LoyaltySystem.SafetyWaiverView>,
+    val orientationRecords: List<LoyaltySystem.OrientationRecordView>,
+    val keycards: List<LoyaltySystem.KeycardView>,
+) : View
+
+// ── the builder's vocabulary: one field handle per member, memberships per refinement ──
+
+class MemberFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val referrer: MemberFields get() = MemberFields(fieldPath + "referrer")
+    val tier: TextField get() = TextField(fieldPath + "tier")
+    val foundingReferrer: MemberFields get() = MemberFields(fieldPath + "foundingReferrer")
+    val streak: NumField get() = NumField(fieldPath + "streak")
+    fun isCertifiedMember(): Expr = isA("CertifiedMember")
+}
+
+class DuesPaymentFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val coveredMonth: TextField get() = TextField(fieldPath + "coveredMonth")
+    val dueBy: DateField get() = DateField(fieldPath + "dueBy")
+    val paidOn: DateField get() = DateField(fieldPath + "paidOn")
+    val onTime: BoolField get() = BoolField(fieldPath + "onTime")
+    val previous: DuesPaymentFields get() = DuesPaymentFields(fieldPath + "previous")
+    val streakAfter: NumField get() = NumField(fieldPath + "streakAfter")
+}
+
+class PurchaseFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    fun isQualifiedPurchase(): Expr = isA("QualifiedPurchase")
+    fun isVipPurchase(): Expr = isA("VipPurchase")
+}
+
+class ThankYouNoteFields(path: List<String> = emptyList()) : Fields(path) {
+    val purchase: PurchaseFields get() = PurchaseFields(fieldPath + "purchase")
+}
+
+class EnrollmentFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+}
+
+class SafetyWaiverFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+}
+
+class OrientationRecordFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+}
+
+class KeycardFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+}
+
+class QualifiedPurchaseFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    fun isVipPurchase(): Expr = isA("VipPurchase")
+}
+
+class VipPurchaseFields(path: List<String> = emptyList()) : Fields(path) {
+    val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    fun isQualifiedPurchase(): Expr = isA("QualifiedPurchase")
+}
+
+class CertifiedMemberFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val referrer: MemberFields get() = MemberFields(fieldPath + "referrer")
+    val tier: TextField get() = TextField(fieldPath + "tier")
+    val foundingReferrer: MemberFields get() = MemberFields(fieldPath + "foundingReferrer")
+    val streak: NumField get() = NumField(fieldPath + "streak")
 }
 
 fun main() {

@@ -298,6 +298,320 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun toString() = "ArchivedInvoice#$id"
     }
 
+    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    val read = Read()
+
+    inner class Read {
+        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
+        val registry = QueryRegistry()
+        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+        val customers: CustomerQuery get() = CustomerQuery(Query("Customer"))
+        val correctEmails: CorrectEmailQuery get() = CorrectEmailQuery(Query("CorrectEmail"))
+        val invoices: InvoiceQuery get() = InvoiceQuery(Query("Invoice"))
+        val lineItems: LineItemQuery get() = LineItemQuery(Query("LineItem"))
+        val payments: PaymentQuery get() = PaymentQuery(Query("Payment"))
+        val receipts: ReceiptQuery get() = ReceiptQuery(Query("Receipt"))
+        val receiptEmails: ReceiptEmailQuery get() = ReceiptEmailQuery(Query("ReceiptEmail"))
+        val reminders: ReminderQuery get() = ReminderQuery(Query("Reminder"))
+        val issuances: IssuanceQuery get() = IssuanceQuery(Query("Issuance"))
+        val dueChangeRefusals: DueChangeRefusalQuery get() = DueChangeRefusalQuery(Query("DueChangeRefusal"))
+        val archiveRequests: ArchiveRequestQuery get() = ArchiveRequestQuery(Query("ArchiveRequest"))
+        val unarchiveRequests: UnarchiveRequestQuery get() = UnarchiveRequestQuery(Query("UnarchiveRequest"))
+        val unarchiveNotices: UnarchiveNoticeQuery get() = UnarchiveNoticeQuery(Query("UnarchiveNotice"))
+        val paidInvoices: PaidInvoiceQuery get() = PaidInvoiceQuery(Query("PaidInvoice"))
+        val unemailedReceipts: UnemailedReceiptQuery get() = UnemailedReceiptQuery(Query("UnemailedReceipt"))
+        val overdueInvoices: OverdueInvoiceQuery get() = OverdueInvoiceQuery(Query("OverdueInvoice"))
+        val actionableOverdues: ActionableOverdueQuery get() = ActionableOverdueQuery(Query("ActionableOverdue"))
+        val issuedInvoices: IssuedInvoiceQuery get() = IssuedInvoiceQuery(Query("IssuedInvoice"))
+        val archivedInvoices: ArchivedInvoiceQuery get() = ArchivedInvoiceQuery(Query("ArchivedInvoice"))
+    }
+
+    inner class CustomerQuery(q: Query) : TypedQuery<CustomerFields, Customer>(system, q, CustomerFields(), { materializeCustomer(it) }) {
+        override fun with(q: Query) = CustomerQuery(q)
+    }
+
+    inner class CorrectEmailQuery(q: Query) : TypedQuery<CorrectEmailFields, CorrectEmail>(system, q, CorrectEmailFields(), { materializeCorrectEmail(it) }) {
+        override fun with(q: Query) = CorrectEmailQuery(q)
+    }
+
+    inner class InvoiceQuery(q: Query) : TypedQuery<InvoiceFields, Invoice>(system, q, InvoiceFields(), { materializeInvoice(it) }) {
+        override fun with(q: Query) = InvoiceQuery(q)
+    }
+
+    inner class LineItemQuery(q: Query) : TypedQuery<LineItemFields, LineItem>(system, q, LineItemFields(), { materializeLineItem(it) }) {
+        override fun with(q: Query) = LineItemQuery(q)
+    }
+
+    inner class PaymentQuery(q: Query) : TypedQuery<PaymentFields, Payment>(system, q, PaymentFields(), { materializePayment(it) }) {
+        override fun with(q: Query) = PaymentQuery(q)
+    }
+
+    inner class ReceiptQuery(q: Query) : TypedQuery<ReceiptFields, Receipt>(system, q, ReceiptFields(), { materializeReceipt(it) }) {
+        override fun with(q: Query) = ReceiptQuery(q)
+    }
+
+    inner class ReceiptEmailQuery(q: Query) : TypedQuery<ReceiptEmailFields, ReceiptEmail>(system, q, ReceiptEmailFields(), { materializeReceiptEmail(it) }) {
+        override fun with(q: Query) = ReceiptEmailQuery(q)
+    }
+
+    inner class ReminderQuery(q: Query) : TypedQuery<ReminderFields, Reminder>(system, q, ReminderFields(), { materializeReminder(it) }) {
+        override fun with(q: Query) = ReminderQuery(q)
+    }
+
+    inner class IssuanceQuery(q: Query) : TypedQuery<IssuanceFields, Issuance>(system, q, IssuanceFields(), { materializeIssuance(it) }) {
+        override fun with(q: Query) = IssuanceQuery(q)
+    }
+
+    inner class DueChangeRefusalQuery(q: Query) : TypedQuery<DueChangeRefusalFields, DueChangeRefusal>(system, q, DueChangeRefusalFields(), { materializeDueChangeRefusal(it) }) {
+        override fun with(q: Query) = DueChangeRefusalQuery(q)
+    }
+
+    inner class ArchiveRequestQuery(q: Query) : TypedQuery<ArchiveRequestFields, ArchiveRequest>(system, q, ArchiveRequestFields(), { materializeArchiveRequest(it) }) {
+        override fun with(q: Query) = ArchiveRequestQuery(q)
+    }
+
+    inner class UnarchiveRequestQuery(q: Query) : TypedQuery<UnarchiveRequestFields, UnarchiveRequest>(system, q, UnarchiveRequestFields(), { materializeUnarchiveRequest(it) }) {
+        override fun with(q: Query) = UnarchiveRequestQuery(q)
+    }
+
+    inner class UnarchiveNoticeQuery(q: Query) : TypedQuery<UnarchiveNoticeFields, UnarchiveNotice>(system, q, UnarchiveNoticeFields(), { materializeUnarchiveNotice(it) }) {
+        override fun with(q: Query) = UnarchiveNoticeQuery(q)
+    }
+
+    inner class PaidInvoiceQuery(q: Query) : TypedQuery<PaidInvoiceFields, PaidInvoice>(system, q, PaidInvoiceFields(), { materializePaidInvoice(it) }) {
+        override fun with(q: Query) = PaidInvoiceQuery(q)
+    }
+
+    inner class UnemailedReceiptQuery(q: Query) : TypedQuery<UnemailedReceiptFields, UnemailedReceipt>(system, q, UnemailedReceiptFields(), { materializeUnemailedReceipt(it) }) {
+        override fun with(q: Query) = UnemailedReceiptQuery(q)
+    }
+
+    inner class OverdueInvoiceQuery(q: Query) : TypedQuery<OverdueInvoiceFields, OverdueInvoice>(system, q, OverdueInvoiceFields(), { materializeOverdueInvoice(it) }) {
+        override fun with(q: Query) = OverdueInvoiceQuery(q)
+    }
+
+    inner class ActionableOverdueQuery(q: Query) : TypedQuery<ActionableOverdueFields, ActionableOverdue>(system, q, ActionableOverdueFields(), { materializeActionableOverdue(it) }) {
+        override fun with(q: Query) = ActionableOverdueQuery(q)
+    }
+
+    inner class IssuedInvoiceQuery(q: Query) : TypedQuery<IssuedInvoiceFields, IssuedInvoice>(system, q, IssuedInvoiceFields(), { materializeIssuedInvoice(it) }) {
+        override fun with(q: Query) = IssuedInvoiceQuery(q)
+    }
+
+    inner class ArchivedInvoiceQuery(q: Query) : TypedQuery<ArchivedInvoiceFields, ArchivedInvoice>(system, q, ArchivedInvoiceFields(), { materializeArchivedInvoice(it) }) {
+        override fun with(q: Query) = ArchivedInvoiceQuery(q)
+    }
+
+    fun materializeCustomer(id: Long): Customer = Customer(
+        id = id,
+        name = system.get(id, "name") as String,
+        email = system.get(id, "email") as String,
+        signedUpOn = system.get(id, "signedUpOn") as Instant,
+        largestPayment = system.get(id, "largestPayment") as BigDecimal,
+        correctEmails = (system.get(id, "correctEmails") as List<*>).map { CorrectEmailView(it as Long) },
+        invoices = (system.get(id, "invoices") as List<*>).map { InvoiceView(it as Long) },
+    )
+
+    fun materializeCorrectEmail(id: Long): CorrectEmail = CorrectEmail(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        corrected = system.get(id, "corrected") as String,
+    )
+
+    fun materializeInvoice(id: Long): Invoice = Invoice(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        due = system.get(id, "due") as LocalDate,
+        reference = system.get(id, "reference") as String,
+        issuedOn = system.get(id, "issuedOn") as Instant,
+        total = system.get(id, "total") as BigDecimal,
+        balance = system.get(id, "balance") as BigDecimal,
+        status = system.get(id, "status") as String,
+        lineItems = (system.get(id, "lineItems") as List<*>).map { LineItemView(it as Long) },
+        payments = (system.get(id, "payments") as List<*>).map { PaymentView(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
+        reminders = (system.get(id, "reminders") as List<*>).map { ReminderView(it as Long) },
+        issuances = (system.get(id, "issuances") as List<*>).map { IssuanceView(it as Long) },
+        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { DueChangeRefusalView(it as Long) },
+        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { ArchiveRequestView(it as Long) },
+        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { UnarchiveRequestView(it as Long) },
+        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { UnarchiveNoticeView(it as Long) },
+    )
+
+    fun materializeLineItem(id: Long): LineItem = LineItem(
+        id = id,
+        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        description = system.get(id, "description") as String,
+        price = system.get(id, "price") as BigDecimal,
+        quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
+        amount = system.get(id, "amount") as BigDecimal,
+    )
+
+    fun materializePayment(id: Long): Payment = Payment(
+        id = id,
+        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        amount = system.get(id, "amount") as BigDecimal,
+        receivedOn = system.get(id, "receivedOn") as Instant,
+    )
+
+    fun materializeReceipt(id: Long): Receipt = Receipt(
+        id = id,
+        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        sentOn = system.get(id, "sentOn") as Instant,
+        receiptEmails = (system.get(id, "receiptEmails") as List<*>).map { ReceiptEmailView(it as Long) },
+    )
+
+    fun materializeReceiptEmail(id: Long): ReceiptEmail = ReceiptEmail(
+        id = id,
+        receipt = ReceiptView(system.get(id, "receipt") as Long),
+        queuedOn = system.get(id, "queuedOn") as Instant,
+    )
+
+    fun materializeReminder(id: Long): Reminder = Reminder(
+        id = id,
+        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        sentOn = system.get(id, "sentOn") as LocalDate,
+    )
+
+    fun materializeIssuance(id: Long): Issuance = Issuance(
+        id = id,
+        invoice = InvoiceView(system.get(id, "invoice") as Long),
+    )
+
+    fun materializeDueChangeRefusal(id: Long): DueChangeRefusal = DueChangeRefusal(
+        id = id,
+        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        requestedDue = system.get(id, "requestedDue") as LocalDate,
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeArchiveRequest(id: Long): ArchiveRequest = ArchiveRequest(
+        id = id,
+        invoice = InvoiceView(system.get(id, "invoice") as Long),
+    )
+
+    fun materializeUnarchiveRequest(id: Long): UnarchiveRequest = UnarchiveRequest(
+        id = id,
+        invoice = InvoiceView(system.get(id, "invoice") as Long),
+    )
+
+    fun materializeUnarchiveNotice(id: Long): UnarchiveNotice = UnarchiveNotice(
+        id = id,
+        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        wasArchivedOn = system.get(id, "wasArchivedOn") as LocalDate,
+        noticedOn = system.get(id, "noticedOn") as Instant,
+    )
+
+    fun materializePaidInvoice(id: Long): PaidInvoice = PaidInvoice(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        due = system.get(id, "due") as LocalDate,
+        reference = system.get(id, "reference") as String,
+        issuedOn = system.get(id, "issuedOn") as Instant,
+        total = system.get(id, "total") as BigDecimal,
+        balance = system.get(id, "balance") as BigDecimal,
+        status = system.get(id, "status") as String,
+        lineItems = (system.get(id, "lineItems") as List<*>).map { LineItemView(it as Long) },
+        payments = (system.get(id, "payments") as List<*>).map { PaymentView(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
+        reminders = (system.get(id, "reminders") as List<*>).map { ReminderView(it as Long) },
+        issuances = (system.get(id, "issuances") as List<*>).map { IssuanceView(it as Long) },
+        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { DueChangeRefusalView(it as Long) },
+        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { ArchiveRequestView(it as Long) },
+        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { UnarchiveRequestView(it as Long) },
+        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { UnarchiveNoticeView(it as Long) },
+    )
+
+    fun materializeUnemailedReceipt(id: Long): UnemailedReceipt = UnemailedReceipt(
+        id = id,
+        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        sentOn = system.get(id, "sentOn") as Instant,
+        receiptEmails = (system.get(id, "receiptEmails") as List<*>).map { ReceiptEmailView(it as Long) },
+    )
+
+    fun materializeOverdueInvoice(id: Long): OverdueInvoice = OverdueInvoice(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        due = system.get(id, "due") as LocalDate,
+        reference = system.get(id, "reference") as String,
+        issuedOn = system.get(id, "issuedOn") as Instant,
+        total = system.get(id, "total") as BigDecimal,
+        balance = system.get(id, "balance") as BigDecimal,
+        status = system.get(id, "status") as String,
+        lineItems = (system.get(id, "lineItems") as List<*>).map { LineItemView(it as Long) },
+        payments = (system.get(id, "payments") as List<*>).map { PaymentView(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
+        reminders = (system.get(id, "reminders") as List<*>).map { ReminderView(it as Long) },
+        issuances = (system.get(id, "issuances") as List<*>).map { IssuanceView(it as Long) },
+        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { DueChangeRefusalView(it as Long) },
+        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { ArchiveRequestView(it as Long) },
+        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { UnarchiveRequestView(it as Long) },
+        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { UnarchiveNoticeView(it as Long) },
+    )
+
+    fun materializeActionableOverdue(id: Long): ActionableOverdue = ActionableOverdue(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        due = system.get(id, "due") as LocalDate,
+        reference = system.get(id, "reference") as String,
+        issuedOn = system.get(id, "issuedOn") as Instant,
+        total = system.get(id, "total") as BigDecimal,
+        balance = system.get(id, "balance") as BigDecimal,
+        status = system.get(id, "status") as String,
+        lineItems = (system.get(id, "lineItems") as List<*>).map { LineItemView(it as Long) },
+        payments = (system.get(id, "payments") as List<*>).map { PaymentView(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
+        reminders = (system.get(id, "reminders") as List<*>).map { ReminderView(it as Long) },
+        issuances = (system.get(id, "issuances") as List<*>).map { IssuanceView(it as Long) },
+        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { DueChangeRefusalView(it as Long) },
+        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { ArchiveRequestView(it as Long) },
+        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { UnarchiveRequestView(it as Long) },
+        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { UnarchiveNoticeView(it as Long) },
+        archivedOn = system.get(id, "archivedOn") as LocalDate,
+    )
+
+    fun materializeIssuedInvoice(id: Long): IssuedInvoice = IssuedInvoice(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        due = system.get(id, "due") as LocalDate,
+        reference = system.get(id, "reference") as String,
+        issuedOn = system.get(id, "issuedOn") as Instant,
+        total = system.get(id, "total") as BigDecimal,
+        balance = system.get(id, "balance") as BigDecimal,
+        status = system.get(id, "status") as String,
+        lineItems = (system.get(id, "lineItems") as List<*>).map { LineItemView(it as Long) },
+        payments = (system.get(id, "payments") as List<*>).map { PaymentView(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
+        reminders = (system.get(id, "reminders") as List<*>).map { ReminderView(it as Long) },
+        issuances = (system.get(id, "issuances") as List<*>).map { IssuanceView(it as Long) },
+        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { DueChangeRefusalView(it as Long) },
+        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { ArchiveRequestView(it as Long) },
+        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { UnarchiveRequestView(it as Long) },
+        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { UnarchiveNoticeView(it as Long) },
+    )
+
+    fun materializeArchivedInvoice(id: Long): ArchivedInvoice = ArchivedInvoice(
+        id = id,
+        customer = CustomerView(system.get(id, "customer") as Long),
+        due = system.get(id, "due") as LocalDate,
+        reference = system.get(id, "reference") as String,
+        issuedOn = system.get(id, "issuedOn") as Instant,
+        total = system.get(id, "total") as BigDecimal,
+        balance = system.get(id, "balance") as BigDecimal,
+        status = system.get(id, "status") as String,
+        lineItems = (system.get(id, "lineItems") as List<*>).map { LineItemView(it as Long) },
+        payments = (system.get(id, "payments") as List<*>).map { PaymentView(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
+        reminders = (system.get(id, "reminders") as List<*>).map { ReminderView(it as Long) },
+        issuances = (system.get(id, "issuances") as List<*>).map { IssuanceView(it as Long) },
+        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { DueChangeRefusalView(it as Long) },
+        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { ArchiveRequestView(it as Long) },
+        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { UnarchiveRequestView(it as Long) },
+        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { UnarchiveNoticeView(it as Long) },
+        archivedOn = system.getAs(id, "ArchivedInvoice", "archivedOn") as LocalDate,
+    )
+
     companion object {
         private val SPEC = """
 -- Billing: a small invoicing system — the first Velle spec, and v0's test fixture.
@@ -529,6 +843,380 @@ rule NoteUnarchival when leaving ArchivedInvoice {
 }
 """
     }
+}
+
+// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
+// References are typed handles (views); navigating one is a further read.
+
+data class Customer(
+    override val id: Long,
+    val name: String,
+    val email: String,
+    val signedUpOn: Instant,
+    val largestPayment: BigDecimal,
+    val correctEmails: List<BillingSystem.CorrectEmailView>,
+    val invoices: List<BillingSystem.InvoiceView>,
+) : View
+
+data class CorrectEmail(
+    override val id: Long,
+    val customer: BillingSystem.CustomerView,
+    val corrected: String,
+) : View
+
+data class Invoice(
+    override val id: Long,
+    val customer: BillingSystem.CustomerView,
+    val due: LocalDate,
+    val reference: String,
+    val issuedOn: Instant,
+    val total: BigDecimal,
+    val balance: BigDecimal,
+    val status: String,
+    val lineItems: List<BillingSystem.LineItemView>,
+    val payments: List<BillingSystem.PaymentView>,
+    val receipts: List<BillingSystem.ReceiptView>,
+    val reminders: List<BillingSystem.ReminderView>,
+    val issuances: List<BillingSystem.IssuanceView>,
+    val dueChangeRefusals: List<BillingSystem.DueChangeRefusalView>,
+    val archiveRequests: List<BillingSystem.ArchiveRequestView>,
+    val unarchiveRequests: List<BillingSystem.UnarchiveRequestView>,
+    val unarchiveNotices: List<BillingSystem.UnarchiveNoticeView>,
+) : View
+
+data class LineItem(
+    override val id: Long,
+    val invoice: BillingSystem.InvoiceView,
+    val description: String,
+    val price: BigDecimal,
+    val quantity: Int,
+    val amount: BigDecimal,
+) : View
+
+data class Payment(
+    override val id: Long,
+    val invoice: BillingSystem.InvoiceView,
+    val amount: BigDecimal,
+    val receivedOn: Instant,
+) : View
+
+data class Receipt(
+    override val id: Long,
+    val invoice: BillingSystem.InvoiceView,
+    val sentOn: Instant,
+    val receiptEmails: List<BillingSystem.ReceiptEmailView>,
+) : View
+
+data class ReceiptEmail(
+    override val id: Long,
+    val receipt: BillingSystem.ReceiptView,
+    val queuedOn: Instant,
+) : View
+
+data class Reminder(
+    override val id: Long,
+    val invoice: BillingSystem.InvoiceView,
+    val sentOn: LocalDate,
+) : View
+
+data class Issuance(
+    override val id: Long,
+    val invoice: BillingSystem.InvoiceView,
+) : View
+
+data class DueChangeRefusal(
+    override val id: Long,
+    val invoice: BillingSystem.InvoiceView,
+    val requestedDue: LocalDate,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class ArchiveRequest(
+    override val id: Long,
+    val invoice: BillingSystem.InvoiceView,
+) : View
+
+data class UnarchiveRequest(
+    override val id: Long,
+    val invoice: BillingSystem.InvoiceView,
+) : View
+
+data class UnarchiveNotice(
+    override val id: Long,
+    val invoice: BillingSystem.InvoiceView,
+    val wasArchivedOn: LocalDate,
+    val noticedOn: Instant,
+) : View
+
+data class PaidInvoice(
+    override val id: Long,
+    val customer: BillingSystem.CustomerView,
+    val due: LocalDate,
+    val reference: String,
+    val issuedOn: Instant,
+    val total: BigDecimal,
+    val balance: BigDecimal,
+    val status: String,
+    val lineItems: List<BillingSystem.LineItemView>,
+    val payments: List<BillingSystem.PaymentView>,
+    val receipts: List<BillingSystem.ReceiptView>,
+    val reminders: List<BillingSystem.ReminderView>,
+    val issuances: List<BillingSystem.IssuanceView>,
+    val dueChangeRefusals: List<BillingSystem.DueChangeRefusalView>,
+    val archiveRequests: List<BillingSystem.ArchiveRequestView>,
+    val unarchiveRequests: List<BillingSystem.UnarchiveRequestView>,
+    val unarchiveNotices: List<BillingSystem.UnarchiveNoticeView>,
+) : View
+
+data class UnemailedReceipt(
+    override val id: Long,
+    val invoice: BillingSystem.InvoiceView,
+    val sentOn: Instant,
+    val receiptEmails: List<BillingSystem.ReceiptEmailView>,
+) : View
+
+data class OverdueInvoice(
+    override val id: Long,
+    val customer: BillingSystem.CustomerView,
+    val due: LocalDate,
+    val reference: String,
+    val issuedOn: Instant,
+    val total: BigDecimal,
+    val balance: BigDecimal,
+    val status: String,
+    val lineItems: List<BillingSystem.LineItemView>,
+    val payments: List<BillingSystem.PaymentView>,
+    val receipts: List<BillingSystem.ReceiptView>,
+    val reminders: List<BillingSystem.ReminderView>,
+    val issuances: List<BillingSystem.IssuanceView>,
+    val dueChangeRefusals: List<BillingSystem.DueChangeRefusalView>,
+    val archiveRequests: List<BillingSystem.ArchiveRequestView>,
+    val unarchiveRequests: List<BillingSystem.UnarchiveRequestView>,
+    val unarchiveNotices: List<BillingSystem.UnarchiveNoticeView>,
+) : View
+
+data class ActionableOverdue(
+    override val id: Long,
+    val customer: BillingSystem.CustomerView,
+    val due: LocalDate,
+    val reference: String,
+    val issuedOn: Instant,
+    val total: BigDecimal,
+    val balance: BigDecimal,
+    val status: String,
+    val lineItems: List<BillingSystem.LineItemView>,
+    val payments: List<BillingSystem.PaymentView>,
+    val receipts: List<BillingSystem.ReceiptView>,
+    val reminders: List<BillingSystem.ReminderView>,
+    val issuances: List<BillingSystem.IssuanceView>,
+    val dueChangeRefusals: List<BillingSystem.DueChangeRefusalView>,
+    val archiveRequests: List<BillingSystem.ArchiveRequestView>,
+    val unarchiveRequests: List<BillingSystem.UnarchiveRequestView>,
+    val unarchiveNotices: List<BillingSystem.UnarchiveNoticeView>,
+    val archivedOn: LocalDate,
+) : View
+
+data class IssuedInvoice(
+    override val id: Long,
+    val customer: BillingSystem.CustomerView,
+    val due: LocalDate,
+    val reference: String,
+    val issuedOn: Instant,
+    val total: BigDecimal,
+    val balance: BigDecimal,
+    val status: String,
+    val lineItems: List<BillingSystem.LineItemView>,
+    val payments: List<BillingSystem.PaymentView>,
+    val receipts: List<BillingSystem.ReceiptView>,
+    val reminders: List<BillingSystem.ReminderView>,
+    val issuances: List<BillingSystem.IssuanceView>,
+    val dueChangeRefusals: List<BillingSystem.DueChangeRefusalView>,
+    val archiveRequests: List<BillingSystem.ArchiveRequestView>,
+    val unarchiveRequests: List<BillingSystem.UnarchiveRequestView>,
+    val unarchiveNotices: List<BillingSystem.UnarchiveNoticeView>,
+) : View
+
+data class ArchivedInvoice(
+    override val id: Long,
+    val customer: BillingSystem.CustomerView,
+    val due: LocalDate,
+    val reference: String,
+    val issuedOn: Instant,
+    val total: BigDecimal,
+    val balance: BigDecimal,
+    val status: String,
+    val lineItems: List<BillingSystem.LineItemView>,
+    val payments: List<BillingSystem.PaymentView>,
+    val receipts: List<BillingSystem.ReceiptView>,
+    val reminders: List<BillingSystem.ReminderView>,
+    val issuances: List<BillingSystem.IssuanceView>,
+    val dueChangeRefusals: List<BillingSystem.DueChangeRefusalView>,
+    val archiveRequests: List<BillingSystem.ArchiveRequestView>,
+    val unarchiveRequests: List<BillingSystem.UnarchiveRequestView>,
+    val unarchiveNotices: List<BillingSystem.UnarchiveNoticeView>,
+    val archivedOn: LocalDate,
+) : View
+
+// ── the builder's vocabulary: one field handle per member, memberships per refinement ──
+
+class CustomerFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val email: TextField get() = TextField(fieldPath + "email")
+    val signedUpOn: DateTimeField get() = DateTimeField(fieldPath + "signedUpOn")
+    val largestPayment: NumField get() = NumField(fieldPath + "largestPayment")
+}
+
+class CorrectEmailFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val corrected: TextField get() = TextField(fieldPath + "corrected")
+}
+
+class InvoiceFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val due: DateField get() = DateField(fieldPath + "due")
+    val reference: TextField get() = TextField(fieldPath + "reference")
+    val issuedOn: DateTimeField get() = DateTimeField(fieldPath + "issuedOn")
+    val total: NumField get() = NumField(fieldPath + "total")
+    val balance: NumField get() = NumField(fieldPath + "balance")
+    val status: TextField get() = TextField(fieldPath + "status")
+    fun isPaidInvoice(): Expr = isA("PaidInvoice")
+    fun isOverdueInvoice(): Expr = isA("OverdueInvoice")
+    fun isActionableOverdue(): Expr = isA("ActionableOverdue")
+    fun isIssuedInvoice(): Expr = isA("IssuedInvoice")
+    fun isArchivedInvoice(): Expr = isA("ArchivedInvoice")
+}
+
+class LineItemFields(path: List<String> = emptyList()) : Fields(path) {
+    val invoice: InvoiceFields get() = InvoiceFields(fieldPath + "invoice")
+    val description: TextField get() = TextField(fieldPath + "description")
+    val price: NumField get() = NumField(fieldPath + "price")
+    val quantity: NumField get() = NumField(fieldPath + "quantity")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+}
+
+class PaymentFields(path: List<String> = emptyList()) : Fields(path) {
+    val invoice: InvoiceFields get() = InvoiceFields(fieldPath + "invoice")
+    val amount: NumField get() = NumField(fieldPath + "amount")
+    val receivedOn: DateTimeField get() = DateTimeField(fieldPath + "receivedOn")
+}
+
+class ReceiptFields(path: List<String> = emptyList()) : Fields(path) {
+    val invoice: InvoiceFields get() = InvoiceFields(fieldPath + "invoice")
+    val sentOn: DateTimeField get() = DateTimeField(fieldPath + "sentOn")
+    fun isUnemailedReceipt(): Expr = isA("UnemailedReceipt")
+}
+
+class ReceiptEmailFields(path: List<String> = emptyList()) : Fields(path) {
+    val receipt: ReceiptFields get() = ReceiptFields(fieldPath + "receipt")
+    val queuedOn: DateTimeField get() = DateTimeField(fieldPath + "queuedOn")
+}
+
+class ReminderFields(path: List<String> = emptyList()) : Fields(path) {
+    val invoice: InvoiceFields get() = InvoiceFields(fieldPath + "invoice")
+    val sentOn: DateField get() = DateField(fieldPath + "sentOn")
+}
+
+class IssuanceFields(path: List<String> = emptyList()) : Fields(path) {
+    val invoice: InvoiceFields get() = InvoiceFields(fieldPath + "invoice")
+}
+
+class DueChangeRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val invoice: InvoiceFields get() = InvoiceFields(fieldPath + "invoice")
+    val requestedDue: DateField get() = DateField(fieldPath + "requestedDue")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class ArchiveRequestFields(path: List<String> = emptyList()) : Fields(path) {
+    val invoice: InvoiceFields get() = InvoiceFields(fieldPath + "invoice")
+}
+
+class UnarchiveRequestFields(path: List<String> = emptyList()) : Fields(path) {
+    val invoice: InvoiceFields get() = InvoiceFields(fieldPath + "invoice")
+}
+
+class UnarchiveNoticeFields(path: List<String> = emptyList()) : Fields(path) {
+    val invoice: InvoiceFields get() = InvoiceFields(fieldPath + "invoice")
+    val wasArchivedOn: DateField get() = DateField(fieldPath + "wasArchivedOn")
+    val noticedOn: DateTimeField get() = DateTimeField(fieldPath + "noticedOn")
+}
+
+class PaidInvoiceFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val due: DateField get() = DateField(fieldPath + "due")
+    val reference: TextField get() = TextField(fieldPath + "reference")
+    val issuedOn: DateTimeField get() = DateTimeField(fieldPath + "issuedOn")
+    val total: NumField get() = NumField(fieldPath + "total")
+    val balance: NumField get() = NumField(fieldPath + "balance")
+    val status: TextField get() = TextField(fieldPath + "status")
+    fun isOverdueInvoice(): Expr = isA("OverdueInvoice")
+    fun isActionableOverdue(): Expr = isA("ActionableOverdue")
+    fun isIssuedInvoice(): Expr = isA("IssuedInvoice")
+    fun isArchivedInvoice(): Expr = isA("ArchivedInvoice")
+}
+
+class UnemailedReceiptFields(path: List<String> = emptyList()) : Fields(path) {
+    val invoice: InvoiceFields get() = InvoiceFields(fieldPath + "invoice")
+    val sentOn: DateTimeField get() = DateTimeField(fieldPath + "sentOn")
+}
+
+class OverdueInvoiceFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val due: DateField get() = DateField(fieldPath + "due")
+    val reference: TextField get() = TextField(fieldPath + "reference")
+    val issuedOn: DateTimeField get() = DateTimeField(fieldPath + "issuedOn")
+    val total: NumField get() = NumField(fieldPath + "total")
+    val balance: NumField get() = NumField(fieldPath + "balance")
+    val status: TextField get() = TextField(fieldPath + "status")
+    fun isPaidInvoice(): Expr = isA("PaidInvoice")
+    fun isActionableOverdue(): Expr = isA("ActionableOverdue")
+    fun isIssuedInvoice(): Expr = isA("IssuedInvoice")
+    fun isArchivedInvoice(): Expr = isA("ArchivedInvoice")
+}
+
+class ActionableOverdueFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val due: DateField get() = DateField(fieldPath + "due")
+    val reference: TextField get() = TextField(fieldPath + "reference")
+    val issuedOn: DateTimeField get() = DateTimeField(fieldPath + "issuedOn")
+    val total: NumField get() = NumField(fieldPath + "total")
+    val balance: NumField get() = NumField(fieldPath + "balance")
+    val status: TextField get() = TextField(fieldPath + "status")
+    val archivedOn: DateField get() = DateField(fieldPath + "archivedOn")
+    fun isPaidInvoice(): Expr = isA("PaidInvoice")
+    fun isOverdueInvoice(): Expr = isA("OverdueInvoice")
+    fun isIssuedInvoice(): Expr = isA("IssuedInvoice")
+    fun isArchivedInvoice(): Expr = isA("ArchivedInvoice")
+}
+
+class IssuedInvoiceFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val due: DateField get() = DateField(fieldPath + "due")
+    val reference: TextField get() = TextField(fieldPath + "reference")
+    val issuedOn: DateTimeField get() = DateTimeField(fieldPath + "issuedOn")
+    val total: NumField get() = NumField(fieldPath + "total")
+    val balance: NumField get() = NumField(fieldPath + "balance")
+    val status: TextField get() = TextField(fieldPath + "status")
+    fun isPaidInvoice(): Expr = isA("PaidInvoice")
+    fun isOverdueInvoice(): Expr = isA("OverdueInvoice")
+    fun isActionableOverdue(): Expr = isA("ActionableOverdue")
+    fun isArchivedInvoice(): Expr = isA("ArchivedInvoice")
+}
+
+class ArchivedInvoiceFields(path: List<String> = emptyList()) : Fields(path) {
+    val customer: CustomerFields get() = CustomerFields(fieldPath + "customer")
+    val due: DateField get() = DateField(fieldPath + "due")
+    val reference: TextField get() = TextField(fieldPath + "reference")
+    val issuedOn: DateTimeField get() = DateTimeField(fieldPath + "issuedOn")
+    val total: NumField get() = NumField(fieldPath + "total")
+    val balance: NumField get() = NumField(fieldPath + "balance")
+    val status: TextField get() = TextField(fieldPath + "status")
+    val archivedOn: DateField get() = DateField(fieldPath + "archivedOn")
+    fun isPaidInvoice(): Expr = isA("PaidInvoice")
+    fun isOverdueInvoice(): Expr = isA("OverdueInvoice")
+    fun isActionableOverdue(): Expr = isA("ActionableOverdue")
+    fun isIssuedInvoice(): Expr = isA("IssuedInvoice")
 }
 
 fun main() {

@@ -354,7 +354,16 @@ class Validator(private val model: Model) {
                 // a conjunction narrows what follows it (README §10)
                 if (e.op == "and") withNarrowing(narrowingsOf(e.left)) { checkExpr(e.right, scope) }
                 else checkExpr(e.right, scope)
+                // the text operators take text on both sides (README §10; OQ51 R1)
+                if (e.op in TEXT_OPERATORS) {
+                    for (side in listOf(e.left, e.right)) {
+                        val t = scalarTypeOf(side, scope) ?: continue
+                        if (t != VType.Text)
+                            diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.op}' compares text, but '${Printer.expr(side)}' is not text"))
+                    }
+                }
             }
+            is ValueLit -> {}
             is NotExpr -> checkExpr(e.inner, scope)
             is IfExpr -> {
                 checkExpr(e.condition, scope)
@@ -401,6 +410,72 @@ class Validator(private val model: Model) {
             is ShapeForSource -> checkExpr(e.forExpr, scope)
             is SetExpr -> checkCollection(e.collection, scope)
             else -> {}
+        }
+    }
+
+    /** The scalar type of a simple expression where it can be read off the model
+     *  (a literal, `lowercase(...)`, a path to a scalar member); null when unknown. */
+    private fun scalarTypeOf(e: Expr, scope: String): VType? = when (e) {
+        is TextLit -> VType.Text
+        is IntLit, is DecLit -> VType.Num("decimal")
+        is BoolLit -> VType.Bool
+        is TodayLit -> VType.DateT
+        is NowLit -> VType.DateTimeT
+        is ValueLit -> when (e.value) {
+            is Value.VText -> VType.Text
+            is Value.VNum -> VType.Num("decimal")
+            is Value.VBool -> VType.Bool
+            is Value.VDate -> VType.DateT
+            is Value.VDateTime -> VType.DateTimeT
+            else -> null
+        }
+        is FunCall -> if (e.name == "lowercase") VType.Text else null
+        is PathExpr -> {
+            val names = if (e.root == "this") e.segs.map { it.name } else listOf(e.root) + e.segs.map { it.name }
+            var sc: String? = if (e.root in aliasScopes) aliasScopes[e.root] else (thisScope ?: scope)
+            var t: VType? = null
+            for ((i, n) in names.withIndex()) {
+                val m = sc?.let { model.membersOf(it)[n] } ?: run { t = null; break }
+                t = (m.type as? VType.Optional)?.inner ?: m.type
+                sc = m.type.instanceShape()
+                if (i != names.lastIndex && sc == null) { t = null; break }
+            }
+            t
+        }
+        else -> null
+    }
+
+    private fun isOrderable(t: VType): Boolean {
+        val bare = (t as? VType.Optional)?.inner ?: t
+        return bare is VType.Num || bare == VType.Text || bare == VType.DateT || bare == VType.DateTimeT
+    }
+
+    /**
+     * The query API's check (README §22, the composed query; OQ51): [expr] is a
+     * predicate over the members of [scope], a shape or refinement, checked with
+     * the rules a refinement's own predicate gets. Returns the diagnostics
+     * without leaving them on the model.
+     */
+    fun checkQueryPredicate(expr: Expr, scope: String): List<Diagnostic> {
+        val before = diags.size
+        checkExpr(expr, scope)
+        val out = diags.subList(before, diags.size).toList()
+        while (diags.size > before) diags.removeAt(diags.size - 1)
+        return out
+    }
+
+    /** The query API's order datums: each an orderable member of [scope], never
+     *  `id` (README §5, §10; OQ51 R2, R10). */
+    fun checkQueryOrder(datums: List<String>, scope: String): List<Diagnostic> = buildList {
+        if (datums.isEmpty())
+            add(Diagnostic("F2", "a query names its order — one or more orderable members of '$scope' with a direction (README §22)"))
+        for (d in datums) {
+            val m = model.membersOf(scope)[d]
+            when {
+                m == null -> add(Diagnostic("F2", "order by '$d' — '$scope' has no member '$d'"))
+                d == "id" -> add(Diagnostic("F2", "order by 'id' — identity orders nothing (README §5); name a datum the data carries"))
+                !isOrderable(m.type) -> add(Diagnostic("F2", "order by '$d' — $scope.$d is not orderable (README §10)"))
+            }
         }
     }
 

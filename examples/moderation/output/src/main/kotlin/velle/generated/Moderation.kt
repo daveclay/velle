@@ -199,6 +199,177 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun toString() = "OrphanedListing#$id"
     }
 
+    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    val read = Read()
+
+    inner class Read {
+        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
+        val registry = QueryRegistry()
+        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+        val sellers: SellerQuery get() = SellerQuery(Query("Seller"))
+        val listings: ListingQuery get() = ListingQuery(Query("Listing"))
+        val publicationNotices: PublicationNoticeQuery get() = PublicationNoticeQuery(Query("PublicationNotice"))
+        val sellerNotices: SellerNoticeQuery get() = SellerNoticeQuery(Query("SellerNotice"))
+        val draftClosures: DraftClosureQuery get() = DraftClosureQuery(Query("DraftClosure"))
+        val listingReports: ListingReportQuery get() = ListingReportQuery(Query("ListingReport"))
+        val reporterNotices: ReporterNoticeQuery get() = ReporterNoticeQuery(Query("ReporterNotice"))
+        val discardRecords: DiscardRecordQuery get() = DiscardRecordQuery(Query("DiscardRecord"))
+        val discardRefusals: DiscardRefusalQuery get() = DiscardRefusalQuery(Query("DiscardRefusal"))
+        val drafts: DraftQuery get() = DraftQuery(Query("Draft"))
+        val publishedListings: PublishedListingQuery get() = PublishedListingQuery(Query("PublishedListing"))
+        val orphanReports: OrphanReportQuery get() = OrphanReportQuery(Query("OrphanReport"))
+        val orphanedListings: OrphanedListingQuery get() = OrphanedListingQuery(Query("OrphanedListing"))
+    }
+
+    inner class SellerQuery(q: Query) : TypedQuery<SellerFields, Seller>(system, q, SellerFields(), { materializeSeller(it) }) {
+        override fun with(q: Query) = SellerQuery(q)
+    }
+
+    inner class ListingQuery(q: Query) : TypedQuery<ListingFields, Listing>(system, q, ListingFields(), { materializeListing(it) }) {
+        override fun with(q: Query) = ListingQuery(q)
+    }
+
+    inner class PublicationNoticeQuery(q: Query) : TypedQuery<PublicationNoticeFields, PublicationNotice>(system, q, PublicationNoticeFields(), { materializePublicationNotice(it) }) {
+        override fun with(q: Query) = PublicationNoticeQuery(q)
+    }
+
+    inner class SellerNoticeQuery(q: Query) : TypedQuery<SellerNoticeFields, SellerNotice>(system, q, SellerNoticeFields(), { materializeSellerNotice(it) }) {
+        override fun with(q: Query) = SellerNoticeQuery(q)
+    }
+
+    inner class DraftClosureQuery(q: Query) : TypedQuery<DraftClosureFields, DraftClosure>(system, q, DraftClosureFields(), { materializeDraftClosure(it) }) {
+        override fun with(q: Query) = DraftClosureQuery(q)
+    }
+
+    inner class ListingReportQuery(q: Query) : TypedQuery<ListingReportFields, ListingReport>(system, q, ListingReportFields(), { materializeListingReport(it) }) {
+        override fun with(q: Query) = ListingReportQuery(q)
+    }
+
+    inner class ReporterNoticeQuery(q: Query) : TypedQuery<ReporterNoticeFields, ReporterNotice>(system, q, ReporterNoticeFields(), { materializeReporterNotice(it) }) {
+        override fun with(q: Query) = ReporterNoticeQuery(q)
+    }
+
+    inner class DiscardRecordQuery(q: Query) : TypedQuery<DiscardRecordFields, DiscardRecord>(system, q, DiscardRecordFields(), { materializeDiscardRecord(it) }) {
+        override fun with(q: Query) = DiscardRecordQuery(q)
+    }
+
+    inner class DiscardRefusalQuery(q: Query) : TypedQuery<DiscardRefusalFields, DiscardRefusal>(system, q, DiscardRefusalFields(), { materializeDiscardRefusal(it) }) {
+        override fun with(q: Query) = DiscardRefusalQuery(q)
+    }
+
+    inner class DraftQuery(q: Query) : TypedQuery<DraftFields, Draft>(system, q, DraftFields(), { materializeDraft(it) }) {
+        override fun with(q: Query) = DraftQuery(q)
+    }
+
+    inner class PublishedListingQuery(q: Query) : TypedQuery<PublishedListingFields, PublishedListing>(system, q, PublishedListingFields(), { materializePublishedListing(it) }) {
+        override fun with(q: Query) = PublishedListingQuery(q)
+    }
+
+    inner class OrphanReportQuery(q: Query) : TypedQuery<OrphanReportFields, OrphanReport>(system, q, OrphanReportFields(), { materializeOrphanReport(it) }) {
+        override fun with(q: Query) = OrphanReportQuery(q)
+    }
+
+    inner class OrphanedListingQuery(q: Query) : TypedQuery<OrphanedListingFields, OrphanedListing>(system, q, OrphanedListingFields(), { materializeOrphanedListing(it) }) {
+        override fun with(q: Query) = OrphanedListingQuery(q)
+    }
+
+    fun materializeSeller(id: Long): Seller = Seller(
+        id = id,
+        name = system.get(id, "name") as String,
+        listings = (system.get(id, "listings") as List<*>).map { ListingView(it as Long) },
+        sellerNotices = (system.get(id, "sellerNotices") as List<*>).map { SellerNoticeView(it as Long) },
+    )
+
+    fun materializeListing(id: Long): Listing = Listing(
+        id = id,
+        title = system.get(id, "title") as String,
+        seller = (system.get(id, "seller") as Long?)?.let { SellerView(it) },
+        isDraft = system.get(id, "isDraft") as Boolean,
+        listingReports = (system.get(id, "listingReports") as List<*>).map { ListingReportView(it as Long) },
+    )
+
+    fun materializePublicationNotice(id: Long): PublicationNotice = PublicationNotice(
+        id = id,
+        listingTitle = system.get(id, "listingTitle") as String,
+        publishedOn = system.get(id, "publishedOn") as Instant,
+    )
+
+    fun materializeSellerNotice(id: Long): SellerNotice = SellerNotice(
+        id = id,
+        seller = (system.get(id, "seller") as Long?)?.let { SellerView(it) },
+        listingTitle = system.get(id, "listingTitle") as String,
+        noticedOn = system.get(id, "noticedOn") as Instant,
+    )
+
+    fun materializeDraftClosure(id: Long): DraftClosure = DraftClosure(
+        id = id,
+        listingTitle = system.get(id, "listingTitle") as String,
+        closedOn = system.get(id, "closedOn") as Instant,
+    )
+
+    fun materializeListingReport(id: Long): ListingReport = ListingReport(
+        id = id,
+        listing = (system.get(id, "listing") as Long?)?.let { ListingView(it) },
+        listingTitle = system.get(id, "listingTitle") as String,
+        reason = system.get(id, "reason") as String,
+        reportedOn = system.get(id, "reportedOn") as Instant,
+        reporterNotices = (system.get(id, "reporterNotices") as List<*>).map { ReporterNoticeView(it as Long) },
+    )
+
+    fun materializeReporterNotice(id: Long): ReporterNotice = ReporterNotice(
+        id = id,
+        report = ListingReportView(system.get(id, "report") as Long),
+        listingTitle = system.get(id, "listingTitle") as String,
+        noticedOn = system.get(id, "noticedOn") as Instant,
+    )
+
+    fun materializeDiscardRecord(id: Long): DiscardRecord = DiscardRecord(
+        id = id,
+        listingTitle = system.get(id, "listingTitle") as String,
+        reason = system.get(id, "reason") as String,
+        discardedOn = system.get(id, "discardedOn") as Instant,
+    )
+
+    fun materializeDiscardRefusal(id: Long): DiscardRefusal = DiscardRefusal(
+        id = id,
+        listingTitle = system.get(id, "listingTitle") as String,
+        reason = system.get(id, "reason") as String,
+        refusedOn = system.get(id, "refusedOn") as Instant,
+    )
+
+    fun materializeDraft(id: Long): Draft = Draft(
+        id = id,
+        title = system.get(id, "title") as String,
+        seller = (system.get(id, "seller") as Long?)?.let { SellerView(it) },
+        isDraft = system.get(id, "isDraft") as Boolean,
+        listingReports = (system.get(id, "listingReports") as List<*>).map { ListingReportView(it as Long) },
+    )
+
+    fun materializePublishedListing(id: Long): PublishedListing = PublishedListing(
+        id = id,
+        title = system.get(id, "title") as String,
+        seller = (system.get(id, "seller") as Long?)?.let { SellerView(it) },
+        isDraft = system.get(id, "isDraft") as Boolean,
+        listingReports = (system.get(id, "listingReports") as List<*>).map { ListingReportView(it as Long) },
+    )
+
+    fun materializeOrphanReport(id: Long): OrphanReport = OrphanReport(
+        id = id,
+        listing = (system.get(id, "listing") as Long?)?.let { ListingView(it) },
+        listingTitle = system.get(id, "listingTitle") as String,
+        reason = system.get(id, "reason") as String,
+        reportedOn = system.get(id, "reportedOn") as Instant,
+        reporterNotices = (system.get(id, "reporterNotices") as List<*>).map { ReporterNoticeView(it as Long) },
+    )
+
+    fun materializeOrphanedListing(id: Long): OrphanedListing = OrphanedListing(
+        id = id,
+        title = system.get(id, "title") as String,
+        seller = (system.get(id, "seller") as Long?)?.let { SellerView(it) },
+        isDraft = system.get(id, "isDraft") as Boolean,
+        listingReports = (system.get(id, "listingReports") as List<*>).map { ListingReportView(it as Long) },
+    )
+
     companion object {
         private val SPEC = """
 -- Moderation: a marketplace's listings — drafts discarded, sellers closing
@@ -407,6 +578,194 @@ rule SweepOrphanedDrafts when (OrphanedListing where isDraft) {
 }
 """
     }
+}
+
+// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
+// References are typed handles (views); navigating one is a further read.
+
+data class Seller(
+    override val id: Long,
+    val name: String,
+    val listings: List<ModerationSystem.ListingView>,
+    val sellerNotices: List<ModerationSystem.SellerNoticeView>,
+) : View
+
+data class Listing(
+    override val id: Long,
+    val title: String,
+    val seller: ModerationSystem.SellerView?,
+    val isDraft: Boolean,
+    val listingReports: List<ModerationSystem.ListingReportView>,
+) : View
+
+data class PublicationNotice(
+    override val id: Long,
+    val listingTitle: String,
+    val publishedOn: Instant,
+) : View
+
+data class SellerNotice(
+    override val id: Long,
+    val seller: ModerationSystem.SellerView?,
+    val listingTitle: String,
+    val noticedOn: Instant,
+) : View
+
+data class DraftClosure(
+    override val id: Long,
+    val listingTitle: String,
+    val closedOn: Instant,
+) : View
+
+data class ListingReport(
+    override val id: Long,
+    val listing: ModerationSystem.ListingView?,
+    val listingTitle: String,
+    val reason: String,
+    val reportedOn: Instant,
+    val reporterNotices: List<ModerationSystem.ReporterNoticeView>,
+) : View
+
+data class ReporterNotice(
+    override val id: Long,
+    val report: ModerationSystem.ListingReportView,
+    val listingTitle: String,
+    val noticedOn: Instant,
+) : View
+
+data class DiscardRecord(
+    override val id: Long,
+    val listingTitle: String,
+    val reason: String,
+    val discardedOn: Instant,
+) : View
+
+data class DiscardRefusal(
+    override val id: Long,
+    val listingTitle: String,
+    val reason: String,
+    val refusedOn: Instant,
+) : View
+
+data class Draft(
+    override val id: Long,
+    val title: String,
+    val seller: ModerationSystem.SellerView?,
+    val isDraft: Boolean,
+    val listingReports: List<ModerationSystem.ListingReportView>,
+) : View
+
+data class PublishedListing(
+    override val id: Long,
+    val title: String,
+    val seller: ModerationSystem.SellerView?,
+    val isDraft: Boolean,
+    val listingReports: List<ModerationSystem.ListingReportView>,
+) : View
+
+data class OrphanReport(
+    override val id: Long,
+    val listing: ModerationSystem.ListingView?,
+    val listingTitle: String,
+    val reason: String,
+    val reportedOn: Instant,
+    val reporterNotices: List<ModerationSystem.ReporterNoticeView>,
+) : View
+
+data class OrphanedListing(
+    override val id: Long,
+    val title: String,
+    val seller: ModerationSystem.SellerView?,
+    val isDraft: Boolean,
+    val listingReports: List<ModerationSystem.ListingReportView>,
+) : View
+
+// ── the builder's vocabulary: one field handle per member, memberships per refinement ──
+
+class SellerFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+}
+
+class ListingFields(path: List<String> = emptyList()) : Fields(path) {
+    val title: TextField get() = TextField(fieldPath + "title")
+    val seller: SellerFields get() = SellerFields(fieldPath + "seller")
+    val isDraft: BoolField get() = BoolField(fieldPath + "isDraft")
+    fun isDraft(): Expr = isA("Draft")
+    fun isPublishedListing(): Expr = isA("PublishedListing")
+    fun isOrphanedListing(): Expr = isA("OrphanedListing")
+}
+
+class PublicationNoticeFields(path: List<String> = emptyList()) : Fields(path) {
+    val listingTitle: TextField get() = TextField(fieldPath + "listingTitle")
+    val publishedOn: DateTimeField get() = DateTimeField(fieldPath + "publishedOn")
+}
+
+class SellerNoticeFields(path: List<String> = emptyList()) : Fields(path) {
+    val seller: SellerFields get() = SellerFields(fieldPath + "seller")
+    val listingTitle: TextField get() = TextField(fieldPath + "listingTitle")
+    val noticedOn: DateTimeField get() = DateTimeField(fieldPath + "noticedOn")
+}
+
+class DraftClosureFields(path: List<String> = emptyList()) : Fields(path) {
+    val listingTitle: TextField get() = TextField(fieldPath + "listingTitle")
+    val closedOn: DateTimeField get() = DateTimeField(fieldPath + "closedOn")
+}
+
+class ListingReportFields(path: List<String> = emptyList()) : Fields(path) {
+    val listing: ListingFields get() = ListingFields(fieldPath + "listing")
+    val listingTitle: TextField get() = TextField(fieldPath + "listingTitle")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val reportedOn: DateTimeField get() = DateTimeField(fieldPath + "reportedOn")
+    fun isOrphanReport(): Expr = isA("OrphanReport")
+}
+
+class ReporterNoticeFields(path: List<String> = emptyList()) : Fields(path) {
+    val report: ListingReportFields get() = ListingReportFields(fieldPath + "report")
+    val listingTitle: TextField get() = TextField(fieldPath + "listingTitle")
+    val noticedOn: DateTimeField get() = DateTimeField(fieldPath + "noticedOn")
+}
+
+class DiscardRecordFields(path: List<String> = emptyList()) : Fields(path) {
+    val listingTitle: TextField get() = TextField(fieldPath + "listingTitle")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val discardedOn: DateTimeField get() = DateTimeField(fieldPath + "discardedOn")
+}
+
+class DiscardRefusalFields(path: List<String> = emptyList()) : Fields(path) {
+    val listingTitle: TextField get() = TextField(fieldPath + "listingTitle")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val refusedOn: DateTimeField get() = DateTimeField(fieldPath + "refusedOn")
+}
+
+class DraftFields(path: List<String> = emptyList()) : Fields(path) {
+    val title: TextField get() = TextField(fieldPath + "title")
+    val seller: SellerFields get() = SellerFields(fieldPath + "seller")
+    val isDraft: BoolField get() = BoolField(fieldPath + "isDraft")
+    fun isPublishedListing(): Expr = isA("PublishedListing")
+    fun isOrphanedListing(): Expr = isA("OrphanedListing")
+}
+
+class PublishedListingFields(path: List<String> = emptyList()) : Fields(path) {
+    val title: TextField get() = TextField(fieldPath + "title")
+    val seller: SellerFields get() = SellerFields(fieldPath + "seller")
+    val isDraft: BoolField get() = BoolField(fieldPath + "isDraft")
+    fun isDraft(): Expr = isA("Draft")
+    fun isOrphanedListing(): Expr = isA("OrphanedListing")
+}
+
+class OrphanReportFields(path: List<String> = emptyList()) : Fields(path) {
+    val listing: ListingFields get() = ListingFields(fieldPath + "listing")
+    val listingTitle: TextField get() = TextField(fieldPath + "listingTitle")
+    val reason: TextField get() = TextField(fieldPath + "reason")
+    val reportedOn: DateTimeField get() = DateTimeField(fieldPath + "reportedOn")
+}
+
+class OrphanedListingFields(path: List<String> = emptyList()) : Fields(path) {
+    val title: TextField get() = TextField(fieldPath + "title")
+    val seller: SellerFields get() = SellerFields(fieldPath + "seller")
+    val isDraft: BoolField get() = BoolField(fieldPath + "isDraft")
+    fun isDraft(): Expr = isA("Draft")
+    fun isPublishedListing(): Expr = isA("PublishedListing")
 }
 
 fun main() {

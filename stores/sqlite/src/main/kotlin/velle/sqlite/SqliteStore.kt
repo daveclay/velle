@@ -10,6 +10,7 @@ import velle.Row
 import velle.StateResolver
 import velle.StoreKey
 import velle.StoredProp
+import velle.TEXT_OPERATORS
 import velle.TimestampProp
 import velle.VType
 import velle.VelleSystem
@@ -257,12 +258,31 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
                 ?: return degrade(positive)
             val encoded = encode(f.value, colType) ?: return degrade(positive)
             val col = """$alias."${f.field}""""
+            // the text operators (README §10) render to LIKE with `\` as the escape
+            // character; SQLite's LIKE folds ASCII case, so the rendering may
+            // over-return against the case-sensitive predicate — legal under the
+            // superset contract, and the evaluator decides in memory
+            if (f.op in TEXT_OPERATORS) {
+                val text = encoded as? String ?: return degrade(positive)
+                val pattern = when (f.op) {
+                    "contains" -> "%" + likeEscape(text) + "%"
+                    "starts with" -> likeEscape(text) + "%"
+                    "ends with" -> "%" + likeEscape(text)
+                    else -> text // `like`: the author's pattern, same wildcards, same escape
+                }
+                binds.add(pattern)
+                return "$col LIKE ? ESCAPE '\\'"
+            }
             binds.add(encoded)
             return when (f.op) {
                 "==" -> "$col = ?"
                 "!=" -> "($col IS NULL OR $col != ?)"
                 else -> "$col ${f.op} ?"
             }
+        }
+
+        private fun likeEscape(s: String): String = buildString {
+            for (c in s) { if (c == '\\' || c == '%' || c == '_') append('\\'); append(c) }
         }
 
         private fun degrade(positive: Boolean): String = if (positive) "1" else "0"
@@ -281,6 +301,8 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
                 is QConst.QBool -> (if (c.v) 1 else 0).takeIf { bare == VType.Bool }
                 is QConst.QDate -> c.v.toString().takeIf { bare == VType.DateT }
                 is QConst.QDateTime -> null
+                // an instance constant (the query API's "this customer"): the row key
+                is QConst.QRef -> (c.ref.key.value as? Number)?.toLong().takeIf { bare is VType.Inst }
             }
         }
     }

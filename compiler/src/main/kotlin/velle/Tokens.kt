@@ -38,6 +38,15 @@ val KEYWORDS: Set<String> = setOf(
  * else `days`, `minutes`, ... are ordinary identifiers (`minutes: integer`).
  */
 val DURATION_UNITS = setOf("seconds", "minutes", "hours", "days", "weeks")
+
+/**
+ * The text comparison operators (README §10; OQ51 R1): contextual words that
+ * read as an operator only between two value expressions — `contains`, `like`,
+ * and the pairs `starts with` / `ends with`. The operator's name in the AST is
+ * the spelling, space included. All are exact and case-sensitive; `like` takes
+ * a pattern with `%` (any run), `_` (any one character), and `\` escaping either.
+ */
+val TEXT_OPERATORS = setOf("contains", "starts with", "ends with", "like")
 val SCALAR_KEYWORDS = setOf("text", "integer", "long", "decimal", "double", "boolean")
 
 class VelleSyntaxError(message: String, val line: Int, val col: Int) :
