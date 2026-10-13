@@ -86,7 +86,7 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## Language questions awaiting design
 
-- [ ] Decide the six search decisions in `investigate-search.md` (a refinement with parameters, its word, a read order on a refinement, `contains`, delegated matching, the generated read's shape) — OQ51.
+- [ ] Decide the six read decisions in `investigate-reads.md` (a read API the caller composes over the spec as schema, questions registered beside the client and checked at build time, dropping the spec-side question constructs, stable pages, the read protocol with pluggable REST and GraphQL bindings, the wire form of a filter) and the two search decisions in `investigate-search.md` (`contains`, delegated matching) — OQ51.
 - [ ] Decide whether a duration may be built from a data value (`treatedAt + interval days`) — today a duration takes a literal count only, so "collect every N days" cannot be derived and the peptides collection tasks carry admin-stated due dates instead (`break-peptides.md` S13).
 - [ ] Bootstrap/backfill triggers — OQ28.
 - [ ] Erasure and retention — OQ27.

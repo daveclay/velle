@@ -15,7 +15,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **[OQ28](questions/OQ28-bootstrap-backfill.md)** — bootstrap/backfill: a new rule against pre-existing state · not designed
 - **[OQ43](questions/OQ43-transient-containers.md)** — transient containers: a closure whose container is `transient act` · V17's direction forces the all-transient tree; v0 refuses the combination (`checks.md` V22) — remaining: the scoped V17 carve-out (same-closure references, `with`-resolution-only inverse inference), V18's reach over transient parts, the durable-container/transient-branch mix
 - **[OQ44](questions/OQ44-union-stress.md)** — stress-testing cross-base unions: the checks that still assume one base, the runtime, the generated output, and the diagrams, each against an adversarial spec · opened 2026-09-13 at OQ29's close
-- **[OQ51](questions/OQ51-search.md)** — search: a read that takes input · a refinement with parameters, a read order on a refinement, `contains`; six decisions in `investigate-search.md` · opened 2026-10-12
+- **[OQ51](questions/OQ51-reads.md)** — reading the system: a read API the caller composes from the spec as schema (GraphQL-inspired), questions registered beside the client and checked at build time, no reads declared in the spec, order and stable pages, a read protocol with pluggable REST and GraphQL bindings; search as the first special case · `investigate-reads.md` (six general decisions) and `investigate-search.md` (two search decisions) · opened 2026-10-12
 
 ## Deferred — post-v0 re-derivations (README §22's list)
 

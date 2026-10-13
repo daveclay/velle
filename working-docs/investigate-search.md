@@ -1,7 +1,8 @@
 # Investigation: search — how an engineer builds a search feature in Velle
 
 **Status:** first pass (2026-10-12) — conceptual, by analysis; nothing here runs. One language change is proposed (a refinement with parameters, plus a read order on a refinement and a text predicate), with the binding consequences worked through. Decisions for Dave at the bottom.
-**Question tag:** [OQ51](questions/OQ51-search.md)
+**Question tag:** [OQ51](questions/OQ51-reads.md)
+**Parent:** `working-docs/investigate-reads.md` — reads in general; this doc is the search special case. That doc supersedes section 3c and decisions 1, 2, 3, and 6 below: a read takes part in no proof, so the search is a question the engineer registers beside the client or composes at request time, checked against the spec at build time, never a refinement with parameters; the price cap and the order are the caller's, the visibility gate is OQ33's, and the parameterized refinement stays on file as the remedy if spelling the match twice (in `SavedSearch` and in the client's question) ever proves too costly. Decisions 4 and 5 below stand.
 **See:** README §8 (refinements), §10 (selectors and the mandatory `by`), §6 (collections are sets), §22 "External input (`act`)" (the deferred question whether `act` also names a read surface; the Mapping item; the escape hatch; the extension framework) · `working-docs/investigate_runtime.md` §6 (the candidate pre-filter) and §10 (the typed store surface and its question recognition) · [OQ33](questions/OQ33-visible-to.md) (visibility) · [OQ35](questions/OQ35-mixins.md) (a trait shared across shapes)
 
 ---

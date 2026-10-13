@@ -19,6 +19,7 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **C0 pinning** — a transient act's partitions are evaluated against the state at its arrival commit and never re-evaluated by its own consequences (`evaluation.md`, "Transient acts").
 - **closure / exposure closure / input closure** — what one commit carries: the act plus the inline parts its `with` declaration says arrive with it, statically shaped, with the single instance as the degenerate case (README §4; §6 "Inline part creation").
 - **HOLDS / TAX / GAP** — break-doc verdicts: the design handles the case · handles it at a cost · needs a new obligation or fails (`break-b.md`).
+- **surface** — the set of calls available to code outside the system: the *typed surface* is the generated Kotlin API (commit functions, accessors, views), the *query surface* or *read surface* is the part of it that gets data out, the *store surface* is the typed interface a store implements. Plain synonym: API. Used in README §22 and `investigate_runtime.md` §10–§11; `investigate-reads.md` says "read API".
 
 ## Patterns
 
