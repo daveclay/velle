@@ -49,6 +49,8 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 - [ ] Revisit: can rules copy a transient container act *and its parts* into a durable tree? The part-copying rules appear to have no way to name the durable container a sibling rule just created (V17 bans the reference path, U1's snapshot hides the sibling's creation) — confirm or break the tracing; the outcome scopes OQ43.
 
 ## Runtime follow-ons (`investigate_runtime.md`)
+- [ ] Make the loading of associated and joined records configurable in the query API (`investigate-reads.md` R5, Dave 2026-10-12): the first build returns references as typed handles navigated lazily; later, following GraphQL's lead, a query names the relationships it wants loaded with the root, nested to any depth, the framework loads exactly those batched per level, and every unnamed reference stays a lazy handle — so the N+1 cost is the caller's choice, not the framework's default.
+- [ ] Support transaction isolation levels for reads: today a query through the read API is a read-only snapshot and nothing else (`evaluation.md`, "A read is a read-only snapshot"; `investigate-reads.md` R4); let the read request name the isolation it wants (read-committed, repeatable-read, serializable) and let the store binding map it — Dave, 2026-10-12.
 
 - [ ] Build reverse-path candidate narrowing (per-watcher read paths walked backward from the mutation); bare-shape entrant diffs and aggregate pre-filters ride with it (§6).
 - [ ] Switch the generated `System` to real time by default, controllable clock as the test affordance (§1).
@@ -56,11 +58,13 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 - [x] Implement the exposure closure (`act ... with` — README §6 "Inline part creation"): parser `withClause`, V22 + the V1 self-pair extension + closure shapes in the commit-kind derivation (V3/V15 reach), codegen nested input types, runtime closure commits, `ClosureTest`, and `examples/orders/` exercising it end-to-end. The V21 projection's *static* slice (back-reference unsuppliable is runtime-enforced today) rides the existing V21 item above.
 - [ ] Remove the now-dead `initially` optional-parameter branch from `Codegen.kt` `commitFn` once V21 lands (optional `?` fields stay optional parameters — ratified 2026-08-20; no example spec puts `initially` on an act any more).
 - [ ] Give the generated `SpecSupport` a `newSystem()` hook so the generated specs run over a store as the flow tests do (`examples/*/output/src/test/kotlin/velle/*OverSqliteTest.kt`; `investigate_runtime.md` §11).
-- [ ] Decide whether two store obligations the conformance pass surfaced join `evaluation.md`'s universal-transaction contract: a deleted row's key is never reissued, and a scan's row order is the query surface's order (`investigate_runtime.md` §11; stated today in `Hydration.kt`'s kdoc).
+- [ ] Decide whether one store obligation the conformance pass surfaced joins `evaluation.md`'s universal-transaction contract: a deleted row's key is never reissued (`investigate_runtime.md` §11; stated today in `Hydration.kt`'s kdoc). The other, a scan's row order as the query surface's order, closed 2026-10-12: no store obligation; every query names its order (`investigate-reads.md` R10), and the generated specs' `last(shape)` reads name a datum.
+- [ ] Decide whether a shape may declare a default read order that a query inherits when it names none (`investigate-reads.md` R10 leaves it open; today every query must name its order) — Dave, 2026-10-12.
 - [ ] Fix the 16 compiler tests failing at HEAD — `ParserTest`'s billing fixture inventory, `RuntimeTest` committing `Customer` directly (billing enters through `SignUp` now), and fixture drift in `RuleGraphGenTest`, `StateFlowGenTest`, `DiagramGenTest`, `QueryCompilerTest`; verified present on a clean checkout before the store pass (2026-09-14).
 - [ ] Teach SpecGen to generate refinement specs over rule-materialized shapes — the request/record split dropped its specs for PaidInvoice, SettledOrder, Delinquent, ClosedTicket, LockedNote, and kin (givens still reach those states; only the generated coverage vanished).
 
 ## v0 loose ends
+- [ ] Implement the text operators `contains`, `starts with`, `ends with`, `like` (README §5, §10; `grammar.md`, ruled 2026-10-12 in `investigate-reads.md` R1): the contextual words in the lexer, `comparison` in the parser, validator typing (text × text → boolean), the evaluator (`like` with `%`, `_`, and `\` escapes), the query compiler rendering each to `LIKE` with escaped wildcards under the superset contract, and tests; README states them ahead of the implementation.
 
 - [ ] Decide: `if ... then` sharing the condition's line — language rule, or parser limitation to lift?
 - [ ] Close validator gaps (tracked in `Validator.kt`'s header): V11 branch-sensitive narrowing · V12 at-most-one beyond the refinement slice (`singular_references.md`) · A-series beyond A4/A5.
@@ -86,7 +90,8 @@ Actions only, one line each, verb-first. Context lives behind the links: open qu
 
 ## Language questions awaiting design
 
-- [ ] Decide the six read decisions in `investigate-reads.md` (a read API the caller composes over the spec as schema, questions registered beside the client and checked at build time, dropping the spec-side question constructs, stable pages, the read protocol with pluggable REST and GraphQL bindings, the wire form of a filter) and the two search decisions in `investigate-search.md` (`contains`, delegated matching) — OQ51.
+- [ ] Answer the eleven read questions in `investigate-reads.md` section 11 (no reads in the spec, the dropped spec-side constructs, the read request and result as data, reads as snapshot-only transactions, shipping before visibility, how a query is registered, the REST filter wire form, stable pages, withdrawing scan order, `contains`, what to build first) — OQ51.
+- [ ] Make ordering by the store key an advisory warning, not an error: a read (composed or registered, `investigate-reads.md` section 4) or a selector that names `id` as an order datum has a defined meaning but one the author probably did not intend, since the key is minted and carries no business order (README §5, §10); the cursor's hidden tie-break (`investigate-reads.md` R2) is the sanctioned use and raises nothing — Dave, 2026-10-12.
 - [ ] Decide whether a duration may be built from a data value (`treatedAt + interval days`) — today a duration takes a literal count only, so "collect every N days" cannot be derived and the peptides collection tasks carry admin-stated due dates instead (`break-peptides.md` S13).
 - [ ] Bootstrap/backfill triggers — OQ28.
 - [ ] Erasure and retention — OQ27.

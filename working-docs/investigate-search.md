@@ -2,7 +2,7 @@
 
 **Status:** first pass (2026-10-12) — conceptual, by analysis; nothing here runs. One language change is proposed (a refinement with parameters, plus a read order on a refinement and a text predicate), with the binding consequences worked through. Decisions for Dave at the bottom.
 **Question tag:** [OQ51](questions/OQ51-reads.md)
-**Parent:** `working-docs/investigate-reads.md` — reads in general; this doc is the search special case. That doc supersedes section 3c and decisions 1, 2, 3, and 6 below: a read takes part in no proof, so the search is a question the engineer registers beside the client or composes at request time, checked against the spec at build time, never a refinement with parameters; the price cap and the order are the caller's, the visibility gate is OQ33's, and the parameterized refinement stays on file as the remedy if spelling the match twice (in `SavedSearch` and in the client's question) ever proves too costly. Decisions 4 and 5 below stand.
+**Parent:** `working-docs/investigate-reads.md` — reads in general; this doc is the search special case. That doc supersedes section 3c and decisions 1, 2, 3, and 6 below: a read takes part in no proof, so the search is a query the engineer registers beside the client or composes at request time, checked against the spec at build time, never a refinement with parameters; the price cap and the order are the caller's, the visibility gate is OQ33's, and the parameterized refinement stays on file as the remedy if spelling the match twice (in `SavedSearch` and in the client's query) ever proves too costly. Decisions 4 and 5 below stand.
 **See:** README §8 (refinements), §10 (selectors and the mandatory `by`), §6 (collections are sets), §22 "External input (`act`)" (the deferred question whether `act` also names a read surface; the Mapping item; the escape hatch; the extension framework) · `working-docs/investigate_runtime.md` §6 (the candidate pre-filter) and §10 (the typed store surface and its question recognition) · [OQ33](questions/OQ33-visible-to.md) (visibility) · [OQ35](questions/OQ35-mixins.md) (a trait shared across shapes)
 
 ---
@@ -237,7 +237,7 @@ The center of the pass (section 3c). Without parameters, the only spellings are 
 
 The members of a refinement are a set; a search result is a list. The proposed `by` clause on a refinement declaration states the order a reader receives members in, with the same datums a selector's `by` accepts (README §10: declared, orderable properties, body properties included; never `id`) plus a direction word, which selectors do not need because `latest` and `first` fix it. Two things follow for free. Stable paging is exactly the discrimination rule README §10 already imposes: an order whose datums fail to discriminate gives unstable pages, so the fail-loudly rule gains a second justification and needs no paging vocabulary. And the order belongs on unparameterized refinements too ("overdue invoices, oldest first"), where the generated accessor would honor it; the open TODO item on whether a store's scan order is a contract obligation (`working-docs/TODO.md`, runtime follow-ons) resolves the other way for any refinement that declares its order. Decision 3.
 
-### F3 — GAP: no text predicate
+### F3 — GAP, closed by ruling (2026-10-12): no text predicate
 
 `lowercase(name) contains lowercase(terms)` needs `contains`, a substring test with exact semantics, the same closed-vocabulary growth README §5 anticipates. A prefix test for suggestions is the same decision. The pre-filter renders it to `LIKE`; the authoritative check runs in memory as every predicate does (`investigate_runtime.md` §6). Decision 4.
 
@@ -275,13 +275,15 @@ The digest carries the matched set as a `many` on one record, which is why it is
 If decision 1 through 4 go as recommended, the generated surface changes in two places and the runtime contract in none.
 
 - **The typed accessor.** Beside `products()` and `sellables()`, a parameterized refinement generates a function taking its parameters, returning the hits as views in the declared order, each view carrying the body's derived properties: `productSearch(terms: String, maxPrice: BigDecimal?, shopper: Ref<Shopper>): List<ProductSearchView>` (`compiler/src/main/kotlin/velle/Codegen.kt`, the accessor block that today wraps `instancesOf`). Evaluation is a read over settled state, the case `investigate_runtime.md` §6 marks as safe for the pre-filter with no caveat; the authoritative check and the ordering run in memory over the shortlist.
-- **The typed store.** The parameterized refinement is a named question whose holes are its declared parameters plus any evaluation-moment constants, exactly the recognized form of `remindOverdueCandidates(dueBefore, sentOnAfter)` (`investigate_runtime.md` §10): `productSearchCandidates(terms: String, maxPrice: BigDecimal?)`, with the superset contract, defaulted onto the generic protocol, overridable in hand-written SQL. `shopper.verifiedAdult` is a keyed read, not a hole. The derived conjuncts (`Sellable` through the latest stock count) drop out of the candidate query by polarity, which is the performance story of search in Velle in one sentence: a search is as fast as the column-expressible part of its predicate and order, and the author moves work into that part by materializing a snapshot column (F5), a visible decision with a stated cadence.
+- **The typed store.** The parameterized refinement is a named query whose holes are its declared parameters plus any evaluation-moment constants, exactly the recognized form of `remindOverdueCandidates(dueBefore, sentOnAfter)` (`investigate_runtime.md` §10): `productSearchCandidates(terms: String, maxPrice: BigDecimal?)`, with the superset contract, defaulted onto the generic protocol, overridable in hand-written SQL. `shopper.verifiedAdult` is a keyed read, not a hole. The derived conjuncts (`Sellable` through the latest stock count) drop out of the candidate query by polarity, which is the performance story of search in Velle in one sentence: a search is as fast as the column-expressible part of its predicate and order, and the author moves work into that part by materializing a snapshot column (F5), a visible decision with a stated cadence.
 - **The runtime's protocol** (`StateResolver`, `fetchCandidates`) is unchanged: a declared parameter is a constant in the filter tree by the time the store sees it.
 - **The record beside the read.** A wrapper that logs searches calls the read, then commits `RecordSearch`; the hit count is re-derived in the commit from the same definition. Two evaluations of one predicate per search is compilation's concern, not the spec's.
 
 ## 7. What needs Dave's input
 
 ### 1. A refinement may declare parameters, and a parameterized refinement is a predicate, never a state
+
+**Dropped 2026-10-12 (`investigate-reads.md` R6).** Kept here as the remedy on file for a definition with an input that the spec and a client both need and that proves too costly to spell twice.
 
 Decision: adopt `shape Name(param: type, ...) = Base where ...` with the validator refusing every state-only use (a bare `when` subject, a `never` subject, `captured`, `frozen`, `undeletable`) and admitting every predicate use (`is` with arguments, `exists`, aggregates, selectors, derived collections, composition, the generated read). Every in-spec use is an inlining; the analyses see the substituted predicate. This also closes README §22's deferred question: `act` is strictly input, and reads are refinements.
 
@@ -293,9 +295,13 @@ Decision: keep `shape` for a parameterized refinement, or introduce a noun. `sea
 
 ### 3. A refinement may declare the order its members are read in
 
+**Dropped 2026-10-12 (`investigate-reads.md` R6).** Order is the caller's; kept here as the remedy on file for a ranking a rule reads.
+
 Decision: a `by` clause after the predicate and body, `by <datum> [ascending|descending], ...`, with the datums a selector's `by` accepts plus the body's derived properties, honored by the generated accessor and the typed store's candidate method, and legal on unparameterized refinements too. Direction words are new vocabulary (`descending` as a contextual word after a datum, like `by` itself); the discrimination rule is README §10's unchanged, now also the stable-paging rule. Decide whether a refinement with no `by` has an unspecified read order (today's scan order, the open TODO item) or whether that TODO item's question becomes "a refinement read through the surface declares its order or is read in no promised order".
 
 ### 4. `contains` joins the builtin vocabulary
+
+**Ruled 2026-10-12 in `investigate-reads.md` (R1): adopted and widened — `contains`, `starts with`, `ends with`, and `like` with SQL-style wildcards; promoted to README §5, §10 and `grammar.md`; implementation is a `TODO.md` item.**
 
 Decision: `a contains b` as a text predicate with substring semantics, exact and case-sensitive, so case folding stays the author's visible `lowercase`. Decide whether a prefix test ships beside it (suggestions and autocomplete want one; `contains` serves loosely). Cost: none structural; the pre-filter renders `LIKE`, the type check is F2's.
 
@@ -304,6 +310,8 @@ Decision: `a contains b` as a text predicate with substring semantics, exact and
 Decision, deferrable: whether a registered extension predicate may declare the store as its authority, which crosses the one-evaluator line (`investigate_runtime.md` §2, §6) for that predicate alone, or whether every registered predicate carries a reference implementation that is the meaning and the store is only ever a pre-filter. The first gives a real search engine's relevance an honest home at the cost of a predicate the spec cannot check and a rule over it that may disagree with what the shopper saw; the second keeps the line and limits search to what a reference implementation can define. Recommendation for now: v0 ships `contains` only, the question waits for the extension framework, and the escape-hatch item in README §22 gains search as its first named customer.
 
 ### 6. The generated read's shape
+
+**Superseded 2026-10-12 (`investigate-reads.md` R5):** a query returns the shape's generated Kotlin data classes plus a cursor.
 
 Decision, binding-side: whether the accessor for a parameterized refinement returns a list, a lazy sequence, or takes a window (offset and size, or a cursor over the declared order). Engineer-facing only; the language says nothing. A window can push below the authoritative in-memory check only when the whole predicate and order are column-expressible, so a window on the accessor is honest only as "the first N after evaluation" unless the typed store's candidate method takes it too. Recommendation: the accessor returns the ordered list; a window lives on the candidate method as an engineer's optimization, and nothing promises it is applied before the authoritative check.
 
