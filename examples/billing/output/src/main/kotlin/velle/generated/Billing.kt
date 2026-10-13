@@ -33,27 +33,27 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     /** Queue key: [correctEmail.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCorrectEmail(customer: CustomerView, corrected: String): CommitResult =
+    fun commitCorrectEmail(customer: Ref<Customer>, corrected: String): CommitResult =
         system.commit("CorrectEmail", buildMap {
-            put("customer", customer.id)
+            put("customer", system.idOf(customer))
             put("corrected", corrected)
         })
 
     /** Queue key: [billCustomer.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitBillCustomer(customer: CustomerView, due: LocalDate): CommitResult =
+    fun commitBillCustomer(customer: Ref<Customer>, due: LocalDate): CommitResult =
         system.commit("BillCustomer", buildMap {
-            put("customer", customer.id)
+            put("customer", system.idOf(customer))
             put("due", due)
         })
 
     /** Queue key: [lineItem.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitLineItem(invoice: InvoiceView, description: String, price: BigDecimal, quantity: Int): CommitResult =
+    fun commitLineItem(invoice: Ref<Invoice>, description: String, price: BigDecimal, quantity: Int): CommitResult =
         system.commit("LineItem", buildMap {
-            put("invoice", invoice.id)
+            put("invoice", system.idOf(invoice))
             put("description", description)
             put("price", price)
             put("quantity", quantity)
@@ -62,268 +62,174 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     /** Queue keys: [submitPayment.invoice], [submitPayment.invoice.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitSubmitPayment(invoice: InvoiceView, amount: BigDecimal): CommitResult =
+    fun commitSubmitPayment(invoice: Ref<Invoice>, amount: BigDecimal): CommitResult =
         system.commit("SubmitPayment", buildMap {
-            put("invoice", invoice.id)
+            put("invoice", system.idOf(invoice))
             put("amount", amount)
         })
 
     /** Queue key: [issuance.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitIssuance(invoice: InvoiceView): CommitResult =
+    fun commitIssuance(invoice: Ref<Invoice>): CommitResult =
         system.commit("Issuance", buildMap {
-            put("invoice", invoice.id)
+            put("invoice", system.idOf(invoice))
         })
 
     /** Queue keys: [changeDueDate.invoice], [changeDueDate.invoice.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitChangeDueDate(invoice: InvoiceView, newDue: LocalDate): CommitResult =
+    fun commitChangeDueDate(invoice: Ref<Invoice>, newDue: LocalDate): CommitResult =
         system.commit("ChangeDueDate", buildMap {
-            put("invoice", invoice.id)
+            put("invoice", system.idOf(invoice))
             put("newDue", newDue)
         })
 
     /** Queue key: [archiveRequest.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitArchiveRequest(invoice: InvoiceView): CommitResult =
+    fun commitArchiveRequest(invoice: Ref<Invoice>): CommitResult =
         system.commit("ArchiveRequest", buildMap {
-            put("invoice", invoice.id)
+            put("invoice", system.idOf(invoice))
         })
 
     /** Queue key: [unarchiveRequest.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitUnarchiveRequest(invoice: InvoiceView): CommitResult =
+    fun commitUnarchiveRequest(invoice: Ref<Invoice>): CommitResult =
         system.commit("UnarchiveRequest", buildMap {
-            put("invoice", invoice.id)
+            put("invoice", system.idOf(invoice))
         })
 
-    fun customers(): List<CustomerView> = system.instancesOf("Customer").map { CustomerView(it) }
-    fun customer(id: Long) = CustomerView(id)
-    fun correctEmails(): List<CorrectEmailView> = system.instancesOf("CorrectEmail").map { CorrectEmailView(it) }
-    fun correctEmail(id: Long) = CorrectEmailView(id)
-    fun invoices(): List<InvoiceView> = system.instancesOf("Invoice").map { InvoiceView(it) }
-    fun invoice(id: Long) = InvoiceView(id)
-    fun lineItems(): List<LineItemView> = system.instancesOf("LineItem").map { LineItemView(it) }
-    fun lineItem(id: Long) = LineItemView(id)
-    fun payments(): List<PaymentView> = system.instancesOf("Payment").map { PaymentView(it) }
-    fun payment(id: Long) = PaymentView(id)
-    fun receipts(): List<ReceiptView> = system.instancesOf("Receipt").map { ReceiptView(it) }
-    fun receipt(id: Long) = ReceiptView(id)
-    fun receiptEmails(): List<ReceiptEmailView> = system.instancesOf("ReceiptEmail").map { ReceiptEmailView(it) }
-    fun receiptEmail(id: Long) = ReceiptEmailView(id)
-    fun reminders(): List<ReminderView> = system.instancesOf("Reminder").map { ReminderView(it) }
-    fun reminder(id: Long) = ReminderView(id)
-    fun issuances(): List<IssuanceView> = system.instancesOf("Issuance").map { IssuanceView(it) }
-    fun issuance(id: Long) = IssuanceView(id)
-    fun dueChangeRefusals(): List<DueChangeRefusalView> = system.instancesOf("DueChangeRefusal").map { DueChangeRefusalView(it) }
-    fun dueChangeRefusal(id: Long) = DueChangeRefusalView(id)
-    fun archiveRequests(): List<ArchiveRequestView> = system.instancesOf("ArchiveRequest").map { ArchiveRequestView(it) }
-    fun archiveRequest(id: Long) = ArchiveRequestView(id)
-    fun unarchiveRequests(): List<UnarchiveRequestView> = system.instancesOf("UnarchiveRequest").map { UnarchiveRequestView(it) }
-    fun unarchiveRequest(id: Long) = UnarchiveRequestView(id)
-    fun unarchiveNotices(): List<UnarchiveNoticeView> = system.instancesOf("UnarchiveNotice").map { UnarchiveNoticeView(it) }
-    fun unarchiveNotice(id: Long) = UnarchiveNoticeView(id)
-    fun paidInvoices(): List<PaidInvoiceView> = system.instancesOf("PaidInvoice").map { PaidInvoiceView(it) }
-    fun InvoiceView.isPaidInvoice(): Boolean = system.isMember(id, "PaidInvoice")
-    fun unemailedReceipts(): List<UnemailedReceiptView> = system.instancesOf("UnemailedReceipt").map { UnemailedReceiptView(it) }
-    fun ReceiptView.isUnemailedReceipt(): Boolean = system.isMember(id, "UnemailedReceipt")
-    fun overdueInvoices(): List<OverdueInvoiceView> = system.instancesOf("OverdueInvoice").map { OverdueInvoiceView(it) }
-    fun InvoiceView.isOverdueInvoice(): Boolean = system.isMember(id, "OverdueInvoice")
-    fun actionableOverdues(): List<ActionableOverdueView> = system.instancesOf("ActionableOverdue").map { ActionableOverdueView(it) }
-    fun InvoiceView.isActionableOverdue(): Boolean = system.isMember(id, "ActionableOverdue")
-    fun issuedInvoices(): List<IssuedInvoiceView> = system.instancesOf("IssuedInvoice").map { IssuedInvoiceView(it) }
-    fun InvoiceView.isIssuedInvoice(): Boolean = system.isMember(id, "IssuedInvoice")
-    fun archivedInvoices(): List<ArchivedInvoiceView> = system.instancesOf("ArchivedInvoice").map { ArchivedInvoiceView(it) }
-    fun InvoiceView.isArchivedInvoice(): Boolean = system.isMember(id, "ArchivedInvoice")
+    fun customers(): List<Customer> = system.instancesOf("Customer").map { materializeCustomer(it) }
+    fun correctEmails(): List<CorrectEmail> = system.instancesOf("CorrectEmail").map { materializeCorrectEmail(it) }
+    fun invoices(): List<Invoice> = system.instancesOf("Invoice").map { materializeInvoice(it) }
+    fun lineItems(): List<LineItem> = system.instancesOf("LineItem").map { materializeLineItem(it) }
+    fun payments(): List<Payment> = system.instancesOf("Payment").map { materializePayment(it) }
+    fun receipts(): List<Receipt> = system.instancesOf("Receipt").map { materializeReceipt(it) }
+    fun receiptEmails(): List<ReceiptEmail> = system.instancesOf("ReceiptEmail").map { materializeReceiptEmail(it) }
+    fun reminders(): List<Reminder> = system.instancesOf("Reminder").map { materializeReminder(it) }
+    fun issuances(): List<Issuance> = system.instancesOf("Issuance").map { materializeIssuance(it) }
+    fun dueChangeRefusals(): List<DueChangeRefusal> = system.instancesOf("DueChangeRefusal").map { materializeDueChangeRefusal(it) }
+    fun archiveRequests(): List<ArchiveRequest> = system.instancesOf("ArchiveRequest").map { materializeArchiveRequest(it) }
+    fun unarchiveRequests(): List<UnarchiveRequest> = system.instancesOf("UnarchiveRequest").map { materializeUnarchiveRequest(it) }
+    fun unarchiveNotices(): List<UnarchiveNotice> = system.instancesOf("UnarchiveNotice").map { materializeUnarchiveNotice(it) }
+    fun paidInvoices(): List<PaidInvoice> = system.instancesOf("PaidInvoice").map { materializePaidInvoice(it) }
+    fun unemailedReceipts(): List<UnemailedReceipt> = system.instancesOf("UnemailedReceipt").map { materializeUnemailedReceipt(it) }
+    fun overdueInvoices(): List<OverdueInvoice> = system.instancesOf("OverdueInvoice").map { materializeOverdueInvoice(it) }
+    fun actionableOverdues(): List<ActionableOverdue> = system.instancesOf("ActionableOverdue").map { materializeActionableOverdue(it) }
+    fun issuedInvoices(): List<IssuedInvoice> = system.instancesOf("IssuedInvoice").map { materializeIssuedInvoice(it) }
+    fun archivedInvoices(): List<ArchivedInvoice> = system.instancesOf("ArchivedInvoice").map { materializeArchivedInvoice(it) }
 
-    inner class CustomerView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val email: String get() = system.get(id, "email") as String
-        val signedUpOn: Instant get() = system.get(id, "signedUpOn") as Instant
-        val largestPayment: BigDecimal get() = system.get(id, "largestPayment") as BigDecimal
-        val correctEmails: List<CorrectEmailView> get() = (system.get(id, "correctEmails") as List<*>).map { CorrectEmailView(it as Long) }
-        val invoices: List<InvoiceView> get() = (system.get(id, "invoices") as List<*>).map { InvoiceView(it as Long) }
-        override fun toString() = "Customer#$id"
-        override fun equals(other: Any?) = other is CustomerView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class CorrectEmailView(override val id: Long) : View {
-        val customer: CustomerView get() = CustomerView(system.get(id, "customer") as Long)
-        val corrected: String get() = system.get(id, "corrected") as String
-        override fun toString() = "CorrectEmail#$id"
-        override fun equals(other: Any?) = other is CorrectEmailView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class InvoiceView(override val id: Long) : View {
-        val customer: CustomerView get() = CustomerView(system.get(id, "customer") as Long)
-        val due: LocalDate get() = system.get(id, "due") as LocalDate
-        val reference: String get() = system.get(id, "reference") as String
-        val issuedOn: Instant get() = system.get(id, "issuedOn") as Instant
-        val total: BigDecimal get() = system.get(id, "total") as BigDecimal
-        val balance: BigDecimal get() = system.get(id, "balance") as BigDecimal
-        val status: String get() = system.get(id, "status") as String
-        val lineItems: List<LineItemView> get() = (system.get(id, "lineItems") as List<*>).map { LineItemView(it as Long) }
-        val payments: List<PaymentView> get() = (system.get(id, "payments") as List<*>).map { PaymentView(it as Long) }
-        val receipts: List<ReceiptView> get() = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) }
-        val reminders: List<ReminderView> get() = (system.get(id, "reminders") as List<*>).map { ReminderView(it as Long) }
-        val issuances: List<IssuanceView> get() = (system.get(id, "issuances") as List<*>).map { IssuanceView(it as Long) }
-        val dueChangeRefusals: List<DueChangeRefusalView> get() = (system.get(id, "dueChangeRefusals") as List<*>).map { DueChangeRefusalView(it as Long) }
-        val archiveRequests: List<ArchiveRequestView> get() = (system.get(id, "archiveRequests") as List<*>).map { ArchiveRequestView(it as Long) }
-        val unarchiveRequests: List<UnarchiveRequestView> get() = (system.get(id, "unarchiveRequests") as List<*>).map { UnarchiveRequestView(it as Long) }
-        val unarchiveNotices: List<UnarchiveNoticeView> get() = (system.get(id, "unarchiveNotices") as List<*>).map { UnarchiveNoticeView(it as Long) }
-        override fun toString() = "Invoice#$id"
-        override fun equals(other: Any?) = other is InvoiceView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class LineItemView(override val id: Long) : View {
-        val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
-        val description: String get() = system.get(id, "description") as String
-        val price: BigDecimal get() = system.get(id, "price") as BigDecimal
-        val quantity: Int get() = (system.get(id, "quantity") as BigDecimal).intValueExact()
-        val amount: BigDecimal get() = system.get(id, "amount") as BigDecimal
-        override fun toString() = "LineItem#$id"
-        override fun equals(other: Any?) = other is LineItemView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class PaymentView(override val id: Long) : View {
-        val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
-        val amount: BigDecimal get() = system.get(id, "amount") as BigDecimal
-        val receivedOn: Instant get() = system.get(id, "receivedOn") as Instant
-        override fun toString() = "Payment#$id"
-        override fun equals(other: Any?) = other is PaymentView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ReceiptView(override val id: Long) : View {
-        val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
-        val sentOn: Instant get() = system.get(id, "sentOn") as Instant
-        val receiptEmails: List<ReceiptEmailView> get() = (system.get(id, "receiptEmails") as List<*>).map { ReceiptEmailView(it as Long) }
-        override fun toString() = "Receipt#$id"
-        override fun equals(other: Any?) = other is ReceiptView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ReceiptEmailView(override val id: Long) : View {
-        val receipt: ReceiptView get() = ReceiptView(system.get(id, "receipt") as Long)
-        val queuedOn: Instant get() = system.get(id, "queuedOn") as Instant
-        override fun toString() = "ReceiptEmail#$id"
-        override fun equals(other: Any?) = other is ReceiptEmailView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ReminderView(override val id: Long) : View {
-        val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
-        val sentOn: LocalDate get() = system.get(id, "sentOn") as LocalDate
-        override fun toString() = "Reminder#$id"
-        override fun equals(other: Any?) = other is ReminderView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class IssuanceView(override val id: Long) : View {
-        val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
-        override fun toString() = "Issuance#$id"
-        override fun equals(other: Any?) = other is IssuanceView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class DueChangeRefusalView(override val id: Long) : View {
-        val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
-        val requestedDue: LocalDate get() = system.get(id, "requestedDue") as LocalDate
-        val reason: String get() = system.get(id, "reason") as String
-        val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
-        override fun toString() = "DueChangeRefusal#$id"
-        override fun equals(other: Any?) = other is DueChangeRefusalView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ArchiveRequestView(override val id: Long) : View {
-        val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
-        override fun toString() = "ArchiveRequest#$id"
-        override fun equals(other: Any?) = other is ArchiveRequestView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class UnarchiveRequestView(override val id: Long) : View {
-        val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
-        override fun toString() = "UnarchiveRequest#$id"
-        override fun equals(other: Any?) = other is UnarchiveRequestView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class UnarchiveNoticeView(override val id: Long) : View {
-        val invoice: InvoiceView get() = InvoiceView(system.get(id, "invoice") as Long)
-        val wasArchivedOn: LocalDate get() = system.get(id, "wasArchivedOn") as LocalDate
-        val noticedOn: Instant get() = system.get(id, "noticedOn") as Instant
-        override fun toString() = "UnarchiveNotice#$id"
-        override fun equals(other: Any?) = other is UnarchiveNoticeView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class PaidInvoiceView(override val id: Long) : View {
-        fun asInvoice() = InvoiceView(id)
-        override fun toString() = "PaidInvoice#$id"
-    }
-
-    inner class UnemailedReceiptView(override val id: Long) : View {
-        fun asReceipt() = ReceiptView(id)
-        override fun toString() = "UnemailedReceipt#$id"
-    }
-
-    inner class OverdueInvoiceView(override val id: Long) : View {
-        fun asInvoice() = InvoiceView(id)
-        override fun toString() = "OverdueInvoice#$id"
-    }
-
-    inner class ActionableOverdueView(override val id: Long) : View {
-        fun asInvoice() = InvoiceView(id)
-        override fun toString() = "ActionableOverdue#$id"
-    }
-
-    inner class IssuedInvoiceView(override val id: Long) : View {
-        fun asInvoice() = InvoiceView(id)
-        override fun toString() = "IssuedInvoice#$id"
-    }
-
-    inner class ArchivedInvoiceView(override val id: Long) : View {
-        fun asInvoice() = InvoiceView(id)
-        val archivedOn: LocalDate get() = system.getAs(id, "ArchivedInvoice", "archivedOn") as LocalDate
-        override fun toString() = "ArchivedInvoice#$id"
-    }
-
-    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
     val read = Read()
 
     inner class Read {
         /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
         val registry = QueryRegistry()
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+
+        /** The model object behind a reference, read now; throws when the record no longer exists. */
+        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
+        fun fetch(id: Long): Ref<*> {
+            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
+            return materialize(id)
+        }
+
         val customers: CustomerQuery get() = CustomerQuery(Query("Customer"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun customer(key: StoreKey): Customer = this(Ref.Persisted("Customer", key))
+        fun customer(key: Long): Customer = customer(StoreKey(key))
+
         val correctEmails: CorrectEmailQuery get() = CorrectEmailQuery(Query("CorrectEmail"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun correctEmail(key: StoreKey): CorrectEmail = this(Ref.Persisted("CorrectEmail", key))
+        fun correctEmail(key: Long): CorrectEmail = correctEmail(StoreKey(key))
+
         val invoices: InvoiceQuery get() = InvoiceQuery(Query("Invoice"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun invoice(key: StoreKey): Invoice = this(Ref.Persisted("Invoice", key))
+        fun invoice(key: Long): Invoice = invoice(StoreKey(key))
+
         val lineItems: LineItemQuery get() = LineItemQuery(Query("LineItem"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun lineItem(key: StoreKey): LineItem = this(Ref.Persisted("LineItem", key))
+        fun lineItem(key: Long): LineItem = lineItem(StoreKey(key))
+
         val payments: PaymentQuery get() = PaymentQuery(Query("Payment"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun payment(key: StoreKey): Payment = this(Ref.Persisted("Payment", key))
+        fun payment(key: Long): Payment = payment(StoreKey(key))
+
         val receipts: ReceiptQuery get() = ReceiptQuery(Query("Receipt"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun receipt(key: StoreKey): Receipt = this(Ref.Persisted("Receipt", key))
+        fun receipt(key: Long): Receipt = receipt(StoreKey(key))
+
         val receiptEmails: ReceiptEmailQuery get() = ReceiptEmailQuery(Query("ReceiptEmail"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun receiptEmail(key: StoreKey): ReceiptEmail = this(Ref.Persisted("ReceiptEmail", key))
+        fun receiptEmail(key: Long): ReceiptEmail = receiptEmail(StoreKey(key))
+
         val reminders: ReminderQuery get() = ReminderQuery(Query("Reminder"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun reminder(key: StoreKey): Reminder = this(Ref.Persisted("Reminder", key))
+        fun reminder(key: Long): Reminder = reminder(StoreKey(key))
+
         val issuances: IssuanceQuery get() = IssuanceQuery(Query("Issuance"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun issuance(key: StoreKey): Issuance = this(Ref.Persisted("Issuance", key))
+        fun issuance(key: Long): Issuance = issuance(StoreKey(key))
+
         val dueChangeRefusals: DueChangeRefusalQuery get() = DueChangeRefusalQuery(Query("DueChangeRefusal"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun dueChangeRefusal(key: StoreKey): DueChangeRefusal = this(Ref.Persisted("DueChangeRefusal", key))
+        fun dueChangeRefusal(key: Long): DueChangeRefusal = dueChangeRefusal(StoreKey(key))
+
         val archiveRequests: ArchiveRequestQuery get() = ArchiveRequestQuery(Query("ArchiveRequest"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun archiveRequest(key: StoreKey): ArchiveRequest = this(Ref.Persisted("ArchiveRequest", key))
+        fun archiveRequest(key: Long): ArchiveRequest = archiveRequest(StoreKey(key))
+
         val unarchiveRequests: UnarchiveRequestQuery get() = UnarchiveRequestQuery(Query("UnarchiveRequest"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun unarchiveRequest(key: StoreKey): UnarchiveRequest = this(Ref.Persisted("UnarchiveRequest", key))
+        fun unarchiveRequest(key: Long): UnarchiveRequest = unarchiveRequest(StoreKey(key))
+
         val unarchiveNotices: UnarchiveNoticeQuery get() = UnarchiveNoticeQuery(Query("UnarchiveNotice"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun unarchiveNotice(key: StoreKey): UnarchiveNotice = this(Ref.Persisted("UnarchiveNotice", key))
+        fun unarchiveNotice(key: Long): UnarchiveNotice = unarchiveNotice(StoreKey(key))
+
         val paidInvoices: PaidInvoiceQuery get() = PaidInvoiceQuery(Query("PaidInvoice"))
+        /** The record behind [ref] as a member of PaidInvoice, or null when it is not one. */
+        fun paidInvoice(ref: Ref<Invoice>): PaidInvoice? =
+            system.idOf(ref).let { if (system.exists("PaidInvoice", it)) materializePaidInvoice(it) else null }
+
         val unemailedReceipts: UnemailedReceiptQuery get() = UnemailedReceiptQuery(Query("UnemailedReceipt"))
+        /** The record behind [ref] as a member of UnemailedReceipt, or null when it is not one. */
+        fun unemailedReceipt(ref: Ref<Receipt>): UnemailedReceipt? =
+            system.idOf(ref).let { if (system.exists("UnemailedReceipt", it)) materializeUnemailedReceipt(it) else null }
+
         val overdueInvoices: OverdueInvoiceQuery get() = OverdueInvoiceQuery(Query("OverdueInvoice"))
+        /** The record behind [ref] as a member of OverdueInvoice, or null when it is not one. */
+        fun overdueInvoice(ref: Ref<Invoice>): OverdueInvoice? =
+            system.idOf(ref).let { if (system.exists("OverdueInvoice", it)) materializeOverdueInvoice(it) else null }
+
         val actionableOverdues: ActionableOverdueQuery get() = ActionableOverdueQuery(Query("ActionableOverdue"))
+        /** The record behind [ref] as a member of ActionableOverdue, or null when it is not one. */
+        fun actionableOverdue(ref: Ref<Invoice>): ActionableOverdue? =
+            system.idOf(ref).let { if (system.exists("ActionableOverdue", it)) materializeActionableOverdue(it) else null }
+
         val issuedInvoices: IssuedInvoiceQuery get() = IssuedInvoiceQuery(Query("IssuedInvoice"))
+        /** The record behind [ref] as a member of IssuedInvoice, or null when it is not one. */
+        fun issuedInvoice(ref: Ref<Invoice>): IssuedInvoice? =
+            system.idOf(ref).let { if (system.exists("IssuedInvoice", it)) materializeIssuedInvoice(it) else null }
+
         val archivedInvoices: ArchivedInvoiceQuery get() = ArchivedInvoiceQuery(Query("ArchivedInvoice"))
+        /** The record behind [ref] as a member of ArchivedInvoice, or null when it is not one. */
+        fun archivedInvoice(ref: Ref<Invoice>): ArchivedInvoice? =
+            system.idOf(ref).let { if (system.exists("ArchivedInvoice", it)) materializeArchivedInvoice(it) else null }
     }
 
     inner class CustomerQuery(q: Query) : TypedQuery<CustomerFields, Customer>(system, q, CustomerFields(), { materializeCustomer(it) }) {
@@ -402,45 +308,68 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun with(q: Query) = ArchivedInvoiceQuery(q)
     }
 
+    /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
+    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+        "Customer" -> materializeCustomer(id)
+        "CorrectEmail" -> materializeCorrectEmail(id)
+        "Invoice" -> materializeInvoice(id)
+        "LineItem" -> materializeLineItem(id)
+        "Payment" -> materializePayment(id)
+        "Receipt" -> materializeReceipt(id)
+        "ReceiptEmail" -> materializeReceiptEmail(id)
+        "Reminder" -> materializeReminder(id)
+        "Issuance" -> materializeIssuance(id)
+        "DueChangeRefusal" -> materializeDueChangeRefusal(id)
+        "ArchiveRequest" -> materializeArchiveRequest(id)
+        "UnarchiveRequest" -> materializeUnarchiveRequest(id)
+        "UnarchiveNotice" -> materializeUnarchiveNotice(id)
+        else -> throw IllegalStateException("no model object for '$shape'")
+    }
+
     fun materializeCustomer(id: Long): Customer = Customer(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         email = system.get(id, "email") as String,
         signedUpOn = system.get(id, "signedUpOn") as Instant,
         largestPayment = system.get(id, "largestPayment") as BigDecimal,
-        correctEmails = (system.get(id, "correctEmails") as List<*>).map { CorrectEmailView(it as Long) },
-        invoices = (system.get(id, "invoices") as List<*>).map { InvoiceView(it as Long) },
+        correctEmails = (system.get(id, "correctEmails") as List<*>).map { system.refFor(it as Long) },
+        invoices = (system.get(id, "invoices") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeCorrectEmail(id: Long): CorrectEmail = CorrectEmail(
-        id = id,
-        customer = CustomerView(system.get(id, "customer") as Long),
+        key = system.refFor(id).key,
+        customer = system.refFor(system.get(id, "customer") as Long),
         corrected = system.get(id, "corrected") as String,
     )
 
     fun materializeInvoice(id: Long): Invoice = Invoice(
-        id = id,
-        customer = CustomerView(system.get(id, "customer") as Long),
+        key = system.refFor(id).key,
+        customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,
         reference = system.get(id, "reference") as String,
         issuedOn = system.get(id, "issuedOn") as Instant,
         total = system.get(id, "total") as BigDecimal,
         balance = system.get(id, "balance") as BigDecimal,
         status = system.get(id, "status") as String,
-        lineItems = (system.get(id, "lineItems") as List<*>).map { LineItemView(it as Long) },
-        payments = (system.get(id, "payments") as List<*>).map { PaymentView(it as Long) },
-        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
-        reminders = (system.get(id, "reminders") as List<*>).map { ReminderView(it as Long) },
-        issuances = (system.get(id, "issuances") as List<*>).map { IssuanceView(it as Long) },
-        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { DueChangeRefusalView(it as Long) },
-        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { ArchiveRequestView(it as Long) },
-        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { UnarchiveRequestView(it as Long) },
-        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { UnarchiveNoticeView(it as Long) },
+        lineItems = (system.get(id, "lineItems") as List<*>).map { system.refFor(it as Long) },
+        payments = (system.get(id, "payments") as List<*>).map { system.refFor(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
+        reminders = (system.get(id, "reminders") as List<*>).map { system.refFor(it as Long) },
+        issuances = (system.get(id, "issuances") as List<*>).map { system.refFor(it as Long) },
+        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { system.refFor(it as Long) },
+        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { system.refFor(it as Long) },
+        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { system.refFor(it as Long) },
+        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { system.refFor(it as Long) },
+        isPaidInvoice = system.isMember(id, "PaidInvoice"),
+        isOverdueInvoice = system.isMember(id, "OverdueInvoice"),
+        isActionableOverdue = system.isMember(id, "ActionableOverdue"),
+        isIssuedInvoice = system.isMember(id, "IssuedInvoice"),
+        isArchivedInvoice = system.isMember(id, "ArchivedInvoice"),
     )
 
     fun materializeLineItem(id: Long): LineItem = LineItem(
-        id = id,
-        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        key = system.refFor(id).key,
+        invoice = system.refFor(system.get(id, "invoice") as Long),
         description = system.get(id, "description") as String,
         price = system.get(id, "price") as BigDecimal,
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
@@ -448,168 +377,189 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     )
 
     fun materializePayment(id: Long): Payment = Payment(
-        id = id,
-        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        key = system.refFor(id).key,
+        invoice = system.refFor(system.get(id, "invoice") as Long),
         amount = system.get(id, "amount") as BigDecimal,
         receivedOn = system.get(id, "receivedOn") as Instant,
     )
 
     fun materializeReceipt(id: Long): Receipt = Receipt(
-        id = id,
-        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        key = system.refFor(id).key,
+        invoice = system.refFor(system.get(id, "invoice") as Long),
         sentOn = system.get(id, "sentOn") as Instant,
-        receiptEmails = (system.get(id, "receiptEmails") as List<*>).map { ReceiptEmailView(it as Long) },
+        receiptEmails = (system.get(id, "receiptEmails") as List<*>).map { system.refFor(it as Long) },
+        isUnemailedReceipt = system.isMember(id, "UnemailedReceipt"),
     )
 
     fun materializeReceiptEmail(id: Long): ReceiptEmail = ReceiptEmail(
-        id = id,
-        receipt = ReceiptView(system.get(id, "receipt") as Long),
+        key = system.refFor(id).key,
+        receipt = system.refFor(system.get(id, "receipt") as Long),
         queuedOn = system.get(id, "queuedOn") as Instant,
     )
 
     fun materializeReminder(id: Long): Reminder = Reminder(
-        id = id,
-        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        key = system.refFor(id).key,
+        invoice = system.refFor(system.get(id, "invoice") as Long),
         sentOn = system.get(id, "sentOn") as LocalDate,
     )
 
     fun materializeIssuance(id: Long): Issuance = Issuance(
-        id = id,
-        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        key = system.refFor(id).key,
+        invoice = system.refFor(system.get(id, "invoice") as Long),
     )
 
     fun materializeDueChangeRefusal(id: Long): DueChangeRefusal = DueChangeRefusal(
-        id = id,
-        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        key = system.refFor(id).key,
+        invoice = system.refFor(system.get(id, "invoice") as Long),
         requestedDue = system.get(id, "requestedDue") as LocalDate,
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
     fun materializeArchiveRequest(id: Long): ArchiveRequest = ArchiveRequest(
-        id = id,
-        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        key = system.refFor(id).key,
+        invoice = system.refFor(system.get(id, "invoice") as Long),
     )
 
     fun materializeUnarchiveRequest(id: Long): UnarchiveRequest = UnarchiveRequest(
-        id = id,
-        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        key = system.refFor(id).key,
+        invoice = system.refFor(system.get(id, "invoice") as Long),
     )
 
     fun materializeUnarchiveNotice(id: Long): UnarchiveNotice = UnarchiveNotice(
-        id = id,
-        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        key = system.refFor(id).key,
+        invoice = system.refFor(system.get(id, "invoice") as Long),
         wasArchivedOn = system.get(id, "wasArchivedOn") as LocalDate,
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
     fun materializePaidInvoice(id: Long): PaidInvoice = PaidInvoice(
-        id = id,
-        customer = CustomerView(system.get(id, "customer") as Long),
+        key = system.refFor(id).key,
+        customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,
         reference = system.get(id, "reference") as String,
         issuedOn = system.get(id, "issuedOn") as Instant,
         total = system.get(id, "total") as BigDecimal,
         balance = system.get(id, "balance") as BigDecimal,
         status = system.get(id, "status") as String,
-        lineItems = (system.get(id, "lineItems") as List<*>).map { LineItemView(it as Long) },
-        payments = (system.get(id, "payments") as List<*>).map { PaymentView(it as Long) },
-        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
-        reminders = (system.get(id, "reminders") as List<*>).map { ReminderView(it as Long) },
-        issuances = (system.get(id, "issuances") as List<*>).map { IssuanceView(it as Long) },
-        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { DueChangeRefusalView(it as Long) },
-        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { ArchiveRequestView(it as Long) },
-        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { UnarchiveRequestView(it as Long) },
-        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { UnarchiveNoticeView(it as Long) },
+        lineItems = (system.get(id, "lineItems") as List<*>).map { system.refFor(it as Long) },
+        payments = (system.get(id, "payments") as List<*>).map { system.refFor(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
+        reminders = (system.get(id, "reminders") as List<*>).map { system.refFor(it as Long) },
+        issuances = (system.get(id, "issuances") as List<*>).map { system.refFor(it as Long) },
+        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { system.refFor(it as Long) },
+        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { system.refFor(it as Long) },
+        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { system.refFor(it as Long) },
+        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { system.refFor(it as Long) },
+        isOverdueInvoice = system.isMember(id, "OverdueInvoice"),
+        isActionableOverdue = system.isMember(id, "ActionableOverdue"),
+        isIssuedInvoice = system.isMember(id, "IssuedInvoice"),
+        isArchivedInvoice = system.isMember(id, "ArchivedInvoice"),
     )
 
     fun materializeUnemailedReceipt(id: Long): UnemailedReceipt = UnemailedReceipt(
-        id = id,
-        invoice = InvoiceView(system.get(id, "invoice") as Long),
+        key = system.refFor(id).key,
+        invoice = system.refFor(system.get(id, "invoice") as Long),
         sentOn = system.get(id, "sentOn") as Instant,
-        receiptEmails = (system.get(id, "receiptEmails") as List<*>).map { ReceiptEmailView(it as Long) },
+        receiptEmails = (system.get(id, "receiptEmails") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeOverdueInvoice(id: Long): OverdueInvoice = OverdueInvoice(
-        id = id,
-        customer = CustomerView(system.get(id, "customer") as Long),
+        key = system.refFor(id).key,
+        customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,
         reference = system.get(id, "reference") as String,
         issuedOn = system.get(id, "issuedOn") as Instant,
         total = system.get(id, "total") as BigDecimal,
         balance = system.get(id, "balance") as BigDecimal,
         status = system.get(id, "status") as String,
-        lineItems = (system.get(id, "lineItems") as List<*>).map { LineItemView(it as Long) },
-        payments = (system.get(id, "payments") as List<*>).map { PaymentView(it as Long) },
-        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
-        reminders = (system.get(id, "reminders") as List<*>).map { ReminderView(it as Long) },
-        issuances = (system.get(id, "issuances") as List<*>).map { IssuanceView(it as Long) },
-        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { DueChangeRefusalView(it as Long) },
-        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { ArchiveRequestView(it as Long) },
-        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { UnarchiveRequestView(it as Long) },
-        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { UnarchiveNoticeView(it as Long) },
+        lineItems = (system.get(id, "lineItems") as List<*>).map { system.refFor(it as Long) },
+        payments = (system.get(id, "payments") as List<*>).map { system.refFor(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
+        reminders = (system.get(id, "reminders") as List<*>).map { system.refFor(it as Long) },
+        issuances = (system.get(id, "issuances") as List<*>).map { system.refFor(it as Long) },
+        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { system.refFor(it as Long) },
+        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { system.refFor(it as Long) },
+        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { system.refFor(it as Long) },
+        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { system.refFor(it as Long) },
+        isPaidInvoice = system.isMember(id, "PaidInvoice"),
+        isActionableOverdue = system.isMember(id, "ActionableOverdue"),
+        isIssuedInvoice = system.isMember(id, "IssuedInvoice"),
+        isArchivedInvoice = system.isMember(id, "ArchivedInvoice"),
     )
 
     fun materializeActionableOverdue(id: Long): ActionableOverdue = ActionableOverdue(
-        id = id,
-        customer = CustomerView(system.get(id, "customer") as Long),
+        key = system.refFor(id).key,
+        customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,
         reference = system.get(id, "reference") as String,
         issuedOn = system.get(id, "issuedOn") as Instant,
         total = system.get(id, "total") as BigDecimal,
         balance = system.get(id, "balance") as BigDecimal,
         status = system.get(id, "status") as String,
-        lineItems = (system.get(id, "lineItems") as List<*>).map { LineItemView(it as Long) },
-        payments = (system.get(id, "payments") as List<*>).map { PaymentView(it as Long) },
-        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
-        reminders = (system.get(id, "reminders") as List<*>).map { ReminderView(it as Long) },
-        issuances = (system.get(id, "issuances") as List<*>).map { IssuanceView(it as Long) },
-        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { DueChangeRefusalView(it as Long) },
-        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { ArchiveRequestView(it as Long) },
-        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { UnarchiveRequestView(it as Long) },
-        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { UnarchiveNoticeView(it as Long) },
+        lineItems = (system.get(id, "lineItems") as List<*>).map { system.refFor(it as Long) },
+        payments = (system.get(id, "payments") as List<*>).map { system.refFor(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
+        reminders = (system.get(id, "reminders") as List<*>).map { system.refFor(it as Long) },
+        issuances = (system.get(id, "issuances") as List<*>).map { system.refFor(it as Long) },
+        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { system.refFor(it as Long) },
+        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { system.refFor(it as Long) },
+        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { system.refFor(it as Long) },
+        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { system.refFor(it as Long) },
         archivedOn = system.get(id, "archivedOn") as LocalDate,
+        isPaidInvoice = system.isMember(id, "PaidInvoice"),
+        isOverdueInvoice = system.isMember(id, "OverdueInvoice"),
+        isIssuedInvoice = system.isMember(id, "IssuedInvoice"),
+        isArchivedInvoice = system.isMember(id, "ArchivedInvoice"),
     )
 
     fun materializeIssuedInvoice(id: Long): IssuedInvoice = IssuedInvoice(
-        id = id,
-        customer = CustomerView(system.get(id, "customer") as Long),
+        key = system.refFor(id).key,
+        customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,
         reference = system.get(id, "reference") as String,
         issuedOn = system.get(id, "issuedOn") as Instant,
         total = system.get(id, "total") as BigDecimal,
         balance = system.get(id, "balance") as BigDecimal,
         status = system.get(id, "status") as String,
-        lineItems = (system.get(id, "lineItems") as List<*>).map { LineItemView(it as Long) },
-        payments = (system.get(id, "payments") as List<*>).map { PaymentView(it as Long) },
-        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
-        reminders = (system.get(id, "reminders") as List<*>).map { ReminderView(it as Long) },
-        issuances = (system.get(id, "issuances") as List<*>).map { IssuanceView(it as Long) },
-        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { DueChangeRefusalView(it as Long) },
-        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { ArchiveRequestView(it as Long) },
-        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { UnarchiveRequestView(it as Long) },
-        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { UnarchiveNoticeView(it as Long) },
+        lineItems = (system.get(id, "lineItems") as List<*>).map { system.refFor(it as Long) },
+        payments = (system.get(id, "payments") as List<*>).map { system.refFor(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
+        reminders = (system.get(id, "reminders") as List<*>).map { system.refFor(it as Long) },
+        issuances = (system.get(id, "issuances") as List<*>).map { system.refFor(it as Long) },
+        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { system.refFor(it as Long) },
+        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { system.refFor(it as Long) },
+        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { system.refFor(it as Long) },
+        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { system.refFor(it as Long) },
+        isPaidInvoice = system.isMember(id, "PaidInvoice"),
+        isOverdueInvoice = system.isMember(id, "OverdueInvoice"),
+        isActionableOverdue = system.isMember(id, "ActionableOverdue"),
+        isArchivedInvoice = system.isMember(id, "ArchivedInvoice"),
     )
 
     fun materializeArchivedInvoice(id: Long): ArchivedInvoice = ArchivedInvoice(
-        id = id,
-        customer = CustomerView(system.get(id, "customer") as Long),
+        key = system.refFor(id).key,
+        customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,
         reference = system.get(id, "reference") as String,
         issuedOn = system.get(id, "issuedOn") as Instant,
         total = system.get(id, "total") as BigDecimal,
         balance = system.get(id, "balance") as BigDecimal,
         status = system.get(id, "status") as String,
-        lineItems = (system.get(id, "lineItems") as List<*>).map { LineItemView(it as Long) },
-        payments = (system.get(id, "payments") as List<*>).map { PaymentView(it as Long) },
-        receipts = (system.get(id, "receipts") as List<*>).map { ReceiptView(it as Long) },
-        reminders = (system.get(id, "reminders") as List<*>).map { ReminderView(it as Long) },
-        issuances = (system.get(id, "issuances") as List<*>).map { IssuanceView(it as Long) },
-        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { DueChangeRefusalView(it as Long) },
-        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { ArchiveRequestView(it as Long) },
-        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { UnarchiveRequestView(it as Long) },
-        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { UnarchiveNoticeView(it as Long) },
+        lineItems = (system.get(id, "lineItems") as List<*>).map { system.refFor(it as Long) },
+        payments = (system.get(id, "payments") as List<*>).map { system.refFor(it as Long) },
+        receipts = (system.get(id, "receipts") as List<*>).map { system.refFor(it as Long) },
+        reminders = (system.get(id, "reminders") as List<*>).map { system.refFor(it as Long) },
+        issuances = (system.get(id, "issuances") as List<*>).map { system.refFor(it as Long) },
+        dueChangeRefusals = (system.get(id, "dueChangeRefusals") as List<*>).map { system.refFor(it as Long) },
+        archiveRequests = (system.get(id, "archiveRequests") as List<*>).map { system.refFor(it as Long) },
+        unarchiveRequests = (system.get(id, "unarchiveRequests") as List<*>).map { system.refFor(it as Long) },
+        unarchiveNotices = (system.get(id, "unarchiveNotices") as List<*>).map { system.refFor(it as Long) },
         archivedOn = system.getAs(id, "ArchivedInvoice", "archivedOn") as LocalDate,
+        isPaidInvoice = system.isMember(id, "PaidInvoice"),
+        isOverdueInvoice = system.isMember(id, "OverdueInvoice"),
+        isActionableOverdue = system.isMember(id, "ActionableOverdue"),
+        isIssuedInvoice = system.isMember(id, "IssuedInvoice"),
     )
 
     companion object {
@@ -845,218 +795,348 @@ rule NoteUnarchival when leaving ArchivedInvoice {
     }
 }
 
-// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
-// References are typed handles (views); navigating one is a further read.
+// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// A model object is a reference to its own record (`Ref<T>`): equality is identity,
+// a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
+// the record's membership at the moment of the read.
 
 data class Customer(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val email: String,
     val signedUpOn: Instant,
     val largestPayment: BigDecimal,
-    val correctEmails: List<BillingSystem.CorrectEmailView>,
-    val invoices: List<BillingSystem.InvoiceView>,
-) : View
+    val correctEmails: List<Ref<CorrectEmail>>,
+    val invoices: List<Ref<Invoice>>,
+) : Ref<Customer> {
+    override val shape: String get() = "Customer"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class CorrectEmail(
-    override val id: Long,
-    val customer: BillingSystem.CustomerView,
+    override val key: StoreKey,
+    val customer: Ref<Customer>,
     val corrected: String,
-) : View
+) : Ref<CorrectEmail> {
+    override val shape: String get() = "CorrectEmail"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Invoice(
-    override val id: Long,
-    val customer: BillingSystem.CustomerView,
+    override val key: StoreKey,
+    val customer: Ref<Customer>,
     val due: LocalDate,
     val reference: String,
     val issuedOn: Instant,
     val total: BigDecimal,
     val balance: BigDecimal,
     val status: String,
-    val lineItems: List<BillingSystem.LineItemView>,
-    val payments: List<BillingSystem.PaymentView>,
-    val receipts: List<BillingSystem.ReceiptView>,
-    val reminders: List<BillingSystem.ReminderView>,
-    val issuances: List<BillingSystem.IssuanceView>,
-    val dueChangeRefusals: List<BillingSystem.DueChangeRefusalView>,
-    val archiveRequests: List<BillingSystem.ArchiveRequestView>,
-    val unarchiveRequests: List<BillingSystem.UnarchiveRequestView>,
-    val unarchiveNotices: List<BillingSystem.UnarchiveNoticeView>,
-) : View
+    val lineItems: List<Ref<LineItem>>,
+    val payments: List<Ref<Payment>>,
+    val receipts: List<Ref<Receipt>>,
+    val reminders: List<Ref<Reminder>>,
+    val issuances: List<Ref<Issuance>>,
+    val dueChangeRefusals: List<Ref<DueChangeRefusal>>,
+    val archiveRequests: List<Ref<ArchiveRequest>>,
+    val unarchiveRequests: List<Ref<UnarchiveRequest>>,
+    val unarchiveNotices: List<Ref<UnarchiveNotice>>,
+    /** membership of PaidInvoice at the moment of the read */
+    val isPaidInvoice: Boolean,
+    /** membership of OverdueInvoice at the moment of the read */
+    val isOverdueInvoice: Boolean,
+    /** membership of ActionableOverdue at the moment of the read */
+    val isActionableOverdue: Boolean,
+    /** membership of IssuedInvoice at the moment of the read */
+    val isIssuedInvoice: Boolean,
+    /** membership of ArchivedInvoice at the moment of the read */
+    val isArchivedInvoice: Boolean,
+) : Ref<Invoice> {
+    override val shape: String get() = "Invoice"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class LineItem(
-    override val id: Long,
-    val invoice: BillingSystem.InvoiceView,
+    override val key: StoreKey,
+    val invoice: Ref<Invoice>,
     val description: String,
     val price: BigDecimal,
     val quantity: Int,
     val amount: BigDecimal,
-) : View
+) : Ref<LineItem> {
+    override val shape: String get() = "LineItem"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Payment(
-    override val id: Long,
-    val invoice: BillingSystem.InvoiceView,
+    override val key: StoreKey,
+    val invoice: Ref<Invoice>,
     val amount: BigDecimal,
     val receivedOn: Instant,
-) : View
+) : Ref<Payment> {
+    override val shape: String get() = "Payment"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Receipt(
-    override val id: Long,
-    val invoice: BillingSystem.InvoiceView,
+    override val key: StoreKey,
+    val invoice: Ref<Invoice>,
     val sentOn: Instant,
-    val receiptEmails: List<BillingSystem.ReceiptEmailView>,
-) : View
+    val receiptEmails: List<Ref<ReceiptEmail>>,
+    /** membership of UnemailedReceipt at the moment of the read */
+    val isUnemailedReceipt: Boolean,
+) : Ref<Receipt> {
+    override val shape: String get() = "Receipt"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ReceiptEmail(
-    override val id: Long,
-    val receipt: BillingSystem.ReceiptView,
+    override val key: StoreKey,
+    val receipt: Ref<Receipt>,
     val queuedOn: Instant,
-) : View
+) : Ref<ReceiptEmail> {
+    override val shape: String get() = "ReceiptEmail"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Reminder(
-    override val id: Long,
-    val invoice: BillingSystem.InvoiceView,
+    override val key: StoreKey,
+    val invoice: Ref<Invoice>,
     val sentOn: LocalDate,
-) : View
+) : Ref<Reminder> {
+    override val shape: String get() = "Reminder"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Issuance(
-    override val id: Long,
-    val invoice: BillingSystem.InvoiceView,
-) : View
+    override val key: StoreKey,
+    val invoice: Ref<Invoice>,
+) : Ref<Issuance> {
+    override val shape: String get() = "Issuance"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class DueChangeRefusal(
-    override val id: Long,
-    val invoice: BillingSystem.InvoiceView,
+    override val key: StoreKey,
+    val invoice: Ref<Invoice>,
     val requestedDue: LocalDate,
     val reason: String,
     val refusedOn: Instant,
-) : View
+) : Ref<DueChangeRefusal> {
+    override val shape: String get() = "DueChangeRefusal"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ArchiveRequest(
-    override val id: Long,
-    val invoice: BillingSystem.InvoiceView,
-) : View
+    override val key: StoreKey,
+    val invoice: Ref<Invoice>,
+) : Ref<ArchiveRequest> {
+    override val shape: String get() = "ArchiveRequest"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class UnarchiveRequest(
-    override val id: Long,
-    val invoice: BillingSystem.InvoiceView,
-) : View
+    override val key: StoreKey,
+    val invoice: Ref<Invoice>,
+) : Ref<UnarchiveRequest> {
+    override val shape: String get() = "UnarchiveRequest"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class UnarchiveNotice(
-    override val id: Long,
-    val invoice: BillingSystem.InvoiceView,
+    override val key: StoreKey,
+    val invoice: Ref<Invoice>,
     val wasArchivedOn: LocalDate,
     val noticedOn: Instant,
-) : View
+) : Ref<UnarchiveNotice> {
+    override val shape: String get() = "UnarchiveNotice"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class PaidInvoice(
-    override val id: Long,
-    val customer: BillingSystem.CustomerView,
+    override val key: StoreKey,
+    val customer: Ref<Customer>,
     val due: LocalDate,
     val reference: String,
     val issuedOn: Instant,
     val total: BigDecimal,
     val balance: BigDecimal,
     val status: String,
-    val lineItems: List<BillingSystem.LineItemView>,
-    val payments: List<BillingSystem.PaymentView>,
-    val receipts: List<BillingSystem.ReceiptView>,
-    val reminders: List<BillingSystem.ReminderView>,
-    val issuances: List<BillingSystem.IssuanceView>,
-    val dueChangeRefusals: List<BillingSystem.DueChangeRefusalView>,
-    val archiveRequests: List<BillingSystem.ArchiveRequestView>,
-    val unarchiveRequests: List<BillingSystem.UnarchiveRequestView>,
-    val unarchiveNotices: List<BillingSystem.UnarchiveNoticeView>,
-) : View
+    val lineItems: List<Ref<LineItem>>,
+    val payments: List<Ref<Payment>>,
+    val receipts: List<Ref<Receipt>>,
+    val reminders: List<Ref<Reminder>>,
+    val issuances: List<Ref<Issuance>>,
+    val dueChangeRefusals: List<Ref<DueChangeRefusal>>,
+    val archiveRequests: List<Ref<ArchiveRequest>>,
+    val unarchiveRequests: List<Ref<UnarchiveRequest>>,
+    val unarchiveNotices: List<Ref<UnarchiveNotice>>,
+    /** membership of OverdueInvoice at the moment of the read */
+    val isOverdueInvoice: Boolean,
+    /** membership of ActionableOverdue at the moment of the read */
+    val isActionableOverdue: Boolean,
+    /** membership of IssuedInvoice at the moment of the read */
+    val isIssuedInvoice: Boolean,
+    /** membership of ArchivedInvoice at the moment of the read */
+    val isArchivedInvoice: Boolean,
+) : Ref<Invoice> {
+    override val shape: String get() = "Invoice"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class UnemailedReceipt(
-    override val id: Long,
-    val invoice: BillingSystem.InvoiceView,
+    override val key: StoreKey,
+    val invoice: Ref<Invoice>,
     val sentOn: Instant,
-    val receiptEmails: List<BillingSystem.ReceiptEmailView>,
-) : View
+    val receiptEmails: List<Ref<ReceiptEmail>>,
+) : Ref<Receipt> {
+    override val shape: String get() = "Receipt"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class OverdueInvoice(
-    override val id: Long,
-    val customer: BillingSystem.CustomerView,
+    override val key: StoreKey,
+    val customer: Ref<Customer>,
     val due: LocalDate,
     val reference: String,
     val issuedOn: Instant,
     val total: BigDecimal,
     val balance: BigDecimal,
     val status: String,
-    val lineItems: List<BillingSystem.LineItemView>,
-    val payments: List<BillingSystem.PaymentView>,
-    val receipts: List<BillingSystem.ReceiptView>,
-    val reminders: List<BillingSystem.ReminderView>,
-    val issuances: List<BillingSystem.IssuanceView>,
-    val dueChangeRefusals: List<BillingSystem.DueChangeRefusalView>,
-    val archiveRequests: List<BillingSystem.ArchiveRequestView>,
-    val unarchiveRequests: List<BillingSystem.UnarchiveRequestView>,
-    val unarchiveNotices: List<BillingSystem.UnarchiveNoticeView>,
-) : View
+    val lineItems: List<Ref<LineItem>>,
+    val payments: List<Ref<Payment>>,
+    val receipts: List<Ref<Receipt>>,
+    val reminders: List<Ref<Reminder>>,
+    val issuances: List<Ref<Issuance>>,
+    val dueChangeRefusals: List<Ref<DueChangeRefusal>>,
+    val archiveRequests: List<Ref<ArchiveRequest>>,
+    val unarchiveRequests: List<Ref<UnarchiveRequest>>,
+    val unarchiveNotices: List<Ref<UnarchiveNotice>>,
+    /** membership of PaidInvoice at the moment of the read */
+    val isPaidInvoice: Boolean,
+    /** membership of ActionableOverdue at the moment of the read */
+    val isActionableOverdue: Boolean,
+    /** membership of IssuedInvoice at the moment of the read */
+    val isIssuedInvoice: Boolean,
+    /** membership of ArchivedInvoice at the moment of the read */
+    val isArchivedInvoice: Boolean,
+) : Ref<Invoice> {
+    override val shape: String get() = "Invoice"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ActionableOverdue(
-    override val id: Long,
-    val customer: BillingSystem.CustomerView,
+    override val key: StoreKey,
+    val customer: Ref<Customer>,
     val due: LocalDate,
     val reference: String,
     val issuedOn: Instant,
     val total: BigDecimal,
     val balance: BigDecimal,
     val status: String,
-    val lineItems: List<BillingSystem.LineItemView>,
-    val payments: List<BillingSystem.PaymentView>,
-    val receipts: List<BillingSystem.ReceiptView>,
-    val reminders: List<BillingSystem.ReminderView>,
-    val issuances: List<BillingSystem.IssuanceView>,
-    val dueChangeRefusals: List<BillingSystem.DueChangeRefusalView>,
-    val archiveRequests: List<BillingSystem.ArchiveRequestView>,
-    val unarchiveRequests: List<BillingSystem.UnarchiveRequestView>,
-    val unarchiveNotices: List<BillingSystem.UnarchiveNoticeView>,
+    val lineItems: List<Ref<LineItem>>,
+    val payments: List<Ref<Payment>>,
+    val receipts: List<Ref<Receipt>>,
+    val reminders: List<Ref<Reminder>>,
+    val issuances: List<Ref<Issuance>>,
+    val dueChangeRefusals: List<Ref<DueChangeRefusal>>,
+    val archiveRequests: List<Ref<ArchiveRequest>>,
+    val unarchiveRequests: List<Ref<UnarchiveRequest>>,
+    val unarchiveNotices: List<Ref<UnarchiveNotice>>,
     val archivedOn: LocalDate,
-) : View
+    /** membership of PaidInvoice at the moment of the read */
+    val isPaidInvoice: Boolean,
+    /** membership of OverdueInvoice at the moment of the read */
+    val isOverdueInvoice: Boolean,
+    /** membership of IssuedInvoice at the moment of the read */
+    val isIssuedInvoice: Boolean,
+    /** membership of ArchivedInvoice at the moment of the read */
+    val isArchivedInvoice: Boolean,
+) : Ref<Invoice> {
+    override val shape: String get() = "Invoice"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class IssuedInvoice(
-    override val id: Long,
-    val customer: BillingSystem.CustomerView,
+    override val key: StoreKey,
+    val customer: Ref<Customer>,
     val due: LocalDate,
     val reference: String,
     val issuedOn: Instant,
     val total: BigDecimal,
     val balance: BigDecimal,
     val status: String,
-    val lineItems: List<BillingSystem.LineItemView>,
-    val payments: List<BillingSystem.PaymentView>,
-    val receipts: List<BillingSystem.ReceiptView>,
-    val reminders: List<BillingSystem.ReminderView>,
-    val issuances: List<BillingSystem.IssuanceView>,
-    val dueChangeRefusals: List<BillingSystem.DueChangeRefusalView>,
-    val archiveRequests: List<BillingSystem.ArchiveRequestView>,
-    val unarchiveRequests: List<BillingSystem.UnarchiveRequestView>,
-    val unarchiveNotices: List<BillingSystem.UnarchiveNoticeView>,
-) : View
+    val lineItems: List<Ref<LineItem>>,
+    val payments: List<Ref<Payment>>,
+    val receipts: List<Ref<Receipt>>,
+    val reminders: List<Ref<Reminder>>,
+    val issuances: List<Ref<Issuance>>,
+    val dueChangeRefusals: List<Ref<DueChangeRefusal>>,
+    val archiveRequests: List<Ref<ArchiveRequest>>,
+    val unarchiveRequests: List<Ref<UnarchiveRequest>>,
+    val unarchiveNotices: List<Ref<UnarchiveNotice>>,
+    /** membership of PaidInvoice at the moment of the read */
+    val isPaidInvoice: Boolean,
+    /** membership of OverdueInvoice at the moment of the read */
+    val isOverdueInvoice: Boolean,
+    /** membership of ActionableOverdue at the moment of the read */
+    val isActionableOverdue: Boolean,
+    /** membership of ArchivedInvoice at the moment of the read */
+    val isArchivedInvoice: Boolean,
+) : Ref<Invoice> {
+    override val shape: String get() = "Invoice"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ArchivedInvoice(
-    override val id: Long,
-    val customer: BillingSystem.CustomerView,
+    override val key: StoreKey,
+    val customer: Ref<Customer>,
     val due: LocalDate,
     val reference: String,
     val issuedOn: Instant,
     val total: BigDecimal,
     val balance: BigDecimal,
     val status: String,
-    val lineItems: List<BillingSystem.LineItemView>,
-    val payments: List<BillingSystem.PaymentView>,
-    val receipts: List<BillingSystem.ReceiptView>,
-    val reminders: List<BillingSystem.ReminderView>,
-    val issuances: List<BillingSystem.IssuanceView>,
-    val dueChangeRefusals: List<BillingSystem.DueChangeRefusalView>,
-    val archiveRequests: List<BillingSystem.ArchiveRequestView>,
-    val unarchiveRequests: List<BillingSystem.UnarchiveRequestView>,
-    val unarchiveNotices: List<BillingSystem.UnarchiveNoticeView>,
+    val lineItems: List<Ref<LineItem>>,
+    val payments: List<Ref<Payment>>,
+    val receipts: List<Ref<Receipt>>,
+    val reminders: List<Ref<Reminder>>,
+    val issuances: List<Ref<Issuance>>,
+    val dueChangeRefusals: List<Ref<DueChangeRefusal>>,
+    val archiveRequests: List<Ref<ArchiveRequest>>,
+    val unarchiveRequests: List<Ref<UnarchiveRequest>>,
+    val unarchiveNotices: List<Ref<UnarchiveNotice>>,
     val archivedOn: LocalDate,
-) : View
+    /** membership of PaidInvoice at the moment of the read */
+    val isPaidInvoice: Boolean,
+    /** membership of OverdueInvoice at the moment of the read */
+    val isOverdueInvoice: Boolean,
+    /** membership of ActionableOverdue at the moment of the read */
+    val isActionableOverdue: Boolean,
+    /** membership of IssuedInvoice at the moment of the read */
+    val isIssuedInvoice: Boolean,
+) : Ref<Invoice> {
+    override val shape: String get() = "Invoice"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 // ── the builder's vocabulary: one field handle per member, memberships per refinement ──
 

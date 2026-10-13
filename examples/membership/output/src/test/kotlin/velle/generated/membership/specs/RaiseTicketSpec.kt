@@ -57,7 +57,7 @@ class RaiseTicketSpec : SpecSupport() {
         ticket.assertIsNotA("ClosedTicket", "the exit commit must end the membership")
         assertEquals(beforeReopenNotice + 1, count("ReopenNotice"), "rule NoticeReopen: one 'ReopenNotice' per firing")
         val producedReopenNotice = last("ReopenNotice")
-        assertEquals(ticket.id, field(producedReopenNotice, "ticket"), "ReopenNotice.ticket: this")
+        assertEquals(idOf(ticket), field(producedReopenNotice, "ticket"), "ReopenNotice.ticket: this")
     }
 
     @Test
@@ -75,7 +75,7 @@ class RaiseTicketSpec : SpecSupport() {
         sys.system.tick("Daily")
         assertEquals(beforeEscalation + 1, count("Escalation"), "rule EscalateUrgent: one 'Escalation' per firing")
         val producedEscalation = last("Escalation")
-        assertEquals(ticket.id, field(producedEscalation, "ticket"), "Escalation.ticket: this")
+        assertEquals(idOf(ticket), field(producedEscalation, "ticket"), "Escalation.ticket: this")
         sys.system.tick("Daily")
         assertEquals(beforeEscalation + 1, count("Escalation"), "the guard makes re-evaluation harmless")
         sys.advanceDays(3)

@@ -22,6 +22,6 @@ class AllergyConflictSpec : SpecSupport() {
         val prescription = givens.prescriptionForAlertAllergy()
         prescription.assertIsA("AllergyConflict", "the given must deliver a member of 'AllergyConflict'")
         val producedPharmacistAlert = last("PharmacistAlert")
-        assertEquals(prescription.id, field(producedPharmacistAlert, "prescription"), "PharmacistAlert.prescription: this")
+        assertEquals(idOf(prescription), field(producedPharmacistAlert, "prescription"), "PharmacistAlert.prescription: this")
     }
 }

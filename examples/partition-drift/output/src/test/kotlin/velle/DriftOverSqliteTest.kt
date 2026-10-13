@@ -1,6 +1,7 @@
 package velle
 
 import java.sql.Connection
+import velle.generated.*
 import java.sql.DriverManager
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -61,12 +62,12 @@ class DriftPersistenceTest {
         assertEquals(0, first.editRefusals().size)
 
         val second = process()
-        val note2 = second.note(second.system.handleFor("Note", 1L))
+        val note2 = second.read.note(1L)
         accept(second.commitSafeEdit(note2, "vandalism"))
         assertEquals(1, second.editRefusals().size, "an edit during the lock is refused, once")
-        assertEquals("agenda-by-editor", note2.title)
+        assertEquals("agenda-by-editor", second.read(note2).title)
         accept(second.commitUnlockNote(note2))
-        assertEquals("agenda-by-editor", note2.title, "the stored application evidence keeps the old edit handled")
+        assertEquals("agenda-by-editor", second.read(note2).title, "the stored application evidence keeps the old edit handled")
         assertEquals(1, second.editApplications().size)
         assertEquals(1, second.editRefusals().size)
     }
@@ -77,11 +78,12 @@ class DriftPersistenceTest {
         accept(first.commitCreateNote("minutes", "v1"))
         val note = first.notes().single()
         accept(first.commitBareEdit(note, "v2-by-editor"))
-        assertEquals("v2-by-editor", note.body)
+        assertEquals("v2-by-editor", first.read(note).body)
 
         val second = process()
-        val note2 = second.note(second.system.handleFor("Note", 1L))
+        val note2 = second.read.note(1L)
         accept(second.commitLockNote(note2))
         assertEquals(1, second.bareEditRefusals().size) // THE DEFECT: the stored act re-partitions under the lock
     }
 }
+

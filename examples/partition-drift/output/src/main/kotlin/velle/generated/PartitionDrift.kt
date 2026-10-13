@@ -29,232 +29,166 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
     /** Queue key: [lockNote.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitLockNote(note: NoteView): CommitResult =
+    fun commitLockNote(note: Ref<Note>): CommitResult =
         system.commit("LockNote", buildMap {
-            put("note", note.id)
+            put("note", system.idOf(note))
         })
 
     /** Queue key: [unlockNote.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitUnlockNote(note: NoteView): CommitResult =
+    fun commitUnlockNote(note: Ref<Note>): CommitResult =
         system.commit("UnlockNote", buildMap {
-            put("note", note.id)
+            put("note", system.idOf(note))
         })
 
     /** Queue key: [renameText.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitRenameText(note: NoteView, newText: String): CommitResult =
+    fun commitRenameText(note: Ref<Note>, newText: String): CommitResult =
         system.commit("RenameText", buildMap {
-            put("note", note.id)
+            put("note", system.idOf(note))
             put("newText", newText)
         })
 
     /** Queue key: [bareEdit.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitBareEdit(note: NoteView, newText: String): CommitResult =
+    fun commitBareEdit(note: Ref<Note>, newText: String): CommitResult =
         system.commit("BareEdit", buildMap {
-            put("note", note.id)
+            put("note", system.idOf(note))
             put("newText", newText)
         })
 
     /** Queue key: [safeEdit.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitSafeEdit(note: NoteView, newTitle: String): CommitResult =
+    fun commitSafeEdit(note: Ref<Note>, newTitle: String): CommitResult =
         system.commit("SafeEdit", buildMap {
-            put("note", note.id)
+            put("note", system.idOf(note))
             put("newTitle", newTitle)
         })
 
     /** Queue key: [transientEdit.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitTransientEdit(note: NoteView, newTitle: String): CommitResult =
+    fun commitTransientEdit(note: Ref<Note>, newTitle: String): CommitResult =
         system.commit("TransientEdit", buildMap {
-            put("note", note.id)
+            put("note", system.idOf(note))
             put("newTitle", newTitle)
         })
 
-    fun notes(): List<NoteView> = system.instancesOf("Note").map { NoteView(it) }
-    fun note(id: Long) = NoteView(id)
-    fun lockNotes(): List<LockNoteView> = system.instancesOf("LockNote").map { LockNoteView(it) }
-    fun lockNote(id: Long) = LockNoteView(id)
-    fun unlockNotes(): List<UnlockNoteView> = system.instancesOf("UnlockNote").map { UnlockNoteView(it) }
-    fun unlockNote(id: Long) = UnlockNoteView(id)
-    fun renameTexts(): List<RenameTextView> = system.instancesOf("RenameText").map { RenameTextView(it) }
-    fun renameText(id: Long) = RenameTextView(id)
-    fun bareEdits(): List<BareEditView> = system.instancesOf("BareEdit").map { BareEditView(it) }
-    fun bareEdit(id: Long) = BareEditView(id)
-    fun bareEditRefusals(): List<BareEditRefusalView> = system.instancesOf("BareEditRefusal").map { BareEditRefusalView(it) }
-    fun bareEditRefusal(id: Long) = BareEditRefusalView(id)
-    fun safeEdits(): List<SafeEditView> = system.instancesOf("SafeEdit").map { SafeEditView(it) }
-    fun safeEdit(id: Long) = SafeEditView(id)
-    fun editApplications(): List<EditApplicationView> = system.instancesOf("EditApplication").map { EditApplicationView(it) }
-    fun editApplication(id: Long) = EditApplicationView(id)
-    fun editRefusals(): List<EditRefusalView> = system.instancesOf("EditRefusal").map { EditRefusalView(it) }
-    fun editRefusal(id: Long) = EditRefusalView(id)
-    fun transientEditRefusals(): List<TransientEditRefusalView> = system.instancesOf("TransientEditRefusal").map { TransientEditRefusalView(it) }
-    fun transientEditRefusal(id: Long) = TransientEditRefusalView(id)
-    fun lockedNotes(): List<LockedNoteView> = system.instancesOf("LockedNote").map { LockedNoteView(it) }
-    fun NoteView.isLockedNote(): Boolean = system.isMember(id, "LockedNote")
-    fun applicableBareEdits(): List<ApplicableBareEditView> = system.instancesOf("ApplicableBareEdit").map { ApplicableBareEditView(it) }
-    fun BareEditView.isApplicableBareEdit(): Boolean = system.isMember(id, "ApplicableBareEdit")
-    fun refusedBareEdits(): List<RefusedBareEditView> = system.instancesOf("RefusedBareEdit").map { RefusedBareEditView(it) }
-    fun BareEditView.isRefusedBareEdit(): Boolean = system.isMember(id, "RefusedBareEdit")
-    fun unhandledSafeEdits(): List<UnhandledSafeEditView> = system.instancesOf("UnhandledSafeEdit").map { UnhandledSafeEditView(it) }
-    fun SafeEditView.isUnhandledSafeEdit(): Boolean = system.isMember(id, "UnhandledSafeEdit")
-    fun applicableSafeEdits(): List<ApplicableSafeEditView> = system.instancesOf("ApplicableSafeEdit").map { ApplicableSafeEditView(it) }
-    fun SafeEditView.isApplicableSafeEdit(): Boolean = system.isMember(id, "ApplicableSafeEdit")
-    fun refusedSafeEdits(): List<RefusedSafeEditView> = system.instancesOf("RefusedSafeEdit").map { RefusedSafeEditView(it) }
-    fun SafeEditView.isRefusedSafeEdit(): Boolean = system.isMember(id, "RefusedSafeEdit")
+    fun notes(): List<Note> = system.instancesOf("Note").map { materializeNote(it) }
+    fun lockNotes(): List<LockNote> = system.instancesOf("LockNote").map { materializeLockNote(it) }
+    fun unlockNotes(): List<UnlockNote> = system.instancesOf("UnlockNote").map { materializeUnlockNote(it) }
+    fun renameTexts(): List<RenameText> = system.instancesOf("RenameText").map { materializeRenameText(it) }
+    fun bareEdits(): List<BareEdit> = system.instancesOf("BareEdit").map { materializeBareEdit(it) }
+    fun bareEditRefusals(): List<BareEditRefusal> = system.instancesOf("BareEditRefusal").map { materializeBareEditRefusal(it) }
+    fun safeEdits(): List<SafeEdit> = system.instancesOf("SafeEdit").map { materializeSafeEdit(it) }
+    fun editApplications(): List<EditApplication> = system.instancesOf("EditApplication").map { materializeEditApplication(it) }
+    fun editRefusals(): List<EditRefusal> = system.instancesOf("EditRefusal").map { materializeEditRefusal(it) }
+    fun transientEditRefusals(): List<TransientEditRefusal> = system.instancesOf("TransientEditRefusal").map { materializeTransientEditRefusal(it) }
+    fun lockedNotes(): List<LockedNote> = system.instancesOf("LockedNote").map { materializeLockedNote(it) }
+    fun applicableBareEdits(): List<ApplicableBareEdit> = system.instancesOf("ApplicableBareEdit").map { materializeApplicableBareEdit(it) }
+    fun refusedBareEdits(): List<RefusedBareEdit> = system.instancesOf("RefusedBareEdit").map { materializeRefusedBareEdit(it) }
+    fun unhandledSafeEdits(): List<UnhandledSafeEdit> = system.instancesOf("UnhandledSafeEdit").map { materializeUnhandledSafeEdit(it) }
+    fun applicableSafeEdits(): List<ApplicableSafeEdit> = system.instancesOf("ApplicableSafeEdit").map { materializeApplicableSafeEdit(it) }
+    fun refusedSafeEdits(): List<RefusedSafeEdit> = system.instancesOf("RefusedSafeEdit").map { materializeRefusedSafeEdit(it) }
 
-    inner class NoteView(override val id: Long) : View {
-        val title: String get() = system.get(id, "title") as String
-        val body: String get() = system.get(id, "body") as String
-        val locked: Boolean get() = system.get(id, "locked") as Boolean
-        val lockNotes: List<LockNoteView> get() = (system.get(id, "lockNotes") as List<*>).map { LockNoteView(it as Long) }
-        val unlockNotes: List<UnlockNoteView> get() = (system.get(id, "unlockNotes") as List<*>).map { UnlockNoteView(it as Long) }
-        val renameTexts: List<RenameTextView> get() = (system.get(id, "renameTexts") as List<*>).map { RenameTextView(it as Long) }
-        val bareEdits: List<BareEditView> get() = (system.get(id, "bareEdits") as List<*>).map { BareEditView(it as Long) }
-        val safeEdits: List<SafeEditView> get() = (system.get(id, "safeEdits") as List<*>).map { SafeEditView(it as Long) }
-        val transientEditRefusals: List<TransientEditRefusalView> get() = (system.get(id, "transientEditRefusals") as List<*>).map { TransientEditRefusalView(it as Long) }
-        override fun toString() = "Note#$id"
-        override fun equals(other: Any?) = other is NoteView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class LockNoteView(override val id: Long) : View {
-        val note: NoteView get() = NoteView(system.get(id, "note") as Long)
-        override fun toString() = "LockNote#$id"
-        override fun equals(other: Any?) = other is LockNoteView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class UnlockNoteView(override val id: Long) : View {
-        val note: NoteView get() = NoteView(system.get(id, "note") as Long)
-        override fun toString() = "UnlockNote#$id"
-        override fun equals(other: Any?) = other is UnlockNoteView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class RenameTextView(override val id: Long) : View {
-        val note: NoteView get() = NoteView(system.get(id, "note") as Long)
-        val newText: String get() = system.get(id, "newText") as String
-        override fun toString() = "RenameText#$id"
-        override fun equals(other: Any?) = other is RenameTextView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class BareEditView(override val id: Long) : View {
-        val note: NoteView get() = NoteView(system.get(id, "note") as Long)
-        val newText: String get() = system.get(id, "newText") as String
-        val bareEditRefusals: List<BareEditRefusalView> get() = (system.get(id, "bareEditRefusals") as List<*>).map { BareEditRefusalView(it as Long) }
-        override fun toString() = "BareEdit#$id"
-        override fun equals(other: Any?) = other is BareEditView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class BareEditRefusalView(override val id: Long) : View {
-        val edit: BareEditView get() = BareEditView(system.get(id, "edit") as Long)
-        val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
-        override fun toString() = "BareEditRefusal#$id"
-        override fun equals(other: Any?) = other is BareEditRefusalView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class SafeEditView(override val id: Long) : View {
-        val note: NoteView get() = NoteView(system.get(id, "note") as Long)
-        val newTitle: String get() = system.get(id, "newTitle") as String
-        val editApplications: List<EditApplicationView> get() = (system.get(id, "editApplications") as List<*>).map { EditApplicationView(it as Long) }
-        val editRefusals: List<EditRefusalView> get() = (system.get(id, "editRefusals") as List<*>).map { EditRefusalView(it as Long) }
-        override fun toString() = "SafeEdit#$id"
-        override fun equals(other: Any?) = other is SafeEditView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class EditApplicationView(override val id: Long) : View {
-        val edit: SafeEditView get() = SafeEditView(system.get(id, "edit") as Long)
-        val appliedOn: Instant get() = system.get(id, "appliedOn") as Instant
-        override fun toString() = "EditApplication#$id"
-        override fun equals(other: Any?) = other is EditApplicationView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class EditRefusalView(override val id: Long) : View {
-        val edit: SafeEditView get() = SafeEditView(system.get(id, "edit") as Long)
-        val reason: String get() = system.get(id, "reason") as String
-        val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
-        override fun toString() = "EditRefusal#$id"
-        override fun equals(other: Any?) = other is EditRefusalView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class TransientEditRefusalView(override val id: Long) : View {
-        val note: NoteView get() = NoteView(system.get(id, "note") as Long)
-        val requestedTitle: String get() = system.get(id, "requestedTitle") as String
-        val reason: String get() = system.get(id, "reason") as String
-        val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
-        override fun toString() = "TransientEditRefusal#$id"
-        override fun equals(other: Any?) = other is TransientEditRefusalView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class LockedNoteView(override val id: Long) : View {
-        fun asNote() = NoteView(id)
-        override fun toString() = "LockedNote#$id"
-    }
-
-    inner class ApplicableBareEditView(override val id: Long) : View {
-        fun asBareEdit() = BareEditView(id)
-        override fun toString() = "ApplicableBareEdit#$id"
-    }
-
-    inner class RefusedBareEditView(override val id: Long) : View {
-        fun asBareEdit() = BareEditView(id)
-        override fun toString() = "RefusedBareEdit#$id"
-    }
-
-    inner class UnhandledSafeEditView(override val id: Long) : View {
-        fun asSafeEdit() = SafeEditView(id)
-        override fun toString() = "UnhandledSafeEdit#$id"
-    }
-
-    inner class ApplicableSafeEditView(override val id: Long) : View {
-        fun asSafeEdit() = SafeEditView(id)
-        override fun toString() = "ApplicableSafeEdit#$id"
-    }
-
-    inner class RefusedSafeEditView(override val id: Long) : View {
-        fun asSafeEdit() = SafeEditView(id)
-        override fun toString() = "RefusedSafeEdit#$id"
-    }
-
-    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
     val read = Read()
 
     inner class Read {
         /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
         val registry = QueryRegistry()
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+
+        /** The model object behind a reference, read now; throws when the record no longer exists. */
+        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
+        fun fetch(id: Long): Ref<*> {
+            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
+            return materialize(id)
+        }
+
         val notes: NoteQuery get() = NoteQuery(Query("Note"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun note(key: StoreKey): Note = this(Ref.Persisted("Note", key))
+        fun note(key: Long): Note = note(StoreKey(key))
+
         val lockNotes: LockNoteQuery get() = LockNoteQuery(Query("LockNote"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun lockNote(key: StoreKey): LockNote = this(Ref.Persisted("LockNote", key))
+        fun lockNote(key: Long): LockNote = lockNote(StoreKey(key))
+
         val unlockNotes: UnlockNoteQuery get() = UnlockNoteQuery(Query("UnlockNote"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun unlockNote(key: StoreKey): UnlockNote = this(Ref.Persisted("UnlockNote", key))
+        fun unlockNote(key: Long): UnlockNote = unlockNote(StoreKey(key))
+
         val renameTexts: RenameTextQuery get() = RenameTextQuery(Query("RenameText"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun renameText(key: StoreKey): RenameText = this(Ref.Persisted("RenameText", key))
+        fun renameText(key: Long): RenameText = renameText(StoreKey(key))
+
         val bareEdits: BareEditQuery get() = BareEditQuery(Query("BareEdit"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun bareEdit(key: StoreKey): BareEdit = this(Ref.Persisted("BareEdit", key))
+        fun bareEdit(key: Long): BareEdit = bareEdit(StoreKey(key))
+
         val bareEditRefusals: BareEditRefusalQuery get() = BareEditRefusalQuery(Query("BareEditRefusal"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun bareEditRefusal(key: StoreKey): BareEditRefusal = this(Ref.Persisted("BareEditRefusal", key))
+        fun bareEditRefusal(key: Long): BareEditRefusal = bareEditRefusal(StoreKey(key))
+
         val safeEdits: SafeEditQuery get() = SafeEditQuery(Query("SafeEdit"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun safeEdit(key: StoreKey): SafeEdit = this(Ref.Persisted("SafeEdit", key))
+        fun safeEdit(key: Long): SafeEdit = safeEdit(StoreKey(key))
+
         val editApplications: EditApplicationQuery get() = EditApplicationQuery(Query("EditApplication"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun editApplication(key: StoreKey): EditApplication = this(Ref.Persisted("EditApplication", key))
+        fun editApplication(key: Long): EditApplication = editApplication(StoreKey(key))
+
         val editRefusals: EditRefusalQuery get() = EditRefusalQuery(Query("EditRefusal"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun editRefusal(key: StoreKey): EditRefusal = this(Ref.Persisted("EditRefusal", key))
+        fun editRefusal(key: Long): EditRefusal = editRefusal(StoreKey(key))
+
         val transientEditRefusals: TransientEditRefusalQuery get() = TransientEditRefusalQuery(Query("TransientEditRefusal"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun transientEditRefusal(key: StoreKey): TransientEditRefusal = this(Ref.Persisted("TransientEditRefusal", key))
+        fun transientEditRefusal(key: Long): TransientEditRefusal = transientEditRefusal(StoreKey(key))
+
         val lockedNotes: LockedNoteQuery get() = LockedNoteQuery(Query("LockedNote"))
+        /** The record behind [ref] as a member of LockedNote, or null when it is not one. */
+        fun lockedNote(ref: Ref<Note>): LockedNote? =
+            system.idOf(ref).let { if (system.exists("LockedNote", it)) materializeLockedNote(it) else null }
+
         val applicableBareEdits: ApplicableBareEditQuery get() = ApplicableBareEditQuery(Query("ApplicableBareEdit"))
+        /** The record behind [ref] as a member of ApplicableBareEdit, or null when it is not one. */
+        fun applicableBareEdit(ref: Ref<BareEdit>): ApplicableBareEdit? =
+            system.idOf(ref).let { if (system.exists("ApplicableBareEdit", it)) materializeApplicableBareEdit(it) else null }
+
         val refusedBareEdits: RefusedBareEditQuery get() = RefusedBareEditQuery(Query("RefusedBareEdit"))
+        /** The record behind [ref] as a member of RefusedBareEdit, or null when it is not one. */
+        fun refusedBareEdit(ref: Ref<BareEdit>): RefusedBareEdit? =
+            system.idOf(ref).let { if (system.exists("RefusedBareEdit", it)) materializeRefusedBareEdit(it) else null }
+
         val unhandledSafeEdits: UnhandledSafeEditQuery get() = UnhandledSafeEditQuery(Query("UnhandledSafeEdit"))
+        /** The record behind [ref] as a member of UnhandledSafeEdit, or null when it is not one. */
+        fun unhandledSafeEdit(ref: Ref<SafeEdit>): UnhandledSafeEdit? =
+            system.idOf(ref).let { if (system.exists("UnhandledSafeEdit", it)) materializeUnhandledSafeEdit(it) else null }
+
         val applicableSafeEdits: ApplicableSafeEditQuery get() = ApplicableSafeEditQuery(Query("ApplicableSafeEdit"))
+        /** The record behind [ref] as a member of ApplicableSafeEdit, or null when it is not one. */
+        fun applicableSafeEdit(ref: Ref<SafeEdit>): ApplicableSafeEdit? =
+            system.idOf(ref).let { if (system.exists("ApplicableSafeEdit", it)) materializeApplicableSafeEdit(it) else null }
+
         val refusedSafeEdits: RefusedSafeEditQuery get() = RefusedSafeEditQuery(Query("RefusedSafeEdit"))
+        /** The record behind [ref] as a member of RefusedSafeEdit, or null when it is not one. */
+        fun refusedSafeEdit(ref: Ref<SafeEdit>): RefusedSafeEdit? =
+            system.idOf(ref).let { if (system.exists("RefusedSafeEdit", it)) materializeRefusedSafeEdit(it) else null }
     }
 
     inner class NoteQuery(q: Query) : TypedQuery<NoteFields, Note>(system, q, NoteFields(), { materializeNote(it) }) {
@@ -321,126 +255,155 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         override fun with(q: Query) = RefusedSafeEditQuery(q)
     }
 
+    /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
+    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+        "Note" -> materializeNote(id)
+        "LockNote" -> materializeLockNote(id)
+        "UnlockNote" -> materializeUnlockNote(id)
+        "RenameText" -> materializeRenameText(id)
+        "BareEdit" -> materializeBareEdit(id)
+        "BareEditRefusal" -> materializeBareEditRefusal(id)
+        "SafeEdit" -> materializeSafeEdit(id)
+        "EditApplication" -> materializeEditApplication(id)
+        "EditRefusal" -> materializeEditRefusal(id)
+        "TransientEditRefusal" -> materializeTransientEditRefusal(id)
+        else -> throw IllegalStateException("no model object for '$shape'")
+    }
+
     fun materializeNote(id: Long): Note = Note(
-        id = id,
+        key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         body = system.get(id, "body") as String,
         locked = system.get(id, "locked") as Boolean,
-        lockNotes = (system.get(id, "lockNotes") as List<*>).map { LockNoteView(it as Long) },
-        unlockNotes = (system.get(id, "unlockNotes") as List<*>).map { UnlockNoteView(it as Long) },
-        renameTexts = (system.get(id, "renameTexts") as List<*>).map { RenameTextView(it as Long) },
-        bareEdits = (system.get(id, "bareEdits") as List<*>).map { BareEditView(it as Long) },
-        safeEdits = (system.get(id, "safeEdits") as List<*>).map { SafeEditView(it as Long) },
-        transientEditRefusals = (system.get(id, "transientEditRefusals") as List<*>).map { TransientEditRefusalView(it as Long) },
+        lockNotes = (system.get(id, "lockNotes") as List<*>).map { system.refFor(it as Long) },
+        unlockNotes = (system.get(id, "unlockNotes") as List<*>).map { system.refFor(it as Long) },
+        renameTexts = (system.get(id, "renameTexts") as List<*>).map { system.refFor(it as Long) },
+        bareEdits = (system.get(id, "bareEdits") as List<*>).map { system.refFor(it as Long) },
+        safeEdits = (system.get(id, "safeEdits") as List<*>).map { system.refFor(it as Long) },
+        transientEditRefusals = (system.get(id, "transientEditRefusals") as List<*>).map { system.refFor(it as Long) },
+        isLockedNote = system.isMember(id, "LockedNote"),
     )
 
     fun materializeLockNote(id: Long): LockNote = LockNote(
-        id = id,
-        note = NoteView(system.get(id, "note") as Long),
+        key = system.refFor(id).key,
+        note = system.refFor(system.get(id, "note") as Long),
     )
 
     fun materializeUnlockNote(id: Long): UnlockNote = UnlockNote(
-        id = id,
-        note = NoteView(system.get(id, "note") as Long),
+        key = system.refFor(id).key,
+        note = system.refFor(system.get(id, "note") as Long),
     )
 
     fun materializeRenameText(id: Long): RenameText = RenameText(
-        id = id,
-        note = NoteView(system.get(id, "note") as Long),
+        key = system.refFor(id).key,
+        note = system.refFor(system.get(id, "note") as Long),
         newText = system.get(id, "newText") as String,
     )
 
     fun materializeBareEdit(id: Long): BareEdit = BareEdit(
-        id = id,
-        note = NoteView(system.get(id, "note") as Long),
+        key = system.refFor(id).key,
+        note = system.refFor(system.get(id, "note") as Long),
         newText = system.get(id, "newText") as String,
-        bareEditRefusals = (system.get(id, "bareEditRefusals") as List<*>).map { BareEditRefusalView(it as Long) },
+        bareEditRefusals = (system.get(id, "bareEditRefusals") as List<*>).map { system.refFor(it as Long) },
+        isApplicableBareEdit = system.isMember(id, "ApplicableBareEdit"),
+        isRefusedBareEdit = system.isMember(id, "RefusedBareEdit"),
     )
 
     fun materializeBareEditRefusal(id: Long): BareEditRefusal = BareEditRefusal(
-        id = id,
-        edit = BareEditView(system.get(id, "edit") as Long),
+        key = system.refFor(id).key,
+        edit = system.refFor(system.get(id, "edit") as Long),
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
     fun materializeSafeEdit(id: Long): SafeEdit = SafeEdit(
-        id = id,
-        note = NoteView(system.get(id, "note") as Long),
+        key = system.refFor(id).key,
+        note = system.refFor(system.get(id, "note") as Long),
         newTitle = system.get(id, "newTitle") as String,
-        editApplications = (system.get(id, "editApplications") as List<*>).map { EditApplicationView(it as Long) },
-        editRefusals = (system.get(id, "editRefusals") as List<*>).map { EditRefusalView(it as Long) },
+        editApplications = (system.get(id, "editApplications") as List<*>).map { system.refFor(it as Long) },
+        editRefusals = (system.get(id, "editRefusals") as List<*>).map { system.refFor(it as Long) },
+        isUnhandledSafeEdit = system.isMember(id, "UnhandledSafeEdit"),
+        isApplicableSafeEdit = system.isMember(id, "ApplicableSafeEdit"),
+        isRefusedSafeEdit = system.isMember(id, "RefusedSafeEdit"),
     )
 
     fun materializeEditApplication(id: Long): EditApplication = EditApplication(
-        id = id,
-        edit = SafeEditView(system.get(id, "edit") as Long),
+        key = system.refFor(id).key,
+        edit = system.refFor(system.get(id, "edit") as Long),
         appliedOn = system.get(id, "appliedOn") as Instant,
     )
 
     fun materializeEditRefusal(id: Long): EditRefusal = EditRefusal(
-        id = id,
-        edit = SafeEditView(system.get(id, "edit") as Long),
+        key = system.refFor(id).key,
+        edit = system.refFor(system.get(id, "edit") as Long),
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
     fun materializeTransientEditRefusal(id: Long): TransientEditRefusal = TransientEditRefusal(
-        id = id,
-        note = NoteView(system.get(id, "note") as Long),
+        key = system.refFor(id).key,
+        note = system.refFor(system.get(id, "note") as Long),
         requestedTitle = system.get(id, "requestedTitle") as String,
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
     fun materializeLockedNote(id: Long): LockedNote = LockedNote(
-        id = id,
+        key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         body = system.get(id, "body") as String,
         locked = system.get(id, "locked") as Boolean,
-        lockNotes = (system.get(id, "lockNotes") as List<*>).map { LockNoteView(it as Long) },
-        unlockNotes = (system.get(id, "unlockNotes") as List<*>).map { UnlockNoteView(it as Long) },
-        renameTexts = (system.get(id, "renameTexts") as List<*>).map { RenameTextView(it as Long) },
-        bareEdits = (system.get(id, "bareEdits") as List<*>).map { BareEditView(it as Long) },
-        safeEdits = (system.get(id, "safeEdits") as List<*>).map { SafeEditView(it as Long) },
-        transientEditRefusals = (system.get(id, "transientEditRefusals") as List<*>).map { TransientEditRefusalView(it as Long) },
+        lockNotes = (system.get(id, "lockNotes") as List<*>).map { system.refFor(it as Long) },
+        unlockNotes = (system.get(id, "unlockNotes") as List<*>).map { system.refFor(it as Long) },
+        renameTexts = (system.get(id, "renameTexts") as List<*>).map { system.refFor(it as Long) },
+        bareEdits = (system.get(id, "bareEdits") as List<*>).map { system.refFor(it as Long) },
+        safeEdits = (system.get(id, "safeEdits") as List<*>).map { system.refFor(it as Long) },
+        transientEditRefusals = (system.get(id, "transientEditRefusals") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeApplicableBareEdit(id: Long): ApplicableBareEdit = ApplicableBareEdit(
-        id = id,
-        note = NoteView(system.get(id, "note") as Long),
+        key = system.refFor(id).key,
+        note = system.refFor(system.get(id, "note") as Long),
         newText = system.get(id, "newText") as String,
-        bareEditRefusals = (system.get(id, "bareEditRefusals") as List<*>).map { BareEditRefusalView(it as Long) },
+        bareEditRefusals = (system.get(id, "bareEditRefusals") as List<*>).map { system.refFor(it as Long) },
+        isRefusedBareEdit = system.isMember(id, "RefusedBareEdit"),
     )
 
     fun materializeRefusedBareEdit(id: Long): RefusedBareEdit = RefusedBareEdit(
-        id = id,
-        note = NoteView(system.get(id, "note") as Long),
+        key = system.refFor(id).key,
+        note = system.refFor(system.get(id, "note") as Long),
         newText = system.get(id, "newText") as String,
-        bareEditRefusals = (system.get(id, "bareEditRefusals") as List<*>).map { BareEditRefusalView(it as Long) },
+        bareEditRefusals = (system.get(id, "bareEditRefusals") as List<*>).map { system.refFor(it as Long) },
+        isApplicableBareEdit = system.isMember(id, "ApplicableBareEdit"),
     )
 
     fun materializeUnhandledSafeEdit(id: Long): UnhandledSafeEdit = UnhandledSafeEdit(
-        id = id,
-        note = NoteView(system.get(id, "note") as Long),
+        key = system.refFor(id).key,
+        note = system.refFor(system.get(id, "note") as Long),
         newTitle = system.get(id, "newTitle") as String,
-        editApplications = (system.get(id, "editApplications") as List<*>).map { EditApplicationView(it as Long) },
-        editRefusals = (system.get(id, "editRefusals") as List<*>).map { EditRefusalView(it as Long) },
+        editApplications = (system.get(id, "editApplications") as List<*>).map { system.refFor(it as Long) },
+        editRefusals = (system.get(id, "editRefusals") as List<*>).map { system.refFor(it as Long) },
+        isApplicableSafeEdit = system.isMember(id, "ApplicableSafeEdit"),
+        isRefusedSafeEdit = system.isMember(id, "RefusedSafeEdit"),
     )
 
     fun materializeApplicableSafeEdit(id: Long): ApplicableSafeEdit = ApplicableSafeEdit(
-        id = id,
-        note = NoteView(system.get(id, "note") as Long),
+        key = system.refFor(id).key,
+        note = system.refFor(system.get(id, "note") as Long),
         newTitle = system.get(id, "newTitle") as String,
-        editApplications = (system.get(id, "editApplications") as List<*>).map { EditApplicationView(it as Long) },
-        editRefusals = (system.get(id, "editRefusals") as List<*>).map { EditRefusalView(it as Long) },
+        editApplications = (system.get(id, "editApplications") as List<*>).map { system.refFor(it as Long) },
+        editRefusals = (system.get(id, "editRefusals") as List<*>).map { system.refFor(it as Long) },
+        isUnhandledSafeEdit = system.isMember(id, "UnhandledSafeEdit"),
+        isRefusedSafeEdit = system.isMember(id, "RefusedSafeEdit"),
     )
 
     fun materializeRefusedSafeEdit(id: Long): RefusedSafeEdit = RefusedSafeEdit(
-        id = id,
-        note = NoteView(system.get(id, "note") as Long),
+        key = system.refFor(id).key,
+        note = system.refFor(system.get(id, "note") as Long),
         newTitle = system.get(id, "newTitle") as String,
-        editApplications = (system.get(id, "editApplications") as List<*>).map { EditApplicationView(it as Long) },
-        editRefusals = (system.get(id, "editRefusals") as List<*>).map { EditRefusalView(it as Long) },
+        editApplications = (system.get(id, "editApplications") as List<*>).map { system.refFor(it as Long) },
+        editRefusals = (system.get(id, "editRefusals") as List<*>).map { system.refFor(it as Long) },
+        isUnhandledSafeEdit = system.isMember(id, "UnhandledSafeEdit"),
+        isApplicableSafeEdit = system.isMember(id, "ApplicableSafeEdit"),
     )
 
     companion object {
@@ -633,130 +596,224 @@ rule RefuseTransientEdit when RefusedTransientEdit {
     }
 }
 
-// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
-// References are typed handles (views); navigating one is a further read.
+// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// A model object is a reference to its own record (`Ref<T>`): equality is identity,
+// a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
+// the record's membership at the moment of the read.
 
 data class Note(
-    override val id: Long,
+    override val key: StoreKey,
     val title: String,
     val body: String,
     val locked: Boolean,
-    val lockNotes: List<PartitionDriftSystem.LockNoteView>,
-    val unlockNotes: List<PartitionDriftSystem.UnlockNoteView>,
-    val renameTexts: List<PartitionDriftSystem.RenameTextView>,
-    val bareEdits: List<PartitionDriftSystem.BareEditView>,
-    val safeEdits: List<PartitionDriftSystem.SafeEditView>,
-    val transientEditRefusals: List<PartitionDriftSystem.TransientEditRefusalView>,
-) : View
+    val lockNotes: List<Ref<LockNote>>,
+    val unlockNotes: List<Ref<UnlockNote>>,
+    val renameTexts: List<Ref<RenameText>>,
+    val bareEdits: List<Ref<BareEdit>>,
+    val safeEdits: List<Ref<SafeEdit>>,
+    val transientEditRefusals: List<Ref<TransientEditRefusal>>,
+    /** membership of LockedNote at the moment of the read */
+    val isLockedNote: Boolean,
+) : Ref<Note> {
+    override val shape: String get() = "Note"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class LockNote(
-    override val id: Long,
-    val note: PartitionDriftSystem.NoteView,
-) : View
+    override val key: StoreKey,
+    val note: Ref<Note>,
+) : Ref<LockNote> {
+    override val shape: String get() = "LockNote"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class UnlockNote(
-    override val id: Long,
-    val note: PartitionDriftSystem.NoteView,
-) : View
+    override val key: StoreKey,
+    val note: Ref<Note>,
+) : Ref<UnlockNote> {
+    override val shape: String get() = "UnlockNote"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class RenameText(
-    override val id: Long,
-    val note: PartitionDriftSystem.NoteView,
+    override val key: StoreKey,
+    val note: Ref<Note>,
     val newText: String,
-) : View
+) : Ref<RenameText> {
+    override val shape: String get() = "RenameText"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class BareEdit(
-    override val id: Long,
-    val note: PartitionDriftSystem.NoteView,
+    override val key: StoreKey,
+    val note: Ref<Note>,
     val newText: String,
-    val bareEditRefusals: List<PartitionDriftSystem.BareEditRefusalView>,
-) : View
+    val bareEditRefusals: List<Ref<BareEditRefusal>>,
+    /** membership of ApplicableBareEdit at the moment of the read */
+    val isApplicableBareEdit: Boolean,
+    /** membership of RefusedBareEdit at the moment of the read */
+    val isRefusedBareEdit: Boolean,
+) : Ref<BareEdit> {
+    override val shape: String get() = "BareEdit"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class BareEditRefusal(
-    override val id: Long,
-    val edit: PartitionDriftSystem.BareEditView,
+    override val key: StoreKey,
+    val edit: Ref<BareEdit>,
     val refusedOn: Instant,
-) : View
+) : Ref<BareEditRefusal> {
+    override val shape: String get() = "BareEditRefusal"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class SafeEdit(
-    override val id: Long,
-    val note: PartitionDriftSystem.NoteView,
+    override val key: StoreKey,
+    val note: Ref<Note>,
     val newTitle: String,
-    val editApplications: List<PartitionDriftSystem.EditApplicationView>,
-    val editRefusals: List<PartitionDriftSystem.EditRefusalView>,
-) : View
+    val editApplications: List<Ref<EditApplication>>,
+    val editRefusals: List<Ref<EditRefusal>>,
+    /** membership of UnhandledSafeEdit at the moment of the read */
+    val isUnhandledSafeEdit: Boolean,
+    /** membership of ApplicableSafeEdit at the moment of the read */
+    val isApplicableSafeEdit: Boolean,
+    /** membership of RefusedSafeEdit at the moment of the read */
+    val isRefusedSafeEdit: Boolean,
+) : Ref<SafeEdit> {
+    override val shape: String get() = "SafeEdit"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class EditApplication(
-    override val id: Long,
-    val edit: PartitionDriftSystem.SafeEditView,
+    override val key: StoreKey,
+    val edit: Ref<SafeEdit>,
     val appliedOn: Instant,
-) : View
+) : Ref<EditApplication> {
+    override val shape: String get() = "EditApplication"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class EditRefusal(
-    override val id: Long,
-    val edit: PartitionDriftSystem.SafeEditView,
+    override val key: StoreKey,
+    val edit: Ref<SafeEdit>,
     val reason: String,
     val refusedOn: Instant,
-) : View
+) : Ref<EditRefusal> {
+    override val shape: String get() = "EditRefusal"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class TransientEditRefusal(
-    override val id: Long,
-    val note: PartitionDriftSystem.NoteView,
+    override val key: StoreKey,
+    val note: Ref<Note>,
     val requestedTitle: String,
     val reason: String,
     val refusedOn: Instant,
-) : View
+) : Ref<TransientEditRefusal> {
+    override val shape: String get() = "TransientEditRefusal"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class LockedNote(
-    override val id: Long,
+    override val key: StoreKey,
     val title: String,
     val body: String,
     val locked: Boolean,
-    val lockNotes: List<PartitionDriftSystem.LockNoteView>,
-    val unlockNotes: List<PartitionDriftSystem.UnlockNoteView>,
-    val renameTexts: List<PartitionDriftSystem.RenameTextView>,
-    val bareEdits: List<PartitionDriftSystem.BareEditView>,
-    val safeEdits: List<PartitionDriftSystem.SafeEditView>,
-    val transientEditRefusals: List<PartitionDriftSystem.TransientEditRefusalView>,
-) : View
+    val lockNotes: List<Ref<LockNote>>,
+    val unlockNotes: List<Ref<UnlockNote>>,
+    val renameTexts: List<Ref<RenameText>>,
+    val bareEdits: List<Ref<BareEdit>>,
+    val safeEdits: List<Ref<SafeEdit>>,
+    val transientEditRefusals: List<Ref<TransientEditRefusal>>,
+) : Ref<Note> {
+    override val shape: String get() = "Note"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ApplicableBareEdit(
-    override val id: Long,
-    val note: PartitionDriftSystem.NoteView,
+    override val key: StoreKey,
+    val note: Ref<Note>,
     val newText: String,
-    val bareEditRefusals: List<PartitionDriftSystem.BareEditRefusalView>,
-) : View
+    val bareEditRefusals: List<Ref<BareEditRefusal>>,
+    /** membership of RefusedBareEdit at the moment of the read */
+    val isRefusedBareEdit: Boolean,
+) : Ref<BareEdit> {
+    override val shape: String get() = "BareEdit"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class RefusedBareEdit(
-    override val id: Long,
-    val note: PartitionDriftSystem.NoteView,
+    override val key: StoreKey,
+    val note: Ref<Note>,
     val newText: String,
-    val bareEditRefusals: List<PartitionDriftSystem.BareEditRefusalView>,
-) : View
+    val bareEditRefusals: List<Ref<BareEditRefusal>>,
+    /** membership of ApplicableBareEdit at the moment of the read */
+    val isApplicableBareEdit: Boolean,
+) : Ref<BareEdit> {
+    override val shape: String get() = "BareEdit"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class UnhandledSafeEdit(
-    override val id: Long,
-    val note: PartitionDriftSystem.NoteView,
+    override val key: StoreKey,
+    val note: Ref<Note>,
     val newTitle: String,
-    val editApplications: List<PartitionDriftSystem.EditApplicationView>,
-    val editRefusals: List<PartitionDriftSystem.EditRefusalView>,
-) : View
+    val editApplications: List<Ref<EditApplication>>,
+    val editRefusals: List<Ref<EditRefusal>>,
+    /** membership of ApplicableSafeEdit at the moment of the read */
+    val isApplicableSafeEdit: Boolean,
+    /** membership of RefusedSafeEdit at the moment of the read */
+    val isRefusedSafeEdit: Boolean,
+) : Ref<SafeEdit> {
+    override val shape: String get() = "SafeEdit"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ApplicableSafeEdit(
-    override val id: Long,
-    val note: PartitionDriftSystem.NoteView,
+    override val key: StoreKey,
+    val note: Ref<Note>,
     val newTitle: String,
-    val editApplications: List<PartitionDriftSystem.EditApplicationView>,
-    val editRefusals: List<PartitionDriftSystem.EditRefusalView>,
-) : View
+    val editApplications: List<Ref<EditApplication>>,
+    val editRefusals: List<Ref<EditRefusal>>,
+    /** membership of UnhandledSafeEdit at the moment of the read */
+    val isUnhandledSafeEdit: Boolean,
+    /** membership of RefusedSafeEdit at the moment of the read */
+    val isRefusedSafeEdit: Boolean,
+) : Ref<SafeEdit> {
+    override val shape: String get() = "SafeEdit"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class RefusedSafeEdit(
-    override val id: Long,
-    val note: PartitionDriftSystem.NoteView,
+    override val key: StoreKey,
+    val note: Ref<Note>,
     val newTitle: String,
-    val editApplications: List<PartitionDriftSystem.EditApplicationView>,
-    val editRefusals: List<PartitionDriftSystem.EditRefusalView>,
-) : View
+    val editApplications: List<Ref<EditApplication>>,
+    val editRefusals: List<Ref<EditRefusal>>,
+    /** membership of UnhandledSafeEdit at the moment of the read */
+    val isUnhandledSafeEdit: Boolean,
+    /** membership of ApplicableSafeEdit at the moment of the read */
+    val isApplicableSafeEdit: Boolean,
+) : Ref<SafeEdit> {
+    override val shape: String get() = "SafeEdit"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 // ── the builder's vocabulary: one field handle per member, memberships per refinement ──
 

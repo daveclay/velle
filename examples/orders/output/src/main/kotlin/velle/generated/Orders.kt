@@ -21,20 +21,20 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
     data class NewCustomization(
         val note: String,
     ) {
-        internal fun raw(): Map<String, Any?> = buildMap {
+        internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
             put("note", note)
         }
     }
 
     data class NewOrderLine(
-        val product: ProductView,
+        val product: Ref<Product>,
         val quantity: Int,
         val customizations: List<NewCustomization> = emptyList(),
     ) {
-        internal fun raw(): Map<String, Any?> = buildMap {
-            put("product", product.id)
+        internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+            put("product", system.idOf(product))
             put("quantity", quantity)
-            put("customizations", customizations.map { it.raw() })
+            put("customizations", customizations.map { it.raw(system) })
         }
     }
 
@@ -57,93 +57,65 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
     /** Queue key: [order.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitOrder(customer: CustomerView, placedOn: LocalDate, orderLines: List<NewOrderLine> = emptyList()): CommitResult =
+    fun commitOrder(customer: Ref<Customer>, placedOn: LocalDate, orderLines: List<NewOrderLine> = emptyList()): CommitResult =
         system.commit("Order", buildMap {
-            put("customer", customer.id)
+            put("customer", system.idOf(customer))
             put("placedOn", placedOn)
         }, buildMap {
-            put("orderLines", orderLines.map { it.raw() })
+            put("orderLines", orderLines.map { it.raw(system) })
         })
 
-    fun customers(): List<CustomerView> = system.instancesOf("Customer").map { CustomerView(it) }
-    fun customer(id: Long) = CustomerView(id)
-    fun products(): List<ProductView> = system.instancesOf("Product").map { ProductView(it) }
-    fun product(id: Long) = ProductView(id)
-    fun orders(): List<OrderView> = system.instancesOf("Order").map { OrderView(it) }
-    fun order(id: Long) = OrderView(id)
-    fun orderLines(): List<OrderLineView> = system.instancesOf("OrderLine").map { OrderLineView(it) }
-    fun orderLine(id: Long) = OrderLineView(id)
-    fun customizations(): List<CustomizationView> = system.instancesOf("Customization").map { CustomizationView(it) }
-    fun customization(id: Long) = CustomizationView(id)
-    fun reservations(): List<ReservationView> = system.instancesOf("Reservation").map { ReservationView(it) }
-    fun reservation(id: Long) = ReservationView(id)
+    fun customers(): List<Customer> = system.instancesOf("Customer").map { materializeCustomer(it) }
+    fun products(): List<Product> = system.instancesOf("Product").map { materializeProduct(it) }
+    fun orders(): List<Order> = system.instancesOf("Order").map { materializeOrder(it) }
+    fun orderLines(): List<OrderLine> = system.instancesOf("OrderLine").map { materializeOrderLine(it) }
+    fun customizations(): List<Customization> = system.instancesOf("Customization").map { materializeCustomization(it) }
+    fun reservations(): List<Reservation> = system.instancesOf("Reservation").map { materializeReservation(it) }
 
-    inner class CustomerView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val orders: List<OrderView> get() = (system.get(id, "orders") as List<*>).map { OrderView(it as Long) }
-        override fun toString() = "Customer#$id"
-        override fun equals(other: Any?) = other is CustomerView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ProductView(override val id: Long) : View {
-        val sku: String get() = system.get(id, "sku") as String
-        val orderLines: List<OrderLineView> get() = (system.get(id, "orderLines") as List<*>).map { OrderLineView(it as Long) }
-        override fun toString() = "Product#$id"
-        override fun equals(other: Any?) = other is ProductView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class OrderView(override val id: Long) : View {
-        val customer: CustomerView get() = CustomerView(system.get(id, "customer") as Long)
-        val placedOn: LocalDate get() = system.get(id, "placedOn") as LocalDate
-        val total: Int get() = (system.get(id, "total") as BigDecimal).intValueExact()
-        val orderLines: List<OrderLineView> get() = (system.get(id, "orderLines") as List<*>).map { OrderLineView(it as Long) }
-        override fun toString() = "Order#$id"
-        override fun equals(other: Any?) = other is OrderView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class OrderLineView(override val id: Long) : View {
-        val order: OrderView get() = OrderView(system.get(id, "order") as Long)
-        val product: ProductView get() = ProductView(system.get(id, "product") as Long)
-        val quantity: Int get() = (system.get(id, "quantity") as BigDecimal).intValueExact()
-        val customizations: List<CustomizationView> get() = (system.get(id, "customizations") as List<*>).map { CustomizationView(it as Long) }
-        val reservations: List<ReservationView> get() = (system.get(id, "reservations") as List<*>).map { ReservationView(it as Long) }
-        override fun toString() = "OrderLine#$id"
-        override fun equals(other: Any?) = other is OrderLineView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class CustomizationView(override val id: Long) : View {
-        val line: OrderLineView get() = OrderLineView(system.get(id, "line") as Long)
-        val note: String get() = system.get(id, "note") as String
-        override fun toString() = "Customization#$id"
-        override fun equals(other: Any?) = other is CustomizationView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ReservationView(override val id: Long) : View {
-        val line: OrderLineView get() = OrderLineView(system.get(id, "line") as Long)
-        val quantity: Int get() = (system.get(id, "quantity") as BigDecimal).intValueExact()
-        override fun toString() = "Reservation#$id"
-        override fun equals(other: Any?) = other is ReservationView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
     val read = Read()
 
     inner class Read {
         /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
         val registry = QueryRegistry()
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+
+        /** The model object behind a reference, read now; throws when the record no longer exists. */
+        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
+        fun fetch(id: Long): Ref<*> {
+            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
+            return materialize(id)
+        }
+
         val customers: CustomerQuery get() = CustomerQuery(Query("Customer"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun customer(key: StoreKey): Customer = this(Ref.Persisted("Customer", key))
+        fun customer(key: Long): Customer = customer(StoreKey(key))
+
         val products: ProductQuery get() = ProductQuery(Query("Product"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun product(key: StoreKey): Product = this(Ref.Persisted("Product", key))
+        fun product(key: Long): Product = product(StoreKey(key))
+
         val orders: OrderQuery get() = OrderQuery(Query("Order"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun order(key: StoreKey): Order = this(Ref.Persisted("Order", key))
+        fun order(key: Long): Order = order(StoreKey(key))
+
         val orderLines: OrderLineQuery get() = OrderLineQuery(Query("OrderLine"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun orderLine(key: StoreKey): OrderLine = this(Ref.Persisted("OrderLine", key))
+        fun orderLine(key: Long): OrderLine = orderLine(StoreKey(key))
+
         val customizations: CustomizationQuery get() = CustomizationQuery(Query("Customization"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun customization(key: StoreKey): Customization = this(Ref.Persisted("Customization", key))
+        fun customization(key: Long): Customization = customization(StoreKey(key))
+
         val reservations: ReservationQuery get() = ReservationQuery(Query("Reservation"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun reservation(key: StoreKey): Reservation = this(Ref.Persisted("Reservation", key))
+        fun reservation(key: Long): Reservation = reservation(StoreKey(key))
     }
 
     inner class CustomerQuery(q: Query) : TypedQuery<CustomerFields, Customer>(system, q, CustomerFields(), { materializeCustomer(it) }) {
@@ -170,44 +142,55 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
         override fun with(q: Query) = ReservationQuery(q)
     }
 
+    /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
+    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+        "Customer" -> materializeCustomer(id)
+        "Product" -> materializeProduct(id)
+        "Order" -> materializeOrder(id)
+        "OrderLine" -> materializeOrderLine(id)
+        "Customization" -> materializeCustomization(id)
+        "Reservation" -> materializeReservation(id)
+        else -> throw IllegalStateException("no model object for '$shape'")
+    }
+
     fun materializeCustomer(id: Long): Customer = Customer(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        orders = (system.get(id, "orders") as List<*>).map { OrderView(it as Long) },
+        orders = (system.get(id, "orders") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeProduct(id: Long): Product = Product(
-        id = id,
+        key = system.refFor(id).key,
         sku = system.get(id, "sku") as String,
-        orderLines = (system.get(id, "orderLines") as List<*>).map { OrderLineView(it as Long) },
+        orderLines = (system.get(id, "orderLines") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeOrder(id: Long): Order = Order(
-        id = id,
-        customer = CustomerView(system.get(id, "customer") as Long),
+        key = system.refFor(id).key,
+        customer = system.refFor(system.get(id, "customer") as Long),
         placedOn = system.get(id, "placedOn") as LocalDate,
         total = (system.get(id, "total") as BigDecimal).intValueExact(),
-        orderLines = (system.get(id, "orderLines") as List<*>).map { OrderLineView(it as Long) },
+        orderLines = (system.get(id, "orderLines") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeOrderLine(id: Long): OrderLine = OrderLine(
-        id = id,
-        order = OrderView(system.get(id, "order") as Long),
-        product = ProductView(system.get(id, "product") as Long),
+        key = system.refFor(id).key,
+        order = system.refFor(system.get(id, "order") as Long),
+        product = system.refFor(system.get(id, "product") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
-        customizations = (system.get(id, "customizations") as List<*>).map { CustomizationView(it as Long) },
-        reservations = (system.get(id, "reservations") as List<*>).map { ReservationView(it as Long) },
+        customizations = (system.get(id, "customizations") as List<*>).map { system.refFor(it as Long) },
+        reservations = (system.get(id, "reservations") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeCustomization(id: Long): Customization = Customization(
-        id = id,
-        line = OrderLineView(system.get(id, "line") as Long),
+        key = system.refFor(id).key,
+        line = system.refFor(system.get(id, "line") as Long),
         note = system.get(id, "note") as String,
     )
 
     fun materializeReservation(id: Long): Reservation = Reservation(
-        id = id,
-        line = OrderLineView(system.get(id, "line") as Long),
+        key = system.refFor(id).key,
+        line = system.refFor(system.get(id, "line") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
     )
 
@@ -266,49 +249,75 @@ never (OrderLine where quantity <= 0)
     }
 }
 
-// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
-// References are typed handles (views); navigating one is a further read.
+// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// A model object is a reference to its own record (`Ref<T>`): equality is identity,
+// a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
+// the record's membership at the moment of the read.
 
 data class Customer(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
-    val orders: List<OrdersSystem.OrderView>,
-) : View
+    val orders: List<Ref<Order>>,
+) : Ref<Customer> {
+    override val shape: String get() = "Customer"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Product(
-    override val id: Long,
+    override val key: StoreKey,
     val sku: String,
-    val orderLines: List<OrdersSystem.OrderLineView>,
-) : View
+    val orderLines: List<Ref<OrderLine>>,
+) : Ref<Product> {
+    override val shape: String get() = "Product"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Order(
-    override val id: Long,
-    val customer: OrdersSystem.CustomerView,
+    override val key: StoreKey,
+    val customer: Ref<Customer>,
     val placedOn: LocalDate,
     val total: Int,
-    val orderLines: List<OrdersSystem.OrderLineView>,
-) : View
+    val orderLines: List<Ref<OrderLine>>,
+) : Ref<Order> {
+    override val shape: String get() = "Order"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class OrderLine(
-    override val id: Long,
-    val order: OrdersSystem.OrderView,
-    val product: OrdersSystem.ProductView,
+    override val key: StoreKey,
+    val order: Ref<Order>,
+    val product: Ref<Product>,
     val quantity: Int,
-    val customizations: List<OrdersSystem.CustomizationView>,
-    val reservations: List<OrdersSystem.ReservationView>,
-) : View
+    val customizations: List<Ref<Customization>>,
+    val reservations: List<Ref<Reservation>>,
+) : Ref<OrderLine> {
+    override val shape: String get() = "OrderLine"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Customization(
-    override val id: Long,
-    val line: OrdersSystem.OrderLineView,
+    override val key: StoreKey,
+    val line: Ref<OrderLine>,
     val note: String,
-) : View
+) : Ref<Customization> {
+    override val shape: String get() = "Customization"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Reservation(
-    override val id: Long,
-    val line: OrdersSystem.OrderLineView,
+    override val key: StoreKey,
+    val line: Ref<OrderLine>,
     val quantity: Int,
-) : View
+) : Ref<Reservation> {
+    override val shape: String get() = "Reservation"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 // ── the builder's vocabulary: one field handle per member, memberships per refinement ──
 

@@ -1,6 +1,8 @@
 package velle.generated.loyalty
 
 import java.math.BigDecimal
+import velle.generated.*
+import velle.generated.Member
 import java.sql.Connection
 import java.sql.DriverManager
 import java.time.LocalDate
@@ -52,7 +54,7 @@ class LoyaltyPersistenceTest {
 
     private fun accept(r: CommitResult) = assertIs<CommitResult.Accepted>(r, "refused: $r")
 
-    private fun dues(sys: LoyaltySystem, m: LoyaltySystem.MemberView, month: String, dueBy: LocalDate, paidOn: LocalDate) =
+    private fun dues(sys: LoyaltySystem, m: Member, month: String, dueBy: LocalDate, paidOn: LocalDate) =
         accept(sys.commitDuesPayment(m, month, dueBy, paidOn))
 
     @Test
@@ -62,15 +64,15 @@ class LoyaltyPersistenceTest {
         val ada = first.members().last()
         dues(first, ada, "January", dueBy = LocalDate.of(2026, 1, 31), paidOn = LocalDate.of(2026, 1, 10))
         dues(first, ada, "March", dueBy = LocalDate.of(2026, 3, 31), paidOn = LocalDate.of(2026, 3, 5))
-        assertEquals(2, ada.streak)
+        assertEquals(2, first.read(ada).streak)
 
         val second = process()
-        val ada2 = second.member(second.system.handleFor("Member", 1L))
-        assertEquals(2, ada2.streak, "the recurrence re-derives from the two stored payments")
+        val ada2 = second.read.member(1L)
+        assertEquals(2, second.read(ada2).streak, "the recurrence re-derives from the two stored payments")
         dues(second, ada2, "February", dueBy = LocalDate.of(2026, 2, 28), paidOn = LocalDate.of(2026, 2, 8))
-        assertEquals(3, ada2.streak)
-        val chain = second.duesPayments().filter { it.member == ada2 }.sortedBy { it.paidOn }
-        assertEquals(listOf(1, 2, 3), chain.map { it.streakAfter })
+        assertEquals(3, second.read(ada2).streak)
+        val chain = second.duesPayments().filter { second.read(it).member == ada2 }.sortedBy { second.read(it).paidOn }
+        assertEquals(listOf(1, 2, 3), chain.map { second.read(it).streakAfter })
     }
 
     @Test
@@ -83,14 +85,15 @@ class LoyaltyPersistenceTest {
         accept(first.commitJoin("Recruit", referrer = scout))
 
         val second = process()
-        val founder2 = second.member(second.system.handleFor("Member", 1L))
-        val scout2 = second.member(second.system.handleFor("Member", 2L))
-        val recruit2 = second.member(second.system.handleFor("Member", 3L))
-        assertEquals(founder2, recruit2.foundingReferrer, "the chain walks stored references to its root")
+        val founder2 = second.read.member(1L)
+        val scout2 = second.read.member(2L)
+        val recruit2 = second.read.member(3L)
+        assertEquals(founder2, second.read(recruit2).foundingReferrer, "the chain walks stored references to its root")
 
         accept(second.commitPurchase(recruit2, BigDecimal("150")))
-        assertEquals("gold", recruit2.tier)
-        assertEquals("advocate", scout2.tier, "the referrer's promotion wrote a different stored row")
+        assertEquals("gold", second.read(recruit2).tier)
+        assertEquals("advocate", second.read(scout2).tier, "the referrer's promotion wrote a different stored row")
         assertEquals(1, second.thankYouNotes().size)
     }
 }
+

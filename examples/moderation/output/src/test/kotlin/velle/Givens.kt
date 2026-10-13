@@ -1,6 +1,7 @@
 package velle.generated.moderation
 
 import velle.generated.ModerationSystem
+import velle.generated.*
 
 /**
  * The human-owned scenarios the generated moderation specs demand (testgen.md).
@@ -10,12 +11,12 @@ import velle.generated.ModerationSystem
  */
 class Givens(private val sys: ModerationSystem) : RequiredGivens {
 
-    private fun seller(): ModerationSystem.SellerView {
+    private fun seller(): Seller {
         sys.commitSeller("Ada")
         return sys.sellers().last()
     }
 
-    private fun newDraft(seller: ModerationSystem.SellerView = seller()): ModerationSystem.ListingView {
+    private fun newDraft(seller: Seller = seller()): Listing {
         sys.commitListing("brass lamp", seller)
         return sys.listings().last()
     }
@@ -24,22 +25,22 @@ class Givens(private val sys: ModerationSystem) : RequiredGivens {
         sys.commitPublish(newDraft())
     }
 
-    override fun draft(): ModerationSystem.ListingView = newDraft()
+    override fun draft(): Listing = newDraft()
 
-    override fun exitDraft(listing: ModerationSystem.ListingView) {
+    override fun exitDraft(listing: Listing) {
         sys.commitPublish(listing)
     }
 
-    override fun listingForNoteDiscard(): ModerationSystem.ListingView = newDraft()
+    override fun listingForNoteDiscard(): Listing = newDraft()
 
-    override fun deleteForNoteDiscard(listing: ModerationSystem.ListingView) {
+    override fun deleteForNoteDiscard(listing: Listing) {
         sys.commitDiscardDraft(listing, "duplicate")
     }
 
     /** A report on a draft, then the draft discarded: the report's reference absorbs the deletion. */
-    override fun listingReportForNotifyReporter(): ModerationSystem.ListingReportView {
+    override fun listingReportForNotifyReporter(): ListingReport {
         val draft = newDraft()
-        sys.commitListingReport(draft, draft.title, "spam")
+        sys.commitListingReport(draft, sys.read(draft).title, "spam")
         val report = sys.listingReports().last()
         sys.commitDiscardDraft(draft, "spam")
         return report
@@ -61,7 +62,7 @@ class Givens(private val sys: ModerationSystem) : RequiredGivens {
 
     /** A published listing survives its seller's closure as an orphan; a draft
      *  would be swept in the same commit and could not be returned. */
-    override fun listingForSweepOrphanedDrafts(): ModerationSystem.ListingView {
+    override fun listingForSweepOrphanedDrafts(): Listing {
         val ada = seller()
         val listing = newDraft(ada)
         sys.commitPublish(listing)
@@ -69,3 +70,4 @@ class Givens(private val sys: ModerationSystem) : RequiredGivens {
         return listing
     }
 }
+

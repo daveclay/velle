@@ -65,7 +65,7 @@ class CurrentSpec : SpecSupport() {
         sys.system.tick("Daily")
         assertEquals(beforeTaskNag + 1, count("TaskNag"), "rule NagRefillTask: one 'TaskNag' per firing")
         val producedTaskNag = last("TaskNag")
-        assertEquals(refillTask.id, field(producedTaskNag, "task"), "TaskNag.task: this")
+        assertEquals(idOf(refillTask), field(producedTaskNag, "task"), "TaskNag.task: this")
         sys.system.tick("Daily")
         assertEquals(beforeTaskNag + 1, count("TaskNag"), "the guard makes re-evaluation harmless")
     }
@@ -77,7 +77,7 @@ class CurrentSpec : SpecSupport() {
         prescription.assertIsA("AutoRefill", "the given must deliver a member of 'AutoRefill'")
         sys.system.tick("Daily")
         val producedRefillTask = last("RefillTask")
-        assertEquals(prescription.id, field(producedRefillTask, "prescription"), "RefillTask.prescription: this")
+        assertEquals(idOf(prescription), field(producedRefillTask, "prescription"), "RefillTask.prescription: this")
         sys.system.tick("Daily")
     }
 

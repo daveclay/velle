@@ -1,6 +1,7 @@
 package velle
 
 import java.math.BigDecimal
+import velle.generated.*
 import java.sql.Connection
 import java.sql.DriverManager
 import java.time.LocalDate
@@ -87,7 +88,7 @@ class TypedStoreTest {
         val inv = billing.invoices().last()
         accept(billing.commitLineItem(inv, "Design", BigDecimal("1200.00"), 1))
         accept(billing.commitSubmitPayment(inv, BigDecimal("1200.00")))
-        assertEquals("paid", billing.invoice(inv.id).status)
+        assertEquals("paid", billing.read(inv).status)
         assertEquals(1, billing.receipts().size)
         assertEquals(1, billing.receiptEmails().size)
 
@@ -102,7 +103,7 @@ class TypedStoreTest {
         assertEquals(1, tuned.size, "the adapter should recognize the sweep as remindOverdueCandidates")
         assertEquals(LocalDate.of(2026, 1, 1), tuned.single().first)          // today
         assertEquals(LocalDate.of(2025, 12, 25), tuned.single().second)       // today - 7 days
-        assertTrue(billing.reminders().single().invoice.id == overdue.id)
+        assertTrue(billing.read(billing.reminders().single()).invoice.key == overdue.key)
 
         // and the guard's evidence suppresses the next sweep through the same override
         billing.tickWeekly()
@@ -110,3 +111,4 @@ class TypedStoreTest {
         assertEquals(2, tuned.size)
     }
 }
+

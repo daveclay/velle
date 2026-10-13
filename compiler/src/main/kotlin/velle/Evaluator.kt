@@ -129,6 +129,7 @@ class Evaluator(private val system: VelleSystem) {
         TodayLit -> Value.VDate(system.effectiveToday)
         is DurationLit -> Value.VDuration(e.amount, e.unit)
         is ValueLit -> e.value
+        is RefLit -> Value.VRef(system.idOf(e.ref))
         is PathExpr -> evalPath(e, ctx)
         is UnaryMinus -> {
             val v = eval(e.inner, ctx) as? Value.VNum ?: throw VelleRuntimeError("unary minus on non-number")

@@ -27,7 +27,7 @@ class PharmacistSpec : SpecSupport() {
         sys.system.tick("Daily")
         assertEquals(beforeLicenceReminder + 1, count("LicenceReminder"), "rule RemindLicence: one 'LicenceReminder' per firing")
         val producedLicenceReminder = last("LicenceReminder")
-        assertEquals(staff.id, field(producedLicenceReminder, "pharmacist"), "LicenceReminder.pharmacist: this")
+        assertEquals(idOf(staff), field(producedLicenceReminder, "pharmacist"), "LicenceReminder.pharmacist: this")
         sys.system.tick("Daily")
         assertEquals(beforeLicenceReminder + 1, count("LicenceReminder"), "the guard makes re-evaluation harmless")
         sys.advanceDays(8)

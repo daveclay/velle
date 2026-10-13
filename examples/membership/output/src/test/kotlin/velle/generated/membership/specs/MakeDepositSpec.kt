@@ -44,7 +44,7 @@ class MakeDepositSpec : SpecSupport() {
         // given: any committed 'Member'
         val member = givens.someMember()
         val before = count("MakeDeposit")
-        val result = sys.system.commit("MakeDeposit", mapOf("member" to member.id, "amount" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("MakeDeposit", mapOf("member" to idOf(member), "amount" to java.math.BigDecimal("-1")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("MakeDeposit"), "a refused act commits nothing")
     }
@@ -53,7 +53,7 @@ class MakeDepositSpec : SpecSupport() {
     fun `never - a MakeDeposit with amount 1 is accepted`() {
         // given: any committed 'Member'
         val member = givens.someMember()
-        val result = sys.system.commit("MakeDeposit", mapOf("member" to member.id, "amount" to java.math.BigDecimal("1")))
+        val result = sys.system.commit("MakeDeposit", mapOf("member" to idOf(member), "amount" to java.math.BigDecimal("1")))
         assertIs<CommitResult.Accepted>(result)
     }
 }

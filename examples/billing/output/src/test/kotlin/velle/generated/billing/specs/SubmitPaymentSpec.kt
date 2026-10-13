@@ -29,7 +29,7 @@ class SubmitPaymentSpec : SpecSupport() {
         // given: any committed 'Invoice'
         val invoice = givens.someInvoice()
         val before = count("SubmitPayment")
-        val result = sys.system.commit("SubmitPayment", mapOf("invoice" to invoice.id, "amount" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("SubmitPayment", mapOf("invoice" to idOf(invoice), "amount" to java.math.BigDecimal("-1")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("SubmitPayment"), "a refused act commits nothing")
     }
@@ -38,7 +38,7 @@ class SubmitPaymentSpec : SpecSupport() {
     fun `never - a SubmitPayment with amount 1 is accepted`() {
         // given: any committed 'Invoice'
         val invoice = givens.someInvoice()
-        val result = sys.system.commit("SubmitPayment", mapOf("invoice" to invoice.id, "amount" to java.math.BigDecimal("1")))
+        val result = sys.system.commit("SubmitPayment", mapOf("invoice" to idOf(invoice), "amount" to java.math.BigDecimal("1")))
         assertIs<CommitResult.Accepted>(result)
     }
 }

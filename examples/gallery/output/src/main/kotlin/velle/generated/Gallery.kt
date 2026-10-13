@@ -33,9 +33,9 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPost(author: MemberView, body: String): CommitResult =
+    fun commitPost(author: Ref<Member>, body: String): CommitResult =
         system.commit("Post", buildMap {
-            put("author", author.id)
+            put("author", system.idOf(author))
             put("body", body)
         })
 
@@ -45,9 +45,9 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPhoto(author: MemberView, caption: String): CommitResult =
+    fun commitPhoto(author: Ref<Member>, caption: String): CommitResult =
         system.commit("Photo", buildMap {
-            put("author", author.id)
+            put("author", system.idOf(author))
             put("caption", caption)
         })
 
@@ -59,139 +59,85 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitComment(target: ContentView, author: MemberView, body: String): CommitResult =
+    fun commitComment(target: Ref<Content>, author: Ref<Member>, body: String): CommitResult =
         system.commit("Comment", buildMap {
-            put("target", target.id)
-            put("author", author.id)
+            put("target", system.idOf(target))
+            put("author", system.idOf(author))
             put("body", body)
         })
 
-    fun members(): List<MemberView> = system.instancesOf("Member").map { MemberView(it) }
-    fun member(id: Long) = MemberView(id)
-    fun posts(): List<PostView> = system.instancesOf("Post").map { PostView(it) }
-    fun post(id: Long) = PostView(id)
-    fun photos(): List<PhotoView> = system.instancesOf("Photo").map { PhotoView(it) }
-    fun photo(id: Long) = PhotoView(id)
-    fun comments(): List<CommentView> = system.instancesOf("Comment").map { CommentView(it) }
-    fun comment(id: Long) = CommentView(id)
-    fun popularityNotices(): List<PopularityNoticeView> = system.instancesOf("PopularityNotice").map { PopularityNoticeView(it) }
-    fun popularityNotice(id: Long) = PopularityNoticeView(id)
-    fun commentNotices(): List<CommentNoticeView> = system.instancesOf("CommentNotice").map { CommentNoticeView(it) }
-    fun commentNotice(id: Long) = CommentNoticeView(id)
-    fun contents(): List<ContentView> = system.instancesOf("Content").map { ContentView(it) }
-    fun ContentView.isContent(): Boolean = system.isMember(id, "Content")
-    fun PostView.isContent(): Boolean = system.isMember(id, "Content")
-    fun PhotoView.isContent(): Boolean = system.isMember(id, "Content")
-    fun populars(): List<PopularView> = system.instancesOf("Popular").map { PopularView(it) }
-    fun ContentView.isPopular(): Boolean = system.isMember(id, "Popular")
-    fun postComments(): List<PostCommentView> = system.instancesOf("PostComment").map { PostCommentView(it) }
-    fun CommentView.isPostComment(): Boolean = system.isMember(id, "PostComment")
-    fun photoComments(): List<PhotoCommentView> = system.instancesOf("PhotoComment").map { PhotoCommentView(it) }
-    fun CommentView.isPhotoComment(): Boolean = system.isMember(id, "PhotoComment")
+    fun members(): List<Member> = system.instancesOf("Member").map { materializeMember(it) }
+    fun posts(): List<Post> = system.instancesOf("Post").map { materializePost(it) }
+    fun photos(): List<Photo> = system.instancesOf("Photo").map { materializePhoto(it) }
+    fun comments(): List<Comment> = system.instancesOf("Comment").map { materializeComment(it) }
+    fun popularityNotices(): List<PopularityNotice> = system.instancesOf("PopularityNotice").map { materializePopularityNotice(it) }
+    fun commentNotices(): List<CommentNotice> = system.instancesOf("CommentNotice").map { materializeCommentNotice(it) }
+    fun contents(): List<Content> = system.instancesOf("Content").map { materializeContent(it) }
+    fun populars(): List<Popular> = system.instancesOf("Popular").map { materializePopular(it) }
+    fun postComments(): List<PostComment> = system.instancesOf("PostComment").map { materializePostComment(it) }
+    fun photoComments(): List<PhotoComment> = system.instancesOf("PhotoComment").map { materializePhotoComment(it) }
 
-    inner class MemberView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val posts: List<PostView> get() = (system.get(id, "posts") as List<*>).map { PostView(it as Long) }
-        val photos: List<PhotoView> get() = (system.get(id, "photos") as List<*>).map { PhotoView(it as Long) }
-        val comments: List<CommentView> get() = (system.get(id, "comments") as List<*>).map { CommentView(it as Long) }
-        val commentNotices: List<CommentNoticeView> get() = (system.get(id, "commentNotices") as List<*>).map { CommentNoticeView(it as Long) }
-        override fun toString() = "Member#$id"
-        override fun equals(other: Any?) = other is MemberView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class PostView(override val id: Long) : View {
-        val author: MemberView get() = MemberView(system.get(id, "author") as Long)
-        val body: String get() = system.get(id, "body") as String
-        val comments: List<CommentView> get() = (system.get(id, "comments") as List<*>).map { CommentView(it as Long) }
-        val popularityNotices: List<PopularityNoticeView> get() = (system.get(id, "popularityNotices") as List<*>).map { PopularityNoticeView(it as Long) }
-        fun asContent() = ContentView(id)
-        override fun toString() = "Post#$id"
-        override fun equals(other: Any?) = other is PostView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class PhotoView(override val id: Long) : View {
-        val author: MemberView get() = MemberView(system.get(id, "author") as Long)
-        val caption: String get() = system.get(id, "caption") as String
-        val comments: List<CommentView> get() = (system.get(id, "comments") as List<*>).map { CommentView(it as Long) }
-        val popularityNotices: List<PopularityNoticeView> get() = (system.get(id, "popularityNotices") as List<*>).map { PopularityNoticeView(it as Long) }
-        fun asContent() = ContentView(id)
-        override fun toString() = "Photo#$id"
-        override fun equals(other: Any?) = other is PhotoView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class CommentView(override val id: Long) : View {
-        val target: ContentView get() = ContentView(system.get(id, "target") as Long)
-        val author: MemberView get() = MemberView(system.get(id, "author") as Long)
-        val body: String get() = system.get(id, "body") as String
-        val commentNotices: List<CommentNoticeView> get() = (system.get(id, "commentNotices") as List<*>).map { CommentNoticeView(it as Long) }
-        override fun toString() = "Comment#$id"
-        override fun equals(other: Any?) = other is CommentView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class PopularityNoticeView(override val id: Long) : View {
-        val content: ContentView get() = ContentView(system.get(id, "content") as Long)
-        val noticedOn: Instant get() = system.get(id, "noticedOn") as Instant
-        override fun toString() = "PopularityNotice#$id"
-        override fun equals(other: Any?) = other is PopularityNoticeView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class CommentNoticeView(override val id: Long) : View {
-        val recipient: MemberView get() = MemberView(system.get(id, "recipient") as Long)
-        val comment: CommentView get() = CommentView(system.get(id, "comment") as Long)
-        val excerpt: String get() = system.get(id, "excerpt") as String
-        override fun toString() = "CommentNotice#$id"
-        override fun equals(other: Any?) = other is CommentNoticeView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ContentView(override val id: Long) : View {
-        /** the operand this instance is of */
-        val shape: String get() = system.shapeOf(id)
-        fun asPost(): PostView? = if (system.shapeOf(id) == "Post") PostView(id) else null
-        fun asPhoto(): PhotoView? = if (system.shapeOf(id) == "Photo") PhotoView(id) else null
-        val comments: List<CommentView> get() = (system.get(id, "comments") as List<*>).map { CommentView(it as Long) }
-        val popularityNotices: List<PopularityNoticeView> get() = (system.get(id, "popularityNotices") as List<*>).map { PopularityNoticeView(it as Long) }
-        val commentCount: Int get() = (system.getAs(id, "Content", "commentCount") as BigDecimal).intValueExact()
-        override fun toString() = "Content#$id"
-        override fun equals(other: Any?) = other is View && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class PopularView(override val id: Long) : View {
-        fun asContent() = ContentView(id)
-        override fun toString() = "Popular#$id"
-    }
-
-    inner class PostCommentView(override val id: Long) : View {
-        fun asComment() = CommentView(id)
-        override fun toString() = "PostComment#$id"
-    }
-
-    inner class PhotoCommentView(override val id: Long) : View {
-        fun asComment() = CommentView(id)
-        override fun toString() = "PhotoComment#$id"
-    }
-
-    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
     val read = Read()
 
     inner class Read {
         /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
         val registry = QueryRegistry()
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+
+        /** The model object behind a reference, read now; throws when the record no longer exists. */
+        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
+        fun fetch(id: Long): Ref<*> {
+            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
+            return materialize(id)
+        }
+
         val members: MemberQuery get() = MemberQuery(Query("Member"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun member(key: StoreKey): Member = this(Ref.Persisted("Member", key))
+        fun member(key: Long): Member = member(StoreKey(key))
+
         val posts: PostQuery get() = PostQuery(Query("Post"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun post(key: StoreKey): Post = this(Ref.Persisted("Post", key))
+        fun post(key: Long): Post = post(StoreKey(key))
+
         val photos: PhotoQuery get() = PhotoQuery(Query("Photo"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun photo(key: StoreKey): Photo = this(Ref.Persisted("Photo", key))
+        fun photo(key: Long): Photo = photo(StoreKey(key))
+
         val comments: CommentQuery get() = CommentQuery(Query("Comment"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun comment(key: StoreKey): Comment = this(Ref.Persisted("Comment", key))
+        fun comment(key: Long): Comment = comment(StoreKey(key))
+
         val popularityNotices: PopularityNoticeQuery get() = PopularityNoticeQuery(Query("PopularityNotice"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun popularityNotice(key: StoreKey): PopularityNotice = this(Ref.Persisted("PopularityNotice", key))
+        fun popularityNotice(key: Long): PopularityNotice = popularityNotice(StoreKey(key))
+
         val commentNotices: CommentNoticeQuery get() = CommentNoticeQuery(Query("CommentNotice"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun commentNotice(key: StoreKey): CommentNotice = this(Ref.Persisted("CommentNotice", key))
+        fun commentNotice(key: Long): CommentNotice = commentNotice(StoreKey(key))
+
+        val contents: ContentQuery get() = ContentQuery(Query("Content"))
+
+        val populars: PopularQuery get() = PopularQuery(Query("Popular"))
+        /** The record behind [ref] as a member of Popular, or null when it is not one. */
+        fun popular(ref: Ref<Content>): Popular? =
+            system.idOf(ref).let { if (system.exists("Popular", it)) materializePopular(it) else null }
+
         val postComments: PostCommentQuery get() = PostCommentQuery(Query("PostComment"))
+        /** The record behind [ref] as a member of PostComment, or null when it is not one. */
+        fun postComment(ref: Ref<Comment>): PostComment? =
+            system.idOf(ref).let { if (system.exists("PostComment", it)) materializePostComment(it) else null }
+
         val photoComments: PhotoCommentQuery get() = PhotoCommentQuery(Query("PhotoComment"))
+        /** The record behind [ref] as a member of PhotoComment, or null when it is not one. */
+        fun photoComment(ref: Ref<Comment>): PhotoComment? =
+            system.idOf(ref).let { if (system.exists("PhotoComment", it)) materializePhotoComment(it) else null }
     }
 
     inner class MemberQuery(q: Query) : TypedQuery<MemberFields, Member>(system, q, MemberFields(), { materializeMember(it) }) {
@@ -218,6 +164,14 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun with(q: Query) = CommentNoticeQuery(q)
     }
 
+    inner class ContentQuery(q: Query) : TypedQuery<ContentFields, Content>(system, q, ContentFields(), { materializeContent(it) }) {
+        override fun with(q: Query) = ContentQuery(q)
+    }
+
+    inner class PopularQuery(q: Query) : TypedQuery<PopularFields, Popular>(system, q, PopularFields(), { materializePopular(it) }) {
+        override fun with(q: Query) = PopularQuery(q)
+    }
+
     inner class PostCommentQuery(q: Query) : TypedQuery<PostCommentFields, PostComment>(system, q, PostCommentFields(), { materializePostComment(it) }) {
         override fun with(q: Query) = PostCommentQuery(q)
     }
@@ -226,66 +180,94 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun with(q: Query) = PhotoCommentQuery(q)
     }
 
+    /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
+    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+        "Member" -> materializeMember(id)
+        "Post" -> materializePost(id)
+        "Photo" -> materializePhoto(id)
+        "Comment" -> materializeComment(id)
+        "PopularityNotice" -> materializePopularityNotice(id)
+        "CommentNotice" -> materializeCommentNotice(id)
+        else -> throw IllegalStateException("no model object for '$shape'")
+    }
+
     fun materializeMember(id: Long): Member = Member(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        posts = (system.get(id, "posts") as List<*>).map { PostView(it as Long) },
-        photos = (system.get(id, "photos") as List<*>).map { PhotoView(it as Long) },
-        comments = (system.get(id, "comments") as List<*>).map { CommentView(it as Long) },
-        commentNotices = (system.get(id, "commentNotices") as List<*>).map { CommentNoticeView(it as Long) },
+        posts = (system.get(id, "posts") as List<*>).map { system.refFor(it as Long) },
+        photos = (system.get(id, "photos") as List<*>).map { system.refFor(it as Long) },
+        comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
+        commentNotices = (system.get(id, "commentNotices") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializePost(id: Long): Post = Post(
-        id = id,
-        author = MemberView(system.get(id, "author") as Long),
+        key = system.refFor(id).key,
+        author = system.refFor(system.get(id, "author") as Long),
         body = system.get(id, "body") as String,
-        comments = (system.get(id, "comments") as List<*>).map { CommentView(it as Long) },
-        popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { PopularityNoticeView(it as Long) },
+        comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
+        popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
+        commentCount = (system.getAs(id, "Content", "commentCount") as BigDecimal).intValueExact(),
+        isPopular = system.isMember(id, "Popular"),
     )
 
     fun materializePhoto(id: Long): Photo = Photo(
-        id = id,
-        author = MemberView(system.get(id, "author") as Long),
+        key = system.refFor(id).key,
+        author = system.refFor(system.get(id, "author") as Long),
         caption = system.get(id, "caption") as String,
-        comments = (system.get(id, "comments") as List<*>).map { CommentView(it as Long) },
-        popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { PopularityNoticeView(it as Long) },
+        comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
+        popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
+        commentCount = (system.getAs(id, "Content", "commentCount") as BigDecimal).intValueExact(),
+        isPopular = system.isMember(id, "Popular"),
     )
 
     fun materializeComment(id: Long): Comment = Comment(
-        id = id,
-        target = ContentView(system.get(id, "target") as Long),
-        author = MemberView(system.get(id, "author") as Long),
+        key = system.refFor(id).key,
+        target = system.refFor(system.get(id, "target") as Long),
+        author = system.refFor(system.get(id, "author") as Long),
         body = system.get(id, "body") as String,
-        commentNotices = (system.get(id, "commentNotices") as List<*>).map { CommentNoticeView(it as Long) },
+        commentNotices = (system.get(id, "commentNotices") as List<*>).map { system.refFor(it as Long) },
+        isPostComment = system.isMember(id, "PostComment"),
+        isPhotoComment = system.isMember(id, "PhotoComment"),
     )
 
     fun materializePopularityNotice(id: Long): PopularityNotice = PopularityNotice(
-        id = id,
-        content = ContentView(system.get(id, "content") as Long),
+        key = system.refFor(id).key,
+        content = system.refFor(system.get(id, "content") as Long),
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
     fun materializeCommentNotice(id: Long): CommentNotice = CommentNotice(
-        id = id,
-        recipient = MemberView(system.get(id, "recipient") as Long),
-        comment = CommentView(system.get(id, "comment") as Long),
+        key = system.refFor(id).key,
+        recipient = system.refFor(system.get(id, "recipient") as Long),
+        comment = system.refFor(system.get(id, "comment") as Long),
         excerpt = system.get(id, "excerpt") as String,
     )
 
+    fun materializeContent(id: Long): Content = materialize(id) as Content
+
+    fun materializePopular(id: Long): Popular = Popular(
+        key = system.refFor(id).key,
+        comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
+        popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
+        commentCount = (system.get(id, "commentCount") as BigDecimal).intValueExact(),
+    )
+
     fun materializePostComment(id: Long): PostComment = PostComment(
-        id = id,
-        target = ContentView(system.get(id, "target") as Long),
-        author = MemberView(system.get(id, "author") as Long),
+        key = system.refFor(id).key,
+        target = system.refFor(system.get(id, "target") as Long),
+        author = system.refFor(system.get(id, "author") as Long),
         body = system.get(id, "body") as String,
-        commentNotices = (system.get(id, "commentNotices") as List<*>).map { CommentNoticeView(it as Long) },
+        commentNotices = (system.get(id, "commentNotices") as List<*>).map { system.refFor(it as Long) },
+        isPhotoComment = system.isMember(id, "PhotoComment"),
     )
 
     fun materializePhotoComment(id: Long): PhotoComment = PhotoComment(
-        id = id,
-        target = ContentView(system.get(id, "target") as Long),
-        author = MemberView(system.get(id, "author") as Long),
+        key = system.refFor(id).key,
+        target = system.refFor(system.get(id, "target") as Long),
+        author = system.refFor(system.get(id, "author") as Long),
         body = system.get(id, "body") as String,
-        commentNotices = (system.get(id, "commentNotices") as List<*>).map { CommentNoticeView(it as Long) },
+        commentNotices = (system.get(id, "commentNotices") as List<*>).map { system.refFor(it as Long) },
+        isPostComment = system.isMember(id, "PostComment"),
     )
 
     companion object {
@@ -368,70 +350,138 @@ shape PhotoComment = Comment where target is Photo
     }
 }
 
-// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
-// References are typed handles (views); navigating one is a further read.
+// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// A model object is a reference to its own record (`Ref<T>`): equality is identity,
+// a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
+// the record's membership at the moment of the read.
 
 data class Member(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
-    val posts: List<GallerySystem.PostView>,
-    val photos: List<GallerySystem.PhotoView>,
-    val comments: List<GallerySystem.CommentView>,
-    val commentNotices: List<GallerySystem.CommentNoticeView>,
-) : View
+    val posts: List<Ref<Post>>,
+    val photos: List<Ref<Photo>>,
+    val comments: List<Ref<Comment>>,
+    val commentNotices: List<Ref<CommentNotice>>,
+) : Ref<Member> {
+    override val shape: String get() = "Member"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Post(
-    override val id: Long,
-    val author: GallerySystem.MemberView,
+    override val key: StoreKey,
+    val author: Ref<Member>,
     val body: String,
-    val comments: List<GallerySystem.CommentView>,
-    val popularityNotices: List<GallerySystem.PopularityNoticeView>,
-) : View
+    override val comments: List<Ref<Comment>>,
+    override val popularityNotices: List<Ref<PopularityNotice>>,
+    override val commentCount: Int,
+    /** membership of Popular at the moment of the read */
+    override val isPopular: Boolean,
+) : Ref<Post>, Content {
+    override val shape: String get() = "Post"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Photo(
-    override val id: Long,
-    val author: GallerySystem.MemberView,
+    override val key: StoreKey,
+    val author: Ref<Member>,
     val caption: String,
-    val comments: List<GallerySystem.CommentView>,
-    val popularityNotices: List<GallerySystem.PopularityNoticeView>,
-) : View
+    override val comments: List<Ref<Comment>>,
+    override val popularityNotices: List<Ref<PopularityNotice>>,
+    override val commentCount: Int,
+    /** membership of Popular at the moment of the read */
+    override val isPopular: Boolean,
+) : Ref<Photo>, Content {
+    override val shape: String get() = "Photo"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Comment(
-    override val id: Long,
-    val target: GallerySystem.ContentView,
-    val author: GallerySystem.MemberView,
+    override val key: StoreKey,
+    val target: Ref<Content>,
+    val author: Ref<Member>,
     val body: String,
-    val commentNotices: List<GallerySystem.CommentNoticeView>,
-) : View
+    val commentNotices: List<Ref<CommentNotice>>,
+    /** membership of PostComment at the moment of the read */
+    val isPostComment: Boolean,
+    /** membership of PhotoComment at the moment of the read */
+    val isPhotoComment: Boolean,
+) : Ref<Comment> {
+    override val shape: String get() = "Comment"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class PopularityNotice(
-    override val id: Long,
-    val content: GallerySystem.ContentView,
+    override val key: StoreKey,
+    val content: Ref<Content>,
     val noticedOn: Instant,
-) : View
+) : Ref<PopularityNotice> {
+    override val shape: String get() = "PopularityNotice"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class CommentNotice(
-    override val id: Long,
-    val recipient: GallerySystem.MemberView,
-    val comment: GallerySystem.CommentView,
+    override val key: StoreKey,
+    val recipient: Ref<Member>,
+    val comment: Ref<Comment>,
     val excerpt: String,
-) : View
+) : Ref<CommentNotice> {
+    override val shape: String get() = "CommentNotice"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
+interface Content : Keyed {
+    /** this record as a reference typed by the union, for a parameter that takes one */
+    val ref: Ref<Content> get() = Ref.Persisted(shape, key)
+    val comments: List<Ref<Comment>>
+    val popularityNotices: List<Ref<PopularityNotice>>
+    val commentCount: Int
+    val isPopular: Boolean
+}
+
+data class Popular(
+    override val key: StoreKey,
+    val comments: List<Ref<Comment>>,
+    val popularityNotices: List<Ref<PopularityNotice>>,
+    val commentCount: Int,
+) : Ref<Content> {
+    override val shape: String get() = "Content"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class PostComment(
-    override val id: Long,
-    val target: GallerySystem.ContentView,
-    val author: GallerySystem.MemberView,
+    override val key: StoreKey,
+    val target: Ref<Content>,
+    val author: Ref<Member>,
     val body: String,
-    val commentNotices: List<GallerySystem.CommentNoticeView>,
-) : View
+    val commentNotices: List<Ref<CommentNotice>>,
+    /** membership of PhotoComment at the moment of the read */
+    val isPhotoComment: Boolean,
+) : Ref<Comment> {
+    override val shape: String get() = "Comment"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class PhotoComment(
-    override val id: Long,
-    val target: GallerySystem.ContentView,
-    val author: GallerySystem.MemberView,
+    override val key: StoreKey,
+    val target: Ref<Content>,
+    val author: Ref<Member>,
     val body: String,
-    val commentNotices: List<GallerySystem.CommentNoticeView>,
-) : View
+    val commentNotices: List<Ref<CommentNotice>>,
+    /** membership of PostComment at the moment of the read */
+    val isPostComment: Boolean,
+) : Ref<Comment> {
+    override val shape: String get() = "Comment"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 // ── the builder's vocabulary: one field handle per member, memberships per refinement ──
 
@@ -442,15 +492,19 @@ class MemberFields(path: List<String> = emptyList()) : Fields(path) {
 class PostFields(path: List<String> = emptyList()) : Fields(path) {
     val author: MemberFields get() = MemberFields(fieldPath + "author")
     val body: TextField get() = TextField(fieldPath + "body")
+    val commentCount: NumField get() = NumField(fieldPath + "commentCount")
+    fun isPopular(): Expr = isA("Popular")
 }
 
 class PhotoFields(path: List<String> = emptyList()) : Fields(path) {
     val author: MemberFields get() = MemberFields(fieldPath + "author")
     val caption: TextField get() = TextField(fieldPath + "caption")
+    val commentCount: NumField get() = NumField(fieldPath + "commentCount")
+    fun isPopular(): Expr = isA("Popular")
 }
 
 class CommentFields(path: List<String> = emptyList()) : Fields(path) {
-    val target: RefField get() = RefField(fieldPath + "target")
+    val target: ContentFields get() = ContentFields(fieldPath + "target")
     val author: MemberFields get() = MemberFields(fieldPath + "author")
     val body: TextField get() = TextField(fieldPath + "body")
     fun isPostComment(): Expr = isA("PostComment")
@@ -458,7 +512,7 @@ class CommentFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class PopularityNoticeFields(path: List<String> = emptyList()) : Fields(path) {
-    val content: RefField get() = RefField(fieldPath + "content")
+    val content: ContentFields get() = ContentFields(fieldPath + "content")
     val noticedOn: DateTimeField get() = DateTimeField(fieldPath + "noticedOn")
 }
 
@@ -468,15 +522,24 @@ class CommentNoticeFields(path: List<String> = emptyList()) : Fields(path) {
     val excerpt: TextField get() = TextField(fieldPath + "excerpt")
 }
 
+class ContentFields(path: List<String> = emptyList()) : Fields(path) {
+    val commentCount: NumField get() = NumField(fieldPath + "commentCount")
+    fun isPopular(): Expr = isA("Popular")
+}
+
+class PopularFields(path: List<String> = emptyList()) : Fields(path) {
+    val commentCount: NumField get() = NumField(fieldPath + "commentCount")
+}
+
 class PostCommentFields(path: List<String> = emptyList()) : Fields(path) {
-    val target: RefField get() = RefField(fieldPath + "target")
+    val target: ContentFields get() = ContentFields(fieldPath + "target")
     val author: MemberFields get() = MemberFields(fieldPath + "author")
     val body: TextField get() = TextField(fieldPath + "body")
     fun isPhotoComment(): Expr = isA("PhotoComment")
 }
 
 class PhotoCommentFields(path: List<String> = emptyList()) : Fields(path) {
-    val target: RefField get() = RefField(fieldPath + "target")
+    val target: ContentFields get() = ContentFields(fieldPath + "target")
     val author: MemberFields get() = MemberFields(fieldPath + "author")
     val body: TextField get() = TextField(fieldPath + "body")
     fun isPostComment(): Expr = isA("PostComment")

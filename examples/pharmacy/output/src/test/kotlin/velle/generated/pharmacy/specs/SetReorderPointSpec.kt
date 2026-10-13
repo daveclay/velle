@@ -31,7 +31,7 @@ class SetReorderPointSpec : SpecSupport() {
         // given: any committed 'Staff'
         val requestedBy = givens.someStaff()
         val before = count("SetReorderPoint")
-        val result = sys.system.commit("SetReorderPoint", mapOf("drug" to drug.id, "requestedBy" to requestedBy.id, "reorderPoint" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("SetReorderPoint", mapOf("drug" to idOf(drug), "requestedBy" to idOf(requestedBy), "reorderPoint" to java.math.BigDecimal("-1")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("SetReorderPoint"), "a refused act commits nothing")
     }
@@ -42,7 +42,7 @@ class SetReorderPointSpec : SpecSupport() {
         val drug = givens.someDrug()
         // given: any committed 'Staff'
         val requestedBy = givens.someStaff()
-        val result = sys.system.commit("SetReorderPoint", mapOf("drug" to drug.id, "requestedBy" to requestedBy.id, "reorderPoint" to java.math.BigDecimal("0")))
+        val result = sys.system.commit("SetReorderPoint", mapOf("drug" to idOf(drug), "requestedBy" to idOf(requestedBy), "reorderPoint" to java.math.BigDecimal("0")))
         assertIs<CommitResult.Accepted>(result)
     }
 }

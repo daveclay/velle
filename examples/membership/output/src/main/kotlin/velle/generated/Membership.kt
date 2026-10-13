@@ -41,29 +41,29 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
      *  System-wide over AuditEntry — creates AuditEntry referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitSignUp(name: String, signupEmail: String, plan: PlanView, referredBy: MemberView? = null): CommitResult =
+    fun commitSignUp(name: String, signupEmail: String, plan: Ref<Plan>, referredBy: Ref<Member>? = null): CommitResult =
         system.commit("SignUp", buildMap {
             put("name", name)
             put("signupEmail", signupEmail)
-            put("plan", plan.id)
-            referredBy?.let { put("referredBy", it.id) }
+            put("plan", system.idOf(plan))
+            referredBy?.let { put("referredBy", system.idOf(it)) }
         })
 
     /** Queue key: [changeEmail.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitChangeEmail(member: MemberView, newEmail: String): CommitResult =
+    fun commitChangeEmail(member: Ref<Member>, newEmail: String): CommitResult =
         system.commit("ChangeEmail", buildMap {
-            put("member", member.id)
+            put("member", system.idOf(member))
             put("newEmail", newEmail)
         })
 
     /** Queue keys: [visit.member], [visit.member.plan], [visit.member.referredBy].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitVisit(member: MemberView, minutes: Int): CommitResult =
+    fun commitVisit(member: Ref<Member>, minutes: Int): CommitResult =
         system.commit("Visit", buildMap {
-            put("member", member.id)
+            put("member", system.idOf(member))
             put("minutes", minutes)
         })
 
@@ -76,9 +76,9 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
      *  System-wide over AuditEntry — creates AuditEntry referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitMakeDeposit(member: MemberView, amount: BigDecimal): CommitResult =
+    fun commitMakeDeposit(member: Ref<Member>, amount: BigDecimal): CommitResult =
         system.commit("MakeDeposit", buildMap {
-            put("member", member.id)
+            put("member", system.idOf(member))
             put("amount", amount)
         })
 
@@ -95,440 +95,272 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
      *  System-wide over ReopenNotice — creates ReopenNotice referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitRaiseTicket(member: MemberView, subject: String, due: LocalDate, priority: String, assignee: AgentView? = null): CommitResult =
+    fun commitRaiseTicket(member: Ref<Member>, subject: String, due: LocalDate, priority: String, assignee: Ref<Agent>? = null): CommitResult =
         system.commit("RaiseTicket", buildMap {
-            put("member", member.id)
+            put("member", system.idOf(member))
             put("subject", subject)
             put("due", due)
             put("priority", priority)
-            assignee?.let { put("assignee", it.id) }
+            assignee?.let { put("assignee", system.idOf(it)) }
         })
 
     /** Queue keys: [closeTicket.closedBy], [closeTicket.ticket], [closeTicket.ticket.closedBy].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCloseTicket(ticket: TicketView, closedBy: AgentView): CommitResult =
+    fun commitCloseTicket(ticket: Ref<Ticket>, closedBy: Ref<Agent>): CommitResult =
         system.commit("CloseTicket", buildMap {
-            put("ticket", ticket.id)
-            put("closedBy", closedBy.id)
+            put("ticket", system.idOf(ticket))
+            put("closedBy", system.idOf(closedBy))
         })
 
     /** Queue keys: [reopenTicket.ticket], [reopenTicket.ticket.closedBy].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitReopenTicket(ticket: TicketView): CommitResult =
+    fun commitReopenTicket(ticket: Ref<Ticket>): CommitResult =
         system.commit("ReopenTicket", buildMap {
-            put("ticket", ticket.id)
+            put("ticket", system.idOf(ticket))
         })
 
     /** Queue keys: [assignTicket.agent], [assignTicket.ticket], [assignTicket.ticket.assignee], [assignTicket.ticket.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitAssignTicket(ticket: TicketView, agent: AgentView): CommitResult =
+    fun commitAssignTicket(ticket: Ref<Ticket>, agent: Ref<Agent>): CommitResult =
         system.commit("AssignTicket", buildMap {
-            put("ticket", ticket.id)
-            put("agent", agent.id)
+            put("ticket", system.idOf(ticket))
+            put("agent", system.idOf(agent))
         })
 
-    fun plans(): List<PlanView> = system.instancesOf("Plan").map { PlanView(it) }
-    fun plan(id: Long) = PlanView(id)
-    fun members(): List<MemberView> = system.instancesOf("Member").map { MemberView(it) }
-    fun member(id: Long) = MemberView(id)
-    fun welcomeNotes(): List<WelcomeNoteView> = system.instancesOf("WelcomeNote").map { WelcomeNoteView(it) }
-    fun welcomeNote(id: Long) = WelcomeNoteView(id)
-    fun emailChanges(): List<EmailChangeView> = system.instancesOf("EmailChange").map { EmailChangeView(it) }
-    fun emailChange(id: Long) = EmailChangeView(id)
-    fun visits(): List<VisitView> = system.instancesOf("Visit").map { VisitView(it) }
-    fun visit(id: Long) = VisitView(id)
-    fun analyticsPings(): List<AnalyticsPingView> = system.instancesOf("AnalyticsPing").map { AnalyticsPingView(it) }
-    fun analyticsPing(id: Long) = AnalyticsPingView(id)
-    fun deposits(): List<DepositView> = system.instancesOf("Deposit").map { DepositView(it) }
-    fun deposit(id: Long) = DepositView(id)
-    fun charges(): List<ChargeView> = system.instancesOf("Charge").map { ChargeView(it) }
-    fun charge(id: Long) = ChargeView(id)
-    fun chargeApplications(): List<ChargeApplicationView> = system.instancesOf("ChargeApplication").map { ChargeApplicationView(it) }
-    fun chargeApplication(id: Long) = ChargeApplicationView(id)
-    fun delinquencyFlags(): List<DelinquencyFlagView> = system.instancesOf("DelinquencyFlag").map { DelinquencyFlagView(it) }
-    fun delinquencyFlag(id: Long) = DelinquencyFlagView(id)
-    fun delinquencyResolutions(): List<DelinquencyResolutionView> = system.instancesOf("DelinquencyResolution").map { DelinquencyResolutionView(it) }
-    fun delinquencyResolution(id: Long) = DelinquencyResolutionView(id)
-    fun auditEntrys(): List<AuditEntryView> = system.instancesOf("AuditEntry").map { AuditEntryView(it) }
-    fun auditEntry(id: Long) = AuditEntryView(id)
-    fun accountReviews(): List<AccountReviewView> = system.instancesOf("AccountReview").map { AccountReviewView(it) }
-    fun accountReview(id: Long) = AccountReviewView(id)
-    fun agents(): List<AgentView> = system.instancesOf("Agent").map { AgentView(it) }
-    fun agent(id: Long) = AgentView(id)
-    fun tickets(): List<TicketView> = system.instancesOf("Ticket").map { TicketView(it) }
-    fun ticket(id: Long) = TicketView(id)
-    fun ticketClosures(): List<TicketClosureView> = system.instancesOf("TicketClosure").map { TicketClosureView(it) }
-    fun ticketClosure(id: Long) = TicketClosureView(id)
-    fun reopenTickets(): List<ReopenTicketView> = system.instancesOf("ReopenTicket").map { ReopenTicketView(it) }
-    fun reopenTicket(id: Long) = ReopenTicketView(id)
-    fun reopenNotices(): List<ReopenNoticeView> = system.instancesOf("ReopenNotice").map { ReopenNoticeView(it) }
-    fun reopenNotice(id: Long) = ReopenNoticeView(id)
-    fun escalations(): List<EscalationView> = system.instancesOf("Escalation").map { EscalationView(it) }
-    fun escalation(id: Long) = EscalationView(id)
-    fun selfReferrals(): List<SelfReferralView> = system.instancesOf("SelfReferral").map { SelfReferralView(it) }
-    fun MemberView.isSelfReferral(): Boolean = system.isMember(id, "SelfReferral")
-    fun unappliedDeposits(): List<UnappliedDepositView> = system.instancesOf("UnappliedDeposit").map { UnappliedDepositView(it) }
-    fun DepositView.isUnappliedDeposit(): Boolean = system.isMember(id, "UnappliedDeposit")
-    fun activeMembers(): List<ActiveMemberView> = system.instancesOf("ActiveMember").map { ActiveMemberView(it) }
-    fun MemberView.isActiveMember(): Boolean = system.isMember(id, "ActiveMember")
-    fun unappliedCharges(): List<UnappliedChargeView> = system.instancesOf("UnappliedCharge").map { UnappliedChargeView(it) }
-    fun ChargeView.isUnappliedCharge(): Boolean = system.isMember(id, "UnappliedCharge")
-    fun delinquents(): List<DelinquentView> = system.instancesOf("Delinquent").map { DelinquentView(it) }
-    fun MemberView.isDelinquent(): Boolean = system.isMember(id, "Delinquent")
-    fun deepDelinquents(): List<DeepDelinquentView> = system.instancesOf("DeepDelinquent").map { DeepDelinquentView(it) }
-    fun MemberView.isDeepDelinquent(): Boolean = system.isMember(id, "DeepDelinquent")
-    fun openDelinquencyFlags(): List<OpenDelinquencyFlagView> = system.instancesOf("OpenDelinquencyFlag").map { OpenDelinquencyFlagView(it) }
-    fun DelinquencyFlagView.isOpenDelinquencyFlag(): Boolean = system.isMember(id, "OpenDelinquencyFlag")
-    fun chronicDelinquents(): List<ChronicDelinquentView> = system.instancesOf("ChronicDelinquent").map { ChronicDelinquentView(it) }
-    fun MemberView.isChronicDelinquent(): Boolean = system.isMember(id, "ChronicDelinquent")
-    fun closedTickets(): List<ClosedTicketView> = system.instancesOf("ClosedTicket").map { ClosedTicketView(it) }
-    fun TicketView.isClosedTicket(): Boolean = system.isMember(id, "ClosedTicket")
-    fun openTickets(): List<OpenTicketView> = system.instancesOf("OpenTicket").map { OpenTicketView(it) }
-    fun TicketView.isOpenTicket(): Boolean = system.isMember(id, "OpenTicket")
-    fun overdueTickets(): List<OverdueTicketView> = system.instancesOf("OverdueTicket").map { OverdueTicketView(it) }
-    fun TicketView.isOverdueTicket(): Boolean = system.isMember(id, "OverdueTicket")
-    fun highPrioritys(): List<HighPriorityView> = system.instancesOf("HighPriority").map { HighPriorityView(it) }
-    fun TicketView.isHighPriority(): Boolean = system.isMember(id, "HighPriority")
-    fun unassigneds(): List<UnassignedView> = system.instancesOf("Unassigned").map { UnassignedView(it) }
-    fun TicketView.isUnassigned(): Boolean = system.isMember(id, "Unassigned")
-    fun needsAttentions(): List<NeedsAttentionView> = system.instancesOf("NeedsAttention").map { NeedsAttentionView(it) }
-    fun TicketView.isNeedsAttention(): Boolean = system.isMember(id, "NeedsAttention")
-    fun urgentQueues(): List<UrgentQueueView> = system.instancesOf("UrgentQueue").map { UrgentQueueView(it) }
-    fun TicketView.isUrgentQueue(): Boolean = system.isMember(id, "UrgentQueue")
-    fun memberWithDisputedCharges(): List<MemberWithDisputedChargeView> = system.instancesOf("MemberWithDisputedCharge").map { MemberWithDisputedChargeView(it) }
-    fun MemberView.isMemberWithDisputedCharge(): Boolean = system.isMember(id, "MemberWithDisputedCharge")
-    fun lateEscalatedMembers(): List<LateEscalatedMemberView> = system.instancesOf("LateEscalatedMember").map { LateEscalatedMemberView(it) }
-    fun MemberView.isLateEscalatedMember(): Boolean = system.isMember(id, "LateEscalatedMember")
+    fun plans(): List<Plan> = system.instancesOf("Plan").map { materializePlan(it) }
+    fun members(): List<Member> = system.instancesOf("Member").map { materializeMember(it) }
+    fun welcomeNotes(): List<WelcomeNote> = system.instancesOf("WelcomeNote").map { materializeWelcomeNote(it) }
+    fun emailChanges(): List<EmailChange> = system.instancesOf("EmailChange").map { materializeEmailChange(it) }
+    fun visits(): List<Visit> = system.instancesOf("Visit").map { materializeVisit(it) }
+    fun analyticsPings(): List<AnalyticsPing> = system.instancesOf("AnalyticsPing").map { materializeAnalyticsPing(it) }
+    fun deposits(): List<Deposit> = system.instancesOf("Deposit").map { materializeDeposit(it) }
+    fun charges(): List<Charge> = system.instancesOf("Charge").map { materializeCharge(it) }
+    fun chargeApplications(): List<ChargeApplication> = system.instancesOf("ChargeApplication").map { materializeChargeApplication(it) }
+    fun delinquencyFlags(): List<DelinquencyFlag> = system.instancesOf("DelinquencyFlag").map { materializeDelinquencyFlag(it) }
+    fun delinquencyResolutions(): List<DelinquencyResolution> = system.instancesOf("DelinquencyResolution").map { materializeDelinquencyResolution(it) }
+    fun auditEntrys(): List<AuditEntry> = system.instancesOf("AuditEntry").map { materializeAuditEntry(it) }
+    fun accountReviews(): List<AccountReview> = system.instancesOf("AccountReview").map { materializeAccountReview(it) }
+    fun agents(): List<Agent> = system.instancesOf("Agent").map { materializeAgent(it) }
+    fun tickets(): List<Ticket> = system.instancesOf("Ticket").map { materializeTicket(it) }
+    fun ticketClosures(): List<TicketClosure> = system.instancesOf("TicketClosure").map { materializeTicketClosure(it) }
+    fun reopenTickets(): List<ReopenTicket> = system.instancesOf("ReopenTicket").map { materializeReopenTicket(it) }
+    fun reopenNotices(): List<ReopenNotice> = system.instancesOf("ReopenNotice").map { materializeReopenNotice(it) }
+    fun escalations(): List<Escalation> = system.instancesOf("Escalation").map { materializeEscalation(it) }
+    fun selfReferrals(): List<SelfReferral> = system.instancesOf("SelfReferral").map { materializeSelfReferral(it) }
+    fun unappliedDeposits(): List<UnappliedDeposit> = system.instancesOf("UnappliedDeposit").map { materializeUnappliedDeposit(it) }
+    fun activeMembers(): List<ActiveMember> = system.instancesOf("ActiveMember").map { materializeActiveMember(it) }
+    fun unappliedCharges(): List<UnappliedCharge> = system.instancesOf("UnappliedCharge").map { materializeUnappliedCharge(it) }
+    fun delinquents(): List<Delinquent> = system.instancesOf("Delinquent").map { materializeDelinquent(it) }
+    fun deepDelinquents(): List<DeepDelinquent> = system.instancesOf("DeepDelinquent").map { materializeDeepDelinquent(it) }
+    fun openDelinquencyFlags(): List<OpenDelinquencyFlag> = system.instancesOf("OpenDelinquencyFlag").map { materializeOpenDelinquencyFlag(it) }
+    fun chronicDelinquents(): List<ChronicDelinquent> = system.instancesOf("ChronicDelinquent").map { materializeChronicDelinquent(it) }
+    fun closedTickets(): List<ClosedTicket> = system.instancesOf("ClosedTicket").map { materializeClosedTicket(it) }
+    fun openTickets(): List<OpenTicket> = system.instancesOf("OpenTicket").map { materializeOpenTicket(it) }
+    fun overdueTickets(): List<OverdueTicket> = system.instancesOf("OverdueTicket").map { materializeOverdueTicket(it) }
+    fun highPrioritys(): List<HighPriority> = system.instancesOf("HighPriority").map { materializeHighPriority(it) }
+    fun unassigneds(): List<Unassigned> = system.instancesOf("Unassigned").map { materializeUnassigned(it) }
+    fun needsAttentions(): List<NeedsAttention> = system.instancesOf("NeedsAttention").map { materializeNeedsAttention(it) }
+    fun urgentQueues(): List<UrgentQueue> = system.instancesOf("UrgentQueue").map { materializeUrgentQueue(it) }
+    fun memberWithDisputedCharges(): List<MemberWithDisputedCharge> = system.instancesOf("MemberWithDisputedCharge").map { materializeMemberWithDisputedCharge(it) }
+    fun lateEscalatedMembers(): List<LateEscalatedMember> = system.instancesOf("LateEscalatedMember").map { materializeLateEscalatedMember(it) }
 
-    inner class PlanView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val price: BigDecimal get() = system.get(id, "price") as BigDecimal
-        val members: List<MemberView> get() = (system.get(id, "members") as List<*>).map { MemberView(it as Long) }
-        override fun toString() = "Plan#$id"
-        override fun equals(other: Any?) = other is PlanView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class MemberView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val signupEmail: String get() = system.get(id, "signupEmail") as String
-        val plan: PlanView get() = PlanView(system.get(id, "plan") as Long)
-        val referredBy: MemberView? get() = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) }
-        val joinedOn: Instant get() = system.get(id, "joinedOn") as Instant
-        val lastChangedOn: Instant get() = system.get(id, "lastChangedOn") as Instant
-        val balance: BigDecimal get() = system.get(id, "balance") as BigDecimal
-        val lowestBalance: BigDecimal get() = system.get(id, "lowestBalance") as BigDecimal
-        val visitCount: Long get() = (system.get(id, "visitCount") as BigDecimal).longValueExact()
-        val suspended: Boolean get() = system.get(id, "suspended") as Boolean
-        val engagementScore: Double get() = (system.get(id, "engagementScore") as BigDecimal).toDouble()
-        val totalDeposited: BigDecimal get() = system.get(id, "totalDeposited") as BigDecimal
-        val email: String get() = system.get(id, "email") as String
-        val members: List<MemberView> get() = (system.get(id, "members") as List<*>).map { MemberView(it as Long) }
-        val welcomeNotes: List<WelcomeNoteView> get() = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) }
-        val emailChanges: List<EmailChangeView> get() = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) }
-        val visits: List<VisitView> get() = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) }
-        val deposits: List<DepositView> get() = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) }
-        val charges: List<ChargeView> get() = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) }
-        val delinquencyFlags: List<DelinquencyFlagView> get() = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) }
-        val auditEntrys: List<AuditEntryView> get() = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) }
-        val accountReviews: List<AccountReviewView> get() = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) }
-        val tickets: List<TicketView> get() = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) }
-        override fun toString() = "Member#$id"
-        override fun equals(other: Any?) = other is MemberView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class WelcomeNoteView(override val id: Long) : View {
-        val member: MemberView get() = MemberView(system.get(id, "member") as Long)
-        val sentOn: Instant get() = system.get(id, "sentOn") as Instant
-        override fun toString() = "WelcomeNote#$id"
-        override fun equals(other: Any?) = other is WelcomeNoteView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class EmailChangeView(override val id: Long) : View {
-        val member: MemberView get() = MemberView(system.get(id, "member") as Long)
-        val newEmail: String get() = system.get(id, "newEmail") as String
-        val changedOn: Instant get() = system.get(id, "changedOn") as Instant
-        override fun toString() = "EmailChange#$id"
-        override fun equals(other: Any?) = other is EmailChangeView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class VisitView(override val id: Long) : View {
-        val member: MemberView get() = MemberView(system.get(id, "member") as Long)
-        val minutes: Int get() = (system.get(id, "minutes") as BigDecimal).intValueExact()
-        val analyticsPings: List<AnalyticsPingView> get() = (system.get(id, "analyticsPings") as List<*>).map { AnalyticsPingView(it as Long) }
-        override fun toString() = "Visit#$id"
-        override fun equals(other: Any?) = other is VisitView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class AnalyticsPingView(override val id: Long) : View {
-        val visit: VisitView get() = VisitView(system.get(id, "visit") as Long)
-        val pingedOn: Instant get() = system.get(id, "pingedOn") as Instant
-        override fun toString() = "AnalyticsPing#$id"
-        override fun equals(other: Any?) = other is AnalyticsPingView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class DepositView(override val id: Long) : View {
-        val member: MemberView get() = MemberView(system.get(id, "member") as Long)
-        val amount: BigDecimal get() = system.get(id, "amount") as BigDecimal
-        val applied: Boolean get() = system.get(id, "applied") as Boolean
-        override fun toString() = "Deposit#$id"
-        override fun equals(other: Any?) = other is DepositView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ChargeView(override val id: Long) : View {
-        val member: MemberView get() = MemberView(system.get(id, "member") as Long)
-        val amount: BigDecimal get() = system.get(id, "amount") as BigDecimal
-        val reference: String get() = system.get(id, "reference") as String
-        val requestedOn: LocalDate get() = system.get(id, "requestedOn") as LocalDate
-        val chargeApplications: List<ChargeApplicationView> get() = (system.get(id, "chargeApplications") as List<*>).map { ChargeApplicationView(it as Long) }
-        override fun toString() = "Charge#$id"
-        override fun equals(other: Any?) = other is ChargeView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ChargeApplicationView(override val id: Long) : View {
-        val charge: ChargeView get() = ChargeView(system.get(id, "charge") as Long)
-        val appliedOn: Instant get() = system.get(id, "appliedOn") as Instant
-        override fun toString() = "ChargeApplication#$id"
-        override fun equals(other: Any?) = other is ChargeApplicationView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class DelinquencyFlagView(override val id: Long) : View {
-        val member: MemberView get() = MemberView(system.get(id, "member") as Long)
-        val flaggedOn: LocalDate get() = system.get(id, "flaggedOn") as LocalDate
-        val delinquencyResolutions: List<DelinquencyResolutionView> get() = (system.get(id, "delinquencyResolutions") as List<*>).map { DelinquencyResolutionView(it as Long) }
-        override fun toString() = "DelinquencyFlag#$id"
-        override fun equals(other: Any?) = other is DelinquencyFlagView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class DelinquencyResolutionView(override val id: Long) : View {
-        val flag: DelinquencyFlagView get() = DelinquencyFlagView(system.get(id, "flag") as Long)
-        val resolvedOn: LocalDate get() = system.get(id, "resolvedOn") as LocalDate
-        override fun toString() = "DelinquencyResolution#$id"
-        override fun equals(other: Any?) = other is DelinquencyResolutionView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class AuditEntryView(override val id: Long) : View {
-        val member: MemberView get() = MemberView(system.get(id, "member") as Long)
-        val note: String get() = system.get(id, "note") as String
-        val loggedOn: Instant get() = system.get(id, "loggedOn") as Instant
-        override fun toString() = "AuditEntry#$id"
-        override fun equals(other: Any?) = other is AuditEntryView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class AccountReviewView(override val id: Long) : View {
-        val member: MemberView get() = MemberView(system.get(id, "member") as Long)
-        val openedOn: Instant get() = system.get(id, "openedOn") as Instant
-        override fun toString() = "AccountReview#$id"
-        override fun equals(other: Any?) = other is AccountReviewView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class AgentView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val email: String get() = system.get(id, "email") as String
-        val tickets: List<TicketView> get() = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) }
-        val ticketClosures: List<TicketClosureView> get() = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) }
-        val reopenNotices: List<ReopenNoticeView> get() = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) }
-        override fun toString() = "Agent#$id"
-        override fun equals(other: Any?) = other is AgentView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class TicketView(override val id: Long) : View {
-        val member: MemberView get() = MemberView(system.get(id, "member") as Long)
-        val subject: String get() = system.get(id, "subject") as String
-        val due: LocalDate get() = system.get(id, "due") as LocalDate
-        val priority: String get() = system.get(id, "priority") as String
-        val assignee: AgentView? get() = (system.get(id, "assignee") as Long?)?.let { AgentView(it) }
-        val openedOn: Instant get() = system.get(id, "openedOn") as Instant
-        val assigneeEmail: String? get() = system.get(id, "assigneeEmail") as String?
-        val contact: String get() = system.get(id, "contact") as String
-        val ticketClosures: List<TicketClosureView> get() = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) }
-        val reopenTickets: List<ReopenTicketView> get() = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) }
-        val reopenNotices: List<ReopenNoticeView> get() = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) }
-        val escalations: List<EscalationView> get() = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) }
-        override fun toString() = "Ticket#$id"
-        override fun equals(other: Any?) = other is TicketView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class TicketClosureView(override val id: Long) : View {
-        val ticket: TicketView get() = TicketView(system.get(id, "ticket") as Long)
-        val closedBy: AgentView get() = AgentView(system.get(id, "closedBy") as Long)
-        val closedOn: Instant get() = system.get(id, "closedOn") as Instant
-        override fun toString() = "TicketClosure#$id"
-        override fun equals(other: Any?) = other is TicketClosureView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ReopenTicketView(override val id: Long) : View {
-        val ticket: TicketView get() = TicketView(system.get(id, "ticket") as Long)
-        override fun toString() = "ReopenTicket#$id"
-        override fun equals(other: Any?) = other is ReopenTicketView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ReopenNoticeView(override val id: Long) : View {
-        val ticket: TicketView get() = TicketView(system.get(id, "ticket") as Long)
-        val reassignTo: AgentView get() = AgentView(system.get(id, "reassignTo") as Long)
-        val noticedOn: Instant get() = system.get(id, "noticedOn") as Instant
-        override fun toString() = "ReopenNotice#$id"
-        override fun equals(other: Any?) = other is ReopenNoticeView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class EscalationView(override val id: Long) : View {
-        val ticket: TicketView get() = TicketView(system.get(id, "ticket") as Long)
-        val raisedOn: LocalDate get() = system.get(id, "raisedOn") as LocalDate
-        override fun toString() = "Escalation#$id"
-        override fun equals(other: Any?) = other is EscalationView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class SelfReferralView(override val id: Long) : View {
-        fun asMember() = MemberView(id)
-        override fun toString() = "SelfReferral#$id"
-    }
-
-    inner class UnappliedDepositView(override val id: Long) : View {
-        fun asDeposit() = DepositView(id)
-        override fun toString() = "UnappliedDeposit#$id"
-    }
-
-    inner class ActiveMemberView(override val id: Long) : View {
-        fun asMember() = MemberView(id)
-        override fun toString() = "ActiveMember#$id"
-    }
-
-    inner class UnappliedChargeView(override val id: Long) : View {
-        fun asCharge() = ChargeView(id)
-        override fun toString() = "UnappliedCharge#$id"
-    }
-
-    inner class DelinquentView(override val id: Long) : View {
-        fun asMember() = MemberView(id)
-        override fun toString() = "Delinquent#$id"
-    }
-
-    inner class DeepDelinquentView(override val id: Long) : View {
-        fun asMember() = MemberView(id)
-        override fun toString() = "DeepDelinquent#$id"
-    }
-
-    inner class OpenDelinquencyFlagView(override val id: Long) : View {
-        fun asDelinquencyFlag() = DelinquencyFlagView(id)
-        override fun toString() = "OpenDelinquencyFlag#$id"
-    }
-
-    inner class ChronicDelinquentView(override val id: Long) : View {
-        fun asMember() = MemberView(id)
-        override fun toString() = "ChronicDelinquent#$id"
-    }
-
-    inner class ClosedTicketView(override val id: Long) : View {
-        fun asTicket() = TicketView(id)
-        val closedOn: LocalDate get() = system.getAs(id, "ClosedTicket", "closedOn") as LocalDate
-        val closedBy: AgentView get() = AgentView(system.getAs(id, "ClosedTicket", "closedBy") as Long)
-        override fun toString() = "ClosedTicket#$id"
-    }
-
-    inner class OpenTicketView(override val id: Long) : View {
-        fun asTicket() = TicketView(id)
-        override fun toString() = "OpenTicket#$id"
-    }
-
-    inner class OverdueTicketView(override val id: Long) : View {
-        fun asTicket() = TicketView(id)
-        override fun toString() = "OverdueTicket#$id"
-    }
-
-    inner class HighPriorityView(override val id: Long) : View {
-        fun asTicket() = TicketView(id)
-        override fun toString() = "HighPriority#$id"
-    }
-
-    inner class UnassignedView(override val id: Long) : View {
-        fun asTicket() = TicketView(id)
-        override fun toString() = "Unassigned#$id"
-    }
-
-    inner class NeedsAttentionView(override val id: Long) : View {
-        fun asTicket() = TicketView(id)
-        override fun toString() = "NeedsAttention#$id"
-    }
-
-    inner class UrgentQueueView(override val id: Long) : View {
-        fun asTicket() = TicketView(id)
-        override fun toString() = "UrgentQueue#$id"
-    }
-
-    inner class MemberWithDisputedChargeView(override val id: Long) : View {
-        fun asMember() = MemberView(id)
-        override fun toString() = "MemberWithDisputedCharge#$id"
-    }
-
-    inner class LateEscalatedMemberView(override val id: Long) : View {
-        fun asMember() = MemberView(id)
-        override fun toString() = "LateEscalatedMember#$id"
-    }
-
-    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
     val read = Read()
 
     inner class Read {
         /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
         val registry = QueryRegistry()
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+
+        /** The model object behind a reference, read now; throws when the record no longer exists. */
+        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
+        fun fetch(id: Long): Ref<*> {
+            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
+            return materialize(id)
+        }
+
         val plans: PlanQuery get() = PlanQuery(Query("Plan"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun plan(key: StoreKey): Plan = this(Ref.Persisted("Plan", key))
+        fun plan(key: Long): Plan = plan(StoreKey(key))
+
         val members: MemberQuery get() = MemberQuery(Query("Member"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun member(key: StoreKey): Member = this(Ref.Persisted("Member", key))
+        fun member(key: Long): Member = member(StoreKey(key))
+
         val welcomeNotes: WelcomeNoteQuery get() = WelcomeNoteQuery(Query("WelcomeNote"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun welcomeNote(key: StoreKey): WelcomeNote = this(Ref.Persisted("WelcomeNote", key))
+        fun welcomeNote(key: Long): WelcomeNote = welcomeNote(StoreKey(key))
+
         val emailChanges: EmailChangeQuery get() = EmailChangeQuery(Query("EmailChange"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun emailChange(key: StoreKey): EmailChange = this(Ref.Persisted("EmailChange", key))
+        fun emailChange(key: Long): EmailChange = emailChange(StoreKey(key))
+
         val visits: VisitQuery get() = VisitQuery(Query("Visit"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun visit(key: StoreKey): Visit = this(Ref.Persisted("Visit", key))
+        fun visit(key: Long): Visit = visit(StoreKey(key))
+
         val analyticsPings: AnalyticsPingQuery get() = AnalyticsPingQuery(Query("AnalyticsPing"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun analyticsPing(key: StoreKey): AnalyticsPing = this(Ref.Persisted("AnalyticsPing", key))
+        fun analyticsPing(key: Long): AnalyticsPing = analyticsPing(StoreKey(key))
+
         val deposits: DepositQuery get() = DepositQuery(Query("Deposit"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun deposit(key: StoreKey): Deposit = this(Ref.Persisted("Deposit", key))
+        fun deposit(key: Long): Deposit = deposit(StoreKey(key))
+
         val charges: ChargeQuery get() = ChargeQuery(Query("Charge"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun charge(key: StoreKey): Charge = this(Ref.Persisted("Charge", key))
+        fun charge(key: Long): Charge = charge(StoreKey(key))
+
         val chargeApplications: ChargeApplicationQuery get() = ChargeApplicationQuery(Query("ChargeApplication"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun chargeApplication(key: StoreKey): ChargeApplication = this(Ref.Persisted("ChargeApplication", key))
+        fun chargeApplication(key: Long): ChargeApplication = chargeApplication(StoreKey(key))
+
         val delinquencyFlags: DelinquencyFlagQuery get() = DelinquencyFlagQuery(Query("DelinquencyFlag"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun delinquencyFlag(key: StoreKey): DelinquencyFlag = this(Ref.Persisted("DelinquencyFlag", key))
+        fun delinquencyFlag(key: Long): DelinquencyFlag = delinquencyFlag(StoreKey(key))
+
         val delinquencyResolutions: DelinquencyResolutionQuery get() = DelinquencyResolutionQuery(Query("DelinquencyResolution"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun delinquencyResolution(key: StoreKey): DelinquencyResolution = this(Ref.Persisted("DelinquencyResolution", key))
+        fun delinquencyResolution(key: Long): DelinquencyResolution = delinquencyResolution(StoreKey(key))
+
         val auditEntrys: AuditEntryQuery get() = AuditEntryQuery(Query("AuditEntry"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun auditEntry(key: StoreKey): AuditEntry = this(Ref.Persisted("AuditEntry", key))
+        fun auditEntry(key: Long): AuditEntry = auditEntry(StoreKey(key))
+
         val accountReviews: AccountReviewQuery get() = AccountReviewQuery(Query("AccountReview"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun accountReview(key: StoreKey): AccountReview = this(Ref.Persisted("AccountReview", key))
+        fun accountReview(key: Long): AccountReview = accountReview(StoreKey(key))
+
         val agents: AgentQuery get() = AgentQuery(Query("Agent"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun agent(key: StoreKey): Agent = this(Ref.Persisted("Agent", key))
+        fun agent(key: Long): Agent = agent(StoreKey(key))
+
         val tickets: TicketQuery get() = TicketQuery(Query("Ticket"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun ticket(key: StoreKey): Ticket = this(Ref.Persisted("Ticket", key))
+        fun ticket(key: Long): Ticket = ticket(StoreKey(key))
+
         val ticketClosures: TicketClosureQuery get() = TicketClosureQuery(Query("TicketClosure"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun ticketClosure(key: StoreKey): TicketClosure = this(Ref.Persisted("TicketClosure", key))
+        fun ticketClosure(key: Long): TicketClosure = ticketClosure(StoreKey(key))
+
         val reopenTickets: ReopenTicketQuery get() = ReopenTicketQuery(Query("ReopenTicket"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun reopenTicket(key: StoreKey): ReopenTicket = this(Ref.Persisted("ReopenTicket", key))
+        fun reopenTicket(key: Long): ReopenTicket = reopenTicket(StoreKey(key))
+
         val reopenNotices: ReopenNoticeQuery get() = ReopenNoticeQuery(Query("ReopenNotice"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun reopenNotice(key: StoreKey): ReopenNotice = this(Ref.Persisted("ReopenNotice", key))
+        fun reopenNotice(key: Long): ReopenNotice = reopenNotice(StoreKey(key))
+
         val escalations: EscalationQuery get() = EscalationQuery(Query("Escalation"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun escalation(key: StoreKey): Escalation = this(Ref.Persisted("Escalation", key))
+        fun escalation(key: Long): Escalation = escalation(StoreKey(key))
+
         val selfReferrals: SelfReferralQuery get() = SelfReferralQuery(Query("SelfReferral"))
+        /** The record behind [ref] as a member of SelfReferral, or null when it is not one. */
+        fun selfReferral(ref: Ref<Member>): SelfReferral? =
+            system.idOf(ref).let { if (system.exists("SelfReferral", it)) materializeSelfReferral(it) else null }
+
         val unappliedDeposits: UnappliedDepositQuery get() = UnappliedDepositQuery(Query("UnappliedDeposit"))
+        /** The record behind [ref] as a member of UnappliedDeposit, or null when it is not one. */
+        fun unappliedDeposit(ref: Ref<Deposit>): UnappliedDeposit? =
+            system.idOf(ref).let { if (system.exists("UnappliedDeposit", it)) materializeUnappliedDeposit(it) else null }
+
         val activeMembers: ActiveMemberQuery get() = ActiveMemberQuery(Query("ActiveMember"))
+        /** The record behind [ref] as a member of ActiveMember, or null when it is not one. */
+        fun activeMember(ref: Ref<Member>): ActiveMember? =
+            system.idOf(ref).let { if (system.exists("ActiveMember", it)) materializeActiveMember(it) else null }
+
         val unappliedCharges: UnappliedChargeQuery get() = UnappliedChargeQuery(Query("UnappliedCharge"))
+        /** The record behind [ref] as a member of UnappliedCharge, or null when it is not one. */
+        fun unappliedCharge(ref: Ref<Charge>): UnappliedCharge? =
+            system.idOf(ref).let { if (system.exists("UnappliedCharge", it)) materializeUnappliedCharge(it) else null }
+
         val delinquents: DelinquentQuery get() = DelinquentQuery(Query("Delinquent"))
+        /** The record behind [ref] as a member of Delinquent, or null when it is not one. */
+        fun delinquent(ref: Ref<Member>): Delinquent? =
+            system.idOf(ref).let { if (system.exists("Delinquent", it)) materializeDelinquent(it) else null }
+
         val deepDelinquents: DeepDelinquentQuery get() = DeepDelinquentQuery(Query("DeepDelinquent"))
+        /** The record behind [ref] as a member of DeepDelinquent, or null when it is not one. */
+        fun deepDelinquent(ref: Ref<Member>): DeepDelinquent? =
+            system.idOf(ref).let { if (system.exists("DeepDelinquent", it)) materializeDeepDelinquent(it) else null }
+
         val openDelinquencyFlags: OpenDelinquencyFlagQuery get() = OpenDelinquencyFlagQuery(Query("OpenDelinquencyFlag"))
+        /** The record behind [ref] as a member of OpenDelinquencyFlag, or null when it is not one. */
+        fun openDelinquencyFlag(ref: Ref<DelinquencyFlag>): OpenDelinquencyFlag? =
+            system.idOf(ref).let { if (system.exists("OpenDelinquencyFlag", it)) materializeOpenDelinquencyFlag(it) else null }
+
         val chronicDelinquents: ChronicDelinquentQuery get() = ChronicDelinquentQuery(Query("ChronicDelinquent"))
+        /** The record behind [ref] as a member of ChronicDelinquent, or null when it is not one. */
+        fun chronicDelinquent(ref: Ref<Member>): ChronicDelinquent? =
+            system.idOf(ref).let { if (system.exists("ChronicDelinquent", it)) materializeChronicDelinquent(it) else null }
+
         val closedTickets: ClosedTicketQuery get() = ClosedTicketQuery(Query("ClosedTicket"))
+        /** The record behind [ref] as a member of ClosedTicket, or null when it is not one. */
+        fun closedTicket(ref: Ref<Ticket>): ClosedTicket? =
+            system.idOf(ref).let { if (system.exists("ClosedTicket", it)) materializeClosedTicket(it) else null }
+
         val openTickets: OpenTicketQuery get() = OpenTicketQuery(Query("OpenTicket"))
+        /** The record behind [ref] as a member of OpenTicket, or null when it is not one. */
+        fun openTicket(ref: Ref<Ticket>): OpenTicket? =
+            system.idOf(ref).let { if (system.exists("OpenTicket", it)) materializeOpenTicket(it) else null }
+
         val overdueTickets: OverdueTicketQuery get() = OverdueTicketQuery(Query("OverdueTicket"))
+        /** The record behind [ref] as a member of OverdueTicket, or null when it is not one. */
+        fun overdueTicket(ref: Ref<Ticket>): OverdueTicket? =
+            system.idOf(ref).let { if (system.exists("OverdueTicket", it)) materializeOverdueTicket(it) else null }
+
         val highPrioritys: HighPriorityQuery get() = HighPriorityQuery(Query("HighPriority"))
+        /** The record behind [ref] as a member of HighPriority, or null when it is not one. */
+        fun highPriority(ref: Ref<Ticket>): HighPriority? =
+            system.idOf(ref).let { if (system.exists("HighPriority", it)) materializeHighPriority(it) else null }
+
         val unassigneds: UnassignedQuery get() = UnassignedQuery(Query("Unassigned"))
+        /** The record behind [ref] as a member of Unassigned, or null when it is not one. */
+        fun unassigned(ref: Ref<Ticket>): Unassigned? =
+            system.idOf(ref).let { if (system.exists("Unassigned", it)) materializeUnassigned(it) else null }
+
         val needsAttentions: NeedsAttentionQuery get() = NeedsAttentionQuery(Query("NeedsAttention"))
+        /** The record behind [ref] as a member of NeedsAttention, or null when it is not one. */
+        fun needsAttention(ref: Ref<Ticket>): NeedsAttention? =
+            system.idOf(ref).let { if (system.exists("NeedsAttention", it)) materializeNeedsAttention(it) else null }
+
         val urgentQueues: UrgentQueueQuery get() = UrgentQueueQuery(Query("UrgentQueue"))
+        /** The record behind [ref] as a member of UrgentQueue, or null when it is not one. */
+        fun urgentQueue(ref: Ref<Ticket>): UrgentQueue? =
+            system.idOf(ref).let { if (system.exists("UrgentQueue", it)) materializeUrgentQueue(it) else null }
+
         val memberWithDisputedCharges: MemberWithDisputedChargeQuery get() = MemberWithDisputedChargeQuery(Query("MemberWithDisputedCharge"))
+        /** The record behind [ref] as a member of MemberWithDisputedCharge, or null when it is not one. */
+        fun memberWithDisputedCharge(ref: Ref<Member>): MemberWithDisputedCharge? =
+            system.idOf(ref).let { if (system.exists("MemberWithDisputedCharge", it)) materializeMemberWithDisputedCharge(it) else null }
+
         val lateEscalatedMembers: LateEscalatedMemberQuery get() = LateEscalatedMemberQuery(Query("LateEscalatedMember"))
+        /** The record behind [ref] as a member of LateEscalatedMember, or null when it is not one. */
+        fun lateEscalatedMember(ref: Ref<Member>): LateEscalatedMember? =
+            system.idOf(ref).let { if (system.exists("LateEscalatedMember", it)) materializeLateEscalatedMember(it) else null }
     }
 
     inner class PlanQuery(q: Query) : TypedQuery<PlanFields, Plan>(system, q, PlanFields(), { materializePlan(it) }) {
@@ -675,19 +507,43 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun with(q: Query) = LateEscalatedMemberQuery(q)
     }
 
+    /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
+    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+        "Plan" -> materializePlan(id)
+        "Member" -> materializeMember(id)
+        "WelcomeNote" -> materializeWelcomeNote(id)
+        "EmailChange" -> materializeEmailChange(id)
+        "Visit" -> materializeVisit(id)
+        "AnalyticsPing" -> materializeAnalyticsPing(id)
+        "Deposit" -> materializeDeposit(id)
+        "Charge" -> materializeCharge(id)
+        "ChargeApplication" -> materializeChargeApplication(id)
+        "DelinquencyFlag" -> materializeDelinquencyFlag(id)
+        "DelinquencyResolution" -> materializeDelinquencyResolution(id)
+        "AuditEntry" -> materializeAuditEntry(id)
+        "AccountReview" -> materializeAccountReview(id)
+        "Agent" -> materializeAgent(id)
+        "Ticket" -> materializeTicket(id)
+        "TicketClosure" -> materializeTicketClosure(id)
+        "ReopenTicket" -> materializeReopenTicket(id)
+        "ReopenNotice" -> materializeReopenNotice(id)
+        "Escalation" -> materializeEscalation(id)
+        else -> throw IllegalStateException("no model object for '$shape'")
+    }
+
     fun materializePlan(id: Long): Plan = Plan(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         price = system.get(id, "price") as BigDecimal,
-        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
+        members = (system.get(id, "members") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeMember(id: Long): Member = Member(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
-        plan = PlanView(system.get(id, "plan") as Long),
-        referredBy = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) },
+        plan = system.refFor(system.get(id, "plan") as Long),
+        referredBy = (system.get(id, "referredBy") as Long?)?.let { system.refFor(it) },
         joinedOn = system.get(id, "joinedOn") as Instant,
         lastChangedOn = system.get(id, "lastChangedOn") as Instant,
         balance = system.get(id, "balance") as BigDecimal,
@@ -697,148 +553,165 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         engagementScore = (system.get(id, "engagementScore") as BigDecimal).toDouble(),
         totalDeposited = system.get(id, "totalDeposited") as BigDecimal,
         email = system.get(id, "email") as String,
-        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
-        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) },
-        emailChanges = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) },
-        visits = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) },
-        deposits = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) },
-        charges = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) },
-        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) },
-        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) },
-        accountReviews = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) },
-        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+        members = (system.get(id, "members") as List<*>).map { system.refFor(it as Long) },
+        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { system.refFor(it as Long) },
+        emailChanges = (system.get(id, "emailChanges") as List<*>).map { system.refFor(it as Long) },
+        visits = (system.get(id, "visits") as List<*>).map { system.refFor(it as Long) },
+        deposits = (system.get(id, "deposits") as List<*>).map { system.refFor(it as Long) },
+        charges = (system.get(id, "charges") as List<*>).map { system.refFor(it as Long) },
+        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { system.refFor(it as Long) },
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { system.refFor(it as Long) },
+        accountReviews = (system.get(id, "accountReviews") as List<*>).map { system.refFor(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { system.refFor(it as Long) },
+        isSelfReferral = system.isMember(id, "SelfReferral"),
+        isActiveMember = system.isMember(id, "ActiveMember"),
+        isDelinquent = system.isMember(id, "Delinquent"),
+        isDeepDelinquent = system.isMember(id, "DeepDelinquent"),
+        isChronicDelinquent = system.isMember(id, "ChronicDelinquent"),
+        isMemberWithDisputedCharge = system.isMember(id, "MemberWithDisputedCharge"),
+        isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
     fun materializeWelcomeNote(id: Long): WelcomeNote = WelcomeNote(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         sentOn = system.get(id, "sentOn") as Instant,
     )
 
     fun materializeEmailChange(id: Long): EmailChange = EmailChange(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         newEmail = system.get(id, "newEmail") as String,
         changedOn = system.get(id, "changedOn") as Instant,
     )
 
     fun materializeVisit(id: Long): Visit = Visit(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         minutes = (system.get(id, "minutes") as BigDecimal).intValueExact(),
-        analyticsPings = (system.get(id, "analyticsPings") as List<*>).map { AnalyticsPingView(it as Long) },
+        analyticsPings = (system.get(id, "analyticsPings") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeAnalyticsPing(id: Long): AnalyticsPing = AnalyticsPing(
-        id = id,
-        visit = VisitView(system.get(id, "visit") as Long),
+        key = system.refFor(id).key,
+        visit = system.refFor(system.get(id, "visit") as Long),
         pingedOn = system.get(id, "pingedOn") as Instant,
     )
 
     fun materializeDeposit(id: Long): Deposit = Deposit(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
         applied = system.get(id, "applied") as Boolean,
+        isUnappliedDeposit = system.isMember(id, "UnappliedDeposit"),
     )
 
     fun materializeCharge(id: Long): Charge = Charge(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
         reference = system.get(id, "reference") as String,
         requestedOn = system.get(id, "requestedOn") as LocalDate,
-        chargeApplications = (system.get(id, "chargeApplications") as List<*>).map { ChargeApplicationView(it as Long) },
+        chargeApplications = (system.get(id, "chargeApplications") as List<*>).map { system.refFor(it as Long) },
+        isUnappliedCharge = system.isMember(id, "UnappliedCharge"),
     )
 
     fun materializeChargeApplication(id: Long): ChargeApplication = ChargeApplication(
-        id = id,
-        charge = ChargeView(system.get(id, "charge") as Long),
+        key = system.refFor(id).key,
+        charge = system.refFor(system.get(id, "charge") as Long),
         appliedOn = system.get(id, "appliedOn") as Instant,
     )
 
     fun materializeDelinquencyFlag(id: Long): DelinquencyFlag = DelinquencyFlag(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         flaggedOn = system.get(id, "flaggedOn") as LocalDate,
-        delinquencyResolutions = (system.get(id, "delinquencyResolutions") as List<*>).map { DelinquencyResolutionView(it as Long) },
+        delinquencyResolutions = (system.get(id, "delinquencyResolutions") as List<*>).map { system.refFor(it as Long) },
+        isOpenDelinquencyFlag = system.isMember(id, "OpenDelinquencyFlag"),
     )
 
     fun materializeDelinquencyResolution(id: Long): DelinquencyResolution = DelinquencyResolution(
-        id = id,
-        flag = DelinquencyFlagView(system.get(id, "flag") as Long),
+        key = system.refFor(id).key,
+        flag = system.refFor(system.get(id, "flag") as Long),
         resolvedOn = system.get(id, "resolvedOn") as LocalDate,
     )
 
     fun materializeAuditEntry(id: Long): AuditEntry = AuditEntry(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         note = system.get(id, "note") as String,
         loggedOn = system.get(id, "loggedOn") as Instant,
     )
 
     fun materializeAccountReview(id: Long): AccountReview = AccountReview(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         openedOn = system.get(id, "openedOn") as Instant,
     )
 
     fun materializeAgent(id: Long): Agent = Agent(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         email = system.get(id, "email") as String,
-        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
-        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
-        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { system.refFor(it as Long) },
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { system.refFor(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeTicket(id: Long): Ticket = Ticket(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
         due = system.get(id, "due") as LocalDate,
         priority = system.get(id, "priority") as String,
-        assignee = (system.get(id, "assignee") as Long?)?.let { AgentView(it) },
+        assignee = (system.get(id, "assignee") as Long?)?.let { system.refFor(it) },
         openedOn = system.get(id, "openedOn") as Instant,
         assigneeEmail = system.get(id, "assigneeEmail") as String?,
         contact = system.get(id, "contact") as String,
-        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
-        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) },
-        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
-        escalations = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) },
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { system.refFor(it as Long) },
+        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { system.refFor(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { system.refFor(it as Long) },
+        escalations = (system.get(id, "escalations") as List<*>).map { system.refFor(it as Long) },
+        isClosedTicket = system.isMember(id, "ClosedTicket"),
+        isOpenTicket = system.isMember(id, "OpenTicket"),
+        isOverdueTicket = system.isMember(id, "OverdueTicket"),
+        isHighPriority = system.isMember(id, "HighPriority"),
+        isUnassigned = system.isMember(id, "Unassigned"),
+        isNeedsAttention = system.isMember(id, "NeedsAttention"),
+        isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
     fun materializeTicketClosure(id: Long): TicketClosure = TicketClosure(
-        id = id,
-        ticket = TicketView(system.get(id, "ticket") as Long),
-        closedBy = AgentView(system.get(id, "closedBy") as Long),
+        key = system.refFor(id).key,
+        ticket = system.refFor(system.get(id, "ticket") as Long),
+        closedBy = system.refFor(system.get(id, "closedBy") as Long),
         closedOn = system.get(id, "closedOn") as Instant,
     )
 
     fun materializeReopenTicket(id: Long): ReopenTicket = ReopenTicket(
-        id = id,
-        ticket = TicketView(system.get(id, "ticket") as Long),
+        key = system.refFor(id).key,
+        ticket = system.refFor(system.get(id, "ticket") as Long),
     )
 
     fun materializeReopenNotice(id: Long): ReopenNotice = ReopenNotice(
-        id = id,
-        ticket = TicketView(system.get(id, "ticket") as Long),
-        reassignTo = AgentView(system.get(id, "reassignTo") as Long),
+        key = system.refFor(id).key,
+        ticket = system.refFor(system.get(id, "ticket") as Long),
+        reassignTo = system.refFor(system.get(id, "reassignTo") as Long),
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
     fun materializeEscalation(id: Long): Escalation = Escalation(
-        id = id,
-        ticket = TicketView(system.get(id, "ticket") as Long),
+        key = system.refFor(id).key,
+        ticket = system.refFor(system.get(id, "ticket") as Long),
         raisedOn = system.get(id, "raisedOn") as LocalDate,
     )
 
     fun materializeSelfReferral(id: Long): SelfReferral = SelfReferral(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
-        plan = PlanView(system.get(id, "plan") as Long),
-        referredBy = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) },
+        plan = system.refFor(system.get(id, "plan") as Long),
+        referredBy = (system.get(id, "referredBy") as Long?)?.let { system.refFor(it) },
         joinedOn = system.get(id, "joinedOn") as Instant,
         lastChangedOn = system.get(id, "lastChangedOn") as Instant,
         balance = system.get(id, "balance") as BigDecimal,
@@ -848,31 +721,37 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         engagementScore = (system.get(id, "engagementScore") as BigDecimal).toDouble(),
         totalDeposited = system.get(id, "totalDeposited") as BigDecimal,
         email = system.get(id, "email") as String,
-        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
-        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) },
-        emailChanges = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) },
-        visits = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) },
-        deposits = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) },
-        charges = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) },
-        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) },
-        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) },
-        accountReviews = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) },
-        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+        members = (system.get(id, "members") as List<*>).map { system.refFor(it as Long) },
+        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { system.refFor(it as Long) },
+        emailChanges = (system.get(id, "emailChanges") as List<*>).map { system.refFor(it as Long) },
+        visits = (system.get(id, "visits") as List<*>).map { system.refFor(it as Long) },
+        deposits = (system.get(id, "deposits") as List<*>).map { system.refFor(it as Long) },
+        charges = (system.get(id, "charges") as List<*>).map { system.refFor(it as Long) },
+        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { system.refFor(it as Long) },
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { system.refFor(it as Long) },
+        accountReviews = (system.get(id, "accountReviews") as List<*>).map { system.refFor(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { system.refFor(it as Long) },
+        isActiveMember = system.isMember(id, "ActiveMember"),
+        isDelinquent = system.isMember(id, "Delinquent"),
+        isDeepDelinquent = system.isMember(id, "DeepDelinquent"),
+        isChronicDelinquent = system.isMember(id, "ChronicDelinquent"),
+        isMemberWithDisputedCharge = system.isMember(id, "MemberWithDisputedCharge"),
+        isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
     fun materializeUnappliedDeposit(id: Long): UnappliedDeposit = UnappliedDeposit(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
         applied = system.get(id, "applied") as Boolean,
     )
 
     fun materializeActiveMember(id: Long): ActiveMember = ActiveMember(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
-        plan = PlanView(system.get(id, "plan") as Long),
-        referredBy = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) },
+        plan = system.refFor(system.get(id, "plan") as Long),
+        referredBy = (system.get(id, "referredBy") as Long?)?.let { system.refFor(it) },
         joinedOn = system.get(id, "joinedOn") as Instant,
         lastChangedOn = system.get(id, "lastChangedOn") as Instant,
         balance = system.get(id, "balance") as BigDecimal,
@@ -882,33 +761,39 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         engagementScore = (system.get(id, "engagementScore") as BigDecimal).toDouble(),
         totalDeposited = system.get(id, "totalDeposited") as BigDecimal,
         email = system.get(id, "email") as String,
-        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
-        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) },
-        emailChanges = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) },
-        visits = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) },
-        deposits = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) },
-        charges = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) },
-        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) },
-        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) },
-        accountReviews = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) },
-        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+        members = (system.get(id, "members") as List<*>).map { system.refFor(it as Long) },
+        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { system.refFor(it as Long) },
+        emailChanges = (system.get(id, "emailChanges") as List<*>).map { system.refFor(it as Long) },
+        visits = (system.get(id, "visits") as List<*>).map { system.refFor(it as Long) },
+        deposits = (system.get(id, "deposits") as List<*>).map { system.refFor(it as Long) },
+        charges = (system.get(id, "charges") as List<*>).map { system.refFor(it as Long) },
+        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { system.refFor(it as Long) },
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { system.refFor(it as Long) },
+        accountReviews = (system.get(id, "accountReviews") as List<*>).map { system.refFor(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { system.refFor(it as Long) },
+        isSelfReferral = system.isMember(id, "SelfReferral"),
+        isDelinquent = system.isMember(id, "Delinquent"),
+        isDeepDelinquent = system.isMember(id, "DeepDelinquent"),
+        isChronicDelinquent = system.isMember(id, "ChronicDelinquent"),
+        isMemberWithDisputedCharge = system.isMember(id, "MemberWithDisputedCharge"),
+        isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
     fun materializeUnappliedCharge(id: Long): UnappliedCharge = UnappliedCharge(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
         reference = system.get(id, "reference") as String,
         requestedOn = system.get(id, "requestedOn") as LocalDate,
-        chargeApplications = (system.get(id, "chargeApplications") as List<*>).map { ChargeApplicationView(it as Long) },
+        chargeApplications = (system.get(id, "chargeApplications") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeDelinquent(id: Long): Delinquent = Delinquent(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
-        plan = PlanView(system.get(id, "plan") as Long),
-        referredBy = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) },
+        plan = system.refFor(system.get(id, "plan") as Long),
+        referredBy = (system.get(id, "referredBy") as Long?)?.let { system.refFor(it) },
         joinedOn = system.get(id, "joinedOn") as Instant,
         lastChangedOn = system.get(id, "lastChangedOn") as Instant,
         balance = system.get(id, "balance") as BigDecimal,
@@ -918,24 +803,30 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         engagementScore = (system.get(id, "engagementScore") as BigDecimal).toDouble(),
         totalDeposited = system.get(id, "totalDeposited") as BigDecimal,
         email = system.get(id, "email") as String,
-        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
-        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) },
-        emailChanges = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) },
-        visits = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) },
-        deposits = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) },
-        charges = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) },
-        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) },
-        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) },
-        accountReviews = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) },
-        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+        members = (system.get(id, "members") as List<*>).map { system.refFor(it as Long) },
+        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { system.refFor(it as Long) },
+        emailChanges = (system.get(id, "emailChanges") as List<*>).map { system.refFor(it as Long) },
+        visits = (system.get(id, "visits") as List<*>).map { system.refFor(it as Long) },
+        deposits = (system.get(id, "deposits") as List<*>).map { system.refFor(it as Long) },
+        charges = (system.get(id, "charges") as List<*>).map { system.refFor(it as Long) },
+        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { system.refFor(it as Long) },
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { system.refFor(it as Long) },
+        accountReviews = (system.get(id, "accountReviews") as List<*>).map { system.refFor(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { system.refFor(it as Long) },
+        isSelfReferral = system.isMember(id, "SelfReferral"),
+        isActiveMember = system.isMember(id, "ActiveMember"),
+        isDeepDelinquent = system.isMember(id, "DeepDelinquent"),
+        isChronicDelinquent = system.isMember(id, "ChronicDelinquent"),
+        isMemberWithDisputedCharge = system.isMember(id, "MemberWithDisputedCharge"),
+        isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
     fun materializeDeepDelinquent(id: Long): DeepDelinquent = DeepDelinquent(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
-        plan = PlanView(system.get(id, "plan") as Long),
-        referredBy = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) },
+        plan = system.refFor(system.get(id, "plan") as Long),
+        referredBy = (system.get(id, "referredBy") as Long?)?.let { system.refFor(it) },
         joinedOn = system.get(id, "joinedOn") as Instant,
         lastChangedOn = system.get(id, "lastChangedOn") as Instant,
         balance = system.get(id, "balance") as BigDecimal,
@@ -945,31 +836,37 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         engagementScore = (system.get(id, "engagementScore") as BigDecimal).toDouble(),
         totalDeposited = system.get(id, "totalDeposited") as BigDecimal,
         email = system.get(id, "email") as String,
-        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
-        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) },
-        emailChanges = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) },
-        visits = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) },
-        deposits = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) },
-        charges = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) },
-        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) },
-        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) },
-        accountReviews = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) },
-        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+        members = (system.get(id, "members") as List<*>).map { system.refFor(it as Long) },
+        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { system.refFor(it as Long) },
+        emailChanges = (system.get(id, "emailChanges") as List<*>).map { system.refFor(it as Long) },
+        visits = (system.get(id, "visits") as List<*>).map { system.refFor(it as Long) },
+        deposits = (system.get(id, "deposits") as List<*>).map { system.refFor(it as Long) },
+        charges = (system.get(id, "charges") as List<*>).map { system.refFor(it as Long) },
+        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { system.refFor(it as Long) },
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { system.refFor(it as Long) },
+        accountReviews = (system.get(id, "accountReviews") as List<*>).map { system.refFor(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { system.refFor(it as Long) },
+        isSelfReferral = system.isMember(id, "SelfReferral"),
+        isActiveMember = system.isMember(id, "ActiveMember"),
+        isDelinquent = system.isMember(id, "Delinquent"),
+        isChronicDelinquent = system.isMember(id, "ChronicDelinquent"),
+        isMemberWithDisputedCharge = system.isMember(id, "MemberWithDisputedCharge"),
+        isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
     fun materializeOpenDelinquencyFlag(id: Long): OpenDelinquencyFlag = OpenDelinquencyFlag(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         flaggedOn = system.get(id, "flaggedOn") as LocalDate,
-        delinquencyResolutions = (system.get(id, "delinquencyResolutions") as List<*>).map { DelinquencyResolutionView(it as Long) },
+        delinquencyResolutions = (system.get(id, "delinquencyResolutions") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeChronicDelinquent(id: Long): ChronicDelinquent = ChronicDelinquent(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
-        plan = PlanView(system.get(id, "plan") as Long),
-        referredBy = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) },
+        plan = system.refFor(system.get(id, "plan") as Long),
+        referredBy = (system.get(id, "referredBy") as Long?)?.let { system.refFor(it) },
         joinedOn = system.get(id, "joinedOn") as Instant,
         lastChangedOn = system.get(id, "lastChangedOn") as Instant,
         balance = system.get(id, "balance") as BigDecimal,
@@ -979,138 +876,186 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         engagementScore = (system.get(id, "engagementScore") as BigDecimal).toDouble(),
         totalDeposited = system.get(id, "totalDeposited") as BigDecimal,
         email = system.get(id, "email") as String,
-        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
-        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) },
-        emailChanges = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) },
-        visits = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) },
-        deposits = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) },
-        charges = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) },
-        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) },
-        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) },
-        accountReviews = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) },
-        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+        members = (system.get(id, "members") as List<*>).map { system.refFor(it as Long) },
+        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { system.refFor(it as Long) },
+        emailChanges = (system.get(id, "emailChanges") as List<*>).map { system.refFor(it as Long) },
+        visits = (system.get(id, "visits") as List<*>).map { system.refFor(it as Long) },
+        deposits = (system.get(id, "deposits") as List<*>).map { system.refFor(it as Long) },
+        charges = (system.get(id, "charges") as List<*>).map { system.refFor(it as Long) },
+        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { system.refFor(it as Long) },
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { system.refFor(it as Long) },
+        accountReviews = (system.get(id, "accountReviews") as List<*>).map { system.refFor(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { system.refFor(it as Long) },
+        isSelfReferral = system.isMember(id, "SelfReferral"),
+        isActiveMember = system.isMember(id, "ActiveMember"),
+        isDelinquent = system.isMember(id, "Delinquent"),
+        isDeepDelinquent = system.isMember(id, "DeepDelinquent"),
+        isMemberWithDisputedCharge = system.isMember(id, "MemberWithDisputedCharge"),
+        isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
     fun materializeClosedTicket(id: Long): ClosedTicket = ClosedTicket(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
         due = system.get(id, "due") as LocalDate,
         priority = system.get(id, "priority") as String,
-        assignee = (system.get(id, "assignee") as Long?)?.let { AgentView(it) },
+        assignee = (system.get(id, "assignee") as Long?)?.let { system.refFor(it) },
         openedOn = system.get(id, "openedOn") as Instant,
         assigneeEmail = system.get(id, "assigneeEmail") as String?,
         contact = system.get(id, "contact") as String,
-        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
-        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) },
-        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
-        escalations = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) },
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { system.refFor(it as Long) },
+        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { system.refFor(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { system.refFor(it as Long) },
+        escalations = (system.get(id, "escalations") as List<*>).map { system.refFor(it as Long) },
         closedOn = system.getAs(id, "ClosedTicket", "closedOn") as LocalDate,
-        closedBy = AgentView(system.getAs(id, "ClosedTicket", "closedBy") as Long),
+        closedBy = system.refFor(system.getAs(id, "ClosedTicket", "closedBy") as Long),
+        isOpenTicket = system.isMember(id, "OpenTicket"),
+        isOverdueTicket = system.isMember(id, "OverdueTicket"),
+        isHighPriority = system.isMember(id, "HighPriority"),
+        isUnassigned = system.isMember(id, "Unassigned"),
+        isNeedsAttention = system.isMember(id, "NeedsAttention"),
+        isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
     fun materializeOpenTicket(id: Long): OpenTicket = OpenTicket(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
         due = system.get(id, "due") as LocalDate,
         priority = system.get(id, "priority") as String,
-        assignee = (system.get(id, "assignee") as Long?)?.let { AgentView(it) },
+        assignee = (system.get(id, "assignee") as Long?)?.let { system.refFor(it) },
         openedOn = system.get(id, "openedOn") as Instant,
         assigneeEmail = system.get(id, "assigneeEmail") as String?,
         contact = system.get(id, "contact") as String,
-        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
-        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) },
-        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
-        escalations = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) },
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { system.refFor(it as Long) },
+        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { system.refFor(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { system.refFor(it as Long) },
+        escalations = (system.get(id, "escalations") as List<*>).map { system.refFor(it as Long) },
+        isClosedTicket = system.isMember(id, "ClosedTicket"),
+        isOverdueTicket = system.isMember(id, "OverdueTicket"),
+        isHighPriority = system.isMember(id, "HighPriority"),
+        isUnassigned = system.isMember(id, "Unassigned"),
+        isNeedsAttention = system.isMember(id, "NeedsAttention"),
+        isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
     fun materializeOverdueTicket(id: Long): OverdueTicket = OverdueTicket(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
         due = system.get(id, "due") as LocalDate,
         priority = system.get(id, "priority") as String,
-        assignee = (system.get(id, "assignee") as Long?)?.let { AgentView(it) },
+        assignee = (system.get(id, "assignee") as Long?)?.let { system.refFor(it) },
         openedOn = system.get(id, "openedOn") as Instant,
         assigneeEmail = system.get(id, "assigneeEmail") as String?,
         contact = system.get(id, "contact") as String,
-        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
-        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) },
-        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
-        escalations = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) },
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { system.refFor(it as Long) },
+        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { system.refFor(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { system.refFor(it as Long) },
+        escalations = (system.get(id, "escalations") as List<*>).map { system.refFor(it as Long) },
+        isClosedTicket = system.isMember(id, "ClosedTicket"),
+        isOpenTicket = system.isMember(id, "OpenTicket"),
+        isHighPriority = system.isMember(id, "HighPriority"),
+        isUnassigned = system.isMember(id, "Unassigned"),
+        isNeedsAttention = system.isMember(id, "NeedsAttention"),
+        isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
     fun materializeHighPriority(id: Long): HighPriority = HighPriority(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
         due = system.get(id, "due") as LocalDate,
         priority = system.get(id, "priority") as String,
-        assignee = (system.get(id, "assignee") as Long?)?.let { AgentView(it) },
+        assignee = (system.get(id, "assignee") as Long?)?.let { system.refFor(it) },
         openedOn = system.get(id, "openedOn") as Instant,
         assigneeEmail = system.get(id, "assigneeEmail") as String?,
         contact = system.get(id, "contact") as String,
-        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
-        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) },
-        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
-        escalations = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) },
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { system.refFor(it as Long) },
+        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { system.refFor(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { system.refFor(it as Long) },
+        escalations = (system.get(id, "escalations") as List<*>).map { system.refFor(it as Long) },
+        isClosedTicket = system.isMember(id, "ClosedTicket"),
+        isOpenTicket = system.isMember(id, "OpenTicket"),
+        isOverdueTicket = system.isMember(id, "OverdueTicket"),
+        isUnassigned = system.isMember(id, "Unassigned"),
+        isNeedsAttention = system.isMember(id, "NeedsAttention"),
+        isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
     fun materializeUnassigned(id: Long): Unassigned = Unassigned(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
         due = system.get(id, "due") as LocalDate,
         priority = system.get(id, "priority") as String,
-        assignee = (system.get(id, "assignee") as Long?)?.let { AgentView(it) },
+        assignee = (system.get(id, "assignee") as Long?)?.let { system.refFor(it) },
         openedOn = system.get(id, "openedOn") as Instant,
         assigneeEmail = system.get(id, "assigneeEmail") as String?,
         contact = system.get(id, "contact") as String,
-        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
-        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) },
-        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
-        escalations = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) },
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { system.refFor(it as Long) },
+        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { system.refFor(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { system.refFor(it as Long) },
+        escalations = (system.get(id, "escalations") as List<*>).map { system.refFor(it as Long) },
+        isClosedTicket = system.isMember(id, "ClosedTicket"),
+        isOpenTicket = system.isMember(id, "OpenTicket"),
+        isOverdueTicket = system.isMember(id, "OverdueTicket"),
+        isHighPriority = system.isMember(id, "HighPriority"),
+        isNeedsAttention = system.isMember(id, "NeedsAttention"),
+        isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
     fun materializeNeedsAttention(id: Long): NeedsAttention = NeedsAttention(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
         due = system.get(id, "due") as LocalDate,
         priority = system.get(id, "priority") as String,
-        assignee = (system.get(id, "assignee") as Long?)?.let { AgentView(it) },
+        assignee = (system.get(id, "assignee") as Long?)?.let { system.refFor(it) },
         openedOn = system.get(id, "openedOn") as Instant,
         assigneeEmail = system.get(id, "assigneeEmail") as String?,
         contact = system.get(id, "contact") as String,
-        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
-        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) },
-        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
-        escalations = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) },
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { system.refFor(it as Long) },
+        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { system.refFor(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { system.refFor(it as Long) },
+        escalations = (system.get(id, "escalations") as List<*>).map { system.refFor(it as Long) },
+        isClosedTicket = system.isMember(id, "ClosedTicket"),
+        isOpenTicket = system.isMember(id, "OpenTicket"),
+        isOverdueTicket = system.isMember(id, "OverdueTicket"),
+        isHighPriority = system.isMember(id, "HighPriority"),
+        isUnassigned = system.isMember(id, "Unassigned"),
+        isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
     fun materializeUrgentQueue(id: Long): UrgentQueue = UrgentQueue(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
         due = system.get(id, "due") as LocalDate,
         priority = system.get(id, "priority") as String,
-        assignee = (system.get(id, "assignee") as Long?)?.let { AgentView(it) },
+        assignee = (system.get(id, "assignee") as Long?)?.let { system.refFor(it) },
         openedOn = system.get(id, "openedOn") as Instant,
         assigneeEmail = system.get(id, "assigneeEmail") as String?,
         contact = system.get(id, "contact") as String,
-        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { TicketClosureView(it as Long) },
-        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { ReopenTicketView(it as Long) },
-        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { ReopenNoticeView(it as Long) },
-        escalations = (system.get(id, "escalations") as List<*>).map { EscalationView(it as Long) },
+        ticketClosures = (system.get(id, "ticketClosures") as List<*>).map { system.refFor(it as Long) },
+        reopenTickets = (system.get(id, "reopenTickets") as List<*>).map { system.refFor(it as Long) },
+        reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { system.refFor(it as Long) },
+        escalations = (system.get(id, "escalations") as List<*>).map { system.refFor(it as Long) },
+        isClosedTicket = system.isMember(id, "ClosedTicket"),
+        isOpenTicket = system.isMember(id, "OpenTicket"),
+        isOverdueTicket = system.isMember(id, "OverdueTicket"),
+        isHighPriority = system.isMember(id, "HighPriority"),
+        isUnassigned = system.isMember(id, "Unassigned"),
+        isNeedsAttention = system.isMember(id, "NeedsAttention"),
     )
 
     fun materializeMemberWithDisputedCharge(id: Long): MemberWithDisputedCharge = MemberWithDisputedCharge(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
-        plan = PlanView(system.get(id, "plan") as Long),
-        referredBy = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) },
+        plan = system.refFor(system.get(id, "plan") as Long),
+        referredBy = (system.get(id, "referredBy") as Long?)?.let { system.refFor(it) },
         joinedOn = system.get(id, "joinedOn") as Instant,
         lastChangedOn = system.get(id, "lastChangedOn") as Instant,
         balance = system.get(id, "balance") as BigDecimal,
@@ -1120,24 +1065,30 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         engagementScore = (system.get(id, "engagementScore") as BigDecimal).toDouble(),
         totalDeposited = system.get(id, "totalDeposited") as BigDecimal,
         email = system.get(id, "email") as String,
-        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
-        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) },
-        emailChanges = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) },
-        visits = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) },
-        deposits = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) },
-        charges = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) },
-        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) },
-        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) },
-        accountReviews = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) },
-        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+        members = (system.get(id, "members") as List<*>).map { system.refFor(it as Long) },
+        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { system.refFor(it as Long) },
+        emailChanges = (system.get(id, "emailChanges") as List<*>).map { system.refFor(it as Long) },
+        visits = (system.get(id, "visits") as List<*>).map { system.refFor(it as Long) },
+        deposits = (system.get(id, "deposits") as List<*>).map { system.refFor(it as Long) },
+        charges = (system.get(id, "charges") as List<*>).map { system.refFor(it as Long) },
+        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { system.refFor(it as Long) },
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { system.refFor(it as Long) },
+        accountReviews = (system.get(id, "accountReviews") as List<*>).map { system.refFor(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { system.refFor(it as Long) },
+        isSelfReferral = system.isMember(id, "SelfReferral"),
+        isActiveMember = system.isMember(id, "ActiveMember"),
+        isDelinquent = system.isMember(id, "Delinquent"),
+        isDeepDelinquent = system.isMember(id, "DeepDelinquent"),
+        isChronicDelinquent = system.isMember(id, "ChronicDelinquent"),
+        isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
     fun materializeLateEscalatedMember(id: Long): LateEscalatedMember = LateEscalatedMember(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
-        plan = PlanView(system.get(id, "plan") as Long),
-        referredBy = (system.get(id, "referredBy") as Long?)?.let { MemberView(it) },
+        plan = system.refFor(system.get(id, "plan") as Long),
+        referredBy = (system.get(id, "referredBy") as Long?)?.let { system.refFor(it) },
         joinedOn = system.get(id, "joinedOn") as Instant,
         lastChangedOn = system.get(id, "lastChangedOn") as Instant,
         balance = system.get(id, "balance") as BigDecimal,
@@ -1147,16 +1098,22 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         engagementScore = (system.get(id, "engagementScore") as BigDecimal).toDouble(),
         totalDeposited = system.get(id, "totalDeposited") as BigDecimal,
         email = system.get(id, "email") as String,
-        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
-        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { WelcomeNoteView(it as Long) },
-        emailChanges = (system.get(id, "emailChanges") as List<*>).map { EmailChangeView(it as Long) },
-        visits = (system.get(id, "visits") as List<*>).map { VisitView(it as Long) },
-        deposits = (system.get(id, "deposits") as List<*>).map { DepositView(it as Long) },
-        charges = (system.get(id, "charges") as List<*>).map { ChargeView(it as Long) },
-        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { DelinquencyFlagView(it as Long) },
-        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { AuditEntryView(it as Long) },
-        accountReviews = (system.get(id, "accountReviews") as List<*>).map { AccountReviewView(it as Long) },
-        tickets = (system.get(id, "tickets") as List<*>).map { TicketView(it as Long) },
+        members = (system.get(id, "members") as List<*>).map { system.refFor(it as Long) },
+        welcomeNotes = (system.get(id, "welcomeNotes") as List<*>).map { system.refFor(it as Long) },
+        emailChanges = (system.get(id, "emailChanges") as List<*>).map { system.refFor(it as Long) },
+        visits = (system.get(id, "visits") as List<*>).map { system.refFor(it as Long) },
+        deposits = (system.get(id, "deposits") as List<*>).map { system.refFor(it as Long) },
+        charges = (system.get(id, "charges") as List<*>).map { system.refFor(it as Long) },
+        delinquencyFlags = (system.get(id, "delinquencyFlags") as List<*>).map { system.refFor(it as Long) },
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { system.refFor(it as Long) },
+        accountReviews = (system.get(id, "accountReviews") as List<*>).map { system.refFor(it as Long) },
+        tickets = (system.get(id, "tickets") as List<*>).map { system.refFor(it as Long) },
+        isSelfReferral = system.isMember(id, "SelfReferral"),
+        isActiveMember = system.isMember(id, "ActiveMember"),
+        isDelinquent = system.isMember(id, "Delinquent"),
+        isDeepDelinquent = system.isMember(id, "DeepDelinquent"),
+        isChronicDelinquent = system.isMember(id, "ChronicDelinquent"),
+        isMemberWithDisputedCharge = system.isMember(id, "MemberWithDisputedCharge"),
     )
 
     companion object {
@@ -1595,22 +1552,28 @@ shape LateEscalatedMember = Member where
     }
 }
 
-// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
-// References are typed handles (views); navigating one is a further read.
+// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// A model object is a reference to its own record (`Ref<T>`): equality is identity,
+// a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
+// the record's membership at the moment of the read.
 
 data class Plan(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val price: BigDecimal,
-    val members: List<MembershipSystem.MemberView>,
-) : View
+    val members: List<Ref<Member>>,
+) : Ref<Plan> {
+    override val shape: String get() = "Plan"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Member(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val signupEmail: String,
-    val plan: MembershipSystem.PlanView,
-    val referredBy: MembershipSystem.MemberView?,
+    val plan: Ref<Plan>,
+    val referredBy: Ref<Member>?,
     val joinedOn: Instant,
     val lastChangedOn: Instant,
     val balance: BigDecimal,
@@ -1620,148 +1583,254 @@ data class Member(
     val engagementScore: Double,
     val totalDeposited: BigDecimal,
     val email: String,
-    val members: List<MembershipSystem.MemberView>,
-    val welcomeNotes: List<MembershipSystem.WelcomeNoteView>,
-    val emailChanges: List<MembershipSystem.EmailChangeView>,
-    val visits: List<MembershipSystem.VisitView>,
-    val deposits: List<MembershipSystem.DepositView>,
-    val charges: List<MembershipSystem.ChargeView>,
-    val delinquencyFlags: List<MembershipSystem.DelinquencyFlagView>,
-    val auditEntrys: List<MembershipSystem.AuditEntryView>,
-    val accountReviews: List<MembershipSystem.AccountReviewView>,
-    val tickets: List<MembershipSystem.TicketView>,
-) : View
+    val members: List<Ref<Member>>,
+    val welcomeNotes: List<Ref<WelcomeNote>>,
+    val emailChanges: List<Ref<EmailChange>>,
+    val visits: List<Ref<Visit>>,
+    val deposits: List<Ref<Deposit>>,
+    val charges: List<Ref<Charge>>,
+    val delinquencyFlags: List<Ref<DelinquencyFlag>>,
+    val auditEntrys: List<Ref<AuditEntry>>,
+    val accountReviews: List<Ref<AccountReview>>,
+    val tickets: List<Ref<Ticket>>,
+    /** membership of SelfReferral at the moment of the read */
+    val isSelfReferral: Boolean,
+    /** membership of ActiveMember at the moment of the read */
+    val isActiveMember: Boolean,
+    /** membership of Delinquent at the moment of the read */
+    val isDelinquent: Boolean,
+    /** membership of DeepDelinquent at the moment of the read */
+    val isDeepDelinquent: Boolean,
+    /** membership of ChronicDelinquent at the moment of the read */
+    val isChronicDelinquent: Boolean,
+    /** membership of MemberWithDisputedCharge at the moment of the read */
+    val isMemberWithDisputedCharge: Boolean,
+    /** membership of LateEscalatedMember at the moment of the read */
+    val isLateEscalatedMember: Boolean,
+) : Ref<Member> {
+    override val shape: String get() = "Member"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class WelcomeNote(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val sentOn: Instant,
-) : View
+) : Ref<WelcomeNote> {
+    override val shape: String get() = "WelcomeNote"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class EmailChange(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val newEmail: String,
     val changedOn: Instant,
-) : View
+) : Ref<EmailChange> {
+    override val shape: String get() = "EmailChange"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Visit(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val minutes: Int,
-    val analyticsPings: List<MembershipSystem.AnalyticsPingView>,
-) : View
+    val analyticsPings: List<Ref<AnalyticsPing>>,
+) : Ref<Visit> {
+    override val shape: String get() = "Visit"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class AnalyticsPing(
-    override val id: Long,
-    val visit: MembershipSystem.VisitView,
+    override val key: StoreKey,
+    val visit: Ref<Visit>,
     val pingedOn: Instant,
-) : View
+) : Ref<AnalyticsPing> {
+    override val shape: String get() = "AnalyticsPing"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Deposit(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val amount: BigDecimal,
     val applied: Boolean,
-) : View
+    /** membership of UnappliedDeposit at the moment of the read */
+    val isUnappliedDeposit: Boolean,
+) : Ref<Deposit> {
+    override val shape: String get() = "Deposit"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Charge(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val amount: BigDecimal,
     val reference: String,
     val requestedOn: LocalDate,
-    val chargeApplications: List<MembershipSystem.ChargeApplicationView>,
-) : View
+    val chargeApplications: List<Ref<ChargeApplication>>,
+    /** membership of UnappliedCharge at the moment of the read */
+    val isUnappliedCharge: Boolean,
+) : Ref<Charge> {
+    override val shape: String get() = "Charge"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ChargeApplication(
-    override val id: Long,
-    val charge: MembershipSystem.ChargeView,
+    override val key: StoreKey,
+    val charge: Ref<Charge>,
     val appliedOn: Instant,
-) : View
+) : Ref<ChargeApplication> {
+    override val shape: String get() = "ChargeApplication"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class DelinquencyFlag(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val flaggedOn: LocalDate,
-    val delinquencyResolutions: List<MembershipSystem.DelinquencyResolutionView>,
-) : View
+    val delinquencyResolutions: List<Ref<DelinquencyResolution>>,
+    /** membership of OpenDelinquencyFlag at the moment of the read */
+    val isOpenDelinquencyFlag: Boolean,
+) : Ref<DelinquencyFlag> {
+    override val shape: String get() = "DelinquencyFlag"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class DelinquencyResolution(
-    override val id: Long,
-    val flag: MembershipSystem.DelinquencyFlagView,
+    override val key: StoreKey,
+    val flag: Ref<DelinquencyFlag>,
     val resolvedOn: LocalDate,
-) : View
+) : Ref<DelinquencyResolution> {
+    override val shape: String get() = "DelinquencyResolution"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class AuditEntry(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val note: String,
     val loggedOn: Instant,
-) : View
+) : Ref<AuditEntry> {
+    override val shape: String get() = "AuditEntry"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class AccountReview(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val openedOn: Instant,
-) : View
+) : Ref<AccountReview> {
+    override val shape: String get() = "AccountReview"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Agent(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val email: String,
-    val tickets: List<MembershipSystem.TicketView>,
-    val ticketClosures: List<MembershipSystem.TicketClosureView>,
-    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
-) : View
+    val tickets: List<Ref<Ticket>>,
+    val ticketClosures: List<Ref<TicketClosure>>,
+    val reopenNotices: List<Ref<ReopenNotice>>,
+) : Ref<Agent> {
+    override val shape: String get() = "Agent"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Ticket(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
     val priority: String,
-    val assignee: MembershipSystem.AgentView?,
+    val assignee: Ref<Agent>?,
     val openedOn: Instant,
     val assigneeEmail: String?,
     val contact: String,
-    val ticketClosures: List<MembershipSystem.TicketClosureView>,
-    val reopenTickets: List<MembershipSystem.ReopenTicketView>,
-    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
-    val escalations: List<MembershipSystem.EscalationView>,
-) : View
+    val ticketClosures: List<Ref<TicketClosure>>,
+    val reopenTickets: List<Ref<ReopenTicket>>,
+    val reopenNotices: List<Ref<ReopenNotice>>,
+    val escalations: List<Ref<Escalation>>,
+    /** membership of ClosedTicket at the moment of the read */
+    val isClosedTicket: Boolean,
+    /** membership of OpenTicket at the moment of the read */
+    val isOpenTicket: Boolean,
+    /** membership of OverdueTicket at the moment of the read */
+    val isOverdueTicket: Boolean,
+    /** membership of HighPriority at the moment of the read */
+    val isHighPriority: Boolean,
+    /** membership of Unassigned at the moment of the read */
+    val isUnassigned: Boolean,
+    /** membership of NeedsAttention at the moment of the read */
+    val isNeedsAttention: Boolean,
+    /** membership of UrgentQueue at the moment of the read */
+    val isUrgentQueue: Boolean,
+) : Ref<Ticket> {
+    override val shape: String get() = "Ticket"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class TicketClosure(
-    override val id: Long,
-    val ticket: MembershipSystem.TicketView,
-    val closedBy: MembershipSystem.AgentView,
+    override val key: StoreKey,
+    val ticket: Ref<Ticket>,
+    val closedBy: Ref<Agent>,
     val closedOn: Instant,
-) : View
+) : Ref<TicketClosure> {
+    override val shape: String get() = "TicketClosure"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ReopenTicket(
-    override val id: Long,
-    val ticket: MembershipSystem.TicketView,
-) : View
+    override val key: StoreKey,
+    val ticket: Ref<Ticket>,
+) : Ref<ReopenTicket> {
+    override val shape: String get() = "ReopenTicket"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ReopenNotice(
-    override val id: Long,
-    val ticket: MembershipSystem.TicketView,
-    val reassignTo: MembershipSystem.AgentView,
+    override val key: StoreKey,
+    val ticket: Ref<Ticket>,
+    val reassignTo: Ref<Agent>,
     val noticedOn: Instant,
-) : View
+) : Ref<ReopenNotice> {
+    override val shape: String get() = "ReopenNotice"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Escalation(
-    override val id: Long,
-    val ticket: MembershipSystem.TicketView,
+    override val key: StoreKey,
+    val ticket: Ref<Ticket>,
     val raisedOn: LocalDate,
-) : View
+) : Ref<Escalation> {
+    override val shape: String get() = "Escalation"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class SelfReferral(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val signupEmail: String,
-    val plan: MembershipSystem.PlanView,
-    val referredBy: MembershipSystem.MemberView?,
+    val plan: Ref<Plan>,
+    val referredBy: Ref<Member>?,
     val joinedOn: Instant,
     val lastChangedOn: Instant,
     val balance: BigDecimal,
@@ -1771,31 +1840,51 @@ data class SelfReferral(
     val engagementScore: Double,
     val totalDeposited: BigDecimal,
     val email: String,
-    val members: List<MembershipSystem.MemberView>,
-    val welcomeNotes: List<MembershipSystem.WelcomeNoteView>,
-    val emailChanges: List<MembershipSystem.EmailChangeView>,
-    val visits: List<MembershipSystem.VisitView>,
-    val deposits: List<MembershipSystem.DepositView>,
-    val charges: List<MembershipSystem.ChargeView>,
-    val delinquencyFlags: List<MembershipSystem.DelinquencyFlagView>,
-    val auditEntrys: List<MembershipSystem.AuditEntryView>,
-    val accountReviews: List<MembershipSystem.AccountReviewView>,
-    val tickets: List<MembershipSystem.TicketView>,
-) : View
+    val members: List<Ref<Member>>,
+    val welcomeNotes: List<Ref<WelcomeNote>>,
+    val emailChanges: List<Ref<EmailChange>>,
+    val visits: List<Ref<Visit>>,
+    val deposits: List<Ref<Deposit>>,
+    val charges: List<Ref<Charge>>,
+    val delinquencyFlags: List<Ref<DelinquencyFlag>>,
+    val auditEntrys: List<Ref<AuditEntry>>,
+    val accountReviews: List<Ref<AccountReview>>,
+    val tickets: List<Ref<Ticket>>,
+    /** membership of ActiveMember at the moment of the read */
+    val isActiveMember: Boolean,
+    /** membership of Delinquent at the moment of the read */
+    val isDelinquent: Boolean,
+    /** membership of DeepDelinquent at the moment of the read */
+    val isDeepDelinquent: Boolean,
+    /** membership of ChronicDelinquent at the moment of the read */
+    val isChronicDelinquent: Boolean,
+    /** membership of MemberWithDisputedCharge at the moment of the read */
+    val isMemberWithDisputedCharge: Boolean,
+    /** membership of LateEscalatedMember at the moment of the read */
+    val isLateEscalatedMember: Boolean,
+) : Ref<Member> {
+    override val shape: String get() = "Member"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class UnappliedDeposit(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val amount: BigDecimal,
     val applied: Boolean,
-) : View
+) : Ref<Deposit> {
+    override val shape: String get() = "Deposit"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ActiveMember(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val signupEmail: String,
-    val plan: MembershipSystem.PlanView,
-    val referredBy: MembershipSystem.MemberView?,
+    val plan: Ref<Plan>,
+    val referredBy: Ref<Member>?,
     val joinedOn: Instant,
     val lastChangedOn: Instant,
     val balance: BigDecimal,
@@ -1805,33 +1894,53 @@ data class ActiveMember(
     val engagementScore: Double,
     val totalDeposited: BigDecimal,
     val email: String,
-    val members: List<MembershipSystem.MemberView>,
-    val welcomeNotes: List<MembershipSystem.WelcomeNoteView>,
-    val emailChanges: List<MembershipSystem.EmailChangeView>,
-    val visits: List<MembershipSystem.VisitView>,
-    val deposits: List<MembershipSystem.DepositView>,
-    val charges: List<MembershipSystem.ChargeView>,
-    val delinquencyFlags: List<MembershipSystem.DelinquencyFlagView>,
-    val auditEntrys: List<MembershipSystem.AuditEntryView>,
-    val accountReviews: List<MembershipSystem.AccountReviewView>,
-    val tickets: List<MembershipSystem.TicketView>,
-) : View
+    val members: List<Ref<Member>>,
+    val welcomeNotes: List<Ref<WelcomeNote>>,
+    val emailChanges: List<Ref<EmailChange>>,
+    val visits: List<Ref<Visit>>,
+    val deposits: List<Ref<Deposit>>,
+    val charges: List<Ref<Charge>>,
+    val delinquencyFlags: List<Ref<DelinquencyFlag>>,
+    val auditEntrys: List<Ref<AuditEntry>>,
+    val accountReviews: List<Ref<AccountReview>>,
+    val tickets: List<Ref<Ticket>>,
+    /** membership of SelfReferral at the moment of the read */
+    val isSelfReferral: Boolean,
+    /** membership of Delinquent at the moment of the read */
+    val isDelinquent: Boolean,
+    /** membership of DeepDelinquent at the moment of the read */
+    val isDeepDelinquent: Boolean,
+    /** membership of ChronicDelinquent at the moment of the read */
+    val isChronicDelinquent: Boolean,
+    /** membership of MemberWithDisputedCharge at the moment of the read */
+    val isMemberWithDisputedCharge: Boolean,
+    /** membership of LateEscalatedMember at the moment of the read */
+    val isLateEscalatedMember: Boolean,
+) : Ref<Member> {
+    override val shape: String get() = "Member"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class UnappliedCharge(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val amount: BigDecimal,
     val reference: String,
     val requestedOn: LocalDate,
-    val chargeApplications: List<MembershipSystem.ChargeApplicationView>,
-) : View
+    val chargeApplications: List<Ref<ChargeApplication>>,
+) : Ref<Charge> {
+    override val shape: String get() = "Charge"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Delinquent(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val signupEmail: String,
-    val plan: MembershipSystem.PlanView,
-    val referredBy: MembershipSystem.MemberView?,
+    val plan: Ref<Plan>,
+    val referredBy: Ref<Member>?,
     val joinedOn: Instant,
     val lastChangedOn: Instant,
     val balance: BigDecimal,
@@ -1841,24 +1950,40 @@ data class Delinquent(
     val engagementScore: Double,
     val totalDeposited: BigDecimal,
     val email: String,
-    val members: List<MembershipSystem.MemberView>,
-    val welcomeNotes: List<MembershipSystem.WelcomeNoteView>,
-    val emailChanges: List<MembershipSystem.EmailChangeView>,
-    val visits: List<MembershipSystem.VisitView>,
-    val deposits: List<MembershipSystem.DepositView>,
-    val charges: List<MembershipSystem.ChargeView>,
-    val delinquencyFlags: List<MembershipSystem.DelinquencyFlagView>,
-    val auditEntrys: List<MembershipSystem.AuditEntryView>,
-    val accountReviews: List<MembershipSystem.AccountReviewView>,
-    val tickets: List<MembershipSystem.TicketView>,
-) : View
+    val members: List<Ref<Member>>,
+    val welcomeNotes: List<Ref<WelcomeNote>>,
+    val emailChanges: List<Ref<EmailChange>>,
+    val visits: List<Ref<Visit>>,
+    val deposits: List<Ref<Deposit>>,
+    val charges: List<Ref<Charge>>,
+    val delinquencyFlags: List<Ref<DelinquencyFlag>>,
+    val auditEntrys: List<Ref<AuditEntry>>,
+    val accountReviews: List<Ref<AccountReview>>,
+    val tickets: List<Ref<Ticket>>,
+    /** membership of SelfReferral at the moment of the read */
+    val isSelfReferral: Boolean,
+    /** membership of ActiveMember at the moment of the read */
+    val isActiveMember: Boolean,
+    /** membership of DeepDelinquent at the moment of the read */
+    val isDeepDelinquent: Boolean,
+    /** membership of ChronicDelinquent at the moment of the read */
+    val isChronicDelinquent: Boolean,
+    /** membership of MemberWithDisputedCharge at the moment of the read */
+    val isMemberWithDisputedCharge: Boolean,
+    /** membership of LateEscalatedMember at the moment of the read */
+    val isLateEscalatedMember: Boolean,
+) : Ref<Member> {
+    override val shape: String get() = "Member"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class DeepDelinquent(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val signupEmail: String,
-    val plan: MembershipSystem.PlanView,
-    val referredBy: MembershipSystem.MemberView?,
+    val plan: Ref<Plan>,
+    val referredBy: Ref<Member>?,
     val joinedOn: Instant,
     val lastChangedOn: Instant,
     val balance: BigDecimal,
@@ -1868,31 +1993,51 @@ data class DeepDelinquent(
     val engagementScore: Double,
     val totalDeposited: BigDecimal,
     val email: String,
-    val members: List<MembershipSystem.MemberView>,
-    val welcomeNotes: List<MembershipSystem.WelcomeNoteView>,
-    val emailChanges: List<MembershipSystem.EmailChangeView>,
-    val visits: List<MembershipSystem.VisitView>,
-    val deposits: List<MembershipSystem.DepositView>,
-    val charges: List<MembershipSystem.ChargeView>,
-    val delinquencyFlags: List<MembershipSystem.DelinquencyFlagView>,
-    val auditEntrys: List<MembershipSystem.AuditEntryView>,
-    val accountReviews: List<MembershipSystem.AccountReviewView>,
-    val tickets: List<MembershipSystem.TicketView>,
-) : View
+    val members: List<Ref<Member>>,
+    val welcomeNotes: List<Ref<WelcomeNote>>,
+    val emailChanges: List<Ref<EmailChange>>,
+    val visits: List<Ref<Visit>>,
+    val deposits: List<Ref<Deposit>>,
+    val charges: List<Ref<Charge>>,
+    val delinquencyFlags: List<Ref<DelinquencyFlag>>,
+    val auditEntrys: List<Ref<AuditEntry>>,
+    val accountReviews: List<Ref<AccountReview>>,
+    val tickets: List<Ref<Ticket>>,
+    /** membership of SelfReferral at the moment of the read */
+    val isSelfReferral: Boolean,
+    /** membership of ActiveMember at the moment of the read */
+    val isActiveMember: Boolean,
+    /** membership of Delinquent at the moment of the read */
+    val isDelinquent: Boolean,
+    /** membership of ChronicDelinquent at the moment of the read */
+    val isChronicDelinquent: Boolean,
+    /** membership of MemberWithDisputedCharge at the moment of the read */
+    val isMemberWithDisputedCharge: Boolean,
+    /** membership of LateEscalatedMember at the moment of the read */
+    val isLateEscalatedMember: Boolean,
+) : Ref<Member> {
+    override val shape: String get() = "Member"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class OpenDelinquencyFlag(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val flaggedOn: LocalDate,
-    val delinquencyResolutions: List<MembershipSystem.DelinquencyResolutionView>,
-) : View
+    val delinquencyResolutions: List<Ref<DelinquencyResolution>>,
+) : Ref<DelinquencyFlag> {
+    override val shape: String get() = "DelinquencyFlag"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ChronicDelinquent(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val signupEmail: String,
-    val plan: MembershipSystem.PlanView,
-    val referredBy: MembershipSystem.MemberView?,
+    val plan: Ref<Plan>,
+    val referredBy: Ref<Member>?,
     val joinedOn: Instant,
     val lastChangedOn: Instant,
     val balance: BigDecimal,
@@ -1902,138 +2047,266 @@ data class ChronicDelinquent(
     val engagementScore: Double,
     val totalDeposited: BigDecimal,
     val email: String,
-    val members: List<MembershipSystem.MemberView>,
-    val welcomeNotes: List<MembershipSystem.WelcomeNoteView>,
-    val emailChanges: List<MembershipSystem.EmailChangeView>,
-    val visits: List<MembershipSystem.VisitView>,
-    val deposits: List<MembershipSystem.DepositView>,
-    val charges: List<MembershipSystem.ChargeView>,
-    val delinquencyFlags: List<MembershipSystem.DelinquencyFlagView>,
-    val auditEntrys: List<MembershipSystem.AuditEntryView>,
-    val accountReviews: List<MembershipSystem.AccountReviewView>,
-    val tickets: List<MembershipSystem.TicketView>,
-) : View
+    val members: List<Ref<Member>>,
+    val welcomeNotes: List<Ref<WelcomeNote>>,
+    val emailChanges: List<Ref<EmailChange>>,
+    val visits: List<Ref<Visit>>,
+    val deposits: List<Ref<Deposit>>,
+    val charges: List<Ref<Charge>>,
+    val delinquencyFlags: List<Ref<DelinquencyFlag>>,
+    val auditEntrys: List<Ref<AuditEntry>>,
+    val accountReviews: List<Ref<AccountReview>>,
+    val tickets: List<Ref<Ticket>>,
+    /** membership of SelfReferral at the moment of the read */
+    val isSelfReferral: Boolean,
+    /** membership of ActiveMember at the moment of the read */
+    val isActiveMember: Boolean,
+    /** membership of Delinquent at the moment of the read */
+    val isDelinquent: Boolean,
+    /** membership of DeepDelinquent at the moment of the read */
+    val isDeepDelinquent: Boolean,
+    /** membership of MemberWithDisputedCharge at the moment of the read */
+    val isMemberWithDisputedCharge: Boolean,
+    /** membership of LateEscalatedMember at the moment of the read */
+    val isLateEscalatedMember: Boolean,
+) : Ref<Member> {
+    override val shape: String get() = "Member"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ClosedTicket(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
     val priority: String,
-    val assignee: MembershipSystem.AgentView?,
+    val assignee: Ref<Agent>?,
     val openedOn: Instant,
     val assigneeEmail: String?,
     val contact: String,
-    val ticketClosures: List<MembershipSystem.TicketClosureView>,
-    val reopenTickets: List<MembershipSystem.ReopenTicketView>,
-    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
-    val escalations: List<MembershipSystem.EscalationView>,
+    val ticketClosures: List<Ref<TicketClosure>>,
+    val reopenTickets: List<Ref<ReopenTicket>>,
+    val reopenNotices: List<Ref<ReopenNotice>>,
+    val escalations: List<Ref<Escalation>>,
     val closedOn: LocalDate,
-    val closedBy: MembershipSystem.AgentView,
-) : View
+    val closedBy: Ref<Agent>,
+    /** membership of OpenTicket at the moment of the read */
+    val isOpenTicket: Boolean,
+    /** membership of OverdueTicket at the moment of the read */
+    val isOverdueTicket: Boolean,
+    /** membership of HighPriority at the moment of the read */
+    val isHighPriority: Boolean,
+    /** membership of Unassigned at the moment of the read */
+    val isUnassigned: Boolean,
+    /** membership of NeedsAttention at the moment of the read */
+    val isNeedsAttention: Boolean,
+    /** membership of UrgentQueue at the moment of the read */
+    val isUrgentQueue: Boolean,
+) : Ref<Ticket> {
+    override val shape: String get() = "Ticket"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class OpenTicket(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
     val priority: String,
-    val assignee: MembershipSystem.AgentView?,
+    val assignee: Ref<Agent>?,
     val openedOn: Instant,
     val assigneeEmail: String?,
     val contact: String,
-    val ticketClosures: List<MembershipSystem.TicketClosureView>,
-    val reopenTickets: List<MembershipSystem.ReopenTicketView>,
-    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
-    val escalations: List<MembershipSystem.EscalationView>,
-) : View
+    val ticketClosures: List<Ref<TicketClosure>>,
+    val reopenTickets: List<Ref<ReopenTicket>>,
+    val reopenNotices: List<Ref<ReopenNotice>>,
+    val escalations: List<Ref<Escalation>>,
+    /** membership of ClosedTicket at the moment of the read */
+    val isClosedTicket: Boolean,
+    /** membership of OverdueTicket at the moment of the read */
+    val isOverdueTicket: Boolean,
+    /** membership of HighPriority at the moment of the read */
+    val isHighPriority: Boolean,
+    /** membership of Unassigned at the moment of the read */
+    val isUnassigned: Boolean,
+    /** membership of NeedsAttention at the moment of the read */
+    val isNeedsAttention: Boolean,
+    /** membership of UrgentQueue at the moment of the read */
+    val isUrgentQueue: Boolean,
+) : Ref<Ticket> {
+    override val shape: String get() = "Ticket"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class OverdueTicket(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
     val priority: String,
-    val assignee: MembershipSystem.AgentView?,
+    val assignee: Ref<Agent>?,
     val openedOn: Instant,
     val assigneeEmail: String?,
     val contact: String,
-    val ticketClosures: List<MembershipSystem.TicketClosureView>,
-    val reopenTickets: List<MembershipSystem.ReopenTicketView>,
-    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
-    val escalations: List<MembershipSystem.EscalationView>,
-) : View
+    val ticketClosures: List<Ref<TicketClosure>>,
+    val reopenTickets: List<Ref<ReopenTicket>>,
+    val reopenNotices: List<Ref<ReopenNotice>>,
+    val escalations: List<Ref<Escalation>>,
+    /** membership of ClosedTicket at the moment of the read */
+    val isClosedTicket: Boolean,
+    /** membership of OpenTicket at the moment of the read */
+    val isOpenTicket: Boolean,
+    /** membership of HighPriority at the moment of the read */
+    val isHighPriority: Boolean,
+    /** membership of Unassigned at the moment of the read */
+    val isUnassigned: Boolean,
+    /** membership of NeedsAttention at the moment of the read */
+    val isNeedsAttention: Boolean,
+    /** membership of UrgentQueue at the moment of the read */
+    val isUrgentQueue: Boolean,
+) : Ref<Ticket> {
+    override val shape: String get() = "Ticket"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class HighPriority(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
     val priority: String,
-    val assignee: MembershipSystem.AgentView?,
+    val assignee: Ref<Agent>?,
     val openedOn: Instant,
     val assigneeEmail: String?,
     val contact: String,
-    val ticketClosures: List<MembershipSystem.TicketClosureView>,
-    val reopenTickets: List<MembershipSystem.ReopenTicketView>,
-    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
-    val escalations: List<MembershipSystem.EscalationView>,
-) : View
+    val ticketClosures: List<Ref<TicketClosure>>,
+    val reopenTickets: List<Ref<ReopenTicket>>,
+    val reopenNotices: List<Ref<ReopenNotice>>,
+    val escalations: List<Ref<Escalation>>,
+    /** membership of ClosedTicket at the moment of the read */
+    val isClosedTicket: Boolean,
+    /** membership of OpenTicket at the moment of the read */
+    val isOpenTicket: Boolean,
+    /** membership of OverdueTicket at the moment of the read */
+    val isOverdueTicket: Boolean,
+    /** membership of Unassigned at the moment of the read */
+    val isUnassigned: Boolean,
+    /** membership of NeedsAttention at the moment of the read */
+    val isNeedsAttention: Boolean,
+    /** membership of UrgentQueue at the moment of the read */
+    val isUrgentQueue: Boolean,
+) : Ref<Ticket> {
+    override val shape: String get() = "Ticket"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Unassigned(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
     val priority: String,
-    val assignee: MembershipSystem.AgentView?,
+    val assignee: Ref<Agent>?,
     val openedOn: Instant,
     val assigneeEmail: String?,
     val contact: String,
-    val ticketClosures: List<MembershipSystem.TicketClosureView>,
-    val reopenTickets: List<MembershipSystem.ReopenTicketView>,
-    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
-    val escalations: List<MembershipSystem.EscalationView>,
-) : View
+    val ticketClosures: List<Ref<TicketClosure>>,
+    val reopenTickets: List<Ref<ReopenTicket>>,
+    val reopenNotices: List<Ref<ReopenNotice>>,
+    val escalations: List<Ref<Escalation>>,
+    /** membership of ClosedTicket at the moment of the read */
+    val isClosedTicket: Boolean,
+    /** membership of OpenTicket at the moment of the read */
+    val isOpenTicket: Boolean,
+    /** membership of OverdueTicket at the moment of the read */
+    val isOverdueTicket: Boolean,
+    /** membership of HighPriority at the moment of the read */
+    val isHighPriority: Boolean,
+    /** membership of NeedsAttention at the moment of the read */
+    val isNeedsAttention: Boolean,
+    /** membership of UrgentQueue at the moment of the read */
+    val isUrgentQueue: Boolean,
+) : Ref<Ticket> {
+    override val shape: String get() = "Ticket"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class NeedsAttention(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
     val priority: String,
-    val assignee: MembershipSystem.AgentView?,
+    val assignee: Ref<Agent>?,
     val openedOn: Instant,
     val assigneeEmail: String?,
     val contact: String,
-    val ticketClosures: List<MembershipSystem.TicketClosureView>,
-    val reopenTickets: List<MembershipSystem.ReopenTicketView>,
-    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
-    val escalations: List<MembershipSystem.EscalationView>,
-) : View
+    val ticketClosures: List<Ref<TicketClosure>>,
+    val reopenTickets: List<Ref<ReopenTicket>>,
+    val reopenNotices: List<Ref<ReopenNotice>>,
+    val escalations: List<Ref<Escalation>>,
+    /** membership of ClosedTicket at the moment of the read */
+    val isClosedTicket: Boolean,
+    /** membership of OpenTicket at the moment of the read */
+    val isOpenTicket: Boolean,
+    /** membership of OverdueTicket at the moment of the read */
+    val isOverdueTicket: Boolean,
+    /** membership of HighPriority at the moment of the read */
+    val isHighPriority: Boolean,
+    /** membership of Unassigned at the moment of the read */
+    val isUnassigned: Boolean,
+    /** membership of UrgentQueue at the moment of the read */
+    val isUrgentQueue: Boolean,
+) : Ref<Ticket> {
+    override val shape: String get() = "Ticket"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class UrgentQueue(
-    override val id: Long,
-    val member: MembershipSystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val subject: String,
     val due: LocalDate,
     val priority: String,
-    val assignee: MembershipSystem.AgentView?,
+    val assignee: Ref<Agent>?,
     val openedOn: Instant,
     val assigneeEmail: String?,
     val contact: String,
-    val ticketClosures: List<MembershipSystem.TicketClosureView>,
-    val reopenTickets: List<MembershipSystem.ReopenTicketView>,
-    val reopenNotices: List<MembershipSystem.ReopenNoticeView>,
-    val escalations: List<MembershipSystem.EscalationView>,
-) : View
+    val ticketClosures: List<Ref<TicketClosure>>,
+    val reopenTickets: List<Ref<ReopenTicket>>,
+    val reopenNotices: List<Ref<ReopenNotice>>,
+    val escalations: List<Ref<Escalation>>,
+    /** membership of ClosedTicket at the moment of the read */
+    val isClosedTicket: Boolean,
+    /** membership of OpenTicket at the moment of the read */
+    val isOpenTicket: Boolean,
+    /** membership of OverdueTicket at the moment of the read */
+    val isOverdueTicket: Boolean,
+    /** membership of HighPriority at the moment of the read */
+    val isHighPriority: Boolean,
+    /** membership of Unassigned at the moment of the read */
+    val isUnassigned: Boolean,
+    /** membership of NeedsAttention at the moment of the read */
+    val isNeedsAttention: Boolean,
+) : Ref<Ticket> {
+    override val shape: String get() = "Ticket"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class MemberWithDisputedCharge(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val signupEmail: String,
-    val plan: MembershipSystem.PlanView,
-    val referredBy: MembershipSystem.MemberView?,
+    val plan: Ref<Plan>,
+    val referredBy: Ref<Member>?,
     val joinedOn: Instant,
     val lastChangedOn: Instant,
     val balance: BigDecimal,
@@ -2043,24 +2316,40 @@ data class MemberWithDisputedCharge(
     val engagementScore: Double,
     val totalDeposited: BigDecimal,
     val email: String,
-    val members: List<MembershipSystem.MemberView>,
-    val welcomeNotes: List<MembershipSystem.WelcomeNoteView>,
-    val emailChanges: List<MembershipSystem.EmailChangeView>,
-    val visits: List<MembershipSystem.VisitView>,
-    val deposits: List<MembershipSystem.DepositView>,
-    val charges: List<MembershipSystem.ChargeView>,
-    val delinquencyFlags: List<MembershipSystem.DelinquencyFlagView>,
-    val auditEntrys: List<MembershipSystem.AuditEntryView>,
-    val accountReviews: List<MembershipSystem.AccountReviewView>,
-    val tickets: List<MembershipSystem.TicketView>,
-) : View
+    val members: List<Ref<Member>>,
+    val welcomeNotes: List<Ref<WelcomeNote>>,
+    val emailChanges: List<Ref<EmailChange>>,
+    val visits: List<Ref<Visit>>,
+    val deposits: List<Ref<Deposit>>,
+    val charges: List<Ref<Charge>>,
+    val delinquencyFlags: List<Ref<DelinquencyFlag>>,
+    val auditEntrys: List<Ref<AuditEntry>>,
+    val accountReviews: List<Ref<AccountReview>>,
+    val tickets: List<Ref<Ticket>>,
+    /** membership of SelfReferral at the moment of the read */
+    val isSelfReferral: Boolean,
+    /** membership of ActiveMember at the moment of the read */
+    val isActiveMember: Boolean,
+    /** membership of Delinquent at the moment of the read */
+    val isDelinquent: Boolean,
+    /** membership of DeepDelinquent at the moment of the read */
+    val isDeepDelinquent: Boolean,
+    /** membership of ChronicDelinquent at the moment of the read */
+    val isChronicDelinquent: Boolean,
+    /** membership of LateEscalatedMember at the moment of the read */
+    val isLateEscalatedMember: Boolean,
+) : Ref<Member> {
+    override val shape: String get() = "Member"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class LateEscalatedMember(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val signupEmail: String,
-    val plan: MembershipSystem.PlanView,
-    val referredBy: MembershipSystem.MemberView?,
+    val plan: Ref<Plan>,
+    val referredBy: Ref<Member>?,
     val joinedOn: Instant,
     val lastChangedOn: Instant,
     val balance: BigDecimal,
@@ -2070,17 +2359,33 @@ data class LateEscalatedMember(
     val engagementScore: Double,
     val totalDeposited: BigDecimal,
     val email: String,
-    val members: List<MembershipSystem.MemberView>,
-    val welcomeNotes: List<MembershipSystem.WelcomeNoteView>,
-    val emailChanges: List<MembershipSystem.EmailChangeView>,
-    val visits: List<MembershipSystem.VisitView>,
-    val deposits: List<MembershipSystem.DepositView>,
-    val charges: List<MembershipSystem.ChargeView>,
-    val delinquencyFlags: List<MembershipSystem.DelinquencyFlagView>,
-    val auditEntrys: List<MembershipSystem.AuditEntryView>,
-    val accountReviews: List<MembershipSystem.AccountReviewView>,
-    val tickets: List<MembershipSystem.TicketView>,
-) : View
+    val members: List<Ref<Member>>,
+    val welcomeNotes: List<Ref<WelcomeNote>>,
+    val emailChanges: List<Ref<EmailChange>>,
+    val visits: List<Ref<Visit>>,
+    val deposits: List<Ref<Deposit>>,
+    val charges: List<Ref<Charge>>,
+    val delinquencyFlags: List<Ref<DelinquencyFlag>>,
+    val auditEntrys: List<Ref<AuditEntry>>,
+    val accountReviews: List<Ref<AccountReview>>,
+    val tickets: List<Ref<Ticket>>,
+    /** membership of SelfReferral at the moment of the read */
+    val isSelfReferral: Boolean,
+    /** membership of ActiveMember at the moment of the read */
+    val isActiveMember: Boolean,
+    /** membership of Delinquent at the moment of the read */
+    val isDelinquent: Boolean,
+    /** membership of DeepDelinquent at the moment of the read */
+    val isDeepDelinquent: Boolean,
+    /** membership of ChronicDelinquent at the moment of the read */
+    val isChronicDelinquent: Boolean,
+    /** membership of MemberWithDisputedCharge at the moment of the read */
+    val isMemberWithDisputedCharge: Boolean,
+) : Ref<Member> {
+    override val shape: String get() = "Member"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 // ── the builder's vocabulary: one field handle per member, memberships per refinement ──
 

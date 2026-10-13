@@ -1,6 +1,8 @@
 package velle.generated.loyalty
 
 import velle.generated.LoyaltySystem
+import velle.generated.*
+import velle.generated.Member
 import java.math.BigDecimal
 
 /**
@@ -11,8 +13,8 @@ class Givens(private val sys: LoyaltySystem) : RequiredGivens {
     private var n = 0
 
     private fun member(
-        referrer: LoyaltySystem.MemberView? = null,
-    ): LoyaltySystem.MemberView {
+        referrer: Member? = null,
+    ): Member {
         sys.commitJoin("Member ${++n}", referrer = referrer)
         return sys.members().last()
     }
@@ -21,18 +23,18 @@ class Givens(private val sys: LoyaltySystem) : RequiredGivens {
         sys.commitJoin("Member ${++n}")
     }
 
-    override fun qualifiedPurchase(): LoyaltySystem.PurchaseView {
+    override fun qualifiedPurchase(): Purchase {
         sys.commitPurchase(member(), BigDecimal("150"))
         return sys.purchases().last()
     }
 
-    override fun purchaseForPromoteReferrer(): LoyaltySystem.PurchaseView {
+    override fun purchaseForPromoteReferrer(): Purchase {
         val recruiter = member()
         sys.commitPurchase(member(referrer = recruiter), BigDecimal("150"))
         return sys.purchases().last()
     }
 
-    override fun purchaseForThankVip(): LoyaltySystem.PurchaseView {
+    override fun purchaseForThankVip(): Purchase {
         // tier is system-maintained, so gold is earned, never given: the
         // qualifying purchase is itself the subject — it enters VipPurchase at
         // its own promotion's commit, and ThankVip thanks it there
@@ -40,16 +42,16 @@ class Givens(private val sys: LoyaltySystem) : RequiredGivens {
         return sys.purchases().last()
     }
 
-    override fun enrollment(): LoyaltySystem.EnrollmentView {
+    override fun enrollment(): Enrollment {
         sys.commitEnrollment(member())
         return sys.enrollments().last()
     }
 
-    override fun memberForIssueKeycard(): LoyaltySystem.MemberView {
+    override fun memberForIssueKeycard(): Member {
         val m = member()
         sys.commitEnrollment(m)
         return m
     }
 
-    override fun someMember(): LoyaltySystem.MemberView = member()
+    override fun someMember(): Member = member()
 }

@@ -19,7 +19,7 @@ class PriceChangeSpec : SpecSupport() {
         // given: any committed 'Drug'
         val drug = givens.someDrug()
         val before = count("PriceChange")
-        val result = sys.system.commit("PriceChange", mapOf("drug" to drug.id, "effectiveOn" to java.time.LocalDate.of(2026, 1, 15), "unitPrice" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("PriceChange", mapOf("drug" to idOf(drug), "effectiveOn" to java.time.LocalDate.of(2026, 1, 15), "unitPrice" to java.math.BigDecimal("-1")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("PriceChange"), "a refused act commits nothing")
     }
@@ -28,7 +28,7 @@ class PriceChangeSpec : SpecSupport() {
     fun `never - a PriceChange with unitPrice 0 is accepted`() {
         // given: any committed 'Drug'
         val drug = givens.someDrug()
-        val result = sys.system.commit("PriceChange", mapOf("drug" to drug.id, "effectiveOn" to java.time.LocalDate.of(2026, 1, 15), "unitPrice" to java.math.BigDecimal("0")))
+        val result = sys.system.commit("PriceChange", mapOf("drug" to idOf(drug), "effectiveOn" to java.time.LocalDate.of(2026, 1, 15), "unitPrice" to java.math.BigDecimal("0")))
         assertIs<CommitResult.Accepted>(result)
     }
 }

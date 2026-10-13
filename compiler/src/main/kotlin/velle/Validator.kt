@@ -363,7 +363,7 @@ class Validator(private val model: Model) {
                     }
                 }
             }
-            is ValueLit -> {}
+            is ValueLit, is RefLit -> {}
             is NotExpr -> checkExpr(e.inner, scope)
             is IfExpr -> {
                 checkExpr(e.condition, scope)

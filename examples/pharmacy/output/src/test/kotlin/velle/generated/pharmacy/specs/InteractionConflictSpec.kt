@@ -22,6 +22,6 @@ class InteractionConflictSpec : SpecSupport() {
         val prescription = givens.prescriptionForAlertInteraction()
         prescription.assertIsA("InteractionConflict", "the given must deliver a member of 'InteractionConflict'")
         val producedPharmacistAlert = last("PharmacistAlert")
-        assertEquals(prescription.id, field(producedPharmacistAlert, "prescription"), "PharmacistAlert.prescription: this")
+        assertEquals(idOf(prescription), field(producedPharmacistAlert, "prescription"), "PharmacistAlert.prescription: this")
     }
 }

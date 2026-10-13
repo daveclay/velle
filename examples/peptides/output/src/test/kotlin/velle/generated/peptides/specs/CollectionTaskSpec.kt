@@ -17,7 +17,7 @@ class CollectionTaskSpec : SpecSupport() {
         // given: any committed 'Trial'
         val trial = givens.someTrial()
         val before = count("CollectionTask")
-        val result = sys.system.commit("CollectionTask", mapOf("trial" to trial.id, "dayMark" to java.math.BigDecimal("-1"), "dueOn" to java.time.LocalDate.of(2026, 1, 15)))
+        val result = sys.system.commit("CollectionTask", mapOf("trial" to idOf(trial), "dayMark" to java.math.BigDecimal("-1"), "dueOn" to java.time.LocalDate.of(2026, 1, 15)))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("CollectionTask"), "a refused act commits nothing")
     }
@@ -26,7 +26,7 @@ class CollectionTaskSpec : SpecSupport() {
     fun `never - a CollectionTask with dayMark 0 is accepted`() {
         // given: any committed 'Trial'
         val trial = givens.someTrial()
-        val result = sys.system.commit("CollectionTask", mapOf("trial" to trial.id, "dayMark" to java.math.BigDecimal("0"), "dueOn" to java.time.LocalDate.of(2026, 1, 15)))
+        val result = sys.system.commit("CollectionTask", mapOf("trial" to idOf(trial), "dayMark" to java.math.BigDecimal("0"), "dueOn" to java.time.LocalDate.of(2026, 1, 15)))
         assertIs<CommitResult.Accepted>(result)
     }
 }

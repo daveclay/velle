@@ -25,7 +25,7 @@ class SilentGreenhouseSpec : SpecSupport() {
         sys.system.tick("Hourly")
         assertEquals(beforeSensorAlert + 1, count("SensorAlert"), "rule RaiseSensorAlert: one 'SensorAlert' per firing")
         val producedSensorAlert = last("SensorAlert")
-        assertEquals(greenhouse.id, field(producedSensorAlert, "greenhouse"), "SensorAlert.greenhouse: this")
+        assertEquals(idOf(greenhouse), field(producedSensorAlert, "greenhouse"), "SensorAlert.greenhouse: this")
         sys.system.tick("Hourly")
         assertEquals(beforeSensorAlert + 1, count("SensorAlert"), "the guard makes re-evaluation harmless")
     }

@@ -3,8 +3,9 @@ package velle
 /**
  * MockHarness codegen (README §22, the milestone scope statement): transpiles a
  * spec to a typed Kotlin surface over the runtime — one commit function per
- * act, one tick function per schedule, typed views per shape and
- * refinement, membership tests, and a `main` for driving the system manually.
+ * act, one tick function per schedule, one model object (data class) per shape
+ * and refinement, the query API over them, and a `main` for driving the
+ * system manually.
  * A spike: sugar over VelleSystem, not a standalone compilation.
  */
 object Codegen {
@@ -41,8 +42,6 @@ object Codegen {
             model.exposed.forEach { commitFn(it) }
             model.shapes.keys.forEach { shapeAccessors(it) }
             model.refinements.keys.forEach { refinementAccessors(it) }
-            model.shapes.keys.forEach { shapeView(it) }
-            model.refinements.keys.forEach { refinementView(it) }
             readSurface()
             specConstant()
             line("}")
@@ -109,7 +108,7 @@ object Codegen {
             val optional = stored.filter { it.initially != null || (isOptional(it.type) && !it.initiallyRequired) }
             val hasParams = required.isNotEmpty() || optional.isNotEmpty() || edge.children.isNotEmpty()
             if (!hasParams) {
-                line("    class $name { internal fun raw(): Map<String, Any?> = emptyMap() }")
+                line("    class $name { internal fun raw(system: VelleSystem): Map<String, Any?> = emptyMap() }")
                 line()
                 return
             }
@@ -118,10 +117,10 @@ object Codegen {
             optional.forEach { line("        val ${it.name}: ${paramType(it.type).removeSuffix("?")}? = null,") }
             edge.children.forEach { line("        val ${it.prop}: List<${closureClassName(it)}> = emptyList(),") }
             line("    ) {")
-            line("        internal fun raw(): Map<String, Any?> = buildMap {")
+            line("        internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {")
             required.forEach { line("            put(\"${it.name}\", ${rawExpr(it.name, it.type)})") }
             optional.forEach { line("            ${it.name}?.let { put(\"${it.name}\", ${rawExpr("it", it.type)}) }") }
-            edge.children.forEach { line("            put(\"${it.prop}\", ${it.prop}.map { it.raw() })") }
+            edge.children.forEach { line("            put(\"${it.prop}\", ${it.prop}.map { it.raw(system) })") }
             line("        }")
             line("    }")
             line()
@@ -158,7 +157,7 @@ object Codegen {
                 line("        })")
             } else {
                 line("        }, buildMap {")
-                edges.forEach { line("            put(\"${it.prop}\", ${it.prop}.map { it.raw() })") }
+                edges.forEach { line("            put(\"${it.prop}\", ${it.prop}.map { it.raw(system) })") }
                 line("        })")
             }
             line()
@@ -186,115 +185,92 @@ object Codegen {
             else -> "Queue ${if (keys.size == 1) "key" else "keys"}: ${keys.joinToString(", ") { "[$it]" }}."
         }
 
-        fun shapeAccessors(shape: String) {
-            if (shape in model.transients) return // an input to the state, never readable after its commit
-            line("    fun ${plural(shape)}(): List<${shape}View> = system.instancesOf(\"$shape\").map { ${shape}View(it) }")
-            line("    fun ${decap(shape)}(id: Long) = ${shape}View(id)")
-        }
+        // ── the surface (README §22): model objects in, model objects out ─────
+        // The spec declares definitions; the caller composes queries. What an
+        // engineer holds is a model object — the shape's data class, every field
+        // read once at the moment of the read — and a model object is itself a
+        // `Ref<T>` to its record, so it passes wherever a reference is taken. A
+        // reference field holds a `Ref<T>`; `read(ref)` resolves it. Nothing is
+        // read *through* a reference.
 
-        fun refinementAccessors(ref: String) {
-            val scope = model.viewScopeOf(ref) ?: return
-            if (model.basesOf(ref).any { it in model.transients }) return
-            line("    fun ${plural(ref)}(): List<${ref}View> = system.instancesOf(\"$ref\").map { ${ref}View(it) }")
-            // membership is asked of the view a value is seen through: the base, or
-            // the static union it is drawn from — and of each operand's own view
-            line("    fun ${scope}View.is$ref(): Boolean = system.isMember(id, \"$ref\")")
-            if (scope == ref) model.basesOf(ref).forEach { op ->
-                line("    fun ${op}View.is$ref(): Boolean = system.isMember(id, \"$ref\")")
-            }
-        }
-
-        fun shapeView(shape: String) {
-            if (shape in model.transients) return
-            line()
-            line("    inner class ${shape}View(override val id: Long) : View {")
-            for ((memberName, m) in model.membersOf(shape)) {
-                if (memberName == "id") continue
-                line("        val $memberName: ${kotlinType(m.type)} get() = ${readExpr("system.get(id, \"$memberName\")", m.type)}")
-            }
-            // an operand's view widens to each static union it belongs to (README §9):
-            // how a Post is handed to a field typed `one Content`
-            model.refinements.keys.filter { model.isStaticUnion(it) && shape in model.basesOf(it) }.forEach {
-                line("        fun as$it() = ${it}View(id)")
-            }
-            line("        override fun toString() = \"$shape#\$id\"")
-            line("        override fun equals(other: Any?) = other is ${shape}View && other.id == id")
-            line("        override fun hashCode() = id.hashCode()")
-            line("    }")
-        }
-
-        fun refinementView(ref: String) {
-            val scope = model.viewScopeOf(ref) ?: return
-            if (model.basesOf(ref).any { it in model.transients }) return
-            if (scope == ref) { unionView(ref); return }
-            val own = model.refinements.getValue(ref).members.filterIsInstance<DerivedProp>()
-            line()
-            line("    inner class ${ref}View(override val id: Long) : View {")
-            line("        fun as$scope() = ${scope}View(id)")
-            for (m in own) {
-                val t = model.typeOf(m.type)
-                line("        val ${m.name}: ${kotlinType(t)} get() = ${readExpr("system.getAs(id, \"$ref\", \"${m.name}\")", t)}")
-            }
-            line("        override fun toString() = \"$ref#\$id\"")
-            line("    }")
-        }
-
-        /** A static union's view (README §9): the shared members — `id`, the inverses
-         *  inferred through fields typed with the union, the union's own derived
-         *  body — plus a narrowing accessor per operand, null when the instance
-         *  is of another operand (`is` at the surface). */
-        fun unionView(union: String) {
-            val own = model.refinements.getValue(union).members.filterIsInstance<DerivedProp>().map { it.name }.toSet()
-            line()
-            line("    inner class ${union}View(override val id: Long) : View {")
-            line("        /** the operand this instance is of */")
-            line("        val shape: String get() = system.shapeOf(id)")
-            model.basesOf(union).forEach { op ->
-                line("        fun as$op(): ${op}View? = if (system.shapeOf(id) == \"$op\") ${op}View(id) else null")
-            }
-            for ((memberName, m) in model.membersOf(union)) {
-                if (memberName == "id") continue
-                val call = if (memberName in own) "system.getAs(id, \"$union\", \"$memberName\")" else "system.get(id, \"$memberName\")"
-                line("        val $memberName: ${kotlinType(m.type)} get() = ${readExpr(call, m.type)}")
-            }
-            line("        override fun toString() = \"$union#\$id\"")
-            line("        override fun equals(other: Any?) = other is View && other.id == id")
-            line("        override fun hashCode() = id.hashCode()")
-            line("    }")
-        }
-
-        // ── the query API (README §22, the composed query; Read.kt; OQ51) ─────
-        // Per shape and per single-base refinement: a data class (R5), a fields
-        // class for the builder's lambdas, a typed query, and the `read` holder
-        // with the registry (R9). Nothing here is a query: the spec declares
-        // definitions, the caller composes.
-
-        /** The roots a query may name: every readable shape, every single-base refinement. */
+        /** The roots a query may name: every readable shape and refinement, static unions included (README §9). */
         val queryRoots: List<String> =
             model.shapes.keys.filterNot { it in model.transients } +
                 model.refinements.keys.filter { r ->
-                    val scope = model.viewScopeOf(r)
-                    scope != null && scope != r && !model.isCrossBase(r) &&
-                        model.basesOf(r).none { it in model.transients }
+                    model.viewScopeOf(r) != null && model.basesOf(r).none { it in model.transients }
                 }
 
         fun isRoot(name: String) = name in queryRoots
+        fun isUnion(name: String) = name in model.refinements && model.isStaticUnion(name)
+        /** The static unions a shape is an operand of. */
+        fun unionsOf(shape: String): List<String> = model.refinements.keys.filter { isUnion(it) && shape in model.basesOf(it) }
+        /** The reference type a model object of [root] is: its base shape, or the union it is drawn from. */
+        fun refTarget(root: String): String = model.baseOf(root) ?: model.unionRootOf(root) ?: root
 
-        /** The members a data class carries and a fields class exposes: everything but `id`. */
+        /** The members a model object carries and a fields class exposes: everything but `id`. */
         fun dataMembers(scope: String): List<Pair<String, MemberInfo>> =
             model.membersOf(scope).entries.filter { it.key != "id" }.map { it.key to it.value }
 
+        /** A union's own derived members, carried by each operand's model object (read in the union's scope). */
+        fun unionMembers(shape: String): List<Triple<String, String, VType>> =
+            unionsOf(shape).flatMap { u ->
+                model.refinements.getValue(u).members.filterIsInstance<DerivedProp>().map { Triple(it.name, u, model.typeOf(it.type)) }
+            }
+
+        /** The refinements a model object of [root] carries a membership flag for. */
+        fun membershipsOf(root: String): List<String> {
+            val members = model.membersOf(root).keys + unionMembers(root).map { it.first }
+            val over: (String) -> Boolean = when {
+                isUnion(root) -> { r -> model.isCrossBase(r) && model.unionRootOf(r) == root }
+                root in model.shapes -> { r -> model.baseOf(r) == root || (model.isCrossBase(r) && model.unionRootOf(r) in unionsOf(root)) }
+                else -> { r -> model.baseOf(r) == model.baseOf(root) }
+            }
+            // a member already named `isX` keeps its name; the flag yields
+            return model.refinements.keys.filter { r -> isRoot(r) && r != root && !isUnion(r) && over(r) && "is$r" !in members }
+        }
+
+        // ── accessors: the degenerate query — every instance, as model objects ──
+        fun shapeAccessors(shape: String) {
+            if (shape in model.transients) return // an input to the state, never readable after its commit
+            line("    fun ${plural(shape)}(): List<$shape> = system.instancesOf(\"$shape\").map { materialize$shape(it) }")
+        }
+
+        fun refinementAccessors(ref: String) {
+            if (!isRoot(ref)) return
+            line("    fun ${plural(ref)}(): List<$ref> = system.instancesOf(\"$ref\").map { materialize$ref(it) }")
+        }
+
         fun readSurface() {
             line()
-            line("    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──")
+            line("    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──")
             line("    val read = Read()")
             line()
             line("    inner class Read {")
             line("        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */")
             line("        val registry = QueryRegistry()")
             line("        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())")
+            line()
+            line("        /** The model object behind a reference, read now; throws when the record no longer exists. */")
+            line("        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T")
+            line("        fun fetch(id: Long): Ref<*> {")
+            line("            system.currentShapeOf(id) ?: throw NoSuchElementException(\"no current record for \${system.refFor(id)}\")")
+            line("            return materialize(id)")
+            line("        }")
             queryRoots.forEach { root ->
+                line()
                 line("        val ${plural(root)}: ${root}Query get() = ${root}Query(Query(\"$root\"))")
+                when {
+                    root in model.shapes -> {
+                        line("        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */")
+                        line("        fun ${decap(root)}(key: StoreKey): $root = this(Ref.Persisted(\"$root\", key))")
+                        line("        fun ${decap(root)}(key: Long): $root = ${decap(root)}(StoreKey(key))")
+                    }
+                    !isUnion(root) -> {
+                        line("        /** The record behind [ref] as a member of $root, or null when it is not one. */")
+                        line("        fun ${decap(root)}(ref: Ref<${refTarget(root)}>): $root? =")
+                        line("            system.idOf(ref).let { if (system.exists(\"$root\", it)) materialize$root(it) else null }")
+                    }
+                }
             }
             line("    }")
             queryRoots.forEach { root ->
@@ -303,41 +279,75 @@ object Codegen {
                 line("        override fun with(q: Query) = ${root}Query(q)")
                 line("    }")
             }
+            line()
+            line("    /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */")
+            line("    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {")
+            model.shapes.keys.filterNot { it in model.transients }.forEach { line("        \"$it\" -> materialize$it(id)") }
+            line("        else -> throw IllegalStateException(\"no model object for '\$shape'\")")
+            line("    }")
             queryRoots.forEach { root -> materializer(root) }
         }
 
-        /** The data class from a handle: every member read at the moment of the query (R5). */
+        /** The model object from a handle: every member read at the moment of the read (R5). */
         fun materializer(root: String) {
-            val own = model.refinements[root]?.members?.filterIsInstance<DerivedProp>()?.map { it.name }?.toSet().orEmpty()
             line()
+            if (isUnion(root)) {
+                line("    fun materialize$root(id: Long): $root = materialize(id) as $root")
+                return
+            }
+            val own = model.refinements[root]?.members?.filterIsInstance<DerivedProp>()?.map { it.name }?.toSet().orEmpty()
             line("    fun materialize$root(id: Long): $root = $root(")
-            line("        id = id,")
+            line("        key = system.refFor(id).key,")
             for ((name, m) in dataMembers(root)) {
                 val call = if (name in own) "system.getAs(id, \"$root\", \"$name\")" else "system.get(id, \"$name\")"
                 line("        $name = ${readExpr(call, m.type)},")
             }
+            if (root in model.shapes) unionMembers(root).forEach { (name, u, t) ->
+                line("        $name = ${readExpr("system.getAs(id, \"$u\", \"$name\")", t)},")
+            }
+            membershipsOf(root).forEach { r -> line("        is$r = system.isMember(id, \"$r\"),") }
             line("    )")
         }
 
         fun dataClasses() {
             line()
-            line("// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──")
-            line("// References are typed handles (views); navigating one is a further read.")
+            line("// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──")
+            line("// A model object is a reference to its own record (`Ref<T>`): equality is identity,")
+            line("// a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is")
+            line("// the record's membership at the moment of the read.")
             for (root in queryRoots) {
                 line()
+                if (isUnion(root)) { unionInterface(root); continue }
+                val target = refTarget(root)
+                val unionNames = if (root in model.shapes) unionsOf(root) else emptyList()
+                val inherited = unionNames.flatMap { model.membersOf(it).keys + membershipsOf(it).map { r -> "is$r" } }.toSet()
+                val supertypes = listOf("Ref<$target>") + unionNames
                 line("data class $root(")
-                line("    override val id: Long,")
-                for ((name, m) in dataMembers(root)) line("    val $name: ${dataType(m.type)},")
-                line(") : View")
+                line("    override val key: StoreKey,")
+                for ((name, m) in dataMembers(root)) line("    ${if (name in inherited) "override " else ""}val $name: ${kotlinType(m.type)},")
+                if (root in model.shapes) unionMembers(root).forEach { (name, _, t) -> line("    override val $name: ${kotlinType(t)},") }
+                membershipsOf(root).forEach { r ->
+                    line("    /** membership of $r at the moment of the read */")
+                    line("    ${if ("is$r" in inherited) "override " else ""}val is$r: Boolean,")
+                }
+                line(") : ${supertypes.joinToString(", ")} {")
+                line("    override val shape: String get() = \"$target\"")
+                line("    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key")
+                line("    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()")
+                line("}")
             }
         }
 
-        /** Data-class field types: as the views, but views are named through the system class. */
-        fun dataType(t: VType): String = when (t) {
-            is VType.Inst -> "${name}System.${t.shape}View"
-            is VType.Coll -> "List<${name}System.${t.shape}View>"
-            is VType.Optional -> dataType(t.inner) + "?"
-            else -> kotlinType(t)
+        /** A static union (README §9) as an interface its operands' model objects implement:
+         *  the shared members, the union's own derived members, and its membership flags.
+         *  Covariance makes a `Ref<Post>` a `Ref<Content>`, which is how an operand widens. */
+        fun unionInterface(union: String) {
+            line("interface $union : Keyed {")
+            line("    /** this record as a reference typed by the union, for a parameter that takes one */")
+            line("    val ref: Ref<$union> get() = Ref.Persisted(shape, key)")
+            for ((name, m) in dataMembers(union)) line("    val $name: ${kotlinType(m.type)}")
+            membershipsOf(union).forEach { r -> line("    val is$r: Boolean") }
+            line("}")
         }
 
         fun fieldsClasses() {
@@ -350,11 +360,11 @@ object Codegen {
                     val handle = fieldHandle(m.type) ?: continue
                     line("    val $memberName: $handle get() = $handle(fieldPath + \"$memberName\")")
                 }
-                // memberships of every refinement over this root's base (`isOverdueInvoice()`)
-                val base = model.baseOf(root) ?: root
-                model.refinements.keys.filter { r -> isRoot(r) && model.baseOf(r) == base && r != root }.forEach { r ->
-                    line("    fun is$r(): Expr = isA(\"$r\")")
+                if (root in model.shapes) unionMembers(root).forEach { (name, _, t) ->
+                    fieldHandle(t)?.let { line("    val $name: $it get() = $it(fieldPath + \"$name\")") }
                 }
+                // memberships of every refinement over this root (`isOverdueInvoice()`)
+                membershipsOf(root).forEach { r -> line("    fun is$r(): Expr = isA(\"$r\")") }
                 line("}")
             }
         }
@@ -402,11 +412,11 @@ object Codegen {
 
         fun isOptional(t: TypeRef) = (t as? ScalarType)?.optional == true || (t as? RelType)?.optional == true
 
-        /** Parameter type for a commit function (relationships take views; `many` takes lists). */
+        /** Parameter type for a commit function (relationships take references — a model object is one; `many` takes lists). */
         fun paramType(t: TypeRef): String = when (t) {
             is RelType ->
-                if (t.many) "List<${t.shape}View>"
-                else "${t.shape}View" + if (t.optional) "?" else ""
+                if (t.many) "List<Ref<${t.shape}>>"
+                else "Ref<${t.shape}>" + if (t.optional) "?" else ""
             is ScalarType ->
                 if (t.many) "List<${scalarKotlin(t.name)}>"
                 else scalarKotlin(t.name) + if (t.optional) "?" else ""
@@ -414,7 +424,7 @@ object Codegen {
 
         /** Convert a parameter back to the raw value the runtime accepts. */
         fun rawExpr(expr: String, t: TypeRef): String = when (t) {
-            is RelType -> if (t.many) "$expr.map { it.id }" else "$expr.id"
+            is RelType -> if (t.many) "$expr.map { system.idOf(it) }" else "system.idOf($expr)"
             is ScalarType -> expr
         }
 
@@ -436,8 +446,8 @@ object Codegen {
             VType.Bool -> "Boolean"
             VType.DateT -> "LocalDate"
             VType.DateTimeT -> "Instant"
-            is VType.Inst -> "${t.shape}View"
-            is VType.Coll -> "List<${t.shape}View>"
+            is VType.Inst -> "Ref<${t.shape}>"
+            is VType.Coll -> "List<Ref<${t.shape}>>"
             is VType.CollS -> "List<${scalarKotlin(t.name)}>"
             is VType.Optional -> kotlinType(t.inner) + "?"
             VType.Id, VType.Unknown -> "Any"
@@ -455,8 +465,8 @@ object Codegen {
             VType.Bool -> "$call as Boolean"
             VType.DateT -> "$call as LocalDate"
             VType.DateTimeT -> "$call as Instant"
-            is VType.Inst -> "${t.shape}View($call as Long)"
-            is VType.Coll -> "($call as List<*>).map { ${t.shape}View(it as Long) }"
+            is VType.Inst -> "system.refFor($call as Long)"
+            is VType.Coll -> "($call as List<*>).map { system.refFor(it as Long) }"
             is VType.CollS -> when (t.name) {
                 "integer" -> "($call as List<*>).map { (it as BigDecimal).intValueExact() }"
                 "long" -> "($call as List<*>).map { (it as BigDecimal).longValueExact() }"
@@ -465,7 +475,7 @@ object Codegen {
                 else -> "($call as List<*>).map { it as ${scalarKotlin(t.name)} }"
             }
             is VType.Optional -> when (val inner = t.inner) {
-                is VType.Inst -> "($call as Long?)?.let { ${inner.shape}View(it) }"
+                is VType.Inst -> "($call as Long?)?.let { system.refFor(it) }"
                 else -> "$call as ${kotlinType(t)}"
             }
             VType.Id, VType.Unknown -> call

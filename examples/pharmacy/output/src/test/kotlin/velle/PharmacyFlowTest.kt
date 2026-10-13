@@ -1,6 +1,8 @@
 package velle.generated.pharmacy
 
 import java.math.BigDecimal
+import velle.Keyed
+import velle.generated.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -9,7 +11,6 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import velle.CommitResult
-import velle.View
 import velle.generated.PharmacySystem
 
 /**
@@ -33,7 +34,7 @@ open class PharmacyFlowTest {
 
     private fun accept(r: CommitResult) = assertIs<CommitResult.Accepted>(r, "refused: $r")
     private fun refuse(r: CommitResult) = assertTrue(r !is CommitResult.Accepted, "expected a refusal, got: $r")
-    private fun View.isA(refinement: String) = sys.system.isMember(id, refinement)
+    private fun Keyed.isA(refinement: String) = sys.system.isMember(sys.system.idOf(this), refinement)
     private fun dec(s: String) = BigDecimal(s)
     private fun BigDecimal.plain() = stripTrailingZeros().toPlainString()
 
@@ -56,22 +57,22 @@ open class PharmacyFlowTest {
         refuse(sys.commitPrescriberOrder(dr, patient, s.today.plusDays(1), tech, listOf(s.line(amoxicillin))))
 
         val order = s.order(patient, dr, tech, listOf(s.line(amoxicillin), s.line(oxycodone, refills = 0)), writtenOn = s.today.minusDays(10))
-        assertEquals(2, order.prescriptions.size)
-        val plain = order.prescriptions.first { it.drug == amoxicillin }
-        val controlled = order.prescriptions.first { it.drug == oxycodone }
-        assertEquals(s.today.minusDays(10).plusDays(365), plain.expiresOn, "a year for an ordinary prescription")
-        assertEquals(s.today.minusDays(10).plusDays(180), controlled.expiresOn, "six months for a controlled one")
-        assertEquals(3, plain.refillsRemaining, "the first fill plus two refills")
-        assertEquals(listOf(plain, controlled).map { it.id }.sorted(), patient.prescriptions.map { it.id }.sorted(), "the two-hop view on the patient")
+        assertEquals(2, sys.read(order).prescriptions.size)
+        val plain = sys.read(order).prescriptions.first { sys.read(it).drug == amoxicillin }
+        val controlled = sys.read(order).prescriptions.first { sys.read(it).drug == oxycodone }
+        assertEquals(s.today.minusDays(10).plusDays(365), sys.read(plain).expiresOn, "a year for an ordinary prescription")
+        assertEquals(s.today.minusDays(10).plusDays(180), sys.read(controlled).expiresOn, "six months for a controlled one")
+        assertEquals(3, sys.read(plain).refillsRemaining, "the first fill plus two refills")
+        assertEquals(listOf(plain, controlled).map { it.key }.toSet(), sys.read(patient).prescriptions.map { it.key }.toSet(), "the two-hop view on the patient")
         assertTrue(plain.isA("ActivePrescription"))
-        assertEquals(order, plain.order, "the back-reference the closure populated")
+        assertEquals(order, sys.read(plain).order, "the back-reference the closure populated")
     }
 
     @Test
     fun `order - corrections and voids are refused once a prescription has been filled`() {
         val c = s.counter()
         accept(sys.commitCorrectEntry(c.prescription, c.technician, "two daily"))
-        assertEquals("two daily", c.prescription.directions)
+        assertEquals("two daily", sys.read(c.prescription).directions)
 
         // only the prescriber who wrote it may discontinue it
         refuse(sys.commitDiscontinuation(c.prescription, s.prescriber("Dr Other"), "not mine"))
@@ -79,8 +80,8 @@ open class PharmacyFlowTest {
         s.filled(c)
         assertTrue(c.prescription.isA("FilledPrescription"))
         accept(sys.commitCorrectEntry(c.prescription, c.technician, "three daily"))
-        assertEquals("two daily", c.prescription.directions, "frozen by FilledPrescription")
-        assertEquals("the prescription has been filled", sys.correctionRefusals().single().reason)
+        assertEquals("two daily", sys.read(c.prescription).directions, "frozen by FilledPrescription")
+        assertEquals("the prescription has been filled", sys.read(sys.correctionRefusals().single()).reason)
 
         accept(sys.commitVoidEntry(c.prescription, c.pharmacist, "wrong patient"))
         assertEquals(1, sys.voidRefusals().size)
@@ -101,35 +102,35 @@ open class PharmacyFlowTest {
     fun `prices - the price in force is the dated entry, a future change waits and can be withdrawn, one in force cannot`() {
         val d = s.drug(price = "1.50")
         val admin = s.administrator()
-        assertEquals("1.5", d.unitPrice.plain())
+        assertEquals("1.5", sys.read(d).unitPrice.plain())
 
         accept(sys.commitPriceChange(d, s.today.plusDays(10), dec("2.00")))
         val future = sys.priceChanges().last()
-        assertEquals("1.5", d.unitPrice.plain(), "the future change waits its turn")
+        assertEquals("1.5", sys.read(d).unitPrice.plain(), "the future change waits its turn")
         assertFalse(future.isA("EffectivePrice"))
 
         // two changes on one date would leave the ledger unordered
         refuse(sys.commitPriceChange(d, s.today.plusDays(10), dec("2.25")))
 
         sys.advanceDays(10)
-        assertEquals("2", d.unitPrice.plain(), "its day came")
+        assertEquals("2", sys.read(d).unitPrice.plain(), "its day came")
         assertTrue(future.isA("EffectivePrice"))
 
         // now it is in force: withdrawal is refused on record
         accept(sys.commitWithdrawPriceChange(future, admin, "second thoughts"))
-        assertEquals("the price is already in force", sys.priceWithdrawalRefusals().single().reason)
-        assertEquals(2, d.priceChanges.size)
+        assertEquals("the price is already in force", sys.read(sys.priceWithdrawalRefusals().single()).reason)
+        assertEquals(2, sys.read(d).priceChanges.size)
 
         // a fresh future change can be withdrawn — by an administrator only
         accept(sys.commitPriceChange(d, s.today.plusDays(5), dec("9.99")))
         val mistaken = sys.priceChanges().last()
         refuse(sys.commitWithdrawPriceChange(mistaken, s.technician(), "typo"))
         accept(sys.commitWithdrawPriceChange(mistaken, admin, "typo"))
-        assertEquals(2, d.priceChanges.size, "removed")
+        assertEquals(2, sys.read(d).priceChanges.size, "removed")
         val withdrawal = sys.priceWithdrawals().single()
-        assertEquals("9.99", withdrawal.unitPrice.plain(), "what was removed, copied out")
-        assertEquals(d, withdrawal.drug)
-        assertEquals("2", d.unitPrice.plain())
+        assertEquals("9.99", sys.read(withdrawal).unitPrice.plain(), "what was removed, copied out")
+        assertEquals(d, sys.read(withdrawal).drug)
+        assertEquals("2", sys.read(d).unitPrice.plain())
     }
 
     // ── clinical checks ──────────────────────────────────────────────────────
@@ -142,13 +143,13 @@ open class PharmacyFlowTest {
         val c = s.counter(patient = patient, drug = amoxicillin)
         assertTrue(c.prescription.isA("AllergyConflict"))
         assertFalse(c.prescription.isA("Cleared"))
-        assertEquals("allergy", sys.pharmacistAlerts().single().kind, "the pharmacist is alerted once")
+        assertEquals("allergy", sys.read(sys.pharmacistAlerts().single()).kind, "the pharmacist is alerted once")
 
         val key = s.requestFill(c.prescription, c.lot, c.technician)
         assertEquals(0, sys.fills().size)
         val refusal = sys.fillRefusals().single()
-        assertEquals(key, refusal.requestKey, "the counter finds its answer by the key")
-        assertEquals("unresolved allergy or interaction conflict", refusal.reason)
+        assertEquals(key, sys.read(refusal).requestKey, "the counter finds its answer by the key")
+        assertEquals("unresolved allergy or interaction conflict", sys.read(refusal).reason)
 
         refuse(sys.commitConflictOverride(c.prescription, c.technician, "patient tolerates it"))
         accept(sys.commitConflictOverride(c.prescription, c.pharmacist, "patient tolerates it"))
@@ -163,7 +164,7 @@ open class PharmacyFlowTest {
         val warfarin = s.drug("warfarin")
         val aspirin = s.drug("aspirin")
         s.interaction(aspirin, warfarin)
-        assertEquals(1, warfarin.interactions.size, "the view reads the pair from the other side")
+        assertEquals(1, sys.read(warfarin).interactions.size, "the view reads the pair from the other side")
         refuse(sys.commitInteraction(aspirin, aspirin, "major"))
 
         val patient = s.patient()
@@ -176,7 +177,7 @@ open class PharmacyFlowTest {
         assertTrue(onAspirin.isA("InteractionConflict"))
         assertTrue(onWarfarin.isA("InteractionConflict"), "and the other way round")
         assertEquals(2, sys.pharmacistAlerts().size)
-        assertTrue(sys.pharmacistAlerts().all { it.kind == "interaction" })
+        assertTrue(sys.pharmacistAlerts().all { sys.read(it).kind == "interaction" })
 
         // discontinuing the warfarin clears both
         accept(sys.commitDiscontinuation(onWarfarin, dr, "stopped"))
@@ -212,14 +213,14 @@ open class PharmacyFlowTest {
         // more than the lot holds is answered on record, over the shelf as it stands
         val small = s.lot(c.drug, lotNumber = "SMALL", received = 20)
         val k0 = s.requestFill(c.prescription, small, c.technician)
-        assertEquals("the lot does not hold that much", sys.fillRefusals().single { it.requestKey == k0 }.reason)
+        assertEquals("the lot does not hold that much", sys.read(sys.fillRefusals().single { sys.read(it).requestKey == k0 }).reason)
         assertEquals(0, sys.fills().size)
 
         // a partial fill is fine; the second fill is the next number
         s.fill(c.prescription, c.lot, c.technician, quantity = 10)
-        assertEquals(1, c.prescription.fillsRecorded)
-        assertEquals(90, c.lot.onHand)
-        assertEquals("15", sys.fills().single().total.plain(), "10 at 1.50")
+        assertEquals(1, sys.read(c.prescription).fillsRecorded)
+        assertEquals(90, sys.read(c.lot).onHand)
+        assertEquals("15", sys.read(sys.fills().single()).total.plain(), "10 at 1.50")
 
         // use up the refills: three fills in all, then the fourth is answered on record
         s.fill(c.prescription, c.lot, c.technician)
@@ -227,20 +228,20 @@ open class PharmacyFlowTest {
         assertTrue(c.prescription.isA("Exhausted"))
         val key = s.requestFill(c.prescription, c.lot, c.technician)
         assertEquals(3, sys.fills().size)
-        assertEquals("no refills remaining", sys.fillRefusals().single { it.requestKey == key }.reason)
-        assertEquals(30, c.lot.onHand, "100 less 10, 30, and 30")
+        assertEquals("no refills remaining", sys.read(sys.fillRefusals().single { sys.read(it).requestKey == key }).reason)
+        assertEquals(30, sys.read(c.lot).onHand, "100 less 10, 30, and 30")
 
         // a discontinued one says so
         val d = s.prescription(c.patient, c.drug, c.prescriber, c.technician)
         accept(sys.commitDiscontinuation(d, c.prescriber, "changed therapy"))
         val k2 = s.requestFill(d, c.lot, c.technician)
-        assertEquals("prescription discontinued", sys.fillRefusals().single { it.requestKey == k2 }.reason)
+        assertEquals("prescription discontinued", sys.read(sys.fillRefusals().single { sys.read(it).requestKey == k2 }).reason)
 
         // an expired one says so
         val e = s.prescription(c.patient, c.drug, c.prescriber, c.technician, writtenOn = s.today.minusDays(366))
         assertTrue(e.isA("Expired"))
         val k3 = s.requestFill(e, c.lot, c.technician)
-        assertEquals("prescription expired", sys.fillRefusals().single { it.requestKey == k3 }.reason)
+        assertEquals("prescription expired", sys.read(sys.fillRefusals().single { sys.read(it).requestKey == k3 }).reason)
     }
 
     @Test
@@ -258,9 +259,9 @@ open class PharmacyFlowTest {
         val fill = s.fill(c.prescription, c.lot, c.technician)
 
         val entry = sys.controlledLogEntrys().single()
-        assertEquals(fill, entry.fill)
-        assertEquals(70, entry.balanceAfter, "100 received less 30 dispensed, as it stood at the fill")
-        assertEquals(70, c.drug.onHand)
+        assertEquals(fill, sys.read(entry).fill)
+        assertEquals(70, sys.read(entry).balanceAfter, "100 received less 30 dispensed, as it stood at the fill")
+        assertEquals(70, sys.read(c.drug).onHand)
     }
 
     // ── verification ─────────────────────────────────────────────────────────
@@ -284,8 +285,8 @@ open class PharmacyFlowTest {
         refuse(sys.commitVerifyFill(c.fill, c.pharmacist, "approved", ""), ) // verified once
         assertTrue(c.fill.isA("RejectedFill"))
         assertFalse(c.fill.isA("ConsumingFill"))
-        assertEquals(100, c.lot.onHand, "the rejected fill went back on the shelf")
-        assertEquals(1, c.prescription.refillsRemaining, "and did not use the one fill allowed")
+        assertEquals(100, sys.read(c.lot).onHand, "the rejected fill went back on the shelf")
+        assertEquals(1, sys.read(c.prescription).refillsRemaining, "and did not use the one fill allowed")
         assertFalse(c.fill.isA("ReadyForPickup"))
     }
 
@@ -295,26 +296,26 @@ open class PharmacyFlowTest {
     fun `counter - the patient is told, counselling gates the first fill, payment must cover what is due, and the exit is recorded with the day it arrived`() {
         val c = s.ready()
         val notice = sys.notices().single()
-        assertEquals("ready for pickup", notice.subject)
-        assertEquals(c.patient, notice.recipient.asPatient(), "the union-typed recipient")
-        assertEquals("555-0100", notice.contact, "a patient is texted")
+        assertEquals("ready for pickup", sys.read(notice).subject)
+        assertEquals(c.patient, (sys.read(sys.read(notice).recipient) as? Patient), "the union-typed recipient")
+        assertEquals("555-0100", sys.read(notice).contact, "a patient is texted")
         assertTrue(c.fill.isA("ReadyForPickup"))
         assertTrue(c.fill.isA("CounsellingDue"), "a first fill is counselled")
 
-        refuse(sys.commitPickUp(c.fill, "the patient", c.fill.amountDue))
+        refuse(sys.commitPickUp(c.fill, "the patient", sys.read(c.fill).amountDue))
         refuse(sys.commitCounselling(c.fill, c.technician, "..."))
         s.counsel(c.fill, c.pharmacist)
         assertFalse(c.fill.isA("CounsellingDue"))
-        assertEquals("45", c.fill.amountDue.plain(), "no insurer: the patient pays the lot")
+        assertEquals("45", sys.read(c.fill).amountDue.plain(), "no insurer: the patient pays the lot")
         refuse(sys.commitPickUp(c.fill, "the patient", dec("44.99")))
 
         sys.advanceDays(3)
         s.pickUp(c.fill)
         assertFalse(c.fill.isA("ReadyForPickup"))
         val exit = sys.counterExits().single()
-        assertEquals(s.today.minusDays(3), exit.readyOn, "the capture, read as it left")
-        assertEquals(s.today, exit.leftOn)
-        refuse(sys.commitPickUp(c.fill, "the patient", c.fill.amountDue), ) // not at the counter any more
+        assertEquals(s.today.minusDays(3), sys.read(exit).readyOn, "the capture, read as it left")
+        assertEquals(s.today, sys.read(exit).leftOn)
+        refuse(sys.commitPickUp(c.fill, "the patient", sys.read(c.fill).amountDue), ) // not at the counter any more
 
         // a second fill of the same ordinary drug needs no counselling
         val second = s.fill(c.prescription, c.lot, c.technician)
@@ -326,8 +327,8 @@ open class PharmacyFlowTest {
     @Test
     fun `counter - a fill uncollected for ten days goes back to stock overnight, restoring the shelf and the refill`() {
         val c = s.ready()
-        assertEquals(70, c.lot.onHand)
-        assertEquals(2, c.prescription.refillsRemaining)
+        assertEquals(70, sys.read(c.lot).onHand)
+        assertEquals(2, sys.read(c.prescription).refillsRemaining)
 
         sys.advanceDays(10)
         sys.tickNightly()
@@ -338,37 +339,37 @@ open class PharmacyFlowTest {
         assertTrue(c.fill.isA("Uncollected"))
         sys.tickNightly()
         val ret = sys.returnToStocks().single()
-        assertEquals(c.fill, ret.fill)
+        assertEquals(c.fill, sys.read(ret).fill)
         assertFalse(c.fill.isA("ReadyForPickup"))
         assertFalse(c.fill.isA("ConsumingFill"))
-        assertEquals(100, c.lot.onHand, "back on the shelf")
-        assertEquals(3, c.prescription.refillsRemaining, "the refill is not used up")
+        assertEquals(100, sys.read(c.lot).onHand, "back on the shelf")
+        assertEquals(3, sys.read(c.prescription).refillsRemaining, "the refill is not used up")
         val exit = sys.counterExits().single()
-        assertEquals(s.today.minusDays(11), exit.readyOn, "the capture read at the tick's exit commit")
+        assertEquals(s.today.minusDays(11), sys.read(exit).readyOn, "the capture read at the tick's exit commit")
         sys.tickNightly()
         assertEquals(1, sys.returnToStocks().size, "the guard makes the next tick harmless")
-        refuse(sys.commitPickUp(c.fill, "the patient", c.fill.amountDue))
+        refuse(sys.commitPickUp(c.fill, "the patient", sys.read(c.fill).amountDue))
     }
 
     @Test
     fun `counter - an allergy reported while a fill waits raises one alert, whether the list is replaced or extended`() {
         val c = s.ready()
         assertEquals(0, sys.counterAlerts().size)
-        val ingredient = c.drug.ingredients.single()
+        val ingredient = sys.read(c.drug).ingredients.single()
 
         accept(sys.commitSetAllergies(c.patient, listOf(s.ingredient("latex"), ingredient)))
-        assertEquals(2, c.patient.allergies.size)
+        assertEquals(2, sys.read(c.patient).allergies.size)
         assertTrue(c.prescription.isA("AllergyConflict"))
-        assertEquals(c.fill, sys.counterAlerts().single().fill)
+        assertEquals(c.fill, sys.read(sys.counterAlerts().single()).fill)
         assertEquals(1, sys.pharmacistAlerts().size, "the prescription-level alert too")
 
         accept(sys.commitSetAllergies(c.patient, emptyList()))
         assertFalse(c.prescription.isA("AllergyConflict"))
         accept(sys.commitAddAllergy(c.patient, ingredient))
-        assertEquals(listOf(ingredient), c.patient.allergies)
+        assertEquals(listOf(ingredient), sys.read(c.patient).allergies)
         assertEquals(1, sys.counterAlerts().size, "once per fill")
         accept(sys.commitAddAllergy(c.patient, ingredient))
-        assertEquals(1, c.patient.allergies.size, "a set: adding a present member is a no-op")
+        assertEquals(1, sys.read(c.patient).allergies.size, "a set: adding a present member is a no-op")
     }
 
     // ── stock ────────────────────────────────────────────────────────────────
@@ -376,25 +377,25 @@ open class PharmacyFlowTest {
     @Test
     fun `stock - on hand is a derivation, counts confirm or adjust it, expired lots are quarantined overnight`() {
         val c = s.filled()
-        assertEquals(70, c.lot.onHand)
+        assertEquals(70, sys.read(c.lot).onHand)
         accept(sys.commitCountLot(c.lot, c.technician, 70))
         assertEquals(1, sys.countConfirmations().size)
         assertEquals(0, sys.stockAdjustments().size)
 
         accept(sys.commitCountLot(c.lot, c.technician, 68))
         val adj = sys.stockAdjustments().single()
-        assertEquals(-2, adj.delta, "counted less the balance it replaced")
-        assertEquals(68, c.lot.onHand)
-        assertEquals(68, c.drug.onHand)
+        assertEquals(-2, sys.read(adj).delta, "counted less the balance it replaced")
+        assertEquals(68, sys.read(c.lot).onHand)
+        assertEquals(68, sys.read(c.drug).onHand)
         refuse(sys.commitCountLot(c.lot, s.administrator(), 68))
 
         val shortDated = s.lot(c.drug, lotNumber = "SHORT", expiresOn = s.today.plusDays(2), received = 10)
-        assertEquals(78, c.drug.onHand)
+        assertEquals(78, sys.read(c.drug).onHand)
         sys.advanceDays(3)
         assertTrue(shortDated.isA("ExpiredLot"))
         assertFalse(shortDated.isA("UsableLot"))
         sys.tickNightly()
-        assertEquals("expired", sys.quarantines().single().reason)
+        assertEquals("expired", sys.read(sys.quarantines().single()).reason)
         assertTrue(shortDated.isA("QuarantinedLot"))
         sys.tickNightly()
         assertEquals(1, sys.quarantines().size)
@@ -408,15 +409,15 @@ open class PharmacyFlowTest {
         // both patients were served from their own lots; serve the second patient's refill from the first lot too
         val refill = s.fill(c2.prescription, c1.lot, c1.technician)
         s.verify(refill, c1.pharmacist)
-        assertEquals(2, c1.lot.fills.size)
+        assertEquals(2, sys.read(c1.lot).fills.size)
 
         accept(sys.commitRecall(c1.lot, "FDA-2026-007", s.today))
         assertTrue(c1.lot.isA("RecalledLot"))
-        assertEquals("recalled", sys.quarantines().single().reason)
+        assertEquals("recalled", sys.read(sys.quarantines().single()).reason)
         assertEquals(2, sys.recallNotices().size, "one per fill from the lot, in the recall's transaction")
-        assertEquals(setOf(c1.patient.id, c2.patient.id), sys.recallNotices().map { it.patient.id }.toSet())
-        assertTrue(sys.recallNotices().all { it.reference == "FDA-2026-007" })
-        assertEquals(0, c2.lot.recalls.size, "the other lot is untouched")
+        assertEquals(setOf(c1.patient.key, c2.patient.key), sys.recallNotices().map { sys.read(it).patient.key }.toSet())
+        assertTrue(sys.recallNotices().all { sys.read(it).reference == "FDA-2026-007" })
+        assertEquals(0, sys.read(c2.lot).recalls.size, "the other lot is untouched")
 
         // nothing more can be filled from it
         refuse(sys.commitFillPrescription("K", c1.prescription, c1.lot, 30, 2, c1.technician))
@@ -431,8 +432,8 @@ open class PharmacyFlowTest {
         assertTrue(d.isA("LowStock"))
         sys.tickNightly()
         val po = sys.purchaseOrders().single()
-        assertEquals(80, po.quantity, "twice the reorder point")
-        assertEquals(s.today, po.orderedOn)
+        assertEquals(80, sys.read(po).quantity, "twice the reorder point")
+        assertEquals(s.today, sys.read(po).orderedOn)
         assertTrue(po.isA("OpenPurchaseOrder"))
         sys.tickNightly()
         assertEquals(1, sys.purchaseOrders().size, "an open order stops a second")
@@ -445,9 +446,9 @@ open class PharmacyFlowTest {
 
         val delivered = s.lot(d, lotNumber = "L-PO", received = 80, purchaseOrder = po)
         assertTrue(po.isA("ReceivedPurchaseOrder"))
-        assertEquals(po, delivered.purchaseOrder)
-        assertEquals(105, d.onHand)
-        assertEquals(2, lot.drug.stockLots.size)
+        assertEquals(po, sys.read(delivered).purchaseOrder)
+        assertEquals(105, sys.read(d).onHand)
+        assertEquals(2, sys.read(sys.read(lot).drug).stockLots.size)
     }
 
     // ── refills ──────────────────────────────────────────────────────────────
@@ -457,8 +458,8 @@ open class PharmacyFlowTest {
         val c = s.collected()
         accept(sys.commitRequestRefill("R-1", c.prescription))
         val task = sys.refillTasks().single()
-        assertEquals("R-1", task.requestKey)
-        assertEquals(1, task.fillsAtRequest)
+        assertEquals("R-1", sys.read(task).requestKey)
+        assertEquals(1, sys.read(task).fillsAtRequest)
         assertTrue(task.isA("OpenRefillTask"))
         assertFalse(task.isA("OverdueRefillTask"))
 
@@ -486,17 +487,17 @@ open class PharmacyFlowTest {
         accept(sys.commitRequestRefill("R-1", c.prescription))
         accept(sys.commitRequestRefill("R-2", c.prescription))
         assertEquals(0, sys.refillTasks().size)
-        assertEquals(listOf("no refills remaining", "no refills remaining"), sys.refillRefusals().map { it.reason })
+        assertEquals(listOf("no refills remaining", "no refills remaining"), sys.refillRefusals().map { sys.read(it).reason })
         assertEquals(1, sys.authorisationRequests().size, "asked once however many times the patient asks")
-        val fax = sys.notices().single { it.subject == "refill authorisation requested" }
-        assertEquals(c.prescriber, fax.recipient.asPrescriber())
-        assertEquals("555-0199", fax.contact, "a prescriber is faxed")
+        val fax = sys.notices().single { sys.read(it).subject == "refill authorisation requested" }
+        assertEquals(c.prescriber, (sys.read(sys.read(fax).recipient) as? Prescriber))
+        assertEquals("555-0199", sys.read(fax).contact, "a prescriber is faxed")
 
         // a discontinued prescription is refused for its own reason, and the prescriber is not asked
         val d = s.prescription(c.patient, c.drug, c.prescriber, c.technician)
         accept(sys.commitDiscontinuation(d, c.prescriber, "stopped"))
         accept(sys.commitRequestRefill("R-3", d))
-        assertEquals("prescription discontinued", sys.refillRefusals().last().reason)
+        assertEquals("prescription discontinued", sys.read(sys.refillRefusals().last()).reason)
         assertEquals(1, sys.authorisationRequests().size)
     }
 
@@ -511,7 +512,7 @@ open class PharmacyFlowTest {
         sys.advanceDays(1)
         sys.tickDaily()
         val task = sys.refillTasks().single()
-        assertNull(task.requestKey, "nobody asked")
+        assertNull(sys.read(task).requestKey, "nobody asked")
         sys.tickDaily()
         assertEquals(1, sys.refillTasks().size, "open work stops a second")
 
@@ -540,8 +541,8 @@ open class PharmacyFlowTest {
         assertFalse(aging.isA("ActivePrescription"), "expired by age")
         sys.tickDaily()
         val notice = sys.notices().single()
-        assertEquals("prescription expired", notice.subject)
-        assertEquals(c.patient, notice.recipient.asPatient())
+        assertEquals("prescription expired", sys.read(notice).subject)
+        assertEquals(c.patient, (sys.read(sys.read(notice).recipient) as? Patient))
         sys.tickDaily()
         assertEquals(1, sys.notices().size, "a leaver leaves once")
     }
@@ -556,11 +557,11 @@ open class PharmacyFlowTest {
         val c = s.ready(s.filled(s.counter(patient = s.patient("Insured", plan = s.plan()))))
         assertTrue(c.fill.isA("InsuredFill"))
         val claim = sys.claims().single()
-        assertEquals(c.fill, claim.fill)
-        assertEquals(c.patient.plan, claim.plan)
-        assertEquals("45", claim.amount.plain())
+        assertEquals(c.fill, sys.read(claim).fill)
+        assertEquals(sys.read(c.patient).plan, sys.read(claim).plan)
+        assertEquals("45", sys.read(claim).amount.plain())
         assertTrue(claim.isA("PendingClaim"))
-        assertEquals("45", c.fill.amountDue.plain(), "until the insurer answers, the patient would pay the lot")
+        assertEquals("45", sys.read(c.fill).amountDue.plain(), "until the insurer answers, the patient would pay the lot")
 
         // silence for a day: followed up hourly, at most once a day
         sys.advanceSeconds(23 * 3600)
@@ -575,7 +576,7 @@ open class PharmacyFlowTest {
         accept(sys.commitAdjudication(claim, "paid", dec("40.00"), dec("5.00")))
         assertTrue(claim.isA("PaidClaim"))
         assertFalse(claim.isA("StaleClaim"))
-        assertEquals("5", c.fill.amountDue.plain())
+        assertEquals("5", sys.read(c.fill).amountDue.plain())
         sys.advanceSeconds(24 * 3600)
         sys.tickHourly()
         assertEquals(1, sys.claimFollowUps().size, "answered claims are left alone")
@@ -583,7 +584,7 @@ open class PharmacyFlowTest {
         refuse(sys.commitPickUp(c.fill, "the patient", dec("4.99")))
         s.counsel(c.fill, c.pharmacist)
         s.pickUp(c.fill)
-        assertEquals("5", sys.pickups().single().amountPaid.plain())
+        assertEquals("5", sys.read(sys.pickups().single()).amountPaid.plain())
         assertEquals(1, sys.claims().size, "claimed once")
     }
 
@@ -600,7 +601,7 @@ open class PharmacyFlowTest {
 
         sys.tickDaily()
         sys.tickDaily()
-        assertEquals(listOf(soon), sys.licenceReminders().map { it.pharmacist })
+        assertEquals(listOf(soon), sys.licenceReminders().map { sys.read(it).pharmacist })
         sys.advanceDays(6)
         sys.tickDaily()
         assertEquals(1, sys.licenceReminders().size, "weekly")
@@ -621,9 +622,10 @@ open class PharmacyFlowTest {
         s.lot(oxy, received = 50)
         sys.tickMonthly()
         val snapshots = sys.controlledInventorySnapshots()
-        assertEquals(setOf(oxy.id, codeine.id), snapshots.map { it.drug.id }.toSet(), "controlled drugs only")
-        assertEquals(50, snapshots.single { it.drug == oxy }.onHand)
+        assertEquals(setOf(oxy.key, codeine.key), snapshots.map { sys.read(it).drug.key }.toSet(), "controlled drugs only")
+        assertEquals(50, sys.read(snapshots.single { sys.read(it).drug == oxy }).onHand)
         sys.tickMonthly()
         assertEquals(4, sys.controlledInventorySnapshots().size, "one per drug per tick is the intent")
     }
 }
+

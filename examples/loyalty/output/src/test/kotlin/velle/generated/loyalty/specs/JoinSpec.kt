@@ -36,6 +36,6 @@ class JoinSpec : SpecSupport() {
         member.assertIsA("CertifiedMember", "the given must deliver a member of 'CertifiedMember'")
         assertEquals(beforeKeycard + 1, count("Keycard"), "rule IssueKeycard: one 'Keycard' per firing")
         val producedKeycard = last("Keycard")
-        assertEquals(member.id, field(producedKeycard, "member"), "Keycard.member: this")
+        assertEquals(idOf(member), field(producedKeycard, "member"), "Keycard.member: this")
     }
 }

@@ -24,6 +24,6 @@ class OrphanReportSpec : SpecSupport() {
         listingReport.assertIsA("OrphanReport", "the given must deliver a member of 'OrphanReport'")
         assertEquals(beforeReporterNotice + 1, count("ReporterNotice"), "rule NotifyReporter: one 'ReporterNotice' per firing")
         val producedReporterNotice = last("ReporterNotice")
-        assertEquals(listingReport.id, field(producedReporterNotice, "report"), "ReporterNotice.report: this")
+        assertEquals(idOf(listingReport), field(producedReporterNotice, "report"), "ReporterNotice.report: this")
     }
 }

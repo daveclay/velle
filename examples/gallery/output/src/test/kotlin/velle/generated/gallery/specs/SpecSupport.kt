@@ -2,25 +2,25 @@
 package velle.generated.gallery.specs
 
 import kotlin.test.assertTrue
-import velle.View
+import velle.Keyed
 import velle.generated.*
 import velle.generated.gallery.*
 
 abstract class SpecSupport {
     val sys = GallerySystem()
     val givens: RequiredGivens = Givens(sys)
-    private class Raw(override val id: Long) : View
+    fun idOf(v: Keyed): Long = sys.system.idOf(v)
     fun count(shape: String) = sys.system.instancesOf(shape).size
-    fun last(shape: String): View = Raw(sys.system.instancesOf(shape).last())
-    fun member(v: View, refinement: String) = sys.system.isMember(v.id, refinement)
-    fun field(v: View, name: String) = sys.system.get(v.id, name)
-    fun ref(v: View, name: String): View = Raw(sys.system.get(v.id, name) as Long)
+    fun last(shape: String): Keyed = sys.system.refFor(sys.system.instancesOf(shape).last())
+    fun member(v: Keyed, refinement: String) = sys.system.isMember(idOf(v), refinement)
+    fun field(v: Keyed, name: String) = sys.system.get(idOf(v), name)
+    fun ref(v: Keyed, name: String): Keyed = sys.system.refFor(sys.system.get(idOf(v), name) as Long)
 
     /** Asserts this instance is currently a member of [refinement] — Velle's `is`. */
-    fun View.assertIsA(refinement: String, message: String) =
+    fun Keyed.assertIsA(refinement: String, message: String) =
         assertTrue(member(this, refinement), message)
 
     /** Asserts this instance is currently NOT a member of [refinement]. */
-    fun View.assertIsNotA(refinement: String, message: String) =
+    fun Keyed.assertIsNotA(refinement: String, message: String) =
         assertTrue(!member(this, refinement), message)
 }

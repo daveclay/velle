@@ -22,6 +22,6 @@ class RecalledLotSpec : SpecSupport() {
         val stockLot = givens.stockLotForQuarantineRecalled()
         stockLot.assertIsA("RecalledLot", "the given must deliver a member of 'RecalledLot'")
         val producedQuarantine = last("Quarantine")
-        assertEquals(stockLot.id, field(producedQuarantine, "lot"), "Quarantine.lot: this")
+        assertEquals(idOf(stockLot), field(producedQuarantine, "lot"), "Quarantine.lot: this")
     }
 }

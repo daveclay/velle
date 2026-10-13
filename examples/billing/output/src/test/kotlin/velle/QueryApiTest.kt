@@ -1,6 +1,7 @@
 package velle
 
 import java.math.BigDecimal
+import velle.generated.*
 import java.sql.Connection
 import java.sql.DriverManager
 import java.time.LocalDate
@@ -26,16 +27,16 @@ open class QueryApiTest {
 
     open fun newSystem(): BillingSystem = BillingSystem()
 
-    private fun BillingSystem.customer(name: String, email: String = "${name.lowercase()}@example.com"): BillingSystem.CustomerView {
+    private fun BillingSystem.customer(name: String, email: String = "${name.lowercase()}@example.com"): Customer {
         commitSignUp(name, email)
         return customers().last()
     }
 
     private fun BillingSystem.invoice(
-        customer: BillingSystem.CustomerView,
+        customer: Customer,
         due: LocalDate,
         amount: BigDecimal? = null,
-    ): BillingSystem.InvoiceView {
+    ): Invoice {
         commitBillCustomer(customer, due)
         val inv = invoices().last()
         amount?.let { commitLineItem(inv, "widgets", it, 1) }
@@ -63,7 +64,7 @@ open class QueryApiTest {
 
         assertEquals(listOf(d1, d3), unpaid.map { it.due })
         assertEquals(listOf(BigDecimal("10"), BigDecimal("30")).map { it.stripTrailingZeros() }, unpaid.map { it.balance.stripTrailingZeros() })
-        assertEquals("Ada", unpaid.first().customer.name) // a reference is a handle, navigated from the instance
+        assertEquals("Ada", sys.read(unpaid.first().customer).name) // a reference is a handle; reading it is a fetch
     }
 
     @Test
@@ -95,7 +96,7 @@ open class QueryApiTest {
         assertEquals("overdue", overdue.single().status)
 
         val viaMembership = sys.read.invoices.where { isOverdueInvoice() }.orderBy { due.ascending }.list()
-        assertEquals(overdue.map { it.id }, viaMembership.map { it.id })
+        assertEquals(overdue.map { it.key }, viaMembership.map { it.key })
 
         val notOverdue = sys.read.invoices.where { not(isOverdueInvoice()) }.orderBy { due.ascending }.list()
         assertEquals(listOf(d3), notOverdue.map { it.due })
@@ -149,20 +150,20 @@ open class QueryApiTest {
         val ada = sys.customer("Ada")
         repeat(5) { sys.invoice(ada, d1) } // five invoices, one due date: the order alone cannot tell them apart
 
-        val seen = mutableListOf<Long>()
+        val seen = mutableListOf<StoreKey>()
         var cursor: Cursor? = null
         var pages = 0
         do {
             val page = sys.read.invoices.orderBy { due.ascending }.page(2, cursor).fetch()
             assertTrue(page.items.size <= 2)
-            seen.addAll(page.items.map { it.id })
+            seen.addAll(page.items.map { it.key })
             cursor = page.next
             pages++
         } while (cursor != null)
         assertEquals(3, pages)
         assertEquals(5, seen.size)
         assertEquals(seen.toSet().size, seen.size, "a page repeated a row: $seen")
-        assertEquals(sys.invoices().map { it.id }.toSet(), seen.toSet())
+        assertEquals(sys.invoices().map { it.key }.toSet(), seen.toSet())
 
         // a page that holds everything has no next cursor
         assertNull(sys.read.invoices.orderBy { due.ascending }.page(10).fetch().next)
@@ -212,6 +213,34 @@ open class QueryApiTest {
     }
 
     @Test
+    fun `fetch by identity - a handle points, the data class carries the data and the membership flags`() {
+        val sys = newSystem()
+        val ada = sys.customer("Ada")
+        val inv = sys.invoice(ada, d1, BigDecimal("10"))
+
+        // the handle has no getters; the data class is one read at the moment of the fetch
+        val before = sys.read(inv)
+        assertEquals(inv, before)                       // the same identity: a model object is a reference
+        assertEquals(0, BigDecimal("10").compareTo(before.balance))
+        assertEquals(false, before.isPaidInvoice)
+
+        sys.commitSubmitPayment(inv, BigDecimal("10"))
+        assertEquals(0, BigDecimal("10").compareTo(before.balance), "a data class does not change after the fact")
+        val after = sys.read(inv)
+        assertEquals(0, BigDecimal.ZERO.compareTo(after.balance))
+        assertEquals(true, after.isPaidInvoice)
+        assertEquals("paid", after.status)
+
+        // a refinement root fetches the member, or null
+        assertEquals(after.key, sys.read.paidInvoice(inv)?.key)
+        assertNull(sys.read.overdueInvoice(inv))
+
+        // by store key: only meaningful over a store; in memory the handle is the identity
+        val key = (sys.commitBillCustomer(ada, d2) as CommitResult.Accepted).storeKey
+        if (key != null) assertEquals(d2, sys.read.invoice(StoreKey(key)).due)
+    }
+
+    @Test
     fun `a query reads settled state - a commit is visible to the next query`() {
         val sys = newSystem()
         val ada = sys.customer("Ada")
@@ -245,3 +274,4 @@ class QueryApiOverTypedStoreTest : QueryApiTest() {
         sys.system.connect(BillingStoreResolver(store, sys.system.model), backend)
     }
 }
+

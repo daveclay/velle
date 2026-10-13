@@ -1,6 +1,7 @@
 package velle.generated.peptides
 
 import java.math.BigDecimal
+import velle.generated.*
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -35,42 +36,42 @@ class Scenario(val sys: PeptidesSystem) {
 
     // ── reference data ───────────────────────────────────────────────────────
 
-    fun crop(name: String = "wheat"): PeptidesSystem.CropView {
+    fun crop(name: String = "wheat"): Crop {
         accept(sys.commitCrop(name)); return sys.crops().last()
     }
 
-    fun pathogen(crop: PeptidesSystem.CropView, name: String = "Fusarium graminearum"): PeptidesSystem.PathogenView {
+    fun pathogen(crop: Crop, name: String = "Fusarium graminearum"): Pathogen {
         accept(sys.commitPathogen(name, crop)); return sys.pathogens().last()
     }
 
-    fun peptide(code: String = "PEP-001"): PeptidesSystem.PeptideView {
+    fun peptide(code: String = "PEP-001"): Peptide {
         accept(sys.commitPeptide(code, "GIGKFLHSAKKFGKAFVGEIMNS")); return sys.peptides().last()
     }
 
     // ── lab ──────────────────────────────────────────────────────────────────
 
-    fun assayProtocol(durationHours: Int = 48, replicates: Int = 2, hitThreshold: String = "60"): PeptidesSystem.AssayProtocolView {
+    fun assayProtocol(durationHours: Int = 48, replicates: Int = 2, hitThreshold: String = "60"): AssayProtocol {
         accept(sys.commitAssayProtocol("broth microdilution", durationHours, replicates, dec(hitThreshold)))
         return sys.assayProtocols().last()
     }
 
     fun experiment(
-        peptide: PeptidesSystem.PeptideView,
-        pathogen: PeptidesSystem.PathogenView,
-        protocol: PeptidesSystem.AssayProtocolView = assayProtocol(),
-    ): PeptidesSystem.LabExperimentView {
+        peptide: Peptide,
+        pathogen: Pathogen,
+        protocol: AssayProtocol = assayProtocol(),
+    ): LabExperiment {
         accept(sys.commitLabExperiment(peptide, pathogen, protocol)); return sys.labExperiments().last()
     }
 
     /** One replicate plate read at the given hour marks: (hour, percent inhibition). */
-    fun assay(experiment: PeptidesSystem.LabExperimentView, replicate: Int, readings: List<Pair<Int, String>>): PeptidesSystem.AssayView {
+    fun assay(experiment: LabExperiment, replicate: Int, readings: List<Pair<Int, String>>): Assay {
         accept(sys.commitAssay(experiment, replicate))
         val plate = sys.assays().last()
         for ((hour, pct) in readings) accept(sys.commitAssayReading(plate, hour, dec(pct)))
         return plate
     }
 
-    class Lab(val crop: PeptidesSystem.CropView, val pathogen: PeptidesSystem.PathogenView, val peptide: PeptidesSystem.PeptideView, val experiment: PeptidesSystem.LabExperimentView)
+    class Lab(val crop: Crop, val pathogen: Pathogen, val peptide: Peptide, val experiment: LabExperiment)
 
     /** A peptide with a standing lab hit: two complete replicates peaking at 70 and 75. */
     fun labHit(peptideCode: String = "PEP-001"): Lab {
@@ -85,31 +86,31 @@ class Scenario(val sys: PeptidesSystem) {
 
     // ── greenhouse ───────────────────────────────────────────────────────────
 
-    fun greenhouse(name: String = "GH-1", min: String = "18", max: String = "28"): PeptidesSystem.GreenhouseView {
+    fun greenhouse(name: String = "GH-1", min: String = "18", max: String = "28"): Greenhouse {
         accept(sys.commitGreenhouse(name, dec(min), dec(max))); return sys.greenhouses().last()
     }
 
-    fun greenhouseProtocol(plotsPerArm: Int = 1, finalDay: Int = 14, efficacyThreshold: String = "50"): PeptidesSystem.GreenhouseProtocolView {
+    fun greenhouseProtocol(plotsPerArm: Int = 1, finalDay: Int = 14, efficacyThreshold: String = "50"): GreenhouseProtocol {
         accept(sys.commitGreenhouseProtocol("detached-leaf challenge", plotsPerArm, finalDay, dec(efficacyThreshold)))
         return sys.greenhouseProtocols().last()
     }
 
-    fun reading(greenhouse: PeptidesSystem.GreenhouseView, temperature: String, at: Instant = now) {
+    fun reading(greenhouse: Greenhouse, temperature: String, at: Instant = now) {
         accept(sys.commitClimateReading(greenhouse, at, dec(temperature), dec("65")))
     }
 
-    class Trial(val lab: Lab, val greenhouse: PeptidesSystem.GreenhouseView, val trial: PeptidesSystem.GreenhouseTrialView) {
-        lateinit var treated: PeptidesSystem.GreenhousePlotView
-        lateinit var control: PeptidesSystem.GreenhousePlotView
+    class Trial(val lab: Lab, val greenhouse: Greenhouse, val trial: GreenhouseTrial) {
+        lateinit var treated: GreenhousePlot
+        lateinit var control: GreenhousePlot
     }
 
     /** A greenhouse trial approved against the lab hit, not yet laid out. */
-    fun approvedTrial(lab: Lab = labHit(), greenhouse: PeptidesSystem.GreenhouseView = greenhouse(), key: String = "GH-REQ-1"): Trial {
+    fun approvedTrial(lab: Lab = labHit(), greenhouse: Greenhouse = greenhouse(), key: String = "GH-REQ-1"): Trial {
         accept(sys.commitRequestGreenhouseTrial(key, lab.peptide, lab.pathogen, greenhouse, greenhouseProtocol()))
         return Trial(lab, greenhouse, sys.greenhouseTrials().last())
     }
 
-    fun plot(t: Trial, bench: String, treatment: String): PeptidesSystem.GreenhousePlotView {
+    fun plot(t: Trial, bench: String, treatment: String): GreenhousePlot {
         accept(sys.commitGreenhousePlot(t.trial, bench, treatment)); return sys.greenhousePlots().last()
     }
 
@@ -124,7 +125,7 @@ class Scenario(val sys: PeptidesSystem) {
         accept(sys.commitTreatment(t.trial, at)); return t
     }
 
-    fun observe(plot: PeptidesSystem.GreenhousePlotView, day: Int, severity: String, on: LocalDate = today): PeptidesSystem.PlotObservationView {
+    fun observe(plot: GreenhousePlot, day: Int, severity: String, on: LocalDate = today): PlotObservation {
         accept(sys.commitPlotObservation(plot, day, dec(severity), on)); return sys.plotObservations().last()
     }
 
@@ -145,21 +146,21 @@ class Scenario(val sys: PeptidesSystem) {
 
     // ── field ────────────────────────────────────────────────────────────────
 
-    fun site(name: String = "Dodge County north"): PeptidesSystem.FieldSiteView {
+    fun site(name: String = "Dodge County north"): FieldSite {
         accept(sys.commitFieldSite(name, "NE")); return sys.fieldSites().last()
     }
 
-    fun permit(site: PeptidesSystem.FieldSiteView, crop: PeptidesSystem.CropView, from: LocalDate = today, until: LocalDate = today.plusDays(365)) {
+    fun permit(site: FieldSite, crop: Crop, from: LocalDate = today, until: LocalDate = today.plusDays(365)) {
         accept(sys.commitPermit(site, crop, from, until))
     }
 
-    fun fieldProtocol(): PeptidesSystem.FieldProtocolView {
+    fun fieldProtocol(): FieldProtocol {
         accept(sys.commitFieldProtocol("small-plot efficacy", dec("10"))); return sys.fieldProtocols().last()
     }
 
-    class Field(val gh: Trial, val site: PeptidesSystem.FieldSiteView, val trial: PeptidesSystem.FieldTrialView) {
-        lateinit var treated: PeptidesSystem.FieldPlotView
-        lateinit var control: PeptidesSystem.FieldPlotView
+    class Field(val gh: Trial, val site: FieldSite, val trial: FieldTrial) {
+        lateinit var treated: FieldPlot
+        lateinit var control: FieldPlot
     }
 
     /** A field trial approved against an effective greenhouse result, with a site but no permit yet. */
@@ -184,31 +185,31 @@ class Scenario(val sys: PeptidesSystem) {
 
     // ── collection tasks ─────────────────────────────────────────────────────
 
-    fun trial(t: PeptidesSystem.GreenhouseTrialView): PeptidesSystem.TrialView = sys.TrialView(t.id)
-    fun trial(t: PeptidesSystem.FieldTrialView): PeptidesSystem.TrialView = sys.TrialView(t.id)
+    fun trial(t: GreenhouseTrial): velle.generated.Trial = t
+    fun trial(t: FieldTrial): velle.generated.Trial = t
 
     /** An admin schedules collection at a day mark, due on a date. */
-    fun task(trial: PeptidesSystem.TrialView, dayMark: Int, dueOn: LocalDate): PeptidesSystem.CollectionTaskView {
-        accept(sys.commitCollectionTask(trial, dayMark, dueOn)); return sys.collectionTasks().last()
+    fun task(trial: velle.generated.Trial, dayMark: Int, dueOn: LocalDate): CollectionTask {
+        accept(sys.commitCollectionTask(trial.ref, dayMark, dueOn)); return sys.collectionTasks().last()
     }
 
     /** A treated greenhouse trial with a day-7 task that fell due yesterday and has no scores. */
-    fun overdueTask(): PeptidesSystem.CollectionTaskView {
+    fun overdueTask(): CollectionTask {
         val t = treat(laidOut())
         return task(trial(t.trial), 7, today.minusDays(1))
     }
 
     /** A greenhouse trial scored to its end, with a day-14 task that is therefore done. */
-    fun doneTask(): PeptidesSystem.CollectionTaskView {
+    fun doneTask(): CollectionTask {
         val t = observedToEnd()
         return task(trial(t.trial), 14, today.plusDays(14))
     }
 
-    fun scout(plot: PeptidesSystem.FieldPlotView, day: Int, severity: String, on: LocalDate = today) {
+    fun scout(plot: FieldPlot, day: Int, severity: String, on: LocalDate = today) {
         accept(sys.commitScouting(plot, day, on, dec("30"), dec(severity)))
     }
 
-    fun harvest(plot: PeptidesSystem.FieldPlotView, yieldKgPerHa: String, on: LocalDate = today) {
+    fun harvest(plot: FieldPlot, yieldKgPerHa: String, on: LocalDate = today) {
         accept(sys.commitHarvest(plot, on, dec(yieldKgPerHa)))
     }
 }

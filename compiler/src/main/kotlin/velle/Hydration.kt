@@ -22,24 +22,53 @@ package velle
 data class StoreKey(val value: Any)
 
 /**
- * A typed reference crossing the store boundary. [shape] is always the
- * *concrete base shape* of the referenced row — the store never has to guess a
- * table from a bare value.
+ * A reference to a record: its concrete base shape and its store key. One type
+ * for both sides of the store boundary (README §22): a store row carries it
+ * for every to-one field, and an application engineer holds it, typed by the
+ * model object it points at — `Ref<Customer>` — and resolves it with
+ * `read(ref)`. A model object is itself a `Ref<T>` to its own record, so it
+ * passes wherever a reference is taken. Equality is identity: same shape, same
+ * key, whichever class carries them; whether two reads of one record differ is
+ * a comparison of fields, which is the engineer's to make. In memory, with no store, the key is the
+ * runtime's own identity; the runtime maps between the two in one place.
+ *
+ * [T] is a phantom: never read, only there to type the reference. [Persisted]
+ * is the untyped carrier (`Ref<Nothing>` fits every `Ref<T>`).
  */
-sealed interface Ref {
-    val shape: String
+interface Ref<out T> : Keyed {
 
-    /** A row storage already holds. */
-    data class Persisted(override val shape: String, val key: StoreKey) : Ref
+    /** A row storage already holds, as a store row or a model object's field carries it. */
+    class Persisted(override val shape: String, override val key: StoreKey) : Ref<Nothing>, RowRef {
+        override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+        override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+        override fun toString() = "$shape#${key.value}"
+    }
 
     /**
      * A row created in this same [CommitSet] — [index] into [CommitSet.created].
      * Pending refs always point *backward* (creation order is dependency order:
      * a create can only reference instances that already existed when it was
      * evaluated), so a store inserting in list order has already assigned the
-     * key a pending ref names.
+     * key a pending ref names. Never seen outside a commit set.
      */
-    data class Pending(override val shape: String, val index: Int) : Ref
+    data class Pending(override val shape: String, val index: Int) : RowRef
+}
+
+/**
+ * What identifies a record: its concrete base shape and its store key. Every
+ * reference is one, and so is every model object — including one typed as a
+ * static union's interface (README §9), which is a model object of one of the
+ * union's operands and is why the identity sits here rather than on [Ref].
+ */
+interface Keyed {
+    /** always the *concrete base shape* of the record — the store never has to guess a table */
+    val shape: String
+    val key: StoreKey
+}
+
+/** The two forms a reference takes inside a commit set: a row the store holds, or a row this commit creates. */
+sealed interface RowRef {
+    val shape: String
 }
 
 /**
@@ -147,7 +176,7 @@ data class CommitSet(
     data class Assign(val target: Ref.Persisted, val field: String, val value: Any?)
 
     /** Per-membership memory for [refinement] on [instance] (README §8). */
-    data class Capture(val instance: Ref, val refinement: String, val values: Map<String, Any?>)
+    data class Capture(val instance: RowRef, val refinement: String, val values: Map<String, Any?>)
     data class Retraction(val instance: Ref.Persisted, val refinement: String)
 
     /** A `delete` statement's row removal (OQ37): the instance ceased to be part

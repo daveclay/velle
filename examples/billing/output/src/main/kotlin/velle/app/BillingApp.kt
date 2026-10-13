@@ -1,6 +1,7 @@
 package velle.app
 
 import velle.CommitResult
+import velle.generated.*
 import velle.generated.BillingSystem
 import velle.sqlite.SqliteStore
 import java.math.BigDecimal
@@ -47,10 +48,10 @@ fun main() {
         accept(billing.commitLineItem(inv, "Design work", BigDecimal("1200.00"), 1))
         accept(billing.commitLineItem(inv, "Hosting", BigDecimal("50.00"), 2))
         accept(billing.commitIssuance(inv))
-        println("committed customer #${cust.id}, invoice #${inv.id} with two line items, issued")
+        println("committed customer #${cust.key.value}, invoice #${inv.key.value} with two line items, issued")
 
         // typed reads: derived properties computed by demand-hydrating rows from SQLite
-        println("   invoice.total=${inv.total}  balance=${inv.balance}  status=${inv.status}")
+        billing.read(inv).let { println("   invoice.total=${it.total}  balance=${it.balance}  status=${it.status}") }
 
         // a `never` refusal: rejected at the boundary, nothing reaches the DB
         val refused = billing.commitSubmitPayment(inv, BigDecimal.ZERO)
@@ -60,7 +61,7 @@ fun main() {
         // landed as one SQLite transaction; EmailReceipt is `after commit` — its
         // ReceiptEmail is a second envelope, a second SQLite transaction
         accept(billing.commitSubmitPayment(inv, BigDecimal("1300.00")))
-        println("paid in full -> status=${inv.status}")
+        println("paid in full -> status=${billing.read(inv).status}")
         println()
 
         // an already-overdue invoice, then the weekly tick sweeps it — the tick's
@@ -69,7 +70,7 @@ fun main() {
         val overdue = billing.invoices().last()
         accept(billing.commitLineItem(overdue, "Old work", BigDecimal("99.00"), 1))
         billing.tickWeekly()
-        println("committed overdue invoice #${overdue.id}, ran the weekly tick")
+        println("committed overdue invoice #${overdue.key.value}, ran the weekly tick")
         println()
 
         // ── the engineer's own SQL against their own DB ──

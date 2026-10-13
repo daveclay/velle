@@ -32,10 +32,10 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue key: [pathogen.host].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPathogen(name: String, host: CropView): CommitResult =
+    fun commitPathogen(name: String, host: Ref<Crop>): CommitResult =
         system.commit("Pathogen", buildMap {
             put("name", name)
-            put("host", host.id)
+            put("host", system.idOf(host))
         })
 
     /** Queue keys: none — this commit contends with no other work.
@@ -61,19 +61,19 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: [labExperiment.pathogen], [labExperiment.peptide], [labExperiment.protocol].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitLabExperiment(peptide: PeptideView, pathogen: PathogenView, protocol: AssayProtocolView): CommitResult =
+    fun commitLabExperiment(peptide: Ref<Peptide>, pathogen: Ref<Pathogen>, protocol: Ref<AssayProtocol>): CommitResult =
         system.commit("LabExperiment", buildMap {
-            put("peptide", peptide.id)
-            put("pathogen", pathogen.id)
-            put("protocol", protocol.id)
+            put("peptide", system.idOf(peptide))
+            put("pathogen", system.idOf(pathogen))
+            put("protocol", system.idOf(protocol))
         })
 
     /** Queue keys: [assay.experiment], [assay.experiment.protocol].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitAssay(experiment: LabExperimentView, replicate: Int): CommitResult =
+    fun commitAssay(experiment: Ref<LabExperiment>, replicate: Int): CommitResult =
         system.commit("Assay", buildMap {
-            put("experiment", experiment.id)
+            put("experiment", system.idOf(experiment))
             put("replicate", replicate)
         })
 
@@ -90,9 +90,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over LabHitRetraction — creates LabHitRetraction referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitAssayReading(assay: AssayView, hoursElapsed: Int, inhibitionPercent: BigDecimal): CommitResult =
+    fun commitAssayReading(assay: Ref<Assay>, hoursElapsed: Int, inhibitionPercent: BigDecimal): CommitResult =
         system.commit("AssayReading", buildMap {
-            put("assay", assay.id)
+            put("assay", system.idOf(assay))
             put("hoursElapsed", hoursElapsed)
             put("inhibitionPercent", inhibitionPercent)
         })
@@ -124,9 +124,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ExcursionEnd — consults ExcursionEnd through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitClimateReading(greenhouse: GreenhouseView, recordedAt: Instant, temperature: BigDecimal, humidity: BigDecimal): CommitResult =
+    fun commitClimateReading(greenhouse: Ref<Greenhouse>, recordedAt: Instant, temperature: BigDecimal, humidity: BigDecimal): CommitResult =
         system.commit("ClimateReading", buildMap {
-            put("greenhouse", greenhouse.id)
+            put("greenhouse", system.idOf(greenhouse))
             put("recordedAt", recordedAt)
             put("temperature", temperature)
             put("humidity", humidity)
@@ -150,22 +150,22 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitRequestGreenhouseTrial(requestKey: String, peptide: PeptideView, pathogen: PathogenView, greenhouse: GreenhouseView, protocol: GreenhouseProtocolView): CommitResult =
+    fun commitRequestGreenhouseTrial(requestKey: String, peptide: Ref<Peptide>, pathogen: Ref<Pathogen>, greenhouse: Ref<Greenhouse>, protocol: Ref<GreenhouseProtocol>): CommitResult =
         system.commit("RequestGreenhouseTrial", buildMap {
             put("requestKey", requestKey)
-            put("peptide", peptide.id)
-            put("pathogen", pathogen.id)
-            put("greenhouse", greenhouse.id)
-            put("protocol", protocol.id)
+            put("peptide", system.idOf(peptide))
+            put("pathogen", system.idOf(pathogen))
+            put("greenhouse", system.idOf(greenhouse))
+            put("protocol", system.idOf(protocol))
         })
 
     /** Queue keys: [greenhousePlot.trial], [greenhousePlot.trial.protocol] — plus system-wide width below.
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitGreenhousePlot(trial: GreenhouseTrialView, bench: String, treatment: String): CommitResult =
+    fun commitGreenhousePlot(trial: Ref<GreenhouseTrial>, bench: String, treatment: String): CommitResult =
         system.commit("GreenhousePlot", buildMap {
-            put("trial", trial.id)
+            put("trial", system.idOf(trial))
             put("bench", bench)
             put("treatment", treatment)
         })
@@ -183,9 +183,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Treatment — consults Treatment through 'treatments' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitTreatment(trial: GreenhouseTrialView, treatedAt: Instant): CommitResult =
+    fun commitTreatment(trial: Ref<GreenhouseTrial>, treatedAt: Instant): CommitResult =
         system.commit("Treatment", buildMap {
-            put("trial", trial.id)
+            put("trial", system.idOf(trial))
             put("treatedAt", treatedAt)
         })
 
@@ -199,9 +199,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ObservationCorrection — consults ObservationCorrection through 'observationCorrections' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPlotObservation(plot: GreenhousePlotView, dayAfterTreatment: Int, recordedSeverity: BigDecimal, observedOn: LocalDate): CommitResult =
+    fun commitPlotObservation(plot: Ref<GreenhousePlot>, dayAfterTreatment: Int, recordedSeverity: BigDecimal, observedOn: LocalDate): CommitResult =
         system.commit("PlotObservation", buildMap {
-            put("plot", plot.id)
+            put("plot", system.idOf(plot))
             put("dayAfterTreatment", dayAfterTreatment)
             put("recordedSeverity", recordedSeverity)
             put("observedOn", observedOn)
@@ -210,9 +210,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: [correctObservation.observation], [correctObservation.observation.plot], [correctObservation.observation.plot.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCorrectObservation(observation: PlotObservationView, correctedSeverity: BigDecimal, reason: String): CommitResult =
+    fun commitCorrectObservation(observation: Ref<PlotObservation>, correctedSeverity: BigDecimal, reason: String): CommitResult =
         system.commit("CorrectObservation", buildMap {
-            put("observation", observation.id)
+            put("observation", system.idOf(observation))
             put("correctedSeverity", correctedSeverity)
             put("reason", reason)
         })
@@ -227,9 +227,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ObservationCorrection — consults ObservationCorrection through 'observationCorrections' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitVoidObservation(observation: PlotObservationView, reason: String): CommitResult =
+    fun commitVoidObservation(observation: Ref<PlotObservation>, reason: String): CommitResult =
         system.commit("VoidObservation", buildMap {
-            put("observation", observation.id)
+            put("observation", system.idOf(observation))
             put("reason", reason)
         })
 
@@ -237,9 +237,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitMovePlot(plot: GreenhousePlotView, bench: String): CommitResult =
+    fun commitMovePlot(plot: Ref<GreenhousePlot>, bench: String): CommitResult =
         system.commit("MovePlot", buildMap {
-            put("plot", plot.id)
+            put("plot", system.idOf(plot))
             put("bench", bench)
         })
 
@@ -255,10 +255,10 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: [permit.crop], [permit.site].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPermit(site: FieldSiteView, crop: CropView, issuedOn: LocalDate, expiresOn: LocalDate): CommitResult =
+    fun commitPermit(site: Ref<FieldSite>, crop: Ref<Crop>, issuedOn: LocalDate, expiresOn: LocalDate): CommitResult =
         system.commit("Permit", buildMap {
-            put("site", site.id)
-            put("crop", crop.id)
+            put("site", system.idOf(site))
+            put("crop", system.idOf(crop))
             put("issuedOn", issuedOn)
             put("expiresOn", expiresOn)
         })
@@ -270,9 +270,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ReapplicationNotice — consults ReapplicationNotice through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitWeatherObservation(site: FieldSiteView, observedOn: LocalDate, rainfallMm: BigDecimal, maxTemperature: BigDecimal): CommitResult =
+    fun commitWeatherObservation(site: Ref<FieldSite>, observedOn: LocalDate, rainfallMm: BigDecimal, maxTemperature: BigDecimal): CommitResult =
         system.commit("WeatherObservation", buildMap {
-            put("site", site.id)
+            put("site", system.idOf(site))
             put("observedOn", observedOn)
             put("rainfallMm", rainfallMm)
             put("maxTemperature", maxTemperature)
@@ -294,22 +294,22 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over GreenhouseTrial — reads GreenhouseTrial.peptide with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitRequestFieldTrial(requestKey: String, peptide: PeptideView, pathogen: PathogenView, crop: CropView, site: FieldSiteView, protocol: FieldProtocolView): CommitResult =
+    fun commitRequestFieldTrial(requestKey: String, peptide: Ref<Peptide>, pathogen: Ref<Pathogen>, crop: Ref<Crop>, site: Ref<FieldSite>, protocol: Ref<FieldProtocol>): CommitResult =
         system.commit("RequestFieldTrial", buildMap {
             put("requestKey", requestKey)
-            put("peptide", peptide.id)
-            put("pathogen", pathogen.id)
-            put("crop", crop.id)
-            put("site", site.id)
-            put("protocol", protocol.id)
+            put("peptide", system.idOf(peptide))
+            put("pathogen", system.idOf(pathogen))
+            put("crop", system.idOf(crop))
+            put("site", system.idOf(site))
+            put("protocol", system.idOf(protocol))
         })
 
     /** Queue keys: [plantTrial.trial], [plantTrial.trial.site].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPlantTrial(trial: FieldTrialView, plantedOn: LocalDate, seedLot: String): CommitResult =
+    fun commitPlantTrial(trial: Ref<FieldTrial>, plantedOn: LocalDate, seedLot: String): CommitResult =
         system.commit("PlantTrial", buildMap {
-            put("trial", trial.id)
+            put("trial", system.idOf(trial))
             put("plantedOn", plantedOn)
             put("seedLot", seedLot)
         })
@@ -317,9 +317,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue key: [fieldPlot.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitFieldPlot(trial: FieldTrialView, block: Int, treatment: String): CommitResult =
+    fun commitFieldPlot(trial: Ref<FieldTrial>, block: Int, treatment: String): CommitResult =
         system.commit("FieldPlot", buildMap {
-            put("trial", trial.id)
+            put("trial", system.idOf(trial))
             put("block", block)
             put("treatment", treatment)
         })
@@ -327,9 +327,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: [applyTreatment.trial], [applyTreatment.trial.site].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitApplyTreatment(trial: FieldTrialView, appliedOn: LocalDate, rateGramsPerHa: BigDecimal): CommitResult =
+    fun commitApplyTreatment(trial: Ref<FieldTrial>, appliedOn: LocalDate, rateGramsPerHa: BigDecimal): CommitResult =
         system.commit("ApplyTreatment", buildMap {
-            put("trial", trial.id)
+            put("trial", system.idOf(trial))
             put("appliedOn", appliedOn)
             put("rateGramsPerHa", rateGramsPerHa)
         })
@@ -337,9 +337,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue key: [scouting.plot].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitScouting(plot: FieldPlotView, daysAfterPlanting: Int, scoutedOn: LocalDate, incidencePercent: BigDecimal, severity: BigDecimal): CommitResult =
+    fun commitScouting(plot: Ref<FieldPlot>, daysAfterPlanting: Int, scoutedOn: LocalDate, incidencePercent: BigDecimal, severity: BigDecimal): CommitResult =
         system.commit("Scouting", buildMap {
-            put("plot", plot.id)
+            put("plot", system.idOf(plot))
             put("daysAfterPlanting", daysAfterPlanting)
             put("scoutedOn", scoutedOn)
             put("incidencePercent", incidencePercent)
@@ -349,9 +349,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue key: [harvest.plot].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitHarvest(plot: FieldPlotView, harvestedOn: LocalDate, yieldKgPerHa: BigDecimal): CommitResult =
+    fun commitHarvest(plot: Ref<FieldPlot>, harvestedOn: LocalDate, yieldKgPerHa: BigDecimal): CommitResult =
         system.commit("Harvest", buildMap {
-            put("plot", plot.id)
+            put("plot", system.idOf(plot))
             put("harvestedOn", harvestedOn)
             put("yieldKgPerHa", yieldKgPerHa)
         })
@@ -362,9 +362,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over HaltNotice — consults HaltNotice through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPhytotoxicityReport(plot: FieldPlotView, observedOn: LocalDate, severity: Int): CommitResult =
+    fun commitPhytotoxicityReport(plot: Ref<FieldPlot>, observedOn: LocalDate, severity: Int): CommitResult =
         system.commit("PhytotoxicityReport", buildMap {
-            put("plot", plot.id)
+            put("plot", system.idOf(plot))
             put("observedOn", observedOn)
             put("severity", severity)
         })
@@ -372,9 +372,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue key: [collectionTask.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCollectionTask(trial: TrialView, dayMark: Int, dueOn: LocalDate): CommitResult =
+    fun commitCollectionTask(trial: Ref<Trial>, dayMark: Int, dueOn: LocalDate): CommitResult =
         system.commit("CollectionTask", buildMap {
-            put("trial", trial.id)
+            put("trial", system.idOf(trial))
             put("dayMark", dayMark)
             put("dueOn", dueOn)
         })
@@ -382,906 +382,489 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: [rescheduleTask.task], [rescheduleTask.task.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitRescheduleTask(task: CollectionTaskView, dueOn: LocalDate): CommitResult =
+    fun commitRescheduleTask(task: Ref<CollectionTask>, dueOn: LocalDate): CommitResult =
         system.commit("RescheduleTask", buildMap {
-            put("task", task.id)
+            put("task", system.idOf(task))
             put("dueOn", dueOn)
         })
 
     /** Queue keys: [cancelTask.task], [cancelTask.task.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCancelTask(task: CollectionTaskView, reason: String): CommitResult =
+    fun commitCancelTask(task: Ref<CollectionTask>, reason: String): CommitResult =
         system.commit("CancelTask", buildMap {
-            put("task", task.id)
+            put("task", system.idOf(task))
             put("reason", reason)
         })
 
-    fun crops(): List<CropView> = system.instancesOf("Crop").map { CropView(it) }
-    fun crop(id: Long) = CropView(id)
-    fun pathogens(): List<PathogenView> = system.instancesOf("Pathogen").map { PathogenView(it) }
-    fun pathogen(id: Long) = PathogenView(id)
-    fun peptides(): List<PeptideView> = system.instancesOf("Peptide").map { PeptideView(it) }
-    fun peptide(id: Long) = PeptideView(id)
-    fun assayProtocols(): List<AssayProtocolView> = system.instancesOf("AssayProtocol").map { AssayProtocolView(it) }
-    fun assayProtocol(id: Long) = AssayProtocolView(id)
-    fun labExperiments(): List<LabExperimentView> = system.instancesOf("LabExperiment").map { LabExperimentView(it) }
-    fun labExperiment(id: Long) = LabExperimentView(id)
-    fun assays(): List<AssayView> = system.instancesOf("Assay").map { AssayView(it) }
-    fun assay(id: Long) = AssayView(id)
-    fun assayReadings(): List<AssayReadingView> = system.instancesOf("AssayReading").map { AssayReadingView(it) }
-    fun assayReading(id: Long) = AssayReadingView(id)
-    fun labHits(): List<LabHitView> = system.instancesOf("LabHit").map { LabHitView(it) }
-    fun labHit(id: Long) = LabHitView(id)
-    fun labHitRetractions(): List<LabHitRetractionView> = system.instancesOf("LabHitRetraction").map { LabHitRetractionView(it) }
-    fun labHitRetraction(id: Long) = LabHitRetractionView(id)
-    fun greenhouses(): List<GreenhouseView> = system.instancesOf("Greenhouse").map { GreenhouseView(it) }
-    fun greenhouse(id: Long) = GreenhouseView(id)
-    fun climateReadings(): List<ClimateReadingView> = system.instancesOf("ClimateReading").map { ClimateReadingView(it) }
-    fun climateReading(id: Long) = ClimateReadingView(id)
-    fun greenhouseProtocols(): List<GreenhouseProtocolView> = system.instancesOf("GreenhouseProtocol").map { GreenhouseProtocolView(it) }
-    fun greenhouseProtocol(id: Long) = GreenhouseProtocolView(id)
-    fun greenhouseTrials(): List<GreenhouseTrialView> = system.instancesOf("GreenhouseTrial").map { GreenhouseTrialView(it) }
-    fun greenhouseTrial(id: Long) = GreenhouseTrialView(id)
-    fun greenhouseRefusals(): List<GreenhouseRefusalView> = system.instancesOf("GreenhouseRefusal").map { GreenhouseRefusalView(it) }
-    fun greenhouseRefusal(id: Long) = GreenhouseRefusalView(id)
-    fun greenhousePlots(): List<GreenhousePlotView> = system.instancesOf("GreenhousePlot").map { GreenhousePlotView(it) }
-    fun greenhousePlot(id: Long) = GreenhousePlotView(id)
-    fun treatments(): List<TreatmentView> = system.instancesOf("Treatment").map { TreatmentView(it) }
-    fun treatment(id: Long) = TreatmentView(id)
-    fun plotObservations(): List<PlotObservationView> = system.instancesOf("PlotObservation").map { PlotObservationView(it) }
-    fun plotObservation(id: Long) = PlotObservationView(id)
-    fun greenhouseResults(): List<GreenhouseResultView> = system.instancesOf("GreenhouseResult").map { GreenhouseResultView(it) }
-    fun greenhouseResult(id: Long) = GreenhouseResultView(id)
-    fun observationCorrections(): List<ObservationCorrectionView> = system.instancesOf("ObservationCorrection").map { ObservationCorrectionView(it) }
-    fun observationCorrection(id: Long) = ObservationCorrectionView(id)
-    fun correctionRefusals(): List<CorrectionRefusalView> = system.instancesOf("CorrectionRefusal").map { CorrectionRefusalView(it) }
-    fun correctionRefusal(id: Long) = CorrectionRefusalView(id)
-    fun voidRecords(): List<VoidRecordView> = system.instancesOf("VoidRecord").map { VoidRecordView(it) }
-    fun voidRecord(id: Long) = VoidRecordView(id)
-    fun voidRefusals(): List<VoidRefusalView> = system.instancesOf("VoidRefusal").map { VoidRefusalView(it) }
-    fun voidRefusal(id: Long) = VoidRefusalView(id)
-    fun moveRefusals(): List<MoveRefusalView> = system.instancesOf("MoveRefusal").map { MoveRefusalView(it) }
-    fun moveRefusal(id: Long) = MoveRefusalView(id)
-    fun climateExcursions(): List<ClimateExcursionView> = system.instancesOf("ClimateExcursion").map { ClimateExcursionView(it) }
-    fun climateExcursion(id: Long) = ClimateExcursionView(id)
-    fun excursionEnds(): List<ExcursionEndView> = system.instancesOf("ExcursionEnd").map { ExcursionEndView(it) }
-    fun excursionEnd(id: Long) = ExcursionEndView(id)
-    fun sensorAlerts(): List<SensorAlertView> = system.instancesOf("SensorAlert").map { SensorAlertView(it) }
-    fun sensorAlert(id: Long) = SensorAlertView(id)
-    fun fieldSites(): List<FieldSiteView> = system.instancesOf("FieldSite").map { FieldSiteView(it) }
-    fun fieldSite(id: Long) = FieldSiteView(id)
-    fun permits(): List<PermitView> = system.instancesOf("Permit").map { PermitView(it) }
-    fun permit(id: Long) = PermitView(id)
-    fun weatherObservations(): List<WeatherObservationView> = system.instancesOf("WeatherObservation").map { WeatherObservationView(it) }
-    fun weatherObservation(id: Long) = WeatherObservationView(id)
-    fun fieldProtocols(): List<FieldProtocolView> = system.instancesOf("FieldProtocol").map { FieldProtocolView(it) }
-    fun fieldProtocol(id: Long) = FieldProtocolView(id)
-    fun fieldTrials(): List<FieldTrialView> = system.instancesOf("FieldTrial").map { FieldTrialView(it) }
-    fun fieldTrial(id: Long) = FieldTrialView(id)
-    fun fieldRefusals(): List<FieldRefusalView> = system.instancesOf("FieldRefusal").map { FieldRefusalView(it) }
-    fun fieldRefusal(id: Long) = FieldRefusalView(id)
-    fun plantings(): List<PlantingView> = system.instancesOf("Planting").map { PlantingView(it) }
-    fun planting(id: Long) = PlantingView(id)
-    fun fieldPlots(): List<FieldPlotView> = system.instancesOf("FieldPlot").map { FieldPlotView(it) }
-    fun fieldPlot(id: Long) = FieldPlotView(id)
-    fun treatmentApplications(): List<TreatmentApplicationView> = system.instancesOf("TreatmentApplication").map { TreatmentApplicationView(it) }
-    fun treatmentApplication(id: Long) = TreatmentApplicationView(id)
-    fun reapplicationNotices(): List<ReapplicationNoticeView> = system.instancesOf("ReapplicationNotice").map { ReapplicationNoticeView(it) }
-    fun reapplicationNotice(id: Long) = ReapplicationNoticeView(id)
-    fun scoutings(): List<ScoutingView> = system.instancesOf("Scouting").map { ScoutingView(it) }
-    fun scouting(id: Long) = ScoutingView(id)
-    fun harvests(): List<HarvestView> = system.instancesOf("Harvest").map { HarvestView(it) }
-    fun harvest(id: Long) = HarvestView(id)
-    fun phytotoxicityReports(): List<PhytotoxicityReportView> = system.instancesOf("PhytotoxicityReport").map { PhytotoxicityReportView(it) }
-    fun phytotoxicityReport(id: Long) = PhytotoxicityReportView(id)
-    fun haltNotices(): List<HaltNoticeView> = system.instancesOf("HaltNotice").map { HaltNoticeView(it) }
-    fun haltNotice(id: Long) = HaltNoticeView(id)
-    fun collectionTasks(): List<CollectionTaskView> = system.instancesOf("CollectionTask").map { CollectionTaskView(it) }
-    fun collectionTask(id: Long) = CollectionTaskView(id)
-    fun taskReminders(): List<TaskReminderView> = system.instancesOf("TaskReminder").map { TaskReminderView(it) }
-    fun taskReminder(id: Long) = TaskReminderView(id)
-    fun rescheduleRefusals(): List<RescheduleRefusalView> = system.instancesOf("RescheduleRefusal").map { RescheduleRefusalView(it) }
-    fun rescheduleRefusal(id: Long) = RescheduleRefusalView(id)
-    fun taskCancellations(): List<TaskCancellationView> = system.instancesOf("TaskCancellation").map { TaskCancellationView(it) }
-    fun taskCancellation(id: Long) = TaskCancellationView(id)
-    fun cancelRefusals(): List<CancelRefusalView> = system.instancesOf("CancelRefusal").map { CancelRefusalView(it) }
-    fun cancelRefusal(id: Long) = CancelRefusalView(id)
-    fun completedAssays(): List<CompletedAssayView> = system.instancesOf("CompletedAssay").map { CompletedAssayView(it) }
-    fun AssayView.isCompletedAssay(): Boolean = system.isMember(id, "CompletedAssay")
-    fun hitExperiments(): List<HitExperimentView> = system.instancesOf("HitExperiment").map { HitExperimentView(it) }
-    fun LabExperimentView.isHitExperiment(): Boolean = system.isMember(id, "HitExperiment")
-    fun labValidateds(): List<LabValidatedView> = system.instancesOf("LabValidated").map { LabValidatedView(it) }
-    fun PeptideView.isLabValidated(): Boolean = system.isMember(id, "LabValidated")
-    fun treatedTrials(): List<TreatedTrialView> = system.instancesOf("TreatedTrial").map { TreatedTrialView(it) }
-    fun GreenhouseTrialView.isTreatedTrial(): Boolean = system.isMember(id, "TreatedTrial")
-    fun laidOutTrials(): List<LaidOutTrialView> = system.instancesOf("LaidOutTrial").map { LaidOutTrialView(it) }
-    fun GreenhouseTrialView.isLaidOutTrial(): Boolean = system.isMember(id, "LaidOutTrial")
-    fun observedToEnds(): List<ObservedToEndView> = system.instancesOf("ObservedToEnd").map { ObservedToEndView(it) }
-    fun GreenhouseTrialView.isObservedToEnd(): Boolean = system.isMember(id, "ObservedToEnd")
-    fun completeTrials(): List<CompleteTrialView> = system.instancesOf("CompleteTrial").map { CompleteTrialView(it) }
-    fun GreenhouseTrialView.isCompleteTrial(): Boolean = system.isMember(id, "CompleteTrial")
-    fun effectiveTrials(): List<EffectiveTrialView> = system.instancesOf("EffectiveTrial").map { EffectiveTrialView(it) }
-    fun GreenhouseTrialView.isEffectiveTrial(): Boolean = system.isMember(id, "EffectiveTrial")
-    fun evaluatedTrials(): List<EvaluatedTrialView> = system.instancesOf("EvaluatedTrial").map { EvaluatedTrialView(it) }
-    fun GreenhouseTrialView.isEvaluatedTrial(): Boolean = system.isMember(id, "EvaluatedTrial")
-    fun greenhouseValidateds(): List<GreenhouseValidatedView> = system.instancesOf("GreenhouseValidated").map { GreenhouseValidatedView(it) }
-    fun PeptideView.isGreenhouseValidated(): Boolean = system.isMember(id, "GreenhouseValidated")
-    fun deprioritizeds(): List<DeprioritizedView> = system.instancesOf("Deprioritized").map { DeprioritizedView(it) }
-    fun PeptideView.isDeprioritized(): Boolean = system.isMember(id, "Deprioritized")
-    fun lockedObservations(): List<LockedObservationView> = system.instancesOf("LockedObservation").map { LockedObservationView(it) }
-    fun PlotObservationView.isLockedObservation(): Boolean = system.isMember(id, "LockedObservation")
-    fun treatedPlots(): List<TreatedPlotView> = system.instancesOf("TreatedPlot").map { TreatedPlotView(it) }
-    fun GreenhousePlotView.isTreatedPlot(): Boolean = system.isMember(id, "TreatedPlot")
-    fun activeTrials(): List<ActiveTrialView> = system.instancesOf("ActiveTrial").map { ActiveTrialView(it) }
-    fun GreenhouseTrialView.isActiveTrial(): Boolean = system.isMember(id, "ActiveTrial")
-    fun outOfBands(): List<OutOfBandView> = system.instancesOf("OutOfBand").map { OutOfBandView(it) }
-    fun GreenhouseView.isOutOfBand(): Boolean = system.isMember(id, "OutOfBand")
-    fun openExcursions(): List<OpenExcursionView> = system.instancesOf("OpenExcursion").map { OpenExcursionView(it) }
-    fun ClimateExcursionView.isOpenExcursion(): Boolean = system.isMember(id, "OpenExcursion")
-    fun closableExcursions(): List<ClosableExcursionView> = system.instancesOf("ClosableExcursion").map { ClosableExcursionView(it) }
-    fun ClimateExcursionView.isClosableExcursion(): Boolean = system.isMember(id, "ClosableExcursion")
-    fun compromisedTrials(): List<CompromisedTrialView> = system.instancesOf("CompromisedTrial").map { CompromisedTrialView(it) }
-    fun GreenhouseTrialView.isCompromisedTrial(): Boolean = system.isMember(id, "CompromisedTrial")
-    fun silentGreenhouses(): List<SilentGreenhouseView> = system.instancesOf("SilentGreenhouse").map { SilentGreenhouseView(it) }
-    fun GreenhouseView.isSilentGreenhouse(): Boolean = system.isMember(id, "SilentGreenhouse")
-    fun permittedTrials(): List<PermittedTrialView> = system.instancesOf("PermittedTrial").map { PermittedTrialView(it) }
-    fun FieldTrialView.isPermittedTrial(): Boolean = system.isMember(id, "PermittedTrial")
-    fun plantedTrials(): List<PlantedTrialView> = system.instancesOf("PlantedTrial").map { PlantedTrialView(it) }
-    fun FieldTrialView.isPlantedTrial(): Boolean = system.isMember(id, "PlantedTrial")
-    fun washedOffApplications(): List<WashedOffApplicationView> = system.instancesOf("WashedOffApplication").map { WashedOffApplicationView(it) }
-    fun TreatmentApplicationView.isWashedOffApplication(): Boolean = system.isMember(id, "WashedOffApplication")
-    fun neverScouteds(): List<NeverScoutedView> = system.instancesOf("NeverScouted").map { NeverScoutedView(it) }
-    fun FieldTrialView.isNeverScouted(): Boolean = system.isMember(id, "NeverScouted")
-    fun harvestedTrials(): List<HarvestedTrialView> = system.instancesOf("HarvestedTrial").map { HarvestedTrialView(it) }
-    fun FieldTrialView.isHarvestedTrial(): Boolean = system.isMember(id, "HarvestedTrial")
-    fun successfulFieldTrials(): List<SuccessfulFieldTrialView> = system.instancesOf("SuccessfulFieldTrial").map { SuccessfulFieldTrialView(it) }
-    fun FieldTrialView.isSuccessfulFieldTrial(): Boolean = system.isMember(id, "SuccessfulFieldTrial")
-    fun fieldValidateds(): List<FieldValidatedView> = system.instancesOf("FieldValidated").map { FieldValidatedView(it) }
-    fun PeptideView.isFieldValidated(): Boolean = system.isMember(id, "FieldValidated")
-    fun haltedTrials(): List<HaltedTrialView> = system.instancesOf("HaltedTrial").map { HaltedTrialView(it) }
-    fun FieldTrialView.isHaltedTrial(): Boolean = system.isMember(id, "HaltedTrial")
-    fun trials(): List<TrialView> = system.instancesOf("Trial").map { TrialView(it) }
-    fun TrialView.isTrial(): Boolean = system.isMember(id, "Trial")
-    fun GreenhouseTrialView.isTrial(): Boolean = system.isMember(id, "Trial")
-    fun FieldTrialView.isTrial(): Boolean = system.isMember(id, "Trial")
-    fun doneTasks(): List<DoneTaskView> = system.instancesOf("DoneTask").map { DoneTaskView(it) }
-    fun CollectionTaskView.isDoneTask(): Boolean = system.isMember(id, "DoneTask")
-    fun openTasks(): List<OpenTaskView> = system.instancesOf("OpenTask").map { OpenTaskView(it) }
-    fun CollectionTaskView.isOpenTask(): Boolean = system.isMember(id, "OpenTask")
-    fun overdueTasks(): List<OverdueTaskView> = system.instancesOf("OverdueTask").map { OverdueTaskView(it) }
-    fun CollectionTaskView.isOverdueTask(): Boolean = system.isMember(id, "OverdueTask")
-
-    inner class CropView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val pathogens: List<PathogenView> get() = (system.get(id, "pathogens") as List<*>).map { PathogenView(it as Long) }
-        val permits: List<PermitView> get() = (system.get(id, "permits") as List<*>).map { PermitView(it as Long) }
-        val fieldTrials: List<FieldTrialView> get() = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) }
-        override fun toString() = "Crop#$id"
-        override fun equals(other: Any?) = other is CropView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class PathogenView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val host: CropView get() = CropView(system.get(id, "host") as Long)
-        val labExperiments: List<LabExperimentView> get() = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) }
-        val greenhouseTrials: List<GreenhouseTrialView> get() = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) }
-        val fieldTrials: List<FieldTrialView> get() = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) }
-        override fun toString() = "Pathogen#$id"
-        override fun equals(other: Any?) = other is PathogenView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class PeptideView(override val id: Long) : View {
-        val code: String get() = system.get(id, "code") as String
-        val sequence: String get() = system.get(id, "sequence") as String
-        val stage: String get() = system.get(id, "stage") as String
-        val labExperiments: List<LabExperimentView> get() = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) }
-        val greenhouseTrials: List<GreenhouseTrialView> get() = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) }
-        val fieldTrials: List<FieldTrialView> get() = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) }
-        override fun toString() = "Peptide#$id"
-        override fun equals(other: Any?) = other is PeptideView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class AssayProtocolView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val durationHours: Int get() = (system.get(id, "durationHours") as BigDecimal).intValueExact()
-        val replicates: Int get() = (system.get(id, "replicates") as BigDecimal).intValueExact()
-        val hitThreshold: BigDecimal get() = system.get(id, "hitThreshold") as BigDecimal
-        val labExperiments: List<LabExperimentView> get() = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) }
-        override fun toString() = "AssayProtocol#$id"
-        override fun equals(other: Any?) = other is AssayProtocolView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class LabExperimentView(override val id: Long) : View {
-        val peptide: PeptideView get() = PeptideView(system.get(id, "peptide") as Long)
-        val pathogen: PathogenView get() = PathogenView(system.get(id, "pathogen") as Long)
-        val protocol: AssayProtocolView get() = AssayProtocolView(system.get(id, "protocol") as Long)
-        val completedReplicates: Int get() = (system.get(id, "completedReplicates") as BigDecimal).intValueExact()
-        val meanPeakInhibition: BigDecimal get() = system.get(id, "meanPeakInhibition") as BigDecimal
-        val assays: List<AssayView> get() = (system.get(id, "assays") as List<*>).map { AssayView(it as Long) }
-        val labHits: List<LabHitView> get() = (system.get(id, "labHits") as List<*>).map { LabHitView(it as Long) }
-        val labHitRetractions: List<LabHitRetractionView> get() = (system.get(id, "labHitRetractions") as List<*>).map { LabHitRetractionView(it as Long) }
-        override fun toString() = "LabExperiment#$id"
-        override fun equals(other: Any?) = other is LabExperimentView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class AssayView(override val id: Long) : View {
-        val experiment: LabExperimentView get() = LabExperimentView(system.get(id, "experiment") as Long)
-        val replicate: Int get() = (system.get(id, "replicate") as BigDecimal).intValueExact()
-        val peakInhibition: BigDecimal get() = system.get(id, "peakInhibition") as BigDecimal
-        val assayReadings: List<AssayReadingView> get() = (system.get(id, "assayReadings") as List<*>).map { AssayReadingView(it as Long) }
-        override fun toString() = "Assay#$id"
-        override fun equals(other: Any?) = other is AssayView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class AssayReadingView(override val id: Long) : View {
-        val assay: AssayView get() = AssayView(system.get(id, "assay") as Long)
-        val hoursElapsed: Int get() = (system.get(id, "hoursElapsed") as BigDecimal).intValueExact()
-        val inhibitionPercent: BigDecimal get() = system.get(id, "inhibitionPercent") as BigDecimal
-        val previous: AssayReadingView? get() = (system.get(id, "previous") as Long?)?.let { AssayReadingView(it) }
-        val runningPeak: BigDecimal get() = system.get(id, "runningPeak") as BigDecimal
-        override fun toString() = "AssayReading#$id"
-        override fun equals(other: Any?) = other is AssayReadingView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class LabHitView(override val id: Long) : View {
-        val experiment: LabExperimentView get() = LabExperimentView(system.get(id, "experiment") as Long)
-        val meanPeakInhibition: BigDecimal get() = system.get(id, "meanPeakInhibition") as BigDecimal
-        val recordedOn: Instant get() = system.get(id, "recordedOn") as Instant
-        override fun toString() = "LabHit#$id"
-        override fun equals(other: Any?) = other is LabHitView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class LabHitRetractionView(override val id: Long) : View {
-        val experiment: LabExperimentView get() = LabExperimentView(system.get(id, "experiment") as Long)
-        val retractedOn: Instant get() = system.get(id, "retractedOn") as Instant
-        override fun toString() = "LabHitRetraction#$id"
-        override fun equals(other: Any?) = other is LabHitRetractionView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class GreenhouseView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val minTemperature: BigDecimal get() = system.get(id, "minTemperature") as BigDecimal
-        val maxTemperature: BigDecimal get() = system.get(id, "maxTemperature") as BigDecimal
-        val climateReadings: List<ClimateReadingView> get() = (system.get(id, "climateReadings") as List<*>).map { ClimateReadingView(it as Long) }
-        val greenhouseTrials: List<GreenhouseTrialView> get() = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) }
-        val climateExcursions: List<ClimateExcursionView> get() = (system.get(id, "climateExcursions") as List<*>).map { ClimateExcursionView(it as Long) }
-        val sensorAlerts: List<SensorAlertView> get() = (system.get(id, "sensorAlerts") as List<*>).map { SensorAlertView(it as Long) }
-        override fun toString() = "Greenhouse#$id"
-        override fun equals(other: Any?) = other is GreenhouseView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ClimateReadingView(override val id: Long) : View {
-        val greenhouse: GreenhouseView get() = GreenhouseView(system.get(id, "greenhouse") as Long)
-        val recordedAt: Instant get() = system.get(id, "recordedAt") as Instant
-        val temperature: BigDecimal get() = system.get(id, "temperature") as BigDecimal
-        val humidity: BigDecimal get() = system.get(id, "humidity") as BigDecimal
-        override fun toString() = "ClimateReading#$id"
-        override fun equals(other: Any?) = other is ClimateReadingView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class GreenhouseProtocolView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val plotsPerArm: Int get() = (system.get(id, "plotsPerArm") as BigDecimal).intValueExact()
-        val finalDay: Int get() = (system.get(id, "finalDay") as BigDecimal).intValueExact()
-        val efficacyThreshold: BigDecimal get() = system.get(id, "efficacyThreshold") as BigDecimal
-        val greenhouseTrials: List<GreenhouseTrialView> get() = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) }
-        override fun toString() = "GreenhouseProtocol#$id"
-        override fun equals(other: Any?) = other is GreenhouseProtocolView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class GreenhouseTrialView(override val id: Long) : View {
-        val requestKey: String get() = system.get(id, "requestKey") as String
-        val peptide: PeptideView get() = PeptideView(system.get(id, "peptide") as Long)
-        val pathogen: PathogenView get() = PathogenView(system.get(id, "pathogen") as Long)
-        val greenhouse: GreenhouseView get() = GreenhouseView(system.get(id, "greenhouse") as Long)
-        val protocol: GreenhouseProtocolView get() = GreenhouseProtocolView(system.get(id, "protocol") as Long)
-        val approvedOn: Instant get() = system.get(id, "approvedOn") as Instant
-        val treatedAt: Instant? get() = system.get(id, "treatedAt") as Instant?
-        val treatedPlots: List<GreenhousePlotView> get() = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) }
-        val controlPlots: List<GreenhousePlotView> get() = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) }
-        val meanTreatedAudpc: BigDecimal get() = system.get(id, "meanTreatedAudpc") as BigDecimal
-        val meanControlAudpc: BigDecimal get() = system.get(id, "meanControlAudpc") as BigDecimal
-        val efficacy: BigDecimal get() = system.get(id, "efficacy") as BigDecimal
-        val greenhousePlots: List<GreenhousePlotView> get() = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) }
-        val treatments: List<TreatmentView> get() = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) }
-        val greenhouseResults: List<GreenhouseResultView> get() = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) }
-        val collectionTasks: List<CollectionTaskView> get() = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) }
-        fun asTrial() = TrialView(id)
-        override fun toString() = "GreenhouseTrial#$id"
-        override fun equals(other: Any?) = other is GreenhouseTrialView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class GreenhouseRefusalView(override val id: Long) : View {
-        val requestKey: String get() = system.get(id, "requestKey") as String
-        val reason: String get() = system.get(id, "reason") as String
-        val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
-        override fun toString() = "GreenhouseRefusal#$id"
-        override fun equals(other: Any?) = other is GreenhouseRefusalView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class GreenhousePlotView(override val id: Long) : View {
-        val trial: GreenhouseTrialView get() = GreenhouseTrialView(system.get(id, "trial") as Long)
-        val bench: String get() = system.get(id, "bench") as String
-        val treatment: String get() = system.get(id, "treatment") as String
-        val lastObservedDay: Int get() = (system.get(id, "lastObservedDay") as BigDecimal).intValueExact()
-        val audpc: BigDecimal get() = system.get(id, "audpc") as BigDecimal
-        val plotObservations: List<PlotObservationView> get() = (system.get(id, "plotObservations") as List<*>).map { PlotObservationView(it as Long) }
-        val moveRefusals: List<MoveRefusalView> get() = (system.get(id, "moveRefusals") as List<*>).map { MoveRefusalView(it as Long) }
-        override fun toString() = "GreenhousePlot#$id"
-        override fun equals(other: Any?) = other is GreenhousePlotView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class TreatmentView(override val id: Long) : View {
-        val trial: GreenhouseTrialView get() = GreenhouseTrialView(system.get(id, "trial") as Long)
-        val treatedAt: Instant get() = system.get(id, "treatedAt") as Instant
-        override fun toString() = "Treatment#$id"
-        override fun equals(other: Any?) = other is TreatmentView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class PlotObservationView(override val id: Long) : View {
-        val plot: GreenhousePlotView get() = GreenhousePlotView(system.get(id, "plot") as Long)
-        val dayAfterTreatment: Int get() = (system.get(id, "dayAfterTreatment") as BigDecimal).intValueExact()
-        val recordedSeverity: BigDecimal get() = system.get(id, "recordedSeverity") as BigDecimal
-        val observedOn: LocalDate get() = system.get(id, "observedOn") as LocalDate
-        val diseaseSeverity: BigDecimal get() = system.get(id, "diseaseSeverity") as BigDecimal
-        val previous: PlotObservationView? get() = (system.get(id, "previous") as Long?)?.let { PlotObservationView(it) }
-        val audpcSoFar: BigDecimal get() = system.get(id, "audpcSoFar") as BigDecimal
-        val observationCorrections: List<ObservationCorrectionView> get() = (system.get(id, "observationCorrections") as List<*>).map { ObservationCorrectionView(it as Long) }
-        val correctionRefusals: List<CorrectionRefusalView> get() = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) }
-        val voidRefusals: List<VoidRefusalView> get() = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) }
-        override fun toString() = "PlotObservation#$id"
-        override fun equals(other: Any?) = other is PlotObservationView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class GreenhouseResultView(override val id: Long) : View {
-        val trial: GreenhouseTrialView get() = GreenhouseTrialView(system.get(id, "trial") as Long)
-        val efficacy: BigDecimal get() = system.get(id, "efficacy") as BigDecimal
-        val effective: Boolean get() = system.get(id, "effective") as Boolean
-        val recordedOn: Instant get() = system.get(id, "recordedOn") as Instant
-        override fun toString() = "GreenhouseResult#$id"
-        override fun equals(other: Any?) = other is GreenhouseResultView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ObservationCorrectionView(override val id: Long) : View {
-        val observation: PlotObservationView? get() = (system.get(id, "observation") as Long?)?.let { PlotObservationView(it) }
-        val previousSeverity: BigDecimal get() = system.get(id, "previousSeverity") as BigDecimal
-        val correctedSeverity: BigDecimal get() = system.get(id, "correctedSeverity") as BigDecimal
-        val reason: String get() = system.get(id, "reason") as String
-        val correctedOn: Instant get() = system.get(id, "correctedOn") as Instant
-        override fun toString() = "ObservationCorrection#$id"
-        override fun equals(other: Any?) = other is ObservationCorrectionView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class CorrectionRefusalView(override val id: Long) : View {
-        val observation: PlotObservationView? get() = (system.get(id, "observation") as Long?)?.let { PlotObservationView(it) }
-        val reason: String get() = system.get(id, "reason") as String
-        val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
-        override fun toString() = "CorrectionRefusal#$id"
-        override fun equals(other: Any?) = other is CorrectionRefusalView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class VoidRecordView(override val id: Long) : View {
-        val bench: String get() = system.get(id, "bench") as String
-        val dayAfterTreatment: Int get() = (system.get(id, "dayAfterTreatment") as BigDecimal).intValueExact()
-        val diseaseSeverity: BigDecimal get() = system.get(id, "diseaseSeverity") as BigDecimal
-        val reason: String get() = system.get(id, "reason") as String
-        val voidedOn: Instant get() = system.get(id, "voidedOn") as Instant
-        override fun toString() = "VoidRecord#$id"
-        override fun equals(other: Any?) = other is VoidRecordView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class VoidRefusalView(override val id: Long) : View {
-        val observation: PlotObservationView? get() = (system.get(id, "observation") as Long?)?.let { PlotObservationView(it) }
-        val reason: String get() = system.get(id, "reason") as String
-        val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
-        override fun toString() = "VoidRefusal#$id"
-        override fun equals(other: Any?) = other is VoidRefusalView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class MoveRefusalView(override val id: Long) : View {
-        val plot: GreenhousePlotView get() = GreenhousePlotView(system.get(id, "plot") as Long)
-        val reason: String get() = system.get(id, "reason") as String
-        val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
-        override fun toString() = "MoveRefusal#$id"
-        override fun equals(other: Any?) = other is MoveRefusalView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ClimateExcursionView(override val id: Long) : View {
-        val greenhouse: GreenhouseView get() = GreenhouseView(system.get(id, "greenhouse") as Long)
-        val startedAt: Instant get() = system.get(id, "startedAt") as Instant
-        val temperature: BigDecimal get() = system.get(id, "temperature") as BigDecimal
-        val excursionEnds: List<ExcursionEndView> get() = (system.get(id, "excursionEnds") as List<*>).map { ExcursionEndView(it as Long) }
-        override fun toString() = "ClimateExcursion#$id"
-        override fun equals(other: Any?) = other is ClimateExcursionView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ExcursionEndView(override val id: Long) : View {
-        val excursion: ClimateExcursionView get() = ClimateExcursionView(system.get(id, "excursion") as Long)
-        val endedAt: Instant get() = system.get(id, "endedAt") as Instant
-        override fun toString() = "ExcursionEnd#$id"
-        override fun equals(other: Any?) = other is ExcursionEndView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class SensorAlertView(override val id: Long) : View {
-        val greenhouse: GreenhouseView get() = GreenhouseView(system.get(id, "greenhouse") as Long)
-        val raisedAt: Instant get() = system.get(id, "raisedAt") as Instant
-        override fun toString() = "SensorAlert#$id"
-        override fun equals(other: Any?) = other is SensorAlertView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class FieldSiteView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val region: String get() = system.get(id, "region") as String
-        val permits: List<PermitView> get() = (system.get(id, "permits") as List<*>).map { PermitView(it as Long) }
-        val weatherObservations: List<WeatherObservationView> get() = (system.get(id, "weatherObservations") as List<*>).map { WeatherObservationView(it as Long) }
-        val fieldTrials: List<FieldTrialView> get() = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) }
-        override fun toString() = "FieldSite#$id"
-        override fun equals(other: Any?) = other is FieldSiteView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class PermitView(override val id: Long) : View {
-        val site: FieldSiteView get() = FieldSiteView(system.get(id, "site") as Long)
-        val crop: CropView get() = CropView(system.get(id, "crop") as Long)
-        val issuedOn: LocalDate get() = system.get(id, "issuedOn") as LocalDate
-        val expiresOn: LocalDate get() = system.get(id, "expiresOn") as LocalDate
-        override fun toString() = "Permit#$id"
-        override fun equals(other: Any?) = other is PermitView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class WeatherObservationView(override val id: Long) : View {
-        val site: FieldSiteView get() = FieldSiteView(system.get(id, "site") as Long)
-        val observedOn: LocalDate get() = system.get(id, "observedOn") as LocalDate
-        val rainfallMm: BigDecimal get() = system.get(id, "rainfallMm") as BigDecimal
-        val maxTemperature: BigDecimal get() = system.get(id, "maxTemperature") as BigDecimal
-        override fun toString() = "WeatherObservation#$id"
-        override fun equals(other: Any?) = other is WeatherObservationView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class FieldProtocolView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val yieldGainThreshold: BigDecimal get() = system.get(id, "yieldGainThreshold") as BigDecimal
-        val fieldTrials: List<FieldTrialView> get() = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) }
-        override fun toString() = "FieldProtocol#$id"
-        override fun equals(other: Any?) = other is FieldProtocolView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class FieldTrialView(override val id: Long) : View {
-        val requestKey: String get() = system.get(id, "requestKey") as String
-        val peptide: PeptideView get() = PeptideView(system.get(id, "peptide") as Long)
-        val pathogen: PathogenView get() = PathogenView(system.get(id, "pathogen") as Long)
-        val crop: CropView get() = CropView(system.get(id, "crop") as Long)
-        val site: FieldSiteView get() = FieldSiteView(system.get(id, "site") as Long)
-        val protocol: FieldProtocolView get() = FieldProtocolView(system.get(id, "protocol") as Long)
-        val approvedOn: Instant get() = system.get(id, "approvedOn") as Instant
-        val treatedPlots: List<FieldPlotView> get() = (system.get(id, "treatedPlots") as List<*>).map { FieldPlotView(it as Long) }
-        val controlPlots: List<FieldPlotView> get() = (system.get(id, "controlPlots") as List<*>).map { FieldPlotView(it as Long) }
-        val meanTreatedYield: BigDecimal get() = system.get(id, "meanTreatedYield") as BigDecimal
-        val meanControlYield: BigDecimal get() = system.get(id, "meanControlYield") as BigDecimal
-        val yieldGain: BigDecimal get() = system.get(id, "yieldGain") as BigDecimal
-        val plantings: List<PlantingView> get() = (system.get(id, "plantings") as List<*>).map { PlantingView(it as Long) }
-        val fieldPlots: List<FieldPlotView> get() = (system.get(id, "fieldPlots") as List<*>).map { FieldPlotView(it as Long) }
-        val treatmentApplications: List<TreatmentApplicationView> get() = (system.get(id, "treatmentApplications") as List<*>).map { TreatmentApplicationView(it as Long) }
-        val haltNotices: List<HaltNoticeView> get() = (system.get(id, "haltNotices") as List<*>).map { HaltNoticeView(it as Long) }
-        val collectionTasks: List<CollectionTaskView> get() = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) }
-        fun asTrial() = TrialView(id)
-        override fun toString() = "FieldTrial#$id"
-        override fun equals(other: Any?) = other is FieldTrialView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class FieldRefusalView(override val id: Long) : View {
-        val requestKey: String get() = system.get(id, "requestKey") as String
-        val reason: String get() = system.get(id, "reason") as String
-        val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
-        override fun toString() = "FieldRefusal#$id"
-        override fun equals(other: Any?) = other is FieldRefusalView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class PlantingView(override val id: Long) : View {
-        val trial: FieldTrialView get() = FieldTrialView(system.get(id, "trial") as Long)
-        val plantedOn: LocalDate get() = system.get(id, "plantedOn") as LocalDate
-        val seedLot: String get() = system.get(id, "seedLot") as String
-        val recordedOn: Instant get() = system.get(id, "recordedOn") as Instant
-        override fun toString() = "Planting#$id"
-        override fun equals(other: Any?) = other is PlantingView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class FieldPlotView(override val id: Long) : View {
-        val trial: FieldTrialView get() = FieldTrialView(system.get(id, "trial") as Long)
-        val block: Int get() = (system.get(id, "block") as BigDecimal).intValueExact()
-        val treatment: String get() = system.get(id, "treatment") as String
-        val yieldKgPerHa: BigDecimal get() = system.get(id, "yieldKgPerHa") as BigDecimal
-        val scoutings: List<ScoutingView> get() = (system.get(id, "scoutings") as List<*>).map { ScoutingView(it as Long) }
-        val harvests: List<HarvestView> get() = (system.get(id, "harvests") as List<*>).map { HarvestView(it as Long) }
-        val phytotoxicityReports: List<PhytotoxicityReportView> get() = (system.get(id, "phytotoxicityReports") as List<*>).map { PhytotoxicityReportView(it as Long) }
-        override fun toString() = "FieldPlot#$id"
-        override fun equals(other: Any?) = other is FieldPlotView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class TreatmentApplicationView(override val id: Long) : View {
-        val trial: FieldTrialView get() = FieldTrialView(system.get(id, "trial") as Long)
-        val appliedOn: LocalDate get() = system.get(id, "appliedOn") as LocalDate
-        val rateGramsPerHa: BigDecimal get() = system.get(id, "rateGramsPerHa") as BigDecimal
-        val recordedOn: Instant get() = system.get(id, "recordedOn") as Instant
-        val reapplicationNotices: List<ReapplicationNoticeView> get() = (system.get(id, "reapplicationNotices") as List<*>).map { ReapplicationNoticeView(it as Long) }
-        override fun toString() = "TreatmentApplication#$id"
-        override fun equals(other: Any?) = other is TreatmentApplicationView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ReapplicationNoticeView(override val id: Long) : View {
-        val application: TreatmentApplicationView get() = TreatmentApplicationView(system.get(id, "application") as Long)
-        val noticedOn: LocalDate get() = system.get(id, "noticedOn") as LocalDate
-        override fun toString() = "ReapplicationNotice#$id"
-        override fun equals(other: Any?) = other is ReapplicationNoticeView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ScoutingView(override val id: Long) : View {
-        val plot: FieldPlotView get() = FieldPlotView(system.get(id, "plot") as Long)
-        val daysAfterPlanting: Int get() = (system.get(id, "daysAfterPlanting") as BigDecimal).intValueExact()
-        val scoutedOn: LocalDate get() = system.get(id, "scoutedOn") as LocalDate
-        val incidencePercent: BigDecimal get() = system.get(id, "incidencePercent") as BigDecimal
-        val severity: BigDecimal get() = system.get(id, "severity") as BigDecimal
-        val previous: ScoutingView? get() = (system.get(id, "previous") as Long?)?.let { ScoutingView(it) }
-        val audpcSoFar: BigDecimal get() = system.get(id, "audpcSoFar") as BigDecimal
-        override fun toString() = "Scouting#$id"
-        override fun equals(other: Any?) = other is ScoutingView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class HarvestView(override val id: Long) : View {
-        val plot: FieldPlotView get() = FieldPlotView(system.get(id, "plot") as Long)
-        val harvestedOn: LocalDate get() = system.get(id, "harvestedOn") as LocalDate
-        val yieldKgPerHa: BigDecimal get() = system.get(id, "yieldKgPerHa") as BigDecimal
-        override fun toString() = "Harvest#$id"
-        override fun equals(other: Any?) = other is HarvestView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class PhytotoxicityReportView(override val id: Long) : View {
-        val plot: FieldPlotView get() = FieldPlotView(system.get(id, "plot") as Long)
-        val observedOn: LocalDate get() = system.get(id, "observedOn") as LocalDate
-        val severity: Int get() = (system.get(id, "severity") as BigDecimal).intValueExact()
-        override fun toString() = "PhytotoxicityReport#$id"
-        override fun equals(other: Any?) = other is PhytotoxicityReportView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class HaltNoticeView(override val id: Long) : View {
-        val trial: FieldTrialView get() = FieldTrialView(system.get(id, "trial") as Long)
-        val noticedOn: Instant get() = system.get(id, "noticedOn") as Instant
-        override fun toString() = "HaltNotice#$id"
-        override fun equals(other: Any?) = other is HaltNoticeView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class CollectionTaskView(override val id: Long) : View {
-        val trial: TrialView get() = TrialView(system.get(id, "trial") as Long)
-        val dayMark: Int get() = (system.get(id, "dayMark") as BigDecimal).intValueExact()
-        val dueOn: LocalDate get() = system.get(id, "dueOn") as LocalDate
-        val plotsPending: Int get() = (system.get(id, "plotsPending") as BigDecimal).intValueExact()
-        val taskReminders: List<TaskReminderView> get() = (system.get(id, "taskReminders") as List<*>).map { TaskReminderView(it as Long) }
-        val rescheduleRefusals: List<RescheduleRefusalView> get() = (system.get(id, "rescheduleRefusals") as List<*>).map { RescheduleRefusalView(it as Long) }
-        val cancelRefusals: List<CancelRefusalView> get() = (system.get(id, "cancelRefusals") as List<*>).map { CancelRefusalView(it as Long) }
-        override fun toString() = "CollectionTask#$id"
-        override fun equals(other: Any?) = other is CollectionTaskView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class TaskReminderView(override val id: Long) : View {
-        val task: CollectionTaskView? get() = (system.get(id, "task") as Long?)?.let { CollectionTaskView(it) }
-        val sentOn: LocalDate get() = system.get(id, "sentOn") as LocalDate
-        override fun toString() = "TaskReminder#$id"
-        override fun equals(other: Any?) = other is TaskReminderView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class RescheduleRefusalView(override val id: Long) : View {
-        val task: CollectionTaskView? get() = (system.get(id, "task") as Long?)?.let { CollectionTaskView(it) }
-        val reason: String get() = system.get(id, "reason") as String
-        val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
-        override fun toString() = "RescheduleRefusal#$id"
-        override fun equals(other: Any?) = other is RescheduleRefusalView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class TaskCancellationView(override val id: Long) : View {
-        val dayMark: Int get() = (system.get(id, "dayMark") as BigDecimal).intValueExact()
-        val dueOn: LocalDate get() = system.get(id, "dueOn") as LocalDate
-        val reason: String get() = system.get(id, "reason") as String
-        val cancelledOn: Instant get() = system.get(id, "cancelledOn") as Instant
-        override fun toString() = "TaskCancellation#$id"
-        override fun equals(other: Any?) = other is TaskCancellationView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class CancelRefusalView(override val id: Long) : View {
-        val task: CollectionTaskView? get() = (system.get(id, "task") as Long?)?.let { CollectionTaskView(it) }
-        val reason: String get() = system.get(id, "reason") as String
-        val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
-        override fun toString() = "CancelRefusal#$id"
-        override fun equals(other: Any?) = other is CancelRefusalView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class CompletedAssayView(override val id: Long) : View {
-        fun asAssay() = AssayView(id)
-        override fun toString() = "CompletedAssay#$id"
-    }
-
-    inner class HitExperimentView(override val id: Long) : View {
-        fun asLabExperiment() = LabExperimentView(id)
-        override fun toString() = "HitExperiment#$id"
-    }
-
-    inner class LabValidatedView(override val id: Long) : View {
-        fun asPeptide() = PeptideView(id)
-        override fun toString() = "LabValidated#$id"
-    }
-
-    inner class TreatedTrialView(override val id: Long) : View {
-        fun asGreenhouseTrial() = GreenhouseTrialView(id)
-        override fun toString() = "TreatedTrial#$id"
-    }
-
-    inner class LaidOutTrialView(override val id: Long) : View {
-        fun asGreenhouseTrial() = GreenhouseTrialView(id)
-        override fun toString() = "LaidOutTrial#$id"
-    }
-
-    inner class ObservedToEndView(override val id: Long) : View {
-        fun asGreenhouseTrial() = GreenhouseTrialView(id)
-        override fun toString() = "ObservedToEnd#$id"
-    }
-
-    inner class CompleteTrialView(override val id: Long) : View {
-        fun asGreenhouseTrial() = GreenhouseTrialView(id)
-        override fun toString() = "CompleteTrial#$id"
-    }
-
-    inner class EffectiveTrialView(override val id: Long) : View {
-        fun asGreenhouseTrial() = GreenhouseTrialView(id)
-        override fun toString() = "EffectiveTrial#$id"
-    }
-
-    inner class EvaluatedTrialView(override val id: Long) : View {
-        fun asGreenhouseTrial() = GreenhouseTrialView(id)
-        override fun toString() = "EvaluatedTrial#$id"
-    }
-
-    inner class GreenhouseValidatedView(override val id: Long) : View {
-        fun asPeptide() = PeptideView(id)
-        override fun toString() = "GreenhouseValidated#$id"
-    }
-
-    inner class DeprioritizedView(override val id: Long) : View {
-        fun asPeptide() = PeptideView(id)
-        override fun toString() = "Deprioritized#$id"
-    }
-
-    inner class LockedObservationView(override val id: Long) : View {
-        fun asPlotObservation() = PlotObservationView(id)
-        override fun toString() = "LockedObservation#$id"
-    }
-
-    inner class TreatedPlotView(override val id: Long) : View {
-        fun asGreenhousePlot() = GreenhousePlotView(id)
-        override fun toString() = "TreatedPlot#$id"
-    }
-
-    inner class ActiveTrialView(override val id: Long) : View {
-        fun asGreenhouseTrial() = GreenhouseTrialView(id)
-        override fun toString() = "ActiveTrial#$id"
-    }
-
-    inner class OutOfBandView(override val id: Long) : View {
-        fun asGreenhouse() = GreenhouseView(id)
-        override fun toString() = "OutOfBand#$id"
-    }
-
-    inner class OpenExcursionView(override val id: Long) : View {
-        fun asClimateExcursion() = ClimateExcursionView(id)
-        override fun toString() = "OpenExcursion#$id"
-    }
-
-    inner class ClosableExcursionView(override val id: Long) : View {
-        fun asClimateExcursion() = ClimateExcursionView(id)
-        override fun toString() = "ClosableExcursion#$id"
-    }
-
-    inner class CompromisedTrialView(override val id: Long) : View {
-        fun asGreenhouseTrial() = GreenhouseTrialView(id)
-        override fun toString() = "CompromisedTrial#$id"
-    }
-
-    inner class SilentGreenhouseView(override val id: Long) : View {
-        fun asGreenhouse() = GreenhouseView(id)
-        override fun toString() = "SilentGreenhouse#$id"
-    }
-
-    inner class PermittedTrialView(override val id: Long) : View {
-        fun asFieldTrial() = FieldTrialView(id)
-        override fun toString() = "PermittedTrial#$id"
-    }
-
-    inner class PlantedTrialView(override val id: Long) : View {
-        fun asFieldTrial() = FieldTrialView(id)
-        override fun toString() = "PlantedTrial#$id"
-    }
-
-    inner class WashedOffApplicationView(override val id: Long) : View {
-        fun asTreatmentApplication() = TreatmentApplicationView(id)
-        override fun toString() = "WashedOffApplication#$id"
-    }
-
-    inner class NeverScoutedView(override val id: Long) : View {
-        fun asFieldTrial() = FieldTrialView(id)
-        override fun toString() = "NeverScouted#$id"
-    }
-
-    inner class HarvestedTrialView(override val id: Long) : View {
-        fun asFieldTrial() = FieldTrialView(id)
-        override fun toString() = "HarvestedTrial#$id"
-    }
-
-    inner class SuccessfulFieldTrialView(override val id: Long) : View {
-        fun asFieldTrial() = FieldTrialView(id)
-        override fun toString() = "SuccessfulFieldTrial#$id"
-    }
-
-    inner class FieldValidatedView(override val id: Long) : View {
-        fun asPeptide() = PeptideView(id)
-        override fun toString() = "FieldValidated#$id"
-    }
-
-    inner class HaltedTrialView(override val id: Long) : View {
-        fun asFieldTrial() = FieldTrialView(id)
-        override fun toString() = "HaltedTrial#$id"
-    }
-
-    inner class TrialView(override val id: Long) : View {
-        /** the operand this instance is of */
-        val shape: String get() = system.shapeOf(id)
-        fun asGreenhouseTrial(): GreenhouseTrialView? = if (system.shapeOf(id) == "GreenhouseTrial") GreenhouseTrialView(id) else null
-        fun asFieldTrial(): FieldTrialView? = if (system.shapeOf(id) == "FieldTrial") FieldTrialView(id) else null
-        val collectionTasks: List<CollectionTaskView> get() = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) }
-        override fun toString() = "Trial#$id"
-        override fun equals(other: Any?) = other is View && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class DoneTaskView(override val id: Long) : View {
-        fun asCollectionTask() = CollectionTaskView(id)
-        override fun toString() = "DoneTask#$id"
-    }
-
-    inner class OpenTaskView(override val id: Long) : View {
-        fun asCollectionTask() = CollectionTaskView(id)
-        override fun toString() = "OpenTask#$id"
-    }
-
-    inner class OverdueTaskView(override val id: Long) : View {
-        fun asCollectionTask() = CollectionTaskView(id)
-        override fun toString() = "OverdueTask#$id"
-    }
-
-    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    fun crops(): List<Crop> = system.instancesOf("Crop").map { materializeCrop(it) }
+    fun pathogens(): List<Pathogen> = system.instancesOf("Pathogen").map { materializePathogen(it) }
+    fun peptides(): List<Peptide> = system.instancesOf("Peptide").map { materializePeptide(it) }
+    fun assayProtocols(): List<AssayProtocol> = system.instancesOf("AssayProtocol").map { materializeAssayProtocol(it) }
+    fun labExperiments(): List<LabExperiment> = system.instancesOf("LabExperiment").map { materializeLabExperiment(it) }
+    fun assays(): List<Assay> = system.instancesOf("Assay").map { materializeAssay(it) }
+    fun assayReadings(): List<AssayReading> = system.instancesOf("AssayReading").map { materializeAssayReading(it) }
+    fun labHits(): List<LabHit> = system.instancesOf("LabHit").map { materializeLabHit(it) }
+    fun labHitRetractions(): List<LabHitRetraction> = system.instancesOf("LabHitRetraction").map { materializeLabHitRetraction(it) }
+    fun greenhouses(): List<Greenhouse> = system.instancesOf("Greenhouse").map { materializeGreenhouse(it) }
+    fun climateReadings(): List<ClimateReading> = system.instancesOf("ClimateReading").map { materializeClimateReading(it) }
+    fun greenhouseProtocols(): List<GreenhouseProtocol> = system.instancesOf("GreenhouseProtocol").map { materializeGreenhouseProtocol(it) }
+    fun greenhouseTrials(): List<GreenhouseTrial> = system.instancesOf("GreenhouseTrial").map { materializeGreenhouseTrial(it) }
+    fun greenhouseRefusals(): List<GreenhouseRefusal> = system.instancesOf("GreenhouseRefusal").map { materializeGreenhouseRefusal(it) }
+    fun greenhousePlots(): List<GreenhousePlot> = system.instancesOf("GreenhousePlot").map { materializeGreenhousePlot(it) }
+    fun treatments(): List<Treatment> = system.instancesOf("Treatment").map { materializeTreatment(it) }
+    fun plotObservations(): List<PlotObservation> = system.instancesOf("PlotObservation").map { materializePlotObservation(it) }
+    fun greenhouseResults(): List<GreenhouseResult> = system.instancesOf("GreenhouseResult").map { materializeGreenhouseResult(it) }
+    fun observationCorrections(): List<ObservationCorrection> = system.instancesOf("ObservationCorrection").map { materializeObservationCorrection(it) }
+    fun correctionRefusals(): List<CorrectionRefusal> = system.instancesOf("CorrectionRefusal").map { materializeCorrectionRefusal(it) }
+    fun voidRecords(): List<VoidRecord> = system.instancesOf("VoidRecord").map { materializeVoidRecord(it) }
+    fun voidRefusals(): List<VoidRefusal> = system.instancesOf("VoidRefusal").map { materializeVoidRefusal(it) }
+    fun moveRefusals(): List<MoveRefusal> = system.instancesOf("MoveRefusal").map { materializeMoveRefusal(it) }
+    fun climateExcursions(): List<ClimateExcursion> = system.instancesOf("ClimateExcursion").map { materializeClimateExcursion(it) }
+    fun excursionEnds(): List<ExcursionEnd> = system.instancesOf("ExcursionEnd").map { materializeExcursionEnd(it) }
+    fun sensorAlerts(): List<SensorAlert> = system.instancesOf("SensorAlert").map { materializeSensorAlert(it) }
+    fun fieldSites(): List<FieldSite> = system.instancesOf("FieldSite").map { materializeFieldSite(it) }
+    fun permits(): List<Permit> = system.instancesOf("Permit").map { materializePermit(it) }
+    fun weatherObservations(): List<WeatherObservation> = system.instancesOf("WeatherObservation").map { materializeWeatherObservation(it) }
+    fun fieldProtocols(): List<FieldProtocol> = system.instancesOf("FieldProtocol").map { materializeFieldProtocol(it) }
+    fun fieldTrials(): List<FieldTrial> = system.instancesOf("FieldTrial").map { materializeFieldTrial(it) }
+    fun fieldRefusals(): List<FieldRefusal> = system.instancesOf("FieldRefusal").map { materializeFieldRefusal(it) }
+    fun plantings(): List<Planting> = system.instancesOf("Planting").map { materializePlanting(it) }
+    fun fieldPlots(): List<FieldPlot> = system.instancesOf("FieldPlot").map { materializeFieldPlot(it) }
+    fun treatmentApplications(): List<TreatmentApplication> = system.instancesOf("TreatmentApplication").map { materializeTreatmentApplication(it) }
+    fun reapplicationNotices(): List<ReapplicationNotice> = system.instancesOf("ReapplicationNotice").map { materializeReapplicationNotice(it) }
+    fun scoutings(): List<Scouting> = system.instancesOf("Scouting").map { materializeScouting(it) }
+    fun harvests(): List<Harvest> = system.instancesOf("Harvest").map { materializeHarvest(it) }
+    fun phytotoxicityReports(): List<PhytotoxicityReport> = system.instancesOf("PhytotoxicityReport").map { materializePhytotoxicityReport(it) }
+    fun haltNotices(): List<HaltNotice> = system.instancesOf("HaltNotice").map { materializeHaltNotice(it) }
+    fun collectionTasks(): List<CollectionTask> = system.instancesOf("CollectionTask").map { materializeCollectionTask(it) }
+    fun taskReminders(): List<TaskReminder> = system.instancesOf("TaskReminder").map { materializeTaskReminder(it) }
+    fun rescheduleRefusals(): List<RescheduleRefusal> = system.instancesOf("RescheduleRefusal").map { materializeRescheduleRefusal(it) }
+    fun taskCancellations(): List<TaskCancellation> = system.instancesOf("TaskCancellation").map { materializeTaskCancellation(it) }
+    fun cancelRefusals(): List<CancelRefusal> = system.instancesOf("CancelRefusal").map { materializeCancelRefusal(it) }
+    fun completedAssays(): List<CompletedAssay> = system.instancesOf("CompletedAssay").map { materializeCompletedAssay(it) }
+    fun hitExperiments(): List<HitExperiment> = system.instancesOf("HitExperiment").map { materializeHitExperiment(it) }
+    fun labValidateds(): List<LabValidated> = system.instancesOf("LabValidated").map { materializeLabValidated(it) }
+    fun treatedTrials(): List<TreatedTrial> = system.instancesOf("TreatedTrial").map { materializeTreatedTrial(it) }
+    fun laidOutTrials(): List<LaidOutTrial> = system.instancesOf("LaidOutTrial").map { materializeLaidOutTrial(it) }
+    fun observedToEnds(): List<ObservedToEnd> = system.instancesOf("ObservedToEnd").map { materializeObservedToEnd(it) }
+    fun completeTrials(): List<CompleteTrial> = system.instancesOf("CompleteTrial").map { materializeCompleteTrial(it) }
+    fun effectiveTrials(): List<EffectiveTrial> = system.instancesOf("EffectiveTrial").map { materializeEffectiveTrial(it) }
+    fun evaluatedTrials(): List<EvaluatedTrial> = system.instancesOf("EvaluatedTrial").map { materializeEvaluatedTrial(it) }
+    fun greenhouseValidateds(): List<GreenhouseValidated> = system.instancesOf("GreenhouseValidated").map { materializeGreenhouseValidated(it) }
+    fun deprioritizeds(): List<Deprioritized> = system.instancesOf("Deprioritized").map { materializeDeprioritized(it) }
+    fun lockedObservations(): List<LockedObservation> = system.instancesOf("LockedObservation").map { materializeLockedObservation(it) }
+    fun treatedPlots(): List<TreatedPlot> = system.instancesOf("TreatedPlot").map { materializeTreatedPlot(it) }
+    fun activeTrials(): List<ActiveTrial> = system.instancesOf("ActiveTrial").map { materializeActiveTrial(it) }
+    fun outOfBands(): List<OutOfBand> = system.instancesOf("OutOfBand").map { materializeOutOfBand(it) }
+    fun openExcursions(): List<OpenExcursion> = system.instancesOf("OpenExcursion").map { materializeOpenExcursion(it) }
+    fun closableExcursions(): List<ClosableExcursion> = system.instancesOf("ClosableExcursion").map { materializeClosableExcursion(it) }
+    fun compromisedTrials(): List<CompromisedTrial> = system.instancesOf("CompromisedTrial").map { materializeCompromisedTrial(it) }
+    fun silentGreenhouses(): List<SilentGreenhouse> = system.instancesOf("SilentGreenhouse").map { materializeSilentGreenhouse(it) }
+    fun permittedTrials(): List<PermittedTrial> = system.instancesOf("PermittedTrial").map { materializePermittedTrial(it) }
+    fun plantedTrials(): List<PlantedTrial> = system.instancesOf("PlantedTrial").map { materializePlantedTrial(it) }
+    fun washedOffApplications(): List<WashedOffApplication> = system.instancesOf("WashedOffApplication").map { materializeWashedOffApplication(it) }
+    fun neverScouteds(): List<NeverScouted> = system.instancesOf("NeverScouted").map { materializeNeverScouted(it) }
+    fun harvestedTrials(): List<HarvestedTrial> = system.instancesOf("HarvestedTrial").map { materializeHarvestedTrial(it) }
+    fun successfulFieldTrials(): List<SuccessfulFieldTrial> = system.instancesOf("SuccessfulFieldTrial").map { materializeSuccessfulFieldTrial(it) }
+    fun fieldValidateds(): List<FieldValidated> = system.instancesOf("FieldValidated").map { materializeFieldValidated(it) }
+    fun haltedTrials(): List<HaltedTrial> = system.instancesOf("HaltedTrial").map { materializeHaltedTrial(it) }
+    fun trials(): List<Trial> = system.instancesOf("Trial").map { materializeTrial(it) }
+    fun doneTasks(): List<DoneTask> = system.instancesOf("DoneTask").map { materializeDoneTask(it) }
+    fun openTasks(): List<OpenTask> = system.instancesOf("OpenTask").map { materializeOpenTask(it) }
+    fun overdueTasks(): List<OverdueTask> = system.instancesOf("OverdueTask").map { materializeOverdueTask(it) }
+
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
     val read = Read()
 
     inner class Read {
         /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
         val registry = QueryRegistry()
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+
+        /** The model object behind a reference, read now; throws when the record no longer exists. */
+        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
+        fun fetch(id: Long): Ref<*> {
+            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
+            return materialize(id)
+        }
+
         val crops: CropQuery get() = CropQuery(Query("Crop"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun crop(key: StoreKey): Crop = this(Ref.Persisted("Crop", key))
+        fun crop(key: Long): Crop = crop(StoreKey(key))
+
         val pathogens: PathogenQuery get() = PathogenQuery(Query("Pathogen"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun pathogen(key: StoreKey): Pathogen = this(Ref.Persisted("Pathogen", key))
+        fun pathogen(key: Long): Pathogen = pathogen(StoreKey(key))
+
         val peptides: PeptideQuery get() = PeptideQuery(Query("Peptide"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun peptide(key: StoreKey): Peptide = this(Ref.Persisted("Peptide", key))
+        fun peptide(key: Long): Peptide = peptide(StoreKey(key))
+
         val assayProtocols: AssayProtocolQuery get() = AssayProtocolQuery(Query("AssayProtocol"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun assayProtocol(key: StoreKey): AssayProtocol = this(Ref.Persisted("AssayProtocol", key))
+        fun assayProtocol(key: Long): AssayProtocol = assayProtocol(StoreKey(key))
+
         val labExperiments: LabExperimentQuery get() = LabExperimentQuery(Query("LabExperiment"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun labExperiment(key: StoreKey): LabExperiment = this(Ref.Persisted("LabExperiment", key))
+        fun labExperiment(key: Long): LabExperiment = labExperiment(StoreKey(key))
+
         val assays: AssayQuery get() = AssayQuery(Query("Assay"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun assay(key: StoreKey): Assay = this(Ref.Persisted("Assay", key))
+        fun assay(key: Long): Assay = assay(StoreKey(key))
+
         val assayReadings: AssayReadingQuery get() = AssayReadingQuery(Query("AssayReading"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun assayReading(key: StoreKey): AssayReading = this(Ref.Persisted("AssayReading", key))
+        fun assayReading(key: Long): AssayReading = assayReading(StoreKey(key))
+
         val labHits: LabHitQuery get() = LabHitQuery(Query("LabHit"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun labHit(key: StoreKey): LabHit = this(Ref.Persisted("LabHit", key))
+        fun labHit(key: Long): LabHit = labHit(StoreKey(key))
+
         val labHitRetractions: LabHitRetractionQuery get() = LabHitRetractionQuery(Query("LabHitRetraction"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun labHitRetraction(key: StoreKey): LabHitRetraction = this(Ref.Persisted("LabHitRetraction", key))
+        fun labHitRetraction(key: Long): LabHitRetraction = labHitRetraction(StoreKey(key))
+
         val greenhouses: GreenhouseQuery get() = GreenhouseQuery(Query("Greenhouse"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun greenhouse(key: StoreKey): Greenhouse = this(Ref.Persisted("Greenhouse", key))
+        fun greenhouse(key: Long): Greenhouse = greenhouse(StoreKey(key))
+
         val climateReadings: ClimateReadingQuery get() = ClimateReadingQuery(Query("ClimateReading"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun climateReading(key: StoreKey): ClimateReading = this(Ref.Persisted("ClimateReading", key))
+        fun climateReading(key: Long): ClimateReading = climateReading(StoreKey(key))
+
         val greenhouseProtocols: GreenhouseProtocolQuery get() = GreenhouseProtocolQuery(Query("GreenhouseProtocol"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun greenhouseProtocol(key: StoreKey): GreenhouseProtocol = this(Ref.Persisted("GreenhouseProtocol", key))
+        fun greenhouseProtocol(key: Long): GreenhouseProtocol = greenhouseProtocol(StoreKey(key))
+
         val greenhouseTrials: GreenhouseTrialQuery get() = GreenhouseTrialQuery(Query("GreenhouseTrial"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun greenhouseTrial(key: StoreKey): GreenhouseTrial = this(Ref.Persisted("GreenhouseTrial", key))
+        fun greenhouseTrial(key: Long): GreenhouseTrial = greenhouseTrial(StoreKey(key))
+
         val greenhouseRefusals: GreenhouseRefusalQuery get() = GreenhouseRefusalQuery(Query("GreenhouseRefusal"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun greenhouseRefusal(key: StoreKey): GreenhouseRefusal = this(Ref.Persisted("GreenhouseRefusal", key))
+        fun greenhouseRefusal(key: Long): GreenhouseRefusal = greenhouseRefusal(StoreKey(key))
+
         val greenhousePlots: GreenhousePlotQuery get() = GreenhousePlotQuery(Query("GreenhousePlot"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun greenhousePlot(key: StoreKey): GreenhousePlot = this(Ref.Persisted("GreenhousePlot", key))
+        fun greenhousePlot(key: Long): GreenhousePlot = greenhousePlot(StoreKey(key))
+
         val treatments: TreatmentQuery get() = TreatmentQuery(Query("Treatment"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun treatment(key: StoreKey): Treatment = this(Ref.Persisted("Treatment", key))
+        fun treatment(key: Long): Treatment = treatment(StoreKey(key))
+
         val plotObservations: PlotObservationQuery get() = PlotObservationQuery(Query("PlotObservation"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun plotObservation(key: StoreKey): PlotObservation = this(Ref.Persisted("PlotObservation", key))
+        fun plotObservation(key: Long): PlotObservation = plotObservation(StoreKey(key))
+
         val greenhouseResults: GreenhouseResultQuery get() = GreenhouseResultQuery(Query("GreenhouseResult"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun greenhouseResult(key: StoreKey): GreenhouseResult = this(Ref.Persisted("GreenhouseResult", key))
+        fun greenhouseResult(key: Long): GreenhouseResult = greenhouseResult(StoreKey(key))
+
         val observationCorrections: ObservationCorrectionQuery get() = ObservationCorrectionQuery(Query("ObservationCorrection"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun observationCorrection(key: StoreKey): ObservationCorrection = this(Ref.Persisted("ObservationCorrection", key))
+        fun observationCorrection(key: Long): ObservationCorrection = observationCorrection(StoreKey(key))
+
         val correctionRefusals: CorrectionRefusalQuery get() = CorrectionRefusalQuery(Query("CorrectionRefusal"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun correctionRefusal(key: StoreKey): CorrectionRefusal = this(Ref.Persisted("CorrectionRefusal", key))
+        fun correctionRefusal(key: Long): CorrectionRefusal = correctionRefusal(StoreKey(key))
+
         val voidRecords: VoidRecordQuery get() = VoidRecordQuery(Query("VoidRecord"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun voidRecord(key: StoreKey): VoidRecord = this(Ref.Persisted("VoidRecord", key))
+        fun voidRecord(key: Long): VoidRecord = voidRecord(StoreKey(key))
+
         val voidRefusals: VoidRefusalQuery get() = VoidRefusalQuery(Query("VoidRefusal"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun voidRefusal(key: StoreKey): VoidRefusal = this(Ref.Persisted("VoidRefusal", key))
+        fun voidRefusal(key: Long): VoidRefusal = voidRefusal(StoreKey(key))
+
         val moveRefusals: MoveRefusalQuery get() = MoveRefusalQuery(Query("MoveRefusal"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun moveRefusal(key: StoreKey): MoveRefusal = this(Ref.Persisted("MoveRefusal", key))
+        fun moveRefusal(key: Long): MoveRefusal = moveRefusal(StoreKey(key))
+
         val climateExcursions: ClimateExcursionQuery get() = ClimateExcursionQuery(Query("ClimateExcursion"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun climateExcursion(key: StoreKey): ClimateExcursion = this(Ref.Persisted("ClimateExcursion", key))
+        fun climateExcursion(key: Long): ClimateExcursion = climateExcursion(StoreKey(key))
+
         val excursionEnds: ExcursionEndQuery get() = ExcursionEndQuery(Query("ExcursionEnd"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun excursionEnd(key: StoreKey): ExcursionEnd = this(Ref.Persisted("ExcursionEnd", key))
+        fun excursionEnd(key: Long): ExcursionEnd = excursionEnd(StoreKey(key))
+
         val sensorAlerts: SensorAlertQuery get() = SensorAlertQuery(Query("SensorAlert"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun sensorAlert(key: StoreKey): SensorAlert = this(Ref.Persisted("SensorAlert", key))
+        fun sensorAlert(key: Long): SensorAlert = sensorAlert(StoreKey(key))
+
         val fieldSites: FieldSiteQuery get() = FieldSiteQuery(Query("FieldSite"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun fieldSite(key: StoreKey): FieldSite = this(Ref.Persisted("FieldSite", key))
+        fun fieldSite(key: Long): FieldSite = fieldSite(StoreKey(key))
+
         val permits: PermitQuery get() = PermitQuery(Query("Permit"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun permit(key: StoreKey): Permit = this(Ref.Persisted("Permit", key))
+        fun permit(key: Long): Permit = permit(StoreKey(key))
+
         val weatherObservations: WeatherObservationQuery get() = WeatherObservationQuery(Query("WeatherObservation"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun weatherObservation(key: StoreKey): WeatherObservation = this(Ref.Persisted("WeatherObservation", key))
+        fun weatherObservation(key: Long): WeatherObservation = weatherObservation(StoreKey(key))
+
         val fieldProtocols: FieldProtocolQuery get() = FieldProtocolQuery(Query("FieldProtocol"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun fieldProtocol(key: StoreKey): FieldProtocol = this(Ref.Persisted("FieldProtocol", key))
+        fun fieldProtocol(key: Long): FieldProtocol = fieldProtocol(StoreKey(key))
+
         val fieldTrials: FieldTrialQuery get() = FieldTrialQuery(Query("FieldTrial"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun fieldTrial(key: StoreKey): FieldTrial = this(Ref.Persisted("FieldTrial", key))
+        fun fieldTrial(key: Long): FieldTrial = fieldTrial(StoreKey(key))
+
         val fieldRefusals: FieldRefusalQuery get() = FieldRefusalQuery(Query("FieldRefusal"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun fieldRefusal(key: StoreKey): FieldRefusal = this(Ref.Persisted("FieldRefusal", key))
+        fun fieldRefusal(key: Long): FieldRefusal = fieldRefusal(StoreKey(key))
+
         val plantings: PlantingQuery get() = PlantingQuery(Query("Planting"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun planting(key: StoreKey): Planting = this(Ref.Persisted("Planting", key))
+        fun planting(key: Long): Planting = planting(StoreKey(key))
+
         val fieldPlots: FieldPlotQuery get() = FieldPlotQuery(Query("FieldPlot"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun fieldPlot(key: StoreKey): FieldPlot = this(Ref.Persisted("FieldPlot", key))
+        fun fieldPlot(key: Long): FieldPlot = fieldPlot(StoreKey(key))
+
         val treatmentApplications: TreatmentApplicationQuery get() = TreatmentApplicationQuery(Query("TreatmentApplication"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun treatmentApplication(key: StoreKey): TreatmentApplication = this(Ref.Persisted("TreatmentApplication", key))
+        fun treatmentApplication(key: Long): TreatmentApplication = treatmentApplication(StoreKey(key))
+
         val reapplicationNotices: ReapplicationNoticeQuery get() = ReapplicationNoticeQuery(Query("ReapplicationNotice"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun reapplicationNotice(key: StoreKey): ReapplicationNotice = this(Ref.Persisted("ReapplicationNotice", key))
+        fun reapplicationNotice(key: Long): ReapplicationNotice = reapplicationNotice(StoreKey(key))
+
         val scoutings: ScoutingQuery get() = ScoutingQuery(Query("Scouting"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun scouting(key: StoreKey): Scouting = this(Ref.Persisted("Scouting", key))
+        fun scouting(key: Long): Scouting = scouting(StoreKey(key))
+
         val harvests: HarvestQuery get() = HarvestQuery(Query("Harvest"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun harvest(key: StoreKey): Harvest = this(Ref.Persisted("Harvest", key))
+        fun harvest(key: Long): Harvest = harvest(StoreKey(key))
+
         val phytotoxicityReports: PhytotoxicityReportQuery get() = PhytotoxicityReportQuery(Query("PhytotoxicityReport"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun phytotoxicityReport(key: StoreKey): PhytotoxicityReport = this(Ref.Persisted("PhytotoxicityReport", key))
+        fun phytotoxicityReport(key: Long): PhytotoxicityReport = phytotoxicityReport(StoreKey(key))
+
         val haltNotices: HaltNoticeQuery get() = HaltNoticeQuery(Query("HaltNotice"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun haltNotice(key: StoreKey): HaltNotice = this(Ref.Persisted("HaltNotice", key))
+        fun haltNotice(key: Long): HaltNotice = haltNotice(StoreKey(key))
+
         val collectionTasks: CollectionTaskQuery get() = CollectionTaskQuery(Query("CollectionTask"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun collectionTask(key: StoreKey): CollectionTask = this(Ref.Persisted("CollectionTask", key))
+        fun collectionTask(key: Long): CollectionTask = collectionTask(StoreKey(key))
+
         val taskReminders: TaskReminderQuery get() = TaskReminderQuery(Query("TaskReminder"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun taskReminder(key: StoreKey): TaskReminder = this(Ref.Persisted("TaskReminder", key))
+        fun taskReminder(key: Long): TaskReminder = taskReminder(StoreKey(key))
+
         val rescheduleRefusals: RescheduleRefusalQuery get() = RescheduleRefusalQuery(Query("RescheduleRefusal"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun rescheduleRefusal(key: StoreKey): RescheduleRefusal = this(Ref.Persisted("RescheduleRefusal", key))
+        fun rescheduleRefusal(key: Long): RescheduleRefusal = rescheduleRefusal(StoreKey(key))
+
         val taskCancellations: TaskCancellationQuery get() = TaskCancellationQuery(Query("TaskCancellation"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun taskCancellation(key: StoreKey): TaskCancellation = this(Ref.Persisted("TaskCancellation", key))
+        fun taskCancellation(key: Long): TaskCancellation = taskCancellation(StoreKey(key))
+
         val cancelRefusals: CancelRefusalQuery get() = CancelRefusalQuery(Query("CancelRefusal"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun cancelRefusal(key: StoreKey): CancelRefusal = this(Ref.Persisted("CancelRefusal", key))
+        fun cancelRefusal(key: Long): CancelRefusal = cancelRefusal(StoreKey(key))
+
         val completedAssays: CompletedAssayQuery get() = CompletedAssayQuery(Query("CompletedAssay"))
+        /** The record behind [ref] as a member of CompletedAssay, or null when it is not one. */
+        fun completedAssay(ref: Ref<Assay>): CompletedAssay? =
+            system.idOf(ref).let { if (system.exists("CompletedAssay", it)) materializeCompletedAssay(it) else null }
+
         val hitExperiments: HitExperimentQuery get() = HitExperimentQuery(Query("HitExperiment"))
+        /** The record behind [ref] as a member of HitExperiment, or null when it is not one. */
+        fun hitExperiment(ref: Ref<LabExperiment>): HitExperiment? =
+            system.idOf(ref).let { if (system.exists("HitExperiment", it)) materializeHitExperiment(it) else null }
+
         val labValidateds: LabValidatedQuery get() = LabValidatedQuery(Query("LabValidated"))
+        /** The record behind [ref] as a member of LabValidated, or null when it is not one. */
+        fun labValidated(ref: Ref<Peptide>): LabValidated? =
+            system.idOf(ref).let { if (system.exists("LabValidated", it)) materializeLabValidated(it) else null }
+
         val treatedTrials: TreatedTrialQuery get() = TreatedTrialQuery(Query("TreatedTrial"))
+        /** The record behind [ref] as a member of TreatedTrial, or null when it is not one. */
+        fun treatedTrial(ref: Ref<GreenhouseTrial>): TreatedTrial? =
+            system.idOf(ref).let { if (system.exists("TreatedTrial", it)) materializeTreatedTrial(it) else null }
+
         val laidOutTrials: LaidOutTrialQuery get() = LaidOutTrialQuery(Query("LaidOutTrial"))
+        /** The record behind [ref] as a member of LaidOutTrial, or null when it is not one. */
+        fun laidOutTrial(ref: Ref<GreenhouseTrial>): LaidOutTrial? =
+            system.idOf(ref).let { if (system.exists("LaidOutTrial", it)) materializeLaidOutTrial(it) else null }
+
         val observedToEnds: ObservedToEndQuery get() = ObservedToEndQuery(Query("ObservedToEnd"))
+        /** The record behind [ref] as a member of ObservedToEnd, or null when it is not one. */
+        fun observedToEnd(ref: Ref<GreenhouseTrial>): ObservedToEnd? =
+            system.idOf(ref).let { if (system.exists("ObservedToEnd", it)) materializeObservedToEnd(it) else null }
+
         val completeTrials: CompleteTrialQuery get() = CompleteTrialQuery(Query("CompleteTrial"))
+        /** The record behind [ref] as a member of CompleteTrial, or null when it is not one. */
+        fun completeTrial(ref: Ref<GreenhouseTrial>): CompleteTrial? =
+            system.idOf(ref).let { if (system.exists("CompleteTrial", it)) materializeCompleteTrial(it) else null }
+
         val effectiveTrials: EffectiveTrialQuery get() = EffectiveTrialQuery(Query("EffectiveTrial"))
+        /** The record behind [ref] as a member of EffectiveTrial, or null when it is not one. */
+        fun effectiveTrial(ref: Ref<GreenhouseTrial>): EffectiveTrial? =
+            system.idOf(ref).let { if (system.exists("EffectiveTrial", it)) materializeEffectiveTrial(it) else null }
+
         val evaluatedTrials: EvaluatedTrialQuery get() = EvaluatedTrialQuery(Query("EvaluatedTrial"))
+        /** The record behind [ref] as a member of EvaluatedTrial, or null when it is not one. */
+        fun evaluatedTrial(ref: Ref<GreenhouseTrial>): EvaluatedTrial? =
+            system.idOf(ref).let { if (system.exists("EvaluatedTrial", it)) materializeEvaluatedTrial(it) else null }
+
         val greenhouseValidateds: GreenhouseValidatedQuery get() = GreenhouseValidatedQuery(Query("GreenhouseValidated"))
+        /** The record behind [ref] as a member of GreenhouseValidated, or null when it is not one. */
+        fun greenhouseValidated(ref: Ref<Peptide>): GreenhouseValidated? =
+            system.idOf(ref).let { if (system.exists("GreenhouseValidated", it)) materializeGreenhouseValidated(it) else null }
+
         val deprioritizeds: DeprioritizedQuery get() = DeprioritizedQuery(Query("Deprioritized"))
+        /** The record behind [ref] as a member of Deprioritized, or null when it is not one. */
+        fun deprioritized(ref: Ref<Peptide>): Deprioritized? =
+            system.idOf(ref).let { if (system.exists("Deprioritized", it)) materializeDeprioritized(it) else null }
+
         val lockedObservations: LockedObservationQuery get() = LockedObservationQuery(Query("LockedObservation"))
+        /** The record behind [ref] as a member of LockedObservation, or null when it is not one. */
+        fun lockedObservation(ref: Ref<PlotObservation>): LockedObservation? =
+            system.idOf(ref).let { if (system.exists("LockedObservation", it)) materializeLockedObservation(it) else null }
+
         val treatedPlots: TreatedPlotQuery get() = TreatedPlotQuery(Query("TreatedPlot"))
+        /** The record behind [ref] as a member of TreatedPlot, or null when it is not one. */
+        fun treatedPlot(ref: Ref<GreenhousePlot>): TreatedPlot? =
+            system.idOf(ref).let { if (system.exists("TreatedPlot", it)) materializeTreatedPlot(it) else null }
+
         val activeTrials: ActiveTrialQuery get() = ActiveTrialQuery(Query("ActiveTrial"))
+        /** The record behind [ref] as a member of ActiveTrial, or null when it is not one. */
+        fun activeTrial(ref: Ref<GreenhouseTrial>): ActiveTrial? =
+            system.idOf(ref).let { if (system.exists("ActiveTrial", it)) materializeActiveTrial(it) else null }
+
         val outOfBands: OutOfBandQuery get() = OutOfBandQuery(Query("OutOfBand"))
+        /** The record behind [ref] as a member of OutOfBand, or null when it is not one. */
+        fun outOfBand(ref: Ref<Greenhouse>): OutOfBand? =
+            system.idOf(ref).let { if (system.exists("OutOfBand", it)) materializeOutOfBand(it) else null }
+
         val openExcursions: OpenExcursionQuery get() = OpenExcursionQuery(Query("OpenExcursion"))
+        /** The record behind [ref] as a member of OpenExcursion, or null when it is not one. */
+        fun openExcursion(ref: Ref<ClimateExcursion>): OpenExcursion? =
+            system.idOf(ref).let { if (system.exists("OpenExcursion", it)) materializeOpenExcursion(it) else null }
+
         val closableExcursions: ClosableExcursionQuery get() = ClosableExcursionQuery(Query("ClosableExcursion"))
+        /** The record behind [ref] as a member of ClosableExcursion, or null when it is not one. */
+        fun closableExcursion(ref: Ref<ClimateExcursion>): ClosableExcursion? =
+            system.idOf(ref).let { if (system.exists("ClosableExcursion", it)) materializeClosableExcursion(it) else null }
+
         val compromisedTrials: CompromisedTrialQuery get() = CompromisedTrialQuery(Query("CompromisedTrial"))
+        /** The record behind [ref] as a member of CompromisedTrial, or null when it is not one. */
+        fun compromisedTrial(ref: Ref<GreenhouseTrial>): CompromisedTrial? =
+            system.idOf(ref).let { if (system.exists("CompromisedTrial", it)) materializeCompromisedTrial(it) else null }
+
         val silentGreenhouses: SilentGreenhouseQuery get() = SilentGreenhouseQuery(Query("SilentGreenhouse"))
+        /** The record behind [ref] as a member of SilentGreenhouse, or null when it is not one. */
+        fun silentGreenhouse(ref: Ref<Greenhouse>): SilentGreenhouse? =
+            system.idOf(ref).let { if (system.exists("SilentGreenhouse", it)) materializeSilentGreenhouse(it) else null }
+
         val permittedTrials: PermittedTrialQuery get() = PermittedTrialQuery(Query("PermittedTrial"))
+        /** The record behind [ref] as a member of PermittedTrial, or null when it is not one. */
+        fun permittedTrial(ref: Ref<FieldTrial>): PermittedTrial? =
+            system.idOf(ref).let { if (system.exists("PermittedTrial", it)) materializePermittedTrial(it) else null }
+
         val plantedTrials: PlantedTrialQuery get() = PlantedTrialQuery(Query("PlantedTrial"))
+        /** The record behind [ref] as a member of PlantedTrial, or null when it is not one. */
+        fun plantedTrial(ref: Ref<FieldTrial>): PlantedTrial? =
+            system.idOf(ref).let { if (system.exists("PlantedTrial", it)) materializePlantedTrial(it) else null }
+
         val washedOffApplications: WashedOffApplicationQuery get() = WashedOffApplicationQuery(Query("WashedOffApplication"))
+        /** The record behind [ref] as a member of WashedOffApplication, or null when it is not one. */
+        fun washedOffApplication(ref: Ref<TreatmentApplication>): WashedOffApplication? =
+            system.idOf(ref).let { if (system.exists("WashedOffApplication", it)) materializeWashedOffApplication(it) else null }
+
         val neverScouteds: NeverScoutedQuery get() = NeverScoutedQuery(Query("NeverScouted"))
+        /** The record behind [ref] as a member of NeverScouted, or null when it is not one. */
+        fun neverScouted(ref: Ref<FieldTrial>): NeverScouted? =
+            system.idOf(ref).let { if (system.exists("NeverScouted", it)) materializeNeverScouted(it) else null }
+
         val harvestedTrials: HarvestedTrialQuery get() = HarvestedTrialQuery(Query("HarvestedTrial"))
+        /** The record behind [ref] as a member of HarvestedTrial, or null when it is not one. */
+        fun harvestedTrial(ref: Ref<FieldTrial>): HarvestedTrial? =
+            system.idOf(ref).let { if (system.exists("HarvestedTrial", it)) materializeHarvestedTrial(it) else null }
+
         val successfulFieldTrials: SuccessfulFieldTrialQuery get() = SuccessfulFieldTrialQuery(Query("SuccessfulFieldTrial"))
+        /** The record behind [ref] as a member of SuccessfulFieldTrial, or null when it is not one. */
+        fun successfulFieldTrial(ref: Ref<FieldTrial>): SuccessfulFieldTrial? =
+            system.idOf(ref).let { if (system.exists("SuccessfulFieldTrial", it)) materializeSuccessfulFieldTrial(it) else null }
+
         val fieldValidateds: FieldValidatedQuery get() = FieldValidatedQuery(Query("FieldValidated"))
+        /** The record behind [ref] as a member of FieldValidated, or null when it is not one. */
+        fun fieldValidated(ref: Ref<Peptide>): FieldValidated? =
+            system.idOf(ref).let { if (system.exists("FieldValidated", it)) materializeFieldValidated(it) else null }
+
         val haltedTrials: HaltedTrialQuery get() = HaltedTrialQuery(Query("HaltedTrial"))
+        /** The record behind [ref] as a member of HaltedTrial, or null when it is not one. */
+        fun haltedTrial(ref: Ref<FieldTrial>): HaltedTrial? =
+            system.idOf(ref).let { if (system.exists("HaltedTrial", it)) materializeHaltedTrial(it) else null }
+
+        val trials: TrialQuery get() = TrialQuery(Query("Trial"))
+
         val doneTasks: DoneTaskQuery get() = DoneTaskQuery(Query("DoneTask"))
+        /** The record behind [ref] as a member of DoneTask, or null when it is not one. */
+        fun doneTask(ref: Ref<CollectionTask>): DoneTask? =
+            system.idOf(ref).let { if (system.exists("DoneTask", it)) materializeDoneTask(it) else null }
+
         val openTasks: OpenTaskQuery get() = OpenTaskQuery(Query("OpenTask"))
+        /** The record behind [ref] as a member of OpenTask, or null when it is not one. */
+        fun openTask(ref: Ref<CollectionTask>): OpenTask? =
+            system.idOf(ref).let { if (system.exists("OpenTask", it)) materializeOpenTask(it) else null }
+
         val overdueTasks: OverdueTaskQuery get() = OverdueTaskQuery(Query("OverdueTask"))
+        /** The record behind [ref] as a member of OverdueTask, or null when it is not one. */
+        fun overdueTask(ref: Ref<CollectionTask>): OverdueTask? =
+            system.idOf(ref).let { if (system.exists("OverdueTask", it)) materializeOverdueTask(it) else null }
     }
 
     inner class CropQuery(q: Query) : TypedQuery<CropFields, Crop>(system, q, CropFields(), { materializeCrop(it) }) {
@@ -1572,6 +1155,10 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         override fun with(q: Query) = HaltedTrialQuery(q)
     }
 
+    inner class TrialQuery(q: Query) : TypedQuery<TrialFields, Trial>(system, q, TrialFields(), { materializeTrial(it) }) {
+        override fun with(q: Query) = TrialQuery(q)
+    }
+
     inner class DoneTaskQuery(q: Query) : TypedQuery<DoneTaskFields, DoneTask>(system, q, DoneTaskFields(), { materializeDoneTask(it) }) {
         override fun with(q: Query) = DoneTaskQuery(q)
     }
@@ -1584,181 +1171,249 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         override fun with(q: Query) = OverdueTaskQuery(q)
     }
 
+    /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
+    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+        "Crop" -> materializeCrop(id)
+        "Pathogen" -> materializePathogen(id)
+        "Peptide" -> materializePeptide(id)
+        "AssayProtocol" -> materializeAssayProtocol(id)
+        "LabExperiment" -> materializeLabExperiment(id)
+        "Assay" -> materializeAssay(id)
+        "AssayReading" -> materializeAssayReading(id)
+        "LabHit" -> materializeLabHit(id)
+        "LabHitRetraction" -> materializeLabHitRetraction(id)
+        "Greenhouse" -> materializeGreenhouse(id)
+        "ClimateReading" -> materializeClimateReading(id)
+        "GreenhouseProtocol" -> materializeGreenhouseProtocol(id)
+        "GreenhouseTrial" -> materializeGreenhouseTrial(id)
+        "GreenhouseRefusal" -> materializeGreenhouseRefusal(id)
+        "GreenhousePlot" -> materializeGreenhousePlot(id)
+        "Treatment" -> materializeTreatment(id)
+        "PlotObservation" -> materializePlotObservation(id)
+        "GreenhouseResult" -> materializeGreenhouseResult(id)
+        "ObservationCorrection" -> materializeObservationCorrection(id)
+        "CorrectionRefusal" -> materializeCorrectionRefusal(id)
+        "VoidRecord" -> materializeVoidRecord(id)
+        "VoidRefusal" -> materializeVoidRefusal(id)
+        "MoveRefusal" -> materializeMoveRefusal(id)
+        "ClimateExcursion" -> materializeClimateExcursion(id)
+        "ExcursionEnd" -> materializeExcursionEnd(id)
+        "SensorAlert" -> materializeSensorAlert(id)
+        "FieldSite" -> materializeFieldSite(id)
+        "Permit" -> materializePermit(id)
+        "WeatherObservation" -> materializeWeatherObservation(id)
+        "FieldProtocol" -> materializeFieldProtocol(id)
+        "FieldTrial" -> materializeFieldTrial(id)
+        "FieldRefusal" -> materializeFieldRefusal(id)
+        "Planting" -> materializePlanting(id)
+        "FieldPlot" -> materializeFieldPlot(id)
+        "TreatmentApplication" -> materializeTreatmentApplication(id)
+        "ReapplicationNotice" -> materializeReapplicationNotice(id)
+        "Scouting" -> materializeScouting(id)
+        "Harvest" -> materializeHarvest(id)
+        "PhytotoxicityReport" -> materializePhytotoxicityReport(id)
+        "HaltNotice" -> materializeHaltNotice(id)
+        "CollectionTask" -> materializeCollectionTask(id)
+        "TaskReminder" -> materializeTaskReminder(id)
+        "RescheduleRefusal" -> materializeRescheduleRefusal(id)
+        "TaskCancellation" -> materializeTaskCancellation(id)
+        "CancelRefusal" -> materializeCancelRefusal(id)
+        else -> throw IllegalStateException("no model object for '$shape'")
+    }
+
     fun materializeCrop(id: Long): Crop = Crop(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        pathogens = (system.get(id, "pathogens") as List<*>).map { PathogenView(it as Long) },
-        permits = (system.get(id, "permits") as List<*>).map { PermitView(it as Long) },
-        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+        pathogens = (system.get(id, "pathogens") as List<*>).map { system.refFor(it as Long) },
+        permits = (system.get(id, "permits") as List<*>).map { system.refFor(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializePathogen(id: Long): Pathogen = Pathogen(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        host = CropView(system.get(id, "host") as Long),
-        labExperiments = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) },
-        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
-        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+        host = system.refFor(system.get(id, "host") as Long),
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializePeptide(id: Long): Peptide = Peptide(
-        id = id,
+        key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
         stage = system.get(id, "stage") as String,
-        labExperiments = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) },
-        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
-        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
+        isLabValidated = system.isMember(id, "LabValidated"),
+        isGreenhouseValidated = system.isMember(id, "GreenhouseValidated"),
+        isDeprioritized = system.isMember(id, "Deprioritized"),
+        isFieldValidated = system.isMember(id, "FieldValidated"),
     )
 
     fun materializeAssayProtocol(id: Long): AssayProtocol = AssayProtocol(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         durationHours = (system.get(id, "durationHours") as BigDecimal).intValueExact(),
         replicates = (system.get(id, "replicates") as BigDecimal).intValueExact(),
         hitThreshold = system.get(id, "hitThreshold") as BigDecimal,
-        labExperiments = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) },
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeLabExperiment(id: Long): LabExperiment = LabExperiment(
-        id = id,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        protocol = AssayProtocolView(system.get(id, "protocol") as Long),
+        key = system.refFor(id).key,
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         completedReplicates = (system.get(id, "completedReplicates") as BigDecimal).intValueExact(),
         meanPeakInhibition = system.get(id, "meanPeakInhibition") as BigDecimal,
-        assays = (system.get(id, "assays") as List<*>).map { AssayView(it as Long) },
-        labHits = (system.get(id, "labHits") as List<*>).map { LabHitView(it as Long) },
-        labHitRetractions = (system.get(id, "labHitRetractions") as List<*>).map { LabHitRetractionView(it as Long) },
+        assays = (system.get(id, "assays") as List<*>).map { system.refFor(it as Long) },
+        labHits = (system.get(id, "labHits") as List<*>).map { system.refFor(it as Long) },
+        labHitRetractions = (system.get(id, "labHitRetractions") as List<*>).map { system.refFor(it as Long) },
+        isHitExperiment = system.isMember(id, "HitExperiment"),
     )
 
     fun materializeAssay(id: Long): Assay = Assay(
-        id = id,
-        experiment = LabExperimentView(system.get(id, "experiment") as Long),
+        key = system.refFor(id).key,
+        experiment = system.refFor(system.get(id, "experiment") as Long),
         replicate = (system.get(id, "replicate") as BigDecimal).intValueExact(),
         peakInhibition = system.get(id, "peakInhibition") as BigDecimal,
-        assayReadings = (system.get(id, "assayReadings") as List<*>).map { AssayReadingView(it as Long) },
+        assayReadings = (system.get(id, "assayReadings") as List<*>).map { system.refFor(it as Long) },
+        isCompletedAssay = system.isMember(id, "CompletedAssay"),
     )
 
     fun materializeAssayReading(id: Long): AssayReading = AssayReading(
-        id = id,
-        assay = AssayView(system.get(id, "assay") as Long),
+        key = system.refFor(id).key,
+        assay = system.refFor(system.get(id, "assay") as Long),
         hoursElapsed = (system.get(id, "hoursElapsed") as BigDecimal).intValueExact(),
         inhibitionPercent = system.get(id, "inhibitionPercent") as BigDecimal,
-        previous = (system.get(id, "previous") as Long?)?.let { AssayReadingView(it) },
+        previous = (system.get(id, "previous") as Long?)?.let { system.refFor(it) },
         runningPeak = system.get(id, "runningPeak") as BigDecimal,
     )
 
     fun materializeLabHit(id: Long): LabHit = LabHit(
-        id = id,
-        experiment = LabExperimentView(system.get(id, "experiment") as Long),
+        key = system.refFor(id).key,
+        experiment = system.refFor(system.get(id, "experiment") as Long),
         meanPeakInhibition = system.get(id, "meanPeakInhibition") as BigDecimal,
         recordedOn = system.get(id, "recordedOn") as Instant,
     )
 
     fun materializeLabHitRetraction(id: Long): LabHitRetraction = LabHitRetraction(
-        id = id,
-        experiment = LabExperimentView(system.get(id, "experiment") as Long),
+        key = system.refFor(id).key,
+        experiment = system.refFor(system.get(id, "experiment") as Long),
         retractedOn = system.get(id, "retractedOn") as Instant,
     )
 
     fun materializeGreenhouse(id: Long): Greenhouse = Greenhouse(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         minTemperature = system.get(id, "minTemperature") as BigDecimal,
         maxTemperature = system.get(id, "maxTemperature") as BigDecimal,
-        climateReadings = (system.get(id, "climateReadings") as List<*>).map { ClimateReadingView(it as Long) },
-        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
-        climateExcursions = (system.get(id, "climateExcursions") as List<*>).map { ClimateExcursionView(it as Long) },
-        sensorAlerts = (system.get(id, "sensorAlerts") as List<*>).map { SensorAlertView(it as Long) },
+        climateReadings = (system.get(id, "climateReadings") as List<*>).map { system.refFor(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
+        climateExcursions = (system.get(id, "climateExcursions") as List<*>).map { system.refFor(it as Long) },
+        sensorAlerts = (system.get(id, "sensorAlerts") as List<*>).map { system.refFor(it as Long) },
+        isOutOfBand = system.isMember(id, "OutOfBand"),
+        isSilentGreenhouse = system.isMember(id, "SilentGreenhouse"),
     )
 
     fun materializeClimateReading(id: Long): ClimateReading = ClimateReading(
-        id = id,
-        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        key = system.refFor(id).key,
+        greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         recordedAt = system.get(id, "recordedAt") as Instant,
         temperature = system.get(id, "temperature") as BigDecimal,
         humidity = system.get(id, "humidity") as BigDecimal,
     )
 
     fun materializeGreenhouseProtocol(id: Long): GreenhouseProtocol = GreenhouseProtocol(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         plotsPerArm = (system.get(id, "plotsPerArm") as BigDecimal).intValueExact(),
         finalDay = (system.get(id, "finalDay") as BigDecimal).intValueExact(),
         efficacyThreshold = system.get(id, "efficacyThreshold") as BigDecimal,
-        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeGreenhouseTrial(id: Long): GreenhouseTrial = GreenhouseTrial(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
-        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
-        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
         meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
         efficacy = system.get(id, "efficacy") as BigDecimal,
-        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
-        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
-        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { system.refFor(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { system.refFor(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { system.refFor(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { system.refFor(it as Long) },
+        isTreatedTrial = system.isMember(id, "TreatedTrial"),
+        isLaidOutTrial = system.isMember(id, "LaidOutTrial"),
+        isObservedToEnd = system.isMember(id, "ObservedToEnd"),
+        isCompleteTrial = system.isMember(id, "CompleteTrial"),
+        isEffectiveTrial = system.isMember(id, "EffectiveTrial"),
+        isEvaluatedTrial = system.isMember(id, "EvaluatedTrial"),
+        isActiveTrial = system.isMember(id, "ActiveTrial"),
+        isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
     fun materializeGreenhouseRefusal(id: Long): GreenhouseRefusal = GreenhouseRefusal(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
     fun materializeGreenhousePlot(id: Long): GreenhousePlot = GreenhousePlot(
-        id = id,
-        trial = GreenhouseTrialView(system.get(id, "trial") as Long),
+        key = system.refFor(id).key,
+        trial = system.refFor(system.get(id, "trial") as Long),
         bench = system.get(id, "bench") as String,
         treatment = system.get(id, "treatment") as String,
         lastObservedDay = (system.get(id, "lastObservedDay") as BigDecimal).intValueExact(),
         audpc = system.get(id, "audpc") as BigDecimal,
-        plotObservations = (system.get(id, "plotObservations") as List<*>).map { PlotObservationView(it as Long) },
-        moveRefusals = (system.get(id, "moveRefusals") as List<*>).map { MoveRefusalView(it as Long) },
+        plotObservations = (system.get(id, "plotObservations") as List<*>).map { system.refFor(it as Long) },
+        moveRefusals = (system.get(id, "moveRefusals") as List<*>).map { system.refFor(it as Long) },
+        isTreatedPlot = system.isMember(id, "TreatedPlot"),
     )
 
     fun materializeTreatment(id: Long): Treatment = Treatment(
-        id = id,
-        trial = GreenhouseTrialView(system.get(id, "trial") as Long),
+        key = system.refFor(id).key,
+        trial = system.refFor(system.get(id, "trial") as Long),
         treatedAt = system.get(id, "treatedAt") as Instant,
     )
 
     fun materializePlotObservation(id: Long): PlotObservation = PlotObservation(
-        id = id,
-        plot = GreenhousePlotView(system.get(id, "plot") as Long),
+        key = system.refFor(id).key,
+        plot = system.refFor(system.get(id, "plot") as Long),
         dayAfterTreatment = (system.get(id, "dayAfterTreatment") as BigDecimal).intValueExact(),
         recordedSeverity = system.get(id, "recordedSeverity") as BigDecimal,
         observedOn = system.get(id, "observedOn") as LocalDate,
         diseaseSeverity = system.get(id, "diseaseSeverity") as BigDecimal,
-        previous = (system.get(id, "previous") as Long?)?.let { PlotObservationView(it) },
+        previous = (system.get(id, "previous") as Long?)?.let { system.refFor(it) },
         audpcSoFar = system.get(id, "audpcSoFar") as BigDecimal,
-        observationCorrections = (system.get(id, "observationCorrections") as List<*>).map { ObservationCorrectionView(it as Long) },
-        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
-        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+        observationCorrections = (system.get(id, "observationCorrections") as List<*>).map { system.refFor(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { system.refFor(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { system.refFor(it as Long) },
+        isLockedObservation = system.isMember(id, "LockedObservation"),
     )
 
     fun materializeGreenhouseResult(id: Long): GreenhouseResult = GreenhouseResult(
-        id = id,
-        trial = GreenhouseTrialView(system.get(id, "trial") as Long),
+        key = system.refFor(id).key,
+        trial = system.refFor(system.get(id, "trial") as Long),
         efficacy = system.get(id, "efficacy") as BigDecimal,
         effective = system.get(id, "effective") as Boolean,
         recordedOn = system.get(id, "recordedOn") as Instant,
     )
 
     fun materializeObservationCorrection(id: Long): ObservationCorrection = ObservationCorrection(
-        id = id,
-        observation = (system.get(id, "observation") as Long?)?.let { PlotObservationView(it) },
+        key = system.refFor(id).key,
+        observation = (system.get(id, "observation") as Long?)?.let { system.refFor(it) },
         previousSeverity = system.get(id, "previousSeverity") as BigDecimal,
         correctedSeverity = system.get(id, "correctedSeverity") as BigDecimal,
         reason = system.get(id, "reason") as String,
@@ -1766,14 +1421,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     )
 
     fun materializeCorrectionRefusal(id: Long): CorrectionRefusal = CorrectionRefusal(
-        id = id,
-        observation = (system.get(id, "observation") as Long?)?.let { PlotObservationView(it) },
+        key = system.refFor(id).key,
+        observation = (system.get(id, "observation") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
     fun materializeVoidRecord(id: Long): VoidRecord = VoidRecord(
-        id = id,
+        key = system.refFor(id).key,
         bench = system.get(id, "bench") as String,
         dayAfterTreatment = (system.get(id, "dayAfterTreatment") as BigDecimal).intValueExact(),
         diseaseSeverity = system.get(id, "diseaseSeverity") as BigDecimal,
@@ -1782,190 +1437,202 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     )
 
     fun materializeVoidRefusal(id: Long): VoidRefusal = VoidRefusal(
-        id = id,
-        observation = (system.get(id, "observation") as Long?)?.let { PlotObservationView(it) },
+        key = system.refFor(id).key,
+        observation = (system.get(id, "observation") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
     fun materializeMoveRefusal(id: Long): MoveRefusal = MoveRefusal(
-        id = id,
-        plot = GreenhousePlotView(system.get(id, "plot") as Long),
+        key = system.refFor(id).key,
+        plot = system.refFor(system.get(id, "plot") as Long),
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
     fun materializeClimateExcursion(id: Long): ClimateExcursion = ClimateExcursion(
-        id = id,
-        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        key = system.refFor(id).key,
+        greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         startedAt = system.get(id, "startedAt") as Instant,
         temperature = system.get(id, "temperature") as BigDecimal,
-        excursionEnds = (system.get(id, "excursionEnds") as List<*>).map { ExcursionEndView(it as Long) },
+        excursionEnds = (system.get(id, "excursionEnds") as List<*>).map { system.refFor(it as Long) },
+        isOpenExcursion = system.isMember(id, "OpenExcursion"),
+        isClosableExcursion = system.isMember(id, "ClosableExcursion"),
     )
 
     fun materializeExcursionEnd(id: Long): ExcursionEnd = ExcursionEnd(
-        id = id,
-        excursion = ClimateExcursionView(system.get(id, "excursion") as Long),
+        key = system.refFor(id).key,
+        excursion = system.refFor(system.get(id, "excursion") as Long),
         endedAt = system.get(id, "endedAt") as Instant,
     )
 
     fun materializeSensorAlert(id: Long): SensorAlert = SensorAlert(
-        id = id,
-        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        key = system.refFor(id).key,
+        greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         raisedAt = system.get(id, "raisedAt") as Instant,
     )
 
     fun materializeFieldSite(id: Long): FieldSite = FieldSite(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         region = system.get(id, "region") as String,
-        permits = (system.get(id, "permits") as List<*>).map { PermitView(it as Long) },
-        weatherObservations = (system.get(id, "weatherObservations") as List<*>).map { WeatherObservationView(it as Long) },
-        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+        permits = (system.get(id, "permits") as List<*>).map { system.refFor(it as Long) },
+        weatherObservations = (system.get(id, "weatherObservations") as List<*>).map { system.refFor(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializePermit(id: Long): Permit = Permit(
-        id = id,
-        site = FieldSiteView(system.get(id, "site") as Long),
-        crop = CropView(system.get(id, "crop") as Long),
+        key = system.refFor(id).key,
+        site = system.refFor(system.get(id, "site") as Long),
+        crop = system.refFor(system.get(id, "crop") as Long),
         issuedOn = system.get(id, "issuedOn") as LocalDate,
         expiresOn = system.get(id, "expiresOn") as LocalDate,
     )
 
     fun materializeWeatherObservation(id: Long): WeatherObservation = WeatherObservation(
-        id = id,
-        site = FieldSiteView(system.get(id, "site") as Long),
+        key = system.refFor(id).key,
+        site = system.refFor(system.get(id, "site") as Long),
         observedOn = system.get(id, "observedOn") as LocalDate,
         rainfallMm = system.get(id, "rainfallMm") as BigDecimal,
         maxTemperature = system.get(id, "maxTemperature") as BigDecimal,
     )
 
     fun materializeFieldProtocol(id: Long): FieldProtocol = FieldProtocol(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         yieldGainThreshold = system.get(id, "yieldGainThreshold") as BigDecimal,
-        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeFieldTrial(id: Long): FieldTrial = FieldTrial(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        crop = CropView(system.get(id, "crop") as Long),
-        site = FieldSiteView(system.get(id, "site") as Long),
-        protocol = FieldProtocolView(system.get(id, "protocol") as Long),
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        crop = system.refFor(system.get(id, "crop") as Long),
+        site = system.refFor(system.get(id, "site") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         approvedOn = system.get(id, "approvedOn") as Instant,
-        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { FieldPlotView(it as Long) },
-        controlPlots = (system.get(id, "controlPlots") as List<*>).map { FieldPlotView(it as Long) },
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
         meanControlYield = system.get(id, "meanControlYield") as BigDecimal,
         yieldGain = system.get(id, "yieldGain") as BigDecimal,
-        plantings = (system.get(id, "plantings") as List<*>).map { PlantingView(it as Long) },
-        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { FieldPlotView(it as Long) },
-        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { TreatmentApplicationView(it as Long) },
-        haltNotices = (system.get(id, "haltNotices") as List<*>).map { HaltNoticeView(it as Long) },
-        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+        plantings = (system.get(id, "plantings") as List<*>).map { system.refFor(it as Long) },
+        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { system.refFor(it as Long) },
+        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { system.refFor(it as Long) },
+        haltNotices = (system.get(id, "haltNotices") as List<*>).map { system.refFor(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { system.refFor(it as Long) },
+        isPermittedTrial = system.isMember(id, "PermittedTrial"),
+        isPlantedTrial = system.isMember(id, "PlantedTrial"),
+        isNeverScouted = system.isMember(id, "NeverScouted"),
+        isHarvestedTrial = system.isMember(id, "HarvestedTrial"),
+        isSuccessfulFieldTrial = system.isMember(id, "SuccessfulFieldTrial"),
+        isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
     fun materializeFieldRefusal(id: Long): FieldRefusal = FieldRefusal(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
     fun materializePlanting(id: Long): Planting = Planting(
-        id = id,
-        trial = FieldTrialView(system.get(id, "trial") as Long),
+        key = system.refFor(id).key,
+        trial = system.refFor(system.get(id, "trial") as Long),
         plantedOn = system.get(id, "plantedOn") as LocalDate,
         seedLot = system.get(id, "seedLot") as String,
         recordedOn = system.get(id, "recordedOn") as Instant,
     )
 
     fun materializeFieldPlot(id: Long): FieldPlot = FieldPlot(
-        id = id,
-        trial = FieldTrialView(system.get(id, "trial") as Long),
+        key = system.refFor(id).key,
+        trial = system.refFor(system.get(id, "trial") as Long),
         block = (system.get(id, "block") as BigDecimal).intValueExact(),
         treatment = system.get(id, "treatment") as String,
         yieldKgPerHa = system.get(id, "yieldKgPerHa") as BigDecimal,
-        scoutings = (system.get(id, "scoutings") as List<*>).map { ScoutingView(it as Long) },
-        harvests = (system.get(id, "harvests") as List<*>).map { HarvestView(it as Long) },
-        phytotoxicityReports = (system.get(id, "phytotoxicityReports") as List<*>).map { PhytotoxicityReportView(it as Long) },
+        scoutings = (system.get(id, "scoutings") as List<*>).map { system.refFor(it as Long) },
+        harvests = (system.get(id, "harvests") as List<*>).map { system.refFor(it as Long) },
+        phytotoxicityReports = (system.get(id, "phytotoxicityReports") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeTreatmentApplication(id: Long): TreatmentApplication = TreatmentApplication(
-        id = id,
-        trial = FieldTrialView(system.get(id, "trial") as Long),
+        key = system.refFor(id).key,
+        trial = system.refFor(system.get(id, "trial") as Long),
         appliedOn = system.get(id, "appliedOn") as LocalDate,
         rateGramsPerHa = system.get(id, "rateGramsPerHa") as BigDecimal,
         recordedOn = system.get(id, "recordedOn") as Instant,
-        reapplicationNotices = (system.get(id, "reapplicationNotices") as List<*>).map { ReapplicationNoticeView(it as Long) },
+        reapplicationNotices = (system.get(id, "reapplicationNotices") as List<*>).map { system.refFor(it as Long) },
+        isWashedOffApplication = system.isMember(id, "WashedOffApplication"),
     )
 
     fun materializeReapplicationNotice(id: Long): ReapplicationNotice = ReapplicationNotice(
-        id = id,
-        application = TreatmentApplicationView(system.get(id, "application") as Long),
+        key = system.refFor(id).key,
+        application = system.refFor(system.get(id, "application") as Long),
         noticedOn = system.get(id, "noticedOn") as LocalDate,
     )
 
     fun materializeScouting(id: Long): Scouting = Scouting(
-        id = id,
-        plot = FieldPlotView(system.get(id, "plot") as Long),
+        key = system.refFor(id).key,
+        plot = system.refFor(system.get(id, "plot") as Long),
         daysAfterPlanting = (system.get(id, "daysAfterPlanting") as BigDecimal).intValueExact(),
         scoutedOn = system.get(id, "scoutedOn") as LocalDate,
         incidencePercent = system.get(id, "incidencePercent") as BigDecimal,
         severity = system.get(id, "severity") as BigDecimal,
-        previous = (system.get(id, "previous") as Long?)?.let { ScoutingView(it) },
+        previous = (system.get(id, "previous") as Long?)?.let { system.refFor(it) },
         audpcSoFar = system.get(id, "audpcSoFar") as BigDecimal,
     )
 
     fun materializeHarvest(id: Long): Harvest = Harvest(
-        id = id,
-        plot = FieldPlotView(system.get(id, "plot") as Long),
+        key = system.refFor(id).key,
+        plot = system.refFor(system.get(id, "plot") as Long),
         harvestedOn = system.get(id, "harvestedOn") as LocalDate,
         yieldKgPerHa = system.get(id, "yieldKgPerHa") as BigDecimal,
     )
 
     fun materializePhytotoxicityReport(id: Long): PhytotoxicityReport = PhytotoxicityReport(
-        id = id,
-        plot = FieldPlotView(system.get(id, "plot") as Long),
+        key = system.refFor(id).key,
+        plot = system.refFor(system.get(id, "plot") as Long),
         observedOn = system.get(id, "observedOn") as LocalDate,
         severity = (system.get(id, "severity") as BigDecimal).intValueExact(),
     )
 
     fun materializeHaltNotice(id: Long): HaltNotice = HaltNotice(
-        id = id,
-        trial = FieldTrialView(system.get(id, "trial") as Long),
+        key = system.refFor(id).key,
+        trial = system.refFor(system.get(id, "trial") as Long),
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
     fun materializeCollectionTask(id: Long): CollectionTask = CollectionTask(
-        id = id,
-        trial = TrialView(system.get(id, "trial") as Long),
+        key = system.refFor(id).key,
+        trial = system.refFor(system.get(id, "trial") as Long),
         dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
         dueOn = system.get(id, "dueOn") as LocalDate,
         plotsPending = (system.get(id, "plotsPending") as BigDecimal).intValueExact(),
-        taskReminders = (system.get(id, "taskReminders") as List<*>).map { TaskReminderView(it as Long) },
-        rescheduleRefusals = (system.get(id, "rescheduleRefusals") as List<*>).map { RescheduleRefusalView(it as Long) },
-        cancelRefusals = (system.get(id, "cancelRefusals") as List<*>).map { CancelRefusalView(it as Long) },
+        taskReminders = (system.get(id, "taskReminders") as List<*>).map { system.refFor(it as Long) },
+        rescheduleRefusals = (system.get(id, "rescheduleRefusals") as List<*>).map { system.refFor(it as Long) },
+        cancelRefusals = (system.get(id, "cancelRefusals") as List<*>).map { system.refFor(it as Long) },
+        isDoneTask = system.isMember(id, "DoneTask"),
+        isOpenTask = system.isMember(id, "OpenTask"),
+        isOverdueTask = system.isMember(id, "OverdueTask"),
     )
 
     fun materializeTaskReminder(id: Long): TaskReminder = TaskReminder(
-        id = id,
-        task = (system.get(id, "task") as Long?)?.let { CollectionTaskView(it) },
+        key = system.refFor(id).key,
+        task = (system.get(id, "task") as Long?)?.let { system.refFor(it) },
         sentOn = system.get(id, "sentOn") as LocalDate,
     )
 
     fun materializeRescheduleRefusal(id: Long): RescheduleRefusal = RescheduleRefusal(
-        id = id,
-        task = (system.get(id, "task") as Long?)?.let { CollectionTaskView(it) },
+        key = system.refFor(id).key,
+        task = (system.get(id, "task") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
     fun materializeTaskCancellation(id: Long): TaskCancellation = TaskCancellation(
-        id = id,
+        key = system.refFor(id).key,
         dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
         dueOn = system.get(id, "dueOn") as LocalDate,
         reason = system.get(id, "reason") as String,
@@ -1973,461 +1640,571 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     )
 
     fun materializeCancelRefusal(id: Long): CancelRefusal = CancelRefusal(
-        id = id,
-        task = (system.get(id, "task") as Long?)?.let { CollectionTaskView(it) },
+        key = system.refFor(id).key,
+        task = (system.get(id, "task") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
     fun materializeCompletedAssay(id: Long): CompletedAssay = CompletedAssay(
-        id = id,
-        experiment = LabExperimentView(system.get(id, "experiment") as Long),
+        key = system.refFor(id).key,
+        experiment = system.refFor(system.get(id, "experiment") as Long),
         replicate = (system.get(id, "replicate") as BigDecimal).intValueExact(),
         peakInhibition = system.get(id, "peakInhibition") as BigDecimal,
-        assayReadings = (system.get(id, "assayReadings") as List<*>).map { AssayReadingView(it as Long) },
+        assayReadings = (system.get(id, "assayReadings") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeHitExperiment(id: Long): HitExperiment = HitExperiment(
-        id = id,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        protocol = AssayProtocolView(system.get(id, "protocol") as Long),
+        key = system.refFor(id).key,
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         completedReplicates = (system.get(id, "completedReplicates") as BigDecimal).intValueExact(),
         meanPeakInhibition = system.get(id, "meanPeakInhibition") as BigDecimal,
-        assays = (system.get(id, "assays") as List<*>).map { AssayView(it as Long) },
-        labHits = (system.get(id, "labHits") as List<*>).map { LabHitView(it as Long) },
-        labHitRetractions = (system.get(id, "labHitRetractions") as List<*>).map { LabHitRetractionView(it as Long) },
+        assays = (system.get(id, "assays") as List<*>).map { system.refFor(it as Long) },
+        labHits = (system.get(id, "labHits") as List<*>).map { system.refFor(it as Long) },
+        labHitRetractions = (system.get(id, "labHitRetractions") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeLabValidated(id: Long): LabValidated = LabValidated(
-        id = id,
+        key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
         stage = system.get(id, "stage") as String,
-        labExperiments = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) },
-        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
-        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
+        isGreenhouseValidated = system.isMember(id, "GreenhouseValidated"),
+        isDeprioritized = system.isMember(id, "Deprioritized"),
+        isFieldValidated = system.isMember(id, "FieldValidated"),
     )
 
     fun materializeTreatedTrial(id: Long): TreatedTrial = TreatedTrial(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
-        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
-        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
         meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
         efficacy = system.get(id, "efficacy") as BigDecimal,
-        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
-        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
-        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { system.refFor(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { system.refFor(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { system.refFor(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { system.refFor(it as Long) },
+        isLaidOutTrial = system.isMember(id, "LaidOutTrial"),
+        isObservedToEnd = system.isMember(id, "ObservedToEnd"),
+        isCompleteTrial = system.isMember(id, "CompleteTrial"),
+        isEffectiveTrial = system.isMember(id, "EffectiveTrial"),
+        isEvaluatedTrial = system.isMember(id, "EvaluatedTrial"),
+        isActiveTrial = system.isMember(id, "ActiveTrial"),
+        isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
     fun materializeLaidOutTrial(id: Long): LaidOutTrial = LaidOutTrial(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
-        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
-        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
         meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
         efficacy = system.get(id, "efficacy") as BigDecimal,
-        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
-        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
-        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { system.refFor(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { system.refFor(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { system.refFor(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { system.refFor(it as Long) },
+        isTreatedTrial = system.isMember(id, "TreatedTrial"),
+        isObservedToEnd = system.isMember(id, "ObservedToEnd"),
+        isCompleteTrial = system.isMember(id, "CompleteTrial"),
+        isEffectiveTrial = system.isMember(id, "EffectiveTrial"),
+        isEvaluatedTrial = system.isMember(id, "EvaluatedTrial"),
+        isActiveTrial = system.isMember(id, "ActiveTrial"),
+        isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
     fun materializeObservedToEnd(id: Long): ObservedToEnd = ObservedToEnd(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
-        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
-        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
         meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
         efficacy = system.get(id, "efficacy") as BigDecimal,
-        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
-        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
-        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { system.refFor(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { system.refFor(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { system.refFor(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { system.refFor(it as Long) },
+        isTreatedTrial = system.isMember(id, "TreatedTrial"),
+        isLaidOutTrial = system.isMember(id, "LaidOutTrial"),
+        isCompleteTrial = system.isMember(id, "CompleteTrial"),
+        isEffectiveTrial = system.isMember(id, "EffectiveTrial"),
+        isEvaluatedTrial = system.isMember(id, "EvaluatedTrial"),
+        isActiveTrial = system.isMember(id, "ActiveTrial"),
+        isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
     fun materializeCompleteTrial(id: Long): CompleteTrial = CompleteTrial(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
-        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
-        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
         meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
         efficacy = system.get(id, "efficacy") as BigDecimal,
-        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
-        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
-        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { system.refFor(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { system.refFor(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { system.refFor(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { system.refFor(it as Long) },
+        isTreatedTrial = system.isMember(id, "TreatedTrial"),
+        isLaidOutTrial = system.isMember(id, "LaidOutTrial"),
+        isObservedToEnd = system.isMember(id, "ObservedToEnd"),
+        isEffectiveTrial = system.isMember(id, "EffectiveTrial"),
+        isEvaluatedTrial = system.isMember(id, "EvaluatedTrial"),
+        isActiveTrial = system.isMember(id, "ActiveTrial"),
+        isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
     fun materializeEffectiveTrial(id: Long): EffectiveTrial = EffectiveTrial(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
-        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
-        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
         meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
         efficacy = system.get(id, "efficacy") as BigDecimal,
-        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
-        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
-        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { system.refFor(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { system.refFor(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { system.refFor(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { system.refFor(it as Long) },
+        isTreatedTrial = system.isMember(id, "TreatedTrial"),
+        isLaidOutTrial = system.isMember(id, "LaidOutTrial"),
+        isObservedToEnd = system.isMember(id, "ObservedToEnd"),
+        isCompleteTrial = system.isMember(id, "CompleteTrial"),
+        isEvaluatedTrial = system.isMember(id, "EvaluatedTrial"),
+        isActiveTrial = system.isMember(id, "ActiveTrial"),
+        isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
     fun materializeEvaluatedTrial(id: Long): EvaluatedTrial = EvaluatedTrial(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
-        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
-        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
         meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
         efficacy = system.get(id, "efficacy") as BigDecimal,
-        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
-        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
-        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { system.refFor(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { system.refFor(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { system.refFor(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { system.refFor(it as Long) },
+        isTreatedTrial = system.isMember(id, "TreatedTrial"),
+        isLaidOutTrial = system.isMember(id, "LaidOutTrial"),
+        isObservedToEnd = system.isMember(id, "ObservedToEnd"),
+        isCompleteTrial = system.isMember(id, "CompleteTrial"),
+        isEffectiveTrial = system.isMember(id, "EffectiveTrial"),
+        isActiveTrial = system.isMember(id, "ActiveTrial"),
+        isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
     fun materializeGreenhouseValidated(id: Long): GreenhouseValidated = GreenhouseValidated(
-        id = id,
+        key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
         stage = system.get(id, "stage") as String,
-        labExperiments = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) },
-        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
-        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
+        isLabValidated = system.isMember(id, "LabValidated"),
+        isDeprioritized = system.isMember(id, "Deprioritized"),
+        isFieldValidated = system.isMember(id, "FieldValidated"),
     )
 
     fun materializeDeprioritized(id: Long): Deprioritized = Deprioritized(
-        id = id,
+        key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
         stage = system.get(id, "stage") as String,
-        labExperiments = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) },
-        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
-        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
+        isLabValidated = system.isMember(id, "LabValidated"),
+        isGreenhouseValidated = system.isMember(id, "GreenhouseValidated"),
+        isFieldValidated = system.isMember(id, "FieldValidated"),
     )
 
     fun materializeLockedObservation(id: Long): LockedObservation = LockedObservation(
-        id = id,
-        plot = GreenhousePlotView(system.get(id, "plot") as Long),
+        key = system.refFor(id).key,
+        plot = system.refFor(system.get(id, "plot") as Long),
         dayAfterTreatment = (system.get(id, "dayAfterTreatment") as BigDecimal).intValueExact(),
         recordedSeverity = system.get(id, "recordedSeverity") as BigDecimal,
         observedOn = system.get(id, "observedOn") as LocalDate,
         diseaseSeverity = system.get(id, "diseaseSeverity") as BigDecimal,
-        previous = (system.get(id, "previous") as Long?)?.let { PlotObservationView(it) },
+        previous = (system.get(id, "previous") as Long?)?.let { system.refFor(it) },
         audpcSoFar = system.get(id, "audpcSoFar") as BigDecimal,
-        observationCorrections = (system.get(id, "observationCorrections") as List<*>).map { ObservationCorrectionView(it as Long) },
-        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { CorrectionRefusalView(it as Long) },
-        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { VoidRefusalView(it as Long) },
+        observationCorrections = (system.get(id, "observationCorrections") as List<*>).map { system.refFor(it as Long) },
+        correctionRefusals = (system.get(id, "correctionRefusals") as List<*>).map { system.refFor(it as Long) },
+        voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeTreatedPlot(id: Long): TreatedPlot = TreatedPlot(
-        id = id,
-        trial = GreenhouseTrialView(system.get(id, "trial") as Long),
+        key = system.refFor(id).key,
+        trial = system.refFor(system.get(id, "trial") as Long),
         bench = system.get(id, "bench") as String,
         treatment = system.get(id, "treatment") as String,
         lastObservedDay = (system.get(id, "lastObservedDay") as BigDecimal).intValueExact(),
         audpc = system.get(id, "audpc") as BigDecimal,
-        plotObservations = (system.get(id, "plotObservations") as List<*>).map { PlotObservationView(it as Long) },
-        moveRefusals = (system.get(id, "moveRefusals") as List<*>).map { MoveRefusalView(it as Long) },
+        plotObservations = (system.get(id, "plotObservations") as List<*>).map { system.refFor(it as Long) },
+        moveRefusals = (system.get(id, "moveRefusals") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeActiveTrial(id: Long): ActiveTrial = ActiveTrial(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
-        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
-        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
         meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
         efficacy = system.get(id, "efficacy") as BigDecimal,
-        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
-        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
-        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { system.refFor(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { system.refFor(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { system.refFor(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { system.refFor(it as Long) },
+        isTreatedTrial = system.isMember(id, "TreatedTrial"),
+        isLaidOutTrial = system.isMember(id, "LaidOutTrial"),
+        isObservedToEnd = system.isMember(id, "ObservedToEnd"),
+        isCompleteTrial = system.isMember(id, "CompleteTrial"),
+        isEffectiveTrial = system.isMember(id, "EffectiveTrial"),
+        isEvaluatedTrial = system.isMember(id, "EvaluatedTrial"),
+        isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
     fun materializeOutOfBand(id: Long): OutOfBand = OutOfBand(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         minTemperature = system.get(id, "minTemperature") as BigDecimal,
         maxTemperature = system.get(id, "maxTemperature") as BigDecimal,
-        climateReadings = (system.get(id, "climateReadings") as List<*>).map { ClimateReadingView(it as Long) },
-        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
-        climateExcursions = (system.get(id, "climateExcursions") as List<*>).map { ClimateExcursionView(it as Long) },
-        sensorAlerts = (system.get(id, "sensorAlerts") as List<*>).map { SensorAlertView(it as Long) },
+        climateReadings = (system.get(id, "climateReadings") as List<*>).map { system.refFor(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
+        climateExcursions = (system.get(id, "climateExcursions") as List<*>).map { system.refFor(it as Long) },
+        sensorAlerts = (system.get(id, "sensorAlerts") as List<*>).map { system.refFor(it as Long) },
+        isSilentGreenhouse = system.isMember(id, "SilentGreenhouse"),
     )
 
     fun materializeOpenExcursion(id: Long): OpenExcursion = OpenExcursion(
-        id = id,
-        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        key = system.refFor(id).key,
+        greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         startedAt = system.get(id, "startedAt") as Instant,
         temperature = system.get(id, "temperature") as BigDecimal,
-        excursionEnds = (system.get(id, "excursionEnds") as List<*>).map { ExcursionEndView(it as Long) },
+        excursionEnds = (system.get(id, "excursionEnds") as List<*>).map { system.refFor(it as Long) },
+        isClosableExcursion = system.isMember(id, "ClosableExcursion"),
     )
 
     fun materializeClosableExcursion(id: Long): ClosableExcursion = ClosableExcursion(
-        id = id,
-        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
+        key = system.refFor(id).key,
+        greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         startedAt = system.get(id, "startedAt") as Instant,
         temperature = system.get(id, "temperature") as BigDecimal,
-        excursionEnds = (system.get(id, "excursionEnds") as List<*>).map { ExcursionEndView(it as Long) },
+        excursionEnds = (system.get(id, "excursionEnds") as List<*>).map { system.refFor(it as Long) },
+        isOpenExcursion = system.isMember(id, "OpenExcursion"),
     )
 
     fun materializeCompromisedTrial(id: Long): CompromisedTrial = CompromisedTrial(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        greenhouse = GreenhouseView(system.get(id, "greenhouse") as Long),
-        protocol = GreenhouseProtocolView(system.get(id, "protocol") as Long),
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         approvedOn = system.get(id, "approvedOn") as Instant,
         treatedAt = system.get(id, "treatedAt") as Instant?,
-        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        controlPlots = (system.get(id, "controlPlots") as List<*>).map { GreenhousePlotView(it as Long) },
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedAudpc = system.get(id, "meanTreatedAudpc") as BigDecimal,
         meanControlAudpc = system.get(id, "meanControlAudpc") as BigDecimal,
         efficacy = system.get(id, "efficacy") as BigDecimal,
-        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { GreenhousePlotView(it as Long) },
-        treatments = (system.get(id, "treatments") as List<*>).map { TreatmentView(it as Long) },
-        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { GreenhouseResultView(it as Long) },
-        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+        greenhousePlots = (system.get(id, "greenhousePlots") as List<*>).map { system.refFor(it as Long) },
+        treatments = (system.get(id, "treatments") as List<*>).map { system.refFor(it as Long) },
+        greenhouseResults = (system.get(id, "greenhouseResults") as List<*>).map { system.refFor(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { system.refFor(it as Long) },
+        isTreatedTrial = system.isMember(id, "TreatedTrial"),
+        isLaidOutTrial = system.isMember(id, "LaidOutTrial"),
+        isObservedToEnd = system.isMember(id, "ObservedToEnd"),
+        isCompleteTrial = system.isMember(id, "CompleteTrial"),
+        isEffectiveTrial = system.isMember(id, "EffectiveTrial"),
+        isEvaluatedTrial = system.isMember(id, "EvaluatedTrial"),
+        isActiveTrial = system.isMember(id, "ActiveTrial"),
     )
 
     fun materializeSilentGreenhouse(id: Long): SilentGreenhouse = SilentGreenhouse(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         minTemperature = system.get(id, "minTemperature") as BigDecimal,
         maxTemperature = system.get(id, "maxTemperature") as BigDecimal,
-        climateReadings = (system.get(id, "climateReadings") as List<*>).map { ClimateReadingView(it as Long) },
-        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
-        climateExcursions = (system.get(id, "climateExcursions") as List<*>).map { ClimateExcursionView(it as Long) },
-        sensorAlerts = (system.get(id, "sensorAlerts") as List<*>).map { SensorAlertView(it as Long) },
+        climateReadings = (system.get(id, "climateReadings") as List<*>).map { system.refFor(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
+        climateExcursions = (system.get(id, "climateExcursions") as List<*>).map { system.refFor(it as Long) },
+        sensorAlerts = (system.get(id, "sensorAlerts") as List<*>).map { system.refFor(it as Long) },
+        isOutOfBand = system.isMember(id, "OutOfBand"),
     )
 
     fun materializePermittedTrial(id: Long): PermittedTrial = PermittedTrial(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        crop = CropView(system.get(id, "crop") as Long),
-        site = FieldSiteView(system.get(id, "site") as Long),
-        protocol = FieldProtocolView(system.get(id, "protocol") as Long),
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        crop = system.refFor(system.get(id, "crop") as Long),
+        site = system.refFor(system.get(id, "site") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         approvedOn = system.get(id, "approvedOn") as Instant,
-        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { FieldPlotView(it as Long) },
-        controlPlots = (system.get(id, "controlPlots") as List<*>).map { FieldPlotView(it as Long) },
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
         meanControlYield = system.get(id, "meanControlYield") as BigDecimal,
         yieldGain = system.get(id, "yieldGain") as BigDecimal,
-        plantings = (system.get(id, "plantings") as List<*>).map { PlantingView(it as Long) },
-        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { FieldPlotView(it as Long) },
-        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { TreatmentApplicationView(it as Long) },
-        haltNotices = (system.get(id, "haltNotices") as List<*>).map { HaltNoticeView(it as Long) },
-        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+        plantings = (system.get(id, "plantings") as List<*>).map { system.refFor(it as Long) },
+        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { system.refFor(it as Long) },
+        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { system.refFor(it as Long) },
+        haltNotices = (system.get(id, "haltNotices") as List<*>).map { system.refFor(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { system.refFor(it as Long) },
+        isPlantedTrial = system.isMember(id, "PlantedTrial"),
+        isNeverScouted = system.isMember(id, "NeverScouted"),
+        isHarvestedTrial = system.isMember(id, "HarvestedTrial"),
+        isSuccessfulFieldTrial = system.isMember(id, "SuccessfulFieldTrial"),
+        isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
     fun materializePlantedTrial(id: Long): PlantedTrial = PlantedTrial(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        crop = CropView(system.get(id, "crop") as Long),
-        site = FieldSiteView(system.get(id, "site") as Long),
-        protocol = FieldProtocolView(system.get(id, "protocol") as Long),
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        crop = system.refFor(system.get(id, "crop") as Long),
+        site = system.refFor(system.get(id, "site") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         approvedOn = system.get(id, "approvedOn") as Instant,
-        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { FieldPlotView(it as Long) },
-        controlPlots = (system.get(id, "controlPlots") as List<*>).map { FieldPlotView(it as Long) },
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
         meanControlYield = system.get(id, "meanControlYield") as BigDecimal,
         yieldGain = system.get(id, "yieldGain") as BigDecimal,
-        plantings = (system.get(id, "plantings") as List<*>).map { PlantingView(it as Long) },
-        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { FieldPlotView(it as Long) },
-        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { TreatmentApplicationView(it as Long) },
-        haltNotices = (system.get(id, "haltNotices") as List<*>).map { HaltNoticeView(it as Long) },
-        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+        plantings = (system.get(id, "plantings") as List<*>).map { system.refFor(it as Long) },
+        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { system.refFor(it as Long) },
+        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { system.refFor(it as Long) },
+        haltNotices = (system.get(id, "haltNotices") as List<*>).map { system.refFor(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { system.refFor(it as Long) },
+        isPermittedTrial = system.isMember(id, "PermittedTrial"),
+        isNeverScouted = system.isMember(id, "NeverScouted"),
+        isHarvestedTrial = system.isMember(id, "HarvestedTrial"),
+        isSuccessfulFieldTrial = system.isMember(id, "SuccessfulFieldTrial"),
+        isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
     fun materializeWashedOffApplication(id: Long): WashedOffApplication = WashedOffApplication(
-        id = id,
-        trial = FieldTrialView(system.get(id, "trial") as Long),
+        key = system.refFor(id).key,
+        trial = system.refFor(system.get(id, "trial") as Long),
         appliedOn = system.get(id, "appliedOn") as LocalDate,
         rateGramsPerHa = system.get(id, "rateGramsPerHa") as BigDecimal,
         recordedOn = system.get(id, "recordedOn") as Instant,
-        reapplicationNotices = (system.get(id, "reapplicationNotices") as List<*>).map { ReapplicationNoticeView(it as Long) },
+        reapplicationNotices = (system.get(id, "reapplicationNotices") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeNeverScouted(id: Long): NeverScouted = NeverScouted(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        crop = CropView(system.get(id, "crop") as Long),
-        site = FieldSiteView(system.get(id, "site") as Long),
-        protocol = FieldProtocolView(system.get(id, "protocol") as Long),
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        crop = system.refFor(system.get(id, "crop") as Long),
+        site = system.refFor(system.get(id, "site") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         approvedOn = system.get(id, "approvedOn") as Instant,
-        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { FieldPlotView(it as Long) },
-        controlPlots = (system.get(id, "controlPlots") as List<*>).map { FieldPlotView(it as Long) },
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
         meanControlYield = system.get(id, "meanControlYield") as BigDecimal,
         yieldGain = system.get(id, "yieldGain") as BigDecimal,
-        plantings = (system.get(id, "plantings") as List<*>).map { PlantingView(it as Long) },
-        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { FieldPlotView(it as Long) },
-        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { TreatmentApplicationView(it as Long) },
-        haltNotices = (system.get(id, "haltNotices") as List<*>).map { HaltNoticeView(it as Long) },
-        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+        plantings = (system.get(id, "plantings") as List<*>).map { system.refFor(it as Long) },
+        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { system.refFor(it as Long) },
+        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { system.refFor(it as Long) },
+        haltNotices = (system.get(id, "haltNotices") as List<*>).map { system.refFor(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { system.refFor(it as Long) },
+        isPermittedTrial = system.isMember(id, "PermittedTrial"),
+        isPlantedTrial = system.isMember(id, "PlantedTrial"),
+        isHarvestedTrial = system.isMember(id, "HarvestedTrial"),
+        isSuccessfulFieldTrial = system.isMember(id, "SuccessfulFieldTrial"),
+        isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
     fun materializeHarvestedTrial(id: Long): HarvestedTrial = HarvestedTrial(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        crop = CropView(system.get(id, "crop") as Long),
-        site = FieldSiteView(system.get(id, "site") as Long),
-        protocol = FieldProtocolView(system.get(id, "protocol") as Long),
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        crop = system.refFor(system.get(id, "crop") as Long),
+        site = system.refFor(system.get(id, "site") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         approvedOn = system.get(id, "approvedOn") as Instant,
-        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { FieldPlotView(it as Long) },
-        controlPlots = (system.get(id, "controlPlots") as List<*>).map { FieldPlotView(it as Long) },
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
         meanControlYield = system.get(id, "meanControlYield") as BigDecimal,
         yieldGain = system.get(id, "yieldGain") as BigDecimal,
-        plantings = (system.get(id, "plantings") as List<*>).map { PlantingView(it as Long) },
-        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { FieldPlotView(it as Long) },
-        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { TreatmentApplicationView(it as Long) },
-        haltNotices = (system.get(id, "haltNotices") as List<*>).map { HaltNoticeView(it as Long) },
-        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+        plantings = (system.get(id, "plantings") as List<*>).map { system.refFor(it as Long) },
+        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { system.refFor(it as Long) },
+        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { system.refFor(it as Long) },
+        haltNotices = (system.get(id, "haltNotices") as List<*>).map { system.refFor(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { system.refFor(it as Long) },
+        isPermittedTrial = system.isMember(id, "PermittedTrial"),
+        isPlantedTrial = system.isMember(id, "PlantedTrial"),
+        isNeverScouted = system.isMember(id, "NeverScouted"),
+        isSuccessfulFieldTrial = system.isMember(id, "SuccessfulFieldTrial"),
+        isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
     fun materializeSuccessfulFieldTrial(id: Long): SuccessfulFieldTrial = SuccessfulFieldTrial(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        crop = CropView(system.get(id, "crop") as Long),
-        site = FieldSiteView(system.get(id, "site") as Long),
-        protocol = FieldProtocolView(system.get(id, "protocol") as Long),
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        crop = system.refFor(system.get(id, "crop") as Long),
+        site = system.refFor(system.get(id, "site") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         approvedOn = system.get(id, "approvedOn") as Instant,
-        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { FieldPlotView(it as Long) },
-        controlPlots = (system.get(id, "controlPlots") as List<*>).map { FieldPlotView(it as Long) },
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
         meanControlYield = system.get(id, "meanControlYield") as BigDecimal,
         yieldGain = system.get(id, "yieldGain") as BigDecimal,
-        plantings = (system.get(id, "plantings") as List<*>).map { PlantingView(it as Long) },
-        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { FieldPlotView(it as Long) },
-        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { TreatmentApplicationView(it as Long) },
-        haltNotices = (system.get(id, "haltNotices") as List<*>).map { HaltNoticeView(it as Long) },
-        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+        plantings = (system.get(id, "plantings") as List<*>).map { system.refFor(it as Long) },
+        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { system.refFor(it as Long) },
+        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { system.refFor(it as Long) },
+        haltNotices = (system.get(id, "haltNotices") as List<*>).map { system.refFor(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { system.refFor(it as Long) },
+        isPermittedTrial = system.isMember(id, "PermittedTrial"),
+        isPlantedTrial = system.isMember(id, "PlantedTrial"),
+        isNeverScouted = system.isMember(id, "NeverScouted"),
+        isHarvestedTrial = system.isMember(id, "HarvestedTrial"),
+        isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
     fun materializeFieldValidated(id: Long): FieldValidated = FieldValidated(
-        id = id,
+        key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
         stage = system.get(id, "stage") as String,
-        labExperiments = (system.get(id, "labExperiments") as List<*>).map { LabExperimentView(it as Long) },
-        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { GreenhouseTrialView(it as Long) },
-        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { FieldTrialView(it as Long) },
+        labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
+        greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
+        fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
+        isLabValidated = system.isMember(id, "LabValidated"),
+        isGreenhouseValidated = system.isMember(id, "GreenhouseValidated"),
+        isDeprioritized = system.isMember(id, "Deprioritized"),
     )
 
     fun materializeHaltedTrial(id: Long): HaltedTrial = HaltedTrial(
-        id = id,
+        key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
-        peptide = PeptideView(system.get(id, "peptide") as Long),
-        pathogen = PathogenView(system.get(id, "pathogen") as Long),
-        crop = CropView(system.get(id, "crop") as Long),
-        site = FieldSiteView(system.get(id, "site") as Long),
-        protocol = FieldProtocolView(system.get(id, "protocol") as Long),
+        peptide = system.refFor(system.get(id, "peptide") as Long),
+        pathogen = system.refFor(system.get(id, "pathogen") as Long),
+        crop = system.refFor(system.get(id, "crop") as Long),
+        site = system.refFor(system.get(id, "site") as Long),
+        protocol = system.refFor(system.get(id, "protocol") as Long),
         approvedOn = system.get(id, "approvedOn") as Instant,
-        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { FieldPlotView(it as Long) },
-        controlPlots = (system.get(id, "controlPlots") as List<*>).map { FieldPlotView(it as Long) },
+        treatedPlots = (system.get(id, "treatedPlots") as List<*>).map { system.refFor(it as Long) },
+        controlPlots = (system.get(id, "controlPlots") as List<*>).map { system.refFor(it as Long) },
         meanTreatedYield = system.get(id, "meanTreatedYield") as BigDecimal,
         meanControlYield = system.get(id, "meanControlYield") as BigDecimal,
         yieldGain = system.get(id, "yieldGain") as BigDecimal,
-        plantings = (system.get(id, "plantings") as List<*>).map { PlantingView(it as Long) },
-        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { FieldPlotView(it as Long) },
-        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { TreatmentApplicationView(it as Long) },
-        haltNotices = (system.get(id, "haltNotices") as List<*>).map { HaltNoticeView(it as Long) },
-        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { CollectionTaskView(it as Long) },
+        plantings = (system.get(id, "plantings") as List<*>).map { system.refFor(it as Long) },
+        fieldPlots = (system.get(id, "fieldPlots") as List<*>).map { system.refFor(it as Long) },
+        treatmentApplications = (system.get(id, "treatmentApplications") as List<*>).map { system.refFor(it as Long) },
+        haltNotices = (system.get(id, "haltNotices") as List<*>).map { system.refFor(it as Long) },
+        collectionTasks = (system.get(id, "collectionTasks") as List<*>).map { system.refFor(it as Long) },
+        isPermittedTrial = system.isMember(id, "PermittedTrial"),
+        isPlantedTrial = system.isMember(id, "PlantedTrial"),
+        isNeverScouted = system.isMember(id, "NeverScouted"),
+        isHarvestedTrial = system.isMember(id, "HarvestedTrial"),
+        isSuccessfulFieldTrial = system.isMember(id, "SuccessfulFieldTrial"),
     )
 
+    fun materializeTrial(id: Long): Trial = materialize(id) as Trial
+
     fun materializeDoneTask(id: Long): DoneTask = DoneTask(
-        id = id,
-        trial = TrialView(system.get(id, "trial") as Long),
+        key = system.refFor(id).key,
+        trial = system.refFor(system.get(id, "trial") as Long),
         dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
         dueOn = system.get(id, "dueOn") as LocalDate,
         plotsPending = (system.get(id, "plotsPending") as BigDecimal).intValueExact(),
-        taskReminders = (system.get(id, "taskReminders") as List<*>).map { TaskReminderView(it as Long) },
-        rescheduleRefusals = (system.get(id, "rescheduleRefusals") as List<*>).map { RescheduleRefusalView(it as Long) },
-        cancelRefusals = (system.get(id, "cancelRefusals") as List<*>).map { CancelRefusalView(it as Long) },
+        taskReminders = (system.get(id, "taskReminders") as List<*>).map { system.refFor(it as Long) },
+        rescheduleRefusals = (system.get(id, "rescheduleRefusals") as List<*>).map { system.refFor(it as Long) },
+        cancelRefusals = (system.get(id, "cancelRefusals") as List<*>).map { system.refFor(it as Long) },
+        isOpenTask = system.isMember(id, "OpenTask"),
+        isOverdueTask = system.isMember(id, "OverdueTask"),
     )
 
     fun materializeOpenTask(id: Long): OpenTask = OpenTask(
-        id = id,
-        trial = TrialView(system.get(id, "trial") as Long),
+        key = system.refFor(id).key,
+        trial = system.refFor(system.get(id, "trial") as Long),
         dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
         dueOn = system.get(id, "dueOn") as LocalDate,
         plotsPending = (system.get(id, "plotsPending") as BigDecimal).intValueExact(),
-        taskReminders = (system.get(id, "taskReminders") as List<*>).map { TaskReminderView(it as Long) },
-        rescheduleRefusals = (system.get(id, "rescheduleRefusals") as List<*>).map { RescheduleRefusalView(it as Long) },
-        cancelRefusals = (system.get(id, "cancelRefusals") as List<*>).map { CancelRefusalView(it as Long) },
+        taskReminders = (system.get(id, "taskReminders") as List<*>).map { system.refFor(it as Long) },
+        rescheduleRefusals = (system.get(id, "rescheduleRefusals") as List<*>).map { system.refFor(it as Long) },
+        cancelRefusals = (system.get(id, "cancelRefusals") as List<*>).map { system.refFor(it as Long) },
+        isDoneTask = system.isMember(id, "DoneTask"),
+        isOverdueTask = system.isMember(id, "OverdueTask"),
     )
 
     fun materializeOverdueTask(id: Long): OverdueTask = OverdueTask(
-        id = id,
-        trial = TrialView(system.get(id, "trial") as Long),
+        key = system.refFor(id).key,
+        trial = system.refFor(system.get(id, "trial") as Long),
         dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
         dueOn = system.get(id, "dueOn") as LocalDate,
         plotsPending = (system.get(id, "plotsPending") as BigDecimal).intValueExact(),
-        taskReminders = (system.get(id, "taskReminders") as List<*>).map { TaskReminderView(it as Long) },
-        rescheduleRefusals = (system.get(id, "rescheduleRefusals") as List<*>).map { RescheduleRefusalView(it as Long) },
-        cancelRefusals = (system.get(id, "cancelRefusals") as List<*>).map { CancelRefusalView(it as Long) },
+        taskReminders = (system.get(id, "taskReminders") as List<*>).map { system.refFor(it as Long) },
+        rescheduleRefusals = (system.get(id, "rescheduleRefusals") as List<*>).map { system.refFor(it as Long) },
+        cancelRefusals = (system.get(id, "cancelRefusals") as List<*>).map { system.refFor(it as Long) },
+        isDoneTask = system.isMember(id, "DoneTask"),
+        isOpenTask = system.isMember(id, "OpenTask"),
     )
 
     companion object {
@@ -3347,854 +3124,1438 @@ rule RefuseCancel when RefusedCancel {
     }
 }
 
-// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
-// References are typed handles (views); navigating one is a further read.
+// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// A model object is a reference to its own record (`Ref<T>`): equality is identity,
+// a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
+// the record's membership at the moment of the read.
 
 data class Crop(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
-    val pathogens: List<PeptidesSystem.PathogenView>,
-    val permits: List<PeptidesSystem.PermitView>,
-    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
-) : View
+    val pathogens: List<Ref<Pathogen>>,
+    val permits: List<Ref<Permit>>,
+    val fieldTrials: List<Ref<FieldTrial>>,
+) : Ref<Crop> {
+    override val shape: String get() = "Crop"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Pathogen(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
-    val host: PeptidesSystem.CropView,
-    val labExperiments: List<PeptidesSystem.LabExperimentView>,
-    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
-    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
-) : View
+    val host: Ref<Crop>,
+    val labExperiments: List<Ref<LabExperiment>>,
+    val greenhouseTrials: List<Ref<GreenhouseTrial>>,
+    val fieldTrials: List<Ref<FieldTrial>>,
+) : Ref<Pathogen> {
+    override val shape: String get() = "Pathogen"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Peptide(
-    override val id: Long,
+    override val key: StoreKey,
     val code: String,
     val sequence: String,
     val stage: String,
-    val labExperiments: List<PeptidesSystem.LabExperimentView>,
-    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
-    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
-) : View
+    val labExperiments: List<Ref<LabExperiment>>,
+    val greenhouseTrials: List<Ref<GreenhouseTrial>>,
+    val fieldTrials: List<Ref<FieldTrial>>,
+    /** membership of LabValidated at the moment of the read */
+    val isLabValidated: Boolean,
+    /** membership of GreenhouseValidated at the moment of the read */
+    val isGreenhouseValidated: Boolean,
+    /** membership of Deprioritized at the moment of the read */
+    val isDeprioritized: Boolean,
+    /** membership of FieldValidated at the moment of the read */
+    val isFieldValidated: Boolean,
+) : Ref<Peptide> {
+    override val shape: String get() = "Peptide"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class AssayProtocol(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val durationHours: Int,
     val replicates: Int,
     val hitThreshold: BigDecimal,
-    val labExperiments: List<PeptidesSystem.LabExperimentView>,
-) : View
+    val labExperiments: List<Ref<LabExperiment>>,
+) : Ref<AssayProtocol> {
+    override val shape: String get() = "AssayProtocol"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class LabExperiment(
-    override val id: Long,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val protocol: PeptidesSystem.AssayProtocolView,
+    override val key: StoreKey,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val protocol: Ref<AssayProtocol>,
     val completedReplicates: Int,
     val meanPeakInhibition: BigDecimal,
-    val assays: List<PeptidesSystem.AssayView>,
-    val labHits: List<PeptidesSystem.LabHitView>,
-    val labHitRetractions: List<PeptidesSystem.LabHitRetractionView>,
-) : View
+    val assays: List<Ref<Assay>>,
+    val labHits: List<Ref<LabHit>>,
+    val labHitRetractions: List<Ref<LabHitRetraction>>,
+    /** membership of HitExperiment at the moment of the read */
+    val isHitExperiment: Boolean,
+) : Ref<LabExperiment> {
+    override val shape: String get() = "LabExperiment"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Assay(
-    override val id: Long,
-    val experiment: PeptidesSystem.LabExperimentView,
+    override val key: StoreKey,
+    val experiment: Ref<LabExperiment>,
     val replicate: Int,
     val peakInhibition: BigDecimal,
-    val assayReadings: List<PeptidesSystem.AssayReadingView>,
-) : View
+    val assayReadings: List<Ref<AssayReading>>,
+    /** membership of CompletedAssay at the moment of the read */
+    val isCompletedAssay: Boolean,
+) : Ref<Assay> {
+    override val shape: String get() = "Assay"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class AssayReading(
-    override val id: Long,
-    val assay: PeptidesSystem.AssayView,
+    override val key: StoreKey,
+    val assay: Ref<Assay>,
     val hoursElapsed: Int,
     val inhibitionPercent: BigDecimal,
-    val previous: PeptidesSystem.AssayReadingView?,
+    val previous: Ref<AssayReading>?,
     val runningPeak: BigDecimal,
-) : View
+) : Ref<AssayReading> {
+    override val shape: String get() = "AssayReading"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class LabHit(
-    override val id: Long,
-    val experiment: PeptidesSystem.LabExperimentView,
+    override val key: StoreKey,
+    val experiment: Ref<LabExperiment>,
     val meanPeakInhibition: BigDecimal,
     val recordedOn: Instant,
-) : View
+) : Ref<LabHit> {
+    override val shape: String get() = "LabHit"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class LabHitRetraction(
-    override val id: Long,
-    val experiment: PeptidesSystem.LabExperimentView,
+    override val key: StoreKey,
+    val experiment: Ref<LabExperiment>,
     val retractedOn: Instant,
-) : View
+) : Ref<LabHitRetraction> {
+    override val shape: String get() = "LabHitRetraction"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Greenhouse(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val minTemperature: BigDecimal,
     val maxTemperature: BigDecimal,
-    val climateReadings: List<PeptidesSystem.ClimateReadingView>,
-    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
-    val climateExcursions: List<PeptidesSystem.ClimateExcursionView>,
-    val sensorAlerts: List<PeptidesSystem.SensorAlertView>,
-) : View
+    val climateReadings: List<Ref<ClimateReading>>,
+    val greenhouseTrials: List<Ref<GreenhouseTrial>>,
+    val climateExcursions: List<Ref<ClimateExcursion>>,
+    val sensorAlerts: List<Ref<SensorAlert>>,
+    /** membership of OutOfBand at the moment of the read */
+    val isOutOfBand: Boolean,
+    /** membership of SilentGreenhouse at the moment of the read */
+    val isSilentGreenhouse: Boolean,
+) : Ref<Greenhouse> {
+    override val shape: String get() = "Greenhouse"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ClimateReading(
-    override val id: Long,
-    val greenhouse: PeptidesSystem.GreenhouseView,
+    override val key: StoreKey,
+    val greenhouse: Ref<Greenhouse>,
     val recordedAt: Instant,
     val temperature: BigDecimal,
     val humidity: BigDecimal,
-) : View
+) : Ref<ClimateReading> {
+    override val shape: String get() = "ClimateReading"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class GreenhouseProtocol(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val plotsPerArm: Int,
     val finalDay: Int,
     val efficacyThreshold: BigDecimal,
-    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
-) : View
+    val greenhouseTrials: List<Ref<GreenhouseTrial>>,
+) : Ref<GreenhouseProtocol> {
+    override val shape: String get() = "GreenhouseProtocol"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class GreenhouseTrial(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val greenhouse: PeptidesSystem.GreenhouseView,
-    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val greenhouse: Ref<Greenhouse>,
+    val protocol: Ref<GreenhouseProtocol>,
     val approvedOn: Instant,
     val treatedAt: Instant?,
-    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
-    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatedPlots: List<Ref<GreenhousePlot>>,
+    val controlPlots: List<Ref<GreenhousePlot>>,
     val meanTreatedAudpc: BigDecimal,
     val meanControlAudpc: BigDecimal,
     val efficacy: BigDecimal,
-    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
-    val treatments: List<PeptidesSystem.TreatmentView>,
-    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
-    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
-) : View
+    val greenhousePlots: List<Ref<GreenhousePlot>>,
+    val treatments: List<Ref<Treatment>>,
+    val greenhouseResults: List<Ref<GreenhouseResult>>,
+    override val collectionTasks: List<Ref<CollectionTask>>,
+    /** membership of TreatedTrial at the moment of the read */
+    val isTreatedTrial: Boolean,
+    /** membership of LaidOutTrial at the moment of the read */
+    val isLaidOutTrial: Boolean,
+    /** membership of ObservedToEnd at the moment of the read */
+    val isObservedToEnd: Boolean,
+    /** membership of CompleteTrial at the moment of the read */
+    val isCompleteTrial: Boolean,
+    /** membership of EffectiveTrial at the moment of the read */
+    val isEffectiveTrial: Boolean,
+    /** membership of EvaluatedTrial at the moment of the read */
+    val isEvaluatedTrial: Boolean,
+    /** membership of ActiveTrial at the moment of the read */
+    val isActiveTrial: Boolean,
+    /** membership of CompromisedTrial at the moment of the read */
+    val isCompromisedTrial: Boolean,
+) : Ref<GreenhouseTrial>, Trial {
+    override val shape: String get() = "GreenhouseTrial"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class GreenhouseRefusal(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
     val reason: String,
     val refusedOn: Instant,
-) : View
+) : Ref<GreenhouseRefusal> {
+    override val shape: String get() = "GreenhouseRefusal"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class GreenhousePlot(
-    override val id: Long,
-    val trial: PeptidesSystem.GreenhouseTrialView,
+    override val key: StoreKey,
+    val trial: Ref<GreenhouseTrial>,
     val bench: String,
     val treatment: String,
     val lastObservedDay: Int,
     val audpc: BigDecimal,
-    val plotObservations: List<PeptidesSystem.PlotObservationView>,
-    val moveRefusals: List<PeptidesSystem.MoveRefusalView>,
-) : View
+    val plotObservations: List<Ref<PlotObservation>>,
+    val moveRefusals: List<Ref<MoveRefusal>>,
+    /** membership of TreatedPlot at the moment of the read */
+    val isTreatedPlot: Boolean,
+) : Ref<GreenhousePlot> {
+    override val shape: String get() = "GreenhousePlot"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Treatment(
-    override val id: Long,
-    val trial: PeptidesSystem.GreenhouseTrialView,
+    override val key: StoreKey,
+    val trial: Ref<GreenhouseTrial>,
     val treatedAt: Instant,
-) : View
+) : Ref<Treatment> {
+    override val shape: String get() = "Treatment"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class PlotObservation(
-    override val id: Long,
-    val plot: PeptidesSystem.GreenhousePlotView,
+    override val key: StoreKey,
+    val plot: Ref<GreenhousePlot>,
     val dayAfterTreatment: Int,
     val recordedSeverity: BigDecimal,
     val observedOn: LocalDate,
     val diseaseSeverity: BigDecimal,
-    val previous: PeptidesSystem.PlotObservationView?,
+    val previous: Ref<PlotObservation>?,
     val audpcSoFar: BigDecimal,
-    val observationCorrections: List<PeptidesSystem.ObservationCorrectionView>,
-    val correctionRefusals: List<PeptidesSystem.CorrectionRefusalView>,
-    val voidRefusals: List<PeptidesSystem.VoidRefusalView>,
-) : View
+    val observationCorrections: List<Ref<ObservationCorrection>>,
+    val correctionRefusals: List<Ref<CorrectionRefusal>>,
+    val voidRefusals: List<Ref<VoidRefusal>>,
+    /** membership of LockedObservation at the moment of the read */
+    val isLockedObservation: Boolean,
+) : Ref<PlotObservation> {
+    override val shape: String get() = "PlotObservation"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class GreenhouseResult(
-    override val id: Long,
-    val trial: PeptidesSystem.GreenhouseTrialView,
+    override val key: StoreKey,
+    val trial: Ref<GreenhouseTrial>,
     val efficacy: BigDecimal,
     val effective: Boolean,
     val recordedOn: Instant,
-) : View
+) : Ref<GreenhouseResult> {
+    override val shape: String get() = "GreenhouseResult"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ObservationCorrection(
-    override val id: Long,
-    val observation: PeptidesSystem.PlotObservationView?,
+    override val key: StoreKey,
+    val observation: Ref<PlotObservation>?,
     val previousSeverity: BigDecimal,
     val correctedSeverity: BigDecimal,
     val reason: String,
     val correctedOn: Instant,
-) : View
+) : Ref<ObservationCorrection> {
+    override val shape: String get() = "ObservationCorrection"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class CorrectionRefusal(
-    override val id: Long,
-    val observation: PeptidesSystem.PlotObservationView?,
+    override val key: StoreKey,
+    val observation: Ref<PlotObservation>?,
     val reason: String,
     val refusedOn: Instant,
-) : View
+) : Ref<CorrectionRefusal> {
+    override val shape: String get() = "CorrectionRefusal"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class VoidRecord(
-    override val id: Long,
+    override val key: StoreKey,
     val bench: String,
     val dayAfterTreatment: Int,
     val diseaseSeverity: BigDecimal,
     val reason: String,
     val voidedOn: Instant,
-) : View
+) : Ref<VoidRecord> {
+    override val shape: String get() = "VoidRecord"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class VoidRefusal(
-    override val id: Long,
-    val observation: PeptidesSystem.PlotObservationView?,
+    override val key: StoreKey,
+    val observation: Ref<PlotObservation>?,
     val reason: String,
     val refusedOn: Instant,
-) : View
+) : Ref<VoidRefusal> {
+    override val shape: String get() = "VoidRefusal"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class MoveRefusal(
-    override val id: Long,
-    val plot: PeptidesSystem.GreenhousePlotView,
+    override val key: StoreKey,
+    val plot: Ref<GreenhousePlot>,
     val reason: String,
     val refusedOn: Instant,
-) : View
+) : Ref<MoveRefusal> {
+    override val shape: String get() = "MoveRefusal"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ClimateExcursion(
-    override val id: Long,
-    val greenhouse: PeptidesSystem.GreenhouseView,
+    override val key: StoreKey,
+    val greenhouse: Ref<Greenhouse>,
     val startedAt: Instant,
     val temperature: BigDecimal,
-    val excursionEnds: List<PeptidesSystem.ExcursionEndView>,
-) : View
+    val excursionEnds: List<Ref<ExcursionEnd>>,
+    /** membership of OpenExcursion at the moment of the read */
+    val isOpenExcursion: Boolean,
+    /** membership of ClosableExcursion at the moment of the read */
+    val isClosableExcursion: Boolean,
+) : Ref<ClimateExcursion> {
+    override val shape: String get() = "ClimateExcursion"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ExcursionEnd(
-    override val id: Long,
-    val excursion: PeptidesSystem.ClimateExcursionView,
+    override val key: StoreKey,
+    val excursion: Ref<ClimateExcursion>,
     val endedAt: Instant,
-) : View
+) : Ref<ExcursionEnd> {
+    override val shape: String get() = "ExcursionEnd"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class SensorAlert(
-    override val id: Long,
-    val greenhouse: PeptidesSystem.GreenhouseView,
+    override val key: StoreKey,
+    val greenhouse: Ref<Greenhouse>,
     val raisedAt: Instant,
-) : View
+) : Ref<SensorAlert> {
+    override val shape: String get() = "SensorAlert"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class FieldSite(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val region: String,
-    val permits: List<PeptidesSystem.PermitView>,
-    val weatherObservations: List<PeptidesSystem.WeatherObservationView>,
-    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
-) : View
+    val permits: List<Ref<Permit>>,
+    val weatherObservations: List<Ref<WeatherObservation>>,
+    val fieldTrials: List<Ref<FieldTrial>>,
+) : Ref<FieldSite> {
+    override val shape: String get() = "FieldSite"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Permit(
-    override val id: Long,
-    val site: PeptidesSystem.FieldSiteView,
-    val crop: PeptidesSystem.CropView,
+    override val key: StoreKey,
+    val site: Ref<FieldSite>,
+    val crop: Ref<Crop>,
     val issuedOn: LocalDate,
     val expiresOn: LocalDate,
-) : View
+) : Ref<Permit> {
+    override val shape: String get() = "Permit"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class WeatherObservation(
-    override val id: Long,
-    val site: PeptidesSystem.FieldSiteView,
+    override val key: StoreKey,
+    val site: Ref<FieldSite>,
     val observedOn: LocalDate,
     val rainfallMm: BigDecimal,
     val maxTemperature: BigDecimal,
-) : View
+) : Ref<WeatherObservation> {
+    override val shape: String get() = "WeatherObservation"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class FieldProtocol(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val yieldGainThreshold: BigDecimal,
-    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
-) : View
+    val fieldTrials: List<Ref<FieldTrial>>,
+) : Ref<FieldProtocol> {
+    override val shape: String get() = "FieldProtocol"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class FieldTrial(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val crop: PeptidesSystem.CropView,
-    val site: PeptidesSystem.FieldSiteView,
-    val protocol: PeptidesSystem.FieldProtocolView,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val crop: Ref<Crop>,
+    val site: Ref<FieldSite>,
+    val protocol: Ref<FieldProtocol>,
     val approvedOn: Instant,
-    val treatedPlots: List<PeptidesSystem.FieldPlotView>,
-    val controlPlots: List<PeptidesSystem.FieldPlotView>,
+    val treatedPlots: List<Ref<FieldPlot>>,
+    val controlPlots: List<Ref<FieldPlot>>,
     val meanTreatedYield: BigDecimal,
     val meanControlYield: BigDecimal,
     val yieldGain: BigDecimal,
-    val plantings: List<PeptidesSystem.PlantingView>,
-    val fieldPlots: List<PeptidesSystem.FieldPlotView>,
-    val treatmentApplications: List<PeptidesSystem.TreatmentApplicationView>,
-    val haltNotices: List<PeptidesSystem.HaltNoticeView>,
-    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
-) : View
+    val plantings: List<Ref<Planting>>,
+    val fieldPlots: List<Ref<FieldPlot>>,
+    val treatmentApplications: List<Ref<TreatmentApplication>>,
+    val haltNotices: List<Ref<HaltNotice>>,
+    override val collectionTasks: List<Ref<CollectionTask>>,
+    /** membership of PermittedTrial at the moment of the read */
+    val isPermittedTrial: Boolean,
+    /** membership of PlantedTrial at the moment of the read */
+    val isPlantedTrial: Boolean,
+    /** membership of NeverScouted at the moment of the read */
+    val isNeverScouted: Boolean,
+    /** membership of HarvestedTrial at the moment of the read */
+    val isHarvestedTrial: Boolean,
+    /** membership of SuccessfulFieldTrial at the moment of the read */
+    val isSuccessfulFieldTrial: Boolean,
+    /** membership of HaltedTrial at the moment of the read */
+    val isHaltedTrial: Boolean,
+) : Ref<FieldTrial>, Trial {
+    override val shape: String get() = "FieldTrial"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class FieldRefusal(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
     val reason: String,
     val refusedOn: Instant,
-) : View
+) : Ref<FieldRefusal> {
+    override val shape: String get() = "FieldRefusal"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Planting(
-    override val id: Long,
-    val trial: PeptidesSystem.FieldTrialView,
+    override val key: StoreKey,
+    val trial: Ref<FieldTrial>,
     val plantedOn: LocalDate,
     val seedLot: String,
     val recordedOn: Instant,
-) : View
+) : Ref<Planting> {
+    override val shape: String get() = "Planting"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class FieldPlot(
-    override val id: Long,
-    val trial: PeptidesSystem.FieldTrialView,
+    override val key: StoreKey,
+    val trial: Ref<FieldTrial>,
     val block: Int,
     val treatment: String,
     val yieldKgPerHa: BigDecimal,
-    val scoutings: List<PeptidesSystem.ScoutingView>,
-    val harvests: List<PeptidesSystem.HarvestView>,
-    val phytotoxicityReports: List<PeptidesSystem.PhytotoxicityReportView>,
-) : View
+    val scoutings: List<Ref<Scouting>>,
+    val harvests: List<Ref<Harvest>>,
+    val phytotoxicityReports: List<Ref<PhytotoxicityReport>>,
+) : Ref<FieldPlot> {
+    override val shape: String get() = "FieldPlot"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class TreatmentApplication(
-    override val id: Long,
-    val trial: PeptidesSystem.FieldTrialView,
+    override val key: StoreKey,
+    val trial: Ref<FieldTrial>,
     val appliedOn: LocalDate,
     val rateGramsPerHa: BigDecimal,
     val recordedOn: Instant,
-    val reapplicationNotices: List<PeptidesSystem.ReapplicationNoticeView>,
-) : View
+    val reapplicationNotices: List<Ref<ReapplicationNotice>>,
+    /** membership of WashedOffApplication at the moment of the read */
+    val isWashedOffApplication: Boolean,
+) : Ref<TreatmentApplication> {
+    override val shape: String get() = "TreatmentApplication"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ReapplicationNotice(
-    override val id: Long,
-    val application: PeptidesSystem.TreatmentApplicationView,
+    override val key: StoreKey,
+    val application: Ref<TreatmentApplication>,
     val noticedOn: LocalDate,
-) : View
+) : Ref<ReapplicationNotice> {
+    override val shape: String get() = "ReapplicationNotice"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Scouting(
-    override val id: Long,
-    val plot: PeptidesSystem.FieldPlotView,
+    override val key: StoreKey,
+    val plot: Ref<FieldPlot>,
     val daysAfterPlanting: Int,
     val scoutedOn: LocalDate,
     val incidencePercent: BigDecimal,
     val severity: BigDecimal,
-    val previous: PeptidesSystem.ScoutingView?,
+    val previous: Ref<Scouting>?,
     val audpcSoFar: BigDecimal,
-) : View
+) : Ref<Scouting> {
+    override val shape: String get() = "Scouting"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Harvest(
-    override val id: Long,
-    val plot: PeptidesSystem.FieldPlotView,
+    override val key: StoreKey,
+    val plot: Ref<FieldPlot>,
     val harvestedOn: LocalDate,
     val yieldKgPerHa: BigDecimal,
-) : View
+) : Ref<Harvest> {
+    override val shape: String get() = "Harvest"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class PhytotoxicityReport(
-    override val id: Long,
-    val plot: PeptidesSystem.FieldPlotView,
+    override val key: StoreKey,
+    val plot: Ref<FieldPlot>,
     val observedOn: LocalDate,
     val severity: Int,
-) : View
+) : Ref<PhytotoxicityReport> {
+    override val shape: String get() = "PhytotoxicityReport"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class HaltNotice(
-    override val id: Long,
-    val trial: PeptidesSystem.FieldTrialView,
+    override val key: StoreKey,
+    val trial: Ref<FieldTrial>,
     val noticedOn: Instant,
-) : View
+) : Ref<HaltNotice> {
+    override val shape: String get() = "HaltNotice"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class CollectionTask(
-    override val id: Long,
-    val trial: PeptidesSystem.TrialView,
+    override val key: StoreKey,
+    val trial: Ref<Trial>,
     val dayMark: Int,
     val dueOn: LocalDate,
     val plotsPending: Int,
-    val taskReminders: List<PeptidesSystem.TaskReminderView>,
-    val rescheduleRefusals: List<PeptidesSystem.RescheduleRefusalView>,
-    val cancelRefusals: List<PeptidesSystem.CancelRefusalView>,
-) : View
+    val taskReminders: List<Ref<TaskReminder>>,
+    val rescheduleRefusals: List<Ref<RescheduleRefusal>>,
+    val cancelRefusals: List<Ref<CancelRefusal>>,
+    /** membership of DoneTask at the moment of the read */
+    val isDoneTask: Boolean,
+    /** membership of OpenTask at the moment of the read */
+    val isOpenTask: Boolean,
+    /** membership of OverdueTask at the moment of the read */
+    val isOverdueTask: Boolean,
+) : Ref<CollectionTask> {
+    override val shape: String get() = "CollectionTask"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class TaskReminder(
-    override val id: Long,
-    val task: PeptidesSystem.CollectionTaskView?,
+    override val key: StoreKey,
+    val task: Ref<CollectionTask>?,
     val sentOn: LocalDate,
-) : View
+) : Ref<TaskReminder> {
+    override val shape: String get() = "TaskReminder"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class RescheduleRefusal(
-    override val id: Long,
-    val task: PeptidesSystem.CollectionTaskView?,
+    override val key: StoreKey,
+    val task: Ref<CollectionTask>?,
     val reason: String,
     val refusedOn: Instant,
-) : View
+) : Ref<RescheduleRefusal> {
+    override val shape: String get() = "RescheduleRefusal"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class TaskCancellation(
-    override val id: Long,
+    override val key: StoreKey,
     val dayMark: Int,
     val dueOn: LocalDate,
     val reason: String,
     val cancelledOn: Instant,
-) : View
+) : Ref<TaskCancellation> {
+    override val shape: String get() = "TaskCancellation"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class CancelRefusal(
-    override val id: Long,
-    val task: PeptidesSystem.CollectionTaskView?,
+    override val key: StoreKey,
+    val task: Ref<CollectionTask>?,
     val reason: String,
     val refusedOn: Instant,
-) : View
+) : Ref<CancelRefusal> {
+    override val shape: String get() = "CancelRefusal"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class CompletedAssay(
-    override val id: Long,
-    val experiment: PeptidesSystem.LabExperimentView,
+    override val key: StoreKey,
+    val experiment: Ref<LabExperiment>,
     val replicate: Int,
     val peakInhibition: BigDecimal,
-    val assayReadings: List<PeptidesSystem.AssayReadingView>,
-) : View
+    val assayReadings: List<Ref<AssayReading>>,
+) : Ref<Assay> {
+    override val shape: String get() = "Assay"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class HitExperiment(
-    override val id: Long,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val protocol: PeptidesSystem.AssayProtocolView,
+    override val key: StoreKey,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val protocol: Ref<AssayProtocol>,
     val completedReplicates: Int,
     val meanPeakInhibition: BigDecimal,
-    val assays: List<PeptidesSystem.AssayView>,
-    val labHits: List<PeptidesSystem.LabHitView>,
-    val labHitRetractions: List<PeptidesSystem.LabHitRetractionView>,
-) : View
+    val assays: List<Ref<Assay>>,
+    val labHits: List<Ref<LabHit>>,
+    val labHitRetractions: List<Ref<LabHitRetraction>>,
+) : Ref<LabExperiment> {
+    override val shape: String get() = "LabExperiment"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class LabValidated(
-    override val id: Long,
+    override val key: StoreKey,
     val code: String,
     val sequence: String,
     val stage: String,
-    val labExperiments: List<PeptidesSystem.LabExperimentView>,
-    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
-    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
-) : View
+    val labExperiments: List<Ref<LabExperiment>>,
+    val greenhouseTrials: List<Ref<GreenhouseTrial>>,
+    val fieldTrials: List<Ref<FieldTrial>>,
+    /** membership of GreenhouseValidated at the moment of the read */
+    val isGreenhouseValidated: Boolean,
+    /** membership of Deprioritized at the moment of the read */
+    val isDeprioritized: Boolean,
+    /** membership of FieldValidated at the moment of the read */
+    val isFieldValidated: Boolean,
+) : Ref<Peptide> {
+    override val shape: String get() = "Peptide"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class TreatedTrial(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val greenhouse: PeptidesSystem.GreenhouseView,
-    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val greenhouse: Ref<Greenhouse>,
+    val protocol: Ref<GreenhouseProtocol>,
     val approvedOn: Instant,
     val treatedAt: Instant?,
-    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
-    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatedPlots: List<Ref<GreenhousePlot>>,
+    val controlPlots: List<Ref<GreenhousePlot>>,
     val meanTreatedAudpc: BigDecimal,
     val meanControlAudpc: BigDecimal,
     val efficacy: BigDecimal,
-    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
-    val treatments: List<PeptidesSystem.TreatmentView>,
-    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
-    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
-) : View
+    val greenhousePlots: List<Ref<GreenhousePlot>>,
+    val treatments: List<Ref<Treatment>>,
+    val greenhouseResults: List<Ref<GreenhouseResult>>,
+    val collectionTasks: List<Ref<CollectionTask>>,
+    /** membership of LaidOutTrial at the moment of the read */
+    val isLaidOutTrial: Boolean,
+    /** membership of ObservedToEnd at the moment of the read */
+    val isObservedToEnd: Boolean,
+    /** membership of CompleteTrial at the moment of the read */
+    val isCompleteTrial: Boolean,
+    /** membership of EffectiveTrial at the moment of the read */
+    val isEffectiveTrial: Boolean,
+    /** membership of EvaluatedTrial at the moment of the read */
+    val isEvaluatedTrial: Boolean,
+    /** membership of ActiveTrial at the moment of the read */
+    val isActiveTrial: Boolean,
+    /** membership of CompromisedTrial at the moment of the read */
+    val isCompromisedTrial: Boolean,
+) : Ref<GreenhouseTrial> {
+    override val shape: String get() = "GreenhouseTrial"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class LaidOutTrial(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val greenhouse: PeptidesSystem.GreenhouseView,
-    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val greenhouse: Ref<Greenhouse>,
+    val protocol: Ref<GreenhouseProtocol>,
     val approvedOn: Instant,
     val treatedAt: Instant?,
-    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
-    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatedPlots: List<Ref<GreenhousePlot>>,
+    val controlPlots: List<Ref<GreenhousePlot>>,
     val meanTreatedAudpc: BigDecimal,
     val meanControlAudpc: BigDecimal,
     val efficacy: BigDecimal,
-    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
-    val treatments: List<PeptidesSystem.TreatmentView>,
-    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
-    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
-) : View
+    val greenhousePlots: List<Ref<GreenhousePlot>>,
+    val treatments: List<Ref<Treatment>>,
+    val greenhouseResults: List<Ref<GreenhouseResult>>,
+    val collectionTasks: List<Ref<CollectionTask>>,
+    /** membership of TreatedTrial at the moment of the read */
+    val isTreatedTrial: Boolean,
+    /** membership of ObservedToEnd at the moment of the read */
+    val isObservedToEnd: Boolean,
+    /** membership of CompleteTrial at the moment of the read */
+    val isCompleteTrial: Boolean,
+    /** membership of EffectiveTrial at the moment of the read */
+    val isEffectiveTrial: Boolean,
+    /** membership of EvaluatedTrial at the moment of the read */
+    val isEvaluatedTrial: Boolean,
+    /** membership of ActiveTrial at the moment of the read */
+    val isActiveTrial: Boolean,
+    /** membership of CompromisedTrial at the moment of the read */
+    val isCompromisedTrial: Boolean,
+) : Ref<GreenhouseTrial> {
+    override val shape: String get() = "GreenhouseTrial"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ObservedToEnd(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val greenhouse: PeptidesSystem.GreenhouseView,
-    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val greenhouse: Ref<Greenhouse>,
+    val protocol: Ref<GreenhouseProtocol>,
     val approvedOn: Instant,
     val treatedAt: Instant?,
-    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
-    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatedPlots: List<Ref<GreenhousePlot>>,
+    val controlPlots: List<Ref<GreenhousePlot>>,
     val meanTreatedAudpc: BigDecimal,
     val meanControlAudpc: BigDecimal,
     val efficacy: BigDecimal,
-    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
-    val treatments: List<PeptidesSystem.TreatmentView>,
-    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
-    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
-) : View
+    val greenhousePlots: List<Ref<GreenhousePlot>>,
+    val treatments: List<Ref<Treatment>>,
+    val greenhouseResults: List<Ref<GreenhouseResult>>,
+    val collectionTasks: List<Ref<CollectionTask>>,
+    /** membership of TreatedTrial at the moment of the read */
+    val isTreatedTrial: Boolean,
+    /** membership of LaidOutTrial at the moment of the read */
+    val isLaidOutTrial: Boolean,
+    /** membership of CompleteTrial at the moment of the read */
+    val isCompleteTrial: Boolean,
+    /** membership of EffectiveTrial at the moment of the read */
+    val isEffectiveTrial: Boolean,
+    /** membership of EvaluatedTrial at the moment of the read */
+    val isEvaluatedTrial: Boolean,
+    /** membership of ActiveTrial at the moment of the read */
+    val isActiveTrial: Boolean,
+    /** membership of CompromisedTrial at the moment of the read */
+    val isCompromisedTrial: Boolean,
+) : Ref<GreenhouseTrial> {
+    override val shape: String get() = "GreenhouseTrial"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class CompleteTrial(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val greenhouse: PeptidesSystem.GreenhouseView,
-    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val greenhouse: Ref<Greenhouse>,
+    val protocol: Ref<GreenhouseProtocol>,
     val approvedOn: Instant,
     val treatedAt: Instant?,
-    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
-    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatedPlots: List<Ref<GreenhousePlot>>,
+    val controlPlots: List<Ref<GreenhousePlot>>,
     val meanTreatedAudpc: BigDecimal,
     val meanControlAudpc: BigDecimal,
     val efficacy: BigDecimal,
-    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
-    val treatments: List<PeptidesSystem.TreatmentView>,
-    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
-    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
-) : View
+    val greenhousePlots: List<Ref<GreenhousePlot>>,
+    val treatments: List<Ref<Treatment>>,
+    val greenhouseResults: List<Ref<GreenhouseResult>>,
+    val collectionTasks: List<Ref<CollectionTask>>,
+    /** membership of TreatedTrial at the moment of the read */
+    val isTreatedTrial: Boolean,
+    /** membership of LaidOutTrial at the moment of the read */
+    val isLaidOutTrial: Boolean,
+    /** membership of ObservedToEnd at the moment of the read */
+    val isObservedToEnd: Boolean,
+    /** membership of EffectiveTrial at the moment of the read */
+    val isEffectiveTrial: Boolean,
+    /** membership of EvaluatedTrial at the moment of the read */
+    val isEvaluatedTrial: Boolean,
+    /** membership of ActiveTrial at the moment of the read */
+    val isActiveTrial: Boolean,
+    /** membership of CompromisedTrial at the moment of the read */
+    val isCompromisedTrial: Boolean,
+) : Ref<GreenhouseTrial> {
+    override val shape: String get() = "GreenhouseTrial"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class EffectiveTrial(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val greenhouse: PeptidesSystem.GreenhouseView,
-    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val greenhouse: Ref<Greenhouse>,
+    val protocol: Ref<GreenhouseProtocol>,
     val approvedOn: Instant,
     val treatedAt: Instant?,
-    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
-    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatedPlots: List<Ref<GreenhousePlot>>,
+    val controlPlots: List<Ref<GreenhousePlot>>,
     val meanTreatedAudpc: BigDecimal,
     val meanControlAudpc: BigDecimal,
     val efficacy: BigDecimal,
-    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
-    val treatments: List<PeptidesSystem.TreatmentView>,
-    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
-    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
-) : View
+    val greenhousePlots: List<Ref<GreenhousePlot>>,
+    val treatments: List<Ref<Treatment>>,
+    val greenhouseResults: List<Ref<GreenhouseResult>>,
+    val collectionTasks: List<Ref<CollectionTask>>,
+    /** membership of TreatedTrial at the moment of the read */
+    val isTreatedTrial: Boolean,
+    /** membership of LaidOutTrial at the moment of the read */
+    val isLaidOutTrial: Boolean,
+    /** membership of ObservedToEnd at the moment of the read */
+    val isObservedToEnd: Boolean,
+    /** membership of CompleteTrial at the moment of the read */
+    val isCompleteTrial: Boolean,
+    /** membership of EvaluatedTrial at the moment of the read */
+    val isEvaluatedTrial: Boolean,
+    /** membership of ActiveTrial at the moment of the read */
+    val isActiveTrial: Boolean,
+    /** membership of CompromisedTrial at the moment of the read */
+    val isCompromisedTrial: Boolean,
+) : Ref<GreenhouseTrial> {
+    override val shape: String get() = "GreenhouseTrial"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class EvaluatedTrial(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val greenhouse: PeptidesSystem.GreenhouseView,
-    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val greenhouse: Ref<Greenhouse>,
+    val protocol: Ref<GreenhouseProtocol>,
     val approvedOn: Instant,
     val treatedAt: Instant?,
-    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
-    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatedPlots: List<Ref<GreenhousePlot>>,
+    val controlPlots: List<Ref<GreenhousePlot>>,
     val meanTreatedAudpc: BigDecimal,
     val meanControlAudpc: BigDecimal,
     val efficacy: BigDecimal,
-    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
-    val treatments: List<PeptidesSystem.TreatmentView>,
-    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
-    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
-) : View
+    val greenhousePlots: List<Ref<GreenhousePlot>>,
+    val treatments: List<Ref<Treatment>>,
+    val greenhouseResults: List<Ref<GreenhouseResult>>,
+    val collectionTasks: List<Ref<CollectionTask>>,
+    /** membership of TreatedTrial at the moment of the read */
+    val isTreatedTrial: Boolean,
+    /** membership of LaidOutTrial at the moment of the read */
+    val isLaidOutTrial: Boolean,
+    /** membership of ObservedToEnd at the moment of the read */
+    val isObservedToEnd: Boolean,
+    /** membership of CompleteTrial at the moment of the read */
+    val isCompleteTrial: Boolean,
+    /** membership of EffectiveTrial at the moment of the read */
+    val isEffectiveTrial: Boolean,
+    /** membership of ActiveTrial at the moment of the read */
+    val isActiveTrial: Boolean,
+    /** membership of CompromisedTrial at the moment of the read */
+    val isCompromisedTrial: Boolean,
+) : Ref<GreenhouseTrial> {
+    override val shape: String get() = "GreenhouseTrial"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class GreenhouseValidated(
-    override val id: Long,
+    override val key: StoreKey,
     val code: String,
     val sequence: String,
     val stage: String,
-    val labExperiments: List<PeptidesSystem.LabExperimentView>,
-    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
-    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
-) : View
+    val labExperiments: List<Ref<LabExperiment>>,
+    val greenhouseTrials: List<Ref<GreenhouseTrial>>,
+    val fieldTrials: List<Ref<FieldTrial>>,
+    /** membership of LabValidated at the moment of the read */
+    val isLabValidated: Boolean,
+    /** membership of Deprioritized at the moment of the read */
+    val isDeprioritized: Boolean,
+    /** membership of FieldValidated at the moment of the read */
+    val isFieldValidated: Boolean,
+) : Ref<Peptide> {
+    override val shape: String get() = "Peptide"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Deprioritized(
-    override val id: Long,
+    override val key: StoreKey,
     val code: String,
     val sequence: String,
     val stage: String,
-    val labExperiments: List<PeptidesSystem.LabExperimentView>,
-    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
-    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
-) : View
+    val labExperiments: List<Ref<LabExperiment>>,
+    val greenhouseTrials: List<Ref<GreenhouseTrial>>,
+    val fieldTrials: List<Ref<FieldTrial>>,
+    /** membership of LabValidated at the moment of the read */
+    val isLabValidated: Boolean,
+    /** membership of GreenhouseValidated at the moment of the read */
+    val isGreenhouseValidated: Boolean,
+    /** membership of FieldValidated at the moment of the read */
+    val isFieldValidated: Boolean,
+) : Ref<Peptide> {
+    override val shape: String get() = "Peptide"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class LockedObservation(
-    override val id: Long,
-    val plot: PeptidesSystem.GreenhousePlotView,
+    override val key: StoreKey,
+    val plot: Ref<GreenhousePlot>,
     val dayAfterTreatment: Int,
     val recordedSeverity: BigDecimal,
     val observedOn: LocalDate,
     val diseaseSeverity: BigDecimal,
-    val previous: PeptidesSystem.PlotObservationView?,
+    val previous: Ref<PlotObservation>?,
     val audpcSoFar: BigDecimal,
-    val observationCorrections: List<PeptidesSystem.ObservationCorrectionView>,
-    val correctionRefusals: List<PeptidesSystem.CorrectionRefusalView>,
-    val voidRefusals: List<PeptidesSystem.VoidRefusalView>,
-) : View
+    val observationCorrections: List<Ref<ObservationCorrection>>,
+    val correctionRefusals: List<Ref<CorrectionRefusal>>,
+    val voidRefusals: List<Ref<VoidRefusal>>,
+) : Ref<PlotObservation> {
+    override val shape: String get() = "PlotObservation"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class TreatedPlot(
-    override val id: Long,
-    val trial: PeptidesSystem.GreenhouseTrialView,
+    override val key: StoreKey,
+    val trial: Ref<GreenhouseTrial>,
     val bench: String,
     val treatment: String,
     val lastObservedDay: Int,
     val audpc: BigDecimal,
-    val plotObservations: List<PeptidesSystem.PlotObservationView>,
-    val moveRefusals: List<PeptidesSystem.MoveRefusalView>,
-) : View
+    val plotObservations: List<Ref<PlotObservation>>,
+    val moveRefusals: List<Ref<MoveRefusal>>,
+) : Ref<GreenhousePlot> {
+    override val shape: String get() = "GreenhousePlot"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ActiveTrial(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val greenhouse: PeptidesSystem.GreenhouseView,
-    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val greenhouse: Ref<Greenhouse>,
+    val protocol: Ref<GreenhouseProtocol>,
     val approvedOn: Instant,
     val treatedAt: Instant?,
-    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
-    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatedPlots: List<Ref<GreenhousePlot>>,
+    val controlPlots: List<Ref<GreenhousePlot>>,
     val meanTreatedAudpc: BigDecimal,
     val meanControlAudpc: BigDecimal,
     val efficacy: BigDecimal,
-    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
-    val treatments: List<PeptidesSystem.TreatmentView>,
-    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
-    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
-) : View
+    val greenhousePlots: List<Ref<GreenhousePlot>>,
+    val treatments: List<Ref<Treatment>>,
+    val greenhouseResults: List<Ref<GreenhouseResult>>,
+    val collectionTasks: List<Ref<CollectionTask>>,
+    /** membership of TreatedTrial at the moment of the read */
+    val isTreatedTrial: Boolean,
+    /** membership of LaidOutTrial at the moment of the read */
+    val isLaidOutTrial: Boolean,
+    /** membership of ObservedToEnd at the moment of the read */
+    val isObservedToEnd: Boolean,
+    /** membership of CompleteTrial at the moment of the read */
+    val isCompleteTrial: Boolean,
+    /** membership of EffectiveTrial at the moment of the read */
+    val isEffectiveTrial: Boolean,
+    /** membership of EvaluatedTrial at the moment of the read */
+    val isEvaluatedTrial: Boolean,
+    /** membership of CompromisedTrial at the moment of the read */
+    val isCompromisedTrial: Boolean,
+) : Ref<GreenhouseTrial> {
+    override val shape: String get() = "GreenhouseTrial"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class OutOfBand(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val minTemperature: BigDecimal,
     val maxTemperature: BigDecimal,
-    val climateReadings: List<PeptidesSystem.ClimateReadingView>,
-    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
-    val climateExcursions: List<PeptidesSystem.ClimateExcursionView>,
-    val sensorAlerts: List<PeptidesSystem.SensorAlertView>,
-) : View
+    val climateReadings: List<Ref<ClimateReading>>,
+    val greenhouseTrials: List<Ref<GreenhouseTrial>>,
+    val climateExcursions: List<Ref<ClimateExcursion>>,
+    val sensorAlerts: List<Ref<SensorAlert>>,
+    /** membership of SilentGreenhouse at the moment of the read */
+    val isSilentGreenhouse: Boolean,
+) : Ref<Greenhouse> {
+    override val shape: String get() = "Greenhouse"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class OpenExcursion(
-    override val id: Long,
-    val greenhouse: PeptidesSystem.GreenhouseView,
+    override val key: StoreKey,
+    val greenhouse: Ref<Greenhouse>,
     val startedAt: Instant,
     val temperature: BigDecimal,
-    val excursionEnds: List<PeptidesSystem.ExcursionEndView>,
-) : View
+    val excursionEnds: List<Ref<ExcursionEnd>>,
+    /** membership of ClosableExcursion at the moment of the read */
+    val isClosableExcursion: Boolean,
+) : Ref<ClimateExcursion> {
+    override val shape: String get() = "ClimateExcursion"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ClosableExcursion(
-    override val id: Long,
-    val greenhouse: PeptidesSystem.GreenhouseView,
+    override val key: StoreKey,
+    val greenhouse: Ref<Greenhouse>,
     val startedAt: Instant,
     val temperature: BigDecimal,
-    val excursionEnds: List<PeptidesSystem.ExcursionEndView>,
-) : View
+    val excursionEnds: List<Ref<ExcursionEnd>>,
+    /** membership of OpenExcursion at the moment of the read */
+    val isOpenExcursion: Boolean,
+) : Ref<ClimateExcursion> {
+    override val shape: String get() = "ClimateExcursion"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class CompromisedTrial(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val greenhouse: PeptidesSystem.GreenhouseView,
-    val protocol: PeptidesSystem.GreenhouseProtocolView,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val greenhouse: Ref<Greenhouse>,
+    val protocol: Ref<GreenhouseProtocol>,
     val approvedOn: Instant,
     val treatedAt: Instant?,
-    val treatedPlots: List<PeptidesSystem.GreenhousePlotView>,
-    val controlPlots: List<PeptidesSystem.GreenhousePlotView>,
+    val treatedPlots: List<Ref<GreenhousePlot>>,
+    val controlPlots: List<Ref<GreenhousePlot>>,
     val meanTreatedAudpc: BigDecimal,
     val meanControlAudpc: BigDecimal,
     val efficacy: BigDecimal,
-    val greenhousePlots: List<PeptidesSystem.GreenhousePlotView>,
-    val treatments: List<PeptidesSystem.TreatmentView>,
-    val greenhouseResults: List<PeptidesSystem.GreenhouseResultView>,
-    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
-) : View
+    val greenhousePlots: List<Ref<GreenhousePlot>>,
+    val treatments: List<Ref<Treatment>>,
+    val greenhouseResults: List<Ref<GreenhouseResult>>,
+    val collectionTasks: List<Ref<CollectionTask>>,
+    /** membership of TreatedTrial at the moment of the read */
+    val isTreatedTrial: Boolean,
+    /** membership of LaidOutTrial at the moment of the read */
+    val isLaidOutTrial: Boolean,
+    /** membership of ObservedToEnd at the moment of the read */
+    val isObservedToEnd: Boolean,
+    /** membership of CompleteTrial at the moment of the read */
+    val isCompleteTrial: Boolean,
+    /** membership of EffectiveTrial at the moment of the read */
+    val isEffectiveTrial: Boolean,
+    /** membership of EvaluatedTrial at the moment of the read */
+    val isEvaluatedTrial: Boolean,
+    /** membership of ActiveTrial at the moment of the read */
+    val isActiveTrial: Boolean,
+) : Ref<GreenhouseTrial> {
+    override val shape: String get() = "GreenhouseTrial"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class SilentGreenhouse(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
     val minTemperature: BigDecimal,
     val maxTemperature: BigDecimal,
-    val climateReadings: List<PeptidesSystem.ClimateReadingView>,
-    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
-    val climateExcursions: List<PeptidesSystem.ClimateExcursionView>,
-    val sensorAlerts: List<PeptidesSystem.SensorAlertView>,
-) : View
+    val climateReadings: List<Ref<ClimateReading>>,
+    val greenhouseTrials: List<Ref<GreenhouseTrial>>,
+    val climateExcursions: List<Ref<ClimateExcursion>>,
+    val sensorAlerts: List<Ref<SensorAlert>>,
+    /** membership of OutOfBand at the moment of the read */
+    val isOutOfBand: Boolean,
+) : Ref<Greenhouse> {
+    override val shape: String get() = "Greenhouse"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class PermittedTrial(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val crop: PeptidesSystem.CropView,
-    val site: PeptidesSystem.FieldSiteView,
-    val protocol: PeptidesSystem.FieldProtocolView,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val crop: Ref<Crop>,
+    val site: Ref<FieldSite>,
+    val protocol: Ref<FieldProtocol>,
     val approvedOn: Instant,
-    val treatedPlots: List<PeptidesSystem.FieldPlotView>,
-    val controlPlots: List<PeptidesSystem.FieldPlotView>,
+    val treatedPlots: List<Ref<FieldPlot>>,
+    val controlPlots: List<Ref<FieldPlot>>,
     val meanTreatedYield: BigDecimal,
     val meanControlYield: BigDecimal,
     val yieldGain: BigDecimal,
-    val plantings: List<PeptidesSystem.PlantingView>,
-    val fieldPlots: List<PeptidesSystem.FieldPlotView>,
-    val treatmentApplications: List<PeptidesSystem.TreatmentApplicationView>,
-    val haltNotices: List<PeptidesSystem.HaltNoticeView>,
-    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
-) : View
+    val plantings: List<Ref<Planting>>,
+    val fieldPlots: List<Ref<FieldPlot>>,
+    val treatmentApplications: List<Ref<TreatmentApplication>>,
+    val haltNotices: List<Ref<HaltNotice>>,
+    val collectionTasks: List<Ref<CollectionTask>>,
+    /** membership of PlantedTrial at the moment of the read */
+    val isPlantedTrial: Boolean,
+    /** membership of NeverScouted at the moment of the read */
+    val isNeverScouted: Boolean,
+    /** membership of HarvestedTrial at the moment of the read */
+    val isHarvestedTrial: Boolean,
+    /** membership of SuccessfulFieldTrial at the moment of the read */
+    val isSuccessfulFieldTrial: Boolean,
+    /** membership of HaltedTrial at the moment of the read */
+    val isHaltedTrial: Boolean,
+) : Ref<FieldTrial> {
+    override val shape: String get() = "FieldTrial"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class PlantedTrial(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val crop: PeptidesSystem.CropView,
-    val site: PeptidesSystem.FieldSiteView,
-    val protocol: PeptidesSystem.FieldProtocolView,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val crop: Ref<Crop>,
+    val site: Ref<FieldSite>,
+    val protocol: Ref<FieldProtocol>,
     val approvedOn: Instant,
-    val treatedPlots: List<PeptidesSystem.FieldPlotView>,
-    val controlPlots: List<PeptidesSystem.FieldPlotView>,
+    val treatedPlots: List<Ref<FieldPlot>>,
+    val controlPlots: List<Ref<FieldPlot>>,
     val meanTreatedYield: BigDecimal,
     val meanControlYield: BigDecimal,
     val yieldGain: BigDecimal,
-    val plantings: List<PeptidesSystem.PlantingView>,
-    val fieldPlots: List<PeptidesSystem.FieldPlotView>,
-    val treatmentApplications: List<PeptidesSystem.TreatmentApplicationView>,
-    val haltNotices: List<PeptidesSystem.HaltNoticeView>,
-    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
-) : View
+    val plantings: List<Ref<Planting>>,
+    val fieldPlots: List<Ref<FieldPlot>>,
+    val treatmentApplications: List<Ref<TreatmentApplication>>,
+    val haltNotices: List<Ref<HaltNotice>>,
+    val collectionTasks: List<Ref<CollectionTask>>,
+    /** membership of PermittedTrial at the moment of the read */
+    val isPermittedTrial: Boolean,
+    /** membership of NeverScouted at the moment of the read */
+    val isNeverScouted: Boolean,
+    /** membership of HarvestedTrial at the moment of the read */
+    val isHarvestedTrial: Boolean,
+    /** membership of SuccessfulFieldTrial at the moment of the read */
+    val isSuccessfulFieldTrial: Boolean,
+    /** membership of HaltedTrial at the moment of the read */
+    val isHaltedTrial: Boolean,
+) : Ref<FieldTrial> {
+    override val shape: String get() = "FieldTrial"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class WashedOffApplication(
-    override val id: Long,
-    val trial: PeptidesSystem.FieldTrialView,
+    override val key: StoreKey,
+    val trial: Ref<FieldTrial>,
     val appliedOn: LocalDate,
     val rateGramsPerHa: BigDecimal,
     val recordedOn: Instant,
-    val reapplicationNotices: List<PeptidesSystem.ReapplicationNoticeView>,
-) : View
+    val reapplicationNotices: List<Ref<ReapplicationNotice>>,
+) : Ref<TreatmentApplication> {
+    override val shape: String get() = "TreatmentApplication"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class NeverScouted(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val crop: PeptidesSystem.CropView,
-    val site: PeptidesSystem.FieldSiteView,
-    val protocol: PeptidesSystem.FieldProtocolView,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val crop: Ref<Crop>,
+    val site: Ref<FieldSite>,
+    val protocol: Ref<FieldProtocol>,
     val approvedOn: Instant,
-    val treatedPlots: List<PeptidesSystem.FieldPlotView>,
-    val controlPlots: List<PeptidesSystem.FieldPlotView>,
+    val treatedPlots: List<Ref<FieldPlot>>,
+    val controlPlots: List<Ref<FieldPlot>>,
     val meanTreatedYield: BigDecimal,
     val meanControlYield: BigDecimal,
     val yieldGain: BigDecimal,
-    val plantings: List<PeptidesSystem.PlantingView>,
-    val fieldPlots: List<PeptidesSystem.FieldPlotView>,
-    val treatmentApplications: List<PeptidesSystem.TreatmentApplicationView>,
-    val haltNotices: List<PeptidesSystem.HaltNoticeView>,
-    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
-) : View
+    val plantings: List<Ref<Planting>>,
+    val fieldPlots: List<Ref<FieldPlot>>,
+    val treatmentApplications: List<Ref<TreatmentApplication>>,
+    val haltNotices: List<Ref<HaltNotice>>,
+    val collectionTasks: List<Ref<CollectionTask>>,
+    /** membership of PermittedTrial at the moment of the read */
+    val isPermittedTrial: Boolean,
+    /** membership of PlantedTrial at the moment of the read */
+    val isPlantedTrial: Boolean,
+    /** membership of HarvestedTrial at the moment of the read */
+    val isHarvestedTrial: Boolean,
+    /** membership of SuccessfulFieldTrial at the moment of the read */
+    val isSuccessfulFieldTrial: Boolean,
+    /** membership of HaltedTrial at the moment of the read */
+    val isHaltedTrial: Boolean,
+) : Ref<FieldTrial> {
+    override val shape: String get() = "FieldTrial"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class HarvestedTrial(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val crop: PeptidesSystem.CropView,
-    val site: PeptidesSystem.FieldSiteView,
-    val protocol: PeptidesSystem.FieldProtocolView,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val crop: Ref<Crop>,
+    val site: Ref<FieldSite>,
+    val protocol: Ref<FieldProtocol>,
     val approvedOn: Instant,
-    val treatedPlots: List<PeptidesSystem.FieldPlotView>,
-    val controlPlots: List<PeptidesSystem.FieldPlotView>,
+    val treatedPlots: List<Ref<FieldPlot>>,
+    val controlPlots: List<Ref<FieldPlot>>,
     val meanTreatedYield: BigDecimal,
     val meanControlYield: BigDecimal,
     val yieldGain: BigDecimal,
-    val plantings: List<PeptidesSystem.PlantingView>,
-    val fieldPlots: List<PeptidesSystem.FieldPlotView>,
-    val treatmentApplications: List<PeptidesSystem.TreatmentApplicationView>,
-    val haltNotices: List<PeptidesSystem.HaltNoticeView>,
-    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
-) : View
+    val plantings: List<Ref<Planting>>,
+    val fieldPlots: List<Ref<FieldPlot>>,
+    val treatmentApplications: List<Ref<TreatmentApplication>>,
+    val haltNotices: List<Ref<HaltNotice>>,
+    val collectionTasks: List<Ref<CollectionTask>>,
+    /** membership of PermittedTrial at the moment of the read */
+    val isPermittedTrial: Boolean,
+    /** membership of PlantedTrial at the moment of the read */
+    val isPlantedTrial: Boolean,
+    /** membership of NeverScouted at the moment of the read */
+    val isNeverScouted: Boolean,
+    /** membership of SuccessfulFieldTrial at the moment of the read */
+    val isSuccessfulFieldTrial: Boolean,
+    /** membership of HaltedTrial at the moment of the read */
+    val isHaltedTrial: Boolean,
+) : Ref<FieldTrial> {
+    override val shape: String get() = "FieldTrial"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class SuccessfulFieldTrial(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val crop: PeptidesSystem.CropView,
-    val site: PeptidesSystem.FieldSiteView,
-    val protocol: PeptidesSystem.FieldProtocolView,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val crop: Ref<Crop>,
+    val site: Ref<FieldSite>,
+    val protocol: Ref<FieldProtocol>,
     val approvedOn: Instant,
-    val treatedPlots: List<PeptidesSystem.FieldPlotView>,
-    val controlPlots: List<PeptidesSystem.FieldPlotView>,
+    val treatedPlots: List<Ref<FieldPlot>>,
+    val controlPlots: List<Ref<FieldPlot>>,
     val meanTreatedYield: BigDecimal,
     val meanControlYield: BigDecimal,
     val yieldGain: BigDecimal,
-    val plantings: List<PeptidesSystem.PlantingView>,
-    val fieldPlots: List<PeptidesSystem.FieldPlotView>,
-    val treatmentApplications: List<PeptidesSystem.TreatmentApplicationView>,
-    val haltNotices: List<PeptidesSystem.HaltNoticeView>,
-    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
-) : View
+    val plantings: List<Ref<Planting>>,
+    val fieldPlots: List<Ref<FieldPlot>>,
+    val treatmentApplications: List<Ref<TreatmentApplication>>,
+    val haltNotices: List<Ref<HaltNotice>>,
+    val collectionTasks: List<Ref<CollectionTask>>,
+    /** membership of PermittedTrial at the moment of the read */
+    val isPermittedTrial: Boolean,
+    /** membership of PlantedTrial at the moment of the read */
+    val isPlantedTrial: Boolean,
+    /** membership of NeverScouted at the moment of the read */
+    val isNeverScouted: Boolean,
+    /** membership of HarvestedTrial at the moment of the read */
+    val isHarvestedTrial: Boolean,
+    /** membership of HaltedTrial at the moment of the read */
+    val isHaltedTrial: Boolean,
+) : Ref<FieldTrial> {
+    override val shape: String get() = "FieldTrial"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class FieldValidated(
-    override val id: Long,
+    override val key: StoreKey,
     val code: String,
     val sequence: String,
     val stage: String,
-    val labExperiments: List<PeptidesSystem.LabExperimentView>,
-    val greenhouseTrials: List<PeptidesSystem.GreenhouseTrialView>,
-    val fieldTrials: List<PeptidesSystem.FieldTrialView>,
-) : View
+    val labExperiments: List<Ref<LabExperiment>>,
+    val greenhouseTrials: List<Ref<GreenhouseTrial>>,
+    val fieldTrials: List<Ref<FieldTrial>>,
+    /** membership of LabValidated at the moment of the read */
+    val isLabValidated: Boolean,
+    /** membership of GreenhouseValidated at the moment of the read */
+    val isGreenhouseValidated: Boolean,
+    /** membership of Deprioritized at the moment of the read */
+    val isDeprioritized: Boolean,
+) : Ref<Peptide> {
+    override val shape: String get() = "Peptide"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class HaltedTrial(
-    override val id: Long,
+    override val key: StoreKey,
     val requestKey: String,
-    val peptide: PeptidesSystem.PeptideView,
-    val pathogen: PeptidesSystem.PathogenView,
-    val crop: PeptidesSystem.CropView,
-    val site: PeptidesSystem.FieldSiteView,
-    val protocol: PeptidesSystem.FieldProtocolView,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val crop: Ref<Crop>,
+    val site: Ref<FieldSite>,
+    val protocol: Ref<FieldProtocol>,
     val approvedOn: Instant,
-    val treatedPlots: List<PeptidesSystem.FieldPlotView>,
-    val controlPlots: List<PeptidesSystem.FieldPlotView>,
+    val treatedPlots: List<Ref<FieldPlot>>,
+    val controlPlots: List<Ref<FieldPlot>>,
     val meanTreatedYield: BigDecimal,
     val meanControlYield: BigDecimal,
     val yieldGain: BigDecimal,
-    val plantings: List<PeptidesSystem.PlantingView>,
-    val fieldPlots: List<PeptidesSystem.FieldPlotView>,
-    val treatmentApplications: List<PeptidesSystem.TreatmentApplicationView>,
-    val haltNotices: List<PeptidesSystem.HaltNoticeView>,
-    val collectionTasks: List<PeptidesSystem.CollectionTaskView>,
-) : View
+    val plantings: List<Ref<Planting>>,
+    val fieldPlots: List<Ref<FieldPlot>>,
+    val treatmentApplications: List<Ref<TreatmentApplication>>,
+    val haltNotices: List<Ref<HaltNotice>>,
+    val collectionTasks: List<Ref<CollectionTask>>,
+    /** membership of PermittedTrial at the moment of the read */
+    val isPermittedTrial: Boolean,
+    /** membership of PlantedTrial at the moment of the read */
+    val isPlantedTrial: Boolean,
+    /** membership of NeverScouted at the moment of the read */
+    val isNeverScouted: Boolean,
+    /** membership of HarvestedTrial at the moment of the read */
+    val isHarvestedTrial: Boolean,
+    /** membership of SuccessfulFieldTrial at the moment of the read */
+    val isSuccessfulFieldTrial: Boolean,
+) : Ref<FieldTrial> {
+    override val shape: String get() = "FieldTrial"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
+interface Trial : Keyed {
+    /** this record as a reference typed by the union, for a parameter that takes one */
+    val ref: Ref<Trial> get() = Ref.Persisted(shape, key)
+    val collectionTasks: List<Ref<CollectionTask>>
+}
 
 data class DoneTask(
-    override val id: Long,
-    val trial: PeptidesSystem.TrialView,
+    override val key: StoreKey,
+    val trial: Ref<Trial>,
     val dayMark: Int,
     val dueOn: LocalDate,
     val plotsPending: Int,
-    val taskReminders: List<PeptidesSystem.TaskReminderView>,
-    val rescheduleRefusals: List<PeptidesSystem.RescheduleRefusalView>,
-    val cancelRefusals: List<PeptidesSystem.CancelRefusalView>,
-) : View
+    val taskReminders: List<Ref<TaskReminder>>,
+    val rescheduleRefusals: List<Ref<RescheduleRefusal>>,
+    val cancelRefusals: List<Ref<CancelRefusal>>,
+    /** membership of OpenTask at the moment of the read */
+    val isOpenTask: Boolean,
+    /** membership of OverdueTask at the moment of the read */
+    val isOverdueTask: Boolean,
+) : Ref<CollectionTask> {
+    override val shape: String get() = "CollectionTask"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class OpenTask(
-    override val id: Long,
-    val trial: PeptidesSystem.TrialView,
+    override val key: StoreKey,
+    val trial: Ref<Trial>,
     val dayMark: Int,
     val dueOn: LocalDate,
     val plotsPending: Int,
-    val taskReminders: List<PeptidesSystem.TaskReminderView>,
-    val rescheduleRefusals: List<PeptidesSystem.RescheduleRefusalView>,
-    val cancelRefusals: List<PeptidesSystem.CancelRefusalView>,
-) : View
+    val taskReminders: List<Ref<TaskReminder>>,
+    val rescheduleRefusals: List<Ref<RescheduleRefusal>>,
+    val cancelRefusals: List<Ref<CancelRefusal>>,
+    /** membership of DoneTask at the moment of the read */
+    val isDoneTask: Boolean,
+    /** membership of OverdueTask at the moment of the read */
+    val isOverdueTask: Boolean,
+) : Ref<CollectionTask> {
+    override val shape: String get() = "CollectionTask"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class OverdueTask(
-    override val id: Long,
-    val trial: PeptidesSystem.TrialView,
+    override val key: StoreKey,
+    val trial: Ref<Trial>,
     val dayMark: Int,
     val dueOn: LocalDate,
     val plotsPending: Int,
-    val taskReminders: List<PeptidesSystem.TaskReminderView>,
-    val rescheduleRefusals: List<PeptidesSystem.RescheduleRefusalView>,
-    val cancelRefusals: List<PeptidesSystem.CancelRefusalView>,
-) : View
+    val taskReminders: List<Ref<TaskReminder>>,
+    val rescheduleRefusals: List<Ref<RescheduleRefusal>>,
+    val cancelRefusals: List<Ref<CancelRefusal>>,
+    /** membership of DoneTask at the moment of the read */
+    val isDoneTask: Boolean,
+    /** membership of OpenTask at the moment of the read */
+    val isOpenTask: Boolean,
+) : Ref<CollectionTask> {
+    override val shape: String get() = "CollectionTask"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 // ── the builder's vocabulary: one field handle per member, memberships per refinement ──
 
@@ -4496,7 +4857,7 @@ class HaltNoticeFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class CollectionTaskFields(path: List<String> = emptyList()) : Fields(path) {
-    val trial: RefField get() = RefField(fieldPath + "trial")
+    val trial: TrialFields get() = TrialFields(fieldPath + "trial")
     val dayMark: NumField get() = NumField(fieldPath + "dayMark")
     val dueOn: DateField get() = DateField(fieldPath + "dueOn")
     val plotsPending: NumField get() = NumField(fieldPath + "plotsPending")
@@ -4900,8 +5261,11 @@ class HaltedTrialFields(path: List<String> = emptyList()) : Fields(path) {
     fun isSuccessfulFieldTrial(): Expr = isA("SuccessfulFieldTrial")
 }
 
+class TrialFields(path: List<String> = emptyList()) : Fields(path) {
+}
+
 class DoneTaskFields(path: List<String> = emptyList()) : Fields(path) {
-    val trial: RefField get() = RefField(fieldPath + "trial")
+    val trial: TrialFields get() = TrialFields(fieldPath + "trial")
     val dayMark: NumField get() = NumField(fieldPath + "dayMark")
     val dueOn: DateField get() = DateField(fieldPath + "dueOn")
     val plotsPending: NumField get() = NumField(fieldPath + "plotsPending")
@@ -4910,7 +5274,7 @@ class DoneTaskFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class OpenTaskFields(path: List<String> = emptyList()) : Fields(path) {
-    val trial: RefField get() = RefField(fieldPath + "trial")
+    val trial: TrialFields get() = TrialFields(fieldPath + "trial")
     val dayMark: NumField get() = NumField(fieldPath + "dayMark")
     val dueOn: DateField get() = DateField(fieldPath + "dueOn")
     val plotsPending: NumField get() = NumField(fieldPath + "plotsPending")
@@ -4919,7 +5283,7 @@ class OpenTaskFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class OverdueTaskFields(path: List<String> = emptyList()) : Fields(path) {
-    val trial: RefField get() = RefField(fieldPath + "trial")
+    val trial: TrialFields get() = TrialFields(fieldPath + "trial")
     val dayMark: NumField get() = NumField(fieldPath + "dayMark")
     val dueOn: DateField get() = DateField(fieldPath + "dueOn")
     val plotsPending: NumField get() = NumField(fieldPath + "plotsPending")

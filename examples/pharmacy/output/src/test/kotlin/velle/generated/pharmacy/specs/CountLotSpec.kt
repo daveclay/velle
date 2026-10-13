@@ -21,7 +21,7 @@ class CountLotSpec : SpecSupport() {
         // given: any committed 'Staff'
         val technician = givens.someStaff()
         val before = count("CountLot")
-        val result = sys.system.commit("CountLot", mapOf("lot" to lot.id, "technician" to technician.id, "counted" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("CountLot", mapOf("lot" to idOf(lot), "technician" to idOf(technician), "counted" to java.math.BigDecimal("-1")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("CountLot"), "a refused act commits nothing")
     }
@@ -32,7 +32,7 @@ class CountLotSpec : SpecSupport() {
         val lot = givens.someStockLot()
         // given: any committed 'Staff'
         val technician = givens.someStaff()
-        val result = sys.system.commit("CountLot", mapOf("lot" to lot.id, "technician" to technician.id, "counted" to java.math.BigDecimal("0")))
+        val result = sys.system.commit("CountLot", mapOf("lot" to idOf(lot), "technician" to idOf(technician), "counted" to java.math.BigDecimal("0")))
         assertIs<CommitResult.Accepted>(result)
     }
 }

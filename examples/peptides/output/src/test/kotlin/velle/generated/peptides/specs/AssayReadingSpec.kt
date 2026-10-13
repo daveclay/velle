@@ -21,7 +21,7 @@ class AssayReadingSpec : SpecSupport() {
         // given: any committed 'Assay'
         val assay = givens.someAssay()
         val before = count("AssayReading")
-        val result = sys.system.commit("AssayReading", mapOf("assay" to assay.id, "hoursElapsed" to java.math.BigDecimal("-1"), "inhibitionPercent" to java.math.BigDecimal("0")))
+        val result = sys.system.commit("AssayReading", mapOf("assay" to idOf(assay), "hoursElapsed" to java.math.BigDecimal("-1"), "inhibitionPercent" to java.math.BigDecimal("0")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("AssayReading"), "a refused act commits nothing")
     }
@@ -30,7 +30,7 @@ class AssayReadingSpec : SpecSupport() {
     fun `never - a AssayReading with hoursElapsed 0 is accepted`() {
         // given: any committed 'Assay'
         val assay = givens.someAssay()
-        val result = sys.system.commit("AssayReading", mapOf("assay" to assay.id, "hoursElapsed" to java.math.BigDecimal("0"), "inhibitionPercent" to java.math.BigDecimal("0")))
+        val result = sys.system.commit("AssayReading", mapOf("assay" to idOf(assay), "hoursElapsed" to java.math.BigDecimal("0"), "inhibitionPercent" to java.math.BigDecimal("0")))
         assertIs<CommitResult.Accepted>(result)
     }
 }

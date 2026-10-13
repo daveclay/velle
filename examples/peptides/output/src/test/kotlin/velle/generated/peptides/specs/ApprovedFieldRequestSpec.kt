@@ -40,6 +40,6 @@ class ApprovedFieldRequestSpec : SpecSupport() {
         fieldTrial.assertIsA("HaltedTrial", "the given must deliver a member of 'HaltedTrial'")
         assertEquals(beforeHaltNotice + 1, count("HaltNotice"), "rule NoticeHalt: one 'HaltNotice' per firing")
         val producedHaltNotice = last("HaltNotice")
-        assertEquals(fieldTrial.id, field(producedHaltNotice, "trial"), "HaltNotice.trial: this")
+        assertEquals(idOf(fieldTrial), field(producedHaltNotice, "trial"), "HaltNotice.trial: this")
     }
 }

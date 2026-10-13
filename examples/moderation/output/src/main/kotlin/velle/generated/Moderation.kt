@@ -28,27 +28,27 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     /** Queue key: [listing.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitListing(title: String, seller: SellerView, isDraft: Boolean? = null): CommitResult =
+    fun commitListing(title: String, seller: Ref<Seller>, isDraft: Boolean? = null): CommitResult =
         system.commit("Listing", buildMap {
             put("title", title)
-            put("seller", seller.id)
+            put("seller", system.idOf(seller))
             isDraft?.let { put("isDraft", it) }
         })
 
     /** Queue keys: [publish.listing], [publish.listing.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPublish(listing: ListingView): CommitResult =
+    fun commitPublish(listing: Ref<Listing>): CommitResult =
         system.commit("Publish", buildMap {
-            put("listing", listing.id)
+            put("listing", system.idOf(listing))
         })
 
     /** Queue key: [listingReport.listing].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitListingReport(listing: ListingView, listingTitle: String, reason: String): CommitResult =
+    fun commitListingReport(listing: Ref<Listing>, listingTitle: String, reason: String): CommitResult =
         system.commit("ListingReport", buildMap {
-            put("listing", listing.id)
+            put("listing", system.idOf(listing))
             put("listingTitle", listingTitle)
             put("reason", reason)
         })
@@ -56,169 +56,113 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     /** Queue keys: [discardDraft.listing], [discardDraft.listing.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitDiscardDraft(listing: ListingView, reason: String): CommitResult =
+    fun commitDiscardDraft(listing: Ref<Listing>, reason: String): CommitResult =
         system.commit("DiscardDraft", buildMap {
-            put("listing", listing.id)
+            put("listing", system.idOf(listing))
             put("reason", reason)
         })
 
     /** Queue key: [closeAccount.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCloseAccount(seller: SellerView): CommitResult =
+    fun commitCloseAccount(seller: Ref<Seller>): CommitResult =
         system.commit("CloseAccount", buildMap {
-            put("seller", seller.id)
+            put("seller", system.idOf(seller))
         })
 
-    fun sellers(): List<SellerView> = system.instancesOf("Seller").map { SellerView(it) }
-    fun seller(id: Long) = SellerView(id)
-    fun listings(): List<ListingView> = system.instancesOf("Listing").map { ListingView(it) }
-    fun listing(id: Long) = ListingView(id)
-    fun publicationNotices(): List<PublicationNoticeView> = system.instancesOf("PublicationNotice").map { PublicationNoticeView(it) }
-    fun publicationNotice(id: Long) = PublicationNoticeView(id)
-    fun sellerNotices(): List<SellerNoticeView> = system.instancesOf("SellerNotice").map { SellerNoticeView(it) }
-    fun sellerNotice(id: Long) = SellerNoticeView(id)
-    fun draftClosures(): List<DraftClosureView> = system.instancesOf("DraftClosure").map { DraftClosureView(it) }
-    fun draftClosure(id: Long) = DraftClosureView(id)
-    fun listingReports(): List<ListingReportView> = system.instancesOf("ListingReport").map { ListingReportView(it) }
-    fun listingReport(id: Long) = ListingReportView(id)
-    fun reporterNotices(): List<ReporterNoticeView> = system.instancesOf("ReporterNotice").map { ReporterNoticeView(it) }
-    fun reporterNotice(id: Long) = ReporterNoticeView(id)
-    fun discardRecords(): List<DiscardRecordView> = system.instancesOf("DiscardRecord").map { DiscardRecordView(it) }
-    fun discardRecord(id: Long) = DiscardRecordView(id)
-    fun discardRefusals(): List<DiscardRefusalView> = system.instancesOf("DiscardRefusal").map { DiscardRefusalView(it) }
-    fun discardRefusal(id: Long) = DiscardRefusalView(id)
-    fun drafts(): List<DraftView> = system.instancesOf("Draft").map { DraftView(it) }
-    fun ListingView.isDraft(): Boolean = system.isMember(id, "Draft")
-    fun publishedListings(): List<PublishedListingView> = system.instancesOf("PublishedListing").map { PublishedListingView(it) }
-    fun ListingView.isPublishedListing(): Boolean = system.isMember(id, "PublishedListing")
-    fun orphanReports(): List<OrphanReportView> = system.instancesOf("OrphanReport").map { OrphanReportView(it) }
-    fun ListingReportView.isOrphanReport(): Boolean = system.isMember(id, "OrphanReport")
-    fun orphanedListings(): List<OrphanedListingView> = system.instancesOf("OrphanedListing").map { OrphanedListingView(it) }
-    fun ListingView.isOrphanedListing(): Boolean = system.isMember(id, "OrphanedListing")
+    fun sellers(): List<Seller> = system.instancesOf("Seller").map { materializeSeller(it) }
+    fun listings(): List<Listing> = system.instancesOf("Listing").map { materializeListing(it) }
+    fun publicationNotices(): List<PublicationNotice> = system.instancesOf("PublicationNotice").map { materializePublicationNotice(it) }
+    fun sellerNotices(): List<SellerNotice> = system.instancesOf("SellerNotice").map { materializeSellerNotice(it) }
+    fun draftClosures(): List<DraftClosure> = system.instancesOf("DraftClosure").map { materializeDraftClosure(it) }
+    fun listingReports(): List<ListingReport> = system.instancesOf("ListingReport").map { materializeListingReport(it) }
+    fun reporterNotices(): List<ReporterNotice> = system.instancesOf("ReporterNotice").map { materializeReporterNotice(it) }
+    fun discardRecords(): List<DiscardRecord> = system.instancesOf("DiscardRecord").map { materializeDiscardRecord(it) }
+    fun discardRefusals(): List<DiscardRefusal> = system.instancesOf("DiscardRefusal").map { materializeDiscardRefusal(it) }
+    fun drafts(): List<Draft> = system.instancesOf("Draft").map { materializeDraft(it) }
+    fun publishedListings(): List<PublishedListing> = system.instancesOf("PublishedListing").map { materializePublishedListing(it) }
+    fun orphanReports(): List<OrphanReport> = system.instancesOf("OrphanReport").map { materializeOrphanReport(it) }
+    fun orphanedListings(): List<OrphanedListing> = system.instancesOf("OrphanedListing").map { materializeOrphanedListing(it) }
 
-    inner class SellerView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val listings: List<ListingView> get() = (system.get(id, "listings") as List<*>).map { ListingView(it as Long) }
-        val sellerNotices: List<SellerNoticeView> get() = (system.get(id, "sellerNotices") as List<*>).map { SellerNoticeView(it as Long) }
-        override fun toString() = "Seller#$id"
-        override fun equals(other: Any?) = other is SellerView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ListingView(override val id: Long) : View {
-        val title: String get() = system.get(id, "title") as String
-        val seller: SellerView? get() = (system.get(id, "seller") as Long?)?.let { SellerView(it) }
-        val isDraft: Boolean get() = system.get(id, "isDraft") as Boolean
-        val listingReports: List<ListingReportView> get() = (system.get(id, "listingReports") as List<*>).map { ListingReportView(it as Long) }
-        override fun toString() = "Listing#$id"
-        override fun equals(other: Any?) = other is ListingView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class PublicationNoticeView(override val id: Long) : View {
-        val listingTitle: String get() = system.get(id, "listingTitle") as String
-        val publishedOn: Instant get() = system.get(id, "publishedOn") as Instant
-        override fun toString() = "PublicationNotice#$id"
-        override fun equals(other: Any?) = other is PublicationNoticeView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class SellerNoticeView(override val id: Long) : View {
-        val seller: SellerView? get() = (system.get(id, "seller") as Long?)?.let { SellerView(it) }
-        val listingTitle: String get() = system.get(id, "listingTitle") as String
-        val noticedOn: Instant get() = system.get(id, "noticedOn") as Instant
-        override fun toString() = "SellerNotice#$id"
-        override fun equals(other: Any?) = other is SellerNoticeView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class DraftClosureView(override val id: Long) : View {
-        val listingTitle: String get() = system.get(id, "listingTitle") as String
-        val closedOn: Instant get() = system.get(id, "closedOn") as Instant
-        override fun toString() = "DraftClosure#$id"
-        override fun equals(other: Any?) = other is DraftClosureView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ListingReportView(override val id: Long) : View {
-        val listing: ListingView? get() = (system.get(id, "listing") as Long?)?.let { ListingView(it) }
-        val listingTitle: String get() = system.get(id, "listingTitle") as String
-        val reason: String get() = system.get(id, "reason") as String
-        val reportedOn: Instant get() = system.get(id, "reportedOn") as Instant
-        val reporterNotices: List<ReporterNoticeView> get() = (system.get(id, "reporterNotices") as List<*>).map { ReporterNoticeView(it as Long) }
-        override fun toString() = "ListingReport#$id"
-        override fun equals(other: Any?) = other is ListingReportView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ReporterNoticeView(override val id: Long) : View {
-        val report: ListingReportView get() = ListingReportView(system.get(id, "report") as Long)
-        val listingTitle: String get() = system.get(id, "listingTitle") as String
-        val noticedOn: Instant get() = system.get(id, "noticedOn") as Instant
-        override fun toString() = "ReporterNotice#$id"
-        override fun equals(other: Any?) = other is ReporterNoticeView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class DiscardRecordView(override val id: Long) : View {
-        val listingTitle: String get() = system.get(id, "listingTitle") as String
-        val reason: String get() = system.get(id, "reason") as String
-        val discardedOn: Instant get() = system.get(id, "discardedOn") as Instant
-        override fun toString() = "DiscardRecord#$id"
-        override fun equals(other: Any?) = other is DiscardRecordView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class DiscardRefusalView(override val id: Long) : View {
-        val listingTitle: String get() = system.get(id, "listingTitle") as String
-        val reason: String get() = system.get(id, "reason") as String
-        val refusedOn: Instant get() = system.get(id, "refusedOn") as Instant
-        override fun toString() = "DiscardRefusal#$id"
-        override fun equals(other: Any?) = other is DiscardRefusalView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class DraftView(override val id: Long) : View {
-        fun asListing() = ListingView(id)
-        override fun toString() = "Draft#$id"
-    }
-
-    inner class PublishedListingView(override val id: Long) : View {
-        fun asListing() = ListingView(id)
-        override fun toString() = "PublishedListing#$id"
-    }
-
-    inner class OrphanReportView(override val id: Long) : View {
-        fun asListingReport() = ListingReportView(id)
-        override fun toString() = "OrphanReport#$id"
-    }
-
-    inner class OrphanedListingView(override val id: Long) : View {
-        fun asListing() = ListingView(id)
-        override fun toString() = "OrphanedListing#$id"
-    }
-
-    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
     val read = Read()
 
     inner class Read {
         /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
         val registry = QueryRegistry()
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+
+        /** The model object behind a reference, read now; throws when the record no longer exists. */
+        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
+        fun fetch(id: Long): Ref<*> {
+            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
+            return materialize(id)
+        }
+
         val sellers: SellerQuery get() = SellerQuery(Query("Seller"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun seller(key: StoreKey): Seller = this(Ref.Persisted("Seller", key))
+        fun seller(key: Long): Seller = seller(StoreKey(key))
+
         val listings: ListingQuery get() = ListingQuery(Query("Listing"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun listing(key: StoreKey): Listing = this(Ref.Persisted("Listing", key))
+        fun listing(key: Long): Listing = listing(StoreKey(key))
+
         val publicationNotices: PublicationNoticeQuery get() = PublicationNoticeQuery(Query("PublicationNotice"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun publicationNotice(key: StoreKey): PublicationNotice = this(Ref.Persisted("PublicationNotice", key))
+        fun publicationNotice(key: Long): PublicationNotice = publicationNotice(StoreKey(key))
+
         val sellerNotices: SellerNoticeQuery get() = SellerNoticeQuery(Query("SellerNotice"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun sellerNotice(key: StoreKey): SellerNotice = this(Ref.Persisted("SellerNotice", key))
+        fun sellerNotice(key: Long): SellerNotice = sellerNotice(StoreKey(key))
+
         val draftClosures: DraftClosureQuery get() = DraftClosureQuery(Query("DraftClosure"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun draftClosure(key: StoreKey): DraftClosure = this(Ref.Persisted("DraftClosure", key))
+        fun draftClosure(key: Long): DraftClosure = draftClosure(StoreKey(key))
+
         val listingReports: ListingReportQuery get() = ListingReportQuery(Query("ListingReport"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun listingReport(key: StoreKey): ListingReport = this(Ref.Persisted("ListingReport", key))
+        fun listingReport(key: Long): ListingReport = listingReport(StoreKey(key))
+
         val reporterNotices: ReporterNoticeQuery get() = ReporterNoticeQuery(Query("ReporterNotice"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun reporterNotice(key: StoreKey): ReporterNotice = this(Ref.Persisted("ReporterNotice", key))
+        fun reporterNotice(key: Long): ReporterNotice = reporterNotice(StoreKey(key))
+
         val discardRecords: DiscardRecordQuery get() = DiscardRecordQuery(Query("DiscardRecord"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun discardRecord(key: StoreKey): DiscardRecord = this(Ref.Persisted("DiscardRecord", key))
+        fun discardRecord(key: Long): DiscardRecord = discardRecord(StoreKey(key))
+
         val discardRefusals: DiscardRefusalQuery get() = DiscardRefusalQuery(Query("DiscardRefusal"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun discardRefusal(key: StoreKey): DiscardRefusal = this(Ref.Persisted("DiscardRefusal", key))
+        fun discardRefusal(key: Long): DiscardRefusal = discardRefusal(StoreKey(key))
+
         val drafts: DraftQuery get() = DraftQuery(Query("Draft"))
+        /** The record behind [ref] as a member of Draft, or null when it is not one. */
+        fun draft(ref: Ref<Listing>): Draft? =
+            system.idOf(ref).let { if (system.exists("Draft", it)) materializeDraft(it) else null }
+
         val publishedListings: PublishedListingQuery get() = PublishedListingQuery(Query("PublishedListing"))
+        /** The record behind [ref] as a member of PublishedListing, or null when it is not one. */
+        fun publishedListing(ref: Ref<Listing>): PublishedListing? =
+            system.idOf(ref).let { if (system.exists("PublishedListing", it)) materializePublishedListing(it) else null }
+
         val orphanReports: OrphanReportQuery get() = OrphanReportQuery(Query("OrphanReport"))
+        /** The record behind [ref] as a member of OrphanReport, or null when it is not one. */
+        fun orphanReport(ref: Ref<ListingReport>): OrphanReport? =
+            system.idOf(ref).let { if (system.exists("OrphanReport", it)) materializeOrphanReport(it) else null }
+
         val orphanedListings: OrphanedListingQuery get() = OrphanedListingQuery(Query("OrphanedListing"))
+        /** The record behind [ref] as a member of OrphanedListing, or null when it is not one. */
+        fun orphanedListing(ref: Ref<Listing>): OrphanedListing? =
+            system.idOf(ref).let { if (system.exists("OrphanedListing", it)) materializeOrphanedListing(it) else null }
     }
 
     inner class SellerQuery(q: Query) : TypedQuery<SellerFields, Seller>(system, q, SellerFields(), { materializeSeller(it) }) {
@@ -273,101 +217,122 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun with(q: Query) = OrphanedListingQuery(q)
     }
 
+    /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
+    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+        "Seller" -> materializeSeller(id)
+        "Listing" -> materializeListing(id)
+        "PublicationNotice" -> materializePublicationNotice(id)
+        "SellerNotice" -> materializeSellerNotice(id)
+        "DraftClosure" -> materializeDraftClosure(id)
+        "ListingReport" -> materializeListingReport(id)
+        "ReporterNotice" -> materializeReporterNotice(id)
+        "DiscardRecord" -> materializeDiscardRecord(id)
+        "DiscardRefusal" -> materializeDiscardRefusal(id)
+        else -> throw IllegalStateException("no model object for '$shape'")
+    }
+
     fun materializeSeller(id: Long): Seller = Seller(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        listings = (system.get(id, "listings") as List<*>).map { ListingView(it as Long) },
-        sellerNotices = (system.get(id, "sellerNotices") as List<*>).map { SellerNoticeView(it as Long) },
+        listings = (system.get(id, "listings") as List<*>).map { system.refFor(it as Long) },
+        sellerNotices = (system.get(id, "sellerNotices") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeListing(id: Long): Listing = Listing(
-        id = id,
+        key = system.refFor(id).key,
         title = system.get(id, "title") as String,
-        seller = (system.get(id, "seller") as Long?)?.let { SellerView(it) },
+        seller = (system.get(id, "seller") as Long?)?.let { system.refFor(it) },
         isDraft = system.get(id, "isDraft") as Boolean,
-        listingReports = (system.get(id, "listingReports") as List<*>).map { ListingReportView(it as Long) },
+        listingReports = (system.get(id, "listingReports") as List<*>).map { system.refFor(it as Long) },
+        isPublishedListing = system.isMember(id, "PublishedListing"),
+        isOrphanedListing = system.isMember(id, "OrphanedListing"),
     )
 
     fun materializePublicationNotice(id: Long): PublicationNotice = PublicationNotice(
-        id = id,
+        key = system.refFor(id).key,
         listingTitle = system.get(id, "listingTitle") as String,
         publishedOn = system.get(id, "publishedOn") as Instant,
     )
 
     fun materializeSellerNotice(id: Long): SellerNotice = SellerNotice(
-        id = id,
-        seller = (system.get(id, "seller") as Long?)?.let { SellerView(it) },
+        key = system.refFor(id).key,
+        seller = (system.get(id, "seller") as Long?)?.let { system.refFor(it) },
         listingTitle = system.get(id, "listingTitle") as String,
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
     fun materializeDraftClosure(id: Long): DraftClosure = DraftClosure(
-        id = id,
+        key = system.refFor(id).key,
         listingTitle = system.get(id, "listingTitle") as String,
         closedOn = system.get(id, "closedOn") as Instant,
     )
 
     fun materializeListingReport(id: Long): ListingReport = ListingReport(
-        id = id,
-        listing = (system.get(id, "listing") as Long?)?.let { ListingView(it) },
+        key = system.refFor(id).key,
+        listing = (system.get(id, "listing") as Long?)?.let { system.refFor(it) },
         listingTitle = system.get(id, "listingTitle") as String,
         reason = system.get(id, "reason") as String,
         reportedOn = system.get(id, "reportedOn") as Instant,
-        reporterNotices = (system.get(id, "reporterNotices") as List<*>).map { ReporterNoticeView(it as Long) },
+        reporterNotices = (system.get(id, "reporterNotices") as List<*>).map { system.refFor(it as Long) },
+        isOrphanReport = system.isMember(id, "OrphanReport"),
     )
 
     fun materializeReporterNotice(id: Long): ReporterNotice = ReporterNotice(
-        id = id,
-        report = ListingReportView(system.get(id, "report") as Long),
+        key = system.refFor(id).key,
+        report = system.refFor(system.get(id, "report") as Long),
         listingTitle = system.get(id, "listingTitle") as String,
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
     fun materializeDiscardRecord(id: Long): DiscardRecord = DiscardRecord(
-        id = id,
+        key = system.refFor(id).key,
         listingTitle = system.get(id, "listingTitle") as String,
         reason = system.get(id, "reason") as String,
         discardedOn = system.get(id, "discardedOn") as Instant,
     )
 
     fun materializeDiscardRefusal(id: Long): DiscardRefusal = DiscardRefusal(
-        id = id,
+        key = system.refFor(id).key,
         listingTitle = system.get(id, "listingTitle") as String,
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
     fun materializeDraft(id: Long): Draft = Draft(
-        id = id,
+        key = system.refFor(id).key,
         title = system.get(id, "title") as String,
-        seller = (system.get(id, "seller") as Long?)?.let { SellerView(it) },
+        seller = (system.get(id, "seller") as Long?)?.let { system.refFor(it) },
         isDraft = system.get(id, "isDraft") as Boolean,
-        listingReports = (system.get(id, "listingReports") as List<*>).map { ListingReportView(it as Long) },
+        listingReports = (system.get(id, "listingReports") as List<*>).map { system.refFor(it as Long) },
+        isPublishedListing = system.isMember(id, "PublishedListing"),
+        isOrphanedListing = system.isMember(id, "OrphanedListing"),
     )
 
     fun materializePublishedListing(id: Long): PublishedListing = PublishedListing(
-        id = id,
+        key = system.refFor(id).key,
         title = system.get(id, "title") as String,
-        seller = (system.get(id, "seller") as Long?)?.let { SellerView(it) },
+        seller = (system.get(id, "seller") as Long?)?.let { system.refFor(it) },
         isDraft = system.get(id, "isDraft") as Boolean,
-        listingReports = (system.get(id, "listingReports") as List<*>).map { ListingReportView(it as Long) },
+        listingReports = (system.get(id, "listingReports") as List<*>).map { system.refFor(it as Long) },
+        isOrphanedListing = system.isMember(id, "OrphanedListing"),
     )
 
     fun materializeOrphanReport(id: Long): OrphanReport = OrphanReport(
-        id = id,
-        listing = (system.get(id, "listing") as Long?)?.let { ListingView(it) },
+        key = system.refFor(id).key,
+        listing = (system.get(id, "listing") as Long?)?.let { system.refFor(it) },
         listingTitle = system.get(id, "listingTitle") as String,
         reason = system.get(id, "reason") as String,
         reportedOn = system.get(id, "reportedOn") as Instant,
-        reporterNotices = (system.get(id, "reporterNotices") as List<*>).map { ReporterNoticeView(it as Long) },
+        reporterNotices = (system.get(id, "reporterNotices") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeOrphanedListing(id: Long): OrphanedListing = OrphanedListing(
-        id = id,
+        key = system.refFor(id).key,
         title = system.get(id, "title") as String,
-        seller = (system.get(id, "seller") as Long?)?.let { SellerView(it) },
+        seller = (system.get(id, "seller") as Long?)?.let { system.refFor(it) },
         isDraft = system.get(id, "isDraft") as Boolean,
-        listingReports = (system.get(id, "listingReports") as List<*>).map { ListingReportView(it as Long) },
+        listingReports = (system.get(id, "listingReports") as List<*>).map { system.refFor(it as Long) },
+        isPublishedListing = system.isMember(id, "PublishedListing"),
     )
 
     companion object {
@@ -580,105 +545,173 @@ rule SweepOrphanedDrafts when (OrphanedListing where isDraft) {
     }
 }
 
-// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
-// References are typed handles (views); navigating one is a further read.
+// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// A model object is a reference to its own record (`Ref<T>`): equality is identity,
+// a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
+// the record's membership at the moment of the read.
 
 data class Seller(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
-    val listings: List<ModerationSystem.ListingView>,
-    val sellerNotices: List<ModerationSystem.SellerNoticeView>,
-) : View
+    val listings: List<Ref<Listing>>,
+    val sellerNotices: List<Ref<SellerNotice>>,
+) : Ref<Seller> {
+    override val shape: String get() = "Seller"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Listing(
-    override val id: Long,
+    override val key: StoreKey,
     val title: String,
-    val seller: ModerationSystem.SellerView?,
+    val seller: Ref<Seller>?,
     val isDraft: Boolean,
-    val listingReports: List<ModerationSystem.ListingReportView>,
-) : View
+    val listingReports: List<Ref<ListingReport>>,
+    /** membership of PublishedListing at the moment of the read */
+    val isPublishedListing: Boolean,
+    /** membership of OrphanedListing at the moment of the read */
+    val isOrphanedListing: Boolean,
+) : Ref<Listing> {
+    override val shape: String get() = "Listing"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class PublicationNotice(
-    override val id: Long,
+    override val key: StoreKey,
     val listingTitle: String,
     val publishedOn: Instant,
-) : View
+) : Ref<PublicationNotice> {
+    override val shape: String get() = "PublicationNotice"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class SellerNotice(
-    override val id: Long,
-    val seller: ModerationSystem.SellerView?,
+    override val key: StoreKey,
+    val seller: Ref<Seller>?,
     val listingTitle: String,
     val noticedOn: Instant,
-) : View
+) : Ref<SellerNotice> {
+    override val shape: String get() = "SellerNotice"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class DraftClosure(
-    override val id: Long,
+    override val key: StoreKey,
     val listingTitle: String,
     val closedOn: Instant,
-) : View
+) : Ref<DraftClosure> {
+    override val shape: String get() = "DraftClosure"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ListingReport(
-    override val id: Long,
-    val listing: ModerationSystem.ListingView?,
+    override val key: StoreKey,
+    val listing: Ref<Listing>?,
     val listingTitle: String,
     val reason: String,
     val reportedOn: Instant,
-    val reporterNotices: List<ModerationSystem.ReporterNoticeView>,
-) : View
+    val reporterNotices: List<Ref<ReporterNotice>>,
+    /** membership of OrphanReport at the moment of the read */
+    val isOrphanReport: Boolean,
+) : Ref<ListingReport> {
+    override val shape: String get() = "ListingReport"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ReporterNotice(
-    override val id: Long,
-    val report: ModerationSystem.ListingReportView,
+    override val key: StoreKey,
+    val report: Ref<ListingReport>,
     val listingTitle: String,
     val noticedOn: Instant,
-) : View
+) : Ref<ReporterNotice> {
+    override val shape: String get() = "ReporterNotice"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class DiscardRecord(
-    override val id: Long,
+    override val key: StoreKey,
     val listingTitle: String,
     val reason: String,
     val discardedOn: Instant,
-) : View
+) : Ref<DiscardRecord> {
+    override val shape: String get() = "DiscardRecord"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class DiscardRefusal(
-    override val id: Long,
+    override val key: StoreKey,
     val listingTitle: String,
     val reason: String,
     val refusedOn: Instant,
-) : View
+) : Ref<DiscardRefusal> {
+    override val shape: String get() = "DiscardRefusal"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Draft(
-    override val id: Long,
+    override val key: StoreKey,
     val title: String,
-    val seller: ModerationSystem.SellerView?,
+    val seller: Ref<Seller>?,
     val isDraft: Boolean,
-    val listingReports: List<ModerationSystem.ListingReportView>,
-) : View
+    val listingReports: List<Ref<ListingReport>>,
+    /** membership of PublishedListing at the moment of the read */
+    val isPublishedListing: Boolean,
+    /** membership of OrphanedListing at the moment of the read */
+    val isOrphanedListing: Boolean,
+) : Ref<Listing> {
+    override val shape: String get() = "Listing"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class PublishedListing(
-    override val id: Long,
+    override val key: StoreKey,
     val title: String,
-    val seller: ModerationSystem.SellerView?,
+    val seller: Ref<Seller>?,
     val isDraft: Boolean,
-    val listingReports: List<ModerationSystem.ListingReportView>,
-) : View
+    val listingReports: List<Ref<ListingReport>>,
+    /** membership of OrphanedListing at the moment of the read */
+    val isOrphanedListing: Boolean,
+) : Ref<Listing> {
+    override val shape: String get() = "Listing"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class OrphanReport(
-    override val id: Long,
-    val listing: ModerationSystem.ListingView?,
+    override val key: StoreKey,
+    val listing: Ref<Listing>?,
     val listingTitle: String,
     val reason: String,
     val reportedOn: Instant,
-    val reporterNotices: List<ModerationSystem.ReporterNoticeView>,
-) : View
+    val reporterNotices: List<Ref<ReporterNotice>>,
+) : Ref<ListingReport> {
+    override val shape: String get() = "ListingReport"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class OrphanedListing(
-    override val id: Long,
+    override val key: StoreKey,
     val title: String,
-    val seller: ModerationSystem.SellerView?,
+    val seller: Ref<Seller>?,
     val isDraft: Boolean,
-    val listingReports: List<ModerationSystem.ListingReportView>,
-) : View
+    val listingReports: List<Ref<ListingReport>>,
+    /** membership of PublishedListing at the moment of the read */
+    val isPublishedListing: Boolean,
+) : Ref<Listing> {
+    override val shape: String get() = "Listing"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 // ── the builder's vocabulary: one field handle per member, memberships per refinement ──
 
@@ -690,7 +723,6 @@ class ListingFields(path: List<String> = emptyList()) : Fields(path) {
     val title: TextField get() = TextField(fieldPath + "title")
     val seller: SellerFields get() = SellerFields(fieldPath + "seller")
     val isDraft: BoolField get() = BoolField(fieldPath + "isDraft")
-    fun isDraft(): Expr = isA("Draft")
     fun isPublishedListing(): Expr = isA("PublishedListing")
     fun isOrphanedListing(): Expr = isA("OrphanedListing")
 }
@@ -749,7 +781,6 @@ class PublishedListingFields(path: List<String> = emptyList()) : Fields(path) {
     val title: TextField get() = TextField(fieldPath + "title")
     val seller: SellerFields get() = SellerFields(fieldPath + "seller")
     val isDraft: BoolField get() = BoolField(fieldPath + "isDraft")
-    fun isDraft(): Expr = isA("Draft")
     fun isOrphanedListing(): Expr = isA("OrphanedListing")
 }
 
@@ -764,7 +795,6 @@ class OrphanedListingFields(path: List<String> = emptyList()) : Fields(path) {
     val title: TextField get() = TextField(fieldPath + "title")
     val seller: SellerFields get() = SellerFields(fieldPath + "seller")
     val isDraft: BoolField get() = BoolField(fieldPath + "isDraft")
-    fun isDraft(): Expr = isA("Draft")
     fun isPublishedListing(): Expr = isA("PublishedListing")
 }
 

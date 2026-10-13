@@ -1,6 +1,7 @@
 package velle.generated.partitiondrift
 
 import velle.generated.PartitionDriftSystem
+import velle.generated.*
 
 /** The human-owned scenarios the generated partition-drift specs demand. */
 class Givens(private val sys: PartitionDriftSystem) : RequiredGivens {
@@ -9,48 +10,48 @@ class Givens(private val sys: PartitionDriftSystem) : RequiredGivens {
         sys.commitCreateNote("minutes", "v1")
     }
 
-    private fun note(): PartitionDriftSystem.NoteView {
+    private fun note(): Note {
         sys.commitCreateNote("minutes", "v1")
         return sys.notes().last()
     }
 
-    private fun lockedNote(): PartitionDriftSystem.NoteView {
+    private fun lockedNote(): Note {
         val n = note()
         sys.commitLockNote(n)
         return n
     }
 
-    override fun lockNote(): PartitionDriftSystem.LockNoteView {
+    override fun lockNote(): LockNote {
         sys.commitLockNote(note())
         return sys.lockNotes().last()
     }
 
-    override fun unlockNote(): PartitionDriftSystem.UnlockNoteView {
+    override fun unlockNote(): UnlockNote {
         sys.commitUnlockNote(lockedNote())
         return sys.unlockNotes().last()
     }
 
-    override fun renameText(): PartitionDriftSystem.RenameTextView {
+    override fun renameText(): RenameText {
         sys.commitRenameText(note(), "v2")
         return sys.renameTexts().last()
     }
 
-    override fun applicableBareEdit(): PartitionDriftSystem.BareEditView {
+    override fun applicableBareEdit(): BareEdit {
         sys.commitBareEdit(note(), "v2")
         return sys.bareEdits().last()
     }
 
-    override fun refusedBareEdit(): PartitionDriftSystem.BareEditView {
+    override fun refusedBareEdit(): BareEdit {
         sys.commitBareEdit(lockedNote(), "v2")
         return sys.bareEdits().last()
     }
 
-    override fun applicableSafeEdit(): PartitionDriftSystem.SafeEditView {
+    override fun applicableSafeEdit(): SafeEdit {
         sys.commitSafeEdit(note(), "agenda")
         return sys.safeEdits().last()
     }
 
-    override fun refusedSafeEdit(): PartitionDriftSystem.SafeEditView {
+    override fun refusedSafeEdit(): SafeEdit {
         sys.commitSafeEdit(lockedNote(), "agenda")
         return sys.safeEdits().last()
     }

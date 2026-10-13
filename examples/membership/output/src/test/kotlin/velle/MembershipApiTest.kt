@@ -1,6 +1,7 @@
 package velle
 
 import java.math.BigDecimal
+import velle.generated.*
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -27,11 +28,11 @@ open class MembershipApiTest {
         assertIs<CommitResult.Accepted>(sys.commitSignUp("Ada", "Ada@Example.com", sys.plans().single()))
         val ada = sys.members().single()
 
-        assertEquals("ada@example.com", ada.email, "no changes: lowercased signup email")
+        assertEquals("ada@example.com", sys.read(ada).email, "no changes: lowercased signup email")
         assertEquals(1, sys.welcomeNotes().size, "the compact-for creation fired on entry")
 
         sys.commitChangeEmail(ada, "New@Example.com")
-        assertEquals("new@example.com", ada.email, "the latest ledger entry wins, lowercased")
+        assertEquals("new@example.com", sys.read(ada).email, "the latest ledger entry wins, lowercased")
     }
 
     @Test
@@ -46,14 +47,14 @@ open class MembershipApiTest {
         sys.commitRaiseTicket(ada, "playback stutters", LocalDate.of(2026, 2, 1), "high")
         val ticket = sys.tickets().single()
 
-        assertNull(ticket.assigneeEmail, "?. short-circuits on the absent assignee")
-        assertEquals("support@velle.example", ticket.contact, "the is-some else branch")
-        assertTrue(sys.system.isMember(ticket.id, "UrgentQueue"), "high + unassigned composes in")
+        assertNull(sys.read(ticket).assigneeEmail, "?. short-circuits on the absent assignee")
+        assertEquals("support@velle.example", sys.read(ticket).contact, "the is-some else branch")
+        assertTrue(sys.system.isMember(sys.system.idOf(ticket), "UrgentQueue"), "high + unassigned composes in")
 
         sys.commitAssignTicket(ticket, grace)
-        assertEquals("grace@velle.example", ticket.assigneeEmail)
-        assertEquals("grace@velle.example", ticket.contact)
-        assertTrue(!sys.system.isMember(ticket.id, "UrgentQueue"), "assigned drops out of the queue")
+        assertEquals("grace@velle.example", sys.read(ticket).assigneeEmail)
+        assertEquals("grace@velle.example", sys.read(ticket).contact)
+        assertTrue(!sys.system.isMember(sys.system.idOf(ticket), "UrgentQueue"), "assigned drops out of the queue")
 
         // assigning a closed ticket is pure validation: the transient act is
         // refused at the door (`never`), the caller gets the message, and
@@ -61,7 +62,7 @@ open class MembershipApiTest {
         sys.commitCloseTicket(ticket, grace)
         val refused = sys.commitAssignTicket(ticket, grace)
         assertIs<CommitResult.Refused>(refused)
-        assertEquals("grace@velle.example", ticket.assigneeEmail, "the settled world is untouched")
+        assertEquals("grace@velle.example", sys.read(ticket).assigneeEmail, "the settled world is untouched")
     }
 
     @Test
@@ -72,10 +73,10 @@ open class MembershipApiTest {
         val ada = sys.members().single()
 
         sys.tickMonthly() // renewal mints the charge with its generated reference
-        val reference = sys.charges().single().reference
+        val reference = sys.read(sys.charges().single()).reference
         sys.commitRaiseTicket(ada, reference, LocalDate.of(2026, 3, 1), "low")
         assertTrue(
-            sys.system.isMember(ada.id, "MemberWithDisputedCharge"),
+            sys.system.isMember(sys.system.idOf(ada), "MemberWithDisputedCharge"),
             "sibling join: a ticket subject quoting a charge reference",
         )
 
@@ -83,7 +84,7 @@ open class MembershipApiTest {
         sys.commitRaiseTicket(ada, "old issue", LocalDate.of(2025, 12, 1), "normal")
         sys.tickDaily()
         assertTrue(
-            sys.system.isMember(ada.id, "LateEscalatedMember"),
+            sys.system.isMember(sys.system.idOf(ada), "LateEscalatedMember"),
             "as reach-back: an escalation raised after the ticket's own due date",
         )
     }
@@ -100,13 +101,13 @@ open class MembershipApiTest {
         val ticket = sys.tickets().single()
 
         sys.commitCloseTicket(ticket, grace)
-        assertTrue(sys.system.isMember(ticket.id, "ClosedTicket"))
-        assertEquals(grace.id, sys.closedTickets().single().closedBy.id, "the capture holds the closer")
+        assertTrue(sys.system.isMember(sys.system.idOf(ticket), "ClosedTicket"))
+        assertEquals(grace.key, sys.closedTickets().single().closedBy.key, "the capture holds the closer")
 
         sys.commitReopenTicket(ticket)
-        assertTrue(!sys.system.isMember(ticket.id, "ClosedTicket"))
+        assertTrue(!sys.system.isMember(sys.system.idOf(ticket), "ClosedTicket"))
         val notice = sys.reopenNotices().single()
-        assertEquals(grace.id, notice.reassignTo.id, "the exit rule was the capture's last reader")
+        assertEquals(grace.key, sys.read(notice).reassignTo.key, "the exit rule was the capture's last reader")
     }
 
     @Test
@@ -117,10 +118,11 @@ open class MembershipApiTest {
         val ada = sys.members().single()
 
         sys.commitMakeDeposit(ada, BigDecimal("30"))
-        assertEquals(0, ada.balance.compareTo(BigDecimal("30")), "the deposit folded in after commit")
-        assertTrue(sys.deposits().single().applied, "the flag witness disarmed the guard")
+        assertEquals(0, sys.read(ada).balance.compareTo(BigDecimal("30")), "the deposit folded in after commit")
+        assertTrue(sys.read(sys.deposits().single()).applied, "the flag witness disarmed the guard")
 
         sys.tickMonthly()
-        assertEquals(0, ada.balance.compareTo(BigDecimal("10")), "the renewal charge folded out")
+        assertEquals(0, sys.read(ada).balance.compareTo(BigDecimal("10")), "the renewal charge folded out")
     }
 }
+

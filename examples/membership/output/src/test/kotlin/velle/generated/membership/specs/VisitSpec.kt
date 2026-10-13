@@ -35,7 +35,7 @@ class VisitSpec : SpecSupport() {
         visit.assertIsA("Visit", "the given must deliver a member of 'Visit'")
         assertEquals(beforeAnalyticsPing + 1, count("AnalyticsPing"), "rule PingAnalytics: one 'AnalyticsPing' per firing")
         val producedAnalyticsPing = last("AnalyticsPing")
-        assertEquals(visit.id, field(producedAnalyticsPing, "visit"), "AnalyticsPing.visit: this")
+        assertEquals(idOf(visit), field(producedAnalyticsPing, "visit"), "AnalyticsPing.visit: this")
     }
 
     @Test
@@ -43,7 +43,7 @@ class VisitSpec : SpecSupport() {
         // given: any committed 'Member'
         val member = givens.someMember()
         val before = count("Visit")
-        val result = sys.system.commit("Visit", mapOf("member" to member.id, "minutes" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("Visit", mapOf("member" to idOf(member), "minutes" to java.math.BigDecimal("-1")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("Visit"), "a refused act commits nothing")
     }
@@ -52,7 +52,7 @@ class VisitSpec : SpecSupport() {
     fun `never - a Visit with minutes 1 is accepted`() {
         // given: any committed 'Member'
         val member = givens.someMember()
-        val result = sys.system.commit("Visit", mapOf("member" to member.id, "minutes" to java.math.BigDecimal("1")))
+        val result = sys.system.commit("Visit", mapOf("member" to idOf(member), "minutes" to java.math.BigDecimal("1")))
         assertIs<CommitResult.Accepted>(result)
     }
 }

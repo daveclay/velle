@@ -346,6 +346,7 @@ class QueryCompiler(
             is Value.VRef -> keyOf(v.id)?.let { QConst.QRef(it) } // unpersisted: nothing to test in the store
             else -> null
         }
+        is RefLit -> QConst.QRef(Ref.Persisted(e.ref.shape, e.ref.key))
         else -> null
     }
 

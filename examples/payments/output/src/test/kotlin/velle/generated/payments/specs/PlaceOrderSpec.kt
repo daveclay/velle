@@ -106,7 +106,7 @@ class PlaceOrderSpec : SpecSupport() {
         val order = givens.orderForRequestInitialCharge()
         order.assertIsA("ChargeableOrder", "the given must deliver a member of 'ChargeableOrder'")
         val producedChargeAttempt = last("ChargeAttempt")
-        assertEquals(order.id, field(producedChargeAttempt, "order"), "ChargeAttempt.order: this")
+        assertEquals(idOf(order), field(producedChargeAttempt, "order"), "ChargeAttempt.order: this")
         sys.system.tick("Daily")
     }
 
@@ -116,7 +116,7 @@ class PlaceOrderSpec : SpecSupport() {
         val order = givens.retryableOrder()
         order.assertIsNotA("RetryableOrder", "the disarm law: the firing left its trigger state")
         val producedChargeAttempt = last("ChargeAttempt")
-        assertEquals(order.id, field(producedChargeAttempt, "order"), "ChargeAttempt.order: this")
+        assertEquals(idOf(order), field(producedChargeAttempt, "order"), "ChargeAttempt.order: this")
     }
 
     @Test
@@ -128,7 +128,7 @@ class PlaceOrderSpec : SpecSupport() {
         sys.system.tick("QuarterHourly")
         assertEquals(beforeAttemptTimeout + 1, count("AttemptTimeout"), "rule TimeOutStaleAttempt: one 'AttemptTimeout' per firing")
         val producedAttemptTimeout = last("AttemptTimeout")
-        assertEquals(chargeAttempt.id, field(producedAttemptTimeout, "attempt"), "AttemptTimeout.attempt: this")
+        assertEquals(idOf(chargeAttempt), field(producedAttemptTimeout, "attempt"), "AttemptTimeout.attempt: this")
         sys.system.tick("QuarterHourly")
         assertEquals(beforeAttemptTimeout + 1, count("AttemptTimeout"), "the guard makes re-evaluation harmless")
     }
@@ -151,7 +151,7 @@ class PlaceOrderSpec : SpecSupport() {
         chargeAttempt.assertIsA("SuccessfulCharge", "the given must deliver a member of 'SuccessfulCharge'")
         assertEquals(beforeReceipt + 1, count("Receipt"), "rule SendReceipt: one 'Receipt' per firing")
         val producedReceipt = last("Receipt")
-        assertEquals(chargeAttempt.id, field(producedReceipt, "attempt"), "Receipt.attempt: this")
+        assertEquals(idOf(chargeAttempt), field(producedReceipt, "attempt"), "Receipt.attempt: this")
     }
 
     @Test
@@ -163,7 +163,7 @@ class PlaceOrderSpec : SpecSupport() {
         sys.system.tick("Nightly")
         assertEquals(beforeShipment + 1, count("Shipment"), "rule ShipOrder: one 'Shipment' per firing")
         val producedShipment = last("Shipment")
-        assertEquals(order.id, field(producedShipment, "order"), "Shipment.order: this")
+        assertEquals(idOf(order), field(producedShipment, "order"), "Shipment.order: this")
         sys.system.tick("Nightly")
         assertEquals(beforeShipment + 1, count("Shipment"), "the guard makes re-evaluation harmless")
     }
@@ -176,7 +176,7 @@ class PlaceOrderSpec : SpecSupport() {
         changeShippingAddress.assertIsNotA("ApplicableAddressChange", "the disarm law: the firing left its trigger state")
         assertEquals(beforeAddressChangeApplication + 1, count("AddressChangeApplication"), "rule ApplyAddressChange: one 'AddressChangeApplication' per firing")
         val producedAddressChangeApplication = last("AddressChangeApplication")
-        assertEquals(changeShippingAddress.id, field(producedAddressChangeApplication, "change"), "AddressChangeApplication.change: this")
+        assertEquals(idOf(changeShippingAddress), field(producedAddressChangeApplication, "change"), "AddressChangeApplication.change: this")
         assertEquals(field(changeShippingAddress, "newAddress"), field(ref(changeShippingAddress, "order"), "shippingAddress"), "order.shippingAddress = newAddress")
     }
 
@@ -188,7 +188,7 @@ class PlaceOrderSpec : SpecSupport() {
         changeShippingAddress.assertIsNotA("RefusedAddressChange", "the disarm law: the firing left its trigger state")
         assertEquals(beforeAddressChangeRefusal + 1, count("AddressChangeRefusal"), "rule RecordAddressRefusal: one 'AddressChangeRefusal' per firing")
         val producedAddressChangeRefusal = last("AddressChangeRefusal")
-        assertEquals(changeShippingAddress.id, field(producedAddressChangeRefusal, "change"), "AddressChangeRefusal.change: this")
+        assertEquals(idOf(changeShippingAddress), field(producedAddressChangeRefusal, "change"), "AddressChangeRefusal.change: this")
     }
 
     @Test
@@ -202,7 +202,7 @@ class PlaceOrderSpec : SpecSupport() {
         order.assertIsNotA("SettledOrder", "the exit commit must end the membership")
         assertEquals(beforeSettlementReversal + 1, count("SettlementReversal"), "rule NoteSettlementReversal: one 'SettlementReversal' per firing")
         val producedSettlementReversal = last("SettlementReversal")
-        assertEquals(order.id, field(producedSettlementReversal, "order"), "SettlementReversal.order: this")
+        assertEquals(idOf(order), field(producedSettlementReversal, "order"), "SettlementReversal.order: this")
     }
 
     @Test
@@ -214,7 +214,7 @@ class PlaceOrderSpec : SpecSupport() {
         sys.system.tick("Daily")
         assertEquals(beforePaymentReminder + 1, count("PaymentReminder"), "rule RemindPayment: one 'PaymentReminder' per firing")
         val producedPaymentReminder = last("PaymentReminder")
-        assertEquals(order.id, field(producedPaymentReminder, "order"), "PaymentReminder.order: this")
+        assertEquals(idOf(order), field(producedPaymentReminder, "order"), "PaymentReminder.order: this")
         sys.system.tick("Daily")
         assertEquals(beforePaymentReminder + 1, count("PaymentReminder"), "the guard makes re-evaluation harmless")
         sys.advanceDays(4)
@@ -230,7 +230,7 @@ class PlaceOrderSpec : SpecSupport() {
         order.assertIsA("OverdueOrder", "the given must deliver a member of 'OverdueOrder'")
         assertEquals(beforeDunningFlag + 1, count("DunningFlag"), "rule OpenDunningEpisode: one 'DunningFlag' per firing")
         val producedDunningFlag = last("DunningFlag")
-        assertEquals(order.id, field(producedDunningFlag, "order"), "DunningFlag.order: this")
+        assertEquals(idOf(order), field(producedDunningFlag, "order"), "DunningFlag.order: this")
         sys.system.tick("Daily")
         assertEquals(beforeDunningFlag + 1, count("DunningFlag"), "the guard makes re-evaluation harmless")
     }
@@ -244,7 +244,7 @@ class PlaceOrderSpec : SpecSupport() {
         sys.system.tick("Daily")
         assertEquals(beforeDunningResolution + 1, count("DunningResolution"), "rule CloseDunningEpisode: one 'DunningResolution' per firing")
         val producedDunningResolution = last("DunningResolution")
-        assertEquals(dunningFlag.id, field(producedDunningResolution, "flag"), "DunningResolution.flag: this")
+        assertEquals(idOf(dunningFlag), field(producedDunningResolution, "flag"), "DunningResolution.flag: this")
         sys.system.tick("Daily")
         assertEquals(beforeDunningResolution + 1, count("DunningResolution"), "the guard makes re-evaluation harmless")
     }
@@ -254,7 +254,7 @@ class PlaceOrderSpec : SpecSupport() {
         // given: any committed 'Customer'
         val customer = givens.someCustomer()
         val before = count("PlaceOrder")
-        val result = sys.system.commit("PlaceOrder", mapOf("customer" to customer.id, "amount" to java.math.BigDecimal("-1"), "dueBy" to java.time.LocalDate.of(2026, 1, 15), "shippingAddress" to "sample"))
+        val result = sys.system.commit("PlaceOrder", mapOf("customer" to idOf(customer), "amount" to java.math.BigDecimal("-1"), "dueBy" to java.time.LocalDate.of(2026, 1, 15), "shippingAddress" to "sample"))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("PlaceOrder"), "a refused act commits nothing")
     }
@@ -263,7 +263,7 @@ class PlaceOrderSpec : SpecSupport() {
     fun `never - a PlaceOrder with amount 1 is accepted`() {
         // given: any committed 'Customer'
         val customer = givens.someCustomer()
-        val result = sys.system.commit("PlaceOrder", mapOf("customer" to customer.id, "amount" to java.math.BigDecimal("1"), "dueBy" to java.time.LocalDate.of(2026, 1, 15), "shippingAddress" to "sample"))
+        val result = sys.system.commit("PlaceOrder", mapOf("customer" to idOf(customer), "amount" to java.math.BigDecimal("1"), "dueBy" to java.time.LocalDate.of(2026, 1, 15), "shippingAddress" to "sample"))
         assertIs<CommitResult.Accepted>(result)
     }
 }

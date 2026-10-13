@@ -1,6 +1,8 @@
 package velle.generated.loyalty
 
 import java.math.BigDecimal
+import velle.generated.*
+import velle.generated.Member
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -26,13 +28,13 @@ open class LoyaltyFlowTest {
 
     private fun member(
         name: String,
-        referrer: LoyaltySystem.MemberView? = null,
-    ): LoyaltySystem.MemberView {
+        referrer: Member? = null,
+    ): Member {
         assertIs<CommitResult.Accepted>(sys.commitJoin(name, referrer = referrer))
         return sys.members().last()
     }
 
-    private fun dues(m: LoyaltySystem.MemberView, month: String, dueBy: LocalDate, paidOn: LocalDate) {
+    private fun dues(m: Member, month: String, dueBy: LocalDate, paidOn: LocalDate) {
         assertIs<CommitResult.Accepted>(sys.commitDuesPayment(m, month, dueBy, paidOn))
     }
 
@@ -42,19 +44,19 @@ open class LoyaltyFlowTest {
         dues(ada, "January", dueBy = LocalDate.of(2026, 1, 31), paidOn = LocalDate.of(2026, 1, 10))
         dues(ada, "March", dueBy = LocalDate.of(2026, 3, 31), paidOn = LocalDate.of(2026, 3, 5))
         // the record has a gap: January then March
-        assertEquals(2, ada.streak)
+        assertEquals(2, sys.read(ada).streak)
 
         // February's payment arrives LAST, but was paid on time — it slots
         // into the chain at its paidOn position, and every later payment's
         // streak re-derives. A stored counter folded in arrival order would
         // have counted it after March and kept the wrong answer.
         dues(ada, "February", dueBy = LocalDate.of(2026, 2, 28), paidOn = LocalDate.of(2026, 2, 8))
-        assertEquals(3, ada.streak)
+        assertEquals(3, sys.read(ada).streak)
 
         // each payment knows the streak as of itself — readable history
-        val chain = sys.duesPayments().filter { it.member == ada }.sortedBy { it.paidOn }
-        assertEquals(listOf(1, 2, 3), chain.map { it.streakAfter })
-        assertEquals("February", chain.last().previous?.coveredMonth)
+        val chain = sys.duesPayments().filter { sys.read(it).member == ada }.sortedBy { sys.read(it).paidOn }
+        assertEquals(listOf(1, 2, 3), chain.map { sys.read(it).streakAfter })
+        assertEquals("February", sys.read(chain.last()).previous?.let { sys.read(it) }?.coveredMonth)
     }
 
     @Test
@@ -62,13 +64,13 @@ open class LoyaltyFlowTest {
         val grace = member("Grace")
         dues(grace, "January", dueBy = LocalDate.of(2026, 1, 31), paidOn = LocalDate.of(2026, 1, 10))
         dues(grace, "March", dueBy = LocalDate.of(2026, 3, 31), paidOn = LocalDate.of(2026, 3, 20))
-        assertEquals(2, grace.streak)
+        assertEquals(2, sys.read(grace).streak)
 
         // February was paid late — and its arrival rewrites March's streak too
         dues(grace, "February", dueBy = LocalDate.of(2026, 2, 28), paidOn = LocalDate.of(2026, 3, 2))
-        assertEquals(1, grace.streak)
-        val chain = sys.duesPayments().filter { it.member == grace }.sortedBy { it.paidOn }
-        assertEquals(listOf(1, 0, 1), chain.map { it.streakAfter })
+        assertEquals(1, sys.read(grace).streak)
+        val chain = sys.duesPayments().filter { sys.read(it).member == grace }.sortedBy { sys.read(it).paidOn }
+        assertEquals(listOf(1, 0, 1), chain.map { sys.read(it).streakAfter })
     }
 
     @Test
@@ -76,9 +78,9 @@ open class LoyaltyFlowTest {
         val founder = member("Founder")
         val scout = member("Scout", referrer = founder)
         val recruit = member("Recruit", referrer = scout)
-        assertNull(founder.foundingReferrer)
-        assertEquals(founder, scout.foundingReferrer)
-        assertEquals(founder, recruit.foundingReferrer)
+        assertNull(sys.read(founder).foundingReferrer)
+        assertEquals(founder, sys.read(scout).foundingReferrer)
+        assertEquals(founder, sys.read(recruit).foundingReferrer)
     }
 
     @Test
@@ -86,8 +88,8 @@ open class LoyaltyFlowTest {
         val recruiter = member("Recruiter")
         val buyer = member("Buyer", referrer = recruiter)
         assertIs<CommitResult.Accepted>(sys.commitPurchase(buyer, BigDecimal("150")))
-        assertEquals("gold", buyer.tier)
-        assertEquals("advocate", recruiter.tier)
+        assertEquals("gold", sys.read(buyer).tier)
+        assertEquals("advocate", sys.read(recruiter).tier)
     }
 
     @Test
@@ -116,3 +118,4 @@ open class LoyaltyFlowTest {
         assertEquals(1, sys.keycards().size)
     }
 }
+

@@ -77,7 +77,7 @@ class ApprovedGreenhouseRequestSpec : SpecSupport() {
         greenhouseTrial.assertIsA("CompleteTrial", "the given must deliver a member of 'CompleteTrial'")
         assertEquals(beforeGreenhouseResult + 1, count("GreenhouseResult"), "rule RecordGreenhouseResult: one 'GreenhouseResult' per firing")
         val producedGreenhouseResult = last("GreenhouseResult")
-        assertEquals(greenhouseTrial.id, field(producedGreenhouseResult, "trial"), "GreenhouseResult.trial: this")
+        assertEquals(idOf(greenhouseTrial), field(producedGreenhouseResult, "trial"), "GreenhouseResult.trial: this")
     }
 
     @Test

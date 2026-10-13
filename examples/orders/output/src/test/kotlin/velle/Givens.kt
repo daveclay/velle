@@ -1,6 +1,7 @@
 package velle.generated.orders
 
 import java.time.LocalDate
+import velle.generated.*
 import velle.generated.OrdersSystem
 
 /**
@@ -10,7 +11,7 @@ import velle.generated.OrdersSystem
  */
 class Givens(private val sys: OrdersSystem) : RequiredGivens {
 
-    override fun orderLine(): OrdersSystem.OrderLineView {
+    override fun orderLine(): OrderLine {
         sys.commitCustomer("Ada")
         sys.commitProduct("SKU-G")
         sys.commitOrder(

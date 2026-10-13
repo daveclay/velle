@@ -22,6 +22,6 @@ class OrderSpec : SpecSupport() {
         order.assertIsA("Order", "the given must deliver a member of 'Order'")
         assertEquals(beforeStockReservation + 1, count("StockReservation"), "rule ReserveStock: one 'StockReservation' per firing")
         val producedStockReservation = last("StockReservation")
-        assertEquals(order.id, field(producedStockReservation, "order"), "StockReservation.order: this")
+        assertEquals(idOf(order), field(producedStockReservation, "order"), "StockReservation.order: this")
     }
 }

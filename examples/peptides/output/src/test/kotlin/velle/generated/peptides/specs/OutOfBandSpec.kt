@@ -30,7 +30,7 @@ class OutOfBandSpec : SpecSupport() {
         greenhouse.assertIsA("OutOfBand", "the given must deliver a member of 'OutOfBand'")
         assertEquals(beforeClimateExcursion + 1, count("ClimateExcursion"), "rule OpenClimateExcursion: one 'ClimateExcursion' per firing")
         val producedClimateExcursion = last("ClimateExcursion")
-        assertEquals(greenhouse.id, field(producedClimateExcursion, "greenhouse"), "ClimateExcursion.greenhouse: this")
+        assertEquals(idOf(greenhouse), field(producedClimateExcursion, "greenhouse"), "ClimateExcursion.greenhouse: this")
     }
 
     @Test
@@ -40,7 +40,7 @@ class OutOfBandSpec : SpecSupport() {
         val climateExcursion = givens.closableExcursion()
         assertEquals(beforeExcursionEnd + 1, count("ExcursionEnd"), "rule CloseClimateExcursion: one 'ExcursionEnd' per firing")
         val producedExcursionEnd = last("ExcursionEnd")
-        assertEquals(climateExcursion.id, field(producedExcursionEnd, "excursion"), "ExcursionEnd.excursion: this")
+        assertEquals(idOf(climateExcursion), field(producedExcursionEnd, "excursion"), "ExcursionEnd.excursion: this")
         climateExcursion.assertIsNotA("ClosableExcursion", "the disarm law: the firing left its trigger state")
         sys.system.tick("Hourly")
         assertEquals(beforeExcursionEnd + 1, count("ExcursionEnd"), "the guard makes re-evaluation harmless")

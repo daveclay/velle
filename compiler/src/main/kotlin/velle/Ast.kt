@@ -177,6 +177,10 @@ data class DurationLit(val amount: Long, val unit: String) : Expr
  *  itself; the pre-filter compiler folds it like any literal. */
 data class ValueLit(val value: Value) : Expr
 
+/** A reference the query API supplies at the moment of asking — "this customer"
+ *  — resolved to the instance behind it when the query runs. */
+data class RefLit(val ref: Keyed) : Expr
+
 /** Set denotation as a value: `(Shape where pred)` / `(this.invoices where Overdue)` —
  *  legal in `many`-typed derived-property position and collection-valued contexts (README §6). */
 data class SetExpr(val collection: CollectionExpr) : Expr

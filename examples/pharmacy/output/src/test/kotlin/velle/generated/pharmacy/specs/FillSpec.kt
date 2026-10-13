@@ -32,7 +32,7 @@ class FillSpec : SpecSupport() {
         fill.assertIsA("Fill", "the given must deliver a member of 'Fill'")
         assertEquals(beforeRecallNotice + 1, count("RecallNotice"), "rule NoticeRecall: one 'RecallNotice' per firing")
         val producedRecallNotice = last("RecallNotice")
-        assertEquals(fill.id, field(producedRecallNotice, "fill"), "RecallNotice.fill: this")
+        assertEquals(idOf(fill), field(producedRecallNotice, "fill"), "RecallNotice.fill: this")
     }
 
     @Test
@@ -43,6 +43,6 @@ class FillSpec : SpecSupport() {
         fill.assertIsA("Fill", "the given must deliver a member of 'Fill'")
         assertEquals(beforeControlledLogEntry + 1, count("ControlledLogEntry"), "rule LogControlled: one 'ControlledLogEntry' per firing")
         val producedControlledLogEntry = last("ControlledLogEntry")
-        assertEquals(fill.id, field(producedControlledLogEntry, "fill"), "ControlledLogEntry.fill: this")
+        assertEquals(idOf(fill), field(producedControlledLogEntry, "fill"), "ControlledLogEntry.fill: this")
     }
 }

@@ -28,6 +28,6 @@ class ContentSpec : SpecSupport() {
         content.assertIsA("Popular", "the given must deliver a member of 'Popular'")
         assertEquals(beforePopularityNotice + 1, count("PopularityNotice"), "rule NotePopularity: one 'PopularityNotice' per firing")
         val producedPopularityNotice = last("PopularityNotice")
-        assertEquals(content.id, field(producedPopularityNotice, "content"), "PopularityNotice.content: this")
+        assertEquals(idOf(content), field(producedPopularityNotice, "content"), "PopularityNotice.content: this")
     }
 }

@@ -1,6 +1,8 @@
 package velle.generated.membership
 
 import java.math.BigDecimal
+import velle.generated.*
+import velle.generated.Member
 import java.time.LocalDate
 import velle.generated.MembershipSystem
 
@@ -15,24 +17,24 @@ import velle.generated.MembershipSystem
  */
 class Givens(private val sys: MembershipSystem) : RequiredGivens {
 
-    private fun plan(price: BigDecimal = BigDecimal("20")): MembershipSystem.PlanView {
+    private fun plan(price: BigDecimal = BigDecimal("20")): Plan {
         sys.commitPlan("Standard", price)
         return sys.plans().last()
     }
 
-    private fun newMember(): MembershipSystem.MemberView {
+    private fun newMember(): Member {
         sys.commitSignUp("Ada", "Ada@Example.com", plan())
         return sys.members().last()
     }
 
     /** Sign up, then let the monthly renewal charge drive the balance to -20. */
-    private fun delinquentMember(): MembershipSystem.MemberView {
+    private fun delinquentMember(): Member {
         val m = newMember()
         sys.tickMonthly()
         return m
     }
 
-    private fun agent(): MembershipSystem.AgentView {
+    private fun agent(): Agent {
         sys.commitAgent("Grace", "grace@velle.example")
         return sys.agents().last()
     }
@@ -40,7 +42,7 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
     private fun ticket(
         priority: String = "normal",
         due: LocalDate = LocalDate.of(2026, 3, 1),
-    ): MembershipSystem.TicketView {
+    ): Ticket {
         sys.commitRaiseTicket(newMember(), "billing question", due, priority)
         return sys.tickets().last()
     }
@@ -65,11 +67,11 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
         sys.commitCloseTicket(ticket(), agent())
     }
 
-    override fun member(): MembershipSystem.MemberView = newMember()
+    override fun member(): Member = newMember()
 
-    override fun someMember(): MembershipSystem.MemberView = newMember()
+    override fun someMember(): Member = newMember()
 
-    override fun memberForRestoreService(): MembershipSystem.MemberView {
+    override fun memberForRestoreService(): Member {
         // suspended with the balance recovered: go delinquent, get suspended by
         // the nightly sweep, then a covering deposit — the restoring tick is
         // the spec's to run
@@ -79,35 +81,35 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
         return m
     }
 
-    override fun visit(): MembershipSystem.VisitView {
+    override fun visit(): Visit {
         sys.commitVisit(newMember(), 30)
         return sys.visits().last()
     }
 
-    override fun unappliedDeposit(): MembershipSystem.DepositView {
+    override fun unappliedDeposit(): Deposit {
         sys.commitMakeDeposit(newMember(), BigDecimal("25"))
         return sys.deposits().last()
     }
 
-    override fun memberForRenewMembership(): MembershipSystem.MemberView = newMember()
+    override fun memberForRenewMembership(): Member = newMember()
 
-    override fun unappliedCharge(): MembershipSystem.ChargeView {
+    override fun unappliedCharge(): Charge {
         newMember()
         sys.tickMonthly() // the renewal sweep mints the charge; ApplyCharge follows after commit
         return sys.charges().last()
     }
 
-    override fun delinquent(): MembershipSystem.MemberView = delinquentMember()
+    override fun delinquent(): Member = delinquentMember()
 
-    override fun memberForSuspendDelinquents(): MembershipSystem.MemberView = delinquentMember()
+    override fun memberForSuspendDelinquents(): Member = delinquentMember()
 
-    override fun memberForOpenDelinquencyEpisode(): MembershipSystem.MemberView = delinquentMember()
+    override fun memberForOpenDelinquencyEpisode(): Member = delinquentMember()
 
-    override fun exitDelinquent(member: MembershipSystem.MemberView) {
+    override fun exitDelinquent(member: Member) {
         sys.commitMakeDeposit(member, BigDecimal("25")) // a covering deposit: the recovery commit
     }
 
-    override fun memberForOpenAccountReview(): MembershipSystem.MemberView {
+    override fun memberForOpenAccountReview(): Member {
         // three delinquency episodes, each a renewal charge the balance can't
         // cover, each recovered by a covering deposit before the next
         val m = delinquentMember()                     // episode 1: balance -20
@@ -119,7 +121,7 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
         return m
     }
 
-    override fun closedTicket(): MembershipSystem.TicketView {
+    override fun closedTicket(): Ticket {
         val t = ticket()
         sys.commitCloseTicket(t, agent())
         return t
@@ -129,5 +131,5 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
         sys.commitAssignTicket(ticket(), agent())
     }
 
-    override fun ticketForEscalateUrgent(): MembershipSystem.TicketView = ticket(priority = "high")
+    override fun ticketForEscalateUrgent(): Ticket = ticket(priority = "high")
 }

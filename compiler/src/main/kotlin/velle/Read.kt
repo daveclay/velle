@@ -75,8 +75,6 @@ internal class QueryEngine(private val system: VelleSystem) {
             root in model.refinements -> {
                 if (model.basesOf(root).any { it in model.transients })
                     out.add(Diagnostic("F1", "'$root' refines a transient act: never readable (README §4)"))
-                if (model.isCrossBase(root))
-                    out.add(Diagnostic("F1", "'$root' is a cross-base union: query each operand (README §9)"))
             }
             else -> out.add(Diagnostic("F1", "unknown shape or refinement '$root'"))
         }
@@ -95,7 +93,9 @@ internal class QueryEngine(private val system: VelleSystem) {
     private fun matching(q: Query): List<Long> {
         system.openReadSnapshot()
         val cond = RefName(q.root, q.where)
-        val base = model.baseOf(q.root) ?: q.root
+        // a cross-base union (README §9) has no one table: every operand's instances, then the predicate
+        val base = model.baseOf(q.root)
+            ?: return model.basesOf(q.root).flatMap { system.idsOf(it) }.filter { system.evaluator.memberOfRefExpr(it, cond) }
         val filter = system.queryCompiler().filterFor(cond)
         return system.idsOfCandidates(base, filter).filter { system.evaluator.memberOfRefExpr(it, cond) }
     }
@@ -171,9 +171,9 @@ open class Fields(val fieldPath: List<String> = emptyList()) {
     fun isSome(): Expr = IsExpr(pathExpr(), "some")
     /** Membership of a refinement, for a reference or the root (`customer is VipCustomer`). */
     fun isA(refinement: String): Expr = IsExpr(pathExpr(), "refinement", refinement)
-    /** Identity: the referenced instance is [v] (a view handle or a data class carrying its id). */
-    infix fun eq(v: View): Expr = Binary("==", pathExpr(), ValueLit(Value.VRef(v.id)))
-    infix fun neq(v: View): Expr = Binary("!=", pathExpr(), ValueLit(Value.VRef(v.id)))
+    /** Identity: the referenced instance is [v] (a reference, or a model object, which is one). */
+    infix fun eq(v: Keyed): Expr = Binary("==", pathExpr(), RefLit(v))
+    infix fun neq(v: Keyed): Expr = Binary("!=", pathExpr(), RefLit(v))
 }
 
 /** A scalar member: comparable, and an order datum in either direction. */

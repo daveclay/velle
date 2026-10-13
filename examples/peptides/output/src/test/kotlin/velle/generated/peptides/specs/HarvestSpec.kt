@@ -17,7 +17,7 @@ class HarvestSpec : SpecSupport() {
         // given: any committed 'FieldPlot'
         val plot = givens.someFieldPlot()
         val before = count("Harvest")
-        val result = sys.system.commit("Harvest", mapOf("plot" to plot.id, "harvestedOn" to java.time.LocalDate.of(2026, 1, 15), "yieldKgPerHa" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("Harvest", mapOf("plot" to idOf(plot), "harvestedOn" to java.time.LocalDate.of(2026, 1, 15), "yieldKgPerHa" to java.math.BigDecimal("-1")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("Harvest"), "a refused act commits nothing")
     }
@@ -26,7 +26,7 @@ class HarvestSpec : SpecSupport() {
     fun `never - a Harvest with yieldKgPerHa 0 is accepted`() {
         // given: any committed 'FieldPlot'
         val plot = givens.someFieldPlot()
-        val result = sys.system.commit("Harvest", mapOf("plot" to plot.id, "harvestedOn" to java.time.LocalDate.of(2026, 1, 15), "yieldKgPerHa" to java.math.BigDecimal("0")))
+        val result = sys.system.commit("Harvest", mapOf("plot" to idOf(plot), "harvestedOn" to java.time.LocalDate.of(2026, 1, 15), "yieldKgPerHa" to java.math.BigDecimal("0")))
         assertIs<CommitResult.Accepted>(result)
     }
 }

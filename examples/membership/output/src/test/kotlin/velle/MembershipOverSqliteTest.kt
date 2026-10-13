@@ -1,6 +1,8 @@
 package velle
 
 import java.math.BigDecimal
+import velle.generated.*
+import velle.generated.Member
 import java.sql.Connection
 import java.sql.DriverManager
 import java.time.LocalDate
@@ -64,7 +66,7 @@ class MembershipPersistenceTest {
             }
         }
 
-    private fun MembershipSystem.ada(): MembershipSystem.MemberView {
+    private fun MembershipSystem.ada(): Member {
         accept(commitPlan("Standard", BigDecimal("20")))
         accept(commitSignUp("Ada", "Ada@Example.com", plans().last()))
         return members().last()
@@ -82,17 +84,17 @@ class MembershipPersistenceTest {
         assertEquals(listOf(listOf(1L)), rows("""SELECT closedBy FROM capture_ClosedTicket"""), "the capture landed as a row")
 
         val second = process()
-        val ada2 = second.member(second.system.handleFor("Member", 1L))
-        assertEquals("new@example.com", ada2.email, "latest(...) over the stored EmailChange rows")
+        val ada2 = second.read.member(1L)
+        assertEquals("new@example.com", second.read(ada2).email, "latest(...) over the stored EmailChange rows")
 
-        val ticket = second.ticket(second.system.handleFor("Ticket", 1L))
-        val grace2 = second.agent(second.system.handleFor("Agent", 1L))
-        assertTrue(second.system.isMember(ticket.id, "ClosedTicket"))
+        val ticket = second.read.ticket(1L)
+        val grace2 = second.read.agent(1L)
+        assertTrue(second.system.isMember(second.system.idOf(ticket), "ClosedTicket"))
         assertEquals(grace2, second.closedTickets().single().closedBy, "the capture hydrates from its row")
 
         accept(second.commitReopenTicket(ticket))
-        assertTrue(!second.system.isMember(ticket.id, "ClosedTicket"))
-        assertEquals(grace2, second.reopenNotices().single().reassignTo, "the exit rule was the capture's last reader")
+        assertTrue(!second.system.isMember(second.system.idOf(ticket), "ClosedTicket"))
+        assertEquals(grace2, second.read(second.reopenNotices().single()).reassignTo, "the exit rule was the capture's last reader")
         assertEquals(emptyList(), rows("""SELECT closedBy FROM capture_ClosedTicket"""), "the retraction deleted the row")
     }
 
@@ -101,13 +103,14 @@ class MembershipPersistenceTest {
         val first = process()
         val ada = first.ada()
         accept(first.commitMakeDeposit(ada, BigDecimal("30")))
-        assertEquals(0, ada.balance.compareTo(BigDecimal("30")))
+        assertEquals(0, first.read(ada).balance.compareTo(BigDecimal("30")))
 
         val second = process()
         second.tickMonthly()
-        val ada2 = second.member(second.system.handleFor("Member", 1L))
+        val ada2 = second.read.member(1L)
         assertEquals(1, second.charges().size, "the tick's sweep selected the member from storage")
-        assertEquals(0, ada2.balance.compareTo(BigDecimal("10")), "the fold read the stored deposit and charge")
+        assertEquals(0, second.read(ada2).balance.compareTo(BigDecimal("10")), "the fold read the stored deposit and charge")
         assertEquals(listOf(listOf(1L)), rows("""SELECT COUNT(*) FROM Charge"""))
     }
 }
+

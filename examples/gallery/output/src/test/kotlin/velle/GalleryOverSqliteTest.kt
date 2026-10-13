@@ -1,6 +1,7 @@
 package velle.generated.gallery
 
 import java.sql.Connection
+import velle.generated.*
 import java.sql.DriverManager
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -82,9 +83,9 @@ class GalleryPersistenceTest {
         val post = first.posts().last()
         accept(first.commitPhoto(ada, "sunset"))
         val photo = first.photos().last()
-        accept(first.commitComment(post.asContent(), grace, "hi"))
-        accept(first.commitComment(photo.asContent(), grace, "lovely"))
-        accept(first.commitComment(photo.asContent(), ada, "thanks"))
+        accept(first.commitComment(post, grace, "hi"))
+        accept(first.commitComment(photo, grace, "lovely"))
+        accept(first.commitComment(photo, ada, "thanks"))
 
         // Post#1 and Photo#1 share a key; the discriminator column tells them apart
         assertEquals(
@@ -94,23 +95,23 @@ class GalleryPersistenceTest {
 
         // a second process enters from the storage side, by key
         val second = process()
-        val photo2 = second.photo(second.system.handleFor("Photo", 1L))
-        val post2 = second.post(second.system.handleFor("Post", 1L))
-        val grace2 = second.member(second.system.handleFor("Member", 2L))
-        assertEquals(2, photo2.comments.size, "the join read matched key and shape, not key alone")
-        assertEquals(1, post2.comments.size)
-        assertEquals(2, photo2.asContent().commentCount)
-        assertTrue(with(second) { photo2.asContent().isPopular() })
-        assertEquals(listOf(photo2), second.popularityNotices().map { it.content.asPhoto() })
+        val photo2 = second.read.photo(1L)
+        val post2 = second.read.post(1L)
+        val grace2 = second.read.member(2L)
+        assertEquals(2, second.read(photo2).comments.size, "the join read matched key and shape, not key alone")
+        assertEquals(1, second.read(post2).comments.size)
+        assertEquals(2, second.read(photo2).commentCount)
+        assertTrue(with(second) { second.read(photo2).isPopular })
+        assertEquals(listOf(photo2), second.popularityNotices().map { (second.read(second.read(it).content) as? Photo) })
         assertEquals(1, second.postComments().size)
         assertEquals(2, second.photoComments().size)
-        assertEquals(setOf(post2.id, photo2.id), second.contents().map { it.id }.toSet())
+        assertEquals(setOf(post2.key, photo2.key), second.contents().map { it.key }.toSet())
 
         // entry into Popular is decided against stored rows: the post's second
         // comment is an entry, the photo's third is not
-        accept(second.commitComment(post2.asContent(), grace2, "again"))
-        assertEquals(setOf(post2.id, photo2.id), second.popularityNotices().map { it.content.id }.toSet())
-        accept(second.commitComment(photo2.asContent(), grace2, "three"))
+        accept(second.commitComment(post2, grace2, "again"))
+        assertEquals(setOf(post2.key, photo2.key), second.popularityNotices().map { second.read(it).content.key }.toSet())
+        accept(second.commitComment(photo2, grace2, "three"))
         assertEquals(2, second.popularityNotices().size)
     }
 
@@ -122,13 +123,14 @@ class GalleryPersistenceTest {
         accept(first.commitPhoto(first.members().last(), "sunset"))
 
         val second = process()
-        val ada = second.member(second.system.handleFor("Member", 1L))
-        val post = second.post(second.system.handleFor("Post", 1L))
-        val photo = second.photo(second.system.handleFor("Photo", 1L))
-        val refused = second.commitComment(post.asContent(), ada, "me again")
+        val ada = second.read.member(1L)
+        val post = second.read.post(1L)
+        val photo = second.read.photo(1L)
+        val refused = second.commitComment(post, ada, "me again")
         assertIs<CommitResult.Refused>(refused)
         assertEquals(listOf(listOf(0L)), rows("""SELECT COUNT(*) FROM Comment"""), "a refused act reaches no row")
-        accept(second.commitComment(photo.asContent(), ada, "my own photo"))
+        accept(second.commitComment(photo, ada, "my own photo"))
         assertEquals(listOf(listOf(1L)), rows("""SELECT COUNT(*) FROM Comment"""))
     }
 }
+

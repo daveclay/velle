@@ -6,6 +6,7 @@ import velle.Model
 import velle.QConst
 import velle.QF
 import velle.Ref
+import velle.RowRef
 import velle.Row
 import velle.StateResolver
 import velle.StoreKey
@@ -404,7 +405,7 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
     }
 
     private fun refShape(v: Any): String =
-        (v as? Ref)?.shape ?: throw IllegalArgumentException("reference value is not a Ref: $v")
+        (v as? RowRef)?.shape ?: throw IllegalArgumentException("reference value is not a Ref: $v")
 
     private fun insert(c: CommitSet.Creation, minted: List<StoreKey>): StoreKey {
         val cols = columnsOf(c.shape)

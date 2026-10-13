@@ -28,7 +28,7 @@ class HitExperimentSpec : SpecSupport() {
         labExperiment.assertIsA("HitExperiment", "the given must deliver a member of 'HitExperiment'")
         assertEquals(beforeLabHit + 1, count("LabHit"), "rule RecordLabHit: one 'LabHit' per firing")
         val producedLabHit = last("LabHit")
-        assertEquals(labExperiment.id, field(producedLabHit, "experiment"), "LabHit.experiment: this")
+        assertEquals(idOf(labExperiment), field(producedLabHit, "experiment"), "LabHit.experiment: this")
     }
 
     @Test
@@ -42,6 +42,6 @@ class HitExperimentSpec : SpecSupport() {
         labExperiment.assertIsNotA("HitExperiment", "the exit commit must end the membership")
         assertEquals(beforeLabHitRetraction + 1, count("LabHitRetraction"), "rule RetractLabHit: one 'LabHitRetraction' per firing")
         val producedLabHitRetraction = last("LabHitRetraction")
-        assertEquals(labExperiment.id, field(producedLabHitRetraction, "experiment"), "LabHitRetraction.experiment: this")
+        assertEquals(idOf(labExperiment), field(producedLabHitRetraction, "experiment"), "LabHitRetraction.experiment: this")
     }
 }

@@ -1,6 +1,7 @@
 package velle
 
 import velle.generated.OrdersSystem
+import velle.generated.*
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,8 +23,8 @@ open class OrdersFlowTest {
     @Test
     fun `an order lands with its lines and their customizations in one commit`() {
         val sys = newSystem()
-        val ada = sys.customer(assertIs<CommitResult.Accepted>(sys.commitCustomer("Ada")).id)
-        val prod = sys.product(assertIs<CommitResult.Accepted>(sys.commitProduct("SKU-1")).id)
+        val ada = sys.read<Customer>(sys.system.refFor(assertIs<CommitResult.Accepted>(sys.commitCustomer("Ada")).id))
+        val prod = sys.read<Product>(sys.system.refFor(assertIs<CommitResult.Accepted>(sys.commitProduct("SKU-1")).id))
 
         val r = sys.commitOrder(
             customer = ada,
@@ -36,30 +37,30 @@ open class OrdersFlowTest {
                 OrdersSystem.NewOrderLine(product = prod, quantity = 3),
             ),
         )
-        val order = sys.order(assertIs<CommitResult.Accepted>(r).id)
+        val order = sys.read<Order>(sys.system.refFor(assertIs<CommitResult.Accepted>(r).id))
 
         // the parts landed, back-references populated by the language
         assertEquals(2, sys.orderLines().size)
-        sys.orderLines().forEach { assertEquals(order, it.order) }
-        assertEquals(setOf(2, 3), sys.orderLines().map { it.quantity }.toSet())
+        sys.orderLines().forEach { assertEquals(order, sys.read(it).order) }
+        assertEquals(setOf(2, 3), sys.orderLines().map { sys.read(it).quantity }.toSet())
 
         // the nested part points at its own level
         val custz = sys.customizations().single()
-        assertEquals("gift wrap", custz.note)
-        assertEquals(2, custz.line.quantity)
+        assertEquals("gift wrap", sys.read(custz).note)
+        assertEquals(2, sys.read(sys.read(custz).line).quantity)
 
         // the aggregate is derived on the container, never part-written
-        assertEquals(5, order.total)
+        assertEquals(5, sys.read(order).total)
 
         // the per-part rule fired once per inline line, in the act's transaction
-        assertEquals(setOf(2, 3), sys.reservations().map { it.quantity }.toSet())
+        assertEquals(setOf(2, 3), sys.reservations().map { sys.read(it).quantity }.toSet())
     }
 
     @Test
     fun `identical inline part values are a bag - two distinct lines`() {
         val sys = newSystem()
-        val ada = sys.customer(assertIs<CommitResult.Accepted>(sys.commitCustomer("Ada")).id)
-        val prod = sys.product(assertIs<CommitResult.Accepted>(sys.commitProduct("SKU-1")).id)
+        val ada = sys.read<Customer>(sys.system.refFor(assertIs<CommitResult.Accepted>(sys.commitCustomer("Ada")).id))
+        val prod = sys.read<Product>(sys.system.refFor(assertIs<CommitResult.Accepted>(sys.commitProduct("SKU-1")).id))
 
         val r = sys.commitOrder(
             customer = ada,
@@ -71,14 +72,14 @@ open class OrdersFlowTest {
         )
         assertIs<CommitResult.Accepted>(r)
         assertEquals(2, sys.orderLines().size)
-        assertEquals(2, sys.order(r.id).total)
+        assertEquals(2, sys.read<Order>(sys.system.refFor(assertIs<CommitResult.Accepted>(r).id)).total)
     }
 
     @Test
     fun `a never over a part refuses the whole closure - nothing lands`() {
         val sys = newSystem()
-        val ada = sys.customer(assertIs<CommitResult.Accepted>(sys.commitCustomer("Ada")).id)
-        val prod = sys.product(assertIs<CommitResult.Accepted>(sys.commitProduct("SKU-1")).id)
+        val ada = sys.read<Customer>(sys.system.refFor(assertIs<CommitResult.Accepted>(sys.commitCustomer("Ada")).id))
+        val prod = sys.read<Product>(sys.system.refFor(assertIs<CommitResult.Accepted>(sys.commitProduct("SKU-1")).id))
 
         val r = sys.commitOrder(
             customer = ada,
@@ -97,10 +98,11 @@ open class OrdersFlowTest {
     @Test
     fun `the empty part collection is the absence`() {
         val sys = newSystem()
-        val ada = sys.customer(assertIs<CommitResult.Accepted>(sys.commitCustomer("Ada")).id)
+        val ada = sys.read<Customer>(sys.system.refFor(assertIs<CommitResult.Accepted>(sys.commitCustomer("Ada")).id))
         val r = sys.commitOrder(customer = ada, placedOn = LocalDate.parse("2026-08-21"))
-        val order = sys.order(assertIs<CommitResult.Accepted>(r).id)
-        assertTrue(order.orderLines.isEmpty())
-        assertEquals(0, order.total)
+        val order = sys.read<Order>(sys.system.refFor(assertIs<CommitResult.Accepted>(r).id))
+        assertTrue(sys.read(order).orderLines.isEmpty())
+        assertEquals(0, sys.read(order).total)
     }
 }
+

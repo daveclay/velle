@@ -117,6 +117,7 @@ object Printer {
         is PathExpr -> e.root + e.segs.joinToString("") { (if (it.viaQdot) "?." else ".") + it.name }
         is UnaryMinus -> "-${operand(e.inner)}"
         is Binary -> "${operand(e.left)} ${e.op} ${operand(e.right)}"
+        is RefLit -> e.ref.toString()
         is ValueLit -> when (val v = e.value) {
             is Value.VText -> "\"${v.v}\""
             is Value.VNum -> v.v.toPlainString()

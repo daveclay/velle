@@ -68,7 +68,7 @@ class BillCustomerSpec : SpecSupport() {
         invoice.assertIsA("PaidInvoice", "the given must deliver a member of 'PaidInvoice'")
         assertEquals(beforeReceipt + 1, count("Receipt"), "rule SendReceipt: one 'Receipt' per firing")
         val producedReceipt = last("Receipt")
-        assertEquals(invoice.id, field(producedReceipt, "invoice"), "Receipt.invoice: this")
+        assertEquals(idOf(invoice), field(producedReceipt, "invoice"), "Receipt.invoice: this")
     }
 
     @Test
@@ -78,7 +78,7 @@ class BillCustomerSpec : SpecSupport() {
         val receipt = givens.unemailedReceipt()
         assertEquals(beforeReceiptEmail + 1, count("ReceiptEmail"), "rule EmailReceipt: one 'ReceiptEmail' per firing")
         val producedReceiptEmail = last("ReceiptEmail")
-        assertEquals(receipt.id, field(producedReceiptEmail, "receipt"), "ReceiptEmail.receipt: this")
+        assertEquals(idOf(receipt), field(producedReceiptEmail, "receipt"), "ReceiptEmail.receipt: this")
         receipt.assertIsNotA("UnemailedReceipt", "the disarm law: the firing left its trigger state")
         sys.system.tick("Hourly")
         assertEquals(beforeReceiptEmail + 1, count("ReceiptEmail"), "the guard makes re-evaluation harmless")
@@ -93,7 +93,7 @@ class BillCustomerSpec : SpecSupport() {
         sys.system.tick("Weekly")
         assertEquals(beforeReminder + 1, count("Reminder"), "rule RemindOverdue: one 'Reminder' per firing")
         val producedReminder = last("Reminder")
-        assertEquals(invoice.id, field(producedReminder, "invoice"), "Reminder.invoice: this")
+        assertEquals(idOf(invoice), field(producedReminder, "invoice"), "Reminder.invoice: this")
         sys.system.tick("Weekly")
         assertEquals(beforeReminder + 1, count("Reminder"), "the guard makes re-evaluation harmless")
         sys.advanceDays(8)
@@ -126,6 +126,6 @@ class BillCustomerSpec : SpecSupport() {
         invoice.assertIsNotA("ArchivedInvoice", "the exit commit must end the membership")
         assertEquals(beforeUnarchiveNotice + 1, count("UnarchiveNotice"), "rule NoteUnarchival: one 'UnarchiveNotice' per firing")
         val producedUnarchiveNotice = last("UnarchiveNotice")
-        assertEquals(invoice.id, field(producedUnarchiveNotice, "invoice"), "UnarchiveNotice.invoice: this")
+        assertEquals(idOf(invoice), field(producedUnarchiveNotice, "invoice"), "UnarchiveNotice.invoice: this")
     }
 }

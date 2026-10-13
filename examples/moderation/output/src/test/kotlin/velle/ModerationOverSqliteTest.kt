@@ -1,6 +1,7 @@
 package velle.generated.moderation
 
 import java.sql.Connection
+import velle.generated.*
 import java.sql.DriverManager
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -86,10 +87,10 @@ class ModerationPersistenceTest {
         assertEquals(listOf(listOf(2L)), rows("""SELECT id FROM Listing"""))
 
         val second = process()
-        val report = second.listingReport(second.system.handleFor("ListingReport", 1L))
-        assertNull(report.listing, "the absorbing reference, read from a dangling key")
-        assertEquals("brass lamp", report.listingTitle)
-        assertEquals(listOf(report.id), second.orphanReports().map { it.id })
+        val report = second.read.listingReport(1L)
+        assertNull(second.read(report).listing, "the absorbing reference, read from a dangling key")
+        assertEquals("brass lamp", second.read(report).listingTitle)
+        assertEquals(listOf(report.key), second.orphanReports().map { it.key })
         assertEquals(1, second.reporterNotices().size, "fired at the deleting commit, in the first process")
         accept(second.commitSeller("Grace"))
         assertEquals(1, second.reporterNotices().size, "the guard reads its evidence from storage")
@@ -105,15 +106,16 @@ class ModerationPersistenceTest {
         accept(first.commitPublish(first.listings().last()))
 
         val second = process()
-        accept(second.commitCloseAccount(second.seller(second.system.handleFor("Seller", 1L))))
+        accept(second.commitCloseAccount(second.read.seller(1L)))
         assertEquals(listOf(listOf(0L)), rows("""SELECT COUNT(*) FROM Seller"""))
         assertEquals(listOf(listOf(2L, 1L)), rows("""SELECT id, seller FROM Listing"""), "the survivor keeps its dangling seller key")
 
         val third = process()
-        val published = third.listing(third.system.handleFor("Listing", 2L))
-        assertNull(published.seller)
-        assertEquals(listOf(published.id), third.orphanedListings().map { it.id })
+        val published = third.read.listing(2L)
+        assertNull(third.read(published).seller)
+        assertEquals(listOf(published.key), third.orphanedListings().map { it.key })
         assertEquals(1, third.listings().size)
         assertEquals(2, third.draftClosures().size, "the publication's and the sweep's")
     }
 }
+

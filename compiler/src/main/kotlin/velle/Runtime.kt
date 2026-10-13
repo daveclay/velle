@@ -56,14 +56,6 @@ sealed interface CommitResult {
     data class Refused(val reason: String, val rejection: Rejection? = null) : CommitResult
 }
 
-/**
- * The common face of every generated typed view (README §5: identity as a
- * readable value): a view is an instance reference the typed surface wraps.
- */
-interface View {
-    val id: Long
-}
-
 class VelleRuntimeError(message: String) : Exception(message)
 private class NeverViolation(val rejection: Rejection) : Exception(rejection.message)
 
@@ -457,7 +449,7 @@ class VelleSystem(
         }
         val indexOfHandle = createdHandles.withIndex().associate { (i, h) -> h to i }
 
-        fun refOf(handle: Long): Ref {
+        fun refOf(handle: Long): RowRef {
             keyOf[handle]?.let { return Ref.Persisted(idShape.getValue(handle), it) }
             indexOfHandle[handle]?.let { return Ref.Pending(idShape.getValue(handle), it) }
             throw VelleRuntimeError("reference to unpersisted instance $handle escapes the commit set")
@@ -1288,6 +1280,44 @@ class VelleSystem(
     @Suppress("UNCHECKED_CAST")
     internal fun orderKeyOf(id: Long): Comparable<Any> =
         (keyOf[id]?.value as? Comparable<Any>) ?: (id as Comparable<Any>)
+
+    /**
+     * The reference an engineer holds for [id] (README §22): the row's store key
+     * when it has one; in memory, with no store, the handle itself is the key.
+     */
+    fun refFor(id: Long): Ref.Persisted {
+        val shape = idShape[id] ?: instance(id)?.shape ?: throw IllegalArgumentException("no instance $id")
+        return Ref.Persisted(shape, keyOf[id] ?: StoreKey(id))
+    }
+
+    /** The session handle behind a reference: the row's handle over a store; the key itself in memory. */
+    fun idOf(ref: Keyed): Long =
+        if (resolver == null) (ref.key.value as? Long ?: throw IllegalArgumentException("not an in-memory reference: $ref"))
+        else handleForRef(Ref.Persisted(ref.shape, ref.key))
+
+    /** The concrete shape of a current instance, from a fresh snapshot outside a transaction; null when gone. */
+    fun currentShapeOf(id: Long): String? {
+        openReadSnapshot()
+        if (id in pendingDeleted) return null
+        return instance(id)?.shape
+    }
+
+    /**
+     * Fetch by identity (README §22): true when [id] is a current instance of
+     * [root] — a shape, or a refinement it is a member of — read from a fresh
+     * snapshot outside a transaction, so the data class built next is one
+     * consistent read.
+     */
+    fun exists(root: String, id: Long): Boolean {
+        openReadSnapshot()
+        val inst = instance(id) ?: return false
+        if (id in pendingDeleted) return false
+        return when {
+            root in model.shapes -> inst.shape == root
+            root in model.refinements -> evaluator.memberOfRefExpr(id, RefName(root))
+            else -> throw IllegalArgumentException("unknown shape or refinement '$root'")
+        }
+    }
 
     /** The query's diagnostics without running it; empty means it is well-formed. */
     fun check(q: Query): List<Diagnostic> = queries.check(q)

@@ -25,7 +25,7 @@ class LowStockSpec : SpecSupport() {
         sys.system.tick("Nightly")
         assertEquals(beforePurchaseOrder + 1, count("PurchaseOrder"), "rule Reorder: one 'PurchaseOrder' per firing")
         val producedPurchaseOrder = last("PurchaseOrder")
-        assertEquals(drug.id, field(producedPurchaseOrder, "drug"), "PurchaseOrder.drug: this")
+        assertEquals(idOf(drug), field(producedPurchaseOrder, "drug"), "PurchaseOrder.drug: this")
         sys.system.tick("Nightly")
         assertEquals(beforePurchaseOrder + 1, count("PurchaseOrder"), "the guard makes re-evaluation harmless")
     }

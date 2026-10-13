@@ -27,7 +27,7 @@ class OpenTaskSpec : SpecSupport() {
         sys.system.tick("Daily")
         assertEquals(beforeTaskReminder + 1, count("TaskReminder"), "rule RemindTask: one 'TaskReminder' per firing")
         val producedTaskReminder = last("TaskReminder")
-        assertEquals(collectionTask.id, field(producedTaskReminder, "task"), "TaskReminder.task: this")
+        assertEquals(idOf(collectionTask), field(producedTaskReminder, "task"), "TaskReminder.task: this")
         sys.system.tick("Daily")
         assertEquals(beforeTaskReminder + 1, count("TaskReminder"), "the guard makes re-evaluation harmless")
     }

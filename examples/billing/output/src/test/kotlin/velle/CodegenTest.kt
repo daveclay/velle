@@ -1,6 +1,7 @@
 package velle
 
 import java.io.File
+import velle.generated.*
 import java.math.BigDecimal
 import java.time.LocalDate
 import kotlin.test.Test
@@ -66,18 +67,18 @@ open class GeneratedApiTest {
         assertIs<CommitResult.Accepted>(
             sys.commitLineItem(invoice, "widgets", BigDecimal("100"), 2))
 
-        assertEquals(0, invoice.total.compareTo(BigDecimal("200")))
-        assertEquals("open", invoice.status)
-        assertEquals(2, invoice.lineItems.single().quantity)
-        assertEquals("Ada", invoice.customer.name)
+        assertEquals(0, sys.read(invoice).total.compareTo(BigDecimal("200")))
+        assertEquals("open", sys.read(invoice).status)
+        assertEquals(2, sys.read(sys.read(invoice).lineItems.single()).quantity)
+        assertEquals("Ada", sys.read(sys.read(invoice).customer).name)
 
         assertIs<CommitResult.Accepted>(sys.commitSubmitPayment(invoice, BigDecimal("200")))
-        with(sys) { assertTrue(invoice.isPaidInvoice()) }
-        assertEquals("paid", invoice.status)
+        with(sys) { assertTrue(sys.read(invoice).isPaidInvoice) }
+        assertEquals("paid", sys.read(invoice).status)
         assertEquals(1, sys.receipts().size)
         assertEquals(1, sys.receiptEmails().size)
-        assertEquals(0, ada.largestPayment.compareTo(BigDecimal("200")))
-        assertEquals(invoice, sys.receipts().single().invoice)
+        assertEquals(0, sys.read(ada).largestPayment.compareTo(BigDecimal("200")))
+        assertEquals(invoice, sys.read(sys.receipts().single()).invoice)
     }
 
     @Test
@@ -100,11 +101,11 @@ open class GeneratedApiTest {
         sys.commitArchiveRequest(invoice)
         val archived = sys.archivedInvoices().single()
         assertEquals(LocalDate.of(2026, 1, 1), archived.archivedOn)
-        assertEquals(invoice, archived.asInvoice())
+        assertEquals(invoice, (sys.read(archived) as? Invoice))
 
         sys.advanceDays(2)
         sys.commitUnarchiveRequest(invoice)
-        assertEquals(LocalDate.of(2026, 1, 1), sys.unarchiveNotices().single().wasArchivedOn)
+        assertEquals(LocalDate.of(2026, 1, 1), sys.read(sys.unarchiveNotices().single()).wasArchivedOn)
         assertEquals(0, sys.archivedInvoices().size)
     }
 
@@ -115,7 +116,7 @@ open class GeneratedApiTest {
         sys.commitBillCustomer(sys.customers().single(), LocalDate.of(2025, 12, 1))
         sys.commitLineItem(sys.invoices().single(), "widgets", BigDecimal("50"), 1)
 
-        with(sys) { assertTrue(invoices().single().isOverdueInvoice()) }
+        with(sys) { assertTrue(sys.read(invoices().single()).isOverdueInvoice) }
         sys.tickWeekly()
         assertEquals(1, sys.reminders().size)
         sys.tickWeekly()
@@ -125,3 +126,4 @@ open class GeneratedApiTest {
         assertEquals(2, sys.reminders().size)
     }
 }
+

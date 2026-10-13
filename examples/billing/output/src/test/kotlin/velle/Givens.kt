@@ -1,6 +1,7 @@
 package velle.generated.billing
 
 import java.math.BigDecimal
+import velle.generated.*
 import java.time.LocalDate
 import velle.generated.BillingSystem
 
@@ -12,12 +13,12 @@ import velle.generated.BillingSystem
  */
 class Givens(private val sys: BillingSystem) : RequiredGivens {
 
-    private fun customer(): BillingSystem.CustomerView {
+    private fun customer(): Customer {
         sys.commitSignUp("Ada", "ada@example.com")
         return sys.customers().last()
     }
 
-    private fun invoice(due: LocalDate = LocalDate.of(2026, 2, 1)): BillingSystem.InvoiceView {
+    private fun invoice(due: LocalDate = LocalDate.of(2026, 2, 1)): Invoice {
         sys.commitBillCustomer(customer(), due)
         return sys.invoices().last()
     }
@@ -25,7 +26,7 @@ class Givens(private val sys: BillingSystem) : RequiredGivens {
     private fun invoiceWithBalance(
         amount: BigDecimal,
         due: LocalDate = LocalDate.of(2026, 2, 1),
-    ): BillingSystem.InvoiceView {
+    ): Invoice {
         val inv = invoice(due)
         sys.commitLineItem(inv, "widgets", amount, 1)
         return inv
@@ -43,30 +44,30 @@ class Givens(private val sys: BillingSystem) : RequiredGivens {
         sys.commitSubmitPayment(invoiceWithBalance(BigDecimal("100")), BigDecimal("40"))
     }
 
-    override fun correctEmail(): BillingSystem.CorrectEmailView {
+    override fun correctEmail(): CorrectEmail {
         sys.commitCorrectEmail(customer(), "corrected@example.com")
         return sys.correctEmails().last()
     }
 
-    override fun payment(): BillingSystem.PaymentView {
+    override fun payment(): Payment {
         sys.commitSubmitPayment(invoiceWithBalance(BigDecimal("100")), BigDecimal("40"))
         return sys.payments().last()
     }
 
-    override fun someInvoice(): BillingSystem.InvoiceView = invoice()
+    override fun someInvoice(): Invoice = invoice()
 
-    override fun paidInvoice(): BillingSystem.InvoiceView {
+    override fun paidInvoice(): Invoice {
         val inv = invoiceWithBalance(BigDecimal("100"))
         sys.commitSubmitPayment(inv, BigDecimal("100")) // covering payment: newly paid
         return inv
     }
 
-    override fun unemailedReceipt(): BillingSystem.ReceiptView {
+    override fun unemailedReceipt(): Receipt {
         paidInvoice()
         return sys.receipts().last()
     }
 
-    override fun invoiceForRemindOverdue(): BillingSystem.InvoiceView =
+    override fun invoiceForRemindOverdue(): Invoice =
         invoiceWithBalance(BigDecimal("100"), due = LocalDate.of(2025, 12, 1))
 
     override fun applicableDueChange() {
@@ -79,7 +80,7 @@ class Givens(private val sys: BillingSystem) : RequiredGivens {
         sys.commitChangeDueDate(inv, LocalDate.of(2026, 3, 1))
     }
 
-    override fun archivedInvoice(): BillingSystem.InvoiceView {
+    override fun archivedInvoice(): Invoice {
         val inv = invoice()
         sys.commitArchiveRequest(inv)
         return inv

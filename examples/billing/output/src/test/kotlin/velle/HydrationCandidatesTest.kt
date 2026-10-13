@@ -1,6 +1,7 @@
 package velle
 
 import java.math.BigDecimal
+import velle.generated.*
 import java.sql.Connection
 import java.sql.DriverManager
 import java.time.LocalDate
@@ -85,7 +86,7 @@ class HydrationCandidatesTest {
         accept(billing.commitLineItem(inv, "Design", BigDecimal("1200.00"), 1))
         accept(billing.commitSubmitPayment(inv, BigDecimal("1200.00")))
 
-        assertEquals("paid", billing.invoice(inv.id).status)
+        assertEquals("paid", billing.read(inv).status)
         assertEquals(1, sqlCount("Receipt"))
         assertEquals(1, sqlCount("ReceiptEmail"))
 
@@ -143,3 +144,4 @@ class HydrationCandidatesTest {
         assertEquals(emptyList(), store.fetchAlls)
     }
 }
+

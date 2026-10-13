@@ -30,79 +30,66 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Cancellation — consults Cancellation through 'cancellations' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCancellation(order: OrderView, requestedOn: LocalDate): CommitResult =
+    fun commitCancellation(order: Ref<Order>, requestedOn: LocalDate): CommitResult =
         system.commit("Cancellation", buildMap {
-            put("order", order.id)
+            put("order", system.idOf(order))
             put("requestedOn", requestedOn)
         })
 
     /** Queue key: [shipment.order].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitShipment(order: OrderView, shippedOn: LocalDate): CommitResult =
+    fun commitShipment(order: Ref<Order>, shippedOn: LocalDate): CommitResult =
         system.commit("Shipment", buildMap {
-            put("order", order.id)
+            put("order", system.idOf(order))
             put("shippedOn", shippedOn)
         })
 
-    fun orders(): List<OrderView> = system.instancesOf("Order").map { OrderView(it) }
-    fun order(id: Long) = OrderView(id)
-    fun cancellations(): List<CancellationView> = system.instancesOf("Cancellation").map { CancellationView(it) }
-    fun cancellation(id: Long) = CancellationView(id)
-    fun shipments(): List<ShipmentView> = system.instancesOf("Shipment").map { ShipmentView(it) }
-    fun shipment(id: Long) = ShipmentView(id)
-    fun cancelledOrders(): List<CancelledOrderView> = system.instancesOf("CancelledOrder").map { CancelledOrderView(it) }
-    fun OrderView.isCancelledOrder(): Boolean = system.isMember(id, "CancelledOrder")
-    fun shippedOrders(): List<ShippedOrderView> = system.instancesOf("ShippedOrder").map { ShippedOrderView(it) }
-    fun OrderView.isShippedOrder(): Boolean = system.isMember(id, "ShippedOrder")
+    fun orders(): List<Order> = system.instancesOf("Order").map { materializeOrder(it) }
+    fun cancellations(): List<Cancellation> = system.instancesOf("Cancellation").map { materializeCancellation(it) }
+    fun shipments(): List<Shipment> = system.instancesOf("Shipment").map { materializeShipment(it) }
+    fun cancelledOrders(): List<CancelledOrder> = system.instancesOf("CancelledOrder").map { materializeCancelledOrder(it) }
+    fun shippedOrders(): List<ShippedOrder> = system.instancesOf("ShippedOrder").map { materializeShippedOrder(it) }
 
-    inner class OrderView(override val id: Long) : View {
-        val reference: String get() = system.get(id, "reference") as String
-        val cancellations: List<CancellationView> get() = (system.get(id, "cancellations") as List<*>).map { CancellationView(it as Long) }
-        val shipments: List<ShipmentView> get() = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) }
-        override fun toString() = "Order#$id"
-        override fun equals(other: Any?) = other is OrderView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class CancellationView(override val id: Long) : View {
-        val order: OrderView get() = OrderView(system.get(id, "order") as Long)
-        val requestedOn: LocalDate get() = system.get(id, "requestedOn") as LocalDate
-        override fun toString() = "Cancellation#$id"
-        override fun equals(other: Any?) = other is CancellationView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ShipmentView(override val id: Long) : View {
-        val order: OrderView get() = OrderView(system.get(id, "order") as Long)
-        val shippedOn: LocalDate get() = system.get(id, "shippedOn") as LocalDate
-        override fun toString() = "Shipment#$id"
-        override fun equals(other: Any?) = other is ShipmentView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class CancelledOrderView(override val id: Long) : View {
-        fun asOrder() = OrderView(id)
-        override fun toString() = "CancelledOrder#$id"
-    }
-
-    inner class ShippedOrderView(override val id: Long) : View {
-        fun asOrder() = OrderView(id)
-        override fun toString() = "ShippedOrder#$id"
-    }
-
-    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
     val read = Read()
 
     inner class Read {
         /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
         val registry = QueryRegistry()
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+
+        /** The model object behind a reference, read now; throws when the record no longer exists. */
+        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
+        fun fetch(id: Long): Ref<*> {
+            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
+            return materialize(id)
+        }
+
         val orders: OrderQuery get() = OrderQuery(Query("Order"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun order(key: StoreKey): Order = this(Ref.Persisted("Order", key))
+        fun order(key: Long): Order = order(StoreKey(key))
+
         val cancellations: CancellationQuery get() = CancellationQuery(Query("Cancellation"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun cancellation(key: StoreKey): Cancellation = this(Ref.Persisted("Cancellation", key))
+        fun cancellation(key: Long): Cancellation = cancellation(StoreKey(key))
+
         val shipments: ShipmentQuery get() = ShipmentQuery(Query("Shipment"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun shipment(key: StoreKey): Shipment = this(Ref.Persisted("Shipment", key))
+        fun shipment(key: Long): Shipment = shipment(StoreKey(key))
+
         val cancelledOrders: CancelledOrderQuery get() = CancelledOrderQuery(Query("CancelledOrder"))
+        /** The record behind [ref] as a member of CancelledOrder, or null when it is not one. */
+        fun cancelledOrder(ref: Ref<Order>): CancelledOrder? =
+            system.idOf(ref).let { if (system.exists("CancelledOrder", it)) materializeCancelledOrder(it) else null }
+
         val shippedOrders: ShippedOrderQuery get() = ShippedOrderQuery(Query("ShippedOrder"))
+        /** The record behind [ref] as a member of ShippedOrder, or null when it is not one. */
+        fun shippedOrder(ref: Ref<Order>): ShippedOrder? =
+            system.idOf(ref).let { if (system.exists("ShippedOrder", it)) materializeShippedOrder(it) else null }
     }
 
     inner class OrderQuery(q: Query) : TypedQuery<OrderFields, Order>(system, q, OrderFields(), { materializeOrder(it) }) {
@@ -125,37 +112,49 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         override fun with(q: Query) = ShippedOrderQuery(q)
     }
 
+    /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
+    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+        "Order" -> materializeOrder(id)
+        "Cancellation" -> materializeCancellation(id)
+        "Shipment" -> materializeShipment(id)
+        else -> throw IllegalStateException("no model object for '$shape'")
+    }
+
     fun materializeOrder(id: Long): Order = Order(
-        id = id,
+        key = system.refFor(id).key,
         reference = system.get(id, "reference") as String,
-        cancellations = (system.get(id, "cancellations") as List<*>).map { CancellationView(it as Long) },
-        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        cancellations = (system.get(id, "cancellations") as List<*>).map { system.refFor(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { system.refFor(it as Long) },
+        isCancelledOrder = system.isMember(id, "CancelledOrder"),
+        isShippedOrder = system.isMember(id, "ShippedOrder"),
     )
 
     fun materializeCancellation(id: Long): Cancellation = Cancellation(
-        id = id,
-        order = OrderView(system.get(id, "order") as Long),
+        key = system.refFor(id).key,
+        order = system.refFor(system.get(id, "order") as Long),
         requestedOn = system.get(id, "requestedOn") as LocalDate,
     )
 
     fun materializeShipment(id: Long): Shipment = Shipment(
-        id = id,
-        order = OrderView(system.get(id, "order") as Long),
+        key = system.refFor(id).key,
+        order = system.refFor(system.get(id, "order") as Long),
         shippedOn = system.get(id, "shippedOn") as LocalDate,
     )
 
     fun materializeCancelledOrder(id: Long): CancelledOrder = CancelledOrder(
-        id = id,
+        key = system.refFor(id).key,
         reference = system.get(id, "reference") as String,
-        cancellations = (system.get(id, "cancellations") as List<*>).map { CancellationView(it as Long) },
-        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        cancellations = (system.get(id, "cancellations") as List<*>).map { system.refFor(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { system.refFor(it as Long) },
+        isShippedOrder = system.isMember(id, "ShippedOrder"),
     )
 
     fun materializeShippedOrder(id: Long): ShippedOrder = ShippedOrder(
-        id = id,
+        key = system.refFor(id).key,
         reference = system.get(id, "reference") as String,
-        cancellations = (system.get(id, "cancellations") as List<*>).map { CancellationView(it as Long) },
-        shipments = (system.get(id, "shipments") as List<*>).map { ShipmentView(it as Long) },
+        cancellations = (system.get(id, "cancellations") as List<*>).map { system.refFor(it as Long) },
+        shipments = (system.get(id, "shipments") as List<*>).map { system.refFor(it as Long) },
+        isCancelledOrder = system.isMember(id, "CancelledOrder"),
     )
 
     companion object {
@@ -231,41 +230,71 @@ never (Shipment where order is CancelledOrder)
     }
 }
 
-// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
-// References are typed handles (views); navigating one is a further read.
+// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// A model object is a reference to its own record (`Ref<T>`): equality is identity,
+// a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
+// the record's membership at the moment of the read.
 
 data class Order(
-    override val id: Long,
+    override val key: StoreKey,
     val reference: String,
-    val cancellations: List<ShippingSystem.CancellationView>,
-    val shipments: List<ShippingSystem.ShipmentView>,
-) : View
+    val cancellations: List<Ref<Cancellation>>,
+    val shipments: List<Ref<Shipment>>,
+    /** membership of CancelledOrder at the moment of the read */
+    val isCancelledOrder: Boolean,
+    /** membership of ShippedOrder at the moment of the read */
+    val isShippedOrder: Boolean,
+) : Ref<Order> {
+    override val shape: String get() = "Order"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Cancellation(
-    override val id: Long,
-    val order: ShippingSystem.OrderView,
+    override val key: StoreKey,
+    val order: Ref<Order>,
     val requestedOn: LocalDate,
-) : View
+) : Ref<Cancellation> {
+    override val shape: String get() = "Cancellation"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Shipment(
-    override val id: Long,
-    val order: ShippingSystem.OrderView,
+    override val key: StoreKey,
+    val order: Ref<Order>,
     val shippedOn: LocalDate,
-) : View
+) : Ref<Shipment> {
+    override val shape: String get() = "Shipment"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class CancelledOrder(
-    override val id: Long,
+    override val key: StoreKey,
     val reference: String,
-    val cancellations: List<ShippingSystem.CancellationView>,
-    val shipments: List<ShippingSystem.ShipmentView>,
-) : View
+    val cancellations: List<Ref<Cancellation>>,
+    val shipments: List<Ref<Shipment>>,
+    /** membership of ShippedOrder at the moment of the read */
+    val isShippedOrder: Boolean,
+) : Ref<Order> {
+    override val shape: String get() = "Order"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ShippedOrder(
-    override val id: Long,
+    override val key: StoreKey,
     val reference: String,
-    val cancellations: List<ShippingSystem.CancellationView>,
-    val shipments: List<ShippingSystem.ShipmentView>,
-) : View
+    val cancellations: List<Ref<Cancellation>>,
+    val shipments: List<Ref<Shipment>>,
+    /** membership of CancelledOrder at the moment of the read */
+    val isCancelledOrder: Boolean,
+) : Ref<Order> {
+    override val shape: String get() = "Order"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 // ── the builder's vocabulary: one field handle per member, memberships per refinement ──
 

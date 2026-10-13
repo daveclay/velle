@@ -37,47 +37,47 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     /** Queue key: [student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitStudent(name: String, tags: List<String>, courses: List<CourseView>, advisor: AdvisorView? = null): CommitResult =
+    fun commitStudent(name: String, tags: List<String>, courses: List<Ref<Course>>, advisor: Ref<Advisor>? = null): CommitResult =
         system.commit("Student", buildMap {
             put("name", name)
             put("tags", tags)
-            put("courses", courses.map { it.id })
-            advisor?.let { put("advisor", it.id) }
+            put("courses", courses.map { system.idOf(it) })
+            advisor?.let { put("advisor", system.idOf(it)) }
         })
 
     /** Queue keys: [setEnrollment.student], [setEnrollment.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitSetEnrollment(student: StudentView, courses: List<CourseView>): CommitResult =
+    fun commitSetEnrollment(student: Ref<Student>, courses: List<Ref<Course>>): CommitResult =
         system.commit("SetEnrollment", buildMap {
-            put("student", student.id)
-            put("courses", courses.map { it.id })
+            put("student", system.idOf(student))
+            put("courses", courses.map { system.idOf(it) })
         })
 
     /** Queue keys: [enroll.student], [enroll.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitEnroll(student: StudentView, course: CourseView): CommitResult =
+    fun commitEnroll(student: Ref<Student>, course: Ref<Course>): CommitResult =
         system.commit("Enroll", buildMap {
-            put("student", student.id)
-            put("course", course.id)
+            put("student", system.idOf(student))
+            put("course", system.idOf(course))
         })
 
     /** Queue keys: [drop.student], [drop.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitDrop(student: StudentView, course: CourseView): CommitResult =
+    fun commitDrop(student: Ref<Student>, course: Ref<Course>): CommitResult =
         system.commit("Drop", buildMap {
-            put("student", student.id)
-            put("course", course.id)
+            put("student", system.idOf(student))
+            put("course", system.idOf(course))
         })
 
     /** Queue keys: [tag.student], [tag.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitTag(student: StudentView, tag: String): CommitResult =
+    fun commitTag(student: Ref<Student>, tag: String): CommitResult =
         system.commit("Tag", buildMap {
-            put("student", student.id)
+            put("student", system.idOf(student))
             put("tag", tag)
         })
 
@@ -85,73 +85,57 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
      *  System-wide over Student — writes a Student whose 'advisor' reference the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitAssignAdvisor(advisor: AdvisorView, students: List<StudentView>): CommitResult =
+    fun commitAssignAdvisor(advisor: Ref<Advisor>, students: List<Ref<Student>>): CommitResult =
         system.commit("AssignAdvisor", buildMap {
-            put("advisor", advisor.id)
-            put("students", students.map { it.id })
+            put("advisor", system.idOf(advisor))
+            put("students", students.map { system.idOf(it) })
         })
 
-    fun advisors(): List<AdvisorView> = system.instancesOf("Advisor").map { AdvisorView(it) }
-    fun advisor(id: Long) = AdvisorView(id)
-    fun courses(): List<CourseView> = system.instancesOf("Course").map { CourseView(it) }
-    fun course(id: Long) = CourseView(id)
-    fun students(): List<StudentView> = system.instancesOf("Student").map { StudentView(it) }
-    fun student(id: Long) = StudentView(id)
-    fun overloadeds(): List<OverloadedView> = system.instancesOf("Overloaded").map { OverloadedView(it) }
-    fun StudentView.isOverloaded(): Boolean = system.isMember(id, "Overloaded")
-    fun untaggeds(): List<UntaggedView> = system.instancesOf("Untagged").map { UntaggedView(it) }
-    fun StudentView.isUntagged(): Boolean = system.isMember(id, "Untagged")
+    fun advisors(): List<Advisor> = system.instancesOf("Advisor").map { materializeAdvisor(it) }
+    fun courses(): List<Course> = system.instancesOf("Course").map { materializeCourse(it) }
+    fun students(): List<Student> = system.instancesOf("Student").map { materializeStudent(it) }
+    fun overloadeds(): List<Overloaded> = system.instancesOf("Overloaded").map { materializeOverloaded(it) }
+    fun untaggeds(): List<Untagged> = system.instancesOf("Untagged").map { materializeUntagged(it) }
 
-    inner class AdvisorView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val advisees: List<StudentView> get() = (system.get(id, "advisees") as List<*>).map { StudentView(it as Long) }
-        val students: List<StudentView> get() = (system.get(id, "students") as List<*>).map { StudentView(it as Long) }
-        override fun toString() = "Advisor#$id"
-        override fun equals(other: Any?) = other is AdvisorView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class CourseView(override val id: Long) : View {
-        val title: String get() = system.get(id, "title") as String
-        val capacity: Int get() = (system.get(id, "capacity") as BigDecimal).intValueExact()
-        val students: List<StudentView> get() = (system.get(id, "students") as List<*>).map { StudentView(it as Long) }
-        override fun toString() = "Course#$id"
-        override fun equals(other: Any?) = other is CourseView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class StudentView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val advisor: AdvisorView? get() = (system.get(id, "advisor") as Long?)?.let { AdvisorView(it) }
-        val tags: List<String> get() = (system.get(id, "tags") as List<*>).map { it as String }
-        val courses: List<CourseView> get() = (system.get(id, "courses") as List<*>).map { CourseView(it as Long) }
-        override fun toString() = "Student#$id"
-        override fun equals(other: Any?) = other is StudentView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class OverloadedView(override val id: Long) : View {
-        fun asStudent() = StudentView(id)
-        override fun toString() = "Overloaded#$id"
-    }
-
-    inner class UntaggedView(override val id: Long) : View {
-        fun asStudent() = StudentView(id)
-        override fun toString() = "Untagged#$id"
-    }
-
-    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
     val read = Read()
 
     inner class Read {
         /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
         val registry = QueryRegistry()
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+
+        /** The model object behind a reference, read now; throws when the record no longer exists. */
+        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
+        fun fetch(id: Long): Ref<*> {
+            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
+            return materialize(id)
+        }
+
         val advisors: AdvisorQuery get() = AdvisorQuery(Query("Advisor"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun advisor(key: StoreKey): Advisor = this(Ref.Persisted("Advisor", key))
+        fun advisor(key: Long): Advisor = advisor(StoreKey(key))
+
         val courses: CourseQuery get() = CourseQuery(Query("Course"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun course(key: StoreKey): Course = this(Ref.Persisted("Course", key))
+        fun course(key: Long): Course = course(StoreKey(key))
+
         val students: StudentQuery get() = StudentQuery(Query("Student"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun student(key: StoreKey): Student = this(Ref.Persisted("Student", key))
+        fun student(key: Long): Student = student(StoreKey(key))
+
         val overloadeds: OverloadedQuery get() = OverloadedQuery(Query("Overloaded"))
+        /** The record behind [ref] as a member of Overloaded, or null when it is not one. */
+        fun overloaded(ref: Ref<Student>): Overloaded? =
+            system.idOf(ref).let { if (system.exists("Overloaded", it)) materializeOverloaded(it) else null }
+
         val untaggeds: UntaggedQuery get() = UntaggedQuery(Query("Untagged"))
+        /** The record behind [ref] as a member of Untagged, or null when it is not one. */
+        fun untagged(ref: Ref<Student>): Untagged? =
+            system.idOf(ref).let { if (system.exists("Untagged", it)) materializeUntagged(it) else null }
     }
 
     inner class AdvisorQuery(q: Query) : TypedQuery<AdvisorFields, Advisor>(system, q, AdvisorFields(), { materializeAdvisor(it) }) {
@@ -174,42 +158,54 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         override fun with(q: Query) = UntaggedQuery(q)
     }
 
+    /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
+    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+        "Advisor" -> materializeAdvisor(id)
+        "Course" -> materializeCourse(id)
+        "Student" -> materializeStudent(id)
+        else -> throw IllegalStateException("no model object for '$shape'")
+    }
+
     fun materializeAdvisor(id: Long): Advisor = Advisor(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        advisees = (system.get(id, "advisees") as List<*>).map { StudentView(it as Long) },
-        students = (system.get(id, "students") as List<*>).map { StudentView(it as Long) },
+        advisees = (system.get(id, "advisees") as List<*>).map { system.refFor(it as Long) },
+        students = (system.get(id, "students") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeCourse(id: Long): Course = Course(
-        id = id,
+        key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         capacity = (system.get(id, "capacity") as BigDecimal).intValueExact(),
-        students = (system.get(id, "students") as List<*>).map { StudentView(it as Long) },
+        students = (system.get(id, "students") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeStudent(id: Long): Student = Student(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        advisor = (system.get(id, "advisor") as Long?)?.let { AdvisorView(it) },
+        advisor = (system.get(id, "advisor") as Long?)?.let { system.refFor(it) },
         tags = (system.get(id, "tags") as List<*>).map { it as String },
-        courses = (system.get(id, "courses") as List<*>).map { CourseView(it as Long) },
+        courses = (system.get(id, "courses") as List<*>).map { system.refFor(it as Long) },
+        isOverloaded = system.isMember(id, "Overloaded"),
+        isUntagged = system.isMember(id, "Untagged"),
     )
 
     fun materializeOverloaded(id: Long): Overloaded = Overloaded(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        advisor = (system.get(id, "advisor") as Long?)?.let { AdvisorView(it) },
+        advisor = (system.get(id, "advisor") as Long?)?.let { system.refFor(it) },
         tags = (system.get(id, "tags") as List<*>).map { it as String },
-        courses = (system.get(id, "courses") as List<*>).map { CourseView(it as Long) },
+        courses = (system.get(id, "courses") as List<*>).map { system.refFor(it as Long) },
+        isUntagged = system.isMember(id, "Untagged"),
     )
 
     fun materializeUntagged(id: Long): Untagged = Untagged(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        advisor = (system.get(id, "advisor") as Long?)?.let { AdvisorView(it) },
+        advisor = (system.get(id, "advisor") as Long?)?.let { system.refFor(it) },
         tags = (system.get(id, "tags") as List<*>).map { it as String },
-        courses = (system.get(id, "courses") as List<*>).map { CourseView(it as Long) },
+        courses = (system.get(id, "courses") as List<*>).map { system.refFor(it as Long) },
+        isOverloaded = system.isMember(id, "Overloaded"),
     )
 
     companion object {
@@ -298,46 +294,76 @@ never (Course where capacity < 0)
     }
 }
 
-// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
-// References are typed handles (views); navigating one is a further read.
+// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// A model object is a reference to its own record (`Ref<T>`): equality is identity,
+// a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
+// the record's membership at the moment of the read.
 
 data class Advisor(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
-    val advisees: List<EnrollmentSystem.StudentView>,
-    val students: List<EnrollmentSystem.StudentView>,
-) : View
+    val advisees: List<Ref<Student>>,
+    val students: List<Ref<Student>>,
+) : Ref<Advisor> {
+    override val shape: String get() = "Advisor"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Course(
-    override val id: Long,
+    override val key: StoreKey,
     val title: String,
     val capacity: Int,
-    val students: List<EnrollmentSystem.StudentView>,
-) : View
+    val students: List<Ref<Student>>,
+) : Ref<Course> {
+    override val shape: String get() = "Course"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Student(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
-    val advisor: EnrollmentSystem.AdvisorView?,
+    val advisor: Ref<Advisor>?,
     val tags: List<String>,
-    val courses: List<EnrollmentSystem.CourseView>,
-) : View
+    val courses: List<Ref<Course>>,
+    /** membership of Overloaded at the moment of the read */
+    val isOverloaded: Boolean,
+    /** membership of Untagged at the moment of the read */
+    val isUntagged: Boolean,
+) : Ref<Student> {
+    override val shape: String get() = "Student"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Overloaded(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
-    val advisor: EnrollmentSystem.AdvisorView?,
+    val advisor: Ref<Advisor>?,
     val tags: List<String>,
-    val courses: List<EnrollmentSystem.CourseView>,
-) : View
+    val courses: List<Ref<Course>>,
+    /** membership of Untagged at the moment of the read */
+    val isUntagged: Boolean,
+) : Ref<Student> {
+    override val shape: String get() = "Student"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Untagged(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
-    val advisor: EnrollmentSystem.AdvisorView?,
+    val advisor: Ref<Advisor>?,
     val tags: List<String>,
-    val courses: List<EnrollmentSystem.CourseView>,
-) : View
+    val courses: List<Ref<Course>>,
+    /** membership of Overloaded at the moment of the read */
+    val isOverloaded: Boolean,
+) : Ref<Student> {
+    override val shape: String get() = "Student"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 // ── the builder's vocabulary: one field handle per member, memberships per refinement ──
 

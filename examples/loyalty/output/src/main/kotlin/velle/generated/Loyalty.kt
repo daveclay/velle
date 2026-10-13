@@ -20,18 +20,18 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     /** Queue keys: [join.referrer], [join.referrer.referrer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitJoin(name: String, referrer: MemberView? = null): CommitResult =
+    fun commitJoin(name: String, referrer: Ref<Member>? = null): CommitResult =
         system.commit("Join", buildMap {
             put("name", name)
-            referrer?.let { put("referrer", it.id) }
+            referrer?.let { put("referrer", system.idOf(it)) }
         })
 
     /** Queue key: [duesPayment.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitDuesPayment(member: MemberView, coveredMonth: String, dueBy: LocalDate, paidOn: LocalDate): CommitResult =
+    fun commitDuesPayment(member: Ref<Member>, coveredMonth: String, dueBy: LocalDate, paidOn: LocalDate): CommitResult =
         system.commit("DuesPayment", buildMap {
-            put("member", member.id)
+            put("member", system.idOf(member))
             put("coveredMonth", coveredMonth)
             put("dueBy", dueBy)
             put("paidOn", paidOn)
@@ -40,151 +40,101 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     /** Queue keys: [purchase.member], [purchase.member.referrer], [purchase.member.referrer.referrer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPurchase(member: MemberView, amount: BigDecimal): CommitResult =
+    fun commitPurchase(member: Ref<Member>, amount: BigDecimal): CommitResult =
         system.commit("Purchase", buildMap {
-            put("member", member.id)
+            put("member", system.idOf(member))
             put("amount", amount)
         })
 
     /** Queue key: [enrollment.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitEnrollment(member: MemberView): CommitResult =
+    fun commitEnrollment(member: Ref<Member>): CommitResult =
         system.commit("Enrollment", buildMap {
-            put("member", member.id)
+            put("member", system.idOf(member))
         })
 
-    fun members(): List<MemberView> = system.instancesOf("Member").map { MemberView(it) }
-    fun member(id: Long) = MemberView(id)
-    fun duesPayments(): List<DuesPaymentView> = system.instancesOf("DuesPayment").map { DuesPaymentView(it) }
-    fun duesPayment(id: Long) = DuesPaymentView(id)
-    fun purchases(): List<PurchaseView> = system.instancesOf("Purchase").map { PurchaseView(it) }
-    fun purchase(id: Long) = PurchaseView(id)
-    fun thankYouNotes(): List<ThankYouNoteView> = system.instancesOf("ThankYouNote").map { ThankYouNoteView(it) }
-    fun thankYouNote(id: Long) = ThankYouNoteView(id)
-    fun enrollments(): List<EnrollmentView> = system.instancesOf("Enrollment").map { EnrollmentView(it) }
-    fun enrollment(id: Long) = EnrollmentView(id)
-    fun safetyWaivers(): List<SafetyWaiverView> = system.instancesOf("SafetyWaiver").map { SafetyWaiverView(it) }
-    fun safetyWaiver(id: Long) = SafetyWaiverView(id)
-    fun orientationRecords(): List<OrientationRecordView> = system.instancesOf("OrientationRecord").map { OrientationRecordView(it) }
-    fun orientationRecord(id: Long) = OrientationRecordView(id)
-    fun keycards(): List<KeycardView> = system.instancesOf("Keycard").map { KeycardView(it) }
-    fun keycard(id: Long) = KeycardView(id)
-    fun qualifiedPurchases(): List<QualifiedPurchaseView> = system.instancesOf("QualifiedPurchase").map { QualifiedPurchaseView(it) }
-    fun PurchaseView.isQualifiedPurchase(): Boolean = system.isMember(id, "QualifiedPurchase")
-    fun vipPurchases(): List<VipPurchaseView> = system.instancesOf("VipPurchase").map { VipPurchaseView(it) }
-    fun PurchaseView.isVipPurchase(): Boolean = system.isMember(id, "VipPurchase")
-    fun certifiedMembers(): List<CertifiedMemberView> = system.instancesOf("CertifiedMember").map { CertifiedMemberView(it) }
-    fun MemberView.isCertifiedMember(): Boolean = system.isMember(id, "CertifiedMember")
+    fun members(): List<Member> = system.instancesOf("Member").map { materializeMember(it) }
+    fun duesPayments(): List<DuesPayment> = system.instancesOf("DuesPayment").map { materializeDuesPayment(it) }
+    fun purchases(): List<Purchase> = system.instancesOf("Purchase").map { materializePurchase(it) }
+    fun thankYouNotes(): List<ThankYouNote> = system.instancesOf("ThankYouNote").map { materializeThankYouNote(it) }
+    fun enrollments(): List<Enrollment> = system.instancesOf("Enrollment").map { materializeEnrollment(it) }
+    fun safetyWaivers(): List<SafetyWaiver> = system.instancesOf("SafetyWaiver").map { materializeSafetyWaiver(it) }
+    fun orientationRecords(): List<OrientationRecord> = system.instancesOf("OrientationRecord").map { materializeOrientationRecord(it) }
+    fun keycards(): List<Keycard> = system.instancesOf("Keycard").map { materializeKeycard(it) }
+    fun qualifiedPurchases(): List<QualifiedPurchase> = system.instancesOf("QualifiedPurchase").map { materializeQualifiedPurchase(it) }
+    fun vipPurchases(): List<VipPurchase> = system.instancesOf("VipPurchase").map { materializeVipPurchase(it) }
+    fun certifiedMembers(): List<CertifiedMember> = system.instancesOf("CertifiedMember").map { materializeCertifiedMember(it) }
 
-    inner class MemberView(override val id: Long) : View {
-        val name: String get() = system.get(id, "name") as String
-        val referrer: MemberView? get() = (system.get(id, "referrer") as Long?)?.let { MemberView(it) }
-        val tier: String get() = system.get(id, "tier") as String
-        val foundingReferrer: MemberView? get() = (system.get(id, "foundingReferrer") as Long?)?.let { MemberView(it) }
-        val streak: Int get() = (system.get(id, "streak") as BigDecimal).intValueExact()
-        val members: List<MemberView> get() = (system.get(id, "members") as List<*>).map { MemberView(it as Long) }
-        val duesPayments: List<DuesPaymentView> get() = (system.get(id, "duesPayments") as List<*>).map { DuesPaymentView(it as Long) }
-        val purchases: List<PurchaseView> get() = (system.get(id, "purchases") as List<*>).map { PurchaseView(it as Long) }
-        val enrollments: List<EnrollmentView> get() = (system.get(id, "enrollments") as List<*>).map { EnrollmentView(it as Long) }
-        val safetyWaivers: List<SafetyWaiverView> get() = (system.get(id, "safetyWaivers") as List<*>).map { SafetyWaiverView(it as Long) }
-        val orientationRecords: List<OrientationRecordView> get() = (system.get(id, "orientationRecords") as List<*>).map { OrientationRecordView(it as Long) }
-        val keycards: List<KeycardView> get() = (system.get(id, "keycards") as List<*>).map { KeycardView(it as Long) }
-        override fun toString() = "Member#$id"
-        override fun equals(other: Any?) = other is MemberView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class DuesPaymentView(override val id: Long) : View {
-        val member: MemberView get() = MemberView(system.get(id, "member") as Long)
-        val coveredMonth: String get() = system.get(id, "coveredMonth") as String
-        val dueBy: LocalDate get() = system.get(id, "dueBy") as LocalDate
-        val paidOn: LocalDate get() = system.get(id, "paidOn") as LocalDate
-        val onTime: Boolean get() = system.get(id, "onTime") as Boolean
-        val previous: DuesPaymentView? get() = (system.get(id, "previous") as Long?)?.let { DuesPaymentView(it) }
-        val streakAfter: Int get() = (system.get(id, "streakAfter") as BigDecimal).intValueExact()
-        override fun toString() = "DuesPayment#$id"
-        override fun equals(other: Any?) = other is DuesPaymentView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class PurchaseView(override val id: Long) : View {
-        val member: MemberView get() = MemberView(system.get(id, "member") as Long)
-        val amount: BigDecimal get() = system.get(id, "amount") as BigDecimal
-        val thankYouNotes: List<ThankYouNoteView> get() = (system.get(id, "thankYouNotes") as List<*>).map { ThankYouNoteView(it as Long) }
-        override fun toString() = "Purchase#$id"
-        override fun equals(other: Any?) = other is PurchaseView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class ThankYouNoteView(override val id: Long) : View {
-        val purchase: PurchaseView get() = PurchaseView(system.get(id, "purchase") as Long)
-        override fun toString() = "ThankYouNote#$id"
-        override fun equals(other: Any?) = other is ThankYouNoteView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class EnrollmentView(override val id: Long) : View {
-        val member: MemberView get() = MemberView(system.get(id, "member") as Long)
-        override fun toString() = "Enrollment#$id"
-        override fun equals(other: Any?) = other is EnrollmentView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class SafetyWaiverView(override val id: Long) : View {
-        val member: MemberView get() = MemberView(system.get(id, "member") as Long)
-        override fun toString() = "SafetyWaiver#$id"
-        override fun equals(other: Any?) = other is SafetyWaiverView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class OrientationRecordView(override val id: Long) : View {
-        val member: MemberView get() = MemberView(system.get(id, "member") as Long)
-        override fun toString() = "OrientationRecord#$id"
-        override fun equals(other: Any?) = other is OrientationRecordView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class KeycardView(override val id: Long) : View {
-        val member: MemberView get() = MemberView(system.get(id, "member") as Long)
-        override fun toString() = "Keycard#$id"
-        override fun equals(other: Any?) = other is KeycardView && other.id == id
-        override fun hashCode() = id.hashCode()
-    }
-
-    inner class QualifiedPurchaseView(override val id: Long) : View {
-        fun asPurchase() = PurchaseView(id)
-        override fun toString() = "QualifiedPurchase#$id"
-    }
-
-    inner class VipPurchaseView(override val id: Long) : View {
-        fun asPurchase() = PurchaseView(id)
-        override fun toString() = "VipPurchase#$id"
-    }
-
-    inner class CertifiedMemberView(override val id: Long) : View {
-        fun asMember() = MemberView(id)
-        override fun toString() = "CertifiedMember#$id"
-    }
-
-    // ── the query API: `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
     val read = Read()
 
     inner class Read {
         /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
         val registry = QueryRegistry()
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+
+        /** The model object behind a reference, read now; throws when the record no longer exists. */
+        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
+        fun fetch(id: Long): Ref<*> {
+            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
+            return materialize(id)
+        }
+
         val members: MemberQuery get() = MemberQuery(Query("Member"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun member(key: StoreKey): Member = this(Ref.Persisted("Member", key))
+        fun member(key: Long): Member = member(StoreKey(key))
+
         val duesPayments: DuesPaymentQuery get() = DuesPaymentQuery(Query("DuesPayment"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun duesPayment(key: StoreKey): DuesPayment = this(Ref.Persisted("DuesPayment", key))
+        fun duesPayment(key: Long): DuesPayment = duesPayment(StoreKey(key))
+
         val purchases: PurchaseQuery get() = PurchaseQuery(Query("Purchase"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun purchase(key: StoreKey): Purchase = this(Ref.Persisted("Purchase", key))
+        fun purchase(key: Long): Purchase = purchase(StoreKey(key))
+
         val thankYouNotes: ThankYouNoteQuery get() = ThankYouNoteQuery(Query("ThankYouNote"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun thankYouNote(key: StoreKey): ThankYouNote = this(Ref.Persisted("ThankYouNote", key))
+        fun thankYouNote(key: Long): ThankYouNote = thankYouNote(StoreKey(key))
+
         val enrollments: EnrollmentQuery get() = EnrollmentQuery(Query("Enrollment"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun enrollment(key: StoreKey): Enrollment = this(Ref.Persisted("Enrollment", key))
+        fun enrollment(key: Long): Enrollment = enrollment(StoreKey(key))
+
         val safetyWaivers: SafetyWaiverQuery get() = SafetyWaiverQuery(Query("SafetyWaiver"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun safetyWaiver(key: StoreKey): SafetyWaiver = this(Ref.Persisted("SafetyWaiver", key))
+        fun safetyWaiver(key: Long): SafetyWaiver = safetyWaiver(StoreKey(key))
+
         val orientationRecords: OrientationRecordQuery get() = OrientationRecordQuery(Query("OrientationRecord"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun orientationRecord(key: StoreKey): OrientationRecord = this(Ref.Persisted("OrientationRecord", key))
+        fun orientationRecord(key: Long): OrientationRecord = orientationRecord(StoreKey(key))
+
         val keycards: KeycardQuery get() = KeycardQuery(Query("Keycard"))
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun keycard(key: StoreKey): Keycard = this(Ref.Persisted("Keycard", key))
+        fun keycard(key: Long): Keycard = keycard(StoreKey(key))
+
         val qualifiedPurchases: QualifiedPurchaseQuery get() = QualifiedPurchaseQuery(Query("QualifiedPurchase"))
+        /** The record behind [ref] as a member of QualifiedPurchase, or null when it is not one. */
+        fun qualifiedPurchase(ref: Ref<Purchase>): QualifiedPurchase? =
+            system.idOf(ref).let { if (system.exists("QualifiedPurchase", it)) materializeQualifiedPurchase(it) else null }
+
         val vipPurchases: VipPurchaseQuery get() = VipPurchaseQuery(Query("VipPurchase"))
+        /** The record behind [ref] as a member of VipPurchase, or null when it is not one. */
+        fun vipPurchase(ref: Ref<Purchase>): VipPurchase? =
+            system.idOf(ref).let { if (system.exists("VipPurchase", it)) materializeVipPurchase(it) else null }
+
         val certifiedMembers: CertifiedMemberQuery get() = CertifiedMemberQuery(Query("CertifiedMember"))
+        /** The record behind [ref] as a member of CertifiedMember, or null when it is not one. */
+        fun certifiedMember(ref: Ref<Member>): CertifiedMember? =
+            system.idOf(ref).let { if (system.exists("CertifiedMember", it)) materializeCertifiedMember(it) else null }
     }
 
     inner class MemberQuery(q: Query) : TypedQuery<MemberFields, Member>(system, q, MemberFields(), { materializeMember(it) }) {
@@ -231,93 +181,111 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun with(q: Query) = CertifiedMemberQuery(q)
     }
 
+    /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
+    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+        "Member" -> materializeMember(id)
+        "DuesPayment" -> materializeDuesPayment(id)
+        "Purchase" -> materializePurchase(id)
+        "ThankYouNote" -> materializeThankYouNote(id)
+        "Enrollment" -> materializeEnrollment(id)
+        "SafetyWaiver" -> materializeSafetyWaiver(id)
+        "OrientationRecord" -> materializeOrientationRecord(id)
+        "Keycard" -> materializeKeycard(id)
+        else -> throw IllegalStateException("no model object for '$shape'")
+    }
+
     fun materializeMember(id: Long): Member = Member(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        referrer = (system.get(id, "referrer") as Long?)?.let { MemberView(it) },
+        referrer = (system.get(id, "referrer") as Long?)?.let { system.refFor(it) },
         tier = system.get(id, "tier") as String,
-        foundingReferrer = (system.get(id, "foundingReferrer") as Long?)?.let { MemberView(it) },
+        foundingReferrer = (system.get(id, "foundingReferrer") as Long?)?.let { system.refFor(it) },
         streak = (system.get(id, "streak") as BigDecimal).intValueExact(),
-        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
-        duesPayments = (system.get(id, "duesPayments") as List<*>).map { DuesPaymentView(it as Long) },
-        purchases = (system.get(id, "purchases") as List<*>).map { PurchaseView(it as Long) },
-        enrollments = (system.get(id, "enrollments") as List<*>).map { EnrollmentView(it as Long) },
-        safetyWaivers = (system.get(id, "safetyWaivers") as List<*>).map { SafetyWaiverView(it as Long) },
-        orientationRecords = (system.get(id, "orientationRecords") as List<*>).map { OrientationRecordView(it as Long) },
-        keycards = (system.get(id, "keycards") as List<*>).map { KeycardView(it as Long) },
+        members = (system.get(id, "members") as List<*>).map { system.refFor(it as Long) },
+        duesPayments = (system.get(id, "duesPayments") as List<*>).map { system.refFor(it as Long) },
+        purchases = (system.get(id, "purchases") as List<*>).map { system.refFor(it as Long) },
+        enrollments = (system.get(id, "enrollments") as List<*>).map { system.refFor(it as Long) },
+        safetyWaivers = (system.get(id, "safetyWaivers") as List<*>).map { system.refFor(it as Long) },
+        orientationRecords = (system.get(id, "orientationRecords") as List<*>).map { system.refFor(it as Long) },
+        keycards = (system.get(id, "keycards") as List<*>).map { system.refFor(it as Long) },
+        isCertifiedMember = system.isMember(id, "CertifiedMember"),
     )
 
     fun materializeDuesPayment(id: Long): DuesPayment = DuesPayment(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         coveredMonth = system.get(id, "coveredMonth") as String,
         dueBy = system.get(id, "dueBy") as LocalDate,
         paidOn = system.get(id, "paidOn") as LocalDate,
         onTime = system.get(id, "onTime") as Boolean,
-        previous = (system.get(id, "previous") as Long?)?.let { DuesPaymentView(it) },
+        previous = (system.get(id, "previous") as Long?)?.let { system.refFor(it) },
         streakAfter = (system.get(id, "streakAfter") as BigDecimal).intValueExact(),
     )
 
     fun materializePurchase(id: Long): Purchase = Purchase(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
-        thankYouNotes = (system.get(id, "thankYouNotes") as List<*>).map { ThankYouNoteView(it as Long) },
+        thankYouNotes = (system.get(id, "thankYouNotes") as List<*>).map { system.refFor(it as Long) },
+        isQualifiedPurchase = system.isMember(id, "QualifiedPurchase"),
+        isVipPurchase = system.isMember(id, "VipPurchase"),
     )
 
     fun materializeThankYouNote(id: Long): ThankYouNote = ThankYouNote(
-        id = id,
-        purchase = PurchaseView(system.get(id, "purchase") as Long),
+        key = system.refFor(id).key,
+        purchase = system.refFor(system.get(id, "purchase") as Long),
     )
 
     fun materializeEnrollment(id: Long): Enrollment = Enrollment(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
     )
 
     fun materializeSafetyWaiver(id: Long): SafetyWaiver = SafetyWaiver(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
     )
 
     fun materializeOrientationRecord(id: Long): OrientationRecord = OrientationRecord(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
     )
 
     fun materializeKeycard(id: Long): Keycard = Keycard(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
     )
 
     fun materializeQualifiedPurchase(id: Long): QualifiedPurchase = QualifiedPurchase(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
-        thankYouNotes = (system.get(id, "thankYouNotes") as List<*>).map { ThankYouNoteView(it as Long) },
+        thankYouNotes = (system.get(id, "thankYouNotes") as List<*>).map { system.refFor(it as Long) },
+        isVipPurchase = system.isMember(id, "VipPurchase"),
     )
 
     fun materializeVipPurchase(id: Long): VipPurchase = VipPurchase(
-        id = id,
-        member = MemberView(system.get(id, "member") as Long),
+        key = system.refFor(id).key,
+        member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
-        thankYouNotes = (system.get(id, "thankYouNotes") as List<*>).map { ThankYouNoteView(it as Long) },
+        thankYouNotes = (system.get(id, "thankYouNotes") as List<*>).map { system.refFor(it as Long) },
+        isQualifiedPurchase = system.isMember(id, "QualifiedPurchase"),
     )
 
     fun materializeCertifiedMember(id: Long): CertifiedMember = CertifiedMember(
-        id = id,
+        key = system.refFor(id).key,
         name = system.get(id, "name") as String,
-        referrer = (system.get(id, "referrer") as Long?)?.let { MemberView(it) },
+        referrer = (system.get(id, "referrer") as Long?)?.let { system.refFor(it) },
         tier = system.get(id, "tier") as String,
-        foundingReferrer = (system.get(id, "foundingReferrer") as Long?)?.let { MemberView(it) },
+        foundingReferrer = (system.get(id, "foundingReferrer") as Long?)?.let { system.refFor(it) },
         streak = (system.get(id, "streak") as BigDecimal).intValueExact(),
-        members = (system.get(id, "members") as List<*>).map { MemberView(it as Long) },
-        duesPayments = (system.get(id, "duesPayments") as List<*>).map { DuesPaymentView(it as Long) },
-        purchases = (system.get(id, "purchases") as List<*>).map { PurchaseView(it as Long) },
-        enrollments = (system.get(id, "enrollments") as List<*>).map { EnrollmentView(it as Long) },
-        safetyWaivers = (system.get(id, "safetyWaivers") as List<*>).map { SafetyWaiverView(it as Long) },
-        orientationRecords = (system.get(id, "orientationRecords") as List<*>).map { OrientationRecordView(it as Long) },
-        keycards = (system.get(id, "keycards") as List<*>).map { KeycardView(it as Long) },
+        members = (system.get(id, "members") as List<*>).map { system.refFor(it as Long) },
+        duesPayments = (system.get(id, "duesPayments") as List<*>).map { system.refFor(it as Long) },
+        purchases = (system.get(id, "purchases") as List<*>).map { system.refFor(it as Long) },
+        enrollments = (system.get(id, "enrollments") as List<*>).map { system.refFor(it as Long) },
+        safetyWaivers = (system.get(id, "safetyWaivers") as List<*>).map { system.refFor(it as Long) },
+        orientationRecords = (system.get(id, "orientationRecords") as List<*>).map { system.refFor(it as Long) },
+        keycards = (system.get(id, "keycards") as List<*>).map { system.refFor(it as Long) },
     )
 
     companion object {
@@ -503,97 +471,153 @@ rule IssueKeycard when (CertifiedMember where not exists Keycard for this) {
     }
 }
 
-// ── the shapes as Kotlin data classes: what a query returns (README §22; OQ51 R5) ──
-// References are typed handles (views); navigating one is a further read.
+// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// A model object is a reference to its own record (`Ref<T>`): equality is identity,
+// a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
+// the record's membership at the moment of the read.
 
 data class Member(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
-    val referrer: LoyaltySystem.MemberView?,
+    val referrer: Ref<Member>?,
     val tier: String,
-    val foundingReferrer: LoyaltySystem.MemberView?,
+    val foundingReferrer: Ref<Member>?,
     val streak: Int,
-    val members: List<LoyaltySystem.MemberView>,
-    val duesPayments: List<LoyaltySystem.DuesPaymentView>,
-    val purchases: List<LoyaltySystem.PurchaseView>,
-    val enrollments: List<LoyaltySystem.EnrollmentView>,
-    val safetyWaivers: List<LoyaltySystem.SafetyWaiverView>,
-    val orientationRecords: List<LoyaltySystem.OrientationRecordView>,
-    val keycards: List<LoyaltySystem.KeycardView>,
-) : View
+    val members: List<Ref<Member>>,
+    val duesPayments: List<Ref<DuesPayment>>,
+    val purchases: List<Ref<Purchase>>,
+    val enrollments: List<Ref<Enrollment>>,
+    val safetyWaivers: List<Ref<SafetyWaiver>>,
+    val orientationRecords: List<Ref<OrientationRecord>>,
+    val keycards: List<Ref<Keycard>>,
+    /** membership of CertifiedMember at the moment of the read */
+    val isCertifiedMember: Boolean,
+) : Ref<Member> {
+    override val shape: String get() = "Member"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class DuesPayment(
-    override val id: Long,
-    val member: LoyaltySystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val coveredMonth: String,
     val dueBy: LocalDate,
     val paidOn: LocalDate,
     val onTime: Boolean,
-    val previous: LoyaltySystem.DuesPaymentView?,
+    val previous: Ref<DuesPayment>?,
     val streakAfter: Int,
-) : View
+) : Ref<DuesPayment> {
+    override val shape: String get() = "DuesPayment"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Purchase(
-    override val id: Long,
-    val member: LoyaltySystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val amount: BigDecimal,
-    val thankYouNotes: List<LoyaltySystem.ThankYouNoteView>,
-) : View
+    val thankYouNotes: List<Ref<ThankYouNote>>,
+    /** membership of QualifiedPurchase at the moment of the read */
+    val isQualifiedPurchase: Boolean,
+    /** membership of VipPurchase at the moment of the read */
+    val isVipPurchase: Boolean,
+) : Ref<Purchase> {
+    override val shape: String get() = "Purchase"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class ThankYouNote(
-    override val id: Long,
-    val purchase: LoyaltySystem.PurchaseView,
-) : View
+    override val key: StoreKey,
+    val purchase: Ref<Purchase>,
+) : Ref<ThankYouNote> {
+    override val shape: String get() = "ThankYouNote"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Enrollment(
-    override val id: Long,
-    val member: LoyaltySystem.MemberView,
-) : View
+    override val key: StoreKey,
+    val member: Ref<Member>,
+) : Ref<Enrollment> {
+    override val shape: String get() = "Enrollment"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class SafetyWaiver(
-    override val id: Long,
-    val member: LoyaltySystem.MemberView,
-) : View
+    override val key: StoreKey,
+    val member: Ref<Member>,
+) : Ref<SafetyWaiver> {
+    override val shape: String get() = "SafetyWaiver"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class OrientationRecord(
-    override val id: Long,
-    val member: LoyaltySystem.MemberView,
-) : View
+    override val key: StoreKey,
+    val member: Ref<Member>,
+) : Ref<OrientationRecord> {
+    override val shape: String get() = "OrientationRecord"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Keycard(
-    override val id: Long,
-    val member: LoyaltySystem.MemberView,
-) : View
+    override val key: StoreKey,
+    val member: Ref<Member>,
+) : Ref<Keycard> {
+    override val shape: String get() = "Keycard"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class QualifiedPurchase(
-    override val id: Long,
-    val member: LoyaltySystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val amount: BigDecimal,
-    val thankYouNotes: List<LoyaltySystem.ThankYouNoteView>,
-) : View
+    val thankYouNotes: List<Ref<ThankYouNote>>,
+    /** membership of VipPurchase at the moment of the read */
+    val isVipPurchase: Boolean,
+) : Ref<Purchase> {
+    override val shape: String get() = "Purchase"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class VipPurchase(
-    override val id: Long,
-    val member: LoyaltySystem.MemberView,
+    override val key: StoreKey,
+    val member: Ref<Member>,
     val amount: BigDecimal,
-    val thankYouNotes: List<LoyaltySystem.ThankYouNoteView>,
-) : View
+    val thankYouNotes: List<Ref<ThankYouNote>>,
+    /** membership of QualifiedPurchase at the moment of the read */
+    val isQualifiedPurchase: Boolean,
+) : Ref<Purchase> {
+    override val shape: String get() = "Purchase"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class CertifiedMember(
-    override val id: Long,
+    override val key: StoreKey,
     val name: String,
-    val referrer: LoyaltySystem.MemberView?,
+    val referrer: Ref<Member>?,
     val tier: String,
-    val foundingReferrer: LoyaltySystem.MemberView?,
+    val foundingReferrer: Ref<Member>?,
     val streak: Int,
-    val members: List<LoyaltySystem.MemberView>,
-    val duesPayments: List<LoyaltySystem.DuesPaymentView>,
-    val purchases: List<LoyaltySystem.PurchaseView>,
-    val enrollments: List<LoyaltySystem.EnrollmentView>,
-    val safetyWaivers: List<LoyaltySystem.SafetyWaiverView>,
-    val orientationRecords: List<LoyaltySystem.OrientationRecordView>,
-    val keycards: List<LoyaltySystem.KeycardView>,
-) : View
+    val members: List<Ref<Member>>,
+    val duesPayments: List<Ref<DuesPayment>>,
+    val purchases: List<Ref<Purchase>>,
+    val enrollments: List<Ref<Enrollment>>,
+    val safetyWaivers: List<Ref<SafetyWaiver>>,
+    val orientationRecords: List<Ref<OrientationRecord>>,
+    val keycards: List<Ref<Keycard>>,
+) : Ref<Member> {
+    override val shape: String get() = "Member"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 // ── the builder's vocabulary: one field handle per member, memberships per refinement ──
 

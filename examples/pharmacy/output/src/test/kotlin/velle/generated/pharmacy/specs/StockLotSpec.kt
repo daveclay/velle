@@ -17,7 +17,7 @@ class StockLotSpec : SpecSupport() {
         // given: any committed 'Drug'
         val drug = givens.someDrug()
         val before = count("StockLot")
-        val result = sys.system.commit("StockLot", mapOf("drug" to drug.id, "lotNumber" to "sample", "expiresOn" to java.time.LocalDate.of(2026, 1, 15), "received" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("StockLot", mapOf("drug" to idOf(drug), "lotNumber" to "sample", "expiresOn" to java.time.LocalDate.of(2026, 1, 15), "received" to java.math.BigDecimal("-1")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("StockLot"), "a refused act commits nothing")
     }
@@ -26,7 +26,7 @@ class StockLotSpec : SpecSupport() {
     fun `never - a StockLot with received 1 is accepted`() {
         // given: any committed 'Drug'
         val drug = givens.someDrug()
-        val result = sys.system.commit("StockLot", mapOf("drug" to drug.id, "lotNumber" to "sample", "expiresOn" to java.time.LocalDate.of(2026, 1, 15), "received" to java.math.BigDecimal("1")))
+        val result = sys.system.commit("StockLot", mapOf("drug" to idOf(drug), "lotNumber" to "sample", "expiresOn" to java.time.LocalDate.of(2026, 1, 15), "received" to java.math.BigDecimal("1")))
         assertIs<CommitResult.Accepted>(result)
     }
 }

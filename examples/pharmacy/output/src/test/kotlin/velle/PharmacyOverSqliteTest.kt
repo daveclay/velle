@@ -1,6 +1,7 @@
 package velle.generated.pharmacy
 
 import java.sql.Connection
+import velle.generated.*
 import java.sql.DriverManager
 import kotlin.test.AfterTest
 import velle.generated.PharmacyStoreOverGeneric

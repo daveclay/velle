@@ -23,7 +23,7 @@ class PlotObservationSpec : SpecSupport() {
         // given: any committed 'GreenhousePlot'
         val plot = givens.someGreenhousePlot()
         val before = count("PlotObservation")
-        val result = sys.system.commit("PlotObservation", mapOf("plot" to plot.id, "dayAfterTreatment" to java.math.BigDecimal("-1"), "recordedSeverity" to java.math.BigDecimal("0"), "observedOn" to java.time.LocalDate.of(2026, 1, 15)))
+        val result = sys.system.commit("PlotObservation", mapOf("plot" to idOf(plot), "dayAfterTreatment" to java.math.BigDecimal("-1"), "recordedSeverity" to java.math.BigDecimal("0"), "observedOn" to java.time.LocalDate.of(2026, 1, 15)))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("PlotObservation"), "a refused act commits nothing")
     }
@@ -32,7 +32,7 @@ class PlotObservationSpec : SpecSupport() {
     fun `never - a PlotObservation with dayAfterTreatment 0 is accepted`() {
         // given: any committed 'GreenhousePlot'
         val plot = givens.someGreenhousePlot()
-        val result = sys.system.commit("PlotObservation", mapOf("plot" to plot.id, "dayAfterTreatment" to java.math.BigDecimal("0"), "recordedSeverity" to java.math.BigDecimal("0"), "observedOn" to java.time.LocalDate.of(2026, 1, 15)))
+        val result = sys.system.commit("PlotObservation", mapOf("plot" to idOf(plot), "dayAfterTreatment" to java.math.BigDecimal("0"), "recordedSeverity" to java.math.BigDecimal("0"), "observedOn" to java.time.LocalDate.of(2026, 1, 15)))
         assertIs<CommitResult.Accepted>(result)
     }
 }

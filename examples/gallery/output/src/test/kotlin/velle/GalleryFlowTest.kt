@@ -1,6 +1,9 @@
 package velle.generated.gallery
 
 import kotlin.test.Test
+import velle.Ref
+import velle.generated.*
+import velle.generated.Member
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
@@ -19,22 +22,22 @@ open class GalleryFlowTest {
     protected open fun newSystem(): GallerySystem = GallerySystem()
     protected val sys: GallerySystem by lazy { newSystem() }
 
-    private fun member(name: String): GallerySystem.MemberView {
+    private fun member(name: String): Member {
         assertIs<CommitResult.Accepted>(sys.commitMember(name))
         return sys.members().last()
     }
 
-    private fun post(author: GallerySystem.MemberView, body: String): GallerySystem.PostView {
+    private fun post(author: Member, body: String): Post {
         assertIs<CommitResult.Accepted>(sys.commitPost(author, body))
         return sys.posts().last()
     }
 
-    private fun photo(author: GallerySystem.MemberView, caption: String): GallerySystem.PhotoView {
+    private fun photo(author: Member, caption: String): Photo {
         assertIs<CommitResult.Accepted>(sys.commitPhoto(author, caption))
         return sys.photos().last()
     }
 
-    private fun comment(target: GallerySystem.ContentView, author: GallerySystem.MemberView, body: String): GallerySystem.CommentView {
+    private fun comment(target: Ref<Content>, author: Member, body: String): Comment {
         assertIs<CommitResult.Accepted>(sys.commitComment(target, author, body))
         return sys.comments().last()
     }
@@ -46,19 +49,19 @@ open class GalleryFlowTest {
         val p = post(ada, "hello")
         val ph = photo(ada, "sunset")
 
-        val onPost = comment(p.asContent(), grace, "hi")
-        val onPhoto = comment(ph.asContent(), grace, "lovely")
+        val onPost = comment(p, grace, "hi")
+        val onPhoto = comment(ph, grace, "lovely")
 
-        assertEquals("Post", onPost.target.shape)
-        assertEquals(p, onPost.target.asPost())
-        assertNull(onPost.target.asPhoto(), "a Post is not a Photo")
-        assertEquals(ph, onPhoto.target.asPhoto())
-        assertNull(onPhoto.target.asPost())
+        assertEquals("Post", sys.read(onPost).target.shape)
+        assertEquals(p, (sys.read(sys.read(onPost).target) as? Post))
+        assertNull((sys.read(sys.read(onPost).target) as? Photo), "a Post is not a Photo")
+        assertEquals(ph, (sys.read(sys.read(onPhoto).target) as? Photo))
+        assertNull((sys.read(sys.read(onPhoto).target) as? Post))
 
         // membership through the union-typed field
-        assertTrue(with(sys) { onPost.isPostComment() })
-        assertTrue(with(sys) { onPhoto.isPhotoComment() })
-        assertEquals(listOf(onPost), sys.postComments().map { sys.comment(it.id) })
+        assertTrue(with(sys) { sys.read(onPost).isPostComment })
+        assertTrue(with(sys) { sys.read(onPhoto).isPhotoComment })
+        assertEquals(listOf(onPost), sys.postComments().map { sys.read(it) })
     }
 
     @Test
@@ -67,17 +70,17 @@ open class GalleryFlowTest {
         val grace = member("Grace")
         val p = post(ada, "hello")
         val ph = photo(ada, "sunset")
-        val c1 = comment(p.asContent(), grace, "one")
-        val c2 = comment(ph.asContent(), grace, "two")
-        val c3 = comment(ph.asContent(), ada, "three")
+        val c1 = comment(p, grace, "one")
+        val c2 = comment(ph, grace, "two")
+        val c3 = comment(ph, ada, "three")
 
-        assertEquals(listOf(c1), p.comments)
-        assertEquals(listOf(c2, c3), ph.comments)
+        assertEquals(listOf(c1), sys.read(p).comments)
+        assertEquals(listOf(c2, c3), sys.read(ph).comments)
         // the union's own view: every operand's instances, the shared inverse, the derived body
-        assertEquals(setOf(p.id, ph.id), sys.contents().map { it.id }.toSet())
-        assertEquals(listOf(c2, c3), ph.asContent().comments)
-        assertEquals(1, p.asContent().commentCount)
-        assertEquals(2, ph.asContent().commentCount)
+        assertEquals(setOf(p.key, ph.key), sys.contents().map { it.key }.toSet())
+        assertEquals(listOf(c2, c3), sys.read(ph).comments)
+        assertEquals(1, sys.read(p).commentCount)
+        assertEquals(2, sys.read(ph).commentCount)
     }
 
     @Test
@@ -86,14 +89,14 @@ open class GalleryFlowTest {
         val grace = member("Grace")
         val p = post(ada, "a post body")
         val ph = photo(grace, "a photo caption")
-        val onPost = comment(p.asContent(), grace, "hi")
-        val onPhoto = comment(ph.asContent(), ada, "lovely")
+        val onPost = comment(p, grace, "hi")
+        val onPhoto = comment(ph, ada, "lovely")
 
-        val notices = sys.commentNotices().associateBy { it.comment }
-        assertEquals(ada, notices.getValue(onPost).recipient, "the post's author is notified")
-        assertEquals("a post body", notices.getValue(onPost).excerpt)
-        assertEquals(grace, notices.getValue(onPhoto).recipient, "the photo's author is notified")
-        assertEquals("a photo caption", notices.getValue(onPhoto).excerpt)
+        val notices = sys.commentNotices().associateBy { sys.read(it).comment }
+        assertEquals(ada, sys.read(notices.getValue(onPost)).recipient, "the post's author is notified")
+        assertEquals("a post body", sys.read(notices.getValue(onPost)).excerpt)
+        assertEquals(grace, sys.read(notices.getValue(onPhoto)).recipient, "the photo's author is notified")
+        assertEquals("a photo caption", sys.read(notices.getValue(onPhoto)).excerpt)
     }
 
     @Test
@@ -101,22 +104,22 @@ open class GalleryFlowTest {
         val ada = member("Ada")
         val grace = member("Grace")
         val ph = photo(ada, "sunset")
-        comment(ph.asContent(), grace, "one")
+        comment(ph, grace, "one")
         assertEquals(0, sys.popularityNotices().size, "one comment is not popular")
-        assertTrue(with(sys) { !ph.asContent().isPopular() })
+        assertTrue(with(sys) { !sys.read(ph).isPopular })
 
-        comment(ph.asContent(), ada, "two")
-        assertTrue(with(sys) { ph.asContent().isPopular() })
-        assertEquals(listOf(ph.id), sys.popularityNotices().map { it.content.id }, "entry fired once")
-        assertEquals(ph, sys.popularityNotices().single().content.asPhoto())
+        comment(ph, ada, "two")
+        assertTrue(with(sys) { sys.read(ph).isPopular })
+        assertEquals(listOf(ph.key), sys.popularityNotices().map { sys.read(it).content.key }, "entry fired once")
+        assertEquals(ph, (sys.read(sys.read(sys.popularityNotices().single()).content) as? Photo))
 
-        comment(ph.asContent(), grace, "three")
+        comment(ph, grace, "three")
         assertEquals(1, sys.popularityNotices().size, "a third comment is not a new entry")
 
         val p = post(ada, "hello")
-        comment(p.asContent(), grace, "one")
-        comment(p.asContent(), grace, "two")
-        assertEquals(setOf(ph.id, p.id), sys.popularityNotices().map { it.content.id }.toSet())
+        comment(p, grace, "one")
+        comment(p, grace, "two")
+        assertEquals(setOf(ph.key, p.key), sys.popularityNotices().map { sys.read(it).content.key }.toSet())
     }
 
     @Test
@@ -125,20 +128,21 @@ open class GalleryFlowTest {
         val p = post(ada, "hello")
         val ph = photo(ada, "sunset")
 
-        val refused = sys.commitComment(p.asContent(), ada, "me again")
+        val refused = sys.commitComment(p, ada, "me again")
         assertIs<CommitResult.Refused>(refused)
-        assertEquals(0, p.comments.size, "a refused act commits nothing")
+        assertEquals(0, sys.read(p).comments.size, "a refused act commits nothing")
 
-        assertIs<CommitResult.Accepted>(sys.commitComment(ph.asContent(), ada, "my own photo"))
+        assertIs<CommitResult.Accepted>(sys.commitComment(ph, ada, "my own photo"))
     }
 
     @Test
     fun `a reference outside the union cannot inhabit the field's type`() {
         val ada = member("Ada")
         val grace = member("Grace")
-        val r = sys.system.commit("Comment", mapOf("target" to ada.id, "author" to grace.id, "body" to "?"))
+        val r = sys.system.commit("Comment", mapOf("target" to ada.key, "author" to grace.key, "body" to "?"))
         val refused = assertIs<CommitResult.Refused>(r)
         assertTrue(refused.reason.startsWith("type:"), refused.reason)
         assertEquals(0, sys.comments().size)
     }
 }
+

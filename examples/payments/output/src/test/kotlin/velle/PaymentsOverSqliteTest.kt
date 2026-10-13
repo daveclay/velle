@@ -1,6 +1,7 @@
 package velle
 
 import java.math.BigDecimal
+import velle.generated.*
 import java.sql.Connection
 import java.sql.DriverManager
 import java.time.Instant
@@ -70,15 +71,15 @@ class PaymentsPersistenceTest {
         assertEquals(1, first.stockReservations().size)
 
         val second = process()
-        val attempt = second.chargeAttempt(second.system.handleFor("ChargeAttempt", 1L))
+        val attempt = second.read.chargeAttempt(1L)
         accept(second.commitProcessorVerdict(attempt, "approved"))
-        val order = second.order(second.system.handleFor("Order", 1L))
+        val order = second.read.order(1L)
         with(second) {
-            assertTrue(attempt.isSuccessfulCharge())
-            assertTrue(order.isSettledOrder())
+            assertTrue(second.read(attempt).isSuccessfulCharge)
+            assertTrue(second.read(order).isSettledOrder)
         }
         assertEquals(1, second.receipts().size)
-        assertEquals(0, order.netPaid.compareTo(BigDecimal("100")))
+        assertEquals(0, second.read(order).netPaid.compareTo(BigDecimal("100")))
 
         val third = process()
         third.tickNightly()
@@ -96,11 +97,12 @@ class PaymentsPersistenceTest {
         val later = process(startTime = Instant.parse("2026-01-01T09:16:00Z"))
         later.tickQuarterHourly()
         assertEquals(1, later.attemptTimeouts().size, "requestedOn is a stored timestamp the sweep compares against")
-        val attempt = later.chargeAttempt(later.system.handleFor("ChargeAttempt", 1L))
+        val attempt = later.read.chargeAttempt(1L)
         with(later) {
-            assertTrue(attempt.isTimedOutAttempt())
-            assertTrue(!attempt.isPendingAttempt())
+            assertTrue(later.read(attempt).isTimedOutAttempt)
+            assertTrue(!later.read(attempt).isPendingAttempt)
         }
         assertEquals(2, later.chargeAttempts().size, "the timeout unblocked a retry")
     }
 }
+

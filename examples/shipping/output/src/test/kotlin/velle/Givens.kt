@@ -1,6 +1,7 @@
 package velle.generated.shipping
 
 import velle.generated.ShippingSystem
+import velle.generated.*
 
 /**
  * The human-owned scenarios the generated shipping specs demand (testgen.md).

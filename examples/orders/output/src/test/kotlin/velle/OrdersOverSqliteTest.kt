@@ -1,6 +1,7 @@
 package velle
 
 import java.sql.Connection
+import velle.generated.*
 import java.sql.DriverManager
 import java.time.LocalDate
 import kotlin.test.AfterTest
@@ -63,7 +64,7 @@ class OrdersPersistenceTest {
             }
         }
 
-    private fun OrdersSystem.cardedProduct(): Pair<OrdersSystem.CustomerView, OrdersSystem.ProductView> {
+    private fun OrdersSystem.cardedProduct(): Pair<Customer, Product> {
         accept(commitCustomer("Ada"))
         accept(commitProduct("SKU-1"))
         return customers().last() to products().last()
@@ -91,12 +92,12 @@ class OrdersPersistenceTest {
         assertEquals(listOf(listOf(1L, 2L), listOf(2L, 3L)), rows("""SELECT line, quantity FROM Reservation ORDER BY id"""))
 
         val second = process()
-        val order = second.order(second.system.handleFor("Order", 1L))
-        assertEquals(2, order.orderLines.size, "the inverse is a join read over the lines' pointer column")
-        assertEquals(5, order.total, "the aggregate derives from stored parts")
+        val order = second.read.order(1L)
+        assertEquals(2, second.read(order).orderLines.size, "the inverse is a join read over the lines' pointer column")
+        assertEquals(5, second.read(order).total, "the aggregate derives from stored parts")
         val custz = second.customizations().single()
-        assertEquals(2, custz.line.quantity)
-        assertEquals(order, custz.line.order)
+        assertEquals(2, second.read(second.read(custz).line).quantity)
+        assertEquals(order, second.read(second.read(custz).line).order)
     }
 
     @Test
@@ -117,3 +118,4 @@ class OrdersPersistenceTest {
         assertNull(rows("""SELECT MAX(id) FROM "Order"""").single().single(), "no key was minted")
     }
 }
+

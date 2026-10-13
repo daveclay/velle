@@ -1,6 +1,7 @@
 package velle.generated.enrollment
 
 import java.sql.Connection
+import velle.generated.*
 import java.sql.DriverManager
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -81,20 +82,20 @@ class EnrollmentPersistenceTest {
         assertEquals(listOf("honors", "stem"), rows("""SELECT value FROM Student__tags WHERE owner = 1 ORDER BY rowid""").map { it[0] })
 
         val second = process()
-        val ada2 = second.student(second.system.handleFor("Student", 1L))
-        val (logic, sets, proofs) = listOf(1L, 2L, 3L).map { second.course(second.system.handleFor("Course", it)) }
-        assertEquals(listOf(logic, sets, proofs), ada2.courses, "membership order is the junction's insertion order")
-        assertEquals(listOf("honors", "stem"), ada2.tags)
-        assertTrue(second.overloadeds().any { it.id == ada2.id }, "count(courses) > 2 over the junction rows")
-        assertTrue(second.untaggeds().none { it.id == ada2.id })
-        assertEquals(listOf(ada2), sets.students, "the m2m inverse scans the declared side's junction")
+        val ada2 = second.read.student(1L)
+        val (logic, sets, proofs) = listOf(1L, 2L, 3L).map { second.read.course(it) }
+        assertEquals(listOf(logic, sets, proofs), second.read(ada2).courses, "membership order is the junction's insertion order")
+        assertEquals(listOf("honors", "stem"), second.read(ada2).tags)
+        assertTrue(second.overloadeds().any { it.key == ada2.key }, "count(courses) > 2 over the junction rows")
+        assertTrue(second.untaggeds().none { it.key == ada2.key })
+        assertEquals(listOf(ada2), second.read(sets).students, "the m2m inverse scans the declared side's junction")
 
         // removal rewrites the edge set whole
         accept(second.commitDrop(ada2, logic))
         assertEquals(listOf(2L, 3L), rows("""SELECT target FROM Student__courses WHERE owner = 1 ORDER BY rowid""").map { it[0] })
-        assertEquals(listOf(sets, proofs), ada2.courses)
-        assertTrue(second.overloadeds().none { it.id == ada2.id })
-        assertEquals(emptyList(), logic.students)
+        assertEquals(listOf(sets, proofs), second.read(ada2).courses)
+        assertTrue(second.overloadeds().none { it.key == ada2.key })
+        assertEquals(emptyList(), second.read(logic).students)
     }
 
     @Test
@@ -113,8 +114,9 @@ class EnrollmentPersistenceTest {
         )
 
         val second = process()
-        val advisor2 = second.advisor(second.system.handleFor("Advisor", 1L))
-        assertEquals(setOf("Ada", "Grace"), advisor2.students.map { it.name }.toSet(), "the one-to-many inverse is a join read")
-        assertEquals(setOf("Ada", "Grace"), advisor2.advisees.map { it.name }.toSet())
+        val advisor2 = second.read.advisor(1L)
+        assertEquals(setOf("Ada", "Grace"), second.read(advisor2).students.map { second.read(it).name }.toSet(), "the one-to-many inverse is a join read")
+        assertEquals(setOf("Ada", "Grace"), second.read(advisor2).advisees.map { second.read(it).name }.toSet())
     }
 }
+

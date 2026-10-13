@@ -344,7 +344,7 @@ class ClosureTest {
         // the projection: no back-reference, no id, on the input types
         val newLine = src.substringAfter("data class NewOrderLine(").substringBefore(") {")
         assertTrue("order" !in newLine, newLine)
-        assertTrue("val product: ProductView" in newLine, newLine)
+        assertTrue("val product: Ref<Product>" in newLine, newLine)
         // the commit function takes the closure edge, absent by default
         assertTrue("orderLines: List<NewOrderLine> = emptyList()" in src, src)
     }

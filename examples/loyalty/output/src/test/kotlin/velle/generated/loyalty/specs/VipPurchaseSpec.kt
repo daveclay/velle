@@ -24,6 +24,6 @@ class VipPurchaseSpec : SpecSupport() {
         purchase.assertIsA("VipPurchase", "the given must deliver a member of 'VipPurchase'")
         assertEquals(beforeThankYouNote + 1, count("ThankYouNote"), "rule ThankVip: one 'ThankYouNote' per firing")
         val producedThankYouNote = last("ThankYouNote")
-        assertEquals(purchase.id, field(producedThankYouNote, "purchase"), "ThankYouNote.purchase: this")
+        assertEquals(idOf(purchase), field(producedThankYouNote, "purchase"), "ThankYouNote.purchase: this")
     }
 }

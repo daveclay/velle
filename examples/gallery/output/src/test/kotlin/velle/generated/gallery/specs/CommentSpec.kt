@@ -24,6 +24,6 @@ class CommentSpec : SpecSupport() {
         comment.assertIsA("Comment", "the given must deliver a member of 'Comment'")
         assertEquals(beforeCommentNotice + 1, count("CommentNotice"), "rule NotifyAuthor: one 'CommentNotice' per firing")
         val producedCommentNotice = last("CommentNotice")
-        assertEquals(comment.id, field(producedCommentNotice, "comment"), "CommentNotice.comment: this")
+        assertEquals(idOf(comment), field(producedCommentNotice, "comment"), "CommentNotice.comment: this")
     }
 }

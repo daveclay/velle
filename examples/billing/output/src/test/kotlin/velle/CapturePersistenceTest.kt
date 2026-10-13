@@ -1,6 +1,7 @@
 package velle
 
 import java.sql.Connection
+import velle.generated.*
 import java.sql.DriverManager
 import java.time.Instant
 import kotlin.test.AfterTest
@@ -65,7 +66,7 @@ class CapturePersistenceTest {
         // date, not the second process's today
         val second = system(Instant.parse("2026-01-06T09:00:00Z"))
         val invHandle = second.system.handleFor("Invoice", invKey)
-        accept(second.commitUnarchiveRequest(second.invoice(invHandle)))
+        accept(second.commitUnarchiveRequest(second.system.refFor(invHandle)))
 
         assertEquals(1L, scalar("""SELECT COUNT(*) FROM "UnarchiveNotice""""))
         assertEquals("2026-01-01", scalar("""SELECT wasArchivedOn FROM "UnarchiveNotice" WHERE invoice = ?""", invKey))

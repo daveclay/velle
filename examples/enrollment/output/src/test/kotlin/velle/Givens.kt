@@ -1,6 +1,7 @@
 package velle.generated.enrollment
 
 import velle.generated.EnrollmentSystem
+import velle.generated.*
 
 /**
  * The human-owned scenarios the generated enrollment specs demand (testgen.md).
@@ -9,12 +10,12 @@ import velle.generated.EnrollmentSystem
  */
 class Givens(private val sys: EnrollmentSystem) : RequiredGivens {
 
-    private fun student(): EnrollmentSystem.StudentView {
+    private fun student(): Student {
         sys.commitStudent("Ada", tags = emptyList(), courses = emptyList())
         return sys.students().last()
     }
 
-    private fun course(): EnrollmentSystem.CourseView {
+    private fun course(): Course {
         sys.commitCourse("Logic", 30)
         return sys.courses().last()
     }

@@ -25,6 +25,6 @@ class ControlledSpec : SpecSupport() {
         sys.system.tick("Monthly")
         assertEquals(beforeControlledInventorySnapshot + 1, count("ControlledInventorySnapshot"), "rule SnapshotControlled: one 'ControlledInventorySnapshot' per firing")
         val producedControlledInventorySnapshot = last("ControlledInventorySnapshot")
-        assertEquals(drug.id, field(producedControlledInventorySnapshot, "drug"), "ControlledInventorySnapshot.drug: this")
+        assertEquals(idOf(drug), field(producedControlledInventorySnapshot, "drug"), "ControlledInventorySnapshot.drug: this")
     }
 }

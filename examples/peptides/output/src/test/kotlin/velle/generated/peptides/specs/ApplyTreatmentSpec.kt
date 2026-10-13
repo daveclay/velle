@@ -38,6 +38,6 @@ class ApplyTreatmentSpec : SpecSupport() {
         treatmentApplication.assertIsA("WashedOffApplication", "the given must deliver a member of 'WashedOffApplication'")
         assertEquals(beforeReapplicationNotice + 1, count("ReapplicationNotice"), "rule NoticeWashOff: one 'ReapplicationNotice' per firing")
         val producedReapplicationNotice = last("ReapplicationNotice")
-        assertEquals(treatmentApplication.id, field(producedReapplicationNotice, "application"), "ReapplicationNotice.application: this")
+        assertEquals(idOf(treatmentApplication), field(producedReapplicationNotice, "application"), "ReapplicationNotice.application: this")
     }
 }

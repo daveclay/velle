@@ -29,7 +29,7 @@ class IssueRefundSpec : SpecSupport() {
         // given: any committed 'Order'
         val order = givens.someOrder()
         val before = count("IssueRefund")
-        val result = sys.system.commit("IssueRefund", mapOf("order" to order.id, "amount" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("IssueRefund", mapOf("order" to idOf(order), "amount" to java.math.BigDecimal("-1")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("IssueRefund"), "a refused act commits nothing")
     }
@@ -38,7 +38,7 @@ class IssueRefundSpec : SpecSupport() {
     fun `never - a IssueRefund with amount 1 is accepted`() {
         // given: any committed 'Order'
         val order = givens.someOrder()
-        val result = sys.system.commit("IssueRefund", mapOf("order" to order.id, "amount" to java.math.BigDecimal("1")))
+        val result = sys.system.commit("IssueRefund", mapOf("order" to idOf(order), "amount" to java.math.BigDecimal("1")))
         assertIs<CommitResult.Accepted>(result)
     }
 }

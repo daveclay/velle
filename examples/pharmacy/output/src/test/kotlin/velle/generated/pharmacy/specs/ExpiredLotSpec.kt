@@ -23,7 +23,7 @@ class ExpiredLotSpec : SpecSupport() {
         stockLot.assertIsA("ExpiredLot", "the given must deliver a member of 'ExpiredLot'")
         sys.system.tick("Nightly")
         val producedQuarantine = last("Quarantine")
-        assertEquals(stockLot.id, field(producedQuarantine, "lot"), "Quarantine.lot: this")
+        assertEquals(idOf(stockLot), field(producedQuarantine, "lot"), "Quarantine.lot: this")
         sys.system.tick("Nightly")
     }
 }

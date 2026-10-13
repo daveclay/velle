@@ -76,7 +76,7 @@ class CreateNoteSpec : SpecSupport() {
         bareEdit.assertIsA("RefusedBareEdit", "the given must deliver a member of 'RefusedBareEdit'")
         assertEquals(beforeBareEditRefusal + 1, count("BareEditRefusal"), "rule RefuseBareEdit: one 'BareEditRefusal' per firing")
         val producedBareEditRefusal = last("BareEditRefusal")
-        assertEquals(bareEdit.id, field(producedBareEditRefusal, "edit"), "BareEditRefusal.edit: this")
+        assertEquals(idOf(bareEdit), field(producedBareEditRefusal, "edit"), "BareEditRefusal.edit: this")
         assertTrue(member(bareEdit, "RefusedBareEdit") != member(bareEdit, "ApplicableBareEdit"), "'RefusedBareEdit' and 'ApplicableBareEdit' partition the act")
     }
 
@@ -88,7 +88,7 @@ class CreateNoteSpec : SpecSupport() {
         safeEdit.assertIsNotA("ApplicableSafeEdit", "the disarm law: the firing left its trigger state")
         assertEquals(beforeEditApplication + 1, count("EditApplication"), "rule ApplySafeEdit: one 'EditApplication' per firing")
         val producedEditApplication = last("EditApplication")
-        assertEquals(safeEdit.id, field(producedEditApplication, "edit"), "EditApplication.edit: this")
+        assertEquals(idOf(safeEdit), field(producedEditApplication, "edit"), "EditApplication.edit: this")
         assertEquals(field(safeEdit, "newTitle"), field(ref(safeEdit, "note"), "title"), "note.title = newTitle")
     }
 
@@ -100,7 +100,7 @@ class CreateNoteSpec : SpecSupport() {
         safeEdit.assertIsNotA("RefusedSafeEdit", "the disarm law: the firing left its trigger state")
         assertEquals(beforeEditRefusal + 1, count("EditRefusal"), "rule RefuseSafeEdit: one 'EditRefusal' per firing")
         val producedEditRefusal = last("EditRefusal")
-        assertEquals(safeEdit.id, field(producedEditRefusal, "edit"), "EditRefusal.edit: this")
+        assertEquals(idOf(safeEdit), field(producedEditRefusal, "edit"), "EditRefusal.edit: this")
     }
 
     @Test

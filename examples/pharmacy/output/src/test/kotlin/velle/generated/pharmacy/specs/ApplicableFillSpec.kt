@@ -78,7 +78,7 @@ class ApplicableFillSpec : SpecSupport() {
         sys.system.tick("Nightly")
         assertEquals(beforeReturnToStock + 1, count("ReturnToStock"), "rule ReturnUncollected: one 'ReturnToStock' per firing")
         val producedReturnToStock = last("ReturnToStock")
-        assertEquals(fill.id, field(producedReturnToStock, "fill"), "ReturnToStock.fill: this")
+        assertEquals(idOf(fill), field(producedReturnToStock, "fill"), "ReturnToStock.fill: this")
         sys.system.tick("Nightly")
         assertEquals(beforeReturnToStock + 1, count("ReturnToStock"), "the guard makes re-evaluation harmless")
     }
@@ -94,7 +94,7 @@ class ApplicableFillSpec : SpecSupport() {
         fill.assertIsNotA("ReadyForPickup", "the exit commit must end the membership")
         assertEquals(beforeCounterExit + 1, count("CounterExit"), "rule RecordCounterExit: one 'CounterExit' per firing")
         val producedCounterExit = last("CounterExit")
-        assertEquals(fill.id, field(producedCounterExit, "fill"), "CounterExit.fill: this")
+        assertEquals(idOf(fill), field(producedCounterExit, "fill"), "CounterExit.fill: this")
     }
 
     @Test
@@ -105,7 +105,7 @@ class ApplicableFillSpec : SpecSupport() {
         fill.assertIsA("ReadyForPickup", "the given must deliver a member of 'ReadyForPickup'")
         assertEquals(beforeCounterAlert + 1, count("CounterAlert"), "rule AlertCounter: one 'CounterAlert' per firing")
         val producedCounterAlert = last("CounterAlert")
-        assertEquals(fill.id, field(producedCounterAlert, "fill"), "CounterAlert.fill: this")
+        assertEquals(idOf(fill), field(producedCounterAlert, "fill"), "CounterAlert.fill: this")
     }
 
     @Test
@@ -116,7 +116,7 @@ class ApplicableFillSpec : SpecSupport() {
         fill.assertIsA("InsuredFill", "the given must deliver a member of 'InsuredFill'")
         assertEquals(beforeClaim + 1, count("Claim"), "rule SubmitClaim: one 'Claim' per firing")
         val producedClaim = last("Claim")
-        assertEquals(fill.id, field(producedClaim, "fill"), "Claim.fill: this")
+        assertEquals(idOf(fill), field(producedClaim, "fill"), "Claim.fill: this")
     }
 
     @Test
@@ -128,7 +128,7 @@ class ApplicableFillSpec : SpecSupport() {
         sys.system.tick("Hourly")
         assertEquals(beforeClaimFollowUp + 1, count("ClaimFollowUp"), "rule FollowUpClaim: one 'ClaimFollowUp' per firing")
         val producedClaimFollowUp = last("ClaimFollowUp")
-        assertEquals(claim.id, field(producedClaimFollowUp, "claim"), "ClaimFollowUp.claim: this")
+        assertEquals(idOf(claim), field(producedClaimFollowUp, "claim"), "ClaimFollowUp.claim: this")
         sys.system.tick("Hourly")
         assertEquals(beforeClaimFollowUp + 1, count("ClaimFollowUp"), "the guard makes re-evaluation harmless")
     }
