@@ -19,7 +19,7 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **C0 pinning** — a transient act's partitions are evaluated against the state at its arrival commit and never re-evaluated by its own consequences (`evaluation.md`, "Transient acts").
 - **closure / exposure closure / input closure** — what one commit carries: the act plus the inline parts its `with` declaration says arrive with it, statically shaped, with the single instance as the degenerate case (README §4; §6 "Inline part creation").
 - **HOLDS / TAX / GAP** — break-doc verdicts: the design handles the case · handles it at a cost · needs a new obligation or fails (`break-b.md`).
-- **surface** — the set of calls available to code outside the system: the *typed surface* is the generated Kotlin API (commit functions, accessors, model objects, the query API), the *query surface* or *read surface* is the part of it that gets data out, the *store surface* is the typed interface a store implements. Plain synonym: API. Used in README §22 and `investigate_runtime.md` §10–§11; `investigate-reads.md` says "read API".
+- **surface** — the set of calls available to code outside the system: the *typed surface* is the generated Kotlin API (commit functions, accessors, model objects, the query API), the *query surface* or *read surface* is the part of it that gets data out, the *store surface* is the typed interface a store implements. Plain synonym: API. Used in README §22 and `investigate_runtime.md` §10–§11; the reads work says "read API".
 
 ## Patterns
 
@@ -80,9 +80,9 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **retraction** — deletion of a capture row at the exit commit's close: the contract's one sanctioned delete, legal because a capture is memory, not a record of the world (§7).
 - **session handle / store key** — runtime identity is process-local; durable identity belongs to the store and round-trips as `Ref.Persisted`/`StoreKey` (§8). Session handles never reach the engineer: the surface works in references (below).
 
-## Reads (`investigate-reads.md`, OQ51)
+## Reads (OQ51, settled → README §22)
 
-- **query** — one read request: a root (a shape or refinement), a filter in the spec's predicate language over the root's members, a required order, a page; composed by whoever asks, never declared in the spec (README §22; `Read.kt`). Called a "query", never a "question".
-- **registered query** — a query the engineer writes with the typed builder and registers under a name (`QueryRegistry`), so it is checked against the spec at the engineer's build and can be named for the store (`investigate-reads.md` R9).
+- **query** — one read request: a root (a shape or refinement), a filter in the spec's predicate language over the root's members, a required order, a page; composed by whoever asks, never declared in the spec (README §22; `compiler/src/main/kotlin/velle/Read.kt`). Called a "query", never a "question".
+- **registered query** — a query the engineer writes with the typed builder and registers under a name (`QueryRegistry`), so it is checked against the spec at the engineer's build and can be named for the store (README §22).
 - **reference (`Ref<T>`) / model object** — one reference type for both sides of the store boundary (2026-10-13): a record's concrete shape and store key, typed by the model object it points at. A model object is the shape's generated data class, every field read once at the moment of the read, and is itself a `Ref<T>` to its record: it passes wherever a reference is taken and equals any reference to the same record (equality is identity; whether two reads differ is a comparison of fields, the engineer's call — Dave, 2026-10-13). A reference field holds a `Ref<T>`; `read(ref)` resolves it. In memory the key is the runtime's own identity (README §22; `Hydration.kt`, `Keyed`).
-- **hidden tie-break** — the store key carried inside a page cursor beside the last row's order datums, so pages stay stable when the caller's order does not tell two rows apart; never exposed as an ordering datum (`investigate-reads.md` R2; README §5).
+- **hidden tie-break** — the store key carried inside a page cursor beside the last row's order datums, so pages stay stable when the caller's order does not tell two rows apart; never exposed as an ordering datum (README §5, §22).
