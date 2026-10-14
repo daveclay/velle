@@ -6,8 +6,8 @@ import kotlin.test.assertTrue
 import kotlin.test.assertFalse
 
 /**
- * The probes of the symmetric-evaluation audit (OQ42 item 1; the record is
- * `working-docs/audit-symmetric-evaluation.md`). Each test pins one construct
+ * The probes of the symmetric-evaluation audit (OQ42 item 1, 2026-08-19).
+ * Each test pins one construct
  * case's verdict: either the subject enumeration names the affected subject
  * (keys appear), or the walk falls to Unknown and widens (fail-closed), or
  * safety rests on the writer keying the row's correlatable references — and

@@ -57,7 +57,7 @@ class QueryRefused(val diagnostics: List<Diagnostic>) :
 /**
  * Answers queries over a [VelleSystem]: checks the request against the model,
  * runs the filter through the pre-filter compiler and the one evaluator
- * (investigate_runtime.md §6), orders, and cuts the page.
+ * (Hydration.kt, the superset contract), orders, and cuts the page.
  */
 internal class QueryEngine(private val system: VelleSystem) {
 

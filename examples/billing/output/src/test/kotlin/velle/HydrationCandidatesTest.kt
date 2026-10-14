@@ -15,7 +15,7 @@ import velle.generated.BillingSystem
 
 /**
  * The read-set relevance gate and the candidate pre-filter, observed from the
- * resolver's side (investigate_runtime.md §6): commits stop hydrating tables
+ * resolver's side (Hydration.kt, fetchCandidates): commits stop hydrating tables
  * their footprint provably cannot affect, and the scans that remain arrive as
  * fetchCandidates with a compiled filter instead of fetchAll.
  */

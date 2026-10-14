@@ -12,7 +12,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 /**
- * The hydration spike app (working-docs/investigate_runtime.md): an engineer's
+ * The billing app: an engineer's
  * application using the transpiled billing system *from* their own code, with
  * state living in a local SQLite database. Commits go through the generated
  * functions; the runtime demand-hydrates what each commit's rule chain needs
@@ -29,7 +29,7 @@ fun main() {
         store.createSchema()
         billing.system.connect(store, store)
 
-        println("=== Velle hydration spike — billing over SQLite (billing.db) ===")
+        println("=== Velle billing over SQLite (billing.db) ===")
         println()
         println("-- rows already in the DB from previous runs:")
         for (shape in listOf("Customer", "Invoice", "LineItem", "Payment", "Receipt", "ReceiptEmail", "Reminder"))
@@ -40,7 +40,7 @@ fun main() {
         // SignUp/BillCustomer/SubmitPayment are transient acts: the durable
         // record is what their rules materialize, so the app reads it back
         // through the typed accessors (identity is the store's,
-        // investigate_runtime.md §8)
+        // Hydration.kt)
         accept(billing.commit(NewSignUp("Ada Lovelace", "ada@example.com")))
         val cust = billing.customers().last()
         accept(billing.commit(NewBillCustomer(cust, due = today().plusDays(30))))

@@ -6,8 +6,8 @@ import kotlin.test.assertTrue
 import kotlin.test.assertNotEquals
 
 /**
- * The sibling-confluence audit's probe suite (OQ16; the audit doc is
- * `working-docs/audit-sibling-confluence.md`). Each probe pins two facts about
+ * The sibling-confluence audit's probe suite (OQ16, 2026-08-20). Each probe
+ * pins two facts about
  * one divergence channel:
  *
  *  1. whether the channel is REAL — run the same scenario under two step-6

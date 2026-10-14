@@ -1,12 +1,12 @@
 package velle
 
 /**
- * The store contract (working-docs/investigate_runtime.md §2–3, §7–8): the
+ * The store contract (evaluation.md "The universal transaction"): the
  * runtime is a per-commit decision kernel that demand-hydrates state through an
  * engineer-supplied resolver, evaluates in memory, and hands each transaction's
  * mutation set back through a commit callback.
  *
- * Identity is the store's (§8). Velle never mints persisted ids: rows are keyed
+ * Identity is the store's. Velle never mints persisted ids: rows are keyed
  * by whatever the store keys them by, carried opaquely as [StoreKey]; the
  * runtime's own instance ids are session-local handles that never appear in
  * this contract. References cross the boundary as typed [Ref] objects — never
@@ -91,7 +91,7 @@ data class Row(val shape: String, val key: StoreKey, val fields: Map<String, Any
  * The read half: the typed questions evaluation can ask of storage — by key,
  * by reference (the join read), by shape (the scan read, filtered or not), and
  * per-membership capture memory. Fetches are cached per envelope by the
- * runtime — one consistent snapshot per transaction, never re-issued (§2).
+ * runtime — one consistent snapshot per transaction, never re-issued (evaluation.md U1).
  */
 interface StateResolver {
     /** Fetch one row by the store's own key — following a to-one reference. */
@@ -143,7 +143,7 @@ interface StateResolver {
  * The write half: one transaction's whole mutation set — the act's create plus
  * every rule-fired create and assign in the envelope — delivered atomically,
  * once, at transaction close. The callback runs *inside* the envelope: a thrown
- * exception rolls the whole commit back and the caller gets the error (§3).
+ * exception rolls the whole commit back and the caller gets the error (evaluation.md U2).
  * Transient acts are excluded — only their consequences persist.
  *
  * [created] is in creation order; reference-typed values in a creation's

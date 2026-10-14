@@ -5,7 +5,7 @@ Coined terms used across the working docs, one line each, with the pointer that 
 ## Acts and the trust boundary
 
 - **act** — a shape declared `act`, whose instances are committed from outside the system; also such an instance, a request or message crossing the trust boundary (README §4, §22).
-- **transient act** — an act that exists only within its own commit's transaction (`transient act`): an input to the state, not a member of it (README §4; decision record `investigate-transient.md`).
+- **transient act** — an act that exists only within its own commit's transaction (`transient act`): an input to the state, not a member of it (README §4; decided 2026-08-10 on the principle that an incoming mutation is an input to the state, not automatically a member of it).
 - **prohibition** — what a `never` or a `requires` declares: a configuration that is impossible, stated as the forbidden configuration (`never`) or as what every record satisfies (`requires`, whose prohibition is its complement; inside a requirement, membership may be spelled `to be`). The umbrella noun (adopted 2026-10-10 in place of "invariant", which named only the proven kind); a prohibition is a refusal, a constraint, or a guarantee, by who it binds (README §21).
 - **refusal** — a prohibition that binds the caller: a prohibition over a transient act, checked once, at the request; the record the request leaves carries nothing (README §21).
 - **constraint** — a prohibition that binds the books: a prohibition over a persistent shape, holding at the end of every transaction for as long as the record exists; any act or tick that would leave the books otherwise is rejected (README §21).
@@ -18,8 +18,8 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **correlation key** — a client-supplied business key (the idempotency-key pattern) a transient act carries and its outcomes copy, so callers can match responses to requests and duplicate submissions can be recognized (OQ26, settled 2026-08-19 → README §4 "Transient acts"): a documented idiom, deliberately not language machinery — the key's uniqueness is the client's to own, the dedup guard the author's to write.
 - **C0 pinning** — a transient act's partitions are evaluated against the state at its arrival commit and never re-evaluated by its own consequences (`evaluation.md`, "Transient acts").
 - **closure / exposure closure / input closure** — what one commit carries: the act plus the inline parts its `with` declaration says arrive with it, statically shaped, with the single instance as the degenerate case (README §4; §6 "Inline part creation").
-- **HOLDS / TAX / GAP** — break-doc verdicts: the design handles the case · handles it at a cost · needs a new obligation or fails (`break-b.md`).
-- **surface** — the set of calls available to code outside the system: the *typed surface* is the generated Kotlin API (the act input values and the `commit` overloads over them, accessors, model objects, the query API), the *query surface* or *read surface* is the part of it that gets data out, the *store surface* is the typed interface a store implements. Plain synonym: API. Used in README §22 and `investigate_runtime.md` §10–§11; the reads work says "read API".
+- **HOLDS / TAX / GAP** — stress-pass verdicts: the design handles the case · handles it at a cost (a restructured spelling, a coarse check to work around) · needs a new obligation or fails (a check, the runtime, or the generator is wrong or missing). Used in OQ16's calibration record and OQ44.
+- **surface** — the set of calls available to code outside the system: the *typed surface* is the generated Kotlin API (the act input values and the `commit` overloads over them, accessors, model objects, the query API), the *query surface* or *read surface* is the part of it that gets data out, the *store surface* is the typed interface a store implements. Plain synonym: API. Used in README §22; the reads work says "read API".
 
 ## Patterns
 
@@ -27,7 +27,7 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **rejection-as-data** — a refusal lands as a fact the caller reads back; nothing unwinds (`patterns.md`, "Validation rejection is data").
 - **conditioned acceptance** — "don't accept unless X" is the *definition* of accepted, not a transaction statement (`patterns.md`).
 - **intent-before-effect** — an external effect hangs off a durable intent fact; executing the effect is the engineer's loop observing the intent (README §11).
-- **materialize, then decide** — the transient-act idiom for async work: the handler copies the act into a durable intent within its transaction; decisions and effects hang off the intent (`break-b.md` Case 5).
+- **materialize, then decide** — the transient-act idiom for async work: the handler copies the act into a durable intent within its transaction; decisions and effects hang off the intent (`patterns.md`, "Materialize, then decide").
 - **ledger / episode** — history patterns: an append-only record read via `latest` · a bounded occurrence fact counted later (README §12, §20).
 - **rung / rung recognition** — a spelling's position on the pattern spectrum (e.g. incremental vs. recompute — one description, two spellings); diagnostics point at the twin rung (README §19–§20).
 - **predecessor recurrence** — the derived-history spelling of an order-dependent fold: a derived `previous` (`latest ... by` the ordering datum) plus self-reference one hop through it, so each record derives its running value from its predecessor's and the current total is a selector read; the served spelling for tick-cadence order-dependent folds (README §19; OQ15, ruled 2026-08-19).
@@ -52,8 +52,8 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **spent prohibition** — an established `never` used as a proof input by other analyses ("the author states the prohibition; the prover uses it," README §21); only a fully-discharged prohibition is spendable.
 - **certificate** — the stated reason a static cycle provably ends, drawn from a decidable whitelist: strict descent on a creation-fixed datum plus a base case, or acyclicity supplied by a `never` prohibition. Consumed by V14 for definition-graph cycles and V16 for cascade quiescence; one shared vocabulary (ruled at OQ15's settling, 2026-08-19), grown by OQ16's calibration.
 - **pinned (firing set)** — a commit's entrant/leaver sets are computed from one pre/post diff before any sibling firing runs, so a sibling's write cannot change who fires at that commit; what it can change is read by *bodies*, which see the evolving state (`evaluation.md` step 5/6; the distinction V15's read-write leg is built on).
-- **polarity (of a consult)** — which way creating an instance can move a predicate: toward true (+), toward false (−), or both/unknown (0); signs come from `exists` under negation, refinement absorption, and count comparisons. Same-direction sibling effects on one predicate cannot race (`audit-sibling-confluence.md` P2).
-- **fresh-instance argument** — a freshly created instance cannot satisfy a positive `exists ... for this` over a shape the same commit does not create, because nothing can reference it yet; so its creation provably cannot move consults gated behind such a refinement, and a fresh instance never *leaves* anything (`audit-sibling-confluence.md` P3; the V12/V18 family's reasoning aimed at consult analysis).
+- **polarity (of a consult)** — which way creating an instance can move a predicate: toward true (+), toward false (−), or both/unknown (0); signs come from `exists` under negation, refinement absorption, and count comparisons. Same-direction sibling effects on one predicate cannot race (`checks.md` V15; `Validator.kt`, `canCoFire`).
+- **fresh-instance argument** — a freshly created instance cannot satisfy a positive `exists ... for this` over a shape the same commit does not create, because nothing can reference it yet; so its creation provably cannot move consults gated behind such a refinement, and a fresh instance never *leaves* anything (`checks.md` V15; the V12/V18 family's reasoning aimed at consult analysis).
 - **check IDs** — V1–V18 are validator errors, A-series are advisories (A4 = drift-exposed partition), F-series are type/form checks; all cataloged in `checks.md`.
 - **OQ tags** — stable open-question numbers; index in `QUESTIONS.md`.
 
@@ -64,21 +64,21 @@ Coined terms used across the working docs, one line each, with the pointer that 
 - **membership axis** — one independently varying dimension of refinement membership on a shape; state-flow diagrams render one small machine per axis, grouping refinements onto a shared axis only when their predicates are provably disjoint (`diagrams.md`).
 - **rule graph** — the whole system's cause map on one page: acts and rules as nodes, "this commit's writes can change that rule's condition" as edges, guards on the edges, decision diamonds only where exclusivity is proven (`diagrams.md`).
 
-## Runtime and storage (`investigate_runtime.md`)
+## Runtime and storage (`evaluation.md` "The universal transaction"; `compiler/src/main/kotlin/velle/Hydration.kt`)
 
 - **envelope** — one act's transaction: the act's commit plus every consequence commit, all-or-nothing.
 - **universal transaction** — the five-clause contract (U1 snapshot, U2 atomicity, U3 serialization, U4 permanence, U5 no side doors) the engineer's storage must honor per envelope; normative in `evaluation.md` (settled OQ36); U3's queue-key derivation settled with OQ40 (2026-08-18) — see the U3 clause and `checks.md` A5.
 - **serialization domain** — the compiler-computed key set an envelope revolves around, expressed as paths from the act (`{this.account}` for a deposit): two envelopes conflict iff their domains intersect, so the domain is exactly what an implementation queues conflicting work on — derived from the envelope's footprint, never declared (OQ40, settled → `evaluation.md` U3; built in `compiler/.../Domains.kt`).
 - **queue key** — the engineer/PO-facing name for one member of a serialization domain: work sharing a queue key is handled one item at a time in arrival order; separate queues run independently. Chosen over "lock"/"synchronized" (which name one mechanism) and "serialize" (which engineers read as data marshalling) (OQ40, settled; stated on the generated commit functions).
 - **contention map** — a compilation artifact (text or diagram) stating each act's queue key in business words ("deposits queue per account"), what contends with what, and every wide domain with the read that caused it — how unintentional system-wide queueing becomes visible to engineers and product owners before production (OQ40, settled; built — `ContentionMapGen.kt`, emitted in `DIAGRAMS-<System>.md`, normative in `diagrams.md`).
-- **hydration / resolver** — the runtime demand-fetches the state an envelope needs through engineer-implemented storage questions: by key, by reference, by shape, captures (§2, §5).
-- **candidate pre-filter / superset contract** — a compiled query trusted only for *exclusion*: it may over-return, never under-return; the authoritative predicate check stays in one evaluator, in memory (§6).
-- **polarity-dual** — how the pre-filter compiler keeps the superset contract: inexpressible predicate parts degrade to TRUE in positive position, FALSE under an odd number of negations (§6).
-- **relevance gating** — a commit evaluates only the watched conditions its mutation footprint can affect, per static read summaries (§6).
-- **self-contained condition** — one reading nothing beyond the base shape's own columns; the criterion for using the pre-filter soundly mid-envelope (§6).
+- **hydration / resolver** — the runtime demand-fetches the state an envelope needs through engineer-implemented storage questions: by key, by reference, by shape, captures (`Hydration.kt`, `StateResolver`).
+- **candidate pre-filter / superset contract** — a compiled query trusted only for *exclusion*: it may over-return, never under-return; the authoritative predicate check stays in one evaluator, in memory (`Hydration.kt`, `fetchCandidates`; `Query.kt`).
+- **polarity-dual** — how the pre-filter compiler keeps the superset contract: inexpressible predicate parts degrade to TRUE in positive position, FALSE under an odd number of negations (`Query.kt`).
+- **relevance gating** — a commit evaluates only the watched conditions its mutation footprint can affect, per static read summaries (`Runtime.kt`).
+- **self-contained condition** — one reading nothing beyond the base shape's own columns; the criterion for using the pre-filter soundly mid-envelope (`Runtime.kt`).
 - **scan floor** — the fallback fetch: all of a shape, when no keyed or filtered path applies.
-- **retraction** — deletion of a capture row at the exit commit's close: the contract's one sanctioned delete, legal because a capture is memory, not a record of the world (§7).
-- **session handle / store key** — runtime identity is process-local; durable identity belongs to the store and round-trips as `Ref.Persisted`/`StoreKey` (§8). Session handles never reach the engineer: the surface works in references (below).
+- **retraction** — deletion of a capture row at the exit commit's close: the contract's one sanctioned delete, legal because a capture is memory, not a record of the world (`evaluation.md` U2; `Hydration.kt`, `Retraction`).
+- **session handle / store key** — runtime identity is process-local; durable identity belongs to the store and round-trips as `Ref.Persisted`/`StoreKey` (`Hydration.kt`). Session handles never reach the engineer: the surface works in references (below).
 
 ## Reads (OQ51, settled → README §22)
 

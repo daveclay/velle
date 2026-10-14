@@ -2225,8 +2225,8 @@ class Validator(private val model: Model) {
     //
     // Delete is instance-granularity mutation whose legality is derived from
     // what the spec proves *using* the instance's existence — never banned by
-    // category. The boundary principle (the C1–C11 catalog,
-    // working-docs/investigate-delete.md): a delete errors when it can break
+    // category. The boundary principle (README §12 "Deletion";
+    // checks.md V23–V28): a delete errors when it can break
     // something the spec proves or declares — never merely because state
     // changes; recalculation is drift, the design working. The disjointness
     // prover is deliberately the shared refinement-overlap one — syntactic

@@ -25,8 +25,8 @@ import java.time.LocalDate
 /**
  * A generic, model-driven store over SQLite: the framework role in README §22's
  * architecture, implementing the runtime's resolver and commit-callback
- * protocol (compiler/.../Hydration.kt; working-docs/investigate_runtime.md
- * §2–3, §7–8) for any spec. It contains no business names — every example's
+ * protocol (compiler/.../Hydration.kt; evaluation.md "The universal
+ * transaction") for any spec. It contains no business names — every example's
  * output module runs its scenarios over this one class — and it is the
  * existence proof that the generic protocol is enough for a store to implement
  * once for all specs.
@@ -139,7 +139,7 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
             // refinement. This store picks a table per refinement — one row per
             // current membership, deleted on exit; nullable columns on the base
             // table or a discriminator would do equally, the mapping is the
-            // store's call (investigate_runtime.md §7).
+            // store's call (Hydration.kt, captureSchemas).
             for (cs in model.captureSchemas) {
                 val cols = cs.props.joinToString("") { ", \"${it.name}\" ${sqlType(it.type)}" }
                 st.execute("""CREATE TABLE IF NOT EXISTS "${captureTable(cs.refinement)}" (id INTEGER PRIMARY KEY$cols)""")
@@ -155,7 +155,7 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
         else -> "TEXT"
     }
 
-    // ── the resolver: the typed read questions (investigate_runtime.md §2, §8) ──
+    // ── the resolver: the typed read questions (Hydration.kt, StateResolver) ──
     // Identity is this store's: rows key on the table's INTEGER PRIMARY KEY,
     // minted at insert and reported back from onCommit.
 
@@ -368,9 +368,9 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
      * Runs inside the runtime's envelope: everything the transaction created,
      * assigned, captured, or deleted lands in one SQLite transaction, and a
      * failure here rolls the whole Velle commit back (in-envelope failure,
-     * investigate_runtime.md §3).
+     * evaluation.md U2).
      *
-     * Identity is minted here (§8): each created row gets its table's next
+     * Identity is minted here (Hydration.kt, StoreKey): each created row gets its table's next
      * key, and the assigned keys return in creation order. Creates arrive with
      * pending refs pointing backward, so inserting in list order always has
      * the referenced key already minted. Deletions go last, as the contract

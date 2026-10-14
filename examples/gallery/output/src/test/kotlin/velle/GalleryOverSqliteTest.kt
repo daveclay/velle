@@ -17,10 +17,10 @@ import velle.sqlite.SqliteStore
 /**
  * The gallery flows over real storage. With a store connected the runtime
  * keeps no state of its own: every transaction opens a fresh snapshot and
- * faults rows in through the resolver (investigate_runtime.md §2), so each
+ * faults rows in through the resolver (evaluation.md U1), so each
  * inherited scenario is the in-memory scenario re-run against SQLite — once
  * through the generic protocol, once through the generated typed store
- * surface (GalleryStore, §10).
+ * surface (GalleryStore).
  */
 class GalleryFlowOverSqliteTest : GalleryFlowTest() {
     private val conn: Connection = DriverManager.getConnection("jdbc:sqlite::memory:")

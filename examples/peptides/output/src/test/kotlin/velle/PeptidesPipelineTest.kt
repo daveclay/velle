@@ -58,7 +58,7 @@ open class PeptidesPipelineTest {
         // Ruled (README §21; evaluation.md "An exposed call"): the input-constrained
         // `never` is evaluated at the boundary, over pre-state plus the act, before any
         // rule runs — so this is a refusal naming the `never`. The v0 runtime does not
-        // implement the boundary pass yet (TODO.md): it checks every `never` at
+        // implement the boundary pass yet (working-docs/questions/OQ52): it checks every `never` at
         // transaction end only, so the rules watching the series evaluate
         // `latest ... by hoursElapsed` first and fail loudly on the tie (README §10).
         // Until then the caller gets a runtime error; the transaction rolls back either way

@@ -5,9 +5,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * OQ37's delete checks (V23–V28), exercised against the investigation's own
- * fixtures (the C1–C11 catalog, working-docs/investigate-delete.md): each
- * error case is a catalog entry, each clean case its documented discharge.
+ * The delete checks (checks.md V23–V28; README §12 "Deletion"), one fixture
+ * per case: each error case is a check's refusal, each clean case its
+ * documented discharge.
  */
 class DeleteValidatorTest {
 
@@ -69,7 +69,7 @@ class DeleteValidatorTest {
         """.trimIndent())
     }
 
-    // ── referential completeness (V24; catalog C3–C5) ────────────────────────
+    // ── referential completeness (V24) ────────────────────────
 
     @Test
     fun `C5 - a plain required reference strands and errors`() {
@@ -104,7 +104,7 @@ class DeleteValidatorTest {
         """.trimIndent())
     }
 
-    // ── existence-dependency (V25; catalog C6–C8) ────────────────────────────
+    // ── existence-dependency (V25) ────────────────────────────
 
     /** The canonical fixture: deleting the witness re-arms the guard and the
      *  backstop double-applies. */
@@ -171,7 +171,7 @@ class DeleteValidatorTest {
         """.trimIndent())
     }
 
-    // ── never maintenance (V26; catalog C9) ──────────────────────────────────
+    // ── never maintenance (V26) ──────────────────────────────────
 
     @Test
     fun `C9 - a deleter the invariant consults errors, the base's own deleter does not`() {
@@ -195,7 +195,7 @@ class DeleteValidatorTest {
         """.trimIndent())
     }
 
-    // ── the deletion gate (V27; catalog C10) ─────────────────────────────────
+    // ── the deletion gate (V27) ─────────────────────────────────
 
     @Test
     fun `C10 - an unconditioned deleter trips the gate, the partition discharges it`() {
@@ -235,7 +235,7 @@ class DeleteValidatorTest {
         assertTrue(a.any { it.code == "A2" && "undeletable" in it.message }, "expected the dead-gate A2, got: $a")
     }
 
-    // ── stranding (V28; catalog C11) ─────────────────────────────────────────
+    // ── stranding (V28) ─────────────────────────────────────────
 
     @Test
     fun `C11 - an after-commit exit rule cannot read a deletion's leaver`() {

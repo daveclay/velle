@@ -19,7 +19,7 @@ import velle.generated.InvoiceRow
 import velle.generated.toInvoiceRow
 
 /**
- * The typed store surface (investigate_runtime.md §10), exercised in its
+ * The typed store surface (StoreGen.kt), exercised in its
  * intended layering — the framework scenario: a generic, spec-agnostic backend
  * (SqliteStore, standing in for a springboot-velle) serves everything through
  * BillingStoreOverGeneric's defaults, and the engineer overrides exactly one

@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
  * The pre-filter compiler (Query.kt): predicates compile to a filter the
  * authoritative predicate always implies — inexpressible pieces degrade to
  * True in positive position and False under negation, so the candidate set
- * only ever widens (investigate_runtime.md §2).
+ * only ever widens (the superset contract, Hydration.kt).
  */
 class QueryCompilerTest {
 

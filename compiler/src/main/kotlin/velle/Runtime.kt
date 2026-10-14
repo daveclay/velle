@@ -135,7 +135,7 @@ class VelleSystem(
 
     private var nextId = 1L
 
-    // ── hydration (investigate_runtime.md §2–3; Hydration.kt) ────────────────
+    // ── hydration (Hydration.kt; evaluation.md "The universal transaction") ──
     // With a resolver connected, [instances]/[byShape] become the per-envelope
     // working set over engineer-owned storage: each transaction opens a fresh
     // snapshot, faults state in on demand (memoized for the envelope), and hands
@@ -149,7 +149,7 @@ class VelleSystem(
      *  conversion; survives snapshot clears. */
     private val idShape = HashMap<Long, String>()
 
-    // Identity is the store's (investigate_runtime.md §8): rows are keyed by
+    // Identity is the store's (Hydration.kt, Ref/StoreKey): rows are keyed by
     // whatever the store assigned, and the runtime's instance ids are
     // session-local handles that never persist. This bimap is the translation
     // at the boundary; like idShape it is an index, surviving snapshot clears.
@@ -187,7 +187,7 @@ class VelleSystem(
     /** Each transaction evaluates against one consistent snapshot: drop the
      *  previous envelope's hydrated state so storage is re-consulted. Captures
      *  included — with a resolver connected they are a cache over the store's
-     *  capture channel (investigate_runtime.md §7), hydrated on demand like
+     *  capture channel (Hydration.kt, CommitSet), hydrated on demand like
      *  rows; without one, the map is the store and survives. */
     private fun beginSnapshot() {
         if (resolver == null) return
@@ -269,8 +269,8 @@ class VelleSystem(
      * resolver's candidate superset for [filter] instead of the whole table. The
      * return is everything of [shape] in the working set — candidates unioned
      * with rows this envelope already touched — and the caller re-checks the
-     * authoritative predicate in memory on all of it (investigate_runtime.md §2:
-     * the filter is a pre-filter, never the evaluation).
+     * authoritative predicate in memory on all of it (the filter is a
+     * pre-filter under the superset contract, never the evaluation).
      */
     internal fun idsOfCandidates(shape: String, filter: QF): List<Long> {
         val r = resolver
@@ -423,8 +423,8 @@ class VelleSystem(
             checkNevers(t)
             // the commit callback runs inside the envelope: its writes join the
             // engineer's storage transaction, and a failure rolls the whole
-            // commit back (investigate_runtime.md §3, in-envelope failure).
-            // The store assigns row identity and reports it back (§8) — the
+            // commit back (evaluation.md U2, in-envelope failure).
+            // The store assigns row identity and reports it back — the
             // returned keys bind this session's handles to storage.
             onCommit?.let { cb ->
                 val pending = buildCommitSet(t)

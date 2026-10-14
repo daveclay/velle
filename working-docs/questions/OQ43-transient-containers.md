@@ -34,3 +34,8 @@ V18 (every request gets a response) applies "for each transient shape," and tran
 ### 3. The durable-container / transient-branch mix — defer explicitly or design the declaration site
 
 If deferred, say so at README §6 ("Inline part creation"), so the ephemeral-payload use case is a recorded non-goal rather than a gap.
+
+## Residue from the transient-acts decision, held here
+
+- **Can rules copy a transient container act and its parts into a durable tree?** The part-copying rules appear to have no way to name the durable container a sibling rule just created: V17 bans the reference path, and U1's snapshot hides the sibling's creation. Confirm or break the tracing; the outcome scopes this question (parked at OQ39's settling).
+- **Confirm outcome-mediated provenance satisfies `why`** (README §22's `why` item) when provenance lands. Under the transient-acts decision `why` walks outcomes, and the step from an outcome back to the vanished act exists only if compilation keeps its own trace, which is tooling, not state.

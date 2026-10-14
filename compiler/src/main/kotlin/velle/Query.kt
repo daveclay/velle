@@ -5,7 +5,7 @@ import java.time.Instant
 import java.time.LocalDate
 
 /**
- * The query IR (investigate_runtime.md §2): a compiled *pre-filter* over one
+ * The query IR: a compiled *pre-filter* over one
  * shape's stored rows, handed to the engineer's resolver so a scan read can
  * return a candidate subset instead of the whole table. The contract is
  * strictly one-directional — the authoritative predicate always implies the
@@ -64,7 +64,8 @@ sealed interface QConst {
  * positive position to [QF.True] (keep the rows — over-fetch), under an odd
  * number of negations to [QF.False] (so the enclosing `not` keeps the rows).
  * The result is always implied by the authoritative predicate, never the
- * reverse — correctness stays in one evaluator (investigate_runtime.md §2).
+ * reverse — correctness stays in one evaluator (evaluation.md, "What the
+ * contract deliberately excludes").
  *
  * Time is data at compile time: `today`/`now` (and duration arithmetic on
  * them) fold to constants, so a filter is built per evaluation moment — per
@@ -427,7 +428,7 @@ private fun VType.strip(): VType = if (this is VType.Optional) inner else this
 /**
  * One store question's filter with its evaluation-moment constants abstracted
  * to *holes* — the machinery behind the generated typed store interface
- * (investigate_runtime.md §10): a `remindOverdueCandidates(dueBefore,
+ * (StoreGen.kt): a `remindOverdueCandidates(dueBefore,
  * sentOnAfter)` method is this template with its holes as parameters.
  *
  * Holes are found by construction, not annotation: the condition is compiled

@@ -104,8 +104,7 @@ class CommutationSweepTest {
             "derivation-disjoint pairs failed to commute:\n" + violations.joinToString("\n"))
     }
 
-    /** The sibling-confluence audit's whole-corpus leg (OQ16;
-     *  `working-docs/audit-sibling-confluence.md`): every validated spec's
+    /** The sibling-confluence audit's whole-corpus leg (OQ16): every validated spec's
      *  world, rebuilt under a reversed step-6 firing order and a reversed
      *  after-commit drain order, must fingerprint identically — evaluation.md's
      *  "ordering within step 6 is never observable in a valid spec", executed. */
