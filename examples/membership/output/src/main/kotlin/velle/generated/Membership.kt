@@ -26,11 +26,8 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPlan(name: String, price: BigDecimal): CommitResult =
-        system.commit("Plan", buildMap {
-            put("name", name)
-            put("price", price)
-        })
+    fun commit(input: NewPlan): Commit<NewPlan> =
+        system.commit("Plan", input.raw(system)).carrying(input)
 
     /** Queue keys: [signUp.plan], [signUp.referredBy] — plus system-wide width below.
      *  System-wide over Member — reads Member.balance with no path back to any key (unexamined (A5)).
@@ -41,31 +38,20 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
      *  System-wide over AuditEntry — creates AuditEntry referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitSignUp(name: String, signupEmail: String, plan: Ref<Plan>, referredBy: Ref<Member>? = null): CommitResult =
-        system.commit("SignUp", buildMap {
-            put("name", name)
-            put("signupEmail", signupEmail)
-            put("plan", system.idOf(plan))
-            referredBy?.let { put("referredBy", system.idOf(it)) }
-        })
+    fun commit(input: NewSignUp): Commit<NewSignUp> =
+        system.commit("SignUp", input.raw(system)).carrying(input)
 
     /** Queue key: [changeEmail.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitChangeEmail(member: Ref<Member>, newEmail: String): CommitResult =
-        system.commit("ChangeEmail", buildMap {
-            put("member", system.idOf(member))
-            put("newEmail", newEmail)
-        })
+    fun commit(input: NewChangeEmail): Commit<NewChangeEmail> =
+        system.commit("ChangeEmail", input.raw(system)).carrying(input)
 
     /** Queue keys: [visit.member], [visit.member.plan], [visit.member.referredBy].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitVisit(member: Ref<Member>, minutes: Int): CommitResult =
-        system.commit("Visit", buildMap {
-            put("member", system.idOf(member))
-            put("minutes", minutes)
-        })
+    fun commit(input: NewVisit): Commit<NewVisit> =
+        system.commit("Visit", input.raw(system)).carrying(input)
 
     /** Queue keys: [makeDeposit.member], [makeDeposit.member.plan], [makeDeposit.member.referredBy] — plus system-wide width below.
      *  System-wide over Member — reads Member.balance with no path back to any key (unexamined (A5)).
@@ -76,59 +62,39 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
      *  System-wide over AuditEntry — creates AuditEntry referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitMakeDeposit(member: Ref<Member>, amount: BigDecimal): CommitResult =
-        system.commit("MakeDeposit", buildMap {
-            put("member", system.idOf(member))
-            put("amount", amount)
-        })
+    fun commit(input: NewMakeDeposit): Commit<NewMakeDeposit> =
+        system.commit("MakeDeposit", input.raw(system)).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitAgent(name: String, email: String): CommitResult =
-        system.commit("Agent", buildMap {
-            put("name", name)
-            put("email", email)
-        })
+    fun commit(input: NewAgent): Commit<NewAgent> =
+        system.commit("Agent", input.raw(system)).carrying(input)
 
     /** Queue keys: [raiseTicket.assignee], [raiseTicket.member] — plus system-wide width below.
      *  System-wide over ReopenNotice — creates ReopenNotice referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitRaiseTicket(member: Ref<Member>, subject: String, due: LocalDate, priority: String, assignee: Ref<Agent>? = null): CommitResult =
-        system.commit("RaiseTicket", buildMap {
-            put("member", system.idOf(member))
-            put("subject", subject)
-            put("due", due)
-            put("priority", priority)
-            assignee?.let { put("assignee", system.idOf(it)) }
-        })
+    fun commit(input: NewRaiseTicket): Commit<NewRaiseTicket> =
+        system.commit("RaiseTicket", input.raw(system)).carrying(input)
 
     /** Queue keys: [closeTicket.closedBy], [closeTicket.ticket], [closeTicket.ticket.closedBy].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCloseTicket(ticket: Ref<Ticket>, closedBy: Ref<Agent>): CommitResult =
-        system.commit("CloseTicket", buildMap {
-            put("ticket", system.idOf(ticket))
-            put("closedBy", system.idOf(closedBy))
-        })
+    fun commit(input: NewCloseTicket): Commit<NewCloseTicket> =
+        system.commit("CloseTicket", input.raw(system)).carrying(input)
 
     /** Queue keys: [reopenTicket.ticket], [reopenTicket.ticket.closedBy].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitReopenTicket(ticket: Ref<Ticket>): CommitResult =
-        system.commit("ReopenTicket", buildMap {
-            put("ticket", system.idOf(ticket))
-        })
+    fun commit(input: NewReopenTicket): Commit<NewReopenTicket> =
+        system.commit("ReopenTicket", input.raw(system)).carrying(input)
 
     /** Queue keys: [assignTicket.agent], [assignTicket.ticket], [assignTicket.ticket.assignee], [assignTicket.ticket.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitAssignTicket(ticket: Ref<Ticket>, agent: Ref<Agent>): CommitResult =
-        system.commit("AssignTicket", buildMap {
-            put("ticket", system.idOf(ticket))
-            put("agent", system.idOf(agent))
-        })
+    fun commit(input: NewAssignTicket): Commit<NewAssignTicket> =
+        system.commit("AssignTicket", input.raw(system)).carrying(input)
 
     fun plans(): List<Plan> = system.instancesOf("Plan").map { materializePlan(it) }
     fun members(): List<Member> = system.instancesOf("Member").map { materializeMember(it) }
@@ -1551,6 +1517,117 @@ shape LateEscalatedMember = Member where
 """
     }
 }
+
+// ── act inputs (README §22, "External input"): one typed value per act,
+// every stored field the committer supplies and nothing else ──
+data class NewPlan(
+    val name: String,
+    val price: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("price", price)
+    }
+}
+
+data class NewSignUp(
+    val name: String,
+    val signupEmail: String,
+    val plan: Ref<Plan>,
+    val referredBy: Ref<Member>? = null,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("signupEmail", signupEmail)
+        put("plan", system.idOf(plan))
+        referredBy?.let { put("referredBy", system.idOf(it)) }
+    }
+}
+
+data class NewChangeEmail(
+    val member: Ref<Member>,
+    val newEmail: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("member", system.idOf(member))
+        put("newEmail", newEmail)
+    }
+}
+
+data class NewVisit(
+    val member: Ref<Member>,
+    val minutes: Int,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("member", system.idOf(member))
+        put("minutes", minutes)
+    }
+}
+
+data class NewMakeDeposit(
+    val member: Ref<Member>,
+    val amount: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("member", system.idOf(member))
+        put("amount", amount)
+    }
+}
+
+data class NewAgent(
+    val name: String,
+    val email: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("email", email)
+    }
+}
+
+data class NewRaiseTicket(
+    val member: Ref<Member>,
+    val subject: String,
+    val due: LocalDate,
+    val priority: String,
+    val assignee: Ref<Agent>? = null,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("member", system.idOf(member))
+        put("subject", subject)
+        put("due", due)
+        put("priority", priority)
+        assignee?.let { put("assignee", system.idOf(it)) }
+    }
+}
+
+data class NewCloseTicket(
+    val ticket: Ref<Ticket>,
+    val closedBy: Ref<Agent>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("ticket", system.idOf(ticket))
+        put("closedBy", system.idOf(closedBy))
+    }
+}
+
+data class NewReopenTicket(
+    val ticket: Ref<Ticket>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("ticket", system.idOf(ticket))
+    }
+}
+
+data class NewAssignTicket(
+    val ticket: Ref<Ticket>,
+    val agent: Ref<Agent>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("ticket", system.idOf(ticket))
+        put("agent", system.idOf(agent))
+    }
+}
+
 
 // ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,

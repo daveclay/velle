@@ -53,7 +53,7 @@ class RaiseTicketSpec : SpecSupport() {
         val ticket = givens.closedTicket()
         ticket.assertIsA("ClosedTicket", "the given must deliver a member of 'ClosedTicket'")
         // when: a ReopenTicket for it is committed
-        sys.commitReopenTicket(ticket)
+        sys.commit(NewReopenTicket(ticket))
         ticket.assertIsNotA("ClosedTicket", "the exit commit must end the membership")
         assertEquals(beforeReopenNotice + 1, count("ReopenNotice"), "rule NoticeReopen: one 'ReopenNotice' per firing")
         val producedReopenNotice = last("ReopenNotice")

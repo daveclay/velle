@@ -34,7 +34,7 @@ class Givens(private val sys: PeptidesSystem) : RequiredGivens {
         val crop = s.crop()
         val pathogen = s.pathogen(crop)
         val peptide = s.peptide("PEP-UNTESTED")
-        s.accept(sys.commitRequestGreenhouseTrial("GH-REQ-REFUSED", peptide, pathogen, s.greenhouse(), s.greenhouseProtocol()))
+        s.accept(sys.commit(NewRequestGreenhouseTrial("GH-REQ-REFUSED", peptide, pathogen, s.greenhouse(), s.greenhouseProtocol())))
     }
 
     override fun greenhouseTrialForRecordGreenhouseResult(): GreenhouseTrial = s.observedToEnd().trial
@@ -42,33 +42,33 @@ class Givens(private val sys: PeptidesSystem) : RequiredGivens {
     override fun applicableCorrection() {
         val t = s.treat(s.laidOut())
         val obs = s.observe(t.control, 0, "12")
-        s.accept(sys.commitCorrectObservation(obs, s.dec("15"), "misread scale"))
+        s.accept(sys.commit(NewCorrectObservation(obs, s.dec("15"), "misread scale")))
     }
 
     override fun refusedCorrection() {
         val t = s.observedToEnd()
-        s.accept(sys.commitCorrectObservation(sys.plotObservations().last(), s.dec("15"), "too late"))
+        s.accept(sys.commit(NewCorrectObservation(sys.plotObservations().last(), s.dec("15"), "too late")))
     }
 
     override fun applicableVoid() {
         val t = s.treat(s.laidOut())
         val obs = s.observe(t.control, 0, "12")
-        s.accept(sys.commitVoidObservation(obs, "wrong plot"))
+        s.accept(sys.commit(NewVoidObservation(obs, "wrong plot")))
     }
 
     override fun refusedVoid() {
         s.observedToEnd()
-        s.accept(sys.commitVoidObservation(sys.plotObservations().last(), "too late"))
+        s.accept(sys.commit(NewVoidObservation(sys.plotObservations().last(), "too late")))
     }
 
     override fun applicableMove() {
         val t = s.laidOut()
-        s.accept(sys.commitMovePlot(t.control, "B2"))
+        s.accept(sys.commit(NewMovePlot(t.control, "B2")))
     }
 
     override fun refusedMove() {
         val t = s.treat(s.laidOut())
-        s.accept(sys.commitMovePlot(t.control, "B2"))
+        s.accept(sys.commit(NewMovePlot(t.control, "B2")))
     }
 
     override fun greenhouseForOpenClimateExcursion(): Greenhouse {
@@ -103,7 +103,7 @@ class Givens(private val sys: PeptidesSystem) : RequiredGivens {
         val crop = s.crop()
         val pathogen = s.pathogen(crop)
         val peptide = s.peptide("PEP-UNTESTED")
-        s.accept(sys.commitRequestFieldTrial("FT-REQ-REFUSED", peptide, pathogen, crop, s.site(), s.fieldProtocol()))
+        s.accept(sys.commit(NewRequestFieldTrial("FT-REQ-REFUSED", peptide, pathogen, crop, s.site(), s.fieldProtocol())))
     }
 
     override fun plantTrial() {
@@ -112,21 +112,21 @@ class Givens(private val sys: PeptidesSystem) : RequiredGivens {
 
     override fun applyTreatment() {
         val f = s.plantedFieldTrial()
-        s.accept(sys.commitApplyTreatment(f.trial, s.today, s.dec("50")))
+        s.accept(sys.commit(NewApplyTreatment(f.trial, s.today, s.dec("50"))))
     }
 
     override fun fieldTrialForNoticeHalt(): FieldTrial {
         val f = s.fieldPlots(s.approvedFieldTrial())
-        s.accept(sys.commitPhytotoxicityReport(f.treated, s.today, 3))
+        s.accept(sys.commit(NewPhytotoxicityReport(f.treated, s.today, 3)))
         return f.trial
     }
 
     /** Sprayed today; six millimetres of rain tomorrow washes it off. */
     override fun treatmentApplicationForNoticeWashOff(): TreatmentApplication {
         val f = s.plantedFieldTrial()
-        s.accept(sys.commitApplyTreatment(f.trial, s.today, s.dec("50")))
+        s.accept(sys.commit(NewApplyTreatment(f.trial, s.today, s.dec("50"))))
         val application = sys.treatmentApplications().last()
-        s.accept(sys.commitWeatherObservation(f.site, s.today.plusDays(1), s.dec("6"), s.dec("24")))
+        s.accept(sys.commit(NewWeatherObservation(f.site, s.today.plusDays(1), s.dec("6"), s.dec("24"))))
         return application
     }
 
@@ -135,19 +135,19 @@ class Givens(private val sys: PeptidesSystem) : RequiredGivens {
     override fun collectionTaskForRemindTask(): CollectionTask = s.overdueTask()
 
     override fun applicableReschedule() {
-        s.accept(sys.commitRescheduleTask(s.overdueTask(), s.today.plusDays(3)))
+        s.accept(sys.commit(NewRescheduleTask(s.overdueTask(), s.today.plusDays(3))))
     }
 
     override fun refusedReschedule() {
-        s.accept(sys.commitRescheduleTask(s.doneTask(), s.today.plusDays(3)))
+        s.accept(sys.commit(NewRescheduleTask(s.doneTask(), s.today.plusDays(3))))
     }
 
     override fun applicableCancel() {
-        s.accept(sys.commitCancelTask(s.overdueTask(), "trial abandoned"))
+        s.accept(sys.commit(NewCancelTask(s.overdueTask(), "trial abandoned")))
     }
 
     override fun refusedCancel() {
-        s.accept(sys.commitCancelTask(s.doneTask(), "too late"))
+        s.accept(sys.commit(NewCancelTask(s.doneTask(), "too late")))
     }
 
     // ── any instance ─────────────────────────────────────────────────────────

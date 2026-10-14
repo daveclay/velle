@@ -2,7 +2,7 @@
 
 The operational semantics of a transpiled Velle system: what the runtime does, stated once, in execution order. Nothing here is newly decided — this consolidates semantics settled across the README (§4, §8, §11, §13, §16–§19, §21) so an implementer follows an algorithm instead of re-deriving one from rationale. The handful of genuinely new calls are **v0 spike choices** — execution decisions below the language, made for the runtime-testing spike, not semantics — marked `[S#]` and collected at the bottom.
 
-The input/output surface (the acts' commit functions, tick and clock functions, typed accessors) is the harness contract in README §22's scope statement; this document is what happens *inside* a call.
+The input/output surface (the acts' typed input values and the `commit` overloads over them, tick and clock functions, typed accessors, the query API) is the harness contract in README §22's scope statement; this document is what happens *inside* a call.
 
 ## State
 

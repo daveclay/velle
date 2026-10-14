@@ -15,22 +15,22 @@ class Givens(private val sys: LoyaltySystem) : RequiredGivens {
     private fun member(
         referrer: Member? = null,
     ): Member {
-        sys.commitJoin("Member ${++n}", referrer = referrer)
+        sys.commit(NewJoin("Member ${++n}", referrer = referrer))
         return sys.members().last()
     }
 
     override fun join() {
-        sys.commitJoin("Member ${++n}")
+        sys.commit(NewJoin("Member ${++n}"))
     }
 
     override fun qualifiedPurchase(): Purchase {
-        sys.commitPurchase(member(), BigDecimal("150"))
+        sys.commit(NewPurchase(member(), BigDecimal("150")))
         return sys.purchases().last()
     }
 
     override fun purchaseForPromoteReferrer(): Purchase {
         val recruiter = member()
-        sys.commitPurchase(member(referrer = recruiter), BigDecimal("150"))
+        sys.commit(NewPurchase(member(referrer = recruiter), BigDecimal("150")))
         return sys.purchases().last()
     }
 
@@ -38,18 +38,18 @@ class Givens(private val sys: LoyaltySystem) : RequiredGivens {
         // tier is system-maintained, so gold is earned, never given: the
         // qualifying purchase is itself the subject — it enters VipPurchase at
         // its own promotion's commit, and ThankVip thanks it there
-        sys.commitPurchase(member(), BigDecimal("150"))
+        sys.commit(NewPurchase(member(), BigDecimal("150")))
         return sys.purchases().last()
     }
 
     override fun enrollment(): Enrollment {
-        sys.commitEnrollment(member())
+        sys.commit(NewEnrollment(member()))
         return sys.enrollments().last()
     }
 
     override fun memberForIssueKeycard(): Member {
         val m = member()
-        sys.commitEnrollment(m)
+        sys.commit(NewEnrollment(m))
         return m
     }
 

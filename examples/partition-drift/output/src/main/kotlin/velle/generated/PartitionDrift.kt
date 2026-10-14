@@ -20,63 +20,44 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCreateNote(title: String, body: String): CommitResult =
-        system.commit("CreateNote", buildMap {
-            put("title", title)
-            put("body", body)
-        })
+    fun commit(input: NewCreateNote): Commit<NewCreateNote> =
+        system.commit("CreateNote", input.raw(system)).carrying(input)
 
     /** Queue key: [lockNote.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitLockNote(note: Ref<Note>): CommitResult =
-        system.commit("LockNote", buildMap {
-            put("note", system.idOf(note))
-        })
+    fun commit(input: NewLockNote): Commit<NewLockNote> =
+        system.commit("LockNote", input.raw(system)).carrying(input)
 
     /** Queue key: [unlockNote.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitUnlockNote(note: Ref<Note>): CommitResult =
-        system.commit("UnlockNote", buildMap {
-            put("note", system.idOf(note))
-        })
+    fun commit(input: NewUnlockNote): Commit<NewUnlockNote> =
+        system.commit("UnlockNote", input.raw(system)).carrying(input)
 
     /** Queue key: [renameText.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitRenameText(note: Ref<Note>, newText: String): CommitResult =
-        system.commit("RenameText", buildMap {
-            put("note", system.idOf(note))
-            put("newText", newText)
-        })
+    fun commit(input: NewRenameText): Commit<NewRenameText> =
+        system.commit("RenameText", input.raw(system)).carrying(input)
 
     /** Queue key: [bareEdit.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitBareEdit(note: Ref<Note>, newText: String): CommitResult =
-        system.commit("BareEdit", buildMap {
-            put("note", system.idOf(note))
-            put("newText", newText)
-        })
+    fun commit(input: NewBareEdit): Commit<NewBareEdit> =
+        system.commit("BareEdit", input.raw(system)).carrying(input)
 
     /** Queue key: [safeEdit.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitSafeEdit(note: Ref<Note>, newTitle: String): CommitResult =
-        system.commit("SafeEdit", buildMap {
-            put("note", system.idOf(note))
-            put("newTitle", newTitle)
-        })
+    fun commit(input: NewSafeEdit): Commit<NewSafeEdit> =
+        system.commit("SafeEdit", input.raw(system)).carrying(input)
 
     /** Queue key: [transientEdit.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitTransientEdit(note: Ref<Note>, newTitle: String): CommitResult =
-        system.commit("TransientEdit", buildMap {
-            put("note", system.idOf(note))
-            put("newTitle", newTitle)
-        })
+    fun commit(input: NewTransientEdit): Commit<NewTransientEdit> =
+        system.commit("TransientEdit", input.raw(system)).carrying(input)
 
     fun notes(): List<Note> = system.instancesOf("Note").map { materializeNote(it) }
     fun lockNotes(): List<LockNote> = system.instancesOf("LockNote").map { materializeLockNote(it) }
@@ -595,6 +576,75 @@ rule RefuseTransientEdit when RefusedTransientEdit {
 """
     }
 }
+
+// ── act inputs (README §22, "External input"): one typed value per act,
+// every stored field the committer supplies and nothing else ──
+data class NewCreateNote(
+    val title: String,
+    val body: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("title", title)
+        put("body", body)
+    }
+}
+
+data class NewLockNote(
+    val note: Ref<Note>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("note", system.idOf(note))
+    }
+}
+
+data class NewUnlockNote(
+    val note: Ref<Note>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("note", system.idOf(note))
+    }
+}
+
+data class NewRenameText(
+    val note: Ref<Note>,
+    val newText: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("note", system.idOf(note))
+        put("newText", newText)
+    }
+}
+
+data class NewBareEdit(
+    val note: Ref<Note>,
+    val newText: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("note", system.idOf(note))
+        put("newText", newText)
+    }
+}
+
+data class NewSafeEdit(
+    val note: Ref<Note>,
+    val newTitle: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("note", system.idOf(note))
+        put("newTitle", newTitle)
+    }
+}
+
+data class NewTransientEdit(
+    val note: Ref<Note>,
+    val newTitle: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("note", system.idOf(note))
+        put("newTitle", newTitle)
+    }
+}
+
 
 // ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,

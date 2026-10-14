@@ -24,82 +24,56 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitSignUp(name: String, email: String): CommitResult =
-        system.commit("SignUp", buildMap {
-            put("name", name)
-            put("email", email)
-        })
+    fun commit(input: NewSignUp): Commit<NewSignUp> =
+        system.commit("SignUp", input.raw(system)).carrying(input)
 
     /** Queue key: [correctEmail.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCorrectEmail(customer: Ref<Customer>, corrected: String): CommitResult =
-        system.commit("CorrectEmail", buildMap {
-            put("customer", system.idOf(customer))
-            put("corrected", corrected)
-        })
+    fun commit(input: NewCorrectEmail): Commit<NewCorrectEmail> =
+        system.commit("CorrectEmail", input.raw(system)).carrying(input)
 
     /** Queue key: [billCustomer.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitBillCustomer(customer: Ref<Customer>, due: LocalDate): CommitResult =
-        system.commit("BillCustomer", buildMap {
-            put("customer", system.idOf(customer))
-            put("due", due)
-        })
+    fun commit(input: NewBillCustomer): Commit<NewBillCustomer> =
+        system.commit("BillCustomer", input.raw(system)).carrying(input)
 
     /** Queue key: [lineItem.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitLineItem(invoice: Ref<Invoice>, description: String, price: BigDecimal, quantity: Int): CommitResult =
-        system.commit("LineItem", buildMap {
-            put("invoice", system.idOf(invoice))
-            put("description", description)
-            put("price", price)
-            put("quantity", quantity)
-        })
+    fun commit(input: NewLineItem): Commit<NewLineItem> =
+        system.commit("LineItem", input.raw(system)).carrying(input)
 
     /** Queue keys: [submitPayment.invoice], [submitPayment.invoice.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitSubmitPayment(invoice: Ref<Invoice>, amount: BigDecimal): CommitResult =
-        system.commit("SubmitPayment", buildMap {
-            put("invoice", system.idOf(invoice))
-            put("amount", amount)
-        })
+    fun commit(input: NewSubmitPayment): Commit<NewSubmitPayment> =
+        system.commit("SubmitPayment", input.raw(system)).carrying(input)
 
     /** Queue key: [issuance.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitIssuance(invoice: Ref<Invoice>): CommitResult =
-        system.commit("Issuance", buildMap {
-            put("invoice", system.idOf(invoice))
-        })
+    fun commit(input: NewIssuance): Commit<NewIssuance> =
+        system.commit("Issuance", input.raw(system)).carrying(input)
 
     /** Queue keys: [changeDueDate.invoice], [changeDueDate.invoice.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitChangeDueDate(invoice: Ref<Invoice>, newDue: LocalDate): CommitResult =
-        system.commit("ChangeDueDate", buildMap {
-            put("invoice", system.idOf(invoice))
-            put("newDue", newDue)
-        })
+    fun commit(input: NewChangeDueDate): Commit<NewChangeDueDate> =
+        system.commit("ChangeDueDate", input.raw(system)).carrying(input)
 
     /** Queue key: [archiveRequest.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitArchiveRequest(invoice: Ref<Invoice>): CommitResult =
-        system.commit("ArchiveRequest", buildMap {
-            put("invoice", system.idOf(invoice))
-        })
+    fun commit(input: NewArchiveRequest): Commit<NewArchiveRequest> =
+        system.commit("ArchiveRequest", input.raw(system)).carrying(input)
 
     /** Queue key: [unarchiveRequest.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitUnarchiveRequest(invoice: Ref<Invoice>): CommitResult =
-        system.commit("UnarchiveRequest", buildMap {
-            put("invoice", system.idOf(invoice))
-        })
+    fun commit(input: NewUnarchiveRequest): Commit<NewUnarchiveRequest> =
+        system.commit("UnarchiveRequest", input.raw(system)).carrying(input)
 
     fun customers(): List<Customer> = system.instancesOf("Customer").map { materializeCustomer(it) }
     fun correctEmails(): List<CorrectEmail> = system.instancesOf("CorrectEmail").map { materializeCorrectEmail(it) }
@@ -794,6 +768,97 @@ rule NoteUnarchival when leaving ArchivedInvoice {
 """
     }
 }
+
+// ── act inputs (README §22, "External input"): one typed value per act,
+// every stored field the committer supplies and nothing else ──
+data class NewSignUp(
+    val name: String,
+    val email: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("email", email)
+    }
+}
+
+data class NewCorrectEmail(
+    val customer: Ref<Customer>,
+    val corrected: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("customer", system.idOf(customer))
+        put("corrected", corrected)
+    }
+}
+
+data class NewBillCustomer(
+    val customer: Ref<Customer>,
+    val due: LocalDate,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("customer", system.idOf(customer))
+        put("due", due)
+    }
+}
+
+data class NewLineItem(
+    val invoice: Ref<Invoice>,
+    val description: String,
+    val price: BigDecimal,
+    val quantity: Int,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("invoice", system.idOf(invoice))
+        put("description", description)
+        put("price", price)
+        put("quantity", quantity)
+    }
+}
+
+data class NewSubmitPayment(
+    val invoice: Ref<Invoice>,
+    val amount: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("invoice", system.idOf(invoice))
+        put("amount", amount)
+    }
+}
+
+data class NewIssuance(
+    val invoice: Ref<Invoice>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("invoice", system.idOf(invoice))
+    }
+}
+
+data class NewChangeDueDate(
+    val invoice: Ref<Invoice>,
+    val newDue: LocalDate,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("invoice", system.idOf(invoice))
+        put("newDue", newDue)
+    }
+}
+
+data class NewArchiveRequest(
+    val invoice: Ref<Invoice>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("invoice", system.idOf(invoice))
+    }
+}
+
+data class NewUnarchiveRequest(
+    val invoice: Ref<Invoice>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("invoice", system.idOf(invoice))
+    }
+}
+
 
 // ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,

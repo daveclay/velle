@@ -5,7 +5,7 @@ import velle.generated.*
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
-import velle.CommitResult
+import velle.Commit
 import velle.generated.PharmacySystem
 
 /**
@@ -25,7 +25,7 @@ import velle.generated.PharmacySystem
  */
 class Scenario(val sys: PharmacySystem) {
 
-    fun accept(r: CommitResult) { check(r is CommitResult.Accepted) { "refused: $r" } }
+    fun accept(r: Commit<*>) { check(r is Commit.Accepted<*>) { "refused: $r" } }
 
     val now: Instant get() = sys.system.now
     val today: LocalDate get() = LocalDate.ofInstant(sys.system.now, ZoneOffset.UTC)
@@ -38,13 +38,13 @@ class Scenario(val sys: PharmacySystem) {
     // ── staff ────────────────────────────────────────────────────────────────
 
     fun staff(name: String, role: String): Staff {
-        accept(sys.commitStaff(name, role)); return sys.staffs().last()
+        accept(sys.commit(NewStaff(name, role))); return sys.staffs().last()
     }
 
     /** A pharmacist whose licence runs until [licensedUntil]. */
     fun pharmacist(name: String = "Priya", licensedUntil: LocalDate = today.plusDays(365)): Staff {
         val p = staff(name, "pharmacist")
-        accept(sys.commitLicenceRenewal(p, "RPH-${p.key}", licensedUntil))
+        accept(sys.commit(NewLicenceRenewal(p, "RPH-${p.key}", licensedUntil)))
         return p
     }
 
@@ -54,7 +54,7 @@ class Scenario(val sys: PharmacySystem) {
     // ── drugs ────────────────────────────────────────────────────────────────
 
     fun ingredient(name: String): Ingredient {
-        accept(sys.commitIngredient(name)); return sys.ingredients().last()
+        accept(sys.commit(NewIngredient(name))); return sys.ingredients().last()
     }
 
     /** A drug with a price of [price] in force from today. */
@@ -66,9 +66,9 @@ class Scenario(val sys: PharmacySystem) {
         reorderPoint: Int = 20,
         price: String = "1.50",
     ): Drug {
-        accept(sys.commitDrug(name, "500 mg", "tablet", schedule, requiresCounselling, ingredients, reorderPoint))
+        accept(sys.commit(NewDrug(name, "500 mg", "tablet", schedule, requiresCounselling, ingredients, reorderPoint)))
         val d = sys.drugs().last()
-        accept(sys.commitPriceChange(d, today, dec(price)))
+        accept(sys.commit(NewPriceChange(d, today, dec(price))))
         return d
     }
 
@@ -76,7 +76,7 @@ class Scenario(val sys: PharmacySystem) {
         drug(name, schedule = schedule, requiresCounselling = true)
 
     fun interaction(a: Drug, b: Drug, severity: String = "major") {
-        accept(sys.commitInteraction(a, b, severity))
+        accept(sys.commit(NewInteraction(a, b, severity)))
     }
 
     fun lot(
@@ -86,13 +86,13 @@ class Scenario(val sys: PharmacySystem) {
         received: Int = 100,
         purchaseOrder: PurchaseOrder? = null,
     ): StockLot {
-        accept(sys.commitStockLot(drug, lotNumber, expiresOn, received, purchaseOrder)); return sys.stockLots().last()
+        accept(sys.commit(NewStockLot(drug, lotNumber, expiresOn, received, purchaseOrder))); return sys.stockLots().last()
     }
 
     // ── patients and prescribers ─────────────────────────────────────────────
 
     fun plan(name: String = "BlueCare", coversControlled: Boolean = true): InsurancePlan {
-        accept(sys.commitInsurancePlan(name, coversControlled)); return sys.insurancePlans().last()
+        accept(sys.commit(NewInsurancePlan(name, coversControlled))); return sys.insurancePlans().last()
     }
 
     fun patient(
@@ -100,27 +100,27 @@ class Scenario(val sys: PharmacySystem) {
         allergies: List<Ingredient> = emptyList(),
         plan: InsurancePlan? = null,
     ): Patient {
-        accept(sys.commitPatient(name, LocalDate.of(1980, 5, 17), "555-0100", allergies, plan)); return sys.patients().last()
+        accept(sys.commit(NewPatient(name, LocalDate.of(1980, 5, 17), "555-0100", allergies, plan))); return sys.patients().last()
     }
 
     fun prescriber(name: String = "Dr Okafor"): Prescriber {
-        accept(sys.commitPrescriber(name, "AO1234563", "555-0199")); return sys.prescribers().last()
+        accept(sys.commit(NewPrescriber(name, "AO1234563", "555-0199"))); return sys.prescribers().last()
     }
 
     // ── the prescriber's order ───────────────────────────────────────────────
 
     fun line(drug: Drug, quantity: Int = 30, daysSupply: Int = 30, refills: Int = 2, directions: String = "one daily") =
-        PharmacySystem.NewPrescription(drug, quantity, daysSupply, refills, directions)
+        NewPrescription(drug, quantity, daysSupply, refills, directions)
 
     /** An order landing with its prescriptions; returns the order. */
     fun order(
         patient: Patient,
         prescriber: Prescriber,
         enteredBy: Staff,
-        lines: List<PharmacySystem.NewPrescription>,
+        lines: List<NewPrescription>,
         writtenOn: LocalDate = today,
     ): PrescriberOrder {
-        accept(sys.commitPrescriberOrder(prescriber, patient, writtenOn, enteredBy, lines)); return sys.prescriberOrders().last()
+        accept(sys.commit(NewPrescriberOrder(prescriber, patient, writtenOn, enteredBy, lines))); return sys.prescriberOrders().last()
     }
 
     /** A one-line order; returns the prescription. */
@@ -139,7 +139,7 @@ class Scenario(val sys: PharmacySystem) {
 
     /** A monitoring-programme check cleared now by [pharmacist]. */
     fun monitoringCheck(prescription: Prescription, pharmacist: Staff) {
-        accept(sys.commitMonitoringCheck(prescription, pharmacist, now, true))
+        accept(sys.commit(NewMonitoringCheck(prescription, pharmacist, now, true)))
     }
 
     /** Submits a fill request at the next fill number; returns the request's key. */
@@ -151,7 +151,7 @@ class Scenario(val sys: PharmacySystem) {
         fillNumber: Int = sys.read(prescription).fillsRecorded + 1,
     ): String {
         val k = key("FILL")
-        accept(sys.commitFillPrescription(k, prescription, lot, quantity, fillNumber, filledBy))
+        accept(sys.commit(NewFillPrescription(k, prescription, lot, quantity, fillNumber, filledBy)))
         return k
     }
 
@@ -169,15 +169,15 @@ class Scenario(val sys: PharmacySystem) {
     }
 
     fun verify(fill: Fill, pharmacist: Staff, outcome: String = "approved") {
-        accept(sys.commitVerifyFill(fill, pharmacist, outcome, "checked"))
+        accept(sys.commit(NewVerifyFill(fill, pharmacist, outcome, "checked")))
     }
 
     fun counsel(fill: Fill, pharmacist: Staff) {
-        accept(sys.commitCounselling(fill, pharmacist, "take with food"))
+        accept(sys.commit(NewCounselling(fill, pharmacist, "take with food")))
     }
 
     fun pickUp(fill: Fill, amount: BigDecimal = sys.read(fill).amountDue) {
-        accept(sys.commitPickUp(fill, "the patient", amount))
+        accept(sys.commit(NewPickUp(fill, "the patient", amount)))
     }
 
     /** Everything one fill needs around it. */

@@ -20,30 +20,22 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitOrder(reference: String): CommitResult =
-        system.commit("Order", buildMap {
-            put("reference", reference)
-        })
+    fun commit(input: NewOrder): Commit<NewOrder> =
+        system.commit("Order", input.raw(system)).carrying(input)
 
     /** Queue keys: [cancellation.order] — plus system-wide width below.
      *  System-wide over Shipment — reads Shipment.order with no path back to any key (unexamined (A5)).
      *  System-wide over Cancellation — consults Cancellation through 'cancellations' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCancellation(order: Ref<Order>, requestedOn: LocalDate): CommitResult =
-        system.commit("Cancellation", buildMap {
-            put("order", system.idOf(order))
-            put("requestedOn", requestedOn)
-        })
+    fun commit(input: NewCancellation): Commit<NewCancellation> =
+        system.commit("Cancellation", input.raw(system)).carrying(input)
 
     /** Queue key: [shipment.order].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitShipment(order: Ref<Order>, shippedOn: LocalDate): CommitResult =
-        system.commit("Shipment", buildMap {
-            put("order", system.idOf(order))
-            put("shippedOn", shippedOn)
-        })
+    fun commit(input: NewShipment): Commit<NewShipment> =
+        system.commit("Shipment", input.raw(system)).carrying(input)
 
     fun orders(): List<Order> = system.instancesOf("Order").map { materializeOrder(it) }
     fun cancellations(): List<Cancellation> = system.instancesOf("Cancellation").map { materializeCancellation(it) }
@@ -229,6 +221,37 @@ never (Shipment where order is CancelledOrder)
 """
     }
 }
+
+// ── act inputs (README §22, "External input"): one typed value per act,
+// every stored field the committer supplies and nothing else ──
+data class NewOrder(
+    val reference: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("reference", reference)
+    }
+}
+
+data class NewCancellation(
+    val order: Ref<Order>,
+    val requestedOn: LocalDate,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("order", system.idOf(order))
+        put("requestedOn", requestedOn)
+    }
+}
+
+data class NewShipment(
+    val order: Ref<Order>,
+    val shippedOn: LocalDate,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("order", system.idOf(order))
+        put("shippedOn", shippedOn)
+    }
+}
+
 
 // ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,

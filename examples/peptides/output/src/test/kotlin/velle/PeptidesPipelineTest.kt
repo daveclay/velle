@@ -11,7 +11,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import velle.CommitResult
+import velle.Commit
 import velle.VelleRuntimeError
 import velle.generated.PeptidesSystem
 
@@ -33,8 +33,8 @@ open class PeptidesPipelineTest {
     protected val sys: PeptidesSystem by lazy { newSystem() }
     private val s: Scenario by lazy { Scenario(sys) }
 
-    private fun accept(r: CommitResult) = assertIs<CommitResult.Accepted>(r, "refused: $r")
-    private fun refuse(r: CommitResult) = assertTrue(r !is CommitResult.Accepted, "expected a refusal, got: $r")
+    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
+    private fun refuse(r: Commit<*>) = assertTrue(r !is Commit.Accepted<*>, "expected a refusal, got: $r")
     private fun Keyed.isA(refinement: String) = sys.system.isMember(sys.system.idOf(this), refinement)
     private fun BigDecimal.at(scale: Int) = setScale(scale, RoundingMode.HALF_UP)
     private fun dec(s: String) = BigDecimal(s)
@@ -48,7 +48,7 @@ open class PeptidesPipelineTest {
         assertEquals(dec("30"), sys.read(plate).peakInhibition, "peak over the two readings on file")
 
         // the 24-hour reading arrives after the 48-hour one; it is ordered by its hour, not its arrival
-        accept(sys.commitAssayReading(plate, 24, dec("80")))
+        accept(sys.commit(NewAssayReading(plate, 24, dec("80"))))
         val at48 = sys.assayReadings().first { sys.read(it).assay == plate && sys.read(it).hoursElapsed == 48 }
         assertEquals(24, sys.read(at48).previous?.let { sys.read(it) }?.hoursElapsed, "the predecessor is the latest earlier hour mark")
         assertEquals(dec("80"), sys.read(at48).runningPeak, "the successor's running peak re-derived")
@@ -62,7 +62,7 @@ open class PeptidesPipelineTest {
         // transaction end only, so the rules watching the series evaluate
         // `latest ... by hoursElapsed` first and fail loudly on the tie (README §10).
         // Until then the caller gets a runtime error; the transaction rolls back either way
-        assertFailsWith<VelleRuntimeError> { sys.commitAssayReading(plate, 24, dec("81")) }
+        assertFailsWith<VelleRuntimeError> { sys.commit(NewAssayReading(plate, 24, dec("81"))) }
         assertEquals(3, sys.read(plate).assayReadings.size, "nothing landed")
         assertEquals(dec("80"), sys.read(plate).peakInhibition)
     }
@@ -98,12 +98,12 @@ open class PeptidesPipelineTest {
         val untested = s.peptide("PEP-UNTESTED")
         val greenhouse = s.greenhouse()
         val protocol = s.greenhouseProtocol()
-        accept(sys.commitRequestGreenhouseTrial("REQ-A", untested, pathogen, greenhouse, protocol))
+        accept(sys.commit(NewRequestGreenhouseTrial("REQ-A", untested, pathogen, greenhouse, protocol)))
         assertEquals("REQ-A", sys.read(sys.greenhouseRefusals().single()).requestKey, "the refusal carries the request key back")
         assertEquals(0, sys.greenhouseTrials().size)
 
         val lab = s.labHit("PEP-002")
-        accept(sys.commitRequestGreenhouseTrial("REQ-B", lab.peptide, lab.pathogen, greenhouse, protocol))
+        accept(sys.commit(NewRequestGreenhouseTrial("REQ-B", lab.peptide, lab.pathogen, greenhouse, protocol)))
         assertEquals("REQ-B", sys.read(sys.greenhouseTrials().single()).requestKey)
         assertEquals(1, sys.greenhouseRefusals().size)
     }
@@ -116,7 +116,7 @@ open class PeptidesPipelineTest {
 
         // no score before treatment is representable: the boundary refuses it
         val untreated = s.laidOut(s.approvedTrial(t.lab, t.greenhouse, "GH-REQ-2"))
-        refuse(sys.commitPlotObservation(untreated.control, 0, dec("5"), s.today))
+        refuse(sys.commit(NewPlotObservation(untreated.control, 0, dec("5"), s.today)))
 
         s.observedToEnd(t)
         val control = t.control
@@ -133,7 +133,7 @@ open class PeptidesPipelineTest {
 
         // the trial is evaluated: a correction on any of its scores is refused as data
         val day14 = sys.plotObservations().first { sys.read(it).plot == control && sys.read(it).dayAfterTreatment == 14 }
-        accept(sys.commitCorrectObservation(day14, dec("60"), "second look"))
+        accept(sys.commit(NewCorrectObservation(day14, dec("60"), "second look")))
         assertEquals("the trial has been evaluated", sys.read(sys.correctionRefusals().single()).reason)
         assertEquals(dec("80"), sys.read(day14).diseaseSeverity)
 
@@ -155,7 +155,7 @@ open class PeptidesPipelineTest {
         s.observe(t.control, 14, "80")
         assertEquals(dec("595.0"), sys.read(t.control).audpc.at(1))
 
-        accept(sys.commitCorrectObservation(day7, dec("50"), "misread scale"))
+        accept(sys.commit(NewCorrectObservation(day7, dec("50"), "misread scale")))
         val correction = sys.observationCorrections().single()
         assertEquals(dec("40"), sys.read(correction).previousSeverity, "the value it replaced, read before it landed")
         assertEquals(dec("40"), sys.read(day7).recordedSeverity, "what was committed stays committed")
@@ -165,7 +165,7 @@ open class PeptidesPipelineTest {
         // the ledger orders by the correction's commit timestamp, so a second correction
         // needs a later clock instant — the harness clock only moves when advanced
         sys.advanceSeconds(60)
-        accept(sys.commitCorrectObservation(day7, dec("45"), "third look"))
+        accept(sys.commit(NewCorrectObservation(day7, dec("45"), "third look")))
         assertEquals(dec("45"), sys.read(day7).diseaseSeverity)
         assertEquals(2, sys.read(day7).observationCorrections.size)
     }
@@ -179,7 +179,7 @@ open class PeptidesPipelineTest {
         val day14 = sys.plotObservations().last()
         assertEquals(7, sys.read(day14).previous?.let { sys.read(it) }?.dayAfterTreatment)
 
-        accept(sys.commitVoidObservation(wrongPlot, "scored against the wrong plot"))
+        accept(sys.commit(NewVoidObservation(wrongPlot, "scored against the wrong plot")))
         assertEquals(2, sys.read(t.control).plotObservations.size)
         assertEquals(0, sys.read(day14).previous?.let { sys.read(it) }?.dayAfterTreatment, "the chain closed over the gap")
         assertEquals(dec("630.0"), sys.read(t.control).audpc.at(1), "(10+80)/2*14")
@@ -190,7 +190,7 @@ open class PeptidesPipelineTest {
         // once evaluated, a void is refused as data and the row stays
         s.observe(t.treated, 0, "5"); s.observe(t.treated, 7, "10"); s.observe(t.treated, 14, "20")
         assertTrue(t.trial.isA("EvaluatedTrial"))
-        accept(sys.commitVoidObservation(day14, "too late"))
+        accept(sys.commit(NewVoidObservation(day14, "too late")))
         assertEquals("the trial has been evaluated", sys.read(sys.voidRefusals().single()).reason)
         assertEquals(2, sys.read(t.control).plotObservations.size)
     }
@@ -198,11 +198,11 @@ open class PeptidesPipelineTest {
     @Test
     fun `greenhouse - plots move between benches until treatment, then the bench is frozen`() {
         val t = s.laidOut()
-        accept(sys.commitMovePlot(t.control, "B2"))
+        accept(sys.commit(NewMovePlot(t.control, "B2")))
         assertEquals("B2", sys.read(t.control).bench)
 
         s.treat(t)
-        accept(sys.commitMovePlot(t.control, "B3"))
+        accept(sys.commit(NewMovePlot(t.control, "B3")))
         assertEquals("B2", sys.read(t.control).bench, "frozen by TreatedPlot")
         assertEquals("the trial has been treated", sys.read(sys.moveRefusals().single()).reason)
     }
@@ -299,20 +299,20 @@ open class PeptidesPipelineTest {
         s.observe(t.control, 0, "10"); s.observe(t.treated, 0, "5")
         assertTrue(done.isA("DoneTask"))
 
-        accept(sys.commitRescheduleTask(open, s.today.plusDays(10)))
+        accept(sys.commit(NewRescheduleTask(open, s.today.plusDays(10))))
         assertEquals(s.today.plusDays(10), sys.read(open).dueOn)
-        accept(sys.commitRescheduleTask(done, s.today.plusDays(10)))
+        accept(sys.commit(NewRescheduleTask(done, s.today.plusDays(10))))
         assertEquals(s.today, sys.read(done).dueOn, "frozen by DoneTask")
         assertEquals("the task is done", sys.read(sys.rescheduleRefusals().single()).reason)
 
-        accept(sys.commitCancelTask(done, "too late"))
+        accept(sys.commit(NewCancelTask(done, "too late")))
         assertEquals(2, sys.collectionTasks().size, "undeletable while done")
         assertEquals(done, sys.read(sys.cancelRefusals().single()).task)
 
         sys.advanceDays(11)
         sys.tickDaily()
         assertEquals(1, sys.taskReminders().size)
-        accept(sys.commitCancelTask(open, "trial abandoned"))
+        accept(sys.commit(NewCancelTask(open, "trial abandoned")))
         assertEquals(listOf(done), sys.collectionTasks(), "the open task is gone")
         val cancellation = sys.taskCancellations().single()
         assertEquals(7, sys.read(cancellation).dayMark)
@@ -359,26 +359,26 @@ open class PeptidesPipelineTest {
         val gh = s.evaluatedTrial(effective = false)
         val site = s.site()
         val protocol = s.fieldProtocol()
-        accept(sys.commitRequestFieldTrial("FT-A", gh.lab.peptide, gh.lab.pathogen, gh.lab.crop, site, protocol))
+        accept(sys.commit(NewRequestFieldTrial("FT-A", gh.lab.peptide, gh.lab.pathogen, gh.lab.crop, site, protocol)))
         assertEquals("FT-A", sys.read(sys.fieldRefusals().single()).requestKey)
 
         val effective = s.evaluatedTrial(effective = true, lab = gh.lab)
         assertTrue(effective.trial.isA("EffectiveTrial"))
-        accept(sys.commitRequestFieldTrial("FT-B", gh.lab.peptide, gh.lab.pathogen, gh.lab.crop, site, protocol))
+        accept(sys.commit(NewRequestFieldTrial("FT-B", gh.lab.peptide, gh.lab.pathogen, gh.lab.crop, site, protocol)))
         val trial = sys.fieldTrials().single()
         assertFalse(trial.isA("PermittedTrial"))
 
         // no permit: planting must not land at all
-        refuse(sys.commitPlantTrial(trial, s.today, "LOT-7"))
+        refuse(sys.commit(NewPlantTrial(trial, s.today, "LOT-7")))
         assertEquals(0, sys.plantings().size)
 
         // an expired permit is no permit
         s.permit(site, gh.lab.crop, from = s.today.minusDays(400), until = s.today.minusDays(1))
-        refuse(sys.commitPlantTrial(trial, s.today, "LOT-7"))
+        refuse(sys.commit(NewPlantTrial(trial, s.today, "LOT-7")))
 
         s.permit(site, gh.lab.crop, until = s.today.plusDays(30))
         assertTrue(trial.isA("PermittedTrial"))
-        accept(sys.commitPlantTrial(trial, s.today, "LOT-7"))
+        accept(sys.commit(NewPlantTrial(trial, s.today, "LOT-7")))
         assertTrue(trial.isA("PlantedTrial"))
         assertEquals(s.today, sys.read(sys.plantings().single()).plantedOn)
 
@@ -387,32 +387,32 @@ open class PeptidesPipelineTest {
         sys.advanceDays(31)
         assertFalse(trial.isA("PermittedTrial"))
         assertTrue(trial.isA("PlantedTrial"))
-        accept(sys.commitFieldPlot(trial, 1, "control"))
-        refuse(sys.commitPlantTrial(trial, s.today, "LOT-8"))
+        accept(sys.commit(NewFieldPlot(trial, 1, "control")))
+        refuse(sys.commit(NewPlantTrial(trial, s.today, "LOT-8")))
     }
 
     @Test
     fun `field - rain the day after spraying washes the peptide off, read off the site's weather series`() {
         val f = s.plantedFieldTrial()
-        accept(sys.commitApplyTreatment(f.trial, s.today, dec("50")))
+        accept(sys.commit(NewApplyTreatment(f.trial, s.today, dec("50"))))
         val application = sys.treatmentApplications().last()
         assertFalse(application.isA("WashedOffApplication"))
 
         // rain on the day itself does not count; rain the next day does, if heavy enough
-        accept(sys.commitWeatherObservation(f.site, s.today, dec("12"), dec("22")))
-        accept(sys.commitWeatherObservation(f.site, s.today.plusDays(1), dec("2"), dec("24")))
+        accept(sys.commit(NewWeatherObservation(f.site, s.today, dec("12"), dec("22"))))
+        accept(sys.commit(NewWeatherObservation(f.site, s.today.plusDays(1), dec("2"), dec("24"))))
         assertFalse(application.isA("WashedOffApplication"))
         assertEquals(0, sys.reapplicationNotices().size)
 
         // the next day's row is corrected upward: the same row cannot be entered twice
-        refuse(sys.commitWeatherObservation(f.site, s.today.plusDays(1), dec("6"), dec("24")))
+        refuse(sys.commit(NewWeatherObservation(f.site, s.today.plusDays(1), dec("6"), dec("24"))))
 
-        accept(sys.commitApplyTreatment(f.trial, s.today.plusDays(3), dec("50")))
+        accept(sys.commit(NewApplyTreatment(f.trial, s.today.plusDays(3), dec("50"))))
         val second = sys.treatmentApplications().last()
-        accept(sys.commitWeatherObservation(f.site, s.today.plusDays(4), dec("6"), dec("24")))
+        accept(sys.commit(NewWeatherObservation(f.site, s.today.plusDays(4), dec("6"), dec("24"))))
         assertTrue(second.isA("WashedOffApplication"))
         assertEquals(second, sys.read(sys.reapplicationNotices().single()).application)
-        accept(sys.commitWeatherObservation(f.site, s.today.plusDays(5), dec("9"), dec("24")))
+        accept(sys.commit(NewWeatherObservation(f.site, s.today.plusDays(5), dec("9"), dec("24"))))
         assertEquals(1, sys.reapplicationNotices().size, "once per washed-off application")
     }
 
@@ -428,7 +428,7 @@ open class PeptidesPipelineTest {
         sys.advanceDays(10)
         s.scout(f.treated, 10, "5"); s.scout(f.control, 10, "30")
         assertEquals(dec("150.0"), sys.read(sys.read(f.control).scoutings.maxBy { sys.read(it).daysAfterPlanting }).audpcSoFar.at(1), "(0+30)/2*10")
-        refuse(sys.commitScouting(f.control, 10, s.today, dec("30"), dec("31")))
+        refuse(sys.commit(NewScouting(f.control, 10, s.today, dec("30"), dec("31"))))
 
         assertFalse(f.trial.isA("HarvestedTrial"))
         s.harvest(f.treated, "5000")
@@ -444,21 +444,21 @@ open class PeptidesPipelineTest {
     @Test
     fun `field - a severe phytotoxicity report halts the trial and later applications are refused at the boundary`() {
         val f = s.plantedFieldTrial()
-        accept(sys.commitPhytotoxicityReport(f.treated, s.today, 2))
+        accept(sys.commit(NewPhytotoxicityReport(f.treated, s.today, 2)))
         assertFalse(f.trial.isA("HaltedTrial"), "mild injury is noted, not a halt")
-        accept(sys.commitApplyTreatment(f.trial, s.today, dec("50")))
+        accept(sys.commit(NewApplyTreatment(f.trial, s.today, dec("50"))))
 
         // the halting report lands although an application is on record: the
         // `never` was about the request's moment, not about history
-        accept(sys.commitPhytotoxicityReport(f.treated, s.today.plusDays(2), 3))
+        accept(sys.commit(NewPhytotoxicityReport(f.treated, s.today.plusDays(2), 3)))
         assertTrue(f.trial.isA("HaltedTrial"))
         assertEquals(1, sys.haltNotices().size)
-        refuse(sys.commitApplyTreatment(f.trial, s.today.plusDays(3), dec("50")))
+        refuse(sys.commit(NewApplyTreatment(f.trial, s.today.plusDays(3), dec("50"))))
         assertEquals(1, sys.treatmentApplications().size)
 
-        accept(sys.commitPhytotoxicityReport(f.control, s.today.plusDays(3), 4))
+        accept(sys.commit(NewPhytotoxicityReport(f.control, s.today.plusDays(3), 4)))
         assertEquals(1, sys.haltNotices().size, "one notice per halt, however many reports")
-        refuse(sys.commitPhytotoxicityReport(f.control, s.today, 6))
+        refuse(sys.commit(NewPhytotoxicityReport(f.control, s.today, 6)))
     }
 
     @Test

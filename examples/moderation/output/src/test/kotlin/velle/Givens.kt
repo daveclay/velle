@@ -12,52 +12,52 @@ import velle.generated.*
 class Givens(private val sys: ModerationSystem) : RequiredGivens {
 
     private fun seller(): Seller {
-        sys.commitSeller("Ada")
+        sys.commit(NewSeller("Ada"))
         return sys.sellers().last()
     }
 
     private fun newDraft(seller: Seller = seller()): Listing {
-        sys.commitListing("brass lamp", seller)
+        sys.commit(NewListing("brass lamp", seller))
         return sys.listings().last()
     }
 
     override fun publish() {
-        sys.commitPublish(newDraft())
+        sys.commit(NewPublish(newDraft()))
     }
 
     override fun draft(): Listing = newDraft()
 
     override fun exitDraft(listing: Listing) {
-        sys.commitPublish(listing)
+        sys.commit(NewPublish(listing))
     }
 
     override fun listingForNoteDiscard(): Listing = newDraft()
 
     override fun deleteForNoteDiscard(listing: Listing) {
-        sys.commitDiscardDraft(listing, "duplicate")
+        sys.commit(NewDiscardDraft(listing, "duplicate"))
     }
 
     /** A report on a draft, then the draft discarded: the report's reference absorbs the deletion. */
     override fun listingReportForNotifyReporter(): ListingReport {
         val draft = newDraft()
-        sys.commitListingReport(draft, sys.read(draft).title, "spam")
+        sys.commit(NewListingReport(draft, sys.read(draft).title, "spam"))
         val report = sys.listingReports().last()
-        sys.commitDiscardDraft(draft, "spam")
+        sys.commit(NewDiscardDraft(draft, "spam"))
         return report
     }
 
     override fun discardDraftForApplyDiscard() {
-        sys.commitDiscardDraft(newDraft(), "duplicate")
+        sys.commit(NewDiscardDraft(newDraft(), "duplicate"))
     }
 
     override fun discardDraftForRefuseDiscard() {
         val listing = newDraft()
-        sys.commitPublish(listing)
-        sys.commitDiscardDraft(listing, "too late")
+        sys.commit(NewPublish(listing))
+        sys.commit(NewDiscardDraft(listing, "too late"))
     }
 
     override fun closeAccount() {
-        sys.commitCloseAccount(seller())
+        sys.commit(NewCloseAccount(seller()))
     }
 
     /** A published listing survives its seller's closure as an orphan; a draft
@@ -65,8 +65,8 @@ class Givens(private val sys: ModerationSystem) : RequiredGivens {
     override fun listingForSweepOrphanedDrafts(): Listing {
         val ada = seller()
         val listing = newDraft(ada)
-        sys.commitPublish(listing)
-        sys.commitCloseAccount(ada)
+        sys.commit(NewPublish(listing))
+        sys.commit(NewCloseAccount(ada))
         return listing
     }
 }

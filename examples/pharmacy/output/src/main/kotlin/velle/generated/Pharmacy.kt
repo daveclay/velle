@@ -23,41 +23,17 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun tickHourly() = system.tick("Hourly")
     fun tickMonthly() = system.tick("Monthly")
 
-    // ── closure input values (README §6, "Inline part creation") ──
-    data class NewPrescription(
-        val drug: Ref<Drug>,
-        val quantity: Int,
-        val daysSupply: Int,
-        val refillsAuthorized: Int,
-        val directions: String,
-    ) {
-        internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
-            put("drug", system.idOf(drug))
-            put("quantity", quantity)
-            put("daysSupply", daysSupply)
-            put("refillsAuthorized", refillsAuthorized)
-            put("directions", directions)
-        }
-    }
-
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitStaff(name: String, role: String): CommitResult =
-        system.commit("Staff", buildMap {
-            put("name", name)
-            put("role", role)
-        })
+    fun commit(input: NewStaff): Commit<NewStaff> =
+        system.commit("Staff", input.raw(system)).carrying(input)
 
     /** Queue key: [licenceRenewal.pharmacist].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitLicenceRenewal(pharmacist: Ref<Staff>, licenceNumber: String, expiresOn: LocalDate): CommitResult =
-        system.commit("LicenceRenewal", buildMap {
-            put("pharmacist", system.idOf(pharmacist))
-            put("licenceNumber", licenceNumber)
-            put("expiresOn", expiresOn)
-        })
+    fun commit(input: NewLicenceRenewal): Commit<NewLicenceRenewal> =
+        system.commit("LicenceRenewal", input.raw(system)).carrying(input)
 
     /** Queue: system-wide.
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
@@ -83,10 +59,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitIngredient(name: String): CommitResult =
-        system.commit("Ingredient", buildMap {
-            put("name", name)
-        })
+    fun commit(input: NewIngredient): Commit<NewIngredient> =
+        system.commit("Ingredient", input.raw(system)).carrying(input)
 
     /** Queue: system-wide.
      *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
@@ -115,16 +89,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Interaction — `Interaction` reads every Interaction and correlates to no key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitDrug(name: String, strength: String, form: String, schedule: Int, requiresCounselling: Boolean, ingredients: List<Ref<Ingredient>>, reorderPoint: Int): CommitResult =
-        system.commit("Drug", buildMap {
-            put("name", name)
-            put("strength", strength)
-            put("form", form)
-            put("schedule", schedule)
-            put("requiresCounselling", requiresCounselling)
-            put("ingredients", ingredients.map { system.idOf(it) })
-            put("reorderPoint", reorderPoint)
-        })
+    fun commit(input: NewDrug): Commit<NewDrug> =
+        system.commit("Drug", input.raw(system)).carrying(input)
 
     /** Queue: system-wide.
      *  System-wide over Prescription — reads Prescription.order with no path back to any key (unexamined (A5)).
@@ -142,64 +108,38 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitInteraction(drugA: Ref<Drug>, drugB: Ref<Drug>, severity: String): CommitResult =
-        system.commit("Interaction", buildMap {
-            put("drugA", system.idOf(drugA))
-            put("drugB", system.idOf(drugB))
-            put("severity", severity)
-        })
+    fun commit(input: NewInteraction): Commit<NewInteraction> =
+        system.commit("Interaction", input.raw(system)).carrying(input)
 
     /** Queue key: [priceChange.drug].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPriceChange(drug: Ref<Drug>, effectiveOn: LocalDate, unitPrice: BigDecimal): CommitResult =
-        system.commit("PriceChange", buildMap {
-            put("drug", system.idOf(drug))
-            put("effectiveOn", effectiveOn)
-            put("unitPrice", unitPrice)
-        })
+    fun commit(input: NewPriceChange): Commit<NewPriceChange> =
+        system.commit("PriceChange", input.raw(system)).carrying(input)
 
     /** Queue keys: [withdrawPriceChange.administrator], [withdrawPriceChange.priceChange], [withdrawPriceChange.priceChange.drug].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitWithdrawPriceChange(priceChange: Ref<PriceChange>, administrator: Ref<Staff>, reason: String): CommitResult =
-        system.commit("WithdrawPriceChange", buildMap {
-            put("priceChange", system.idOf(priceChange))
-            put("administrator", system.idOf(administrator))
-            put("reason", reason)
-        })
+    fun commit(input: NewWithdrawPriceChange): Commit<NewWithdrawPriceChange> =
+        system.commit("WithdrawPriceChange", input.raw(system)).carrying(input)
 
     /** Queue keys: [setReorderPoint.drug], [setReorderPoint.requestedBy].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitSetReorderPoint(drug: Ref<Drug>, requestedBy: Ref<Staff>, reorderPoint: Int): CommitResult =
-        system.commit("SetReorderPoint", buildMap {
-            put("drug", system.idOf(drug))
-            put("requestedBy", system.idOf(requestedBy))
-            put("reorderPoint", reorderPoint)
-        })
+    fun commit(input: NewSetReorderPoint): Commit<NewSetReorderPoint> =
+        system.commit("SetReorderPoint", input.raw(system)).carrying(input)
 
     /** Queue keys: [stockLot.drug], [stockLot.purchaseOrder].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitStockLot(drug: Ref<Drug>, lotNumber: String, expiresOn: LocalDate, received: Int, purchaseOrder: Ref<PurchaseOrder>? = null): CommitResult =
-        system.commit("StockLot", buildMap {
-            put("drug", system.idOf(drug))
-            put("lotNumber", lotNumber)
-            put("expiresOn", expiresOn)
-            put("received", received)
-            purchaseOrder?.let { put("purchaseOrder", system.idOf(it)) }
-        })
+    fun commit(input: NewStockLot): Commit<NewStockLot> =
+        system.commit("StockLot", input.raw(system)).carrying(input)
 
     /** Queue keys: [countLot.lot], [countLot.technician].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCountLot(lot: Ref<StockLot>, technician: Ref<Staff>, counted: Int): CommitResult =
-        system.commit("CountLot", buildMap {
-            put("lot", system.idOf(lot))
-            put("technician", system.idOf(technician))
-            put("counted", counted)
-        })
+    fun commit(input: NewCountLot): Commit<NewCountLot> =
+        system.commit("CountLot", input.raw(system)).carrying(input)
 
     /** Queue keys: [recall.lot] — plus system-wide width below.
      *  System-wide over Recall — consults Recall through 'recalls' with no keyable owner (unexamined (A5)).
@@ -211,21 +151,14 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitRecall(lot: Ref<StockLot>, reference: String, issuedOn: LocalDate): CommitResult =
-        system.commit("Recall", buildMap {
-            put("lot", system.idOf(lot))
-            put("reference", reference)
-            put("issuedOn", issuedOn)
-        })
+    fun commit(input: NewRecall): Commit<NewRecall> =
+        system.commit("Recall", input.raw(system)).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitInsurancePlan(name: String, coversControlled: Boolean): CommitResult =
-        system.commit("InsurancePlan", buildMap {
-            put("name", name)
-            put("coversControlled", coversControlled)
-        })
+    fun commit(input: NewInsurancePlan): Commit<NewInsurancePlan> =
+        system.commit("InsurancePlan", input.raw(system)).carrying(input)
 
     /** Queue keys: [patient.plan] — plus system-wide width below.
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
@@ -257,24 +190,14 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPatient(name: String, birthDate: LocalDate, phone: String, allergies: List<Ref<Ingredient>>, plan: Ref<InsurancePlan>? = null): CommitResult =
-        system.commit("Patient", buildMap {
-            put("name", name)
-            put("birthDate", birthDate)
-            put("phone", phone)
-            put("allergies", allergies.map { system.idOf(it) })
-            plan?.let { put("plan", system.idOf(it)) }
-        })
+    fun commit(input: NewPatient): Commit<NewPatient> =
+        system.commit("Patient", input.raw(system)).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPrescriber(name: String, deaNumber: String, fax: String): CommitResult =
-        system.commit("Prescriber", buildMap {
-            put("name", name)
-            put("deaNumber", deaNumber)
-            put("fax", fax)
-        })
+    fun commit(input: NewPrescriber): Commit<NewPrescriber> =
+        system.commit("Prescriber", input.raw(system)).carrying(input)
 
     /** Queue keys: [setAllergies.patient], [setAllergies.patient.plan] — plus system-wide width below.
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
@@ -300,11 +223,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitSetAllergies(patient: Ref<Patient>, allergies: List<Ref<Ingredient>>): CommitResult =
-        system.commit("SetAllergies", buildMap {
-            put("patient", system.idOf(patient))
-            put("allergies", allergies.map { system.idOf(it) })
-        })
+    fun commit(input: NewSetAllergies): Commit<NewSetAllergies> =
+        system.commit("SetAllergies", input.raw(system)).carrying(input)
 
     /** Queue keys: [addAllergy.patient], [addAllergy.patient.plan] — plus system-wide width below.
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
@@ -330,11 +250,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitAddAllergy(patient: Ref<Patient>, ingredient: Ref<Ingredient>): CommitResult =
-        system.commit("AddAllergy", buildMap {
-            put("patient", system.idOf(patient))
-            put("ingredient", system.idOf(ingredient))
-        })
+    fun commit(input: NewAddAllergy): Commit<NewAddAllergy> =
+        system.commit("AddAllergy", input.raw(system)).carrying(input)
 
     /** Queue keys: [prescriberOrder.enteredBy], [prescriberOrder.patient], [prescriberOrder.prescriber] — plus system-wide width below.
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
@@ -361,15 +278,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PrescriberOrder — reads PrescriberOrder.prescriber with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPrescriberOrder(prescriber: Ref<Prescriber>, patient: Ref<Patient>, writtenOn: LocalDate, enteredBy: Ref<Staff>, prescriptions: List<NewPrescription> = emptyList()): CommitResult =
-        system.commit("PrescriberOrder", buildMap {
-            put("prescriber", system.idOf(prescriber))
-            put("patient", system.idOf(patient))
-            put("writtenOn", writtenOn)
-            put("enteredBy", system.idOf(enteredBy))
-        }, buildMap {
-            put("prescriptions", prescriptions.map { it.raw(system) })
-        })
+    fun commit(input: NewPrescriberOrder): Commit<NewPrescriberOrder> =
+        system.commit("PrescriberOrder", input.raw(system), input.parts(system)).carrying(input)
 
     /** Queue keys: [discontinuation.prescriber], [discontinuation.prescription], [discontinuation.prescription.order] — plus system-wide width below.
      *  System-wide over Prescription — reads Prescription.order with no path back to any key (unexamined (A5)).
@@ -387,12 +297,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitDiscontinuation(prescription: Ref<Prescription>, prescriber: Ref<Prescriber>, reason: String): CommitResult =
-        system.commit("Discontinuation", buildMap {
-            put("prescription", system.idOf(prescription))
-            put("prescriber", system.idOf(prescriber))
-            put("reason", reason)
-        })
+    fun commit(input: NewDiscontinuation): Commit<NewDiscontinuation> =
+        system.commit("Discontinuation", input.raw(system)).carrying(input)
 
     /** Queue keys: [correctEntry.prescription], [correctEntry.prescription.drug], [correctEntry.prescription.order], [correctEntry.prescription.order.patient] — plus system-wide width below.
      *  System-wide over Prescription — `Prescription` reads every Prescription and correlates to no key (unexamined (A5)).
@@ -401,12 +307,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCorrectEntry(prescription: Ref<Prescription>, technician: Ref<Staff>, directions: String): CommitResult =
-        system.commit("CorrectEntry", buildMap {
-            put("prescription", system.idOf(prescription))
-            put("technician", system.idOf(technician))
-            put("directions", directions)
-        })
+    fun commit(input: NewCorrectEntry): Commit<NewCorrectEntry> =
+        system.commit("CorrectEntry", input.raw(system)).carrying(input)
 
     /** Queue keys: [voidEntry.pharmacist], [voidEntry.prescription] — plus system-wide width below.
      *  System-wide over Prescription — reads Prescription.order with no path back to any key (unexamined (A5)).
@@ -424,22 +326,14 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitVoidEntry(prescription: Ref<Prescription>, pharmacist: Ref<Staff>, reason: String): CommitResult =
-        system.commit("VoidEntry", buildMap {
-            put("prescription", system.idOf(prescription))
-            put("pharmacist", system.idOf(pharmacist))
-            put("reason", reason)
-        })
+    fun commit(input: NewVoidEntry): Commit<NewVoidEntry> =
+        system.commit("VoidEntry", input.raw(system)).carrying(input)
 
     /** Queue keys: [conflictOverride.pharmacist], [conflictOverride.prescription].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitConflictOverride(prescription: Ref<Prescription>, pharmacist: Ref<Staff>, justification: String): CommitResult =
-        system.commit("ConflictOverride", buildMap {
-            put("prescription", system.idOf(prescription))
-            put("pharmacist", system.idOf(pharmacist))
-            put("justification", justification)
-        })
+    fun commit(input: NewConflictOverride): Commit<NewConflictOverride> =
+        system.commit("ConflictOverride", input.raw(system)).carrying(input)
 
     /** Queue keys: [fillPrescription.filledBy], [fillPrescription.lot], [fillPrescription.lot.drug], [fillPrescription.prescription], [fillPrescription.prescription.drug], [fillPrescription.prescription.order], [fillPrescription.prescription.order.patient] — plus system-wide width below.
      *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
@@ -467,26 +361,14 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitFillPrescription(requestKey: String, prescription: Ref<Prescription>, lot: Ref<StockLot>, quantity: Int, fillNumber: Int, filledBy: Ref<Staff>): CommitResult =
-        system.commit("FillPrescription", buildMap {
-            put("requestKey", requestKey)
-            put("prescription", system.idOf(prescription))
-            put("lot", system.idOf(lot))
-            put("quantity", quantity)
-            put("fillNumber", fillNumber)
-            put("filledBy", system.idOf(filledBy))
-        })
+    fun commit(input: NewFillPrescription): Commit<NewFillPrescription> =
+        system.commit("FillPrescription", input.raw(system)).carrying(input)
 
     /** Queue keys: [monitoringCheck.pharmacist], [monitoringCheck.prescription].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitMonitoringCheck(prescription: Ref<Prescription>, pharmacist: Ref<Staff>, checkedAt: Instant, cleared: Boolean): CommitResult =
-        system.commit("MonitoringCheck", buildMap {
-            put("prescription", system.idOf(prescription))
-            put("pharmacist", system.idOf(pharmacist))
-            put("checkedAt", checkedAt)
-            put("cleared", cleared)
-        })
+    fun commit(input: NewMonitoringCheck): Commit<NewMonitoringCheck> =
+        system.commit("MonitoringCheck", input.raw(system)).carrying(input)
 
     /** Queue keys: [verifyFill.fill], [verifyFill.fill.insurer], [verifyFill.fill.lot], [verifyFill.fill.lot.drug], [verifyFill.fill.prescription], [verifyFill.fill.prescription.drug], [verifyFill.fill.prescription.order], [verifyFill.fill.prescription.order.patient], [verifyFill.pharmacist] — plus system-wide width below.
      *  System-wide over Prescription — reads Prescription.order with no path back to any key (unexamined (A5)).
@@ -505,34 +387,21 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitVerifyFill(fill: Ref<Fill>, pharmacist: Ref<Staff>, outcome: String, note: String): CommitResult =
-        system.commit("VerifyFill", buildMap {
-            put("fill", system.idOf(fill))
-            put("pharmacist", system.idOf(pharmacist))
-            put("outcome", outcome)
-            put("note", note)
-        })
+    fun commit(input: NewVerifyFill): Commit<NewVerifyFill> =
+        system.commit("VerifyFill", input.raw(system)).carrying(input)
 
     /** Queue keys: [counselling.fill], [counselling.pharmacist].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCounselling(fill: Ref<Fill>, pharmacist: Ref<Staff>, notes: String): CommitResult =
-        system.commit("Counselling", buildMap {
-            put("fill", system.idOf(fill))
-            put("pharmacist", system.idOf(pharmacist))
-            put("notes", notes)
-        })
+    fun commit(input: NewCounselling): Commit<NewCounselling> =
+        system.commit("Counselling", input.raw(system)).carrying(input)
 
     /** Queue keys: [pickUp.fill], [pickUp.fill.lot], [pickUp.fill.lot.drug], [pickUp.fill.prescription], [pickUp.fill.prescription.drug], [pickUp.fill.prescription.order], [pickUp.fill.prescription.order.patient] — plus system-wide width below.
      *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPickUp(fill: Ref<Fill>, collectedBy: String, amountPaid: BigDecimal): CommitResult =
-        system.commit("PickUp", buildMap {
-            put("fill", system.idOf(fill))
-            put("collectedBy", collectedBy)
-            put("amountPaid", amountPaid)
-        })
+    fun commit(input: NewPickUp): Commit<NewPickUp> =
+        system.commit("PickUp", input.raw(system)).carrying(input)
 
     /** Queue keys: [requestRefill.prescription], [requestRefill.prescription.drug], [requestRefill.prescription.order], [requestRefill.prescription.order.prescriber] — plus system-wide width below.
      *  System-wide over RefillRefusal — reads RefillRefusal.reason with no path back to any key (unexamined (A5)).
@@ -542,38 +411,26 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Notice — creates Notice referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitRequestRefill(requestKey: String, prescription: Ref<Prescription>): CommitResult =
-        system.commit("RequestRefill", buildMap {
-            put("requestKey", requestKey)
-            put("prescription", system.idOf(prescription))
-        })
+    fun commit(input: NewRequestRefill): Commit<NewRequestRefill> =
+        system.commit("RequestRefill", input.raw(system)).carrying(input)
 
     /** Queue key: [autoRefillEnrolment.prescription].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitAutoRefillEnrolment(prescription: Ref<Prescription>): CommitResult =
-        system.commit("AutoRefillEnrolment", buildMap {
-            put("prescription", system.idOf(prescription))
-        })
+    fun commit(input: NewAutoRefillEnrolment): Commit<NewAutoRefillEnrolment> =
+        system.commit("AutoRefillEnrolment", input.raw(system)).carrying(input)
 
     /** Queue key: [autoRefillCancellation.prescription].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitAutoRefillCancellation(prescription: Ref<Prescription>): CommitResult =
-        system.commit("AutoRefillCancellation", buildMap {
-            put("prescription", system.idOf(prescription))
-        })
+    fun commit(input: NewAutoRefillCancellation): Commit<NewAutoRefillCancellation> =
+        system.commit("AutoRefillCancellation", input.raw(system)).carrying(input)
 
     /** Queue key: [adjudication.claim].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitAdjudication(claim: Ref<Claim>, outcome: String, paidAmount: BigDecimal, patientPays: BigDecimal): CommitResult =
-        system.commit("Adjudication", buildMap {
-            put("claim", system.idOf(claim))
-            put("outcome", outcome)
-            put("paidAmount", paidAmount)
-            put("patientPays", patientPays)
-        })
+    fun commit(input: NewAdjudication): Commit<NewAdjudication> =
+        system.commit("Adjudication", input.raw(system)).carrying(input)
 
     fun staffs(): List<Staff> = system.instancesOf("Staff").map { materializeStaff(it) }
     fun licenceRenewals(): List<LicenceRenewal> = system.instancesOf("LicenceRenewal").map { materializeLicenceRenewal(it) }
@@ -4128,6 +3985,398 @@ rule SnapshotControlled when Controlled on Monthly {
 """
     }
 }
+
+// ── act inputs (README §22, "External input"): one typed value per act,
+// every stored field the committer supplies and nothing else ──
+data class NewStaff(
+    val name: String,
+    val role: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("role", role)
+    }
+}
+
+data class NewLicenceRenewal(
+    val pharmacist: Ref<Staff>,
+    val licenceNumber: String,
+    val expiresOn: LocalDate,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("pharmacist", system.idOf(pharmacist))
+        put("licenceNumber", licenceNumber)
+        put("expiresOn", expiresOn)
+    }
+}
+
+data class NewIngredient(
+    val name: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+    }
+}
+
+data class NewDrug(
+    val name: String,
+    val strength: String,
+    val form: String,
+    val schedule: Int,
+    val requiresCounselling: Boolean,
+    val ingredients: List<Ref<Ingredient>>,
+    val reorderPoint: Int,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("strength", strength)
+        put("form", form)
+        put("schedule", schedule)
+        put("requiresCounselling", requiresCounselling)
+        put("ingredients", ingredients.map { system.idOf(it) })
+        put("reorderPoint", reorderPoint)
+    }
+}
+
+data class NewInteraction(
+    val drugA: Ref<Drug>,
+    val drugB: Ref<Drug>,
+    val severity: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("drugA", system.idOf(drugA))
+        put("drugB", system.idOf(drugB))
+        put("severity", severity)
+    }
+}
+
+data class NewPriceChange(
+    val drug: Ref<Drug>,
+    val effectiveOn: LocalDate,
+    val unitPrice: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("drug", system.idOf(drug))
+        put("effectiveOn", effectiveOn)
+        put("unitPrice", unitPrice)
+    }
+}
+
+data class NewWithdrawPriceChange(
+    val priceChange: Ref<PriceChange>,
+    val administrator: Ref<Staff>,
+    val reason: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("priceChange", system.idOf(priceChange))
+        put("administrator", system.idOf(administrator))
+        put("reason", reason)
+    }
+}
+
+data class NewSetReorderPoint(
+    val drug: Ref<Drug>,
+    val requestedBy: Ref<Staff>,
+    val reorderPoint: Int,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("drug", system.idOf(drug))
+        put("requestedBy", system.idOf(requestedBy))
+        put("reorderPoint", reorderPoint)
+    }
+}
+
+data class NewStockLot(
+    val drug: Ref<Drug>,
+    val lotNumber: String,
+    val expiresOn: LocalDate,
+    val received: Int,
+    val purchaseOrder: Ref<PurchaseOrder>? = null,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("drug", system.idOf(drug))
+        put("lotNumber", lotNumber)
+        put("expiresOn", expiresOn)
+        put("received", received)
+        purchaseOrder?.let { put("purchaseOrder", system.idOf(it)) }
+    }
+}
+
+data class NewCountLot(
+    val lot: Ref<StockLot>,
+    val technician: Ref<Staff>,
+    val counted: Int,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("lot", system.idOf(lot))
+        put("technician", system.idOf(technician))
+        put("counted", counted)
+    }
+}
+
+data class NewRecall(
+    val lot: Ref<StockLot>,
+    val reference: String,
+    val issuedOn: LocalDate,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("lot", system.idOf(lot))
+        put("reference", reference)
+        put("issuedOn", issuedOn)
+    }
+}
+
+data class NewInsurancePlan(
+    val name: String,
+    val coversControlled: Boolean,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("coversControlled", coversControlled)
+    }
+}
+
+data class NewPatient(
+    val name: String,
+    val birthDate: LocalDate,
+    val phone: String,
+    val allergies: List<Ref<Ingredient>>,
+    val plan: Ref<InsurancePlan>? = null,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("birthDate", birthDate)
+        put("phone", phone)
+        put("allergies", allergies.map { system.idOf(it) })
+        plan?.let { put("plan", system.idOf(it)) }
+    }
+}
+
+data class NewPrescriber(
+    val name: String,
+    val deaNumber: String,
+    val fax: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("deaNumber", deaNumber)
+        put("fax", fax)
+    }
+}
+
+data class NewSetAllergies(
+    val patient: Ref<Patient>,
+    val allergies: List<Ref<Ingredient>>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("patient", system.idOf(patient))
+        put("allergies", allergies.map { system.idOf(it) })
+    }
+}
+
+data class NewAddAllergy(
+    val patient: Ref<Patient>,
+    val ingredient: Ref<Ingredient>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("patient", system.idOf(patient))
+        put("ingredient", system.idOf(ingredient))
+    }
+}
+
+data class NewPrescriberOrder(
+    val prescriber: Ref<Prescriber>,
+    val patient: Ref<Patient>,
+    val writtenOn: LocalDate,
+    val enteredBy: Ref<Staff>,
+    val prescriptions: List<NewPrescription> = emptyList(),
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("prescriber", system.idOf(prescriber))
+        put("patient", system.idOf(patient))
+        put("writtenOn", writtenOn)
+        put("enteredBy", system.idOf(enteredBy))
+    }
+    internal fun parts(system: VelleSystem): Map<String, List<Map<String, Any?>>> = buildMap {
+        put("prescriptions", prescriptions.map { it.raw(system) })
+    }
+}
+
+data class NewDiscontinuation(
+    val prescription: Ref<Prescription>,
+    val prescriber: Ref<Prescriber>,
+    val reason: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("prescription", system.idOf(prescription))
+        put("prescriber", system.idOf(prescriber))
+        put("reason", reason)
+    }
+}
+
+data class NewCorrectEntry(
+    val prescription: Ref<Prescription>,
+    val technician: Ref<Staff>,
+    val directions: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("prescription", system.idOf(prescription))
+        put("technician", system.idOf(technician))
+        put("directions", directions)
+    }
+}
+
+data class NewVoidEntry(
+    val prescription: Ref<Prescription>,
+    val pharmacist: Ref<Staff>,
+    val reason: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("prescription", system.idOf(prescription))
+        put("pharmacist", system.idOf(pharmacist))
+        put("reason", reason)
+    }
+}
+
+data class NewConflictOverride(
+    val prescription: Ref<Prescription>,
+    val pharmacist: Ref<Staff>,
+    val justification: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("prescription", system.idOf(prescription))
+        put("pharmacist", system.idOf(pharmacist))
+        put("justification", justification)
+    }
+}
+
+data class NewFillPrescription(
+    val requestKey: String,
+    val prescription: Ref<Prescription>,
+    val lot: Ref<StockLot>,
+    val quantity: Int,
+    val fillNumber: Int,
+    val filledBy: Ref<Staff>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("requestKey", requestKey)
+        put("prescription", system.idOf(prescription))
+        put("lot", system.idOf(lot))
+        put("quantity", quantity)
+        put("fillNumber", fillNumber)
+        put("filledBy", system.idOf(filledBy))
+    }
+}
+
+data class NewMonitoringCheck(
+    val prescription: Ref<Prescription>,
+    val pharmacist: Ref<Staff>,
+    val checkedAt: Instant,
+    val cleared: Boolean,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("prescription", system.idOf(prescription))
+        put("pharmacist", system.idOf(pharmacist))
+        put("checkedAt", checkedAt)
+        put("cleared", cleared)
+    }
+}
+
+data class NewVerifyFill(
+    val fill: Ref<Fill>,
+    val pharmacist: Ref<Staff>,
+    val outcome: String,
+    val note: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("fill", system.idOf(fill))
+        put("pharmacist", system.idOf(pharmacist))
+        put("outcome", outcome)
+        put("note", note)
+    }
+}
+
+data class NewCounselling(
+    val fill: Ref<Fill>,
+    val pharmacist: Ref<Staff>,
+    val notes: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("fill", system.idOf(fill))
+        put("pharmacist", system.idOf(pharmacist))
+        put("notes", notes)
+    }
+}
+
+data class NewPickUp(
+    val fill: Ref<Fill>,
+    val collectedBy: String,
+    val amountPaid: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("fill", system.idOf(fill))
+        put("collectedBy", collectedBy)
+        put("amountPaid", amountPaid)
+    }
+}
+
+data class NewRequestRefill(
+    val requestKey: String,
+    val prescription: Ref<Prescription>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("requestKey", requestKey)
+        put("prescription", system.idOf(prescription))
+    }
+}
+
+data class NewAutoRefillEnrolment(
+    val prescription: Ref<Prescription>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("prescription", system.idOf(prescription))
+    }
+}
+
+data class NewAutoRefillCancellation(
+    val prescription: Ref<Prescription>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("prescription", system.idOf(prescription))
+    }
+}
+
+data class NewAdjudication(
+    val claim: Ref<Claim>,
+    val outcome: String,
+    val paidAmount: BigDecimal,
+    val patientPays: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("claim", system.idOf(claim))
+        put("outcome", outcome)
+        put("paidAmount", paidAmount)
+        put("patientPays", patientPays)
+    }
+}
+
+// ── closure input values (README §6, "Inline part creation") ──
+data class NewPrescription(
+    val drug: Ref<Drug>,
+    val quantity: Int,
+    val daysSupply: Int,
+    val refillsAuthorized: Int,
+    val directions: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("drug", system.idOf(drug))
+        put("quantity", quantity)
+        put("daysSupply", daysSupply)
+        put("refillsAuthorized", refillsAuthorized)
+        put("directions", directions)
+    }
+}
+
 
 // ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,

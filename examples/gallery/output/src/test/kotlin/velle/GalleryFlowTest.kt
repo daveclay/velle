@@ -8,6 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import velle.Commit
 import velle.CommitResult
 import velle.generated.GallerySystem
 
@@ -23,22 +24,22 @@ open class GalleryFlowTest {
     protected val sys: GallerySystem by lazy { newSystem() }
 
     private fun member(name: String): Member {
-        assertIs<CommitResult.Accepted>(sys.commitMember(name))
+        assertIs<Commit.Accepted<*>>(sys.commit(NewMember(name)))
         return sys.members().last()
     }
 
     private fun post(author: Member, body: String): Post {
-        assertIs<CommitResult.Accepted>(sys.commitPost(author, body))
+        assertIs<Commit.Accepted<*>>(sys.commit(NewPost(author, body)))
         return sys.posts().last()
     }
 
     private fun photo(author: Member, caption: String): Photo {
-        assertIs<CommitResult.Accepted>(sys.commitPhoto(author, caption))
+        assertIs<Commit.Accepted<*>>(sys.commit(NewPhoto(author, caption)))
         return sys.photos().last()
     }
 
     private fun comment(target: Ref<Content>, author: Member, body: String): Comment {
-        assertIs<CommitResult.Accepted>(sys.commitComment(target, author, body))
+        assertIs<Commit.Accepted<*>>(sys.commit(NewComment(target, author, body)))
         return sys.comments().last()
     }
 
@@ -128,11 +129,11 @@ open class GalleryFlowTest {
         val p = post(ada, "hello")
         val ph = photo(ada, "sunset")
 
-        val refused = sys.commitComment(p, ada, "me again")
-        assertIs<CommitResult.Refused>(refused)
+        val refused = sys.commit(NewComment(p, ada, "me again"))
+        assertIs<Commit.Refused<*>>(refused)
         assertEquals(0, sys.read(p).comments.size, "a refused act commits nothing")
 
-        assertIs<CommitResult.Accepted>(sys.commitComment(ph, ada, "my own photo"))
+        assertIs<Commit.Accepted<*>>(sys.commit(NewComment(ph, ada, "my own photo")))
     }
 
     @Test

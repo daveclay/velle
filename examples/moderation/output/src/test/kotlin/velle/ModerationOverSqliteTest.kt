@@ -8,7 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
-import velle.CommitResult
+import velle.Commit
 import velle.generated.ModerationStoreOverGeneric
 import velle.generated.ModerationStoreResolver
 import velle.generated.ModerationSystem
@@ -54,7 +54,7 @@ class ModerationPersistenceTest {
 
     private fun process(): ModerationSystem = ModerationSystem().also { SqliteStore.attach(it.system, conn) }
 
-    private fun accept(r: CommitResult) = assertIs<CommitResult.Accepted>(r, "refused: $r")
+    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
 
     private fun rows(sql: String): List<List<Any?>> =
         conn.createStatement().use { st ->
@@ -70,20 +70,20 @@ class ModerationPersistenceTest {
     @Test
     fun `a deleted row leaves storage, its key is never reused, and a reference at it reads as absent`() {
         val first = process()
-        accept(first.commitSeller("Ada"))
+        accept(first.commit(NewSeller("Ada")))
         val ada = first.sellers().last()
-        accept(first.commitListing("brass lamp", ada))
+        accept(first.commit(NewListing("brass lamp", ada)))
         val lamp = first.listings().last()
-        accept(first.commitListingReport(lamp, "brass lamp", "spam"))
+        accept(first.commit(NewListingReport(lamp, "brass lamp", "spam")))
 
-        accept(first.commitDiscardDraft(lamp, "duplicate"))
+        accept(first.commit(NewDiscardDraft(lamp, "duplicate")))
         assertEquals(emptyList(), rows("""SELECT id FROM Listing"""), "the deletion landed")
         assertEquals(listOf(listOf(1L)), rows("""SELECT listing FROM ListingReport"""), "the report's column still names the dead key")
         assertEquals(listOf(listOf("brass lamp")), rows("""SELECT listingTitle FROM DiscardRecord"""))
         assertEquals(listOf(listOf(1L)), rows("""SELECT COUNT(*) FROM SellerNotice"""))
 
         // a later listing must not inherit the dead key, or the report would point at it
-        accept(first.commitListing("vase", ada))
+        accept(first.commit(NewListing("vase", ada)))
         assertEquals(listOf(listOf(2L)), rows("""SELECT id FROM Listing"""))
 
         val second = process()
@@ -92,21 +92,21 @@ class ModerationPersistenceTest {
         assertEquals("brass lamp", second.read(report).listingTitle)
         assertEquals(listOf(report.key), second.orphanReports().map { it.key })
         assertEquals(1, second.reporterNotices().size, "fired at the deleting commit, in the first process")
-        accept(second.commitSeller("Grace"))
+        accept(second.commit(NewSeller("Grace")))
         assertEquals(1, second.reporterNotices().size, "the guard reads its evidence from storage")
     }
 
     @Test
     fun `closing an account in a later process sweeps the draft and orphans the published listing`() {
         val first = process()
-        accept(first.commitSeller("Ada"))
+        accept(first.commit(NewSeller("Ada")))
         val ada = first.sellers().last()
-        accept(first.commitListing("draft lamp", ada))
-        accept(first.commitListing("published lamp", ada))
-        accept(first.commitPublish(first.listings().last()))
+        accept(first.commit(NewListing("draft lamp", ada)))
+        accept(first.commit(NewListing("published lamp", ada)))
+        accept(first.commit(NewPublish(first.listings().last())))
 
         val second = process()
-        accept(second.commitCloseAccount(second.read.seller(1L)))
+        accept(second.commit(NewCloseAccount(second.read.seller(1L))))
         assertEquals(listOf(listOf(0L)), rows("""SELECT COUNT(*) FROM Seller"""))
         assertEquals(listOf(listOf(2L, 1L)), rows("""SELECT id, seller FROM Listing"""), "the survivor keeps its dangling seller key")
 

@@ -24,58 +24,38 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCrop(name: String): CommitResult =
-        system.commit("Crop", buildMap {
-            put("name", name)
-        })
+    fun commit(input: NewCrop): Commit<NewCrop> =
+        system.commit("Crop", input.raw(system)).carrying(input)
 
     /** Queue key: [pathogen.host].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPathogen(name: String, host: Ref<Crop>): CommitResult =
-        system.commit("Pathogen", buildMap {
-            put("name", name)
-            put("host", system.idOf(host))
-        })
+    fun commit(input: NewPathogen): Commit<NewPathogen> =
+        system.commit("Pathogen", input.raw(system)).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPeptide(code: String, sequence: String): CommitResult =
-        system.commit("Peptide", buildMap {
-            put("code", code)
-            put("sequence", sequence)
-        })
+    fun commit(input: NewPeptide): Commit<NewPeptide> =
+        system.commit("Peptide", input.raw(system)).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitAssayProtocol(name: String, durationHours: Int, replicates: Int, hitThreshold: BigDecimal): CommitResult =
-        system.commit("AssayProtocol", buildMap {
-            put("name", name)
-            put("durationHours", durationHours)
-            put("replicates", replicates)
-            put("hitThreshold", hitThreshold)
-        })
+    fun commit(input: NewAssayProtocol): Commit<NewAssayProtocol> =
+        system.commit("AssayProtocol", input.raw(system)).carrying(input)
 
     /** Queue keys: [labExperiment.pathogen], [labExperiment.peptide], [labExperiment.protocol].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitLabExperiment(peptide: Ref<Peptide>, pathogen: Ref<Pathogen>, protocol: Ref<AssayProtocol>): CommitResult =
-        system.commit("LabExperiment", buildMap {
-            put("peptide", system.idOf(peptide))
-            put("pathogen", system.idOf(pathogen))
-            put("protocol", system.idOf(protocol))
-        })
+    fun commit(input: NewLabExperiment): Commit<NewLabExperiment> =
+        system.commit("LabExperiment", input.raw(system)).carrying(input)
 
     /** Queue keys: [assay.experiment], [assay.experiment.protocol].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitAssay(experiment: Ref<LabExperiment>, replicate: Int): CommitResult =
-        system.commit("Assay", buildMap {
-            put("experiment", system.idOf(experiment))
-            put("replicate", replicate)
-        })
+    fun commit(input: NewAssay): Commit<NewAssay> =
+        system.commit("Assay", input.raw(system)).carrying(input)
 
     /** Queue keys: [assayReading.assay] — plus system-wide width below.
      *  System-wide over Assay — consults Assay through 'assays' with no keyable owner (unexamined (A5)).
@@ -90,12 +70,8 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over LabHitRetraction — creates LabHitRetraction referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitAssayReading(assay: Ref<Assay>, hoursElapsed: Int, inhibitionPercent: BigDecimal): CommitResult =
-        system.commit("AssayReading", buildMap {
-            put("assay", system.idOf(assay))
-            put("hoursElapsed", hoursElapsed)
-            put("inhibitionPercent", inhibitionPercent)
-        })
+    fun commit(input: NewAssayReading): Commit<NewAssayReading> =
+        system.commit("AssayReading", input.raw(system)).carrying(input)
 
     /** Queue: system-wide.
      *  System-wide over ClimateReading — consults ClimateReading through 'climateReadings' with no keyable owner (unexamined (A5)).
@@ -106,12 +82,8 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Greenhouse — reads Greenhouse.minTemperature with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitGreenhouse(name: String, minTemperature: BigDecimal, maxTemperature: BigDecimal): CommitResult =
-        system.commit("Greenhouse", buildMap {
-            put("name", name)
-            put("minTemperature", minTemperature)
-            put("maxTemperature", maxTemperature)
-        })
+    fun commit(input: NewGreenhouse): Commit<NewGreenhouse> =
+        system.commit("Greenhouse", input.raw(system)).carrying(input)
 
     /** Queue keys: [climateReading.greenhouse] — plus system-wide width below.
      *  System-wide over ExcursionEnd — consults ExcursionEnd through a path the derivation cannot key (unexamined (A5)).
@@ -124,25 +96,15 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ExcursionEnd — consults ExcursionEnd through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitClimateReading(greenhouse: Ref<Greenhouse>, recordedAt: Instant, temperature: BigDecimal, humidity: BigDecimal): CommitResult =
-        system.commit("ClimateReading", buildMap {
-            put("greenhouse", system.idOf(greenhouse))
-            put("recordedAt", recordedAt)
-            put("temperature", temperature)
-            put("humidity", humidity)
-        })
+    fun commit(input: NewClimateReading): Commit<NewClimateReading> =
+        system.commit("ClimateReading", input.raw(system)).carrying(input)
 
     /** Queue: system-wide.
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitGreenhouseProtocol(name: String, plotsPerArm: Int, finalDay: Int, efficacyThreshold: BigDecimal): CommitResult =
-        system.commit("GreenhouseProtocol", buildMap {
-            put("name", name)
-            put("plotsPerArm", plotsPerArm)
-            put("finalDay", finalDay)
-            put("efficacyThreshold", efficacyThreshold)
-        })
+    fun commit(input: NewGreenhouseProtocol): Commit<NewGreenhouseProtocol> =
+        system.commit("GreenhouseProtocol", input.raw(system)).carrying(input)
 
     /** Queue keys: [requestGreenhouseTrial.greenhouse], [requestGreenhouseTrial.pathogen], [requestGreenhouseTrial.peptide], [requestGreenhouseTrial.protocol] — plus system-wide width below.
      *  System-wide over AssayProtocol — reads AssayProtocol.durationHours with no path back to any key (unexamined (A5)).
@@ -150,25 +112,15 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitRequestGreenhouseTrial(requestKey: String, peptide: Ref<Peptide>, pathogen: Ref<Pathogen>, greenhouse: Ref<Greenhouse>, protocol: Ref<GreenhouseProtocol>): CommitResult =
-        system.commit("RequestGreenhouseTrial", buildMap {
-            put("requestKey", requestKey)
-            put("peptide", system.idOf(peptide))
-            put("pathogen", system.idOf(pathogen))
-            put("greenhouse", system.idOf(greenhouse))
-            put("protocol", system.idOf(protocol))
-        })
+    fun commit(input: NewRequestGreenhouseTrial): Commit<NewRequestGreenhouseTrial> =
+        system.commit("RequestGreenhouseTrial", input.raw(system)).carrying(input)
 
     /** Queue keys: [greenhousePlot.trial], [greenhousePlot.trial.protocol] — plus system-wide width below.
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitGreenhousePlot(trial: Ref<GreenhouseTrial>, bench: String, treatment: String): CommitResult =
-        system.commit("GreenhousePlot", buildMap {
-            put("trial", system.idOf(trial))
-            put("bench", bench)
-            put("treatment", treatment)
-        })
+    fun commit(input: NewGreenhousePlot): Commit<NewGreenhousePlot> =
+        system.commit("GreenhousePlot", input.raw(system)).carrying(input)
 
     /** Queue keys: [treatment.trial] — plus system-wide width below.
      *  System-wide over GreenhousePlot — consults GreenhousePlot correlated through 'trial' (unexamined (A5)).
@@ -183,11 +135,8 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Treatment — consults Treatment through 'treatments' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitTreatment(trial: Ref<GreenhouseTrial>, treatedAt: Instant): CommitResult =
-        system.commit("Treatment", buildMap {
-            put("trial", system.idOf(trial))
-            put("treatedAt", treatedAt)
-        })
+    fun commit(input: NewTreatment): Commit<NewTreatment> =
+        system.commit("Treatment", input.raw(system)).carrying(input)
 
     /** Queue keys: [plotObservation.plot], [plotObservation.plot.trial] — plus system-wide width below.
      *  System-wide over GreenhousePlot — consults GreenhousePlot correlated through 'trial' (unexamined (A5)).
@@ -199,23 +148,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ObservationCorrection — consults ObservationCorrection through 'observationCorrections' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPlotObservation(plot: Ref<GreenhousePlot>, dayAfterTreatment: Int, recordedSeverity: BigDecimal, observedOn: LocalDate): CommitResult =
-        system.commit("PlotObservation", buildMap {
-            put("plot", system.idOf(plot))
-            put("dayAfterTreatment", dayAfterTreatment)
-            put("recordedSeverity", recordedSeverity)
-            put("observedOn", observedOn)
-        })
+    fun commit(input: NewPlotObservation): Commit<NewPlotObservation> =
+        system.commit("PlotObservation", input.raw(system)).carrying(input)
 
     /** Queue keys: [correctObservation.observation], [correctObservation.observation.plot], [correctObservation.observation.plot.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCorrectObservation(observation: Ref<PlotObservation>, correctedSeverity: BigDecimal, reason: String): CommitResult =
-        system.commit("CorrectObservation", buildMap {
-            put("observation", system.idOf(observation))
-            put("correctedSeverity", correctedSeverity)
-            put("reason", reason)
-        })
+    fun commit(input: NewCorrectObservation): Commit<NewCorrectObservation> =
+        system.commit("CorrectObservation", input.raw(system)).carrying(input)
 
     /** Queue keys: [voidObservation.observation], [voidObservation.observation.plot], [voidObservation.observation.plot.trial] — plus system-wide width below.
      *  System-wide over GreenhousePlot — consults GreenhousePlot correlated through 'trial' (unexamined (A5)).
@@ -227,41 +167,27 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ObservationCorrection — consults ObservationCorrection through 'observationCorrections' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitVoidObservation(observation: Ref<PlotObservation>, reason: String): CommitResult =
-        system.commit("VoidObservation", buildMap {
-            put("observation", system.idOf(observation))
-            put("reason", reason)
-        })
+    fun commit(input: NewVoidObservation): Commit<NewVoidObservation> =
+        system.commit("VoidObservation", input.raw(system)).carrying(input)
 
     /** Queue keys: [movePlot.plot], [movePlot.plot.trial], [movePlot.plot.trial.protocol] — plus system-wide width below.
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitMovePlot(plot: Ref<GreenhousePlot>, bench: String): CommitResult =
-        system.commit("MovePlot", buildMap {
-            put("plot", system.idOf(plot))
-            put("bench", bench)
-        })
+    fun commit(input: NewMovePlot): Commit<NewMovePlot> =
+        system.commit("MovePlot", input.raw(system)).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitFieldSite(name: String, region: String): CommitResult =
-        system.commit("FieldSite", buildMap {
-            put("name", name)
-            put("region", region)
-        })
+    fun commit(input: NewFieldSite): Commit<NewFieldSite> =
+        system.commit("FieldSite", input.raw(system)).carrying(input)
 
     /** Queue keys: [permit.crop], [permit.site].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPermit(site: Ref<FieldSite>, crop: Ref<Crop>, issuedOn: LocalDate, expiresOn: LocalDate): CommitResult =
-        system.commit("Permit", buildMap {
-            put("site", system.idOf(site))
-            put("crop", system.idOf(crop))
-            put("issuedOn", issuedOn)
-            put("expiresOn", expiresOn)
-        })
+    fun commit(input: NewPermit): Commit<NewPermit> =
+        system.commit("Permit", input.raw(system)).carrying(input)
 
     /** Queue keys: [weatherObservation.site] — plus system-wide width below.
      *  System-wide over TreatmentApplication — reads TreatmentApplication.trial with no path back to any key (unexamined (A5)).
@@ -270,22 +196,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ReapplicationNotice — consults ReapplicationNotice through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitWeatherObservation(site: Ref<FieldSite>, observedOn: LocalDate, rainfallMm: BigDecimal, maxTemperature: BigDecimal): CommitResult =
-        system.commit("WeatherObservation", buildMap {
-            put("site", system.idOf(site))
-            put("observedOn", observedOn)
-            put("rainfallMm", rainfallMm)
-            put("maxTemperature", maxTemperature)
-        })
+    fun commit(input: NewWeatherObservation): Commit<NewWeatherObservation> =
+        system.commit("WeatherObservation", input.raw(system)).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitFieldProtocol(name: String, yieldGainThreshold: BigDecimal): CommitResult =
-        system.commit("FieldProtocol", buildMap {
-            put("name", name)
-            put("yieldGainThreshold", yieldGainThreshold)
-        })
+    fun commit(input: NewFieldProtocol): Commit<NewFieldProtocol> =
+        system.commit("FieldProtocol", input.raw(system)).carrying(input)
 
     /** Queue keys: [requestFieldTrial.crop], [requestFieldTrial.pathogen], [requestFieldTrial.peptide], [requestFieldTrial.protocol], [requestFieldTrial.site] — plus system-wide width below.
      *  System-wide over GreenhouseResult — `GreenhouseResult` reads every GreenhouseResult and correlates to no key (unexamined (A5)).
@@ -294,67 +212,38 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over GreenhouseTrial — reads GreenhouseTrial.peptide with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitRequestFieldTrial(requestKey: String, peptide: Ref<Peptide>, pathogen: Ref<Pathogen>, crop: Ref<Crop>, site: Ref<FieldSite>, protocol: Ref<FieldProtocol>): CommitResult =
-        system.commit("RequestFieldTrial", buildMap {
-            put("requestKey", requestKey)
-            put("peptide", system.idOf(peptide))
-            put("pathogen", system.idOf(pathogen))
-            put("crop", system.idOf(crop))
-            put("site", system.idOf(site))
-            put("protocol", system.idOf(protocol))
-        })
+    fun commit(input: NewRequestFieldTrial): Commit<NewRequestFieldTrial> =
+        system.commit("RequestFieldTrial", input.raw(system)).carrying(input)
 
     /** Queue keys: [plantTrial.trial], [plantTrial.trial.site].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPlantTrial(trial: Ref<FieldTrial>, plantedOn: LocalDate, seedLot: String): CommitResult =
-        system.commit("PlantTrial", buildMap {
-            put("trial", system.idOf(trial))
-            put("plantedOn", plantedOn)
-            put("seedLot", seedLot)
-        })
+    fun commit(input: NewPlantTrial): Commit<NewPlantTrial> =
+        system.commit("PlantTrial", input.raw(system)).carrying(input)
 
     /** Queue key: [fieldPlot.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitFieldPlot(trial: Ref<FieldTrial>, block: Int, treatment: String): CommitResult =
-        system.commit("FieldPlot", buildMap {
-            put("trial", system.idOf(trial))
-            put("block", block)
-            put("treatment", treatment)
-        })
+    fun commit(input: NewFieldPlot): Commit<NewFieldPlot> =
+        system.commit("FieldPlot", input.raw(system)).carrying(input)
 
     /** Queue keys: [applyTreatment.trial], [applyTreatment.trial.site].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitApplyTreatment(trial: Ref<FieldTrial>, appliedOn: LocalDate, rateGramsPerHa: BigDecimal): CommitResult =
-        system.commit("ApplyTreatment", buildMap {
-            put("trial", system.idOf(trial))
-            put("appliedOn", appliedOn)
-            put("rateGramsPerHa", rateGramsPerHa)
-        })
+    fun commit(input: NewApplyTreatment): Commit<NewApplyTreatment> =
+        system.commit("ApplyTreatment", input.raw(system)).carrying(input)
 
     /** Queue key: [scouting.plot].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitScouting(plot: Ref<FieldPlot>, daysAfterPlanting: Int, scoutedOn: LocalDate, incidencePercent: BigDecimal, severity: BigDecimal): CommitResult =
-        system.commit("Scouting", buildMap {
-            put("plot", system.idOf(plot))
-            put("daysAfterPlanting", daysAfterPlanting)
-            put("scoutedOn", scoutedOn)
-            put("incidencePercent", incidencePercent)
-            put("severity", severity)
-        })
+    fun commit(input: NewScouting): Commit<NewScouting> =
+        system.commit("Scouting", input.raw(system)).carrying(input)
 
     /** Queue key: [harvest.plot].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitHarvest(plot: Ref<FieldPlot>, harvestedOn: LocalDate, yieldKgPerHa: BigDecimal): CommitResult =
-        system.commit("Harvest", buildMap {
-            put("plot", system.idOf(plot))
-            put("harvestedOn", harvestedOn)
-            put("yieldKgPerHa", yieldKgPerHa)
-        })
+    fun commit(input: NewHarvest): Commit<NewHarvest> =
+        system.commit("Harvest", input.raw(system)).carrying(input)
 
     /** Queue keys: [phytotoxicityReport.plot] — plus system-wide width below.
      *  System-wide over FieldPlot — consults FieldPlot through 'fieldPlots' with no keyable owner (unexamined (A5)).
@@ -362,40 +251,26 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over HaltNotice — consults HaltNotice through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPhytotoxicityReport(plot: Ref<FieldPlot>, observedOn: LocalDate, severity: Int): CommitResult =
-        system.commit("PhytotoxicityReport", buildMap {
-            put("plot", system.idOf(plot))
-            put("observedOn", observedOn)
-            put("severity", severity)
-        })
+    fun commit(input: NewPhytotoxicityReport): Commit<NewPhytotoxicityReport> =
+        system.commit("PhytotoxicityReport", input.raw(system)).carrying(input)
 
     /** Queue key: [collectionTask.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCollectionTask(trial: Ref<Trial>, dayMark: Int, dueOn: LocalDate): CommitResult =
-        system.commit("CollectionTask", buildMap {
-            put("trial", system.idOf(trial))
-            put("dayMark", dayMark)
-            put("dueOn", dueOn)
-        })
+    fun commit(input: NewCollectionTask): Commit<NewCollectionTask> =
+        system.commit("CollectionTask", input.raw(system)).carrying(input)
 
     /** Queue keys: [rescheduleTask.task], [rescheduleTask.task.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitRescheduleTask(task: Ref<CollectionTask>, dueOn: LocalDate): CommitResult =
-        system.commit("RescheduleTask", buildMap {
-            put("task", system.idOf(task))
-            put("dueOn", dueOn)
-        })
+    fun commit(input: NewRescheduleTask): Commit<NewRescheduleTask> =
+        system.commit("RescheduleTask", input.raw(system)).carrying(input)
 
     /** Queue keys: [cancelTask.task], [cancelTask.task.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCancelTask(task: Ref<CollectionTask>, reason: String): CommitResult =
-        system.commit("CancelTask", buildMap {
-            put("task", system.idOf(task))
-            put("reason", reason)
-        })
+    fun commit(input: NewCancelTask): Commit<NewCancelTask> =
+        system.commit("CancelTask", input.raw(system)).carrying(input)
 
     fun crops(): List<Crop> = system.instancesOf("Crop").map { materializeCrop(it) }
     fun pathogens(): List<Pathogen> = system.instancesOf("Pathogen").map { materializePathogen(it) }
@@ -3123,6 +2998,383 @@ rule RefuseCancel when RefusedCancel {
 """
     }
 }
+
+// ── act inputs (README §22, "External input"): one typed value per act,
+// every stored field the committer supplies and nothing else ──
+data class NewCrop(
+    val name: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+    }
+}
+
+data class NewPathogen(
+    val name: String,
+    val host: Ref<Crop>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("host", system.idOf(host))
+    }
+}
+
+data class NewPeptide(
+    val code: String,
+    val sequence: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("code", code)
+        put("sequence", sequence)
+    }
+}
+
+data class NewAssayProtocol(
+    val name: String,
+    val durationHours: Int,
+    val replicates: Int,
+    val hitThreshold: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("durationHours", durationHours)
+        put("replicates", replicates)
+        put("hitThreshold", hitThreshold)
+    }
+}
+
+data class NewLabExperiment(
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val protocol: Ref<AssayProtocol>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("peptide", system.idOf(peptide))
+        put("pathogen", system.idOf(pathogen))
+        put("protocol", system.idOf(protocol))
+    }
+}
+
+data class NewAssay(
+    val experiment: Ref<LabExperiment>,
+    val replicate: Int,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("experiment", system.idOf(experiment))
+        put("replicate", replicate)
+    }
+}
+
+data class NewAssayReading(
+    val assay: Ref<Assay>,
+    val hoursElapsed: Int,
+    val inhibitionPercent: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("assay", system.idOf(assay))
+        put("hoursElapsed", hoursElapsed)
+        put("inhibitionPercent", inhibitionPercent)
+    }
+}
+
+data class NewGreenhouse(
+    val name: String,
+    val minTemperature: BigDecimal,
+    val maxTemperature: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("minTemperature", minTemperature)
+        put("maxTemperature", maxTemperature)
+    }
+}
+
+data class NewClimateReading(
+    val greenhouse: Ref<Greenhouse>,
+    val recordedAt: Instant,
+    val temperature: BigDecimal,
+    val humidity: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("greenhouse", system.idOf(greenhouse))
+        put("recordedAt", recordedAt)
+        put("temperature", temperature)
+        put("humidity", humidity)
+    }
+}
+
+data class NewGreenhouseProtocol(
+    val name: String,
+    val plotsPerArm: Int,
+    val finalDay: Int,
+    val efficacyThreshold: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("plotsPerArm", plotsPerArm)
+        put("finalDay", finalDay)
+        put("efficacyThreshold", efficacyThreshold)
+    }
+}
+
+data class NewRequestGreenhouseTrial(
+    val requestKey: String,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val greenhouse: Ref<Greenhouse>,
+    val protocol: Ref<GreenhouseProtocol>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("requestKey", requestKey)
+        put("peptide", system.idOf(peptide))
+        put("pathogen", system.idOf(pathogen))
+        put("greenhouse", system.idOf(greenhouse))
+        put("protocol", system.idOf(protocol))
+    }
+}
+
+data class NewGreenhousePlot(
+    val trial: Ref<GreenhouseTrial>,
+    val bench: String,
+    val treatment: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("trial", system.idOf(trial))
+        put("bench", bench)
+        put("treatment", treatment)
+    }
+}
+
+data class NewTreatment(
+    val trial: Ref<GreenhouseTrial>,
+    val treatedAt: Instant,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("trial", system.idOf(trial))
+        put("treatedAt", treatedAt)
+    }
+}
+
+data class NewPlotObservation(
+    val plot: Ref<GreenhousePlot>,
+    val dayAfterTreatment: Int,
+    val recordedSeverity: BigDecimal,
+    val observedOn: LocalDate,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("plot", system.idOf(plot))
+        put("dayAfterTreatment", dayAfterTreatment)
+        put("recordedSeverity", recordedSeverity)
+        put("observedOn", observedOn)
+    }
+}
+
+data class NewCorrectObservation(
+    val observation: Ref<PlotObservation>,
+    val correctedSeverity: BigDecimal,
+    val reason: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("observation", system.idOf(observation))
+        put("correctedSeverity", correctedSeverity)
+        put("reason", reason)
+    }
+}
+
+data class NewVoidObservation(
+    val observation: Ref<PlotObservation>,
+    val reason: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("observation", system.idOf(observation))
+        put("reason", reason)
+    }
+}
+
+data class NewMovePlot(
+    val plot: Ref<GreenhousePlot>,
+    val bench: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("plot", system.idOf(plot))
+        put("bench", bench)
+    }
+}
+
+data class NewFieldSite(
+    val name: String,
+    val region: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("region", region)
+    }
+}
+
+data class NewPermit(
+    val site: Ref<FieldSite>,
+    val crop: Ref<Crop>,
+    val issuedOn: LocalDate,
+    val expiresOn: LocalDate,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("site", system.idOf(site))
+        put("crop", system.idOf(crop))
+        put("issuedOn", issuedOn)
+        put("expiresOn", expiresOn)
+    }
+}
+
+data class NewWeatherObservation(
+    val site: Ref<FieldSite>,
+    val observedOn: LocalDate,
+    val rainfallMm: BigDecimal,
+    val maxTemperature: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("site", system.idOf(site))
+        put("observedOn", observedOn)
+        put("rainfallMm", rainfallMm)
+        put("maxTemperature", maxTemperature)
+    }
+}
+
+data class NewFieldProtocol(
+    val name: String,
+    val yieldGainThreshold: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("yieldGainThreshold", yieldGainThreshold)
+    }
+}
+
+data class NewRequestFieldTrial(
+    val requestKey: String,
+    val peptide: Ref<Peptide>,
+    val pathogen: Ref<Pathogen>,
+    val crop: Ref<Crop>,
+    val site: Ref<FieldSite>,
+    val protocol: Ref<FieldProtocol>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("requestKey", requestKey)
+        put("peptide", system.idOf(peptide))
+        put("pathogen", system.idOf(pathogen))
+        put("crop", system.idOf(crop))
+        put("site", system.idOf(site))
+        put("protocol", system.idOf(protocol))
+    }
+}
+
+data class NewPlantTrial(
+    val trial: Ref<FieldTrial>,
+    val plantedOn: LocalDate,
+    val seedLot: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("trial", system.idOf(trial))
+        put("plantedOn", plantedOn)
+        put("seedLot", seedLot)
+    }
+}
+
+data class NewFieldPlot(
+    val trial: Ref<FieldTrial>,
+    val block: Int,
+    val treatment: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("trial", system.idOf(trial))
+        put("block", block)
+        put("treatment", treatment)
+    }
+}
+
+data class NewApplyTreatment(
+    val trial: Ref<FieldTrial>,
+    val appliedOn: LocalDate,
+    val rateGramsPerHa: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("trial", system.idOf(trial))
+        put("appliedOn", appliedOn)
+        put("rateGramsPerHa", rateGramsPerHa)
+    }
+}
+
+data class NewScouting(
+    val plot: Ref<FieldPlot>,
+    val daysAfterPlanting: Int,
+    val scoutedOn: LocalDate,
+    val incidencePercent: BigDecimal,
+    val severity: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("plot", system.idOf(plot))
+        put("daysAfterPlanting", daysAfterPlanting)
+        put("scoutedOn", scoutedOn)
+        put("incidencePercent", incidencePercent)
+        put("severity", severity)
+    }
+}
+
+data class NewHarvest(
+    val plot: Ref<FieldPlot>,
+    val harvestedOn: LocalDate,
+    val yieldKgPerHa: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("plot", system.idOf(plot))
+        put("harvestedOn", harvestedOn)
+        put("yieldKgPerHa", yieldKgPerHa)
+    }
+}
+
+data class NewPhytotoxicityReport(
+    val plot: Ref<FieldPlot>,
+    val observedOn: LocalDate,
+    val severity: Int,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("plot", system.idOf(plot))
+        put("observedOn", observedOn)
+        put("severity", severity)
+    }
+}
+
+data class NewCollectionTask(
+    val trial: Ref<Trial>,
+    val dayMark: Int,
+    val dueOn: LocalDate,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("trial", system.idOf(trial))
+        put("dayMark", dayMark)
+        put("dueOn", dueOn)
+    }
+}
+
+data class NewRescheduleTask(
+    val task: Ref<CollectionTask>,
+    val dueOn: LocalDate,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("task", system.idOf(task))
+        put("dueOn", dueOn)
+    }
+}
+
+data class NewCancelTask(
+    val task: Ref<CollectionTask>,
+    val reason: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("task", system.idOf(task))
+        put("reason", reason)
+    }
+}
+
 
 // ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,

@@ -14,12 +14,12 @@ import velle.generated.BillingSystem
 class Givens(private val sys: BillingSystem) : RequiredGivens {
 
     private fun customer(): Customer {
-        sys.commitSignUp("Ada", "ada@example.com")
+        sys.commit(NewSignUp("Ada", "ada@example.com"))
         return sys.customers().last()
     }
 
     private fun invoice(due: LocalDate = LocalDate.of(2026, 2, 1)): Invoice {
-        sys.commitBillCustomer(customer(), due)
+        sys.commit(NewBillCustomer(customer(), due))
         return sys.invoices().last()
     }
 
@@ -28,29 +28,29 @@ class Givens(private val sys: BillingSystem) : RequiredGivens {
         due: LocalDate = LocalDate.of(2026, 2, 1),
     ): Invoice {
         val inv = invoice(due)
-        sys.commitLineItem(inv, "widgets", amount, 1)
+        sys.commit(NewLineItem(inv, "widgets", amount, 1))
         return inv
     }
 
     override fun signUp() {
-        sys.commitSignUp("Grace", "grace@example.com")
+        sys.commit(NewSignUp("Grace", "grace@example.com"))
     }
 
     override fun billCustomer() {
-        sys.commitBillCustomer(customer(), LocalDate.of(2026, 2, 1))
+        sys.commit(NewBillCustomer(customer(), LocalDate.of(2026, 2, 1)))
     }
 
     override fun submitPayment() {
-        sys.commitSubmitPayment(invoiceWithBalance(BigDecimal("100")), BigDecimal("40"))
+        sys.commit(NewSubmitPayment(invoiceWithBalance(BigDecimal("100")), BigDecimal("40")))
     }
 
     override fun correctEmail(): CorrectEmail {
-        sys.commitCorrectEmail(customer(), "corrected@example.com")
+        sys.commit(NewCorrectEmail(customer(), "corrected@example.com"))
         return sys.correctEmails().last()
     }
 
     override fun payment(): Payment {
-        sys.commitSubmitPayment(invoiceWithBalance(BigDecimal("100")), BigDecimal("40"))
+        sys.commit(NewSubmitPayment(invoiceWithBalance(BigDecimal("100")), BigDecimal("40")))
         return sys.payments().last()
     }
 
@@ -58,7 +58,7 @@ class Givens(private val sys: BillingSystem) : RequiredGivens {
 
     override fun paidInvoice(): Invoice {
         val inv = invoiceWithBalance(BigDecimal("100"))
-        sys.commitSubmitPayment(inv, BigDecimal("100")) // covering payment: newly paid
+        sys.commit(NewSubmitPayment(inv, BigDecimal("100"))) // covering payment: newly paid
         return inv
     }
 
@@ -71,18 +71,18 @@ class Givens(private val sys: BillingSystem) : RequiredGivens {
         invoiceWithBalance(BigDecimal("100"), due = LocalDate.of(2025, 12, 1))
 
     override fun applicableDueChange() {
-        sys.commitChangeDueDate(invoice(), LocalDate.of(2026, 3, 1)) // draft: change applies
+        sys.commit(NewChangeDueDate(invoice(), LocalDate.of(2026, 3, 1))) // draft: change applies
     }
 
     override fun refusedDueChange() {
         val inv = invoice()
-        sys.commitIssuance(inv) // issued: the due date is frozen
-        sys.commitChangeDueDate(inv, LocalDate.of(2026, 3, 1))
+        sys.commit(NewIssuance(inv)) // issued: the due date is frozen
+        sys.commit(NewChangeDueDate(inv, LocalDate.of(2026, 3, 1)))
     }
 
     override fun archivedInvoice(): Invoice {
         val inv = invoice()
-        sys.commitArchiveRequest(inv)
+        sys.commit(NewArchiveRequest(inv))
         return inv
     }
 }

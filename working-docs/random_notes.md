@@ -1,38 +1,16 @@
-# Velle — original notes
+# Syntax
 
-**Status:** pre-README brainstorm, kept as a historical record; most of it is superseded by the README and `investigate_runtime.md`. Still live: the open-codegen/escape-hatch demands ("Escape Hatch", "Codegen/Modifying Velle output" — partially ratified by the developer-owned-output decision; the regeneration/override contract is undesigned and tracked nowhere else), the union sketch under "Shape 'Interfaces'" (feeds [OQ29](questions/OQ29-sum-types.md)), and the visualization question. Mine those into proper homes, then delete (TODO.md, doc chores).
+# Auth
 
----
-
-A declarative language to describe a system. It abstracts away the stack, functions, variables, scope, closures in favor of shapes, relationships, and rules.
-
-## Philosophy
-- Computers execute code using stacks, registers, addresses, etc.
-- We humans don't think about solving problems using stacks, registers, addresses, etc.
-- software engineering solves problems by mapping the human problems into computer mechanics
-    - translate solutions into stack-based concepts: functions, variables, scope, closures
-- We use layers of abstraction to try and abstract away technical details from the real-world problem we're trying to solve
-- What if we abstract away the stack, functions, variables, scope, closures?
-- What would a language look like where we declare how the system should work without using stacks, functions, variables, scope, closures?
-- Interactions are "shapes" that describe the states of an interaction.
-    - instead of thinking about "parameters" to a "function" that "returns a result" or "throws an error"
-    - there's an input state and several potential resulting state (success, error, retry, etc)
-- The language intends to separate human concerns from computer concerns.
-    - Velle captures system design choices made with human judgement, capturing rules and data shapes, interactions, relationships, conditions.
-    - "Compiling" Velle results in code that can be executed. The code is fungible. Today, AI writes a lot of code. But even before AI, software engineering was _mostly_ changing existing code to support business changes rather than greenfield projects. Code should be thought of as _change_. Now that AI writes code, we expect code to change even more often, and treat it as some intermediary commodity.
-    - The problem with code today is that it's complex and noisy and requires interpretation. The more code AI writes, the less the engineers can be confident it does what they intend.
-    - Humans can write tests/specs to ensure the "arbitrary" code does what they intend, current test frameworks have no opinion about their structure in terms of use cases (Cucumber BDD attempts to capture this more than junit, which is focused specifically around code, not system use cases).
-    - Velle attempts to provide a concise use-case system design language that helps humans capture requirements and make judgements without translating those into the domain of computer science and code.
-    - But then extrapolate those requirements into executable tests, modular code, tools to be able to organize and read AI-generated (or human-generated) code.
-
-## Goals
-- The language should define "shapes":
-    - a "shape" is an object, function, or relationship between shapes
-    - has properties that are scalars, or relationships to other shapes
-- Rules are defined as top-level structures associated with shapes, rather than buried in nested functions calls
-- Needs a way to for conditions to be described without resorting to nesting `if` stanzas
-    - I'm thinking a condition is a shape that can be associated with another shape (putting conditions on relationships, for example)
-- "Compiling" Velle results in 1) validating shapes and relationships through strong types and 2) deterministic, executable spec tests that AI or human-generated code can be verified against.
+- concept of an authenticated user
+- authenticated user may be null (scheduled tick, or incoming act from an automated system)
+- roles & permissions may be both static/declarative and dynamic/data
+- how and what is checked during reads? Maybe this is where velle needs it's read syntax?
+  - a user requests order 1234
+  - is the user an admin?
+  - did the user place the order?
+  - is the user referenced as the recipient of the order vs who placed the order?
+  - depends on data & role
 
 # Transpilation Architecture & Design
 

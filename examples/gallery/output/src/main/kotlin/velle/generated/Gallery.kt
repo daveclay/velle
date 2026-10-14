@@ -22,10 +22,8 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitMember(name: String): CommitResult =
-        system.commit("Member", buildMap {
-            put("name", name)
-        })
+    fun commit(input: NewMember): Commit<NewMember> =
+        system.commit("Member", input.raw(system)).carrying(input)
 
     /** Queue keys: [post.author] — plus system-wide width below.
      *  System-wide over Comment — reads Comment.target with no path back to any key (unexamined (A5)).
@@ -33,11 +31,8 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPost(author: Ref<Member>, body: String): CommitResult =
-        system.commit("Post", buildMap {
-            put("author", system.idOf(author))
-            put("body", body)
-        })
+    fun commit(input: NewPost): Commit<NewPost> =
+        system.commit("Post", input.raw(system)).carrying(input)
 
     /** Queue keys: [photo.author] — plus system-wide width below.
      *  System-wide over Comment — reads Comment.target with no path back to any key (unexamined (A5)).
@@ -45,11 +40,8 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPhoto(author: Ref<Member>, caption: String): CommitResult =
-        system.commit("Photo", buildMap {
-            put("author", system.idOf(author))
-            put("caption", caption)
-        })
+    fun commit(input: NewPhoto): Commit<NewPhoto> =
+        system.commit("Photo", input.raw(system)).carrying(input)
 
     /** Queue keys: [comment.author], [comment.target] — plus system-wide width below.
      *  System-wide over CommentNotice — creates CommentNotice referencing an instance the derivation cannot key (unexamined (A5)).
@@ -59,12 +51,8 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitComment(target: Ref<Content>, author: Ref<Member>, body: String): CommitResult =
-        system.commit("Comment", buildMap {
-            put("target", system.idOf(target))
-            put("author", system.idOf(author))
-            put("body", body)
-        })
+    fun commit(input: NewComment): Commit<NewComment> =
+        system.commit("Comment", input.raw(system)).carrying(input)
 
     fun members(): List<Member> = system.instancesOf("Member").map { materializeMember(it) }
     fun posts(): List<Post> = system.instancesOf("Post").map { materializePost(it) }
@@ -349,6 +337,49 @@ shape PhotoComment = Comment where target is Photo
 """
     }
 }
+
+// ── act inputs (README §22, "External input"): one typed value per act,
+// every stored field the committer supplies and nothing else ──
+data class NewMember(
+    val name: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+    }
+}
+
+data class NewPost(
+    val author: Ref<Member>,
+    val body: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("author", system.idOf(author))
+        put("body", body)
+    }
+}
+
+data class NewPhoto(
+    val author: Ref<Member>,
+    val caption: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("author", system.idOf(author))
+        put("caption", caption)
+    }
+}
+
+data class NewComment(
+    val target: Ref<Content>,
+    val author: Ref<Member>,
+    val body: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("target", system.idOf(target))
+        put("author", system.idOf(author))
+        put("body", body)
+    }
+}
+
 
 // ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,

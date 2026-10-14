@@ -241,7 +241,7 @@ object SpecGen {
                 }
             }
             if (subjectRefs != 1) return null
-            return ExitCommit(setup, "sys.commit${act.name}(${args.joinToString(", ")})")
+            return ExitCommit(setup, "sys.commit(New${act.name}(${args.joinToString(", ")}))")
         }
 
         fun guardWindowDays(rule: RuleDecl): Long? {

@@ -20,55 +20,38 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitSeller(name: String): CommitResult =
-        system.commit("Seller", buildMap {
-            put("name", name)
-        })
+    fun commit(input: NewSeller): Commit<NewSeller> =
+        system.commit("Seller", input.raw(system)).carrying(input)
 
     /** Queue key: [listing.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitListing(title: String, seller: Ref<Seller>, isDraft: Boolean? = null): CommitResult =
-        system.commit("Listing", buildMap {
-            put("title", title)
-            put("seller", system.idOf(seller))
-            isDraft?.let { put("isDraft", it) }
-        })
+    fun commit(input: NewListing): Commit<NewListing> =
+        system.commit("Listing", input.raw(system)).carrying(input)
 
     /** Queue keys: [publish.listing], [publish.listing.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPublish(listing: Ref<Listing>): CommitResult =
-        system.commit("Publish", buildMap {
-            put("listing", system.idOf(listing))
-        })
+    fun commit(input: NewPublish): Commit<NewPublish> =
+        system.commit("Publish", input.raw(system)).carrying(input)
 
     /** Queue key: [listingReport.listing].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitListingReport(listing: Ref<Listing>, listingTitle: String, reason: String): CommitResult =
-        system.commit("ListingReport", buildMap {
-            put("listing", system.idOf(listing))
-            put("listingTitle", listingTitle)
-            put("reason", reason)
-        })
+    fun commit(input: NewListingReport): Commit<NewListingReport> =
+        system.commit("ListingReport", input.raw(system)).carrying(input)
 
     /** Queue keys: [discardDraft.listing], [discardDraft.listing.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitDiscardDraft(listing: Ref<Listing>, reason: String): CommitResult =
-        system.commit("DiscardDraft", buildMap {
-            put("listing", system.idOf(listing))
-            put("reason", reason)
-        })
+    fun commit(input: NewDiscardDraft): Commit<NewDiscardDraft> =
+        system.commit("DiscardDraft", input.raw(system)).carrying(input)
 
     /** Queue key: [closeAccount.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCloseAccount(seller: Ref<Seller>): CommitResult =
-        system.commit("CloseAccount", buildMap {
-            put("seller", system.idOf(seller))
-        })
+    fun commit(input: NewCloseAccount): Commit<NewCloseAccount> =
+        system.commit("CloseAccount", input.raw(system)).carrying(input)
 
     fun sellers(): List<Seller> = system.instancesOf("Seller").map { materializeSeller(it) }
     fun listings(): List<Listing> = system.instancesOf("Listing").map { materializeListing(it) }
@@ -544,6 +527,67 @@ rule SweepOrphanedDrafts when (OrphanedListing where isDraft) {
 """
     }
 }
+
+// ── act inputs (README §22, "External input"): one typed value per act,
+// every stored field the committer supplies and nothing else ──
+data class NewSeller(
+    val name: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+    }
+}
+
+data class NewListing(
+    val title: String,
+    val seller: Ref<Seller>,
+    val isDraft: Boolean? = null,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("title", title)
+        put("seller", system.idOf(seller))
+        isDraft?.let { put("isDraft", it) }
+    }
+}
+
+data class NewPublish(
+    val listing: Ref<Listing>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("listing", system.idOf(listing))
+    }
+}
+
+data class NewListingReport(
+    val listing: Ref<Listing>,
+    val listingTitle: String,
+    val reason: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("listing", system.idOf(listing))
+        put("listingTitle", listingTitle)
+        put("reason", reason)
+    }
+}
+
+data class NewDiscardDraft(
+    val listing: Ref<Listing>,
+    val reason: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("listing", system.idOf(listing))
+        put("reason", reason)
+    }
+}
+
+data class NewCloseAccount(
+    val seller: Ref<Seller>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("seller", system.idOf(seller))
+    }
+}
+
 
 // ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,

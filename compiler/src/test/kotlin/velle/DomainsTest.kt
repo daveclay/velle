@@ -383,6 +383,6 @@ class DomainsTest {
     fun `the generated commit function carries the queue-key contract`() {
         val code = Codegen.generate(deposits, "Bank")
         assertTrue("Queue key: [deposit.account]." in code, code.lines().filter { "Queue" in it }.toString())
-        assertTrue(code.indexOf("Queue key: [deposit.account].") < code.indexOf("fun commitDeposit("))
+        assertTrue(code.indexOf("Queue key: [deposit.account].") < code.indexOf("fun commit(input: NewDeposit)"))
     }
 }

@@ -17,53 +17,23 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
     fun advanceDays(days: Long) = system.advanceDays(days)
     fun setTime(t: Instant) = system.setTime(t)
 
-    // ── closure input values (README §6, "Inline part creation") ──
-    data class NewCustomization(
-        val note: String,
-    ) {
-        internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
-            put("note", note)
-        }
-    }
-
-    data class NewOrderLine(
-        val product: Ref<Product>,
-        val quantity: Int,
-        val customizations: List<NewCustomization> = emptyList(),
-    ) {
-        internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
-            put("product", system.idOf(product))
-            put("quantity", quantity)
-            put("customizations", customizations.map { it.raw(system) })
-        }
-    }
+    /** Queue keys: none — this commit contends with no other work.
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
+    fun commit(input: NewCustomer): Commit<NewCustomer> =
+        system.commit("Customer", input.raw(system)).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCustomer(name: String): CommitResult =
-        system.commit("Customer", buildMap {
-            put("name", name)
-        })
-
-    /** Queue keys: none — this commit contends with no other work.
-     *  Commits sharing a queue key are handled one at a time, in arrival
-     *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitProduct(sku: String): CommitResult =
-        system.commit("Product", buildMap {
-            put("sku", sku)
-        })
+    fun commit(input: NewProduct): Commit<NewProduct> =
+        system.commit("Product", input.raw(system)).carrying(input)
 
     /** Queue key: [order.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitOrder(customer: Ref<Customer>, placedOn: LocalDate, orderLines: List<NewOrderLine> = emptyList()): CommitResult =
-        system.commit("Order", buildMap {
-            put("customer", system.idOf(customer))
-            put("placedOn", placedOn)
-        }, buildMap {
-            put("orderLines", orderLines.map { it.raw(system) })
-        })
+    fun commit(input: NewOrder): Commit<NewOrder> =
+        system.commit("Order", input.raw(system), input.parts(system)).carrying(input)
 
     fun customers(): List<Customer> = system.instancesOf("Customer").map { materializeCustomer(it) }
     fun products(): List<Product> = system.instancesOf("Product").map { materializeProduct(it) }
@@ -248,6 +218,60 @@ never (OrderLine where quantity <= 0)
 """
     }
 }
+
+// ── act inputs (README §22, "External input"): one typed value per act,
+// every stored field the committer supplies and nothing else ──
+data class NewCustomer(
+    val name: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+    }
+}
+
+data class NewProduct(
+    val sku: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("sku", sku)
+    }
+}
+
+data class NewOrder(
+    val customer: Ref<Customer>,
+    val placedOn: LocalDate,
+    val orderLines: List<NewOrderLine> = emptyList(),
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("customer", system.idOf(customer))
+        put("placedOn", placedOn)
+    }
+    internal fun parts(system: VelleSystem): Map<String, List<Map<String, Any?>>> = buildMap {
+        put("orderLines", orderLines.map { it.raw(system) })
+    }
+}
+
+// ── closure input values (README §6, "Inline part creation") ──
+data class NewCustomization(
+    val note: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("note", note)
+    }
+}
+
+data class NewOrderLine(
+    val product: Ref<Product>,
+    val quantity: Int,
+    val customizations: List<NewCustomization> = emptyList(),
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("product", system.idOf(product))
+        put("quantity", quantity)
+        put("customizations", customizations.map { it.raw(system) })
+    }
+}
+
 
 // ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,

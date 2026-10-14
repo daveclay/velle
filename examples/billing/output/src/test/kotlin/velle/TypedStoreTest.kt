@@ -69,7 +69,7 @@ class TypedStoreTest {
         }
     }
 
-    private fun accept(r: CommitResult): Long = assertIs<CommitResult.Accepted>(r, "refused: $r").id
+    private fun accept(r: Commit<*>): Long = assertIs<Commit.Accepted<*>>(r, "refused: $r").id
 
     @Test
     fun `generic defaults serve everything, the one override serves its question`() {
@@ -82,20 +82,20 @@ class TypedStoreTest {
         billing.system.connect(BillingStoreResolver(store, billing.system.model), sqlite)
 
         // the full cascade rides the typed layer's generic defaults
-        accept(billing.commitSignUp("Ada", "ada@x.com"))
+        accept(billing.commit(NewSignUp("Ada", "ada@x.com")))
         val cust = billing.customers().last()
-        accept(billing.commitBillCustomer(cust, due = LocalDate.of(2026, 2, 1)))
+        accept(billing.commit(NewBillCustomer(cust, due = LocalDate.of(2026, 2, 1))))
         val inv = billing.invoices().last()
-        accept(billing.commitLineItem(inv, "Design", BigDecimal("1200.00"), 1))
-        accept(billing.commitSubmitPayment(inv, BigDecimal("1200.00")))
+        accept(billing.commit(NewLineItem(inv, "Design", BigDecimal("1200.00"), 1)))
+        accept(billing.commit(NewSubmitPayment(inv, BigDecimal("1200.00"))))
         assertEquals("paid", billing.read(inv).status)
         assertEquals(1, billing.receipts().size)
         assertEquals(1, billing.receiptEmails().size)
 
         // the weekly sweep routes to the hand-tuned override, typed and folded
-        accept(billing.commitBillCustomer(cust, due = LocalDate.of(2025, 12, 20)))
+        accept(billing.commit(NewBillCustomer(cust, due = LocalDate.of(2025, 12, 20))))
         val overdue = billing.invoices().last()
-        accept(billing.commitLineItem(overdue, "Old work", BigDecimal("99.00"), 1))
+        accept(billing.commit(NewLineItem(overdue, "Old work", BigDecimal("99.00"), 1)))
         billing.tickWeekly()
 
         assertEquals(1, billing.reminders().size)

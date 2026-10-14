@@ -122,7 +122,7 @@ class BillCustomerSpec : SpecSupport() {
         val invoice = givens.archivedInvoice()
         invoice.assertIsA("ArchivedInvoice", "the given must deliver a member of 'ArchivedInvoice'")
         // when: a UnarchiveRequest for it is committed
-        sys.commitUnarchiveRequest(invoice)
+        sys.commit(NewUnarchiveRequest(invoice))
         invoice.assertIsNotA("ArchivedInvoice", "the exit commit must end the membership")
         assertEquals(beforeUnarchiveNotice + 1, count("UnarchiveNotice"), "rule NoteUnarchival: one 'UnarchiveNotice' per firing")
         val producedUnarchiveNotice = last("UnarchiveNotice")

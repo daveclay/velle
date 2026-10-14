@@ -18,12 +18,12 @@ import velle.generated.MembershipSystem
 class Givens(private val sys: MembershipSystem) : RequiredGivens {
 
     private fun plan(price: BigDecimal = BigDecimal("20")): Plan {
-        sys.commitPlan("Standard", price)
+        sys.commit(NewPlan("Standard", price))
         return sys.plans().last()
     }
 
     private fun newMember(): Member {
-        sys.commitSignUp("Ada", "Ada@Example.com", plan())
+        sys.commit(NewSignUp("Ada", "Ada@Example.com", plan()))
         return sys.members().last()
     }
 
@@ -35,7 +35,7 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
     }
 
     private fun agent(): Agent {
-        sys.commitAgent("Grace", "grace@velle.example")
+        sys.commit(NewAgent("Grace", "grace@velle.example"))
         return sys.agents().last()
     }
 
@@ -43,28 +43,28 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
         priority: String = "normal",
         due: LocalDate = LocalDate.of(2026, 3, 1),
     ): Ticket {
-        sys.commitRaiseTicket(newMember(), "billing question", due, priority)
+        sys.commit(NewRaiseTicket(newMember(), "billing question", due, priority))
         return sys.tickets().last()
     }
 
     override fun signUp() {
-        sys.commitSignUp("Grace", "Grace@Example.com", plan())
+        sys.commit(NewSignUp("Grace", "Grace@Example.com", plan()))
     }
 
     override fun changeEmail() {
-        sys.commitChangeEmail(newMember(), "New@Example.com")
+        sys.commit(NewChangeEmail(newMember(), "New@Example.com"))
     }
 
     override fun makeDeposit() {
-        sys.commitMakeDeposit(newMember(), BigDecimal("25"))
+        sys.commit(NewMakeDeposit(newMember(), BigDecimal("25")))
     }
 
     override fun raiseTicket() {
-        sys.commitRaiseTicket(newMember(), "billing question", LocalDate.of(2026, 3, 1), "normal")
+        sys.commit(NewRaiseTicket(newMember(), "billing question", LocalDate.of(2026, 3, 1), "normal"))
     }
 
     override fun closeTicket() {
-        sys.commitCloseTicket(ticket(), agent())
+        sys.commit(NewCloseTicket(ticket(), agent()))
     }
 
     override fun member(): Member = newMember()
@@ -77,17 +77,17 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
         // the spec's to run
         val m = delinquentMember()
         sys.tickNightly()
-        sys.commitMakeDeposit(m, BigDecimal("25"))
+        sys.commit(NewMakeDeposit(m, BigDecimal("25")))
         return m
     }
 
     override fun visit(): Visit {
-        sys.commitVisit(newMember(), 30)
+        sys.commit(NewVisit(newMember(), 30))
         return sys.visits().last()
     }
 
     override fun unappliedDeposit(): Deposit {
-        sys.commitMakeDeposit(newMember(), BigDecimal("25"))
+        sys.commit(NewMakeDeposit(newMember(), BigDecimal("25")))
         return sys.deposits().last()
     }
 
@@ -106,7 +106,7 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
     override fun memberForOpenDelinquencyEpisode(): Member = delinquentMember()
 
     override fun exitDelinquent(member: Member) {
-        sys.commitMakeDeposit(member, BigDecimal("25")) // a covering deposit: the recovery commit
+        sys.commit(NewMakeDeposit(member, BigDecimal("25"))) // a covering deposit: the recovery commit
     }
 
     override fun memberForOpenAccountReview(): Member {
@@ -114,7 +114,7 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
         // cover, each recovered by a covering deposit before the next
         val m = delinquentMember()                     // episode 1: balance -20
         repeat(2) {
-            sys.commitMakeDeposit(m, BigDecimal("25")) // recover: episode closes (+5)
+            sys.commit(NewMakeDeposit(m, BigDecimal("25"))) // recover: episode closes (+5)
             sys.advanceDays(31)                        // reopen the 30-day renewal window
             sys.tickMonthly()                          // charge 20 drives the balance negative
         }
@@ -123,12 +123,12 @@ class Givens(private val sys: MembershipSystem) : RequiredGivens {
 
     override fun closedTicket(): Ticket {
         val t = ticket()
-        sys.commitCloseTicket(t, agent())
+        sys.commit(NewCloseTicket(t, agent()))
         return t
     }
 
     override fun applicableAssignment() {
-        sys.commitAssignTicket(ticket(), agent())
+        sys.commit(NewAssignTicket(ticket(), agent()))
     }
 
     override fun ticketForEscalateUrgent(): Ticket = ticket(priority = "high")

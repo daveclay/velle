@@ -10,7 +10,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import velle.CommitResult
+import velle.Commit
 import velle.generated.LoyaltyStoreOverGeneric
 import velle.generated.LoyaltyStoreResolver
 import velle.generated.LoyaltySystem
@@ -52,15 +52,15 @@ class LoyaltyPersistenceTest {
 
     private fun process(): LoyaltySystem = LoyaltySystem().also { SqliteStore.attach(it.system, conn) }
 
-    private fun accept(r: CommitResult) = assertIs<CommitResult.Accepted>(r, "refused: $r")
+    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
 
     private fun dues(sys: LoyaltySystem, m: Member, month: String, dueBy: LocalDate, paidOn: LocalDate) =
-        accept(sys.commitDuesPayment(m, month, dueBy, paidOn))
+        accept(sys.commit(NewDuesPayment(m, month, dueBy, paidOn)))
 
     @Test
     fun `the streak derives from stored payments, and a late arrival in another process heals it`() {
         val first = process()
-        accept(first.commitJoin("Ada"))
+        accept(first.commit(NewJoin("Ada")))
         val ada = first.members().last()
         dues(first, ada, "January", dueBy = LocalDate.of(2026, 1, 31), paidOn = LocalDate.of(2026, 1, 10))
         dues(first, ada, "March", dueBy = LocalDate.of(2026, 3, 31), paidOn = LocalDate.of(2026, 3, 5))
@@ -78,11 +78,11 @@ class LoyaltyPersistenceTest {
     @Test
     fun `the referral chain and the two-member promotion read across processes`() {
         val first = process()
-        accept(first.commitJoin("Founder"))
+        accept(first.commit(NewJoin("Founder")))
         val founder = first.members().last()
-        accept(first.commitJoin("Scout", referrer = founder))
+        accept(first.commit(NewJoin("Scout", referrer = founder)))
         val scout = first.members().last()
-        accept(first.commitJoin("Recruit", referrer = scout))
+        accept(first.commit(NewJoin("Recruit", referrer = scout)))
 
         val second = process()
         val founder2 = second.read.member(1L)
@@ -90,7 +90,7 @@ class LoyaltyPersistenceTest {
         val recruit2 = second.read.member(3L)
         assertEquals(founder2, second.read(recruit2).foundingReferrer, "the chain walks stored references to its root")
 
-        accept(second.commitPurchase(recruit2, BigDecimal("150")))
+        accept(second.commit(NewPurchase(recruit2, BigDecimal("150"))))
         assertEquals("gold", second.read(recruit2).tier)
         assertEquals("advocate", second.read(scout2).tier, "the referrer's promotion wrote a different stored row")
         assertEquals(1, second.thankYouNotes().size)

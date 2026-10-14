@@ -17,13 +17,13 @@ import velle.generated.PaymentsSystem
 class Givens(private val sys: PaymentsSystem) : RequiredGivens {
 
     private fun card(): Card {
-        sys.commitContact("Grace", "grace@velle.example")
-        sys.commitCard("4242", LocalDate.of(2027, 1, 1), sys.contacts().last())
+        sys.commit(NewContact("Grace", "grace@velle.example"))
+        sys.commit(NewCard("4242", LocalDate.of(2027, 1, 1), sys.contacts().last()))
         return sys.cards().last()
     }
 
     private fun customer(withCard: Boolean = true): Customer {
-        sys.commitCustomer("Ada", if (withCard) card() else null)
+        sys.commit(NewCustomer("Ada", if (withCard) card() else null))
         return sys.customers().last()
     }
 
@@ -32,7 +32,7 @@ class Givens(private val sys: PaymentsSystem) : RequiredGivens {
         amount: BigDecimal = BigDecimal("100"),
         dueBy: LocalDate = LocalDate.of(2026, 2, 1),
     ): Order {
-        sys.commitPlaceOrder(customer(withCard), amount, dueBy, "12 Loop Ave")
+        sys.commit(NewPlaceOrder(customer(withCard), amount, dueBy, "12 Loop Ave"))
         return sys.orders().last()
     }
 
@@ -42,11 +42,11 @@ class Givens(private val sys: PaymentsSystem) : RequiredGivens {
     }
 
     private fun respond(attempt: ChargeAttempt, outcome: String) {
-        sys.commitProcessorVerdict(attempt, outcome)
+        sys.commit(NewProcessorVerdict(attempt, outcome))
     }
 
     override fun cardUpdate(): CardUpdate {
-        sys.commitCardUpdate(customer(withCard = false), card())
+        sys.commit(NewCardUpdate(customer(withCard = false), card()))
         return sys.cardUpdates().last()
     }
 
@@ -88,12 +88,12 @@ class Givens(private val sys: PaymentsSystem) : RequiredGivens {
     }
 
     override fun applicableAddressChange(): ChangeShippingAddress {
-        sys.commitChangeShippingAddress(order(withCard = false), "9 Corrected St")
+        sys.commit(NewChangeShippingAddress(order(withCard = false), "9 Corrected St"))
         return sys.changeShippingAddresss().last()
     }
 
     override fun refusedAddressChange(): ChangeShippingAddress {
-        sys.commitChangeShippingAddress(readyToShip(), "9 Corrected St")
+        sys.commit(NewChangeShippingAddress(readyToShip(), "9 Corrected St"))
         return sys.changeShippingAddresss().last()
     }
 
@@ -104,16 +104,16 @@ class Givens(private val sys: PaymentsSystem) : RequiredGivens {
     }
 
     override fun exitSettledOrder(order: Order) {
-        sys.commitIssueRefund(order, BigDecimal("40")) // the refund breaks settlement
+        sys.commit(NewIssueRefund(order, BigDecimal("40"))) // the refund breaks settlement
     }
 
     override fun manualCharge(): ManualCharge {
-        sys.commitManualCharge(order(withCard = false))
+        sys.commit(NewManualCharge(order(withCard = false)))
         return sys.manualCharges().last()
     }
 
     override fun extensionRequest(): ExtensionRequest {
-        sys.commitExtensionRequest(order(withCard = false))
+        sys.commit(NewExtensionRequest(order(withCard = false)))
         return sys.extensionRequests().last()
     }
 
@@ -144,6 +144,6 @@ class Givens(private val sys: PaymentsSystem) : RequiredGivens {
     }
 
     override fun issueRefund() {
-        sys.commitIssueRefund(settledOrder(), BigDecimal("40"))
+        sys.commit(NewIssueRefund(settledOrder(), BigDecimal("40")))
     }
 }

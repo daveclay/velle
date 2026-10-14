@@ -17,9 +17,9 @@ open class PaymentsApiTest {
     protected open fun newSystem(): PaymentsSystem = PaymentsSystem()
 
     private fun PaymentsSystem.cardedCustomer(): Customer {
-        commitContact("Grace", "grace@velle.example")
-        commitCard("4242", LocalDate.of(2027, 1, 1), contacts().last())
-        commitCustomer("Ada", cards().last())
+        commit(NewContact("Grace", "grace@velle.example"))
+        commit(NewCard("4242", LocalDate.of(2027, 1, 1), contacts().last()))
+        commit(NewCustomer("Ada", cards().last()))
         return customers().last()
     }
 
@@ -27,7 +27,7 @@ open class PaymentsApiTest {
         amount: String = "100",
         dueBy: LocalDate = LocalDate.of(2026, 2, 1),
     ): Order {
-        commitPlaceOrder(cardedCustomer(), BigDecimal(amount), dueBy, "12 Loop Ave")
+        commit(NewPlaceOrder(cardedCustomer(), BigDecimal(amount), dueBy, "12 Loop Ave"))
         return orders().last()
     }
 
@@ -43,7 +43,7 @@ open class PaymentsApiTest {
         assertEquals("grace@velle.example", sys.read(order).receiptEmail)
 
         // the processor approves — as its own later act
-        sys.commitProcessorVerdict(attempt, "approved")
+        sys.commit(NewProcessorVerdict(attempt, "approved"))
         with(sys) {
             assertTrue(sys.read(attempt).isSuccessfulCharge)
             assertTrue(sys.read(order).isSettledOrder)
@@ -65,11 +65,11 @@ open class PaymentsApiTest {
         val sys = newSystem()
         val order = sys.newOrder()
 
-        sys.commitChangeShippingAddress(order, "9 Corrected St")
+        sys.commit(NewChangeShippingAddress(order, "9 Corrected St"))
         assertEquals("9 Corrected St", sys.read(order).shippingAddress) // not ready yet: applied
 
-        sys.commitProcessorVerdict(sys.chargeAttempts().single(), "approved")
-        sys.commitChangeShippingAddress(order, "1 Too Late Rd")
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().single(), "approved"))
+        sys.commit(NewChangeShippingAddress(order, "1 Too Late Rd"))
         assertEquals("9 Corrected St", sys.read(order).shippingAddress) // frozen: refused
         assertEquals(1, sys.addressChangeRefusals().size)
         assertEquals("order is ready to ship", sys.read(sys.addressChangeRefusals().single()).reason)
@@ -83,15 +83,15 @@ open class PaymentsApiTest {
         // each verdict lands a moment later: retries are ordered by requestedOn, and a
         // data class reads every derived property, first(... by requestedOn) included
         sys.advanceSeconds(1)
-        sys.commitProcessorVerdict(sys.chargeAttempts().last(), "declined")
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), "declined"))
         assertEquals(2, sys.chargeAttempts().size) // the decline triggered a retry
 
         sys.advanceSeconds(1)
-        sys.commitProcessorVerdict(sys.chargeAttempts().last(), "error")
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), "error"))
         assertEquals(3, sys.chargeAttempts().size)
 
         sys.advanceSeconds(1)
-        sys.commitProcessorVerdict(sys.chargeAttempts().last(), "declined")
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), "declined"))
         assertEquals(3, sys.chargeAttempts().size) // budget spent: no fourth attempt
         with(sys) { assertTrue(sys.read(order).isExhaustedOrder) }
         assertEquals(1, sys.reservationReleases().size) // compensation fired
@@ -118,17 +118,17 @@ open class PaymentsApiTest {
     fun `refund reverses settlement and a manual charge drives a second episode`() {
         val sys = newSystem()
         val order = sys.newOrder()
-        sys.commitProcessorVerdict(sys.chargeAttempts().single(), "approved")
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().single(), "approved"))
         sys.tickNightly() // ship it
 
-        sys.commitIssueRefund(order, BigDecimal("100"))
+        sys.commit(NewIssueRefund(order, BigDecimal("100")))
         with(sys) { assertTrue(!sys.read(order).isSettledOrder) }
         assertEquals(1, sys.settlementReversals().size)
         assertEquals(1, sys.receipts().size) // the receipt survives its premise
 
         sys.advanceSeconds(1) // the manual charge is a later attempt than the first
-        sys.commitManualCharge(order)
-        sys.commitProcessorVerdict(sys.chargeAttempts().last(), "approved")
+        sys.commit(NewManualCharge(order))
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), "approved"))
         with(sys) { assertTrue(sys.read(order).isSettledOrder) }
         assertEquals(2, sys.receipts().size) // a second episode, a second receipt
     }
@@ -140,7 +140,7 @@ open class PaymentsApiTest {
         val order = sys.newOrder(dueBy = LocalDate.of(2025, 12, 15))
         assertEquals(1, sys.dunningFlags().size)
 
-        sys.commitExtensionRequest(order)
+        sys.commit(NewExtensionRequest(order))
         assertEquals(LocalDate.of(2026, 1, 15), sys.read(sys.paymentExtensions().single()).endsOn)
         sys.tickDaily()
         assertEquals(0, sys.paymentReminders().size) // grace period: no nagging
@@ -151,7 +151,7 @@ open class PaymentsApiTest {
         sys.tickDaily()
         assertEquals(1, sys.paymentReminders().size) // three-day lull per order
 
-        sys.commitProcessorVerdict(sys.chargeAttempts().last(), "approved")
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), "approved"))
         sys.tickDaily()
         assertEquals(1, sys.dunningResolutions().size) // the sweep closed the episode
         assertEquals(1, sys.paymentReminders().size)   // and the nagging stopped
@@ -160,8 +160,8 @@ open class PaymentsApiTest {
     @Test
     fun `derived odds and ends - firstAttemptedOn, surplus, refund reconciliation`() {
         val sys = newSystem()
-        sys.commitCustomer("Cardless", null)
-        sys.commitPlaceOrder(sys.customers().last(), BigDecimal("50"), LocalDate.of(2026, 2, 1), "3 Quiet Ln")
+        sys.commit(NewCustomer("Cardless", null))
+        sys.commit(NewPlaceOrder(sys.customers().last(), BigDecimal("50"), LocalDate.of(2026, 2, 1), "3 Quiet Ln"))
         val bare = sys.orders().last()
         assertNull(sys.read(bare).firstAttemptedOn) // never charged
         assertNull(sys.read(bare).receiptEmail)     // no card on file
@@ -169,17 +169,17 @@ open class PaymentsApiTest {
 
         val order = sys.newOrder(amount = "60")
         sys.advanceSeconds(1) // attempts are ordered by requestedOn: each lands a moment later
-        sys.commitProcessorVerdict(sys.chargeAttempts().last(), "declined")
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), "declined"))
         sys.advanceSeconds(1)
-        sys.commitProcessorVerdict(sys.chargeAttempts().last(), "approved")
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), "approved"))
         sys.advanceSeconds(1)
-        sys.commitManualCharge(order) // support double-charges by mistake
-        sys.commitProcessorVerdict(sys.chargeAttempts().last(), "approved")
+        sys.commit(NewManualCharge(order)) // support double-charges by mistake
+        sys.commit(NewProcessorVerdict(sys.chargeAttempts().last(), "approved"))
         // two approvals of 60 against a 60 order: settled with surplus
         assertEquals(0, sys.settledOrders().single().surplus.compareTo(BigDecimal("60")))
 
         sys.advanceSeconds(60) // the refund lands later than the failed attempt
-        sys.commitIssueRefund(order, BigDecimal("10"))
+        sys.commit(NewIssueRefund(order, BigDecimal("10")))
         with(sys) { assertTrue(sys.read(order).isRefundAfterFailure) } // refund after a failed charge
     }
 }

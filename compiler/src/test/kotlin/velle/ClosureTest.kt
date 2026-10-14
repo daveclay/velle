@@ -345,7 +345,9 @@ class ClosureTest {
         val newLine = src.substringAfter("data class NewOrderLine(").substringBefore(") {")
         assertTrue("order" !in newLine, newLine)
         assertTrue("val product: Ref<Product>" in newLine, newLine)
-        // the commit function takes the closure edge, absent by default
+        // the act's input value takes the closure edge, absent by default, and
+        // the commit overload takes the input value
         assertTrue("orderLines: List<NewOrderLine> = emptyList()" in src, src)
+        assertTrue("fun commit(input: NewOrder): Commit<NewOrder>" in src, src)
     }
 }

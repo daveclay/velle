@@ -8,7 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import velle.CommitResult
+import velle.Commit
 import velle.generated.GalleryStoreOverGeneric
 import velle.generated.GalleryStoreResolver
 import velle.generated.GallerySystem
@@ -59,7 +59,7 @@ class GalleryPersistenceTest {
     /** A fresh process over the same database: handles are session-local, rows are not. */
     private fun process(): GallerySystem = GallerySystem().also { SqliteStore.attach(it.system, conn) }
 
-    private fun accept(r: CommitResult) = assertIs<CommitResult.Accepted>(r, "refused: $r")
+    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
 
     private fun rows(sql: String): List<List<Any?>> =
         conn.createStatement().use { st ->
@@ -75,17 +75,17 @@ class GalleryPersistenceTest {
     @Test
     fun `a union-typed reference is stored with its concrete shape, and the join read matches on both`() {
         val first = process()
-        accept(first.commitMember("Ada"))
+        accept(first.commit(NewMember("Ada")))
         val ada = first.members().last()
-        accept(first.commitMember("Grace"))
+        accept(first.commit(NewMember("Grace")))
         val grace = first.members().last()
-        accept(first.commitPost(ada, "hello"))
+        accept(first.commit(NewPost(ada, "hello")))
         val post = first.posts().last()
-        accept(first.commitPhoto(ada, "sunset"))
+        accept(first.commit(NewPhoto(ada, "sunset")))
         val photo = first.photos().last()
-        accept(first.commitComment(post, grace, "hi"))
-        accept(first.commitComment(photo, grace, "lovely"))
-        accept(first.commitComment(photo, ada, "thanks"))
+        accept(first.commit(NewComment(post, grace, "hi")))
+        accept(first.commit(NewComment(photo, grace, "lovely")))
+        accept(first.commit(NewComment(photo, ada, "thanks")))
 
         // Post#1 and Photo#1 share a key; the discriminator column tells them apart
         assertEquals(
@@ -109,27 +109,27 @@ class GalleryPersistenceTest {
 
         // entry into Popular is decided against stored rows: the post's second
         // comment is an entry, the photo's third is not
-        accept(second.commitComment(post2, grace2, "again"))
+        accept(second.commit(NewComment(post2, grace2, "again")))
         assertEquals(setOf(post2.key, photo2.key), second.popularityNotices().map { second.read(it).content.key }.toSet())
-        accept(second.commitComment(photo2, grace2, "three"))
+        accept(second.commit(NewComment(photo2, grace2, "three")))
         assertEquals(2, second.popularityNotices().size)
     }
 
     @Test
     fun `the never's narrowing through the union is checked over stored rows`() {
         val first = process()
-        accept(first.commitMember("Ada"))
-        accept(first.commitPost(first.members().last(), "hello"))
-        accept(first.commitPhoto(first.members().last(), "sunset"))
+        accept(first.commit(NewMember("Ada")))
+        accept(first.commit(NewPost(first.members().last(), "hello")))
+        accept(first.commit(NewPhoto(first.members().last(), "sunset")))
 
         val second = process()
         val ada = second.read.member(1L)
         val post = second.read.post(1L)
         val photo = second.read.photo(1L)
-        val refused = second.commitComment(post, ada, "me again")
-        assertIs<CommitResult.Refused>(refused)
+        val refused = second.commit(NewComment(post, ada, "me again"))
+        assertIs<Commit.Refused<*>>(refused)
         assertEquals(listOf(listOf(0L)), rows("""SELECT COUNT(*) FROM Comment"""), "a refused act reaches no row")
-        accept(second.commitComment(photo, ada, "my own photo"))
+        accept(second.commit(NewComment(photo, ada, "my own photo")))
         assertEquals(listOf(listOf(1L)), rows("""SELECT COUNT(*) FROM Comment"""))
     }
 }

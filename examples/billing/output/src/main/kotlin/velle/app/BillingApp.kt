@@ -1,6 +1,6 @@
 package velle.app
 
-import velle.CommitResult
+import velle.Commit
 import velle.generated.*
 import velle.generated.BillingSystem
 import velle.sqlite.SqliteStore
@@ -41,34 +41,34 @@ fun main() {
         // record is what their rules materialize, so the app reads it back
         // through the typed accessors (identity is the store's,
         // investigate_runtime.md §8)
-        accept(billing.commitSignUp("Ada Lovelace", "ada@example.com"))
+        accept(billing.commit(NewSignUp("Ada Lovelace", "ada@example.com")))
         val cust = billing.customers().last()
-        accept(billing.commitBillCustomer(cust, due = today().plusDays(30)))
+        accept(billing.commit(NewBillCustomer(cust, due = today().plusDays(30))))
         val inv = billing.invoices().last()
-        accept(billing.commitLineItem(inv, "Design work", BigDecimal("1200.00"), 1))
-        accept(billing.commitLineItem(inv, "Hosting", BigDecimal("50.00"), 2))
-        accept(billing.commitIssuance(inv))
+        accept(billing.commit(NewLineItem(inv, "Design work", BigDecimal("1200.00"), 1)))
+        accept(billing.commit(NewLineItem(inv, "Hosting", BigDecimal("50.00"), 2)))
+        accept(billing.commit(NewIssuance(inv)))
         println("committed customer #${cust.key.value}, invoice #${inv.key.value} with two line items, issued")
 
         // typed reads: derived properties computed by demand-hydrating rows from SQLite
         billing.read(inv).let { println("   invoice.total=${it.total}  balance=${it.balance}  status=${it.status}") }
 
         // a `never` refusal: rejected at the boundary, nothing reaches the DB
-        val refused = billing.commitSubmitPayment(inv, BigDecimal.ZERO)
+        val refused = billing.commit(NewSubmitPayment(inv, BigDecimal.ZERO))
         println("zero payment -> $refused")
 
         // payment in full: one envelope = Payment + largestPayment assign + Receipt,
         // landed as one SQLite transaction; EmailReceipt is `after commit` — its
         // ReceiptEmail is a second envelope, a second SQLite transaction
-        accept(billing.commitSubmitPayment(inv, BigDecimal("1300.00")))
+        accept(billing.commit(NewSubmitPayment(inv, BigDecimal("1300.00"))))
         println("paid in full -> status=${billing.read(inv).status}")
         println()
 
         // an already-overdue invoice, then the weekly tick sweeps it — the tick's
         // candidate query brings back overdue invoices from SQLite
-        accept(billing.commitBillCustomer(cust, due = today().minusDays(10)))
+        accept(billing.commit(NewBillCustomer(cust, due = today().minusDays(10))))
         val overdue = billing.invoices().last()
-        accept(billing.commitLineItem(overdue, "Old work", BigDecimal("99.00"), 1))
+        accept(billing.commit(NewLineItem(overdue, "Old work", BigDecimal("99.00"), 1)))
         billing.tickWeekly()
         println("committed overdue invoice #${overdue.key.value}, ran the weekly tick")
         println()
@@ -99,9 +99,9 @@ fun main() {
 
 private fun today(): LocalDate = LocalDate.now(ZoneOffset.UTC) // the system's declared zone (UTC)
 
-private fun accept(r: CommitResult): CommitResult.Accepted = when (r) {
-    is CommitResult.Accepted -> r
-    is CommitResult.Refused -> error("refused: ${r.reason}")
+private fun accept(r: Commit<*>): Commit.Accepted<*> = when (r) {
+    is Commit.Accepted<*> -> r
+    is Commit.Refused<*> -> error("refused: ${r.reason}")
 }
 
 private fun count(conn: Connection, table: String): Long =

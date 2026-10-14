@@ -59,20 +59,20 @@ open class GeneratedApiTest {
     @Test
     fun `the typed surface drives the payment cascade`() {
         val sys = newSystem()
-        assertIs<CommitResult.Accepted>(sys.commitSignUp("Ada", "a@x.com"))
+        assertIs<Commit.Accepted<*>>(sys.commit(NewSignUp("Ada", "a@x.com")))
         val ada = sys.customers().single()
 
-        assertIs<CommitResult.Accepted>(sys.commitBillCustomer(ada, LocalDate.of(2026, 2, 1)))
+        assertIs<Commit.Accepted<*>>(sys.commit(NewBillCustomer(ada, LocalDate.of(2026, 2, 1))))
         val invoice = sys.invoices().single()
-        assertIs<CommitResult.Accepted>(
-            sys.commitLineItem(invoice, "widgets", BigDecimal("100"), 2))
+        assertIs<Commit.Accepted<*>>(
+            sys.commit(NewLineItem(invoice, "widgets", BigDecimal("100"), 2)))
 
         assertEquals(0, sys.read(invoice).total.compareTo(BigDecimal("200")))
         assertEquals("open", sys.read(invoice).status)
         assertEquals(2, sys.read(sys.read(invoice).lineItems.single()).quantity)
         assertEquals("Ada", sys.read(sys.read(invoice).customer).name)
 
-        assertIs<CommitResult.Accepted>(sys.commitSubmitPayment(invoice, BigDecimal("200")))
+        assertIs<Commit.Accepted<*>>(sys.commit(NewSubmitPayment(invoice, BigDecimal("200"))))
         with(sys) { assertTrue(sys.read(invoice).isPaidInvoice) }
         assertEquals("paid", sys.read(invoice).status)
         assertEquals(1, sys.receipts().size)
@@ -84,27 +84,33 @@ open class GeneratedApiTest {
     @Test
     fun `refusals surface through the typed commits`() {
         val sys = newSystem()
-        sys.commitSignUp("Ada", "a@x.com")
-        sys.commitBillCustomer(sys.customers().single(), LocalDate.of(2026, 2, 1))
-        val refused = sys.commitSubmitPayment(sys.invoices().single(), BigDecimal.ZERO)
-        assertIs<CommitResult.Refused>(refused)
+        sys.commit(NewSignUp("Ada", "a@x.com"))
+        sys.commit(NewBillCustomer(sys.customers().single(), LocalDate.of(2026, 2, 1)))
+        val input = NewSubmitPayment(sys.invoices().single(), BigDecimal.ZERO)
+        val refused = assertIs<Commit.Refused<NewSubmitPayment>>(sys.commit(input))
+        // the verdict carries what was refused as the engineer's own type, not a map
+        assertEquals(input, refused.input)
+        assertEquals(0, refused.input.amount.compareTo(BigDecimal.ZERO))
         assertEquals(0, sys.payments().size)
+        val accepted = assertIs<Commit.Accepted<NewSubmitPayment>>(
+            sys.commit(NewSubmitPayment(sys.invoices().single(), BigDecimal("5"))))
+        assertEquals(0, accepted.input.amount.compareTo(BigDecimal("5")))
     }
 
     @Test
     fun `refinement views expose captures`() {
         val sys = newSystem()
-        sys.commitSignUp("Ada", "a@x.com")
-        sys.commitBillCustomer(sys.customers().single(), LocalDate.of(2026, 2, 1))
+        sys.commit(NewSignUp("Ada", "a@x.com"))
+        sys.commit(NewBillCustomer(sys.customers().single(), LocalDate.of(2026, 2, 1)))
         val invoice = sys.invoices().single()
 
-        sys.commitArchiveRequest(invoice)
+        sys.commit(NewArchiveRequest(invoice))
         val archived = sys.archivedInvoices().single()
         assertEquals(LocalDate.of(2026, 1, 1), archived.archivedOn)
         assertEquals(invoice, (sys.read(archived) as? Invoice))
 
         sys.advanceDays(2)
-        sys.commitUnarchiveRequest(invoice)
+        sys.commit(NewUnarchiveRequest(invoice))
         assertEquals(LocalDate.of(2026, 1, 1), sys.read(sys.unarchiveNotices().single()).wasArchivedOn)
         assertEquals(0, sys.archivedInvoices().size)
     }
@@ -112,9 +118,9 @@ open class GeneratedApiTest {
     @Test
     fun `ticks drive the sweep through the typed surface`() {
         val sys = newSystem()
-        sys.commitSignUp("Ada", "a@x.com")
-        sys.commitBillCustomer(sys.customers().single(), LocalDate.of(2025, 12, 1))
-        sys.commitLineItem(sys.invoices().single(), "widgets", BigDecimal("50"), 1)
+        sys.commit(NewSignUp("Ada", "a@x.com"))
+        sys.commit(NewBillCustomer(sys.customers().single(), LocalDate.of(2025, 12, 1)))
+        sys.commit(NewLineItem(sys.invoices().single(), "widgets", BigDecimal("50"), 1))
 
         with(sys) { assertTrue(sys.read(invoices().single()).isOverdueInvoice) }
         sys.tickWeekly()

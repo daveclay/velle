@@ -28,7 +28,7 @@ open class QueryApiTest {
     open fun newSystem(): BillingSystem = BillingSystem()
 
     private fun BillingSystem.customer(name: String, email: String = "${name.lowercase()}@example.com"): Customer {
-        commitSignUp(name, email)
+        commit(NewSignUp(name, email))
         return customers().last()
     }
 
@@ -37,9 +37,9 @@ open class QueryApiTest {
         due: LocalDate,
         amount: BigDecimal? = null,
     ): Invoice {
-        commitBillCustomer(customer, due)
+        commit(NewBillCustomer(customer, due))
         val inv = invoices().last()
-        amount?.let { commitLineItem(inv, "widgets", it, 1) }
+        amount?.let { commit(NewLineItem(inv, "widgets", it, 1)) }
         return inv
     }
 
@@ -55,7 +55,7 @@ open class QueryApiTest {
         sys.invoice(ada, d1, BigDecimal("10"))
         sys.invoice(ada, d2) // no balance: excluded
         val paid = sys.invoice(ada, d1, BigDecimal("50"))
-        sys.commitSubmitPayment(paid, BigDecimal("50")) // paid off: excluded
+        sys.commit(NewSubmitPayment(paid, BigDecimal("50"))) // paid off: excluded
 
         val unpaid: List<Invoice> = sys.read.invoices
             .where { balance gt 0 and (due lte d3) }
@@ -224,7 +224,7 @@ open class QueryApiTest {
         assertEquals(0, BigDecimal("10").compareTo(before.balance))
         assertEquals(false, before.isPaidInvoice)
 
-        sys.commitSubmitPayment(inv, BigDecimal("10"))
+        sys.commit(NewSubmitPayment(inv, BigDecimal("10")))
         assertEquals(0, BigDecimal("10").compareTo(before.balance), "a data class does not change after the fact")
         val after = sys.read(inv)
         assertEquals(0, BigDecimal.ZERO.compareTo(after.balance))
@@ -236,7 +236,7 @@ open class QueryApiTest {
         assertNull(sys.read.overdueInvoice(inv))
 
         // by store key: only meaningful over a store; in memory the handle is the identity
-        val key = (sys.commitBillCustomer(ada, d2) as CommitResult.Accepted).storeKey
+        val key = (sys.commit(NewBillCustomer(ada, d2)) as Commit.Accepted<*>).storeKey
         if (key != null) assertEquals(d2, sys.read.invoice(StoreKey(key)).due)
     }
 

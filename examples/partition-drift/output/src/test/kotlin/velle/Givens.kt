@@ -7,60 +7,60 @@ import velle.generated.*
 class Givens(private val sys: PartitionDriftSystem) : RequiredGivens {
 
     override fun createNote() {
-        sys.commitCreateNote("minutes", "v1")
+        sys.commit(NewCreateNote("minutes", "v1"))
     }
 
     private fun note(): Note {
-        sys.commitCreateNote("minutes", "v1")
+        sys.commit(NewCreateNote("minutes", "v1"))
         return sys.notes().last()
     }
 
     private fun lockedNote(): Note {
         val n = note()
-        sys.commitLockNote(n)
+        sys.commit(NewLockNote(n))
         return n
     }
 
     override fun lockNote(): LockNote {
-        sys.commitLockNote(note())
+        sys.commit(NewLockNote(note()))
         return sys.lockNotes().last()
     }
 
     override fun unlockNote(): UnlockNote {
-        sys.commitUnlockNote(lockedNote())
+        sys.commit(NewUnlockNote(lockedNote()))
         return sys.unlockNotes().last()
     }
 
     override fun renameText(): RenameText {
-        sys.commitRenameText(note(), "v2")
+        sys.commit(NewRenameText(note(), "v2"))
         return sys.renameTexts().last()
     }
 
     override fun applicableBareEdit(): BareEdit {
-        sys.commitBareEdit(note(), "v2")
+        sys.commit(NewBareEdit(note(), "v2"))
         return sys.bareEdits().last()
     }
 
     override fun refusedBareEdit(): BareEdit {
-        sys.commitBareEdit(lockedNote(), "v2")
+        sys.commit(NewBareEdit(lockedNote(), "v2"))
         return sys.bareEdits().last()
     }
 
     override fun applicableSafeEdit(): SafeEdit {
-        sys.commitSafeEdit(note(), "agenda")
+        sys.commit(NewSafeEdit(note(), "agenda"))
         return sys.safeEdits().last()
     }
 
     override fun refusedSafeEdit(): SafeEdit {
-        sys.commitSafeEdit(lockedNote(), "agenda")
+        sys.commit(NewSafeEdit(lockedNote(), "agenda"))
         return sys.safeEdits().last()
     }
 
     override fun applicableTransientEdit() {
-        sys.commitTransientEdit(note(), "agenda")
+        sys.commit(NewTransientEdit(note(), "agenda"))
     }
 
     override fun refusedTransientEdit() {
-        sys.commitTransientEdit(lockedNote(), "agenda")
+        sys.commit(NewTransientEdit(lockedNote(), "agenda"))
     }
 }

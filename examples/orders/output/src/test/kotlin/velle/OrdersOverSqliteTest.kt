@@ -51,7 +51,7 @@ class OrdersPersistenceTest {
 
     private fun process(): OrdersSystem = OrdersSystem().also { SqliteStore.attach(it.system, conn) }
 
-    private fun accept(r: CommitResult) = assertIs<CommitResult.Accepted>(r, "refused: $r")
+    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
 
     private fun rows(sql: String): List<List<Any?>> =
         conn.createStatement().use { st ->
@@ -65,8 +65,8 @@ class OrdersPersistenceTest {
         }
 
     private fun OrdersSystem.cardedProduct(): Pair<Customer, Product> {
-        accept(commitCustomer("Ada"))
-        accept(commitProduct("SKU-1"))
+        accept(commit(NewCustomer("Ada")))
+        accept(commit(NewProduct("SKU-1")))
         return customers().last() to products().last()
     }
 
@@ -74,17 +74,17 @@ class OrdersPersistenceTest {
     fun `a closure lands as one storage transaction and reads back through its inverse`() {
         val first = process()
         val (ada, prod) = first.cardedProduct()
-        accept(first.commitOrder(
+        accept(first.commit(NewOrder(
             customer = ada,
             placedOn = LocalDate.parse("2026-08-21"),
             orderLines = listOf(
-                OrdersSystem.NewOrderLine(
+                NewOrderLine(
                     product = prod, quantity = 2,
-                    customizations = listOf(OrdersSystem.NewCustomization(note = "gift wrap")),
+                    customizations = listOf(NewCustomization(note = "gift wrap")),
                 ),
-                OrdersSystem.NewOrderLine(product = prod, quantity = 3),
+                NewOrderLine(product = prod, quantity = 3),
             ),
-        ))
+        )))
 
         // back-references were pending refs at commit time, resolved to the minted keys
         assertEquals(listOf(listOf(1L, 1L), listOf(2L, 1L)), rows("""SELECT id, "order" FROM OrderLine ORDER BY id"""))
@@ -104,15 +104,15 @@ class OrdersPersistenceTest {
     fun `a refused closure leaves storage untouched`() {
         val first = process()
         val (ada, prod) = first.cardedProduct()
-        val r = first.commitOrder(
+        val r = first.commit(NewOrder(
             customer = ada,
             placedOn = LocalDate.parse("2026-08-21"),
             orderLines = listOf(
-                OrdersSystem.NewOrderLine(product = prod, quantity = 2),
-                OrdersSystem.NewOrderLine(product = prod, quantity = 0),
+                NewOrderLine(product = prod, quantity = 2),
+                NewOrderLine(product = prod, quantity = 0),
             ),
-        )
-        assertIs<CommitResult.Refused>(r)
+        ))
+        assertIs<Commit.Refused<*>>(r)
         for (table in listOf("Order", "OrderLine", "Customization", "Reservation"))
             assertEquals(listOf(listOf(0L)), rows("""SELECT COUNT(*) FROM "$table""""), "$table rows after a refused closure")
         assertNull(rows("""SELECT MAX(id) FROM "Order"""").single().single(), "no key was minted")

@@ -53,7 +53,7 @@ class MembershipPersistenceTest {
 
     private fun process(): MembershipSystem = MembershipSystem().also { SqliteStore.attach(it.system, conn) }
 
-    private fun accept(r: CommitResult) = assertIs<CommitResult.Accepted>(r, "refused: $r")
+    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
 
     private fun rows(sql: String): List<List<Any?>> =
         conn.createStatement().use { st ->
@@ -67,8 +67,8 @@ class MembershipPersistenceTest {
         }
 
     private fun MembershipSystem.ada(): Member {
-        accept(commitPlan("Standard", BigDecimal("20")))
-        accept(commitSignUp("Ada", "Ada@Example.com", plans().last()))
+        accept(commit(NewPlan("Standard", BigDecimal("20"))))
+        accept(commit(NewSignUp("Ada", "Ada@Example.com", plans().last())))
         return members().last()
     }
 
@@ -76,11 +76,11 @@ class MembershipPersistenceTest {
     fun `the email ledger, a capture, and its exit read across processes`() {
         val first = process()
         val ada = first.ada()
-        accept(first.commitChangeEmail(ada, "New@Example.com"))
-        accept(first.commitAgent("Grace", "grace@velle.example"))
+        accept(first.commit(NewChangeEmail(ada, "New@Example.com")))
+        accept(first.commit(NewAgent("Grace", "grace@velle.example")))
         val grace = first.agents().last()
-        accept(first.commitRaiseTicket(ada, "billing question", LocalDate.of(2026, 3, 1), "normal"))
-        accept(first.commitCloseTicket(first.tickets().last(), grace))
+        accept(first.commit(NewRaiseTicket(ada, "billing question", LocalDate.of(2026, 3, 1), "normal")))
+        accept(first.commit(NewCloseTicket(first.tickets().last(), grace)))
         assertEquals(listOf(listOf(1L)), rows("""SELECT closedBy FROM capture_ClosedTicket"""), "the capture landed as a row")
 
         val second = process()
@@ -92,7 +92,7 @@ class MembershipPersistenceTest {
         assertTrue(second.system.isMember(second.system.idOf(ticket), "ClosedTicket"))
         assertEquals(grace2, second.closedTickets().single().closedBy, "the capture hydrates from its row")
 
-        accept(second.commitReopenTicket(ticket))
+        accept(second.commit(NewReopenTicket(ticket)))
         assertTrue(!second.system.isMember(second.system.idOf(ticket), "ClosedTicket"))
         assertEquals(grace2, second.read(second.reopenNotices().single()).reassignTo, "the exit rule was the capture's last reader")
         assertEquals(emptyList(), rows("""SELECT closedBy FROM capture_ClosedTicket"""), "the retraction deleted the row")
@@ -102,7 +102,7 @@ class MembershipPersistenceTest {
     fun `the monthly renewal and the balance fold run from storage`() {
         val first = process()
         val ada = first.ada()
-        accept(first.commitMakeDeposit(ada, BigDecimal("30")))
+        accept(first.commit(NewMakeDeposit(ada, BigDecimal("30"))))
         assertEquals(0, first.read(ada).balance.compareTo(BigDecimal("30")))
 
         val second = process()

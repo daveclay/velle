@@ -47,13 +47,38 @@ class Instance(
 )
 
 sealed interface CommitResult {
-    /** [id] is the session-local handle (what typed views wrap); [storeKey] is
+    /** [id] is the session-local handle; [storeKey] is
      *  the store-assigned row key when a store is connected and the act
      *  persisted — what the application's own queries key on. */
     data class Accepted(val id: Long, val storeKey: Any? = null) : CommitResult
     /** [reason] is the rendered message; [rejection] is the same as data when a
      *  `never` refused the act (README §21), null for a type-level refusal. */
     data class Refused(val reason: String, val rejection: Rejection? = null) : CommitResult
+}
+
+/**
+ * A typed commit's outcome (README §22, "External input"): the generated
+ * surface commits one typed input value per act and hands back the same
+ * value with the verdict, so a refusal holds what was refused as the
+ * engineer's own type — never a map — and an acceptance holds what was
+ * accepted beside its receipt. The runtime stays generic in [I]: it never
+ * depends on generated code.
+ */
+sealed interface Commit<out I> {
+    /** The input value the caller committed, exactly as it was handed in. */
+    val input: I
+    /** [id] is the session-local handle; [storeKey] is the store-assigned row
+     *  key when a store is connected and the act persisted. */
+    data class Accepted<out I>(override val input: I, val id: Long, val storeKey: Any? = null) : Commit<I>
+    /** [reason] is the rendered message; [rejection] is the same as data when a
+     *  `never` refused the act (README §21), null for a type-level refusal. */
+    data class Refused<out I>(override val input: I, val reason: String, val rejection: Rejection? = null) : Commit<I>
+}
+
+/** Attach the typed input to the runtime's untyped verdict. */
+fun <I> CommitResult.carrying(input: I): Commit<I> = when (this) {
+    is CommitResult.Accepted -> Commit.Accepted(input, id, storeKey)
+    is CommitResult.Refused -> Commit.Refused(input, reason, rejection)
 }
 
 class VelleRuntimeError(message: String) : Exception(message)

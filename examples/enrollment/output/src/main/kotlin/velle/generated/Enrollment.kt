@@ -20,76 +20,51 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitAdvisor(name: String): CommitResult =
-        system.commit("Advisor", buildMap {
-            put("name", name)
-        })
+    fun commit(input: NewAdvisor): Commit<NewAdvisor> =
+        system.commit("Advisor", input.raw(system)).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCourse(title: String, capacity: Int): CommitResult =
-        system.commit("Course", buildMap {
-            put("title", title)
-            put("capacity", capacity)
-        })
+    fun commit(input: NewCourse): Commit<NewCourse> =
+        system.commit("Course", input.raw(system)).carrying(input)
 
     /** Queue key: [student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitStudent(name: String, tags: List<String>, courses: List<Ref<Course>>, advisor: Ref<Advisor>? = null): CommitResult =
-        system.commit("Student", buildMap {
-            put("name", name)
-            put("tags", tags)
-            put("courses", courses.map { system.idOf(it) })
-            advisor?.let { put("advisor", system.idOf(it)) }
-        })
+    fun commit(input: NewStudent): Commit<NewStudent> =
+        system.commit("Student", input.raw(system)).carrying(input)
 
     /** Queue keys: [setEnrollment.student], [setEnrollment.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitSetEnrollment(student: Ref<Student>, courses: List<Ref<Course>>): CommitResult =
-        system.commit("SetEnrollment", buildMap {
-            put("student", system.idOf(student))
-            put("courses", courses.map { system.idOf(it) })
-        })
+    fun commit(input: NewSetEnrollment): Commit<NewSetEnrollment> =
+        system.commit("SetEnrollment", input.raw(system)).carrying(input)
 
     /** Queue keys: [enroll.student], [enroll.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitEnroll(student: Ref<Student>, course: Ref<Course>): CommitResult =
-        system.commit("Enroll", buildMap {
-            put("student", system.idOf(student))
-            put("course", system.idOf(course))
-        })
+    fun commit(input: NewEnroll): Commit<NewEnroll> =
+        system.commit("Enroll", input.raw(system)).carrying(input)
 
     /** Queue keys: [drop.student], [drop.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitDrop(student: Ref<Student>, course: Ref<Course>): CommitResult =
-        system.commit("Drop", buildMap {
-            put("student", system.idOf(student))
-            put("course", system.idOf(course))
-        })
+    fun commit(input: NewDrop): Commit<NewDrop> =
+        system.commit("Drop", input.raw(system)).carrying(input)
 
     /** Queue keys: [tag.student], [tag.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitTag(student: Ref<Student>, tag: String): CommitResult =
-        system.commit("Tag", buildMap {
-            put("student", system.idOf(student))
-            put("tag", tag)
-        })
+    fun commit(input: NewTag): Commit<NewTag> =
+        system.commit("Tag", input.raw(system)).carrying(input)
 
     /** Queue keys: [assignAdvisor.advisor] — plus system-wide width below.
      *  System-wide over Student — writes a Student whose 'advisor' reference the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitAssignAdvisor(advisor: Ref<Advisor>, students: List<Ref<Student>>): CommitResult =
-        system.commit("AssignAdvisor", buildMap {
-            put("advisor", system.idOf(advisor))
-            put("students", students.map { system.idOf(it) })
-        })
+    fun commit(input: NewAssignAdvisor): Commit<NewAssignAdvisor> =
+        system.commit("AssignAdvisor", input.raw(system)).carrying(input)
 
     fun advisors(): List<Advisor> = system.instancesOf("Advisor").map { materializeAdvisor(it) }
     fun courses(): List<Course> = system.instancesOf("Course").map { materializeCourse(it) }
@@ -293,6 +268,91 @@ never (Course where capacity < 0)
 """
     }
 }
+
+// ── act inputs (README §22, "External input"): one typed value per act,
+// every stored field the committer supplies and nothing else ──
+data class NewAdvisor(
+    val name: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+    }
+}
+
+data class NewCourse(
+    val title: String,
+    val capacity: Int,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("title", title)
+        put("capacity", capacity)
+    }
+}
+
+data class NewStudent(
+    val name: String,
+    val tags: List<String>,
+    val courses: List<Ref<Course>>,
+    val advisor: Ref<Advisor>? = null,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("tags", tags)
+        put("courses", courses.map { system.idOf(it) })
+        advisor?.let { put("advisor", system.idOf(it)) }
+    }
+}
+
+data class NewSetEnrollment(
+    val student: Ref<Student>,
+    val courses: List<Ref<Course>>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("student", system.idOf(student))
+        put("courses", courses.map { system.idOf(it) })
+    }
+}
+
+data class NewEnroll(
+    val student: Ref<Student>,
+    val course: Ref<Course>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("student", system.idOf(student))
+        put("course", system.idOf(course))
+    }
+}
+
+data class NewDrop(
+    val student: Ref<Student>,
+    val course: Ref<Course>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("student", system.idOf(student))
+        put("course", system.idOf(course))
+    }
+}
+
+data class NewTag(
+    val student: Ref<Student>,
+    val tag: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("student", system.idOf(student))
+        put("tag", tag)
+    }
+}
+
+data class NewAssignAdvisor(
+    val advisor: Ref<Advisor>,
+    val students: List<Ref<Student>>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("advisor", system.idOf(advisor))
+        put("students", students.map { system.idOf(it) })
+    }
+}
+
 
 // ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,

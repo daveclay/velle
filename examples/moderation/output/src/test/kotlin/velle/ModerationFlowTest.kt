@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import velle.CommitResult
+import velle.Commit
 import velle.generated.ModerationSystem
 
 /**
@@ -22,15 +22,15 @@ open class ModerationFlowTest {
     protected open fun newSystem(): ModerationSystem = ModerationSystem()
     protected val sys: ModerationSystem by lazy { newSystem() }
 
-    private fun accept(r: CommitResult) = assertIs<CommitResult.Accepted>(r, "refused: $r")
+    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
 
     private fun seller(name: String): Seller {
-        accept(sys.commitSeller(name))
+        accept(sys.commit(NewSeller(name)))
         return sys.sellers().last()
     }
 
     private fun listing(seller: Seller, title: String): Listing {
-        accept(sys.commitListing(title, seller))
+        accept(sys.commit(NewListing(title, seller)))
         return sys.listings().last()
     }
 
@@ -38,10 +38,10 @@ open class ModerationFlowTest {
     fun `discarding a draft deletes the listing and leaves the records the rules made`() {
         val ada = seller("Ada")
         val lamp = listing(ada, "brass lamp")
-        accept(sys.commitListingReport(lamp, "brass lamp", "spam"))
+        accept(sys.commit(NewListingReport(lamp, "brass lamp", "spam")))
         val report = sys.listingReports().single()
 
-        accept(sys.commitDiscardDraft(lamp, "duplicate"))
+        accept(sys.commit(NewDiscardDraft(lamp, "duplicate")))
 
         assertEquals(emptyList(), sys.listings(), "the row is gone")
         assertEquals(emptyList(), sys.read(ada).listings, "and so is the inverse's view of it")
@@ -61,11 +61,11 @@ open class ModerationFlowTest {
     fun `a published listing is undeletable - the discard is refused as data`() {
         val ada = seller("Ada")
         val lamp = listing(ada, "brass lamp")
-        accept(sys.commitPublish(lamp))
+        accept(sys.commit(NewPublish(lamp)))
         assertEquals(1, sys.publicationNotices().size)
         assertEquals(1, sys.draftClosures().size)
 
-        accept(sys.commitDiscardDraft(lamp, "too late"))
+        accept(sys.commit(NewDiscardDraft(lamp, "too late")))
         assertEquals("too late", sys.read(sys.discardRefusals().single()).reason)
         assertEquals(listOf(lamp), sys.listings(), "the listing stands")
         assertEquals(0, sys.discardRecords().size)
@@ -77,9 +77,9 @@ open class ModerationFlowTest {
         val ada = seller("Ada")
         val draft = listing(ada, "draft lamp")
         val published = listing(ada, "published lamp")
-        accept(sys.commitPublish(published))
+        accept(sys.commit(NewPublish(published)))
 
-        accept(sys.commitCloseAccount(ada))
+        accept(sys.commit(NewCloseAccount(ada)))
 
         assertEquals(emptyList(), sys.sellers())
         assertEquals(listOf(published), sys.listings(), "the draft was swept, the published listing stays")
@@ -99,10 +99,10 @@ open class ModerationFlowTest {
     fun `a report outlives its listing by copying what must survive, and the reporter is told once`() {
         val ada = seller("Ada")
         val lamp = listing(ada, "brass lamp")
-        accept(sys.commitListingReport(lamp, "brass lamp", "counterfeit"))
+        accept(sys.commit(NewListingReport(lamp, "brass lamp", "counterfeit")))
         val report = sys.listingReports().single()
 
-        accept(sys.commitCloseAccount(ada)) // the seller's closure sweeps the draft
+        accept(sys.commit(NewCloseAccount(ada))) // the seller's closure sweeps the draft
         assertNull(sys.read(report).listing)
         assertEquals("brass lamp", sys.read(report).listingTitle)
         assertEquals(1, sys.reporterNotices().size)

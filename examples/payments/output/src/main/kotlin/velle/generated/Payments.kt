@@ -25,11 +25,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitContact(name: String, email: String): CommitResult =
-        system.commit("Contact", buildMap {
-            put("name", name)
-            put("email", email)
-        })
+    fun commit(input: NewContact): Commit<NewContact> =
+        system.commit("Contact", input.raw(system)).carrying(input)
 
     /** Queue keys: [card.billingContact] — plus system-wide width below.
      *  System-wide over Order — reads Order.customer with no path back to any key (unexamined (A5)).
@@ -77,12 +74,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over DunningResolution — consults DunningResolution through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCard(number: String, expiresOn: LocalDate, billingContact: Ref<Contact>? = null): CommitResult =
-        system.commit("Card", buildMap {
-            put("number", number)
-            put("expiresOn", expiresOn)
-            billingContact?.let { put("billingContact", system.idOf(it)) }
-        })
+    fun commit(input: NewCard): Commit<NewCard> =
+        system.commit("Card", input.raw(system)).carrying(input)
 
     /** Queue keys: [customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
@@ -111,11 +104,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCustomer(name: String, card: Ref<Card>? = null): CommitResult =
-        system.commit("Customer", buildMap {
-            put("name", name)
-            card?.let { put("card", system.idOf(it)) }
-        })
+    fun commit(input: NewCustomer): Commit<NewCustomer> =
+        system.commit("Customer", input.raw(system)).carrying(input)
 
     /** Queue keys: [cardUpdate.card], [cardUpdate.customer], [cardUpdate.customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
@@ -144,11 +134,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitCardUpdate(customer: Ref<Customer>, card: Ref<Card>): CommitResult =
-        system.commit("CardUpdate", buildMap {
-            put("customer", system.idOf(customer))
-            put("card", system.idOf(card))
-        })
+    fun commit(input: NewCardUpdate): Commit<NewCardUpdate> =
+        system.commit("CardUpdate", input.raw(system)).carrying(input)
 
     /** Queue keys: [placeOrder.customer], [placeOrder.customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
@@ -177,13 +164,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPlaceOrder(customer: Ref<Customer>, amount: BigDecimal, dueBy: LocalDate, shippingAddress: String): CommitResult =
-        system.commit("PlaceOrder", buildMap {
-            put("customer", system.idOf(customer))
-            put("amount", amount)
-            put("dueBy", dueBy)
-            put("shippingAddress", shippingAddress)
-        })
+    fun commit(input: NewPlaceOrder): Commit<NewPlaceOrder> =
+        system.commit("PlaceOrder", input.raw(system)).carrying(input)
 
     /** Queue keys: [processorVerdict.attempt] — plus system-wide width below.
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
@@ -231,20 +213,14 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeAttempt — consults ChargeAttempt through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitProcessorVerdict(attempt: Ref<ChargeAttempt>, outcome: String): CommitResult =
-        system.commit("ProcessorVerdict", buildMap {
-            put("attempt", system.idOf(attempt))
-            put("outcome", outcome)
-        })
+    fun commit(input: NewProcessorVerdict): Commit<NewProcessorVerdict> =
+        system.commit("ProcessorVerdict", input.raw(system)).carrying(input)
 
     /** Queue keys: [changeShippingAddress.order], [changeShippingAddress.order.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitChangeShippingAddress(order: Ref<Order>, newAddress: String): CommitResult =
-        system.commit("ChangeShippingAddress", buildMap {
-            put("order", system.idOf(order))
-            put("newAddress", newAddress)
-        })
+    fun commit(input: NewChangeShippingAddress): Commit<NewChangeShippingAddress> =
+        system.commit("ChangeShippingAddress", input.raw(system)).carrying(input)
 
     /** Queue keys: [issueRefund.order] — plus system-wide width below.
      *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
@@ -269,11 +245,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitIssueRefund(order: Ref<Order>, amount: BigDecimal): CommitResult =
-        system.commit("IssueRefund", buildMap {
-            put("order", system.idOf(order))
-            put("amount", amount)
-        })
+    fun commit(input: NewIssueRefund): Commit<NewIssueRefund> =
+        system.commit("IssueRefund", input.raw(system)).carrying(input)
 
     /** Queue keys: [manualCharge.order], [manualCharge.order.customer], [manualCharge.order.customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
@@ -302,18 +275,14 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitManualCharge(order: Ref<Order>): CommitResult =
-        system.commit("ManualCharge", buildMap {
-            put("order", system.idOf(order))
-        })
+    fun commit(input: NewManualCharge): Commit<NewManualCharge> =
+        system.commit("ManualCharge", input.raw(system)).carrying(input)
 
     /** Queue key: [extensionRequest.order].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitExtensionRequest(order: Ref<Order>): CommitResult =
-        system.commit("ExtensionRequest", buildMap {
-            put("order", system.idOf(order))
-        })
+    fun commit(input: NewExtensionRequest): Commit<NewExtensionRequest> =
+        system.commit("ExtensionRequest", input.raw(system)).carrying(input)
 
     fun contacts(): List<Contact> = system.instancesOf("Contact").map { materializeContact(it) }
     fun cards(): List<Card> = system.instancesOf("Card").map { materializeCard(it) }
@@ -2075,6 +2044,111 @@ rule CloseDunningEpisode when ClosableDunningFlag on Daily {
 """
     }
 }
+
+// ── act inputs (README §22, "External input"): one typed value per act,
+// every stored field the committer supplies and nothing else ──
+data class NewContact(
+    val name: String,
+    val email: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        put("email", email)
+    }
+}
+
+data class NewCard(
+    val number: String,
+    val expiresOn: LocalDate,
+    val billingContact: Ref<Contact>? = null,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("number", number)
+        put("expiresOn", expiresOn)
+        billingContact?.let { put("billingContact", system.idOf(it)) }
+    }
+}
+
+data class NewCustomer(
+    val name: String,
+    val card: Ref<Card>? = null,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        card?.let { put("card", system.idOf(it)) }
+    }
+}
+
+data class NewCardUpdate(
+    val customer: Ref<Customer>,
+    val card: Ref<Card>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("customer", system.idOf(customer))
+        put("card", system.idOf(card))
+    }
+}
+
+data class NewPlaceOrder(
+    val customer: Ref<Customer>,
+    val amount: BigDecimal,
+    val dueBy: LocalDate,
+    val shippingAddress: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("customer", system.idOf(customer))
+        put("amount", amount)
+        put("dueBy", dueBy)
+        put("shippingAddress", shippingAddress)
+    }
+}
+
+data class NewProcessorVerdict(
+    val attempt: Ref<ChargeAttempt>,
+    val outcome: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("attempt", system.idOf(attempt))
+        put("outcome", outcome)
+    }
+}
+
+data class NewChangeShippingAddress(
+    val order: Ref<Order>,
+    val newAddress: String,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("order", system.idOf(order))
+        put("newAddress", newAddress)
+    }
+}
+
+data class NewIssueRefund(
+    val order: Ref<Order>,
+    val amount: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("order", system.idOf(order))
+        put("amount", amount)
+    }
+}
+
+data class NewManualCharge(
+    val order: Ref<Order>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("order", system.idOf(order))
+    }
+}
+
+data class NewExtensionRequest(
+    val order: Ref<Order>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("order", system.idOf(order))
+    }
+}
+
 
 // ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,

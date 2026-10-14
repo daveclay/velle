@@ -11,36 +11,36 @@ import velle.generated.*
 class Givens(private val sys: EnrollmentSystem) : RequiredGivens {
 
     private fun student(): Student {
-        sys.commitStudent("Ada", tags = emptyList(), courses = emptyList())
+        sys.commit(NewStudent("Ada", tags = emptyList(), courses = emptyList()))
         return sys.students().last()
     }
 
     private fun course(): Course {
-        sys.commitCourse("Logic", 30)
+        sys.commit(NewCourse("Logic", 30))
         return sys.courses().last()
     }
 
     override fun setEnrollment() {
-        sys.commitSetEnrollment(student(), listOf(course()))
+        sys.commit(NewSetEnrollment(student(), listOf(course())))
     }
 
     override fun enroll() {
-        sys.commitEnroll(student(), course())
+        sys.commit(NewEnroll(student(), course()))
     }
 
     override fun drop() {
         val s = student()
         val c = course()
-        sys.commitEnroll(s, c)
-        sys.commitDrop(s, c)
+        sys.commit(NewEnroll(s, c))
+        sys.commit(NewDrop(s, c))
     }
 
     override fun tag() {
-        sys.commitTag(student(), "honors")
+        sys.commit(NewTag(student(), "honors"))
     }
 
     override fun assignAdvisor() {
-        sys.commitAdvisor("Turing")
-        sys.commitAssignAdvisor(sys.advisors().last(), listOf(student()))
+        sys.commit(NewAdvisor("Turing"))
+        sys.commit(NewAssignAdvisor(sys.advisors().last(), listOf(student())))
     }
 }

@@ -31,18 +31,18 @@ class Givens(private val sys: PharmacySystem) : RequiredGivens {
     /** A change dated next month is withdrawn before its day comes. */
     override fun applicableWithdrawal() {
         val d = s.drug()
-        s.accept(sys.commitPriceChange(d, s.today.plusDays(30), s.dec("2.00")))
-        s.accept(sys.commitWithdrawPriceChange(sys.priceChanges().last(), s.administrator(), "entered in error"))
+        s.accept(sys.commit(NewPriceChange(d, s.today.plusDays(30), s.dec("2.00"))))
+        s.accept(sys.commit(NewWithdrawPriceChange(sys.priceChanges().last(), s.administrator(), "entered in error")))
     }
 
     /** The price in force since today cannot be withdrawn. */
     override fun refusedWithdrawal() {
         s.drug()
-        s.accept(sys.commitWithdrawPriceChange(sys.priceChanges().last(), s.administrator(), "too late"))
+        s.accept(sys.commit(NewWithdrawPriceChange(sys.priceChanges().last(), s.administrator(), "too late")))
     }
 
     override fun setReorderPoint() {
-        s.accept(sys.commitSetReorderPoint(s.drug(), s.administrator(), 40))
+        s.accept(sys.commit(NewSetReorderPoint(s.drug(), s.administrator(), 40)))
     }
 
     // ── stock ────────────────────────────────────────────────────────────────
@@ -51,12 +51,12 @@ class Givens(private val sys: PharmacySystem) : RequiredGivens {
 
     override fun matchingCount() {
         val lot = s.lot(s.drug(), received = 100)
-        s.accept(sys.commitCountLot(lot, s.technician(), 100))
+        s.accept(sys.commit(NewCountLot(lot, s.technician(), 100)))
     }
 
     override fun discrepantCount() {
         val lot = s.lot(s.drug(), received = 100)
-        s.accept(sys.commitCountLot(lot, s.technician(), 97))
+        s.accept(sys.commit(NewCountLot(lot, s.technician(), 97)))
     }
 
     /** A lot that expired yesterday with stock left, and no nightly tick yet. */
@@ -68,14 +68,14 @@ class Givens(private val sys: PharmacySystem) : RequiredGivens {
 
     override fun stockLotForQuarantineRecalled(): StockLot {
         val lot = s.lot(s.drug())
-        s.accept(sys.commitRecall(lot, "FDA-2026-001", s.today))
+        s.accept(sys.commit(NewRecall(lot, "FDA-2026-001", s.today)))
         return lot
     }
 
     /** A fill from a lot that is recalled afterwards: the recall flips the fill into the rule's condition. */
     override fun fillForNoticeRecall(): Fill {
         val c = s.filled()
-        s.accept(sys.commitRecall(c.lot, "FDA-2026-002", s.today))
+        s.accept(sys.commit(NewRecall(c.lot, "FDA-2026-002", s.today)))
         return c.fill
     }
 
@@ -92,34 +92,34 @@ class Givens(private val sys: PharmacySystem) : RequiredGivens {
 
     override fun setAllergies() {
         val p = s.patient()
-        s.accept(sys.commitSetAllergies(p, listOf(s.ingredient("penicillin"))))
+        s.accept(sys.commit(NewSetAllergies(p, listOf(s.ingredient("penicillin")))))
     }
 
     override fun addAllergy() {
         val p = s.patient()
-        s.accept(sys.commitAddAllergy(p, s.ingredient("sulfa")))
+        s.accept(sys.commit(NewAddAllergy(p, s.ingredient("sulfa"))))
     }
 
     // ── prescriptions ────────────────────────────────────────────────────────
 
     override fun applicableCorrection() {
         val c = s.counter()
-        s.accept(sys.commitCorrectEntry(c.prescription, c.technician, "two daily"))
+        s.accept(sys.commit(NewCorrectEntry(c.prescription, c.technician, "two daily")))
     }
 
     override fun refusedCorrection() {
         val c = s.filled()
-        s.accept(sys.commitCorrectEntry(c.prescription, c.technician, "two daily"))
+        s.accept(sys.commit(NewCorrectEntry(c.prescription, c.technician, "two daily")))
     }
 
     override fun applicableVoid() {
         val c = s.counter()
-        s.accept(sys.commitVoidEntry(c.prescription, c.pharmacist, "wrong patient"))
+        s.accept(sys.commit(NewVoidEntry(c.prescription, c.pharmacist, "wrong patient")))
     }
 
     override fun refusedVoid() {
         val c = s.filled()
-        s.accept(sys.commitVoidEntry(c.prescription, c.pharmacist, "wrong patient"))
+        s.accept(sys.commit(NewVoidEntry(c.prescription, c.pharmacist, "wrong patient")))
     }
 
     /** A patient allergic to penicillin, prescribed a drug containing it. */
@@ -179,7 +179,7 @@ class Givens(private val sys: PharmacySystem) : RequiredGivens {
     /** A fill at the counter, then the patient reports an allergy to its drug's ingredient. */
     override fun fillForAlertCounter(): Fill {
         val c = s.ready()
-        s.accept(sys.commitAddAllergy(c.patient, sys.read(c.drug).ingredients.single()))
+        s.accept(sys.commit(NewAddAllergy(c.patient, sys.read(c.drug).ingredients.single())))
         return c.fill
     }
 
@@ -191,12 +191,12 @@ class Givens(private val sys: PharmacySystem) : RequiredGivens {
 
     override fun applicableRefill() {
         val c = s.counter()
-        s.accept(sys.commitRequestRefill(s.key(), c.prescription))
+        s.accept(sys.commit(NewRequestRefill(s.key(), c.prescription)))
     }
 
     override fun refusedRefill() {
         val c = s.filled(s.counter(refills = 0))
-        s.accept(sys.commitRequestRefill(s.key(), c.prescription))
+        s.accept(sys.commit(NewRequestRefill(s.key(), c.prescription)))
     }
 
     override fun refillRefusalForAskPrescriber(): RefillRefusal {
@@ -214,7 +214,7 @@ class Givens(private val sys: PharmacySystem) : RequiredGivens {
     /** Enrolled, last filled twenty-five days ago; no daily tick yet. */
     override fun prescriptionForQueueAutoRefill(): Prescription {
         val c = s.collected()
-        s.accept(sys.commitAutoRefillEnrolment(c.prescription))
+        s.accept(sys.commit(NewAutoRefillEnrolment(c.prescription)))
         sys.advanceDays(25)
         return c.prescription
     }
@@ -223,7 +223,7 @@ class Givens(private val sys: PharmacySystem) : RequiredGivens {
 
     /** Discontinued by its prescriber. */
     override fun exitActivePrescription(prescription: Prescription) {
-        s.accept(sys.commitDiscontinuation(prescription, sys.read(sys.read(prescription).order).prescriber, "changed therapy"))
+        s.accept(sys.commit(NewDiscontinuation(prescription, sys.read(sys.read(prescription).order).prescriber, "changed therapy")))
     }
 
     // ── insurance ────────────────────────────────────────────────────────────
@@ -239,7 +239,7 @@ class Givens(private val sys: PharmacySystem) : RequiredGivens {
 
     override fun adjudication() {
         fillForSubmitClaim()
-        s.accept(sys.commitAdjudication(sys.claims().last(), "paid", s.dec("40.00"), s.dec("5.00")))
+        s.accept(sys.commit(NewAdjudication(sys.claims().last(), "paid", s.dec("40.00"), s.dec("5.00"))))
     }
 }
 

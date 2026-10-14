@@ -2,8 +2,8 @@ package velle
 
 /**
  * MockHarness codegen (README §22, the milestone scope statement): transpiles a
- * spec to a typed Kotlin surface over the runtime — one commit function per
- * act, one tick function per schedule, one model object (data class) per shape
+ * spec to a typed Kotlin surface over the runtime — one typed input value and
+ * one `commit` overload per act, one tick function per schedule, one model object (data class) per shape
  * and refinement, the query API over them, and a `main` for driving the
  * system manually.
  * A spike: sugar over VelleSystem, not a standalone compilation.
@@ -38,13 +38,15 @@ object Codegen {
             line()
             clock()
             ticks()
-            closureInputTypes()
             model.exposed.forEach { commitFn(it) }
             model.shapes.keys.forEach { shapeAccessors(it) }
             model.refinements.keys.forEach { refinementAccessors(it) }
             readSurface()
             specConstant()
             line("}")
+            line()
+            actInputTypes()
+            closureInputTypes()
             dataClasses()
             fieldsClasses()
             mainFn()
@@ -84,46 +86,76 @@ object Codegen {
         // (language-populated); an out-of-closure relationship stays a typed view
         // (the reference handle), an in-closure edge is a nested input value. ──
 
+        /** act → its input class: `New<Act>`, the act's stored fields as the
+         *  engineer's own type (README §22, "External input") */
+        val actInputNames: Map<String, String> = model.exposed.associateWith { "New$it" }
+
         /** structural signature (prop name excluded) → generated class name */
         val closureNames = linkedMapOf<ClosureEdge, String>()
 
         fun closureClassName(edge: ClosureEdge): String {
             val sig = edge.copy(prop = "")
             closureNames[sig]?.let { return it }
+            val taken = closureNames.values + actInputNames.values
             var name = "New${edge.partShape}"
-            if (name in closureNames.values)
+            if (name in taken)
                 name = "New${edge.partShape}Via${edge.backRef.replaceFirstChar { it.uppercase() }}"
             var n = 2
-            while (name in closureNames.values) name = "New${edge.partShape}${n++}"
+            while (name in taken) name = "New${edge.partShape}${n++}"
             closureNames[sig] = name
             return name
+        }
+
+        /** One input value class: the stored fields the committer supplies
+         *  (required first, then optional with a `null` default), then one
+         *  nested list per closure edge; `raw` flattens it to what the runtime
+         *  takes. Shared by the act inputs and the closure part inputs. */
+        fun emitInputClass(name: String, stored: List<StoredProp>, edges: List<ClosureEdge>, partsApart: Boolean) {
+            // `? initially required` (OQ37-R10): read-optional, but the commit
+            // must supply a value — a required, non-null parameter
+            val required = stored.filter { it.initially == null && (!isOptional(it.type) || it.initiallyRequired) }
+            val optional = stored.filter { it.initially != null || (isOptional(it.type) && !it.initiallyRequired) }
+            val hasParams = required.isNotEmpty() || optional.isNotEmpty() || edges.isNotEmpty()
+            if (!hasParams) {
+                line("class $name { internal fun raw(system: VelleSystem): Map<String, Any?> = emptyMap() }")
+                line()
+                return
+            }
+            line("data class $name(")
+            required.forEach { line("    val ${it.name}: ${paramType(it.type).removeSuffix("?")},") }
+            optional.forEach { line("    val ${it.name}: ${paramType(it.type).removeSuffix("?")}? = null,") }
+            edges.forEach { line("    val ${it.prop}: List<${closureClassName(it)}> = emptyList(),") }
+            line(") {")
+            line("    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {")
+            required.forEach { line("        put(\"${it.name}\", ${rawExpr(it.name, it.type)})") }
+            optional.forEach { line("        ${it.name}?.let { put(\"${it.name}\", ${rawExpr("it", it.type)}) }") }
+            if (!partsApart) edges.forEach { line("        put(\"${it.prop}\", ${it.prop}.map { it.raw(system) })") }
+            line("    }")
+            if (partsApart && edges.isNotEmpty()) {
+                // an act's inline parts travel beside its fields (README §6,
+                // "Inline part creation"); a part's own nested parts ride in its map
+                line("    internal fun parts(system: VelleSystem): Map<String, List<Map<String, Any?>>> = buildMap {")
+                edges.forEach { line("        put(\"${it.prop}\", ${it.prop}.map { it.raw(system) })") }
+                line("    }")
+            }
+            line("}")
+            line()
+        }
+
+        fun actInputTypes() {
+            if (model.exposed.isEmpty()) return
+            line("// ── act inputs (README §22, \"External input\"): one typed value per act,")
+            line("// every stored field the committer supplies and nothing else ──")
+            for (shape in model.exposed) {
+                val stored = model.shapes.getValue(shape).members.filterIsInstance<StoredProp>()
+                emitInputClass(actInputNames.getValue(shape), stored, model.closures[shape].orEmpty(), partsApart = true)
+            }
         }
 
         fun emitClosureClass(name: String, edge: ClosureEdge) {
             val decl = model.shapes.getValue(edge.partShape)
             val stored = decl.members.filterIsInstance<StoredProp>().filter { it.name != edge.backRef }
-            // `? initially required` (OQ37-R10): read-optional, but the commit
-            // must supply a value — a required, non-null parameter
-            val required = stored.filter { it.initially == null && (!isOptional(it.type) || it.initiallyRequired) }
-            val optional = stored.filter { it.initially != null || (isOptional(it.type) && !it.initiallyRequired) }
-            val hasParams = required.isNotEmpty() || optional.isNotEmpty() || edge.children.isNotEmpty()
-            if (!hasParams) {
-                line("    class $name { internal fun raw(system: VelleSystem): Map<String, Any?> = emptyMap() }")
-                line()
-                return
-            }
-            line("    data class $name(")
-            required.forEach { line("        val ${it.name}: ${paramType(it.type).removeSuffix("?")},") }
-            optional.forEach { line("        val ${it.name}: ${paramType(it.type).removeSuffix("?")}? = null,") }
-            edge.children.forEach { line("        val ${it.prop}: List<${closureClassName(it)}> = emptyList(),") }
-            line("    ) {")
-            line("        internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {")
-            required.forEach { line("            put(\"${it.name}\", ${rawExpr(it.name, it.type)})") }
-            optional.forEach { line("            ${it.name}?.let { put(\"${it.name}\", ${rawExpr("it", it.type)}) }") }
-            edge.children.forEach { line("            put(\"${it.prop}\", ${it.prop}.map { it.raw(system) })") }
-            line("        }")
-            line("    }")
-            line()
+            emitInputClass(name, stored, edge.children, partsApart = false)
         }
 
         fun closureInputTypes() {
@@ -134,32 +166,17 @@ object Codegen {
             }
             model.exposed.forEach { shape -> model.closures[shape].orEmpty().forEach { visit(it) } }
             if (toEmit.isEmpty()) return
-            line("    // ── closure input values (README §6, \"Inline part creation\") ──")
+            line("// ── closure input values (README §6, \"Inline part creation\") ──")
             for ((name, edge) in toEmit) emitClosureClass(name, edge)
         }
 
         fun commitFn(shape: String) {
             queueKeyDoc(shape)
-            val stored = model.shapes.getValue(shape).members.filterIsInstance<StoredProp>()
-            // `? initially required` (OQ37-R10): read-optional, but the commit
-            // must supply a value — a required, non-null parameter
-            val required = stored.filter { it.initially == null && (!isOptional(it.type) || it.initiallyRequired) }
-            val optional = stored.filter { it.initially != null || (isOptional(it.type) && !it.initiallyRequired) }
+            val input = actInputNames.getValue(shape)
             val edges = model.closures[shape].orEmpty()
-            val params = required.map { "${it.name}: ${paramType(it.type).removeSuffix("?")}" } +
-                optional.map { "${it.name}: ${paramType(it.type).removeSuffix("?")}? = null" } +
-                edges.map { "${it.prop}: List<${closureClassName(it)}> = emptyList()" }
-            line("    fun commit$shape(${params.joinToString(", ")}): CommitResult =")
-            line("        system.commit(\"$shape\", buildMap {")
-            required.forEach { line("            put(\"${it.name}\", ${rawExpr(it.name, it.type)})") }
-            optional.forEach { line("            ${it.name}?.let { put(\"${it.name}\", ${rawExpr("it", it.type)}) }") }
-            if (edges.isEmpty()) {
-                line("        })")
-            } else {
-                line("        }, buildMap {")
-                edges.forEach { line("            put(\"${it.prop}\", ${it.prop}.map { it.raw(system) })") }
-                line("        })")
-            }
+            line("    fun commit(input: $input): Commit<$input> =")
+            if (edges.isEmpty()) line("        system.commit(\"$shape\", input.raw(system)).carrying(input)")
+            else line("        system.commit(\"$shape\", input.raw(system), input.parts(system)).carrying(input)")
             line()
         }
 

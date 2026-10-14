@@ -12,13 +12,13 @@ import velle.generated.OrdersSystem
 class Givens(private val sys: OrdersSystem) : RequiredGivens {
 
     override fun orderLine(): OrderLine {
-        sys.commitCustomer("Ada")
-        sys.commitProduct("SKU-G")
-        sys.commitOrder(
+        sys.commit(NewCustomer("Ada"))
+        sys.commit(NewProduct("SKU-G"))
+        sys.commit(NewOrder(
             customer = sys.customers().last(),
             placedOn = LocalDate.parse("2026-08-21"),
-            orderLines = listOf(OrdersSystem.NewOrderLine(product = sys.products().last(), quantity = 1)),
-        )
+            orderLines = listOf(NewOrderLine(product = sys.products().last(), quantity = 1)),
+        ))
         return sys.orderLines().last()
     }
 }

@@ -34,8 +34,8 @@ class CapturePersistenceTest {
         return billing
     }
 
-    private fun accept(r: CommitResult): Long =
-        assertIs<CommitResult.Accepted>(r, "refused: $r").id
+    private fun accept(r: Commit<*>): Long =
+        assertIs<Commit.Accepted<*>>(r, "refused: $r").id
 
     private fun scalar(sql: String, bind: Long? = null): Any? =
         conn.prepareStatement(sql).use { ps ->
@@ -51,12 +51,12 @@ class CapturePersistenceTest {
         // process one, Jan 1: archive the invoice — ArchivedInvoice entered,
         // `captured archivedOn: Date = today` fixed at the entry moment
         val first = system(Instant.parse("2026-01-01T09:00:00Z"))
-        accept(first.commitSignUp("Ada", "ada@x.com"))
+        accept(first.commit(NewSignUp("Ada", "ada@x.com")))
         val cust = first.customers().last()
-        accept(first.commitBillCustomer(cust, due = java.time.LocalDate.of(2026, 2, 1)))
+        accept(first.commit(NewBillCustomer(cust, due = java.time.LocalDate.of(2026, 2, 1))))
         val inv = first.invoices().last()
         val invKey = assertIs<Long>(scalar("""SELECT id FROM "Invoice""""), "store key expected for the persisted invoice")
-        accept(first.commitArchiveRequest(inv))
+        accept(first.commit(NewArchiveRequest(inv)))
 
         assertEquals("2026-01-01", scalar("""SELECT archivedOn FROM "capture_ArchivedInvoice" WHERE id = ?""", invKey))
 
@@ -66,7 +66,7 @@ class CapturePersistenceTest {
         // date, not the second process's today
         val second = system(Instant.parse("2026-01-06T09:00:00Z"))
         val invHandle = second.system.handleFor("Invoice", invKey)
-        accept(second.commitUnarchiveRequest(second.system.refFor(invHandle)))
+        accept(second.commit(NewUnarchiveRequest(second.system.refFor(invHandle))))
 
         assertEquals(1L, scalar("""SELECT COUNT(*) FROM "UnarchiveNotice""""))
         assertEquals("2026-01-01", scalar("""SELECT wasArchivedOn FROM "UnarchiveNotice" WHERE invoice = ?""", invKey))

@@ -20,39 +20,26 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     /** Queue keys: [join.referrer], [join.referrer.referrer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitJoin(name: String, referrer: Ref<Member>? = null): CommitResult =
-        system.commit("Join", buildMap {
-            put("name", name)
-            referrer?.let { put("referrer", system.idOf(it)) }
-        })
+    fun commit(input: NewJoin): Commit<NewJoin> =
+        system.commit("Join", input.raw(system)).carrying(input)
 
     /** Queue key: [duesPayment.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitDuesPayment(member: Ref<Member>, coveredMonth: String, dueBy: LocalDate, paidOn: LocalDate): CommitResult =
-        system.commit("DuesPayment", buildMap {
-            put("member", system.idOf(member))
-            put("coveredMonth", coveredMonth)
-            put("dueBy", dueBy)
-            put("paidOn", paidOn)
-        })
+    fun commit(input: NewDuesPayment): Commit<NewDuesPayment> =
+        system.commit("DuesPayment", input.raw(system)).carrying(input)
 
     /** Queue keys: [purchase.member], [purchase.member.referrer], [purchase.member.referrer.referrer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitPurchase(member: Ref<Member>, amount: BigDecimal): CommitResult =
-        system.commit("Purchase", buildMap {
-            put("member", system.idOf(member))
-            put("amount", amount)
-        })
+    fun commit(input: NewPurchase): Commit<NewPurchase> =
+        system.commit("Purchase", input.raw(system)).carrying(input)
 
     /** Queue key: [enrollment.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commitEnrollment(member: Ref<Member>): CommitResult =
-        system.commit("Enrollment", buildMap {
-            put("member", system.idOf(member))
-        })
+    fun commit(input: NewEnrollment): Commit<NewEnrollment> =
+        system.commit("Enrollment", input.raw(system)).carrying(input)
 
     fun members(): List<Member> = system.instancesOf("Member").map { materializeMember(it) }
     fun duesPayments(): List<DuesPayment> = system.instancesOf("DuesPayment").map { materializeDuesPayment(it) }
@@ -470,6 +457,51 @@ rule IssueKeycard when (CertifiedMember where not exists Keycard for this) {
 """
     }
 }
+
+// ── act inputs (README §22, "External input"): one typed value per act,
+// every stored field the committer supplies and nothing else ──
+data class NewJoin(
+    val name: String,
+    val referrer: Ref<Member>? = null,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("name", name)
+        referrer?.let { put("referrer", system.idOf(it)) }
+    }
+}
+
+data class NewDuesPayment(
+    val member: Ref<Member>,
+    val coveredMonth: String,
+    val dueBy: LocalDate,
+    val paidOn: LocalDate,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("member", system.idOf(member))
+        put("coveredMonth", coveredMonth)
+        put("dueBy", dueBy)
+        put("paidOn", paidOn)
+    }
+}
+
+data class NewPurchase(
+    val member: Ref<Member>,
+    val amount: BigDecimal,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("member", system.idOf(member))
+        put("amount", amount)
+    }
+}
+
+data class NewEnrollment(
+    val member: Ref<Member>,
+) {
+    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("member", system.idOf(member))
+    }
+}
+
 
 // ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,

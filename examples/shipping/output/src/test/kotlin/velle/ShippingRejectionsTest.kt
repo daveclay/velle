@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import velle.CommitResult
+import velle.Commit
 import velle.EvalStep
 import velle.RecordRef
 import velle.Rejection
@@ -36,24 +36,24 @@ class ShippingRejectionsTest {
 
     private val sys = ShippingSystem()
 
-    private fun accept(r: CommitResult) = assertIs<CommitResult.Accepted>(r, "refused: $r")
-    private fun rejection(r: CommitResult): Rejection =
-        assertNotNull(assertIs<CommitResult.Refused>(r, "accepted: $r").rejection, "a never refusal carries its rejection")
+    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
+    private fun rejection(r: Commit<*>): Rejection =
+        assertNotNull(assertIs<Commit.Refused<*>>(r, "accepted: $r").rejection, "a never refusal carries its rejection")
 
     private val sixth = LocalDate.of(2026, 10, 6)
     private val seventh = LocalDate.of(2026, 10, 7)
 
     private fun order(reference: String): Order {
-        accept(sys.commitOrder(reference))
+        accept(sys.commit(NewOrder(reference)))
         return sys.orders().last()
     }
 
     @Test
     fun `cancelling an order that has shipped is refused - the act refused is not the record protected`() {
         val order = order("4471")
-        accept(sys.commitShipment(order, sixth))
+        accept(sys.commit(NewShipment(order, sixth)))
 
-        val r = rejection(sys.commitCancellation(order, seventh))
+        val r = rejection(sys.commit(NewCancellation(order, seventh)))
 
         // The refusal is whole: nothing landed.
         assertEquals(emptyList(), sys.cancellations(), "the cancellation did not land")
@@ -106,9 +106,9 @@ class ShippingRejectionsTest {
     @Test
     fun `shipping an order that is cancelled is refused - the act refused is the record in violation`() {
         val order = order("4471")
-        accept(sys.commitCancellation(order, sixth))
+        accept(sys.commit(NewCancellation(order, sixth)))
 
-        val r = rejection(sys.commitShipment(order, seventh))
+        val r = rejection(sys.commit(NewShipment(order, seventh)))
 
         assertEquals(emptyList(), sys.shipments(), "the shipment did not land")
 
@@ -145,10 +145,10 @@ class ShippingRejectionsTest {
     fun `the prohibition reaches only the order it is about`() {
         val shipped = order("4471")
         val other = order("4472")
-        accept(sys.commitShipment(shipped, sixth))
+        accept(sys.commit(NewShipment(shipped, sixth)))
 
-        accept(sys.commitCancellation(other, seventh))
-        val r = rejection(sys.commitShipment(other, seventh))
+        accept(sys.commit(NewCancellation(other, seventh)))
+        val r = rejection(sys.commit(NewShipment(other, seventh)))
         assertEquals(RecordRef("Order", sys.system.idOf(other)), r.pivots.single().ref, "the rejection is about the other order")
 
         with(sys) {

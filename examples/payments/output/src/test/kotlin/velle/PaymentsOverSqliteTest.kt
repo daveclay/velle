@@ -54,13 +54,13 @@ class PaymentsPersistenceTest {
     private fun process(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")): PaymentsSystem =
         PaymentsSystem(startTime).also { SqliteStore.attach(it.system, conn) }
 
-    private fun accept(r: CommitResult) = assertIs<CommitResult.Accepted>(r, "refused: $r")
+    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
 
     private fun PaymentsSystem.placeOrder() {
-        accept(commitContact("Grace", "grace@velle.example"))
-        accept(commitCard("4242", LocalDate.of(2027, 1, 1), contacts().last()))
-        accept(commitCustomer("Ada", cards().last()))
-        accept(commitPlaceOrder(customers().last(), BigDecimal("100"), LocalDate.of(2026, 2, 1), "12 Loop Ave"))
+        accept(commit(NewContact("Grace", "grace@velle.example")))
+        accept(commit(NewCard("4242", LocalDate.of(2027, 1, 1), contacts().last())))
+        accept(commit(NewCustomer("Ada", cards().last())))
+        accept(commit(NewPlaceOrder(customers().last(), BigDecimal("100"), LocalDate.of(2026, 2, 1), "12 Loop Ave")))
     }
 
     @Test
@@ -72,7 +72,7 @@ class PaymentsPersistenceTest {
 
         val second = process()
         val attempt = second.read.chargeAttempt(1L)
-        accept(second.commitProcessorVerdict(attempt, "approved"))
+        accept(second.commit(NewProcessorVerdict(attempt, "approved")))
         val order = second.read.order(1L)
         with(second) {
             assertTrue(second.read(attempt).isSuccessfulCharge)
