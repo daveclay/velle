@@ -1,6 +1,6 @@
 # Open questions and work items — the index
 
-One line per question and per work item here; the discussion lives in `questions/OQ<n>-*.md`, where each file's header states the question in plain terms before the dense part begins. OQ tags are stable — numbers are never renumbered or reused (next free: OQ61), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
+One line per question and per work item here; the discussion lives in `questions/OQ<n>-*.md`, where each file's header states the question in plain terms before the dense part begins. OQ tags are stable — numbers are never renumbered or reused (next free: OQ63), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
 
 **Questions and items.** A question (an OQ) is a design decision with discussion worth keeping. A work item is one action, verb-first, one line. An item whose whole context fits in its line stands alone; an item with context lives under the question that holds it, and the context is in that question's file, never here. Items are grouped by the part of Velle they change, not by where they were found; S-numbers and P-numbers are findings of the peptides and pharmacy passes, recorded in OQ16's calibration record.
 
@@ -115,7 +115,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 
 - **[OQ28](questions/OQ28-bootstrap-backfill.md)** — bootstrap/backfill: a new rule against pre-existing state · not designed
 - **[OQ59](questions/OQ59-escape-hatch.md)** — the escape hatch: open codegen · deferred, post-v0; the demands from the project's earliest notes, kept when those notes were retired
-- **[OQ33](questions/OQ33-visible-to.md)** — `visible to` field visibility, re-derived (deferred, post-v0; now also carries the authenticated-user and role notes, and OQ51's read-side viewer)
+- **[OQ33](questions/OQ33-authorization.md)** — authorization: the caller as a record the binding API hands in, roles as refinements over it, who-may-commit as prohibitions reading `caller`, who-may-see as visibility clauses the read surface applies, no caller at a tick · investigation written 2026-10-14 at Dave's request; seven decisions wait in its §5 (widened from `visible to` field visibility, which it still carries)
 - **[OQ35](questions/OQ35-mixins.md)** — cross-shape structural mixins · design sketched 2026-09-13; syntax undecided
   - [ ] Restore README §22's mixin item, which README §9 still points at.
 
