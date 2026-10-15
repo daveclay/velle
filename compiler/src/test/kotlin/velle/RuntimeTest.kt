@@ -52,7 +52,7 @@ class RuntimeTest {
     }
 
     @Test
-    fun `input-constrained nevers refuse the act and commit nothing`() {
+    fun `door-checked prohibitions refuse the act and commit nothing`() {
         val sys = newSystem()
         val cust = sys.mustCommit("Customer", "name" to "Ada", "email" to "a@x.com")
         val inv = sys.mustCommit("Invoice", "customer" to cust, "due" to LocalDate.of(2026, 2, 1))

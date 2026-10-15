@@ -542,7 +542,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 -- Deliberately exercises the full v0 surface: every property kind, relationships,
 -- refinements (composition, capture, frozen), guards with disarm proofs, a
 -- whitelisted fold, after-commit with a backstop, a tick sweep whose memory is
--- data, when-leaving, rejection-as-data, and input-constrained `never`s.
+-- data, when-leaving, rejection-as-data, and door-checked `never`s.
 --
 -- Comment convention (here and in membership.velle): plain comments tell the
 -- business story; `velle:` comments note the language machinery on show.
@@ -616,7 +616,7 @@ act LineItem {
 
 -- No line item may have a zero quantity or a negative price — bad submissions
 -- are refused at the door, before they ever become data.
--- velle: input-constrained `never`s, compiled into the commit boundary
+-- velle: constraints no rule can move, checked at the door (README §21)
 never (LineItem where quantity <= 0)
 never (LineItem where price < 0)
 

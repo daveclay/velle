@@ -69,6 +69,10 @@ Fulfillment rules hang off `AcceptedOrder`, never `Order`. The order landing as 
 There is nothing to throw and nowhere to throw it — Velle has no stack and no functions, so exception propagation doesn't exist; a validation failure is a shape or a refinement membership, never a control-flow event. A validate-and-reject flow needs no transaction machinery:
 
 ```
+transient act VoidPayment {
+    payment: one Payment
+}
+
 shape ReceiptedInvoice = Invoice where exists Receipt for this
 
 shape ApplicableVoid = VoidPayment where payment.invoice is not ReceiptedInvoice
@@ -79,13 +83,25 @@ rule ApplyVoid when ApplicableVoid {
 }
 
 rule RecordRefusal when RefusedVoid {
-    VoidRefusal from { void: this, reason: "invoice is settled and receipted", refusedOn: now }
+    VoidRefusal from { payment: payment, reason: "invoice is settled and receipted", refusedOn: now }
 }
 ```
 
-The act lands (the request happened — audit for free: `count(RefusedVoid)`), the consequence never fires for the refused subset, the refusal lands as a fact the caller reads back (delivery is compilation's job). `ApplicableVoid`/`RefusedVoid` partition `VoidPayment`, exhaustiveness-checked — the forgotten `catch` block becomes a compile-time uncovered-subset error. Three levels of "invalid," only the first pre-commit: **(1)** can't inhabit the shape's type at all — rejected below the language, at the trust/input boundary, the `act` surface (README §22, "External input (`act`)"); **(2)** well-shaped, business-invalid — rejection-as-data, above; **(3)** well-shaped, valid, consequence forbidden — resolved as the `frozen` write-gate (README §8, "Frozen fields").
+The request is answered in its own transaction: the consequence never fires for the refused subset, and the refusal lands as a record the caller reads back (delivery is compilation's job), carrying what it needs to say from the request, since the request itself leaves nothing but its consequences (README §4). `ApplicableVoid`/`RefusedVoid` partition `VoidPayment`, exhaustiveness-checked — the forgotten `catch` block becomes a compile-time uncovered-subset error. Three levels of "invalid," only the first pre-commit: **(1)** can't inhabit the shape's type at all — rejected below the language, at the trust/input boundary, the `act` surface (README §22, "External input (`act`)"); **(2)** well-shaped, business-invalid — rejection-as-data, above; **(3)** well-shaped, valid, consequence forbidden — resolved as the `frozen` write-gate (README §8, "Frozen fields").
 
-*A bare state partition over a **persistent** act, as in this example, is drift-exposed (`checks.md` A4): the act persists, so its partition is re-evaluated at every later change to the state it reads. The spelling that dissolves the hazard is a `transient act` (README §4), whose partition is evaluated once, at its own commit; where the request itself must be a durable record, the partition is scoped to unhandled requests and anchored by each side's outcome evidence (the handled-once act partition, `examples/payments/payments.velle`).*
+*`VoidPayment` is a `transient act` (README §4), so its partition is evaluated once, at its own commit, and cannot drift as the invoice's state moves. A bare state partition over a **persistent** act is drift-exposed (`checks.md` A4): the act persists, so its partition is re-evaluated at every later change to the state it reads. Where the request itself must be a durable record, the partition is scoped to unhandled requests and anchored by each side's outcome evidence (the handled-once act partition, `examples/payments/payments.velle`).*
+
+## Three answers to one request
+
+*Which of three mechanisms a sentence about a request belongs to (README §21). From the fill counter in `examples/pharmacy/pharmacy.velle`.*
+
+A request can be answered three ways, and they are not interchangeable:
+
+- A **refusal** — a `never` or `requires` over the transient request — for data that is wrong on arrival and stays wrong: the caller is told and nothing is kept. `FillPrescription requires lot.drug == prescription.drug`; `never (FillPrescription where quantity <= 0 or quantity > prescription.quantity)`.
+- A **refusal recorded as data** — a partition of the request, with a rule recording the refusal (above, "Validation rejection is data") — for the patient's situation, which the counter must be able to read back with a reason: `ApplicableFill = FillPrescription where dispensable` / `RefusedFill = FillPrescription where not dispensable`, and a `FillRefusal` record from the refused side.
+- A **constraint** on the record the request produces — for a sentence about the books that the request's own handling makes true: `never (Fill where fillNumber != count(prescription.fills where fillNumber <= this.fillNumber))` counts the arriving fill among its siblings and catches gaps and repeats in one sentence.
+
+One question decides which: does the request's own handling change what the sentence reads? A refusal is evaluated at the door when its predicate reads nothing the handling moves, and at the settled transaction otherwise (`evaluation.md`, "An exposed call"). `never (FillPrescription where fillNumber != prescription.fillsRecorded + 1)`, where the handling records the fill and grows the count, is true after the handling for every correctly numbered request, and refuses them all. The sentence is about the fills on file, so it belongs on `Fill`.
 
 ## Materialize, then decide
 

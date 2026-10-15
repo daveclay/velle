@@ -2348,7 +2348,7 @@ never (GreenhousePlot where treatment != "peptide" and treatment != "control")
 -- Treatment day: the plants are inoculated and the peptide applied. The
 -- record is the fact; a trial is treated once.
 -- velle: an act rather than an assignment into the trial, so the
--- invariants that read the treatment stay input-constrained (README §21)
+-- prohibitions that read the treatment stay door-checked (README §21)
 act Treatment {
     trial: one GreenhouseTrial
     treatedAt: DateTime
@@ -2385,7 +2385,7 @@ never (PlotObservation where dayAfterTreatment < 0)
 never (PlotObservation where count(plot.plotObservations where dayAfterTreatment == this.dayAfterTreatment) > 1)
 
 -- No score before the plants were treated.
--- velle: an input-constrained `never` testing refinement membership two
+-- velle: a door-checked constraint testing refinement membership two
 -- hops away
 never (PlotObservation where plot.trial is not TreatedTrial)
 
@@ -2741,7 +2741,7 @@ shape PermittedTrial = FieldTrial where
 -- it would be a statement about history — the day the permit expired, the
 -- planting on file would violate it, and every later commit in the system
 -- would be refused.
--- velle: an input-constrained `never` over a transient act reading
+-- velle: a refusal over a transient act reading
 -- refinement membership through a relationship, paired with the bare-shape
 -- rule that answers every request (checks.md V18)
 transient act PlantTrial {

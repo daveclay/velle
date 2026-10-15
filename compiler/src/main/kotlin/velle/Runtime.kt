@@ -369,6 +369,11 @@ class VelleSystem(
     val evaluator = Evaluator(this)
     /** failures of after-commit / tick firings — the act stands, the gap is recorded [S4] */
     val failures = mutableListOf<String>()
+    /** A `never` rejection of an after-commit firing, carried as the same data a
+     *  tick's rejection is thrown with (`evaluation.md`, "Ticks"): the act stood,
+     *  the firing rolled back, and nobody was asking. Reachable only through the
+     *  runtime backstop, since V29 and V30 refuse the spec-visible cases. */
+    val afterCommitRejections = mutableListOf<Rejection>()
 
     private val maxDepth = 500 // [S3] backstop behind the static quiescence proof
 
@@ -574,6 +579,7 @@ class VelleSystem(
             if (!evaluator.memberOfRefExpr(subject, rule.condition)) continue
             val result = inTransaction { txn!!.firing = rule to subject; fire(rule, subject) }
             result.exceptionOrNull()?.let {
+                if (it is NeverViolation) afterCommitRejections.add(it.rejection)
                 failures.add("after-commit firing of '${rule.name}' failed: ${it.message}")
             }
         }
@@ -610,7 +616,7 @@ class VelleSystem(
             return CommitResult.Refused(e.reason)
         }
 
-        val result = inTransaction { applyCommit(mutations).first().also { txn!!.act = it } }
+        val result = inTransaction { applyCommit(mutations, actCommit = true).first() }
         return result.fold(
             onSuccess = { id ->
                 // a transient act is an input to the state, not a member of it: at
@@ -875,7 +881,13 @@ class VelleSystem(
         return ids.filter { evaluator.memberOfRefExpr(it, w.condition) }.toSet()
     }
 
-    private fun applyCommit(mutations: List<Mutation>): List<Long> {
+    /** The door set (README §21, ruled 2026-10-14): the prohibitions whose verdict
+     *  no rule can change, evaluated once at the act's own commit and skipped at
+     *  the transaction end. Computed by the validator from the rules' writes,
+     *  creations, and deletions against each predicate's reads. */
+    private val doorNevers: Set<Int> by lazy { Validator(model).doorNevers }
+
+    private fun applyCommit(mutations: List<Mutation>, actCommit: Boolean = false): List<Long> {
         val t = txn ?: error("commit outside transaction")
         if (t.depth++ > maxDepth)
             throw VelleRuntimeError("cascade depth exceeded $maxDepth — quiescence backstop [S3]")
@@ -913,6 +925,16 @@ class VelleSystem(
             model.shapes[inst.shape]?.members?.filterIsInstance<TimestampProp>()
                 ?.filter { it.on == "update" }
                 ?.forEach { setField(inst, it.name, Value.VDateTime(now), t) }
+        }
+
+        if (actCommit) {
+            // the door (README §21; evaluation.md "An exposed call", step 1): the
+            // act's closure is in, nothing is processed, and the prohibitions no
+            // rule can move are evaluated here — over this commit's footprint
+            // alone, with the act named — and not again at the end. A refusal
+            // reaches the caller before any rule reads the new state.
+            t.act = createdIds.first()
+            checkNevers(t, door = fp)
         }
 
         val post = active.associateWith { memberSet(it) }
@@ -1190,20 +1212,33 @@ class VelleSystem(
 
     /**
      * A `never` constrains every transaction's *final* state (README §21), and
-     * state changes only through commits — so an invariant reading nothing this
+     * state changes only through commits — so a prohibition reading nothing this
      * envelope wrote (and not reading the clock, which moves between envelopes)
      * held at the last transaction end and still holds. The relevance test is
      * [relevant] over the envelope's cumulative footprint, plus time reads.
+     *
+     * With [door] set this is the act's door instead: only the door set, only
+     * over the act's own commit, no time bypass (time never makes a commit
+     * relevant). At the end of an act's transaction the door set is skipped —
+     * it was evaluated at the door and no rule can have moved it — except a
+     * clock-reading constraint, which V30 refuses and the backstop still
+     * catches here when an unvalidated spec runs.
      */
-    private fun checkNevers(t: Txn) {
-        val fp = Footprint().apply {
+    private fun checkNevers(t: Txn, door: Footprint? = null) {
+        val fp = door ?: Footprint().apply {
             created.addAll(t.createdShapes)
             assigned.addAll(t.assignedFields)
             deleted.addAll(t.deletedShapes)
         }
         for ((i, n) in model.nevers.withIndex()) {
             val w = neverWatchers[i] ?: continue
-            if (!w.summary.readsTime && !relevant(w, fp)) continue
+            if (door != null) {
+                if (i !in doorNevers || !relevant(w, fp)) continue
+            } else {
+                val refusal = w.bases.all { it in model.transients }
+                if (t.act != null && i in doorNevers && (refusal || !w.summary.readsTime)) continue
+                if (!w.summary.readsTime && !relevant(w, fp)) continue
+            }
             val ids = if (w.selfContained) idsOfCandidates(w.bases.single(), queryCompiler().filterFor(n.target))
             else w.bases.flatMap { idsOf(it) }
             val violating = ids.filter { evaluator.memberOfRefExpr(it, n.target) }

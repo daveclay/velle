@@ -19,7 +19,7 @@ package velle
  *    a positive and a negated atom yields the once-through chain: never a
  *    member, then a member, then out permanently;
  *  - a comparison moves one way when the fold behind it has a pinned sign:
- *    an input-constrained `never` proving every contribution positive is what
+ *    a door-checked `never` proving every contribution positive is what
  *    licenses drawing the act's arrow in a single direction;
  *  - everything else is an honest "may flip" edge, drawn in both directions.
  *
@@ -47,7 +47,7 @@ internal object StateFlowGen {
                     "are proven from the spec (an `exists` can only be satisfied — " +
                     (if (model.deletedShapes.isEmpty()) "v0 never deletes" else "where no rule deletes the witness (OQ37)") +
                     " — and " +
-                    "a fold moves one way when the input-constrained refusals pin the sign of every " +
+                    "a fold moves one way when the door-checked prohibitions pin the sign of every " +
                     "contribution); where no proof exists, the edge says **may flip** and is drawn in both " +
                     "directions."
             )
@@ -562,7 +562,7 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
     }
 
     /** A create of the fold's element shape adds one contribution; the
-     *  input-constrained nevers pin its sign. Anything else is unproven. */
+     *  door-checked nevers pin its sign. Anything else is unproven. */
     private fun aggDelta(e: AggCall, k: CommitKind, subject: String): SD {
         val elem = elementShapeOf(e.collection, subject) ?: return SD.UNKNOWN
         if (k !is CommitKind.Create || k.shape != elem) return SD.UNKNOWN
@@ -597,7 +597,7 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
         else -> SD.UNKNOWN
     }
 
-    // ── static field signs, proven by the input-constrained nevers ───────────
+    // ── static field signs, proven by the door-checked nevers ────────────────
 
     private fun staticFieldSign(shape: String, field: String, guard: MutableSet<String>): SS {
         if (!guard.add("$shape.$field")) return SS.UNKNOWN

@@ -3,6 +3,7 @@ package velle
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ValidatorTest {
@@ -56,6 +57,46 @@ class ValidatorTest {
             }
         """.trimIndent()
         assertTrue(codes(src).contains("V29"), "fail closed: got ${diags(src)}")
+    }
+
+    // ── V30: a constraint that reads the clock ───────────────────────────────
+
+    private val permits = """
+        act Site { name: text }
+        act Permit { site: one Site  expiresOn: Date  issuedOn: Date }
+        shape PermittedSite = Site where exists (Permit where site == this and expiresOn >= today)
+        act Planting { site: one Site  plantedOn: Date }
+    """.trimIndent()
+
+    @Test
+    fun `V30 - a constraint reading the clock through a consulted refinement is refused`() {
+        val src = permits + "\nnever (Planting where site is not PermittedSite)"
+        val d = diags(src).filter { it.code == "V30" }
+        assertEquals(1, d.size, "got: ${diags(src)}")
+        assertTrue("never #1 (Planting where site is not PermittedSite) over Planting reads the clock" in d.single().message, d.single().message)
+        assertTrue("state it on a transient request" in d.single().message)
+    }
+
+    @Test
+    fun `V30 - a constraint reading the clock directly is refused, as a requirement too`() {
+        assertTrue(codes(permits + "\nnever (Planting where plantedOn > today)").contains("V30"))
+        assertTrue(codes(permits + "\nPlanting requires plantedOn <= today").contains("V30"))
+    }
+
+    @Test
+    fun `V30 - a refusal reads the clock once, at the request`() {
+        val src = permits + """
+
+            transient act PlantRequest { site: one Site  plantedOn: Date }
+            never (PlantRequest where site is not PermittedSite)
+            rule Record when PlantRequest { Planting from { site: site, plantedOn: plantedOn } }
+        """.trimIndent()
+        assertFalse(codes(src).contains("V30"), "got: ${diags(src)}")
+    }
+
+    @Test
+    fun `V30 - a constraint comparing dates to each other does not read the clock`() {
+        assertFalse(codes(permits + "\nnever (Permit where expiresOn < issuedOn)").contains("V30"))
     }
 
     @Test
@@ -454,7 +495,7 @@ class ValidatorTest {
     }
 
     @Test
-    fun `V10 - a rule-maintained never fails closed in v0`() {
+    fun `V10 - a guarantee fails closed in v0`() {
         val src = """
             act Account {
                 balance: decimal initially 0
@@ -841,7 +882,7 @@ class ValidatorTest {
     }
 
     @Test
-    fun `V14 - a rule-maintained never cannot be spent`() {
+    fun `V14 - a guarantee cannot be spent`() {
         val src = rootParent + """
 
             act Reparent {
@@ -855,7 +896,7 @@ class ValidatorTest {
 
             never (Node where parent == this)
         """.trimIndent()
-        // the never reads what 'Apply' writes: rule-maintained, so V10 fails
+        // the never reads what 'Apply' writes: a guarantee, so V10 fails
         // closed on the invariant and V14 refuses to spend it
         assertTrue(codes(src).contains("V10"), "got: ${diags(src)}")
         assertTrue(codes(src).contains("V14"), "got: ${diags(src)}")

@@ -53,8 +53,10 @@ open class PharmacyFlowTest {
         assertEquals(0, sys.prescriberOrders().size)
         assertEquals(0, sys.prescriptions().size)
 
-        // a post-dated order is refused too
-        refuse(sys.commit(NewPrescriberOrder(dr, patient, s.today.plusDays(1), tech, listOf(s.line(amoxicillin)))))
+        // a post-dated order is not refused: "never written in the future" on this
+        // persistent act would be a constraint reading the clock, which checks.md V30
+        // refuses, and the order carries its closure, so there is no transient request
+        // to state it on (the spec says so at the order's declaration)
 
         val order = s.order(patient, dr, tech, listOf(s.line(amoxicillin), s.line(oxycodone, refills = 0)), writtenOn = s.today.minusDays(10))
         assertEquals(2, sys.read(order).prescriptions.size)

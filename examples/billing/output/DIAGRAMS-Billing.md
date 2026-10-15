@@ -145,7 +145,7 @@ classDiagram
 
 ## State flow
 
-A state is membership in a refinement, and memberships overlap — so each diagram below is one *axis* of membership, varying independently of its siblings. Arrow directions are proven from the spec (an `exists` can only be satisfied — v0 never deletes — and a fold moves one way when the input-constrained refusals pin the sign of every contribution); where no proof exists, the edge says **may flip** and is drawn in both directions.
+A state is membership in a refinement, and memberships overlap — so each diagram below is one *axis* of membership, varying independently of its siblings. Arrow directions are proven from the spec (an `exists` can only be satisfied — v0 never deletes — and a fold moves one way when the door-checked prohibitions pin the sign of every contribution); where no proof exists, the edge says **may flip** and is drawn in both directions.
 
 ### Invoice
 
@@ -228,7 +228,7 @@ The two guards are complements, so every ChangeDueDate takes exactly one branch 
 
 ## Rule graph
 
-The whole system on one page: an edge means the source's commit can change the target rule's condition — **may**-cause, like everything else here. Solid edges fire inside the same transaction envelope; dotted edges cross a boundary (`after commit`, or armed now and swept at the labeled tick). Fan-out is not a choice: every edge whose guard holds fires, in no particular order. A diamond appears only where exclusivity is proven — the accept/refuse split of an input-constrained `never`, and a transient act's complement partitions. A self-loop marked *disarms its own guard* is the guard-disarm pattern: the rule's own write makes its re-evaluation harmless. An act with no outgoing edge commits quietly — data recorded, no rule woken.
+The whole system on one page: an edge means the source's commit can change the target rule's condition — **may**-cause, like everything else here. Solid edges fire inside the same transaction envelope; dotted edges cross a boundary (`after commit`, or armed now and swept at the labeled tick). Fan-out is not a choice: every edge whose guard holds fires, in no particular order. A diamond appears only where exclusivity is proven — the accept/refuse split of a door-checked `never`, and a transient act's complement partitions. A self-loop marked *disarms its own guard* is the guard-disarm pattern: the rule's own write makes its re-evaluation harmless. An act with no outgoing edge commits quietly — data recorded, no rule woken.
 
 ```mermaid
 flowchart LR
@@ -303,7 +303,7 @@ sequenceDiagram
     actor Caller
     participant S as Billing
     Caller->>S: commitSignUp(name, email)
-    Note over Caller,S: boundary validation first — type checks and the input-constrained nevers compiled to this act's boundary, a violation is a refusal and nothing begins
+    Note over Caller,S: boundary validation first — type checks, then the door: the prohibitions no rule can move, evaluated over the act's closure before any rule runs; a violation is a refusal and nothing begins
     critical T1 — the SignUp envelope
         S->>S: insert SignUp
         Note over S: transient act — its partitions are decided once, at this commit, and the instance is removed at the envelope's close (only consequences persist)
@@ -320,7 +320,7 @@ sequenceDiagram
     actor Caller
     participant S as Billing
     Caller->>S: commitCorrectEmail(customer, corrected)
-    Note over Caller,S: boundary validation first — type checks and the input-constrained nevers compiled to this act's boundary, a violation is a refusal and nothing begins
+    Note over Caller,S: boundary validation first — type checks, then the door: the prohibitions no rule can move, evaluated over the act's closure before any rule runs; a violation is a refusal and nothing begins
     critical T1 — the CorrectEmail envelope
         S->>S: insert CorrectEmail
         Note over S: ApplyEmailCorrection — when CorrectEmail
@@ -336,7 +336,7 @@ sequenceDiagram
     actor Caller
     participant S as Billing
     Caller->>S: commitBillCustomer(customer, due)
-    Note over Caller,S: boundary validation first — type checks and the input-constrained nevers compiled to this act's boundary, a violation is a refusal and nothing begins
+    Note over Caller,S: boundary validation first — type checks, then the door: the prohibitions no rule can move, evaluated over the act's closure before any rule runs; a violation is a refusal and nothing begins
     critical T1 — the BillCustomer envelope
         S->>S: insert BillCustomer
         Note over S: transient act — its partitions are decided once, at this commit, and the instance is removed at the envelope's close (only consequences persist)
@@ -362,7 +362,7 @@ sequenceDiagram
     actor Caller
     participant S as Billing
     Caller->>S: commitLineItem(invoice, description, price, quantity)
-    Note over Caller,S: boundary validation first — type checks and the input-constrained nevers compiled to this act's boundary, a violation is a refusal and nothing begins
+    Note over Caller,S: boundary validation first — type checks, then the door: the prohibitions no rule can move, evaluated over the act's closure before any rule runs; a violation is a refusal and nothing begins
     critical T1 — the LineItem envelope
         S->>S: insert LineItem
         Note over S: SendReceipt — when PaidInvoice
@@ -387,7 +387,7 @@ sequenceDiagram
     actor Caller
     participant S as Billing
     Caller->>S: commitSubmitPayment(invoice, amount)
-    Note over Caller,S: boundary validation first — type checks and the input-constrained nevers compiled to this act's boundary, a violation is a refusal and nothing begins
+    Note over Caller,S: boundary validation first — type checks, then the door: the prohibitions no rule can move, evaluated over the act's closure before any rule runs; a violation is a refusal and nothing begins
     critical T1 — the SubmitPayment envelope
         S->>S: insert SubmitPayment
         Note over S: transient act — its partitions are decided once, at this commit, and the instance is removed at the envelope's close (only consequences persist)
@@ -416,7 +416,7 @@ sequenceDiagram
     actor Caller
     participant S as Billing
     Caller->>S: commitIssuance(invoice)
-    Note over Caller,S: boundary validation first — type checks and the input-constrained nevers compiled to this act's boundary, a violation is a refusal and nothing begins
+    Note over Caller,S: boundary validation first — type checks, then the door: the prohibitions no rule can move, evaluated over the act's closure before any rule runs; a violation is a refusal and nothing begins
     critical T1 — the Issuance envelope
         S->>S: insert Issuance
         Note over S: no rules fire inside this envelope
@@ -431,7 +431,7 @@ sequenceDiagram
     actor Caller
     participant S as Billing
     Caller->>S: commitChangeDueDate(invoice, newDue)
-    Note over Caller,S: boundary validation first — type checks and the input-constrained nevers compiled to this act's boundary, a violation is a refusal and nothing begins
+    Note over Caller,S: boundary validation first — type checks, then the door: the prohibitions no rule can move, evaluated over the act's closure before any rule runs; a violation is a refusal and nothing begins
     critical T1 — the ChangeDueDate envelope
         S->>S: insert ChangeDueDate
         Note over S: transient act — its partitions are decided once, at this commit, and the instance is removed at the envelope's close (only consequences persist)
@@ -451,7 +451,7 @@ sequenceDiagram
     actor Caller
     participant S as Billing
     Caller->>S: commitArchiveRequest(invoice)
-    Note over Caller,S: boundary validation first — type checks and the input-constrained nevers compiled to this act's boundary, a violation is a refusal and nothing begins
+    Note over Caller,S: boundary validation first — type checks, then the door: the prohibitions no rule can move, evaluated over the act's closure before any rule runs; a violation is a refusal and nothing begins
     critical T1 — the ArchiveRequest envelope
         S->>S: insert ArchiveRequest
         Note over S: NoteUnarchival — when leaving ArchivedInvoice
@@ -468,7 +468,7 @@ sequenceDiagram
     actor Caller
     participant S as Billing
     Caller->>S: commitUnarchiveRequest(invoice)
-    Note over Caller,S: boundary validation first — type checks and the input-constrained nevers compiled to this act's boundary, a violation is a refusal and nothing begins
+    Note over Caller,S: boundary validation first — type checks, then the door: the prohibitions no rule can move, evaluated over the act's closure before any rule runs; a violation is a refusal and nothing begins
     critical T1 — the UnarchiveRequest envelope
         S->>S: insert UnarchiveRequest
         Note over S: NoteUnarchival — when leaving ArchivedInvoice

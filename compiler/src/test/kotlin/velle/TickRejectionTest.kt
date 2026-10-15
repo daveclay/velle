@@ -7,15 +7,16 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * A tick rejected by a constraint (`evaluation.md`, "Ticks"). V29 refuses a
- * scheduled rule whose record a constraint consults, so in a valid spec the
- * case that remains is the one validation cannot see: a constraint that reads
- * the clock is violated by aging alone, and a firing on that state meets it
- * at the transaction end. The tick throws [TickRejected] carrying the same
- * [Rejection] an act's refusal returns, with the rule and the record it ran
- * for in the act's place.
+ * scheduled rule whose record a constraint consults, and V30 refuses a
+ * constraint that reads the clock, since the books can age into it with no
+ * act to refuse (README §21). The runtime backstop remains for a record that
+ * aged into a constraint the compiler never saw: run unvalidated, the tick
+ * throws [TickRejected] carrying the same [Rejection] an act's refusal
+ * returns, with the rule and the record it ran for in the act's place.
  */
 class TickRejectionTest {
 
@@ -34,16 +35,22 @@ class TickRejectionTest {
         }
     """.trimIndent()
 
-    private fun newSystem(): VelleSystem {
-        assertEquals(emptyList(), Validator.validate(spec), "the spec validates: V29 does not fire, no rule produces the forbidden state")
-        return VelleSystem(Model(Parser.parse(spec)), startTime = Instant.parse("2026-10-01T09:00:00Z"))
+    @Test
+    fun `a constraint that reads the clock is invalid velle`() {
+        val d = Validator.validate(spec)
+        assertEquals(listOf("V30"), d.map { it.code }, "got: $d")
+        assertTrue("never #1 (Planting where site is not PermittedSite) over Planting reads the clock" in d.single().message, d.single().message)
     }
+
+    /** The backstop: the spec V30 refuses, run unvalidated. */
+    private fun newSystem(): VelleSystem =
+        VelleSystem(Model(Parser.parse(spec)), startTime = Instant.parse("2026-10-01T09:00:00Z"))
 
     private fun VelleSystem.mustCommit(shape: String, vararg fields: Pair<String, Any?>): Long =
         assertIs<CommitResult.Accepted>(commit(shape, fields.toMap())).id
 
     @Test
-    fun `a constraint that reads the clock rejects the nightly firing once the permit lapses`() {
+    fun `the backstop - a constraint that reads the clock rejects the nightly firing once the permit lapses`() {
         val sys = newSystem()
         val site = sys.mustCommit("Site", "name" to "north field")
         sys.mustCommit("Permit", "site" to site, "expiresOn" to LocalDate.of(2026, 10, 5))

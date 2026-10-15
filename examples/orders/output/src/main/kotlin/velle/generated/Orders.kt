@@ -212,8 +212,8 @@ rule ReserveStock when OrderLine {
     Reservation from { line: this, quantity: this.quantity }
 }
 
--- input-constrained: compiled to the boundary — a closure carrying a
--- non-positive quantity is refused whole, nothing lands
+-- a constraint no rule can move, checked at the door (README §21) — a closure
+-- carrying a non-positive quantity is refused whole, nothing lands
 never (OrderLine where quantity <= 0)
 """
     }

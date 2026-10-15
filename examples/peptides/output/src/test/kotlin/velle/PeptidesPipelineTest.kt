@@ -55,14 +55,15 @@ open class PeptidesPipelineTest {
         assertEquals(dec("80"), sys.read(plate).peakInhibition)
 
         // a second reading at an hour already on file would leave the series unordered.
-        // Ruled (README §21; evaluation.md "An exposed call"): the input-constrained
-        // `never` is evaluated at the boundary, over pre-state plus the act, before any
-        // rule runs — so this is a refusal naming the `never`. The v0 runtime does not
-        // implement the boundary pass yet (working-docs/questions/OQ52): it checks every `never` at
-        // transaction end only, so the rules watching the series evaluate
-        // `latest ... by hoursElapsed` first and fail loudly on the tie (README §10).
-        // Until then the caller gets a runtime error; the transaction rolls back either way
-        assertFailsWith<VelleRuntimeError> { sys.commit(NewAssayReading(plate, 24, dec("81"))) }
+        // The prohibition reads nothing any rule writes, so it is checked at the door
+        // (README §21; evaluation.md "An exposed call"): over pre-state plus the act,
+        // before any rule runs. The caller gets the refusal the author wrote, not a
+        // selector's tie error from the rules that read the series through
+        // `latest ... by hoursElapsed`, and nothing lands
+        val duplicate = sys.commit(NewAssayReading(plate, 24, dec("81")))
+        val refused = assertIs<Commit.Refused<*>>(duplicate, "expected a refusal, got: $duplicate")
+        assertTrue(refused.reason.startsWith("AssayReading refused: "), refused.reason)
+        assertTrue("this AssayReading would be an AssayReading where count(assay.assayReadings where hoursElapsed == this.hoursElapsed) > 1" in refused.reason, refused.reason)
         assertEquals(3, sys.read(plate).assayReadings.size, "nothing landed")
         assertEquals(dec("80"), sys.read(plate).peakInhibition)
     }

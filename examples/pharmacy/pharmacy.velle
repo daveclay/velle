@@ -418,7 +418,12 @@ act PrescriberOrder {
     enteredBy: one Staff
 } with prescriptions
 
-never (PrescriberOrder where writtenOn > today)
+-- velle: "an order is never written in the future" is not written here. On
+-- this persistent act it would be a constraint reading the clock, which
+-- checks.md V30 refuses: the books could age into a constraint with no act
+-- to refuse. The spelling that reads the clock once, at the request, is a
+-- transient request answered by a record, and this order is its own record,
+-- carrying its closure; the sentence belongs to the system that sends it.
 
 -- A prescription: a drug, a quantity, how many refills the prescriber
 -- allows, and directions. A prescription from the closure cannot carry a

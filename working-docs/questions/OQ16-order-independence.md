@@ -76,9 +76,9 @@ Two whole businesses have been written against v0, each starting from the domain
 |---|---|---|---|
 | S1 | `this` inside a filter resolved to the element by the validator | GAP | fixed; probe in `ValidatorTest.kt` |
 | S2 | `as` alias as a collection source lost its element | GAP | fixed; probe in `ValidatorTest.kt` |
-| S3 | uniqueness `never` on a series datum reached after the rules that read it | GAP | ruled 2026-10-09 (OQ46); runtime guardrail is OQ52 §1 |
+| S3 | uniqueness `never` on a series datum reached after the rules that read it | GAP | ruled 2026-10-09 (OQ46), built 2026-10-14: the door check, README §21 and `evaluation.md` "An exposed call"; `PeptidesPipelineTest` asserts the refusal |
 | S4 | ledger ordering by commit timestamp ties within one instant | TAX | OQ58 §3 |
-| S5 | `never` over a persistent act is a statement about history | GAP | halt half ruled 2026-10-11 (OQ47, V29); clock-reading half is OQ52 §3 |
+| S5 | `never` over a persistent act is a statement about history | GAP | halt half ruled 2026-10-11 (OQ47, V29); clock-reading half ruled 2026-10-14: a validation error, `checks.md` V30 |
 | S6 | capture of the base's own derived property refused by V6 | TAX | OQ53 |
 | S7 | `never` over any rule-written field fails closed (V10) | TAX | OQ53; rides this question's discharge vocabulary |
 | S8 | episodes discharge does not cover a series-fed state (V15) | TAX | below, "V15's episodes discharge" |
@@ -95,7 +95,7 @@ Two whole businesses have been written against v0, each starting from the domain
 |---|---|---|---|
 | P1 | V3 refused every partition of a transient act over a time-dependent state | GAP | fixed; probe in `ValidatorTest.kt` |
 | P2 | V29 paired tick rules with refusals over transient acts | GAP | fixed; probe in `ValidatorTest.kt` |
-| P3 | a refusal reading a value the request's own handling moves refuses its own request | TAX | by design per `checks.md` V18; the wording conflict is OQ52 §2 |
+| P3 | a refusal reading a value the request's own handling moves refuses its own request | TAX | by design: a refusal is checked once, at the door when its predicate reads nothing the handling moves and at the settled transaction otherwise (README §21, `checks.md` V18, `evaluation.md` "An exposed call", ruled 2026-10-14) |
 | P4 | V29 cannot see that a record only raises an aggregate | TAX | OQ53 |
 | P5 | `never` over a rule-written field fails closed (V10) | TAX | OQ53; rides this question |
 | P6 | deleting an unfilled prescription strands fourteen referrers (V24) | TAX | by design; void as a record (reversal as data) |
@@ -105,7 +105,7 @@ Two whole businesses have been written against v0, each starting from the domain
 | P10 | generator: closure part "not exposed"; one staff given for every role gate; schedule-only exit case asserts nothing | TAX | OQ56 |
 | P11 | 57 A5 widths; the allergy join's second binding resolved against the first binding's element | TAX | OQ55 |
 | P12 | `then` on the `if` line; no duration from data; no boolean from a comparison | TAX | by design; `QUESTIONS.md` items |
-| P13 | three answering mechanisms on one request, chosen by one question | HOLDS | OQ52 §2 (owed to `patterns.md` and README §21) |
+| P13 | three answering mechanisms on one request, chosen by one question | HOLDS | `patterns.md` "Three answers to one request", README §21 |
 | P14 | inline and standalone exposure together is "exposed twice" | — | moot since OQ50: an act is declared in one place |
 
 **V15's episodes discharge does not cover a state fed by a series (peptides S8).** A greenhouse is out of band when its latest climate reading is outside its limits, and each stretch out of band is an episode:

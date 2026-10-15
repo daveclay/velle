@@ -721,33 +721,30 @@ interface PharmacyStore {
     /** Serves never #11 — `StockLot where received <= 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never11Candidates(): List<StockLotRow>
-    /** Serves never #14 — `PrescriberOrder where writtenOn > today`.
+    /** Serves never #14 — `Prescription where quantity <= 0`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never14Candidates(writtenOnAfter: LocalDate): List<PrescriberOrderRow>
-    /** Serves never #15 — `Prescription where quantity <= 0`.
+    fun never14Candidates(): List<PrescriptionRow>
+    /** Serves never #15 — `Prescription where daysSupply <= 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never15Candidates(): List<PrescriptionRow>
-    /** Serves never #16 — `Prescription where daysSupply <= 0`.
+    /** Serves never #16 — `Prescription where refillsAuthorized < 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never16Candidates(): List<PrescriptionRow>
-    /** Serves never #17 — `Prescription where refillsAuthorized < 0`.
+    /** Serves never #17 — `Prescription where (drug is ScheduleTwo) and (refillsAuthorized > 0)`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never17Candidates(): List<PrescriptionRow>
-    /** Serves never #18 — `Prescription where (drug is ScheduleTwo) and (refillsAuthorized > 0)`.
+    /** Serves never #18 — `Prescription where (drug is Controlled) and (refillsAuthorized > 5)`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never18Candidates(): List<PrescriptionRow>
-    /** Serves never #19 — `Prescription where (drug is Controlled) and (refillsAuthorized > 5)`.
+    /** Serves never #21 — `ConflictOverride where pharmacist is not Pharmacist`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never19Candidates(): List<PrescriptionRow>
-    /** Serves never #22 — `ConflictOverride where pharmacist is not Pharmacist`.
+    fun never21Candidates(): List<ConflictOverrideRow>
+    /** Serves never #27 — `MonitoringCheck where pharmacist is not Pharmacist`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never22Candidates(): List<ConflictOverrideRow>
-    /** Serves never #28 — `MonitoringCheck where pharmacist is not Pharmacist`.
+    fun never27Candidates(): List<MonitoringCheckRow>
+    /** Serves never #33 — `Counselling where pharmacist is not Pharmacist`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never28Candidates(): List<MonitoringCheckRow>
-    /** Serves never #34 — `Counselling where pharmacist is not Pharmacist`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never34Candidates(): List<CounsellingRow>
+    fun never33Candidates(): List<CounsellingRow>
 
     // ── capture memory: null when no current membership (README §13) ──
     fun readyForPickupCapture(instance: Ref.Persisted): ReadyForPickupCapture?
@@ -797,15 +794,14 @@ class PharmacyStoreQuestions(model: Model) {
     val never5Candidates = QTemplate.of(model, "Interaction", model.nevers[4].target)
     val never6Candidates = QTemplate.of(model, "PriceChange", model.nevers[5].target)
     val never11Candidates = QTemplate.of(model, "StockLot", model.nevers[10].target)
-    val never14Candidates = QTemplate.of(model, "PrescriberOrder", model.nevers[13].target)
+    val never14Candidates = QTemplate.of(model, "Prescription", model.nevers[13].target)
     val never15Candidates = QTemplate.of(model, "Prescription", model.nevers[14].target)
     val never16Candidates = QTemplate.of(model, "Prescription", model.nevers[15].target)
     val never17Candidates = QTemplate.of(model, "Prescription", model.nevers[16].target)
     val never18Candidates = QTemplate.of(model, "Prescription", model.nevers[17].target)
-    val never19Candidates = QTemplate.of(model, "Prescription", model.nevers[18].target)
-    val never22Candidates = QTemplate.of(model, "ConflictOverride", model.nevers[21].target)
-    val never28Candidates = QTemplate.of(model, "MonitoringCheck", model.nevers[27].target)
-    val never34Candidates = QTemplate.of(model, "Counselling", model.nevers[33].target)
+    val never21Candidates = QTemplate.of(model, "ConflictOverride", model.nevers[20].target)
+    val never27Candidates = QTemplate.of(model, "MonitoringCheck", model.nevers[26].target)
+    val never33Candidates = QTemplate.of(model, "Counselling", model.nevers[32].target)
 }
 
 /**
@@ -1207,9 +1203,9 @@ open class PharmacyStoreOverGeneric(
         backend.fetchCandidates("StockLot", questions.never11Candidates.instantiate(listOf()))
             .map { it.toStockLotRow() }
 
-    override fun never14Candidates(writtenOnAfter: LocalDate): List<PrescriberOrderRow> =
-        backend.fetchCandidates("PrescriberOrder", questions.never14Candidates.instantiate(listOf(QConst.QDate(writtenOnAfter))))
-            .map { it.toPrescriberOrderRow() }
+    override fun never14Candidates(): List<PrescriptionRow> =
+        backend.fetchCandidates("Prescription", questions.never14Candidates.instantiate(listOf()))
+            .map { it.toPrescriptionRow() }
 
     override fun never15Candidates(): List<PrescriptionRow> =
         backend.fetchCandidates("Prescription", questions.never15Candidates.instantiate(listOf()))
@@ -1227,20 +1223,16 @@ open class PharmacyStoreOverGeneric(
         backend.fetchCandidates("Prescription", questions.never18Candidates.instantiate(listOf()))
             .map { it.toPrescriptionRow() }
 
-    override fun never19Candidates(): List<PrescriptionRow> =
-        backend.fetchCandidates("Prescription", questions.never19Candidates.instantiate(listOf()))
-            .map { it.toPrescriptionRow() }
-
-    override fun never22Candidates(): List<ConflictOverrideRow> =
-        backend.fetchCandidates("ConflictOverride", questions.never22Candidates.instantiate(listOf()))
+    override fun never21Candidates(): List<ConflictOverrideRow> =
+        backend.fetchCandidates("ConflictOverride", questions.never21Candidates.instantiate(listOf()))
             .map { it.toConflictOverrideRow() }
 
-    override fun never28Candidates(): List<MonitoringCheckRow> =
-        backend.fetchCandidates("MonitoringCheck", questions.never28Candidates.instantiate(listOf()))
+    override fun never27Candidates(): List<MonitoringCheckRow> =
+        backend.fetchCandidates("MonitoringCheck", questions.never27Candidates.instantiate(listOf()))
             .map { it.toMonitoringCheckRow() }
 
-    override fun never34Candidates(): List<CounsellingRow> =
-        backend.fetchCandidates("Counselling", questions.never34Candidates.instantiate(listOf()))
+    override fun never33Candidates(): List<CounsellingRow> =
+        backend.fetchCandidates("Counselling", questions.never33Candidates.instantiate(listOf()))
             .map { it.toCounsellingRow() }
 
     override fun readyForPickupCapture(instance: Ref.Persisted): ReadyForPickupCapture? =
@@ -1508,8 +1500,8 @@ class PharmacyStoreResolver(
             questions.never6Candidates.match(filter)?.let { h -> return store.never6Candidates().map { it.toRow() } }
         if (shape == "StockLot")
             questions.never11Candidates.match(filter)?.let { h -> return store.never11Candidates().map { it.toRow() } }
-        if (shape == "PrescriberOrder")
-            questions.never14Candidates.match(filter)?.let { h -> return store.never14Candidates(h.date(0)).map { it.toRow() } }
+        if (shape == "Prescription")
+            questions.never14Candidates.match(filter)?.let { h -> return store.never14Candidates().map { it.toRow() } }
         if (shape == "Prescription")
             questions.never15Candidates.match(filter)?.let { h -> return store.never15Candidates().map { it.toRow() } }
         if (shape == "Prescription")
@@ -1518,14 +1510,12 @@ class PharmacyStoreResolver(
             questions.never17Candidates.match(filter)?.let { h -> return store.never17Candidates().map { it.toRow() } }
         if (shape == "Prescription")
             questions.never18Candidates.match(filter)?.let { h -> return store.never18Candidates().map { it.toRow() } }
-        if (shape == "Prescription")
-            questions.never19Candidates.match(filter)?.let { h -> return store.never19Candidates().map { it.toRow() } }
         if (shape == "ConflictOverride")
-            questions.never22Candidates.match(filter)?.let { h -> return store.never22Candidates().map { it.toRow() } }
+            questions.never21Candidates.match(filter)?.let { h -> return store.never21Candidates().map { it.toRow() } }
         if (shape == "MonitoringCheck")
-            questions.never28Candidates.match(filter)?.let { h -> return store.never28Candidates().map { it.toRow() } }
+            questions.never27Candidates.match(filter)?.let { h -> return store.never27Candidates().map { it.toRow() } }
         if (shape == "Counselling")
-            questions.never34Candidates.match(filter)?.let { h -> return store.never34Candidates().map { it.toRow() } }
+            questions.never33Candidates.match(filter)?.let { h -> return store.never33Candidates().map { it.toRow() } }
         return fetchAll(shape) // unrecognized filters fall back to the scan floor
     }
 

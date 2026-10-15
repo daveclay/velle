@@ -77,7 +77,7 @@ object DiagramGen {
             sb.appendLine("    actor Caller")
             sb.appendLine("    participant S as $systemName")
             sb.appendLine("    Caller->>S: commit$act(${params()})")
-            sb.appendLine("    Note over Caller,S: boundary validation first — type checks and the input-constrained nevers compiled to this act's boundary, a violation is a refusal and nothing begins")
+            sb.appendLine("    Note over Caller,S: boundary validation first — type checks, then the door: the prohibitions no rule can move, evaluated over the act's closure before any rule runs; a violation is a refusal and nothing begins")
 
             val deferred = mutableListOf<Pair<RuleDecl, String>>() // after-commit firings this envelope caused
             renderEnvelope("the $act envelope", deferred, noteIfQuiet = true) {

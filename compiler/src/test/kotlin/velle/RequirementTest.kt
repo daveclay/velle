@@ -133,7 +133,6 @@ class RequirementTest {
             VerifyFill refused: VerifyFill requires pharmacist is Pharmacist, and this VerifyFill does not.
               requires #1: VerifyFill requires pharmacist is Pharmacist
               this VerifyFill: fill = Fill#2, pharmacist = Staff#1
-              produced Verification#4: fill = Fill#2, pharmacist = Staff#1
               through Staff#1: name = "Ana", role = "technician"
               evaluation:
                 this VerifyFill.pharmacist = Staff#1

@@ -10,7 +10,7 @@ package velle
  * Velle has no control flow, so this is not a flowchart of steps. Fan-out
  * means "every edge whose guard holds fires, in no order" (V16), never a
  * choice being made. A decision diamond appears only where exclusivity is
- * proven: the accept/refuse split an input-constrained `never` compiles to,
+ * proven: the accept/refuse split a door-checked `never` compiles to,
  * and a transient act's provably exclusive partitions (complements: exactly
  * one branch, always). Edge style carries the transaction structure — solid
  * fires inside the same envelope, dotted crosses a boundary (`after commit`,
@@ -36,7 +36,7 @@ internal object RuleGraphGen {
                     "the same transaction envelope; dotted edges cross a boundary (`after commit`, or " +
                     "armed now and swept at the labeled tick). Fan-out is not a choice: every edge whose " +
                     "guard holds fires, in no particular order. A diamond appears only where exclusivity " +
-                    "is proven — the accept/refuse split of an input-constrained `never`, and a transient " +
+                    "is proven — the accept/refuse split of a door-checked `never`, and a transient " +
                     "act's complement partitions. A self-loop marked *disarms its own guard* is the " +
                     "guard-disarm pattern: the rule's own write makes its re-evaluation harmless. An act " +
                     "with no outgoing edge commits quietly — data recorded, no rule woken."

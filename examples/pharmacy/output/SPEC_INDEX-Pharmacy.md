@@ -138,9 +138,6 @@ each case below is an executable test.
 - never - a CountLot where counted below 0 is refused
 - never - a CountLot with counted 0 is accepted
 
-## PrescriberOrderSpec.kt
-
-
 ## PrescriptionSpec.kt
 
 
@@ -165,17 +162,17 @@ each case below is an executable test.
 ## Not yet generated
 
 - requires #9: multi-conjunct predicate
-- requires #27: shape is not an act
-- never #33: shape is not an act
-- never #38: shape is not an act
-- requires #30: non-comparison predicate
-- never #31: multi-conjunct predicate
-- requires #32: multi-conjunct predicate
-- requires #35: complex comparison subject
-- never #36: non-comparison predicate
-- never #37: non-literal bound
-- requires #39: multi-conjunct predicate
-- never #40: complex comparison subject
+- requires #26: shape is not an act
+- never #32: shape is not an act
+- never #37: shape is not an act
+- requires #29: non-comparison predicate
+- never #30: multi-conjunct predicate
+- requires #31: multi-conjunct predicate
+- requires #34: complex comparison subject
+- never #35: non-comparison predicate
+- never #36: non-literal bound
+- requires #38: multi-conjunct predicate
+- never #39: complex comparison subject
 - requires #1: multi-conjunct predicate
 - requires #2: non-comparison predicate
 - never #3: complex comparison subject
@@ -184,19 +181,18 @@ each case below is an executable test.
 - never #7: complex comparison subject
 - requires #8: non-comparison predicate
 - requires #12: multi-conjunct predicate
-- never #14: non-literal bound
+- never #14: shape is not an act
 - never #15: shape is not an act
 - never #16: shape is not an act
 - never #17: shape is not an act
 - never #18: shape is not an act
-- never #19: shape is not an act
-- requires #20: non-literal bound
+- requires #19: non-literal bound
+- requires #20: non-comparison predicate
 - requires #21: non-comparison predicate
-- requires #22: non-comparison predicate
-- requires #23: multi-conjunct predicate
-- requires #24: multi-hop comparison subject
+- requires #22: multi-conjunct predicate
+- requires #23: multi-hop comparison subject
+- never #24: complex comparison subject
 - never #25: complex comparison subject
-- never #26: complex comparison subject
-- never #29: multi-conjunct predicate
-- requires #28: non-comparison predicate
-- requires #34: non-comparison predicate
+- never #28: multi-conjunct predicate
+- requires #27: non-comparison predicate
+- requires #33: non-comparison predicate

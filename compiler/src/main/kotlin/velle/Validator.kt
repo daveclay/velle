@@ -55,6 +55,7 @@ class Validator(private val model: Model) {
         checkExistenceDependency()     // V25 (OQ37: guard witnesses, singularity proofs)
         checkNeverDeleters()           // V26 (OQ37: deleters join `never` induction)
         checkUncalledCreations()       // V29 (a firing with no caller joins `never` induction)
+        checkClockReadingConstraints() // V30 (a constraint that reads the clock: the clock is a writer with no caller)
         checkUndeletable()             // V27 (OQ37: the state-scoped deletion gate)
         checkDeleteStranding()         // V28 (OQ37: the V17 mirror at deletion; deletion-side forms transaction-bound)
         checkDeletionSideReferences()  // V24 (OQ37-R14: a deletion-side body keeps no reference to its subject)
@@ -1147,12 +1148,11 @@ class Validator(private val model: Model) {
 
     // ── spent invariants: `never`s as proof inputs (README §21, checks.md V10) ─
     //
-    // Only a fully-discharged invariant is spendable. In v0 that is exactly the
-    // input-constrained kind: no rule writes any field its predicate reads, so
-    // the invariant is enforced entirely at the boundary (compiled guardrails
-    // at the act's boundary) and holds in every settled state. A rule-maintained
-    // `never` would need the inductive proof v0 doesn't attempt (V10 fails
-    // closed on it), so it is never spent.
+    // Only a fully-discharged prohibition is spendable. In v0 that is exactly
+    // the refusals and constraints: no rule writes any field the predicate
+    // reads, so the prohibition is enforced entirely by rejection and holds in
+    // every settled state. A guarantee would need the inductive proof v0
+    // doesn't attempt (V10 fails closed on it), so it is never spent.
 
     private val spendableNevers: List<NeverDecl> by lazy {
         val written = writes.map { it.owner to it.member.name }.toSet()
@@ -1166,6 +1166,39 @@ class Validator(private val model: Model) {
             !s.opaque && s.fields.none { it in written } &&
                 foreignConsults.none { it in model.deletedShapes }
         }
+    }
+
+    // ── the door set: prohibitions checked at the act's own commit (README §21,
+    // ruled 2026-10-14) ───────────────────────────────────────────────────────
+    //
+    // A prohibition constrains the settled transaction, and its rejection names
+    // the act in flight. One whose predicate reads nothing any rule writes,
+    // creates, or deletes cannot change its verdict by the rules running, so the
+    // runtime evaluates it once, at the act's commit before any rule, and skips
+    // it at the transaction end: the same verdict, no second evaluation, and no
+    // rule ever runs on a state the prohibition forbids. Every other prohibition
+    // is evaluated at the end only. The set is by ordinal into `model.nevers`.
+    val doorNevers: Set<Int> by lazy {
+        val written = writes.map { it.owner to it.member.name }.toSet()
+        val writtenShapes = written.map { it.first }.toSet()
+        val created = model.rules.values.flatMap { r ->
+            r.body.filterIsInstance<Creation>().map { model.baseOf(it.shape) ?: it.shape }
+        }.toSet()
+        model.nevers.indices.filter { i ->
+            val n = model.nevers[i]
+            val s = model.summaryOfRefExpr(n.target)
+            val consulted = (s.touchedShapes() + setOfNotNull(model.baseOfExpr(n.target)))
+                .mapNotNull { model.baseOf(it) }.toSet()
+            // an `on update` timestamp advances at every write to its shape
+            val updateStamps = s.collFields.filter { (sh, f) ->
+                model.shapes[model.baseOf(sh) ?: sh]?.members?.filterIsInstance<TimestampProp>()
+                    ?.any { it.name == f && it.on == "update" } == true
+            }
+            !s.opaque &&
+                (s.fields + s.collFields).none { it in written } &&
+                updateStamps.none { it.first in writtenShapes } &&
+                consulted.none { it in created || it in model.deletedShapes }
+        }.toSet()
     }
 
     /**
@@ -1599,8 +1632,8 @@ class Validator(private val model: Model) {
             val written = writes.map { it.owner to it.member.name }.toSet()
             (s.fields intersect written).forEach { (shape, field) ->
                 val writer = writes.first { it.owner == shape && it.member.name == field }.rule.name
-                diags.add(Diagnostic("V10", "never over $shape.$field is rule-maintained ('$writer' writes it) — " +
-                    "v0 cannot yet prove the invariant inductively; fail closed (README §21, OQ16)"))
+                diags.add(Diagnostic("V10", "never over $shape.$field is a guarantee ('$writer' writes the field it reads) — " +
+                    "v0 cannot yet prove it inductively over its writers; fail closed (README §21, OQ16)"))
             }
         }
     }
@@ -2495,6 +2528,31 @@ class Validator(private val model: Model) {
                         "firing, or retract the prohibition (README §21)"))
                 }
             }
+        }
+    }
+
+    // V30 — a constraint that reads the clock (ruled 2026-10-14; README §21).
+    // Time advancing is a commit — the tick — so `today` and `now` are data
+    // with a writer, and that writer fires with nobody asking: the V29 case
+    // with the clock as the writer. A constraint on a persistent shape whose
+    // predicate reads the clock, directly or through a refinement it consults,
+    // can be violated by aging alone, with no act to refuse; and since the end
+    // check collects every violating record, two aged records make the books
+    // unrepairable from inside the system. v0 proves nothing about which
+    // direction time moves a predicate — fail closed. A refusal is exempt: a
+    // transient act is checked once, at the request, and the clock is read at
+    // that moment (V3's stance for a request's time-dependent partition).
+    private fun checkClockReadingConstraints() {
+        for ((i, n) in model.nevers.withIndex()) {
+            val nBase = model.baseOfExpr(n.target)
+            if (nBase != null && nBase in model.transients) continue
+            val s = model.summaryOfRefExpr(n.target)
+            if (!s.readsTime) continue
+            diags.add(Diagnostic("V30", "${n.keyword} #${i + 1} (${Printer.prohibitionBody(n)}) over " +
+                "${nBase ?: Printer.refExpr(n.target)} reads the clock — the books can age into the forbidden " +
+                "state with no act to refuse, and the clock has no caller: state it on a transient request, " +
+                "where the clock is read once at the moment of the act; record the decision as a field the " +
+                "prohibition reads instead of the clock; or retract it (README §21)"))
         }
     }
 
