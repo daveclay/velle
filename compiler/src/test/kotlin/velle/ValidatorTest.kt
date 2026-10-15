@@ -94,6 +94,30 @@ class ValidatorTest {
         assertFalse(codes(src).contains("V30"), "got: ${diags(src)}")
     }
 
+    // README §21, "Where the prohibition is written decides which it is": one
+    // business sentence, two placements. On the transient request it is a
+    // refusal and a past-due invoice stays an ordinary state; on the record it
+    // is a constraint the books would age into, and V30 refuses it.
+    private val invoiceSubmission = """
+        shape Customer { name: text }
+        transient act SubmitInvoice { customer: one Customer  dueOn: Date }
+        shape Invoice { customer: one Customer  dueOn: Date }
+        rule RecordInvoice when SubmitInvoice { Invoice from { customer: customer, dueOn: dueOn } }
+    """.trimIndent()
+
+    @Test
+    fun `V30 - a due date in the past is refused on the transient request, and the past-due record is allowed`() {
+        val src = invoiceSubmission + "\nnever (SubmitInvoice where dueOn < today)"
+        assertEquals(emptyList(), diags(src), "got: ${diags(src)}")
+        assertEquals(setOf(0), Validator(Model(Parser.parse(src))).doorNevers, "the refusal is door-checked")
+    }
+
+    @Test
+    fun `V30 - the same sentence on the invoice record is a constraint the books would age into`() {
+        val src = invoiceSubmission + "\nnever (Invoice where dueOn < today)"
+        assertTrue(codes(src).contains("V30"), "got: ${diags(src)}")
+    }
+
     @Test
     fun `V30 - a constraint comparing dates to each other does not read the clock`() {
         assertFalse(codes(permits + "\nnever (Permit where expiresOn < issuedOn)").contains("V30"))
