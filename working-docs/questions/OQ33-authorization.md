@@ -1,6 +1,6 @@
 # OQ33 — Authorization: the actor (the principal), roles, and what an actor may commit and see
 
-**Status:** open on three visibility decisions (§5.8 form, §5.9 default, §5.10 where applied); §5.1 through §5.6 settled with Dave on 2026-10-14 and 2026-10-15, with the table at the head of §5 as the record. Investigation written 2026-10-14 at Dave's request (the question was deferred post-v0 as `visible to` field visibility; it now carries the whole authorization question, since the read side and the act side turned out to be one construct seen from two places)
+**Status:** every decision in §5 settled with Dave on 2026-10-14 and 2026-10-15, with the table at the head of §5 as the record; the work in §6 is next. Investigation written 2026-10-14 at Dave's request (the question was deferred post-v0 as `visible to` field visibility; it now carries the whole authorization question, since the read side and the act side turned out to be one construct seen from two places)
 **In plain terms:** the engineer's code authenticates a person and, through one resolver registered when the system is built, hands velle an instance of the shape the spec declares for actors, stored when the system owns its users and built from an identity provider's claims when it does not. The spec then says, in its own predicate language, which actors may commit which acts and which records and fields an actor may see, with roles as refinements over the person's shape and data-driven conditions as ordinary predicates relating the actor to the record. A scheduled rule has no actor. The engineer's own reads use a system view the surface does not filter.
 **See:** Reference §8 ("Every captured value traces to data"), §21 (prohibitions), §22 ("External input (`act`)", the query API) · `checks.md` V21, V29 · `evaluation.md` "An exposed call" · `examples/pharmacy/pharmacy.velle` (the role gates as they are written today) · OQ28 (bootstrapping the first actor) · OQ56 (generated cases for role refusals) · OQ57 (the read API's follow-ons)
 
@@ -154,7 +154,7 @@ The licence gate moved into `VerifyFill`'s header, and the two prohibitions that
 
 ## 5. Decisions for Dave
 
-Each section opens with its status in bold, **Settled** with the date or **Open**, then the decision this document recommends, then what it costs. The table is the record; a section's text is the reasoning.
+All settled. Each section opens with its status in bold and the date, then the decision, then what it costs. The table is the record; a section's text is the reasoning.
 
 | § | Decision | Status |
 |---|---|---|
@@ -165,9 +165,9 @@ Each section opens with its status in bold, **Settled** with the date or **Open*
 | 5.5 | The commit function takes an actor exactly when the act declares `by` | Settled 2026-10-15 |
 | 5.6 | No system identity; a spec that wants one models an actor | Settled 2026-10-15 |
 | 5.7 | Visibility's goal and example | Context, not a decision |
-| 5.8 | Visibility's form: `visible to <Shape> [as name] [where ...]` as a body clause | **Open** |
-| 5.9 | Visibility's default: once a spec has any authorization every readable shape declares, `visible to anyone` for public, a top-level clause as the spec-wide default | **Open** |
-| 5.10 | Visibility applied by the read surface only | **Open** |
+| 5.8 | Visibility's form: `visible to <Shape> [as name] [where ...]` as a body clause, in the body | Settled 2026-10-15 |
+| 5.9 | Visibility's default: once a spec has any authorization every readable shape declares, `visible to anyone` for public, a top-level clause as the spec-wide default | Settled 2026-10-15 |
+| 5.10 | Visibility applied by the read surface only; a derived property is calculated regardless of visibility | Settled 2026-10-15 |
 
 ### 5.1 Authenticating the user and handing them to velle is the engineer's job; what that user may do and see is the spec's
 
@@ -267,11 +267,11 @@ What the surface does with it (§3.3). A staff member assigned to one vendor rea
 
 ### 5.8 Visibility's form: `visible to <Shape> [as <name>] [where <predicate>]` as a body clause on a shape and on a field
 
-**Open.** Recommendation below. Choose the body clause, in the family of `frozen` and `undeletable`, naming the viewer's shape as `by` names an act's actor, binding `actor` or the `as` name in its predicate, typed by the clause, with the predicate reading `this`, that name, and the data graph. Several clauses on one record or field disjoin; a record that has any clause is hidden from a viewer whose shape no clause names. The record-level clause sits inside the body beside the fields, where `frozen` and `undeletable` sit in a refinement's body (Reference §8), and the field-level clause follows the field's type as `frozen`'s list names fields (Dave, 2026-10-15, after considering a line after the body). This follows from §5.3 and §5.5 and is a confirmation. The cost is a new body clause in the grammar, and that the viewer of a read is bound under the same default name as the committer of an act, so an author who finds `actor` wrong for a reader writes `as viewer`.
+**Settled with Dave, 2026-10-15: in the body.** The body clause, in the family of `frozen` and `undeletable`, naming the viewer's shape as `by` names an act's actor, binding `actor` or the `as` name in its predicate, typed by the clause, with the predicate reading `this`, that name, and the data graph. Several clauses on one record or field disjoin; a record that has any clause is hidden from a viewer whose shape no clause names. The record-level clause sits inside the body beside the fields, where `frozen` and `undeletable` sit in a refinement's body (Reference §8), and the field-level clause follows the field's type as `frozen`'s list names fields (Dave, 2026-10-15, after considering a line after the body). This follows from §5.3 and §5.5 and is a confirmation. The cost is a new body clause in the grammar, and that the viewer of a read is bound under the same default name as the committer of an act, so an author who finds `actor` wrong for a reader writes `as viewer`.
 
 ### 5.9 Visibility's default: once a spec has any authorization, every readable shape declares its visibility, `visible to anyone` for a public one
 
-**Open.** Recommendation below, reached with Dave on 2026-10-15; it replaces the visible-by-default recommendation this section first carried.
+**Settled with Dave, 2026-10-15.** It replaces the visible-by-default recommendation this section first carried.
 
 Choose the required declaration. Once a spec has authorization, which is any act declared `by` or any shape with a `visible to` clause, a readable shape with no clause is a compile error naming the shape, and `visible to anyone` is how a shape says it is public (`anyone` is a contextual word after `visible to`, where only shape names otherwise appear, so it can clash with nothing; it means any actor the binding provides, never an anonymous reader, since a read with no viewer is the engineer's unfiltered view and a spec has no spelling yet for "readable with no viewer at all"). The word was weighed against `all` and `public` on 2026-10-15: `anyone` fills the who slot the clause's other operands fill; `all` is a quantity word beside `none`, `some`, `one`, and `many`, and the natural spelling of a universal quantifier should one ever join `exists`; `public` is a modifier rather than a `visible to` sentence, and in business speech means the general public, a wider set than this clause admits. What must declare is every base shape and every durable act, since those are what the read surface returns; a transient act or transient shape is never read and says nothing; a refinement takes its base's visibility. A spec with neither `by` nor `visible to` is untouched and keeps compiling.
 
@@ -279,13 +279,82 @@ Why the requirement beats either default. Visible by default fails open silently
 
 The cost is noise, and the one-line answer to it. The pharmacy has about thirty readable shapes, so the honest cost is up to thirty lines, though most would carry a real sentence (`visible to Staff`, `visible to Patient where patient == actor`) rather than `anyone`. Dave's first thought for the noisy case was a namespace that could say `visible to anyone` once for a group; velle has no module construct, a spec is one file, and a grouping invented for visibility alone would be a construct with one use, so the file is the namespace: a top-level clause, `visible to anyone` or `visible to Staff` written once at the top of the spec, which every readable shape without its own clause takes, and which a shape's own clause replaces. It is a declared default, one line a reader can see. Its cost is that velle has no other spec-wide default, and a reader of one shape has to know to look at the top of the file; if a module construct ever arrives for other reasons, the clause attaches to it unchanged.
 
+The pharmacy with the default, three of its shapes as written today in `examples/pharmacy/pharmacy.velle` (`Fill` in the fill section, `Claim` in the claims section, `Drug` in the formulary) and a patient as a second viewer:
+
+```
+visible to Staff                        -- the spec-wide default: every readable shape, unless it says otherwise
+
+act Drug {                              -- says nothing: visible to Staff
+    name: text
+    ...
+}
+
+shape Fill {                            -- says something, so it says everything: staff, and the patient it is for
+    prescription: one Prescription
+    lot: one StockLot
+    quantity: integer
+    unitPrice: decimal visible to Staff
+    ...
+    visible to Staff
+    visible to Patient as patient where prescription.order.patient == patient
+}
+
+shape Claim {                           -- narrows: the default is replaced, not added to
+    fill: one Fill
+    plan: one InsurancePlan
+    amount: decimal
+    ...
+    visible to Administrator
+}
+```
+
+A shape's own clauses replace the default rather than add to it, which is why `Fill` repeats `visible to Staff` beside the patient's clause and why `Claim` can narrow to administrators with one line; the alternative, clauses adding to the default, would leave no way to narrow short of a word for removing the default, and "a shape that says anything says everything" is the rule a reader can hold. A field's clause narrows within its record's: `unitPrice` is visible to staff who can see the fill and to no patient. Of the pharmacy's forty-eight readable declarations, thirty base shapes and eighteen durable acts, perhaps ten would carry a clause under this default and the rest would read as `Drug` does.
+
 ### 5.10 Visibility is applied by the read surface only, never inside spec evaluation
 
-**Open.** Recommendation below. Choose the surface. The cost is the leak through a derivation: `margin` in §5.7 is visible to every assigned staff member and is `price - cost`, so a viewer who may not see `cost` can compute it. The spec does not reason about what a derivation reveals of its inputs; the author gives `margin` its own clause, and a later advisory can point at a visible derivation over an invisible field if that proves to matter. The alternative, applying visibility inside evaluation so that a derivation reads an absent `cost` for a non-administrator, would make a rule's result depend on who is reading, which Reference §8 rules out and which would make `margin` mean two things.
+**Settled with Dave, 2026-10-15.** The question is whether a viewer's visibility changes what the spec computes: whether a derived field is calculated, and over what, when the viewer may not see one of its inputs. Choose no: a derived field is calculated the same way for every read, over every input whether or not the viewer may see it, and visibility decides only whether the result is handed back. The cost is the leak through a derivation: `margin` in §5.7 is visible to every assigned staff member and is `price - cost`, so a viewer who may not see `cost` can compute it. The spec does not reason about what a derivation reveals of its inputs; the author gives `margin` its own clause, and a later advisory can point at a visible derivation over an invisible field if that proves to matter. The alternative, applying visibility inside evaluation so that a derivation reads an absent `cost` for a non-administrator, would make a rule's result depend on who is reading, which Reference §8 rules out and which would make `margin` mean two things.
+
+The example, §5.7's `Product` with a price change and a rule:
+
+```
+shape Product {
+    vendor: one Vendor
+    name: text
+    price: Money
+    cost: Money visible to Administrator
+    margin: Money = price - cost
+    visible to Staff where exists (VendorAssignment where staff == actor and vendor == this.vendor)
+}
+
+transient act ChangePrice by Staff {
+    product: one Product
+    price: Money
+}
+
+ChangePrice requires exists (VendorAssignment where staff == actor and vendor == product.vendor)
+never (ChangePrice where price < product.cost)
+
+rule FlagThinMargin when (Product where margin < 1.00 and not exists MarginAlert for this) {
+    MarginAlert from { product: this }
+}
+```
+
+Evaluation has no viewer, so none of this depends on who is asking. `margin` is calculated as `price - cost` on every read, the assigned staff member's included, with `cost` read in full; the viewer's clause never reaches the formula. The `never` reads `product.cost` for every committer, an assigned staff member included, and refuses a price below cost whether or not that person may see the cost; `FlagThinMargin` reads `cost` through `margin` for every product, since a rule is not a read. What differs is only what the surface hands back after the calculation is done:
+
+```
+sys.read(assignedStaff).product(key)       // name, vendor, price, margin (calculated over the hidden cost); cost absent
+sys.read(administrator).product(key)       // every field
+sys.read.product(key)                      // the engineer's view: every field, no viewer
+sys.read(otherVendorsStaff).product(key)   // absent: the record is invisible to this viewer
+```
+
+Two consequences the example makes concrete. First, the leak: the assigned staff member sees `margin` and `price` and can subtract, so an author who means to hide cost writes `margin: Money = price - cost visible to Administrator`, a clause of the derivation's own, and the spec does not infer it. Second, a refusal is handed back through the same surface: the rejection data for `ChangePrice` carries the records the prohibition read through (§3.4, `compiler/src/main/kotlin/velle/Rejection.kt`), `product` among them, and the surface projects that record for the actor as it would for a read, so the staff member learns the price was refused as below cost without learning the cost. The engineer's own code, reading the rejection through the unfiltered view, sees it whole.
+
+Two things Dave asked to carry forward. The finalized docs must say it plainly, in Reference §7 beside the rule that a derived property is computed on read: a derived property is calculated regardless of visibility, and no formula reads the viewer. And an author who wants a value calculated only for a certain user does not get a viewer-dependent formula; they scope what carries the value to that user, a clause on the derived property itself (`margin: Money = price - cost visible to Administrator`) or on the shape or refinement body that declares it, so that the value is defined once for everyone and handed only to those who may see it.
 
 ## 6. Work, once the decisions land
 
-- Reference: §5 (`actor` beside `id` as a language-populated property; the arrival-fixed derived field), §8 (the actor as the act's fact), §11 and §18 (an `after commit` rule over a durable act reading `actor`), §21 (a prohibition reading `actor`), §22 (the scope statement, "External input", the query API's viewer); `grammar.md` (the `by ... [as ...]` clause on an act and on a rule, the default name, the visibility clauses); `checks.md` (V21's exception, the reachability check, the visibility-predicate check); `evaluation.md` ("An exposed call" with the actor in the input, "A read is a read-only snapshot" with the viewer); `testgen.md`; `diagrams.md`; the glossary (actor and principal, system view).
+- Reference: §5 (`actor` beside `id` as a language-populated property; the arrival-fixed derived field), §7 (a derived property is calculated regardless of visibility; no formula reads the viewer), §8 (the actor as the act's fact), §11 and §18 (an `after commit` rule over a durable act reading `actor`), §21 (a prohibition reading `actor`), §22 (the scope statement, "External input", the query API's viewer); `grammar.md` (the `by ... [as ...]` clause on an act and on a rule, the default name, the visibility clauses); `checks.md` (V21's exception, the reachability check, the visibility-predicate check); `evaluation.md` ("An exposed call" with the actor in the input, "A read is a read-only snapshot" with the viewer); `testgen.md`; `diagrams.md`; the glossary (actor and principal, system view).
 - The compiler: lexer and parser, the model's actor shape, the validator's reachability and form checks, the stored actor on durable acts in the runtime and the store, `Domains.kt` with `actor` as a path root, `Codegen.kt`'s commit function and read surface, `Read.kt` with the viewer and the visibility conjunct, `SpecGen.kt`'s role cases.
 - The pharmacy rewritten onto the actor, regenerated, its tests passing the actor; a small vendor-and-products spec exercising visibility end to end, the first spec whose tests read through two actors and the system view.
 - QUESTIONS.md: the OQ20 row amended; the OQ56 item gains its data; OQ28 gains the bootstrapping item.
