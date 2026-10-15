@@ -23,17 +23,26 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun tickHourly() = system.tick("Hourly")
     fun tickMonthly() = system.tick("Monthly")
 
-    /** Queue keys: none — this commit contends with no other work.
+    /** Queue: system-wide.
+     *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
+     *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
+     *  System-wide over ConflictOverride — reads ConflictOverride.actor with no path back to any key (unexamined (A5)).
+     *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
+     *  System-wide over MonitoringCheck — reads MonitoringCheck.actor with no path back to any key (unexamined (A5)).
+     *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
+     *  System-wide over Counselling — reads Counselling.actor with no path back to any key (unexamined (A5)).
+     *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewStaff): Commit<NewStaff> =
-        system.commit("Staff", input.raw(system)).carrying(input)
+    fun commit(input: NewHireStaff, actor: Ref<Staff>): Commit<NewHireStaff> =
+        system.commit("HireStaff", input.raw(system), actor = system.idOf(actor)).carrying(input)
 
-    /** Queue key: [licenceRenewal.pharmacist].
+    /** Queue keys: [licenceRenewal.pharmacist] — plus system-wide width below.
+     *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewLicenceRenewal): Commit<NewLicenceRenewal> =
-        system.commit("LicenceRenewal", input.raw(system)).carrying(input)
+    fun commit(input: NewLicenceRenewal, actor: Ref<Staff>): Commit<NewLicenceRenewal> =
+        system.commit("LicenceRenewal", input.raw(system), actor = system.idOf(actor)).carrying(input)
 
     /** Queue: system-wide.
      *  System-wide over Prescription — reads Prescription.drug with no path back to any key (unexamined (A5)).
@@ -117,17 +126,19 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun commit(input: NewPriceChange): Commit<NewPriceChange> =
         system.commit("PriceChange", input.raw(system)).carrying(input)
 
-    /** Queue keys: [withdrawPriceChange.administrator], [withdrawPriceChange.priceChange], [withdrawPriceChange.priceChange.drug].
+    /** Queue keys: [withdrawPriceChange.priceChange], [withdrawPriceChange.priceChange.drug] — plus system-wide width below.
+     *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewWithdrawPriceChange): Commit<NewWithdrawPriceChange> =
-        system.commit("WithdrawPriceChange", input.raw(system)).carrying(input)
+    fun commit(input: NewWithdrawPriceChange, actor: Ref<Staff>): Commit<NewWithdrawPriceChange> =
+        system.commit("WithdrawPriceChange", input.raw(system), actor = system.idOf(actor)).carrying(input)
 
-    /** Queue keys: [setReorderPoint.drug], [setReorderPoint.requestedBy].
+    /** Queue keys: [setReorderPoint.drug] — plus system-wide width below.
+     *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSetReorderPoint): Commit<NewSetReorderPoint> =
-        system.commit("SetReorderPoint", input.raw(system)).carrying(input)
+    fun commit(input: NewSetReorderPoint, actor: Ref<Staff>): Commit<NewSetReorderPoint> =
+        system.commit("SetReorderPoint", input.raw(system), actor = system.idOf(actor)).carrying(input)
 
     /** Queue keys: [stockLot.drug], [stockLot.purchaseOrder].
      *  Commits sharing a queue key are handled one at a time, in arrival
@@ -135,11 +146,14 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun commit(input: NewStockLot): Commit<NewStockLot> =
         system.commit("StockLot", input.raw(system)).carrying(input)
 
-    /** Queue keys: [countLot.lot], [countLot.technician].
+    /** Queue keys: [countLot.lot] — plus system-wide width below.
+     *  System-wide over CountConfirmation — creates CountConfirmation referencing an instance the derivation cannot key (unexamined (A5)).
+     *  System-wide over StockAdjustment — creates StockAdjustment referencing an instance the derivation cannot key (unexamined (A5)).
+     *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCountLot): Commit<NewCountLot> =
-        system.commit("CountLot", input.raw(system)).carrying(input)
+    fun commit(input: NewCountLot, actor: Ref<Staff>): Commit<NewCountLot> =
+        system.commit("CountLot", input.raw(system), actor = system.idOf(actor)).carrying(input)
 
     /** Queue keys: [recall.lot] — plus system-wide width below.
      *  System-wide over Recall — consults Recall through 'recalls' with no keyable owner (unexamined (A5)).
@@ -253,7 +267,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun commit(input: NewAddAllergy): Commit<NewAddAllergy> =
         system.commit("AddAllergy", input.raw(system)).carrying(input)
 
-    /** Queue keys: [prescriberOrder.enteredBy], [prescriberOrder.patient], [prescriberOrder.prescriber] — plus system-wide width below.
+    /** Queue keys: [prescriberOrder.patient], [prescriberOrder.prescriber] — plus system-wide width below.
      *  System-wide over Drug — reads Drug.ingredients with no path back to any key (unexamined (A5)).
      *  System-wide over Ingredient — consults Ingredient through 'ingredients' with no keyable owner (unexamined (A5)).
      *  System-wide over Prescription — `Prescription` reads every Prescription and correlates to no key (unexamined (A5)).
@@ -278,8 +292,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PrescriberOrder — reads PrescriberOrder.prescriber with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPrescriberOrder): Commit<NewPrescriberOrder> =
-        system.commit("PrescriberOrder", input.raw(system), input.parts(system)).carrying(input)
+    fun commit(input: NewPrescriberOrder, enteredBy: Ref<Staff>): Commit<NewPrescriberOrder> =
+        system.commit("PrescriberOrder", input.raw(system), input.parts(system), actor = system.idOf(enteredBy)).carrying(input)
 
     /** Queue keys: [discontinuation.prescriber], [discontinuation.prescription], [discontinuation.prescription.order] — plus system-wide width below.
      *  System-wide over Prescription — reads Prescription.order with no path back to any key (unexamined (A5)).
@@ -307,10 +321,12 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCorrectEntry): Commit<NewCorrectEntry> =
-        system.commit("CorrectEntry", input.raw(system)).carrying(input)
+    fun commit(input: NewCorrectEntry, actor: Ref<Staff>): Commit<NewCorrectEntry> =
+        system.commit("CorrectEntry", input.raw(system), actor = system.idOf(actor)).carrying(input)
 
-    /** Queue keys: [voidEntry.pharmacist], [voidEntry.prescription] — plus system-wide width below.
+    /** Queue keys: [voidEntry.prescription] — plus system-wide width below.
+     *  System-wide over EntryVoid — creates EntryVoid referencing an instance the derivation cannot key (unexamined (A5)).
+     *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  System-wide over Prescription — reads Prescription.order with no path back to any key (unexamined (A5)).
      *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
      *  System-wide over Fill — consults Fill through 'fills' with no keyable owner (unexamined (A5)).
@@ -326,24 +342,27 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewVoidEntry): Commit<NewVoidEntry> =
-        system.commit("VoidEntry", input.raw(system)).carrying(input)
+    fun commit(input: NewVoidEntry, actor: Ref<Staff>): Commit<NewVoidEntry> =
+        system.commit("VoidEntry", input.raw(system), actor = system.idOf(actor)).carrying(input)
 
-    /** Queue keys: [conflictOverride.pharmacist], [conflictOverride.prescription].
+    /** Queue keys: [conflictOverride.prescription] — plus system-wide width below.
+     *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewConflictOverride): Commit<NewConflictOverride> =
-        system.commit("ConflictOverride", input.raw(system)).carrying(input)
+    fun commit(input: NewConflictOverride, actor: Ref<Staff>): Commit<NewConflictOverride> =
+        system.commit("ConflictOverride", input.raw(system), actor = system.idOf(actor)).carrying(input)
 
-    /** Queue keys: [fillPrescription.filledBy], [fillPrescription.lot], [fillPrescription.lot.drug], [fillPrescription.prescription], [fillPrescription.prescription.drug], [fillPrescription.prescription.order], [fillPrescription.prescription.order.patient] — plus system-wide width below.
+    /** Queue keys: [fillPrescription.lot], [fillPrescription.lot.drug], [fillPrescription.prescription], [fillPrescription.prescription.drug], [fillPrescription.prescription.order], [fillPrescription.prescription.order.patient] — plus system-wide width below.
      *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
      *  System-wide over Prescription — `Prescription` reads every Prescription and correlates to no key (unexamined (A5)).
      *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
      *  System-wide over Interaction — `Interaction` reads every Interaction and correlates to no key (unexamined (A5)).
+     *  System-wide over Fill — creates Fill referencing an instance the derivation cannot key (unexamined (A5)).
      *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
      *  System-wide over Prescription — `Prescription` reads every Prescription and correlates to no key (unexamined (A5)).
      *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
      *  System-wide over Interaction — `Interaction` reads every Interaction and correlates to no key (unexamined (A5)).
+     *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  System-wide over Prescription — reads Prescription.order with no path back to any key (unexamined (A5)).
      *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
      *  System-wide over Fill — consults Fill through 'fills' with no keyable owner (unexamined (A5)).
@@ -361,16 +380,20 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewFillPrescription): Commit<NewFillPrescription> =
-        system.commit("FillPrescription", input.raw(system)).carrying(input)
+    fun commit(input: NewFillPrescription, filledBy: Ref<Staff>): Commit<NewFillPrescription> =
+        system.commit("FillPrescription", input.raw(system), actor = system.idOf(filledBy)).carrying(input)
 
-    /** Queue keys: [monitoringCheck.pharmacist], [monitoringCheck.prescription].
+    /** Queue keys: [monitoringCheck.prescription] — plus system-wide width below.
+     *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewMonitoringCheck): Commit<NewMonitoringCheck> =
-        system.commit("MonitoringCheck", input.raw(system)).carrying(input)
+    fun commit(input: NewMonitoringCheck, actor: Ref<Staff>): Commit<NewMonitoringCheck> =
+        system.commit("MonitoringCheck", input.raw(system), actor = system.idOf(actor)).carrying(input)
 
-    /** Queue keys: [verifyFill.fill], [verifyFill.fill.insurer], [verifyFill.fill.lot], [verifyFill.fill.lot.drug], [verifyFill.fill.prescription], [verifyFill.fill.prescription.drug], [verifyFill.fill.prescription.order], [verifyFill.fill.prescription.order.patient], [verifyFill.pharmacist] — plus system-wide width below.
+    /** Queue keys: [verifyFill.fill], [verifyFill.fill.insurer], [verifyFill.fill.lot], [verifyFill.fill.lot.drug], [verifyFill.fill.prescription], [verifyFill.fill.prescription.drug], [verifyFill.fill.prescription.order], [verifyFill.fill.prescription.order.patient] — plus system-wide width below.
+     *  System-wide over Verification — creates Verification referencing an instance the derivation cannot key (unexamined (A5)).
+     *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
+     *  System-wide over LicenceRenewal — consults LicenceRenewal through 'licenceRenewals' with no keyable owner (unexamined (A5)).
      *  System-wide over Prescription — reads Prescription.order with no path back to any key (unexamined (A5)).
      *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
      *  System-wide over Fill — consults Fill through 'fills' with no keyable owner (unexamined (A5)).
@@ -387,14 +410,15 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewVerifyFill): Commit<NewVerifyFill> =
-        system.commit("VerifyFill", input.raw(system)).carrying(input)
+    fun commit(input: NewVerifyFill, actor: Ref<Staff>): Commit<NewVerifyFill> =
+        system.commit("VerifyFill", input.raw(system), actor = system.idOf(actor)).carrying(input)
 
-    /** Queue keys: [counselling.fill], [counselling.pharmacist].
+    /** Queue keys: [counselling.fill] — plus system-wide width below.
+     *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCounselling): Commit<NewCounselling> =
-        system.commit("Counselling", input.raw(system)).carrying(input)
+    fun commit(input: NewCounselling, actor: Ref<Staff>): Commit<NewCounselling> =
+        system.commit("Counselling", input.raw(system), actor = system.idOf(actor)).carrying(input)
 
     /** Queue keys: [pickUp.fill], [pickUp.fill.lot], [pickUp.fill.lot.drug], [pickUp.fill.prescription], [pickUp.fill.prescription.drug], [pickUp.fill.prescription.order], [pickUp.fill.prescription.order.patient] — plus system-wide width below.
      *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
@@ -1407,13 +1431,9 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
         stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { system.refFor(it as Long) },
         countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { system.refFor(it as Long) },
-        prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { system.refFor(it as Long) },
         entryVoids = (system.get(id, "entryVoids") as List<*>).map { system.refFor(it as Long) },
-        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { system.refFor(it as Long) },
-        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { system.refFor(it as Long) },
         fills = (system.get(id, "fills") as List<*>).map { system.refFor(it as Long) },
         verifications = (system.get(id, "verifications") as List<*>).map { system.refFor(it as Long) },
-        counsellings = (system.get(id, "counsellings") as List<*>).map { system.refFor(it as Long) },
         isPharmacist = system.isMember(id, "Pharmacist"),
         isTechnician = system.isMember(id, "Technician"),
         isAdministrator = system.isMember(id, "Administrator"),
@@ -1423,6 +1443,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     fun materializeLicenceRenewal(id: Long): LicenceRenewal = LicenceRenewal(
         key = system.refFor(id).key,
+        actor = system.refFor(system.get(id, "actor") as Long),
         pharmacist = system.refFor(system.get(id, "pharmacist") as Long),
         licenceNumber = system.get(id, "licenceNumber") as String,
         expiresOn = system.get(id, "expiresOn") as LocalDate,
@@ -1606,10 +1627,10 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     fun materializePrescriberOrder(id: Long): PrescriberOrder = PrescriberOrder(
         key = system.refFor(id).key,
+        enteredBy = system.refFor(system.get(id, "enteredBy") as Long),
         prescriber = system.refFor(system.get(id, "prescriber") as Long),
         patient = system.refFor(system.get(id, "patient") as Long),
         writtenOn = system.get(id, "writtenOn") as LocalDate,
-        enteredBy = system.refFor(system.get(id, "enteredBy") as Long),
         prescriptions = (system.get(id, "prescriptions") as List<*>).map { system.refFor(it as Long) },
     )
 
@@ -1685,8 +1706,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     fun materializeConflictOverride(id: Long): ConflictOverride = ConflictOverride(
         key = system.refFor(id).key,
+        actor = system.refFor(system.get(id, "actor") as Long),
         prescription = system.refFor(system.get(id, "prescription") as Long),
-        pharmacist = system.refFor(system.get(id, "pharmacist") as Long),
         justification = system.get(id, "justification") as String,
     )
 
@@ -1699,8 +1720,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     fun materializeMonitoringCheck(id: Long): MonitoringCheck = MonitoringCheck(
         key = system.refFor(id).key,
+        actor = system.refFor(system.get(id, "actor") as Long),
         prescription = system.refFor(system.get(id, "prescription") as Long),
-        pharmacist = system.refFor(system.get(id, "pharmacist") as Long),
         checkedAt = system.get(id, "checkedAt") as Instant,
         cleared = system.get(id, "cleared") as Boolean,
     )
@@ -1763,8 +1784,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     fun materializeCounselling(id: Long): Counselling = Counselling(
         key = system.refFor(id).key,
+        actor = system.refFor(system.get(id, "actor") as Long),
         fill = system.refFor(system.get(id, "fill") as Long),
-        pharmacist = system.refFor(system.get(id, "pharmacist") as Long),
         notes = system.get(id, "notes") as String,
     )
 
@@ -1882,13 +1903,9 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
         stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { system.refFor(it as Long) },
         countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { system.refFor(it as Long) },
-        prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { system.refFor(it as Long) },
         entryVoids = (system.get(id, "entryVoids") as List<*>).map { system.refFor(it as Long) },
-        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { system.refFor(it as Long) },
-        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { system.refFor(it as Long) },
         fills = (system.get(id, "fills") as List<*>).map { system.refFor(it as Long) },
         verifications = (system.get(id, "verifications") as List<*>).map { system.refFor(it as Long) },
-        counsellings = (system.get(id, "counsellings") as List<*>).map { system.refFor(it as Long) },
         isTechnician = system.isMember(id, "Technician"),
         isAdministrator = system.isMember(id, "Administrator"),
         isLicensedPharmacist = system.isMember(id, "LicensedPharmacist"),
@@ -1903,13 +1920,9 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
         stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { system.refFor(it as Long) },
         countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { system.refFor(it as Long) },
-        prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { system.refFor(it as Long) },
         entryVoids = (system.get(id, "entryVoids") as List<*>).map { system.refFor(it as Long) },
-        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { system.refFor(it as Long) },
-        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { system.refFor(it as Long) },
         fills = (system.get(id, "fills") as List<*>).map { system.refFor(it as Long) },
         verifications = (system.get(id, "verifications") as List<*>).map { system.refFor(it as Long) },
-        counsellings = (system.get(id, "counsellings") as List<*>).map { system.refFor(it as Long) },
         isPharmacist = system.isMember(id, "Pharmacist"),
         isAdministrator = system.isMember(id, "Administrator"),
         isLicensedPharmacist = system.isMember(id, "LicensedPharmacist"),
@@ -1924,13 +1937,9 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
         stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { system.refFor(it as Long) },
         countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { system.refFor(it as Long) },
-        prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { system.refFor(it as Long) },
         entryVoids = (system.get(id, "entryVoids") as List<*>).map { system.refFor(it as Long) },
-        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { system.refFor(it as Long) },
-        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { system.refFor(it as Long) },
         fills = (system.get(id, "fills") as List<*>).map { system.refFor(it as Long) },
         verifications = (system.get(id, "verifications") as List<*>).map { system.refFor(it as Long) },
-        counsellings = (system.get(id, "counsellings") as List<*>).map { system.refFor(it as Long) },
         isPharmacist = system.isMember(id, "Pharmacist"),
         isTechnician = system.isMember(id, "Technician"),
         isLicensedPharmacist = system.isMember(id, "LicensedPharmacist"),
@@ -1945,13 +1954,9 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
         stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { system.refFor(it as Long) },
         countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { system.refFor(it as Long) },
-        prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { system.refFor(it as Long) },
         entryVoids = (system.get(id, "entryVoids") as List<*>).map { system.refFor(it as Long) },
-        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { system.refFor(it as Long) },
-        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { system.refFor(it as Long) },
         fills = (system.get(id, "fills") as List<*>).map { system.refFor(it as Long) },
         verifications = (system.get(id, "verifications") as List<*>).map { system.refFor(it as Long) },
-        counsellings = (system.get(id, "counsellings") as List<*>).map { system.refFor(it as Long) },
         isPharmacist = system.isMember(id, "Pharmacist"),
         isTechnician = system.isMember(id, "Technician"),
         isAdministrator = system.isMember(id, "Administrator"),
@@ -1966,13 +1971,9 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         licenceReminders = (system.get(id, "licenceReminders") as List<*>).map { system.refFor(it as Long) },
         stockAdjustments = (system.get(id, "stockAdjustments") as List<*>).map { system.refFor(it as Long) },
         countConfirmations = (system.get(id, "countConfirmations") as List<*>).map { system.refFor(it as Long) },
-        prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { system.refFor(it as Long) },
         entryVoids = (system.get(id, "entryVoids") as List<*>).map { system.refFor(it as Long) },
-        conflictOverrides = (system.get(id, "conflictOverrides") as List<*>).map { system.refFor(it as Long) },
-        monitoringChecks = (system.get(id, "monitoringChecks") as List<*>).map { system.refFor(it as Long) },
         fills = (system.get(id, "fills") as List<*>).map { system.refFor(it as Long) },
         verifications = (system.get(id, "verifications") as List<*>).map { system.refFor(it as Long) },
-        counsellings = (system.get(id, "counsellings") as List<*>).map { system.refFor(it as Long) },
         isPharmacist = system.isMember(id, "Pharmacist"),
         isTechnician = system.isMember(id, "Technician"),
         isAdministrator = system.isMember(id, "Administrator"),
@@ -2927,6 +2928,465 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isRejectedClaim = system.isMember(id, "RejectedClaim"),
     )
 
+    // ── reads for a Staff: what the surface returns to one of them (Reference §22, "The actor") ──
+    fun read(viewer: Ref<Staff>): StaffRead = StaffRead(system.idOf(viewer))
+
+    inner class StaffRead(private val viewer: Long) {
+        val staffs: StaffQuery get() = StaffQuery(Query("Staff", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun staff(ref: Ref<Staff>): Staff? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Staff", it)) materializeStaff(it) else null }
+        fun staff(key: StoreKey): Staff? = staff(Ref.Persisted("Staff", key))
+        fun staff(key: Long): Staff? = staff(StoreKey(key))
+        val licenceRenewals: LicenceRenewalQuery get() = LicenceRenewalQuery(Query("LicenceRenewal", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun licenceRenewal(ref: Ref<LicenceRenewal>): LicenceRenewal? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("LicenceRenewal", it)) materializeLicenceRenewal(it) else null }
+        fun licenceRenewal(key: StoreKey): LicenceRenewal? = licenceRenewal(Ref.Persisted("LicenceRenewal", key))
+        fun licenceRenewal(key: Long): LicenceRenewal? = licenceRenewal(StoreKey(key))
+        val licenceReminders: LicenceReminderQuery get() = LicenceReminderQuery(Query("LicenceReminder", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun licenceReminder(ref: Ref<LicenceReminder>): LicenceReminder? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("LicenceReminder", it)) materializeLicenceReminder(it) else null }
+        fun licenceReminder(key: StoreKey): LicenceReminder? = licenceReminder(Ref.Persisted("LicenceReminder", key))
+        fun licenceReminder(key: Long): LicenceReminder? = licenceReminder(StoreKey(key))
+        val ingredients: IngredientQuery get() = IngredientQuery(Query("Ingredient", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun ingredient(ref: Ref<Ingredient>): Ingredient? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Ingredient", it)) materializeIngredient(it) else null }
+        fun ingredient(key: StoreKey): Ingredient? = ingredient(Ref.Persisted("Ingredient", key))
+        fun ingredient(key: Long): Ingredient? = ingredient(StoreKey(key))
+        val drugs: DrugQuery get() = DrugQuery(Query("Drug", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun drug(ref: Ref<Drug>): Drug? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Drug", it)) materializeDrug(it) else null }
+        fun drug(key: StoreKey): Drug? = drug(Ref.Persisted("Drug", key))
+        fun drug(key: Long): Drug? = drug(StoreKey(key))
+        val interactions: InteractionQuery get() = InteractionQuery(Query("Interaction", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun interaction(ref: Ref<Interaction>): Interaction? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Interaction", it)) materializeInteraction(it) else null }
+        fun interaction(key: StoreKey): Interaction? = interaction(Ref.Persisted("Interaction", key))
+        fun interaction(key: Long): Interaction? = interaction(StoreKey(key))
+        val priceChanges: PriceChangeQuery get() = PriceChangeQuery(Query("PriceChange", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun priceChange(ref: Ref<PriceChange>): PriceChange? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("PriceChange", it)) materializePriceChange(it) else null }
+        fun priceChange(key: StoreKey): PriceChange? = priceChange(Ref.Persisted("PriceChange", key))
+        fun priceChange(key: Long): PriceChange? = priceChange(StoreKey(key))
+        val priceWithdrawals: PriceWithdrawalQuery get() = PriceWithdrawalQuery(Query("PriceWithdrawal", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun priceWithdrawal(ref: Ref<PriceWithdrawal>): PriceWithdrawal? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("PriceWithdrawal", it)) materializePriceWithdrawal(it) else null }
+        fun priceWithdrawal(key: StoreKey): PriceWithdrawal? = priceWithdrawal(Ref.Persisted("PriceWithdrawal", key))
+        fun priceWithdrawal(key: Long): PriceWithdrawal? = priceWithdrawal(StoreKey(key))
+        val priceWithdrawalRefusals: PriceWithdrawalRefusalQuery get() = PriceWithdrawalRefusalQuery(Query("PriceWithdrawalRefusal", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun priceWithdrawalRefusal(ref: Ref<PriceWithdrawalRefusal>): PriceWithdrawalRefusal? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("PriceWithdrawalRefusal", it)) materializePriceWithdrawalRefusal(it) else null }
+        fun priceWithdrawalRefusal(key: StoreKey): PriceWithdrawalRefusal? = priceWithdrawalRefusal(Ref.Persisted("PriceWithdrawalRefusal", key))
+        fun priceWithdrawalRefusal(key: Long): PriceWithdrawalRefusal? = priceWithdrawalRefusal(StoreKey(key))
+        val stockLots: StockLotQuery get() = StockLotQuery(Query("StockLot", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun stockLot(ref: Ref<StockLot>): StockLot? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("StockLot", it)) materializeStockLot(it) else null }
+        fun stockLot(key: StoreKey): StockLot? = stockLot(Ref.Persisted("StockLot", key))
+        fun stockLot(key: Long): StockLot? = stockLot(StoreKey(key))
+        val stockAdjustments: StockAdjustmentQuery get() = StockAdjustmentQuery(Query("StockAdjustment", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun stockAdjustment(ref: Ref<StockAdjustment>): StockAdjustment? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("StockAdjustment", it)) materializeStockAdjustment(it) else null }
+        fun stockAdjustment(key: StoreKey): StockAdjustment? = stockAdjustment(Ref.Persisted("StockAdjustment", key))
+        fun stockAdjustment(key: Long): StockAdjustment? = stockAdjustment(StoreKey(key))
+        val countConfirmations: CountConfirmationQuery get() = CountConfirmationQuery(Query("CountConfirmation", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun countConfirmation(ref: Ref<CountConfirmation>): CountConfirmation? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("CountConfirmation", it)) materializeCountConfirmation(it) else null }
+        fun countConfirmation(key: StoreKey): CountConfirmation? = countConfirmation(Ref.Persisted("CountConfirmation", key))
+        fun countConfirmation(key: Long): CountConfirmation? = countConfirmation(StoreKey(key))
+        val quarantines: QuarantineQuery get() = QuarantineQuery(Query("Quarantine", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun quarantine(ref: Ref<Quarantine>): Quarantine? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Quarantine", it)) materializeQuarantine(it) else null }
+        fun quarantine(key: StoreKey): Quarantine? = quarantine(Ref.Persisted("Quarantine", key))
+        fun quarantine(key: Long): Quarantine? = quarantine(StoreKey(key))
+        val recalls: RecallQuery get() = RecallQuery(Query("Recall", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun recall(ref: Ref<Recall>): Recall? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Recall", it)) materializeRecall(it) else null }
+        fun recall(key: StoreKey): Recall? = recall(Ref.Persisted("Recall", key))
+        fun recall(key: Long): Recall? = recall(StoreKey(key))
+        val recallNotices: RecallNoticeQuery get() = RecallNoticeQuery(Query("RecallNotice", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun recallNotice(ref: Ref<RecallNotice>): RecallNotice? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("RecallNotice", it)) materializeRecallNotice(it) else null }
+        fun recallNotice(key: StoreKey): RecallNotice? = recallNotice(Ref.Persisted("RecallNotice", key))
+        fun recallNotice(key: Long): RecallNotice? = recallNotice(StoreKey(key))
+        val purchaseOrders: PurchaseOrderQuery get() = PurchaseOrderQuery(Query("PurchaseOrder", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun purchaseOrder(ref: Ref<PurchaseOrder>): PurchaseOrder? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("PurchaseOrder", it)) materializePurchaseOrder(it) else null }
+        fun purchaseOrder(key: StoreKey): PurchaseOrder? = purchaseOrder(Ref.Persisted("PurchaseOrder", key))
+        fun purchaseOrder(key: Long): PurchaseOrder? = purchaseOrder(StoreKey(key))
+        val insurancePlans: InsurancePlanQuery get() = InsurancePlanQuery(Query("InsurancePlan", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun insurancePlan(ref: Ref<InsurancePlan>): InsurancePlan? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("InsurancePlan", it)) materializeInsurancePlan(it) else null }
+        fun insurancePlan(key: StoreKey): InsurancePlan? = insurancePlan(Ref.Persisted("InsurancePlan", key))
+        fun insurancePlan(key: Long): InsurancePlan? = insurancePlan(StoreKey(key))
+        val patients: PatientQuery get() = PatientQuery(Query("Patient", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun patient(ref: Ref<Patient>): Patient? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Patient", it)) materializePatient(it) else null }
+        fun patient(key: StoreKey): Patient? = patient(Ref.Persisted("Patient", key))
+        fun patient(key: Long): Patient? = patient(StoreKey(key))
+        val prescribers: PrescriberQuery get() = PrescriberQuery(Query("Prescriber", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun prescriber(ref: Ref<Prescriber>): Prescriber? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Prescriber", it)) materializePrescriber(it) else null }
+        fun prescriber(key: StoreKey): Prescriber? = prescriber(Ref.Persisted("Prescriber", key))
+        fun prescriber(key: Long): Prescriber? = prescriber(StoreKey(key))
+        val notices: NoticeQuery get() = NoticeQuery(Query("Notice", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun notice(ref: Ref<Notice>): Notice? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Notice", it)) materializeNotice(it) else null }
+        fun notice(key: StoreKey): Notice? = notice(Ref.Persisted("Notice", key))
+        fun notice(key: Long): Notice? = notice(StoreKey(key))
+        val prescriberOrders: PrescriberOrderQuery get() = PrescriberOrderQuery(Query("PrescriberOrder", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun prescriberOrder(ref: Ref<PrescriberOrder>): PrescriberOrder? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("PrescriberOrder", it)) materializePrescriberOrder(it) else null }
+        fun prescriberOrder(key: StoreKey): PrescriberOrder? = prescriberOrder(Ref.Persisted("PrescriberOrder", key))
+        fun prescriberOrder(key: Long): PrescriberOrder? = prescriberOrder(StoreKey(key))
+        val prescriptions: PrescriptionQuery get() = PrescriptionQuery(Query("Prescription", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun prescription(ref: Ref<Prescription>): Prescription? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Prescription", it)) materializePrescription(it) else null }
+        fun prescription(key: StoreKey): Prescription? = prescription(Ref.Persisted("Prescription", key))
+        fun prescription(key: Long): Prescription? = prescription(StoreKey(key))
+        val discontinuations: DiscontinuationQuery get() = DiscontinuationQuery(Query("Discontinuation", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun discontinuation(ref: Ref<Discontinuation>): Discontinuation? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Discontinuation", it)) materializeDiscontinuation(it) else null }
+        fun discontinuation(key: StoreKey): Discontinuation? = discontinuation(Ref.Persisted("Discontinuation", key))
+        fun discontinuation(key: Long): Discontinuation? = discontinuation(StoreKey(key))
+        val correctionRefusals: CorrectionRefusalQuery get() = CorrectionRefusalQuery(Query("CorrectionRefusal", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun correctionRefusal(ref: Ref<CorrectionRefusal>): CorrectionRefusal? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("CorrectionRefusal", it)) materializeCorrectionRefusal(it) else null }
+        fun correctionRefusal(key: StoreKey): CorrectionRefusal? = correctionRefusal(Ref.Persisted("CorrectionRefusal", key))
+        fun correctionRefusal(key: Long): CorrectionRefusal? = correctionRefusal(StoreKey(key))
+        val entryVoids: EntryVoidQuery get() = EntryVoidQuery(Query("EntryVoid", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun entryVoid(ref: Ref<EntryVoid>): EntryVoid? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("EntryVoid", it)) materializeEntryVoid(it) else null }
+        fun entryVoid(key: StoreKey): EntryVoid? = entryVoid(Ref.Persisted("EntryVoid", key))
+        fun entryVoid(key: Long): EntryVoid? = entryVoid(StoreKey(key))
+        val voidRefusals: VoidRefusalQuery get() = VoidRefusalQuery(Query("VoidRefusal", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun voidRefusal(ref: Ref<VoidRefusal>): VoidRefusal? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("VoidRefusal", it)) materializeVoidRefusal(it) else null }
+        fun voidRefusal(key: StoreKey): VoidRefusal? = voidRefusal(Ref.Persisted("VoidRefusal", key))
+        fun voidRefusal(key: Long): VoidRefusal? = voidRefusal(StoreKey(key))
+        val conflictOverrides: ConflictOverrideQuery get() = ConflictOverrideQuery(Query("ConflictOverride", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun conflictOverride(ref: Ref<ConflictOverride>): ConflictOverride? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ConflictOverride", it)) materializeConflictOverride(it) else null }
+        fun conflictOverride(key: StoreKey): ConflictOverride? = conflictOverride(Ref.Persisted("ConflictOverride", key))
+        fun conflictOverride(key: Long): ConflictOverride? = conflictOverride(StoreKey(key))
+        val pharmacistAlerts: PharmacistAlertQuery get() = PharmacistAlertQuery(Query("PharmacistAlert", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun pharmacistAlert(ref: Ref<PharmacistAlert>): PharmacistAlert? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("PharmacistAlert", it)) materializePharmacistAlert(it) else null }
+        fun pharmacistAlert(key: StoreKey): PharmacistAlert? = pharmacistAlert(Ref.Persisted("PharmacistAlert", key))
+        fun pharmacistAlert(key: Long): PharmacistAlert? = pharmacistAlert(StoreKey(key))
+        val monitoringChecks: MonitoringCheckQuery get() = MonitoringCheckQuery(Query("MonitoringCheck", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun monitoringCheck(ref: Ref<MonitoringCheck>): MonitoringCheck? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("MonitoringCheck", it)) materializeMonitoringCheck(it) else null }
+        fun monitoringCheck(key: StoreKey): MonitoringCheck? = monitoringCheck(Ref.Persisted("MonitoringCheck", key))
+        fun monitoringCheck(key: Long): MonitoringCheck? = monitoringCheck(StoreKey(key))
+        val fills: FillQuery get() = FillQuery(Query("Fill", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun fill(ref: Ref<Fill>): Fill? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Fill", it)) materializeFill(it) else null }
+        fun fill(key: StoreKey): Fill? = fill(Ref.Persisted("Fill", key))
+        fun fill(key: Long): Fill? = fill(StoreKey(key))
+        val fillRefusals: FillRefusalQuery get() = FillRefusalQuery(Query("FillRefusal", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun fillRefusal(ref: Ref<FillRefusal>): FillRefusal? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("FillRefusal", it)) materializeFillRefusal(it) else null }
+        fun fillRefusal(key: StoreKey): FillRefusal? = fillRefusal(Ref.Persisted("FillRefusal", key))
+        fun fillRefusal(key: Long): FillRefusal? = fillRefusal(StoreKey(key))
+        val controlledLogEntrys: ControlledLogEntryQuery get() = ControlledLogEntryQuery(Query("ControlledLogEntry", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun controlledLogEntry(ref: Ref<ControlledLogEntry>): ControlledLogEntry? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ControlledLogEntry", it)) materializeControlledLogEntry(it) else null }
+        fun controlledLogEntry(key: StoreKey): ControlledLogEntry? = controlledLogEntry(Ref.Persisted("ControlledLogEntry", key))
+        fun controlledLogEntry(key: Long): ControlledLogEntry? = controlledLogEntry(StoreKey(key))
+        val verifications: VerificationQuery get() = VerificationQuery(Query("Verification", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun verification(ref: Ref<Verification>): Verification? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Verification", it)) materializeVerification(it) else null }
+        fun verification(key: StoreKey): Verification? = verification(Ref.Persisted("Verification", key))
+        fun verification(key: Long): Verification? = verification(StoreKey(key))
+        val counsellings: CounsellingQuery get() = CounsellingQuery(Query("Counselling", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun counselling(ref: Ref<Counselling>): Counselling? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Counselling", it)) materializeCounselling(it) else null }
+        fun counselling(key: StoreKey): Counselling? = counselling(Ref.Persisted("Counselling", key))
+        fun counselling(key: Long): Counselling? = counselling(StoreKey(key))
+        val returnToStocks: ReturnToStockQuery get() = ReturnToStockQuery(Query("ReturnToStock", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun returnToStock(ref: Ref<ReturnToStock>): ReturnToStock? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ReturnToStock", it)) materializeReturnToStock(it) else null }
+        fun returnToStock(key: StoreKey): ReturnToStock? = returnToStock(Ref.Persisted("ReturnToStock", key))
+        fun returnToStock(key: Long): ReturnToStock? = returnToStock(StoreKey(key))
+        val counterExits: CounterExitQuery get() = CounterExitQuery(Query("CounterExit", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun counterExit(ref: Ref<CounterExit>): CounterExit? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("CounterExit", it)) materializeCounterExit(it) else null }
+        fun counterExit(key: StoreKey): CounterExit? = counterExit(Ref.Persisted("CounterExit", key))
+        fun counterExit(key: Long): CounterExit? = counterExit(StoreKey(key))
+        val pickups: PickupQuery get() = PickupQuery(Query("Pickup", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun pickup(ref: Ref<Pickup>): Pickup? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Pickup", it)) materializePickup(it) else null }
+        fun pickup(key: StoreKey): Pickup? = pickup(Ref.Persisted("Pickup", key))
+        fun pickup(key: Long): Pickup? = pickup(StoreKey(key))
+        val counterAlerts: CounterAlertQuery get() = CounterAlertQuery(Query("CounterAlert", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun counterAlert(ref: Ref<CounterAlert>): CounterAlert? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("CounterAlert", it)) materializeCounterAlert(it) else null }
+        fun counterAlert(key: StoreKey): CounterAlert? = counterAlert(Ref.Persisted("CounterAlert", key))
+        fun counterAlert(key: Long): CounterAlert? = counterAlert(StoreKey(key))
+        val refillTasks: RefillTaskQuery get() = RefillTaskQuery(Query("RefillTask", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun refillTask(ref: Ref<RefillTask>): RefillTask? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("RefillTask", it)) materializeRefillTask(it) else null }
+        fun refillTask(key: StoreKey): RefillTask? = refillTask(Ref.Persisted("RefillTask", key))
+        fun refillTask(key: Long): RefillTask? = refillTask(StoreKey(key))
+        val refillRefusals: RefillRefusalQuery get() = RefillRefusalQuery(Query("RefillRefusal", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun refillRefusal(ref: Ref<RefillRefusal>): RefillRefusal? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("RefillRefusal", it)) materializeRefillRefusal(it) else null }
+        fun refillRefusal(key: StoreKey): RefillRefusal? = refillRefusal(Ref.Persisted("RefillRefusal", key))
+        fun refillRefusal(key: Long): RefillRefusal? = refillRefusal(StoreKey(key))
+        val authorisationRequests: AuthorisationRequestQuery get() = AuthorisationRequestQuery(Query("AuthorisationRequest", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun authorisationRequest(ref: Ref<AuthorisationRequest>): AuthorisationRequest? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("AuthorisationRequest", it)) materializeAuthorisationRequest(it) else null }
+        fun authorisationRequest(key: StoreKey): AuthorisationRequest? = authorisationRequest(Ref.Persisted("AuthorisationRequest", key))
+        fun authorisationRequest(key: Long): AuthorisationRequest? = authorisationRequest(StoreKey(key))
+        val taskNags: TaskNagQuery get() = TaskNagQuery(Query("TaskNag", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun taskNag(ref: Ref<TaskNag>): TaskNag? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("TaskNag", it)) materializeTaskNag(it) else null }
+        fun taskNag(key: StoreKey): TaskNag? = taskNag(Ref.Persisted("TaskNag", key))
+        fun taskNag(key: Long): TaskNag? = taskNag(StoreKey(key))
+        val autoRefillEnrolments: AutoRefillEnrolmentQuery get() = AutoRefillEnrolmentQuery(Query("AutoRefillEnrolment", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun autoRefillEnrolment(ref: Ref<AutoRefillEnrolment>): AutoRefillEnrolment? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("AutoRefillEnrolment", it)) materializeAutoRefillEnrolment(it) else null }
+        fun autoRefillEnrolment(key: StoreKey): AutoRefillEnrolment? = autoRefillEnrolment(Ref.Persisted("AutoRefillEnrolment", key))
+        fun autoRefillEnrolment(key: Long): AutoRefillEnrolment? = autoRefillEnrolment(StoreKey(key))
+        val autoRefillCancellations: AutoRefillCancellationQuery get() = AutoRefillCancellationQuery(Query("AutoRefillCancellation", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun autoRefillCancellation(ref: Ref<AutoRefillCancellation>): AutoRefillCancellation? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("AutoRefillCancellation", it)) materializeAutoRefillCancellation(it) else null }
+        fun autoRefillCancellation(key: StoreKey): AutoRefillCancellation? = autoRefillCancellation(Ref.Persisted("AutoRefillCancellation", key))
+        fun autoRefillCancellation(key: Long): AutoRefillCancellation? = autoRefillCancellation(StoreKey(key))
+        val claims: ClaimQuery get() = ClaimQuery(Query("Claim", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun claim(ref: Ref<Claim>): Claim? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Claim", it)) materializeClaim(it) else null }
+        fun claim(key: StoreKey): Claim? = claim(Ref.Persisted("Claim", key))
+        fun claim(key: Long): Claim? = claim(StoreKey(key))
+        val claimResponses: ClaimResponseQuery get() = ClaimResponseQuery(Query("ClaimResponse", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun claimResponse(ref: Ref<ClaimResponse>): ClaimResponse? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ClaimResponse", it)) materializeClaimResponse(it) else null }
+        fun claimResponse(key: StoreKey): ClaimResponse? = claimResponse(Ref.Persisted("ClaimResponse", key))
+        fun claimResponse(key: Long): ClaimResponse? = claimResponse(StoreKey(key))
+        val claimFollowUps: ClaimFollowUpQuery get() = ClaimFollowUpQuery(Query("ClaimFollowUp", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun claimFollowUp(ref: Ref<ClaimFollowUp>): ClaimFollowUp? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ClaimFollowUp", it)) materializeClaimFollowUp(it) else null }
+        fun claimFollowUp(key: StoreKey): ClaimFollowUp? = claimFollowUp(Ref.Persisted("ClaimFollowUp", key))
+        fun claimFollowUp(key: Long): ClaimFollowUp? = claimFollowUp(StoreKey(key))
+        val controlledInventorySnapshots: ControlledInventorySnapshotQuery get() = ControlledInventorySnapshotQuery(Query("ControlledInventorySnapshot", viewer = viewer))
+        /** The record behind [ref], or null when it is gone or not shown to this viewer. */
+        fun controlledInventorySnapshot(ref: Ref<ControlledInventorySnapshot>): ControlledInventorySnapshot? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ControlledInventorySnapshot", it)) materializeControlledInventorySnapshot(it) else null }
+        fun controlledInventorySnapshot(key: StoreKey): ControlledInventorySnapshot? = controlledInventorySnapshot(Ref.Persisted("ControlledInventorySnapshot", key))
+        fun controlledInventorySnapshot(key: Long): ControlledInventorySnapshot? = controlledInventorySnapshot(StoreKey(key))
+        val pharmacists: PharmacistQuery get() = PharmacistQuery(Query("Pharmacist", viewer = viewer))
+        /** The record behind [ref] as a member of Pharmacist, or null when it is not one or not shown to this viewer. */
+        fun pharmacist(ref: Ref<Staff>): Pharmacist? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Pharmacist", it)) materializePharmacist(it) else null }
+        val technicians: TechnicianQuery get() = TechnicianQuery(Query("Technician", viewer = viewer))
+        /** The record behind [ref] as a member of Technician, or null when it is not one or not shown to this viewer. */
+        fun technician(ref: Ref<Staff>): Technician? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Technician", it)) materializeTechnician(it) else null }
+        val administrators: AdministratorQuery get() = AdministratorQuery(Query("Administrator", viewer = viewer))
+        /** The record behind [ref] as a member of Administrator, or null when it is not one or not shown to this viewer. */
+        fun administrator(ref: Ref<Staff>): Administrator? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Administrator", it)) materializeAdministrator(it) else null }
+        val licensedPharmacists: LicensedPharmacistQuery get() = LicensedPharmacistQuery(Query("LicensedPharmacist", viewer = viewer))
+        /** The record behind [ref] as a member of LicensedPharmacist, or null when it is not one or not shown to this viewer. */
+        fun licensedPharmacist(ref: Ref<Staff>): LicensedPharmacist? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("LicensedPharmacist", it)) materializeLicensedPharmacist(it) else null }
+        val licenceExpiringSoons: LicenceExpiringSoonQuery get() = LicenceExpiringSoonQuery(Query("LicenceExpiringSoon", viewer = viewer))
+        /** The record behind [ref] as a member of LicenceExpiringSoon, or null when it is not one or not shown to this viewer. */
+        fun licenceExpiringSoon(ref: Ref<Staff>): LicenceExpiringSoon? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("LicenceExpiringSoon", it)) materializeLicenceExpiringSoon(it) else null }
+        val controlleds: ControlledQuery get() = ControlledQuery(Query("Controlled", viewer = viewer))
+        /** The record behind [ref] as a member of Controlled, or null when it is not one or not shown to this viewer. */
+        fun controlled(ref: Ref<Drug>): Controlled? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Controlled", it)) materializeControlled(it) else null }
+        val scheduleTwos: ScheduleTwoQuery get() = ScheduleTwoQuery(Query("ScheduleTwo", viewer = viewer))
+        /** The record behind [ref] as a member of ScheduleTwo, or null when it is not one or not shown to this viewer. */
+        fun scheduleTwo(ref: Ref<Drug>): ScheduleTwo? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ScheduleTwo", it)) materializeScheduleTwo(it) else null }
+        val lowStocks: LowStockQuery get() = LowStockQuery(Query("LowStock", viewer = viewer))
+        /** The record behind [ref] as a member of LowStock, or null when it is not one or not shown to this viewer. */
+        fun lowStock(ref: Ref<Drug>): LowStock? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("LowStock", it)) materializeLowStock(it) else null }
+        val effectivePrices: EffectivePriceQuery get() = EffectivePriceQuery(Query("EffectivePrice", viewer = viewer))
+        /** The record behind [ref] as a member of EffectivePrice, or null when it is not one or not shown to this viewer. */
+        fun effectivePrice(ref: Ref<PriceChange>): EffectivePrice? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("EffectivePrice", it)) materializeEffectivePrice(it) else null }
+        val expiredLots: ExpiredLotQuery get() = ExpiredLotQuery(Query("ExpiredLot", viewer = viewer))
+        /** The record behind [ref] as a member of ExpiredLot, or null when it is not one or not shown to this viewer. */
+        fun expiredLot(ref: Ref<StockLot>): ExpiredLot? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ExpiredLot", it)) materializeExpiredLot(it) else null }
+        val quarantinedLots: QuarantinedLotQuery get() = QuarantinedLotQuery(Query("QuarantinedLot", viewer = viewer))
+        /** The record behind [ref] as a member of QuarantinedLot, or null when it is not one or not shown to this viewer. */
+        fun quarantinedLot(ref: Ref<StockLot>): QuarantinedLot? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("QuarantinedLot", it)) materializeQuarantinedLot(it) else null }
+        val recalledLots: RecalledLotQuery get() = RecalledLotQuery(Query("RecalledLot", viewer = viewer))
+        /** The record behind [ref] as a member of RecalledLot, or null when it is not one or not shown to this viewer. */
+        fun recalledLot(ref: Ref<StockLot>): RecalledLot? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("RecalledLot", it)) materializeRecalledLot(it) else null }
+        val usableLots: UsableLotQuery get() = UsableLotQuery(Query("UsableLot", viewer = viewer))
+        /** The record behind [ref] as a member of UsableLot, or null when it is not one or not shown to this viewer. */
+        fun usableLot(ref: Ref<StockLot>): UsableLot? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("UsableLot", it)) materializeUsableLot(it) else null }
+        val openPurchaseOrders: OpenPurchaseOrderQuery get() = OpenPurchaseOrderQuery(Query("OpenPurchaseOrder", viewer = viewer))
+        /** The record behind [ref] as a member of OpenPurchaseOrder, or null when it is not one or not shown to this viewer. */
+        fun openPurchaseOrder(ref: Ref<PurchaseOrder>): OpenPurchaseOrder? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("OpenPurchaseOrder", it)) materializeOpenPurchaseOrder(it) else null }
+        val receivedPurchaseOrders: ReceivedPurchaseOrderQuery get() = ReceivedPurchaseOrderQuery(Query("ReceivedPurchaseOrder", viewer = viewer))
+        /** The record behind [ref] as a member of ReceivedPurchaseOrder, or null when it is not one or not shown to this viewer. */
+        fun receivedPurchaseOrder(ref: Ref<PurchaseOrder>): ReceivedPurchaseOrder? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ReceivedPurchaseOrder", it)) materializeReceivedPurchaseOrder(it) else null }
+        val recipients: RecipientQuery get() = RecipientQuery(Query("Recipient", viewer = viewer))
+        val discontinueds: DiscontinuedQuery get() = DiscontinuedQuery(Query("Discontinued", viewer = viewer))
+        /** The record behind [ref] as a member of Discontinued, or null when it is not one or not shown to this viewer. */
+        fun discontinued(ref: Ref<Prescription>): Discontinued? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Discontinued", it)) materializeDiscontinued(it) else null }
+        val expireds: ExpiredQuery get() = ExpiredQuery(Query("Expired", viewer = viewer))
+        /** The record behind [ref] as a member of Expired, or null when it is not one or not shown to this viewer. */
+        fun expired(ref: Ref<Prescription>): Expired? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Expired", it)) materializeExpired(it) else null }
+        val exhausteds: ExhaustedQuery get() = ExhaustedQuery(Query("Exhausted", viewer = viewer))
+        /** The record behind [ref] as a member of Exhausted, or null when it is not one or not shown to this viewer. */
+        fun exhausted(ref: Ref<Prescription>): Exhausted? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Exhausted", it)) materializeExhausted(it) else null }
+        val currents: CurrentQuery get() = CurrentQuery(Query("Current", viewer = viewer))
+        /** The record behind [ref] as a member of Current, or null when it is not one or not shown to this viewer. */
+        fun current(ref: Ref<Prescription>): Current? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Current", it)) materializeCurrent(it) else null }
+        val activePrescriptions: ActivePrescriptionQuery get() = ActivePrescriptionQuery(Query("ActivePrescription", viewer = viewer))
+        /** The record behind [ref] as a member of ActivePrescription, or null when it is not one or not shown to this viewer. */
+        fun activePrescription(ref: Ref<Prescription>): ActivePrescription? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ActivePrescription", it)) materializeActivePrescription(it) else null }
+        val filledPrescriptions: FilledPrescriptionQuery get() = FilledPrescriptionQuery(Query("FilledPrescription", viewer = viewer))
+        /** The record behind [ref] as a member of FilledPrescription, or null when it is not one or not shown to this viewer. */
+        fun filledPrescription(ref: Ref<Prescription>): FilledPrescription? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("FilledPrescription", it)) materializeFilledPrescription(it) else null }
+        val voideds: VoidedQuery get() = VoidedQuery(Query("Voided", viewer = viewer))
+        /** The record behind [ref] as a member of Voided, or null when it is not one or not shown to this viewer. */
+        fun voided(ref: Ref<Prescription>): Voided? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Voided", it)) materializeVoided(it) else null }
+        val allergyConflicts: AllergyConflictQuery get() = AllergyConflictQuery(Query("AllergyConflict", viewer = viewer))
+        /** The record behind [ref] as a member of AllergyConflict, or null when it is not one or not shown to this viewer. */
+        fun allergyConflict(ref: Ref<Prescription>): AllergyConflict? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("AllergyConflict", it)) materializeAllergyConflict(it) else null }
+        val interactionConflicts: InteractionConflictQuery get() = InteractionConflictQuery(Query("InteractionConflict", viewer = viewer))
+        /** The record behind [ref] as a member of InteractionConflict, or null when it is not one or not shown to this viewer. */
+        fun interactionConflict(ref: Ref<Prescription>): InteractionConflict? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("InteractionConflict", it)) materializeInteractionConflict(it) else null }
+        val cleareds: ClearedQuery get() = ClearedQuery(Query("Cleared", viewer = viewer))
+        /** The record behind [ref] as a member of Cleared, or null when it is not one or not shown to this viewer. */
+        fun cleared(ref: Ref<Prescription>): Cleared? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Cleared", it)) materializeCleared(it) else null }
+        val fillables: FillableQuery get() = FillableQuery(Query("Fillable", viewer = viewer))
+        /** The record behind [ref] as a member of Fillable, or null when it is not one or not shown to this viewer. */
+        fun fillable(ref: Ref<Prescription>): Fillable? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Fillable", it)) materializeFillable(it) else null }
+        val multiplePrescriberss: MultiplePrescribersQuery get() = MultiplePrescribersQuery(Query("MultiplePrescribers", viewer = viewer))
+        /** The record behind [ref] as a member of MultiplePrescribers, or null when it is not one or not shown to this viewer. */
+        fun multiplePrescribers(ref: Ref<Patient>): MultiplePrescribers? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("MultiplePrescribers", it)) materializeMultiplePrescribers(it) else null }
+        val verifiedFills: VerifiedFillQuery get() = VerifiedFillQuery(Query("VerifiedFill", viewer = viewer))
+        /** The record behind [ref] as a member of VerifiedFill, or null when it is not one or not shown to this viewer. */
+        fun verifiedFill(ref: Ref<Fill>): VerifiedFill? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("VerifiedFill", it)) materializeVerifiedFill(it) else null }
+        val rejectedFills: RejectedFillQuery get() = RejectedFillQuery(Query("RejectedFill", viewer = viewer))
+        /** The record behind [ref] as a member of RejectedFill, or null when it is not one or not shown to this viewer. */
+        fun rejectedFill(ref: Ref<Fill>): RejectedFill? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("RejectedFill", it)) materializeRejectedFill(it) else null }
+        val consumingFills: ConsumingFillQuery get() = ConsumingFillQuery(Query("ConsumingFill", viewer = viewer))
+        /** The record behind [ref] as a member of ConsumingFill, or null when it is not one or not shown to this viewer. */
+        fun consumingFill(ref: Ref<Fill>): ConsumingFill? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ConsumingFill", it)) materializeConsumingFill(it) else null }
+        val counsellingDues: CounsellingDueQuery get() = CounsellingDueQuery(Query("CounsellingDue", viewer = viewer))
+        /** The record behind [ref] as a member of CounsellingDue, or null when it is not one or not shown to this viewer. */
+        fun counsellingDue(ref: Ref<Fill>): CounsellingDue? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("CounsellingDue", it)) materializeCounsellingDue(it) else null }
+        val readyForPickups: ReadyForPickupQuery get() = ReadyForPickupQuery(Query("ReadyForPickup", viewer = viewer))
+        /** The record behind [ref] as a member of ReadyForPickup, or null when it is not one or not shown to this viewer. */
+        fun readyForPickup(ref: Ref<Fill>): ReadyForPickup? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ReadyForPickup", it)) materializeReadyForPickup(it) else null }
+        val uncollecteds: UncollectedQuery get() = UncollectedQuery(Query("Uncollected", viewer = viewer))
+        /** The record behind [ref] as a member of Uncollected, or null when it is not one or not shown to this viewer. */
+        fun uncollected(ref: Ref<Fill>): Uncollected? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Uncollected", it)) materializeUncollected(it) else null }
+        val openRefillTasks: OpenRefillTaskQuery get() = OpenRefillTaskQuery(Query("OpenRefillTask", viewer = viewer))
+        /** The record behind [ref] as a member of OpenRefillTask, or null when it is not one or not shown to this viewer. */
+        fun openRefillTask(ref: Ref<RefillTask>): OpenRefillTask? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("OpenRefillTask", it)) materializeOpenRefillTask(it) else null }
+        val overdueRefillTasks: OverdueRefillTaskQuery get() = OverdueRefillTaskQuery(Query("OverdueRefillTask", viewer = viewer))
+        /** The record behind [ref] as a member of OverdueRefillTask, or null when it is not one or not shown to this viewer. */
+        fun overdueRefillTask(ref: Ref<RefillTask>): OverdueRefillTask? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("OverdueRefillTask", it)) materializeOverdueRefillTask(it) else null }
+        val autoRefills: AutoRefillQuery get() = AutoRefillQuery(Query("AutoRefill", viewer = viewer))
+        /** The record behind [ref] as a member of AutoRefill, or null when it is not one or not shown to this viewer. */
+        fun autoRefill(ref: Ref<Prescription>): AutoRefill? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("AutoRefill", it)) materializeAutoRefill(it) else null }
+        val insuredFills: InsuredFillQuery get() = InsuredFillQuery(Query("InsuredFill", viewer = viewer))
+        /** The record behind [ref] as a member of InsuredFill, or null when it is not one or not shown to this viewer. */
+        fun insuredFill(ref: Ref<Fill>): InsuredFill? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("InsuredFill", it)) materializeInsuredFill(it) else null }
+        val pendingClaims: PendingClaimQuery get() = PendingClaimQuery(Query("PendingClaim", viewer = viewer))
+        /** The record behind [ref] as a member of PendingClaim, or null when it is not one or not shown to this viewer. */
+        fun pendingClaim(ref: Ref<Claim>): PendingClaim? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("PendingClaim", it)) materializePendingClaim(it) else null }
+        val paidClaims: PaidClaimQuery get() = PaidClaimQuery(Query("PaidClaim", viewer = viewer))
+        /** The record behind [ref] as a member of PaidClaim, or null when it is not one or not shown to this viewer. */
+        fun paidClaim(ref: Ref<Claim>): PaidClaim? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("PaidClaim", it)) materializePaidClaim(it) else null }
+        val rejectedClaims: RejectedClaimQuery get() = RejectedClaimQuery(Query("RejectedClaim", viewer = viewer))
+        /** The record behind [ref] as a member of RejectedClaim, or null when it is not one or not shown to this viewer. */
+        fun rejectedClaim(ref: Ref<Claim>): RejectedClaim? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("RejectedClaim", it)) materializeRejectedClaim(it) else null }
+        val staleClaims: StaleClaimQuery get() = StaleClaimQuery(Query("StaleClaim", viewer = viewer))
+        /** The record behind [ref] as a member of StaleClaim, or null when it is not one or not shown to this viewer. */
+        fun staleClaim(ref: Ref<Claim>): StaleClaim? =
+            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("StaleClaim", it)) materializeStaleClaim(it) else null }
+    }
+
     companion object {
         private val SPEC = """
 -- Pharmacy: a retail pharmacy — prescriptions arriving from prescribers,
@@ -2951,9 +3411,13 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 --   · a conflict with another of the patient's active prescriptions — a
 --     derived view two hops long on the patient, an alias tested against a
 --     refinement, and a nested `exists` over the drug's interaction view
---   · who may do what — refusals over the request shapes at the boundary:
+--   · who may do what — the actor an act is committed by, declared in its
+--     header (`by LicensedPharmacist`, `by Staff as filledBy`), the role gate
+--     the header states, and refusals over the request reading the actor:
 --     only a licensed pharmacist verifies, nobody verifies their own
---     controlled fill, nobody fills from an expired or quarantined lot
+--     controlled fill, nobody fills from an expired or quarantined lot;
+--     who may see what — a spec-wide `visible to Staff`, and the claims
+--     narrowed to pharmacists and administrators (Reference §22, "The actor")
 --   · why a fill was turned away, on record for the patient — rejection as
 --     data with a per-reason conditional (Reference §4, checks.md V18)
 --   · a fill waiting at the counter — a capture of the day it became ready,
@@ -2976,26 +3440,49 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 -- Comment convention (as in payments.velle): plain comments tell the business
 -- story; `velle:` comments note the language machinery on show.
 
+-- Everything here is the pharmacy's business: every record is shown to staff
+-- and to nobody else unless a shape says otherwise.
+-- velle: the spec-wide visibility default (Reference §22, "The actor"); a
+-- spec with any `by` declares what every readable shape is shown to
+visible to Staff
+
 -- ── Staff: pharmacists, technicians, administrators ──────────────────────────
 
 -- Everyone who works here is staff with one role. Roles do not change: a
--- technician who qualifies as a pharmacist is a new staff record.
-act Staff {
+-- technician who qualifies as a pharmacist is a new staff record. Staff are
+-- the people who act on this system: an act declared `by Staff` (or by one
+-- of the roles below) is committed by one of them, and the committer is a
+-- fact of the commit the binding hands in, not a field anyone can claim.
+-- velle: the actor (Reference §22, "The actor") — `by <Role>` in an act's
+-- header is the role gate, sugar for `requires actor to be <Role>`; the
+-- first administrator is seeded by the engineer, outside the trust boundary
+shape Staff {
     name: text
     role: text
 }
 
 Staff requires role == "pharmacist" or role == "technician" or role == "admin"
 
+transient act HireStaff by Administrator {
+    name: text
+    role: text
+}
+
+rule RecordHire when HireStaff {
+    Staff from { name: name, role: role }
+}
+
 shape Pharmacist = Staff where role == "pharmacist"
 shape Technician = Staff where role == "technician"
 shape Administrator = Staff where role == "admin"
 
--- A pharmacist's licence is renewed for a period. The licence in force is
--- whichever renewal has not yet expired.
+-- An administrator records a pharmacist's licence renewal for a period. The
+-- licence in force is whichever renewal has not yet expired.
 -- velle: a time-dependent refinement (`today`) consulted by a boundary
--- refusal and by a daily reminder sweep
-act LicenceRenewal {
+-- refusal and by a daily reminder sweep; two people on one act — the
+-- pharmacist is a field the administrator names, the administrator is the
+-- actor, stored on this durable act as `actor` with no field declared
+act LicenceRenewal by Administrator {
     pharmacist: one Staff
     licenceNumber: text
     expiresOn: Date
@@ -3091,13 +3578,10 @@ shape EffectivePrice = PriceChange where effectiveOn <= today {
     undeletable
 }
 
-transient act WithdrawPriceChange {
+transient act WithdrawPriceChange by Administrator {
     priceChange: one PriceChange
-    administrator: one Staff
     reason: text
 }
-
-WithdrawPriceChange requires administrator to be Administrator
 
 shape PriceWithdrawal {
     drug: one Drug
@@ -3134,13 +3618,14 @@ rule RefuseWithdrawal when RefusedWithdrawal {
 -- An administrator or a pharmacist raises or lowers a drug's reorder point.
 -- The bound is stated on the act: a prohibition on the drug's field would
 -- fail closed, since a rule writes it (checks V10).
-transient act SetReorderPoint {
+-- velle: a two-role gate stays a body requirement over the actor; the
+-- header names the shape every committer belongs to
+transient act SetReorderPoint by Staff {
     drug: one Drug
-    requestedBy: one Staff
     reorderPoint: integer
 }
 
-SetReorderPoint requires requestedBy to be Administrator or requestedBy to be Pharmacist
+SetReorderPoint requires actor to be Administrator or actor to be Pharmacist
 never (SetReorderPoint where reorderPoint < 0)
 
 rule ApplyReorderPoint when SetReorderPoint {
@@ -3177,13 +3662,12 @@ shape UsableLot      = StockLot where expiresOn >= today and onHand > 0 and
 -- velle: a transient act partitioned on a comparison against a derived
 -- value, with the complement spelled `not (...)` for V18; the body reads the
 -- balance as it stood before the adjustment landed
-transient act CountLot {
+transient act CountLot by Staff {
     lot: one StockLot
-    technician: one Staff
     counted: integer
 }
 
-CountLot requires technician to be Technician or technician to be Pharmacist
+CountLot requires actor to be Technician or actor to be Pharmacist
 never (CountLot where counted < 0)
 
 shape StockAdjustment {
@@ -3204,11 +3688,11 @@ shape MatchingCount    = CountLot where counted == lot.onHand
 shape DiscrepantCount  = CountLot where not counted == lot.onHand
 
 rule ConfirmCount when MatchingCount {
-    CountConfirmation from { lot: lot, counted: counted, countedBy: technician }
+    CountConfirmation from { lot: lot, counted: counted, countedBy: actor }
 }
 
 rule AdjustCount when DiscrepantCount {
-    StockAdjustment from { lot: lot, delta: counted - lot.onHand, countedBy: technician }
+    StockAdjustment from { lot: lot, delta: counted - lot.onHand, countedBy: actor }
 }
 
 -- An expired lot with stock left is quarantined overnight; a recalled lot is
@@ -3342,11 +3826,10 @@ shape Notice {
 -- the whole order away, and the prescriber is told to resend.
 -- velle: the exposure closure (`act ... with`); the part's back-reference
 -- is language-populated; a refusal rolls back container and parts together
-act PrescriberOrder {
+act PrescriberOrder by Staff as enteredBy {
     prescriber: one Prescriber
     patient: one Patient
     writtenOn: Date
-    enteredBy: one Staff
 } with prescriptions
 
 -- velle: "an order is never written in the future" is not written here. On
@@ -3415,9 +3898,8 @@ shape FilledPrescription = Prescription where fills is not empty {
 -- prohibition (checks V10 fails closed on a rule-written field), and the
 -- quantity's bounds matter more than correcting it in place.
 -- velle: the writer partitioned on the freeze's syntactic complement (checks V5)
-transient act CorrectEntry {
+transient act CorrectEntry by Staff {
     prescription: one Prescription
-    technician: one Staff
     directions: text
 }
 
@@ -3444,13 +3926,10 @@ rule RefuseCorrection when RefusedCorrection {
 -- velle: reversal as data (Reference §22, "Reversal") where a `delete` would
 -- have to resolve every required reference (checks V24); the void is
 -- refused on record once the prescription has been filled
-transient act VoidEntry {
+transient act VoidEntry by Pharmacist {
     prescription: one Prescription
-    pharmacist: one Staff
     reason: text
 }
-
-VoidEntry requires pharmacist to be Pharmacist
 
 shape EntryVoid {
     prescription: one Prescription
@@ -3469,7 +3948,7 @@ shape ApplicableVoid = VoidEntry where prescription is not FilledPrescription
 shape RefusedVoid    = VoidEntry where prescription is FilledPrescription
 
 rule ApplyVoid when ApplicableVoid {
-    EntryVoid from { prescription: prescription, pharmacist: pharmacist, reason: reason }
+    EntryVoid from { prescription: prescription, pharmacist: actor, reason: reason }
 }
 
 rule RefuseVoid when RefusedVoid {
@@ -3498,13 +3977,10 @@ shape InteractionConflict = Prescription where
             exists (this.drug.interactions where drugA == other.drug or drugB == other.drug))
 
 -- A pharmacist may override a conflict with a justification on record.
-act ConflictOverride {
+act ConflictOverride by Pharmacist {
     prescription: one Prescription
-    pharmacist: one Staff
     justification: text
 }
-
-ConflictOverride requires pharmacist to be Pharmacist
 
 shape Cleared = Prescription where
     (this is not AllergyConflict and this is not InteractionConflict) or
@@ -3567,13 +4043,14 @@ shape MultiplePrescribers = Patient where
 -- record it produces, beside a rejection-as-data partition on one act whose
 -- two sides are a derived boolean and its negation (checks V18's complement
 -- slice); the correlation key lets the counter find the answer
-transient act FillPrescription {
+-- velle: `as filledBy` gives the actor the business name the fill record
+-- and its prohibitions read it by
+transient act FillPrescription by Staff as filledBy {
     requestKey: text
     prescription: one Prescription
     lot: one StockLot
     quantity: integer
     fillNumber: integer
-    filledBy: one Staff
     dispensable: boolean = if prescription is Fillable and quantity <= lot.onHand then true else false
 }
 
@@ -3590,14 +4067,11 @@ Fill requires fillNumber == count(prescription.fills where fillNumber <= this.fi
 -- A controlled fill needs a clear monitoring-programme check by a pharmacist
 -- within the last day.
 -- velle: a windowed `exists` over `now` inside a refusal
-act MonitoringCheck {
+act MonitoringCheck by Pharmacist {
     prescription: one Prescription
-    pharmacist: one Staff
     checkedAt: DateTime
     cleared: boolean
 }
-
-MonitoringCheck requires pharmacist to be Pharmacist
 
 never (FillPrescription where lot.drug is Controlled and
        not exists (prescription.monitoringChecks where cleared and checkedAt > now - 24 hours))
@@ -3673,17 +4147,15 @@ rule LogControlled when (Fill where lot.drug is Controlled) {
 -- A pharmacist verifies each fill: approved, or rejected back to stock. Only
 -- a licensed pharmacist may verify; a pharmacist never verifies a controlled
 -- fill they filled themselves; a fill is verified once.
--- velle: refusals reading a time-dependent refinement (the licence) and an
--- identity comparison between the act and the fill's field
-transient act VerifyFill {
+-- velle: the licence gate in the header reads a time-dependent refinement;
+-- an identity comparison between the actor and the fill's field
+transient act VerifyFill by LicensedPharmacist {
     fill: one Fill
-    pharmacist: one Staff
     outcome: text
     note: text
 }
 
-VerifyFill requires pharmacist to be LicensedPharmacist
-never (VerifyFill where pharmacist == fill.filledBy and fill.lot.drug is Controlled)
+never (VerifyFill where actor == fill.filledBy and fill.lot.drug is Controlled)
 VerifyFill requires outcome == "approved" or outcome == "rejected"
 
 shape Verification {
@@ -3699,7 +4171,7 @@ shape Verification {
 never (Fill where count(verifications) > 1)
 
 rule RecordVerification when VerifyFill {
-    Verification from { fill: fill, pharmacist: pharmacist, outcome: outcome, note: note }
+    Verification from { fill: fill, pharmacist: actor, outcome: outcome, note: note }
 }
 
 shape VerifiedFill = Fill where exists (verifications where outcome == "approved")
@@ -3713,13 +4185,10 @@ shape ConsumingFill = Fill where this is not RejectedFill and not exists ReturnT
 
 -- A first fill, or any fill of a drug that needs it, is counselled by a
 -- pharmacist before it is handed over.
-act Counselling {
+act Counselling by Pharmacist {
     fill: one Fill
-    pharmacist: one Staff
     notes: text
 }
-
-Counselling requires pharmacist to be Pharmacist
 
 shape CounsellingDue = VerifiedFill where
     (lot.drug.requiresCounselling or fillNumber == 1) and not exists Counselling for this
@@ -3918,7 +4387,11 @@ shape InsuredFill = VerifiedFill where prescription.order.patient.plan is some {
     insurer: one InsurancePlan = prescription.order.patient.plan
 }
 
+-- velle: a shape's own clauses replace the spec-wide default — a claim is
+-- the pharmacist's and the administrator's business, not every technician's
 shape Claim {
+    visible to Pharmacist
+    visible to Administrator
     fill: one Fill
     plan: one InsurancePlan
     amount: decimal
@@ -3993,7 +4466,7 @@ rule SnapshotControlled when Controlled on Monthly {
 
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
-data class NewStaff(
+data class NewHireStaff(
     val name: String,
     val role: String,
 ) {
@@ -4069,24 +4542,20 @@ data class NewPriceChange(
 
 data class NewWithdrawPriceChange(
     val priceChange: Ref<PriceChange>,
-    val administrator: Ref<Staff>,
     val reason: String,
 ) {
     internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("priceChange", system.idOf(priceChange))
-        put("administrator", system.idOf(administrator))
         put("reason", reason)
     }
 }
 
 data class NewSetReorderPoint(
     val drug: Ref<Drug>,
-    val requestedBy: Ref<Staff>,
     val reorderPoint: Int,
 ) {
     internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("drug", system.idOf(drug))
-        put("requestedBy", system.idOf(requestedBy))
         put("reorderPoint", reorderPoint)
     }
 }
@@ -4109,12 +4578,10 @@ data class NewStockLot(
 
 data class NewCountLot(
     val lot: Ref<StockLot>,
-    val technician: Ref<Staff>,
     val counted: Int,
 ) {
     internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("lot", system.idOf(lot))
-        put("technician", system.idOf(technician))
         put("counted", counted)
     }
 }
@@ -4193,14 +4660,12 @@ data class NewPrescriberOrder(
     val prescriber: Ref<Prescriber>,
     val patient: Ref<Patient>,
     val writtenOn: LocalDate,
-    val enteredBy: Ref<Staff>,
     val prescriptions: List<NewPrescription> = emptyList(),
 ) {
     internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("prescriber", system.idOf(prescriber))
         put("patient", system.idOf(patient))
         put("writtenOn", writtenOn)
-        put("enteredBy", system.idOf(enteredBy))
     }
     internal fun parts(system: VelleSystem): Map<String, List<Map<String, Any?>>> = buildMap {
         put("prescriptions", prescriptions.map { it.raw(system) })
@@ -4221,36 +4686,30 @@ data class NewDiscontinuation(
 
 data class NewCorrectEntry(
     val prescription: Ref<Prescription>,
-    val technician: Ref<Staff>,
     val directions: String,
 ) {
     internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("prescription", system.idOf(prescription))
-        put("technician", system.idOf(technician))
         put("directions", directions)
     }
 }
 
 data class NewVoidEntry(
     val prescription: Ref<Prescription>,
-    val pharmacist: Ref<Staff>,
     val reason: String,
 ) {
     internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("prescription", system.idOf(prescription))
-        put("pharmacist", system.idOf(pharmacist))
         put("reason", reason)
     }
 }
 
 data class NewConflictOverride(
     val prescription: Ref<Prescription>,
-    val pharmacist: Ref<Staff>,
     val justification: String,
 ) {
     internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("prescription", system.idOf(prescription))
-        put("pharmacist", system.idOf(pharmacist))
         put("justification", justification)
     }
 }
@@ -4261,7 +4720,6 @@ data class NewFillPrescription(
     val lot: Ref<StockLot>,
     val quantity: Int,
     val fillNumber: Int,
-    val filledBy: Ref<Staff>,
 ) {
     internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("requestKey", requestKey)
@@ -4269,19 +4727,16 @@ data class NewFillPrescription(
         put("lot", system.idOf(lot))
         put("quantity", quantity)
         put("fillNumber", fillNumber)
-        put("filledBy", system.idOf(filledBy))
     }
 }
 
 data class NewMonitoringCheck(
     val prescription: Ref<Prescription>,
-    val pharmacist: Ref<Staff>,
     val checkedAt: Instant,
     val cleared: Boolean,
 ) {
     internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("prescription", system.idOf(prescription))
-        put("pharmacist", system.idOf(pharmacist))
         put("checkedAt", checkedAt)
         put("cleared", cleared)
     }
@@ -4289,13 +4744,11 @@ data class NewMonitoringCheck(
 
 data class NewVerifyFill(
     val fill: Ref<Fill>,
-    val pharmacist: Ref<Staff>,
     val outcome: String,
     val note: String,
 ) {
     internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("fill", system.idOf(fill))
-        put("pharmacist", system.idOf(pharmacist))
         put("outcome", outcome)
         put("note", note)
     }
@@ -4303,12 +4756,10 @@ data class NewVerifyFill(
 
 data class NewCounselling(
     val fill: Ref<Fill>,
-    val pharmacist: Ref<Staff>,
     val notes: String,
 ) {
     internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("fill", system.idOf(fill))
-        put("pharmacist", system.idOf(pharmacist))
         put("notes", notes)
     }
 }
@@ -4396,13 +4847,9 @@ data class Staff(
     val licenceReminders: List<Ref<LicenceReminder>>,
     val stockAdjustments: List<Ref<StockAdjustment>>,
     val countConfirmations: List<Ref<CountConfirmation>>,
-    val prescriberOrders: List<Ref<PrescriberOrder>>,
     val entryVoids: List<Ref<EntryVoid>>,
-    val conflictOverrides: List<Ref<ConflictOverride>>,
-    val monitoringChecks: List<Ref<MonitoringCheck>>,
     val fills: List<Ref<Fill>>,
     val verifications: List<Ref<Verification>>,
-    val counsellings: List<Ref<Counselling>>,
     /** membership of Pharmacist at the moment of the read */
     val isPharmacist: Boolean,
     /** membership of Technician at the moment of the read */
@@ -4421,6 +4868,7 @@ data class Staff(
 
 data class LicenceRenewal(
     override val key: StoreKey,
+    val actor: Ref<Staff>,
     val pharmacist: Ref<Staff>,
     val licenceNumber: String,
     val expiresOn: LocalDate,
@@ -4691,10 +5139,10 @@ data class Notice(
 
 data class PrescriberOrder(
     override val key: StoreKey,
+    val enteredBy: Ref<Staff>,
     val prescriber: Ref<Prescriber>,
     val patient: Ref<Patient>,
     val writtenOn: LocalDate,
-    val enteredBy: Ref<Staff>,
     val prescriptions: List<Ref<Prescription>>,
 ) : Ref<PrescriberOrder> {
     override val shape: String get() = "PrescriberOrder"
@@ -4806,8 +5254,8 @@ data class VoidRefusal(
 
 data class ConflictOverride(
     override val key: StoreKey,
+    val actor: Ref<Staff>,
     val prescription: Ref<Prescription>,
-    val pharmacist: Ref<Staff>,
     val justification: String,
 ) : Ref<ConflictOverride> {
     override val shape: String get() = "ConflictOverride"
@@ -4828,8 +5276,8 @@ data class PharmacistAlert(
 
 data class MonitoringCheck(
     override val key: StoreKey,
+    val actor: Ref<Staff>,
     val prescription: Ref<Prescription>,
-    val pharmacist: Ref<Staff>,
     val checkedAt: Instant,
     val cleared: Boolean,
 ) : Ref<MonitoringCheck> {
@@ -4919,8 +5367,8 @@ data class Verification(
 
 data class Counselling(
     override val key: StoreKey,
+    val actor: Ref<Staff>,
     val fill: Ref<Fill>,
-    val pharmacist: Ref<Staff>,
     val notes: String,
 ) : Ref<Counselling> {
     override val shape: String get() = "Counselling"
@@ -5104,13 +5552,9 @@ data class Pharmacist(
     val licenceReminders: List<Ref<LicenceReminder>>,
     val stockAdjustments: List<Ref<StockAdjustment>>,
     val countConfirmations: List<Ref<CountConfirmation>>,
-    val prescriberOrders: List<Ref<PrescriberOrder>>,
     val entryVoids: List<Ref<EntryVoid>>,
-    val conflictOverrides: List<Ref<ConflictOverride>>,
-    val monitoringChecks: List<Ref<MonitoringCheck>>,
     val fills: List<Ref<Fill>>,
     val verifications: List<Ref<Verification>>,
-    val counsellings: List<Ref<Counselling>>,
     /** membership of Technician at the moment of the read */
     val isTechnician: Boolean,
     /** membership of Administrator at the moment of the read */
@@ -5133,13 +5577,9 @@ data class Technician(
     val licenceReminders: List<Ref<LicenceReminder>>,
     val stockAdjustments: List<Ref<StockAdjustment>>,
     val countConfirmations: List<Ref<CountConfirmation>>,
-    val prescriberOrders: List<Ref<PrescriberOrder>>,
     val entryVoids: List<Ref<EntryVoid>>,
-    val conflictOverrides: List<Ref<ConflictOverride>>,
-    val monitoringChecks: List<Ref<MonitoringCheck>>,
     val fills: List<Ref<Fill>>,
     val verifications: List<Ref<Verification>>,
-    val counsellings: List<Ref<Counselling>>,
     /** membership of Pharmacist at the moment of the read */
     val isPharmacist: Boolean,
     /** membership of Administrator at the moment of the read */
@@ -5162,13 +5602,9 @@ data class Administrator(
     val licenceReminders: List<Ref<LicenceReminder>>,
     val stockAdjustments: List<Ref<StockAdjustment>>,
     val countConfirmations: List<Ref<CountConfirmation>>,
-    val prescriberOrders: List<Ref<PrescriberOrder>>,
     val entryVoids: List<Ref<EntryVoid>>,
-    val conflictOverrides: List<Ref<ConflictOverride>>,
-    val monitoringChecks: List<Ref<MonitoringCheck>>,
     val fills: List<Ref<Fill>>,
     val verifications: List<Ref<Verification>>,
-    val counsellings: List<Ref<Counselling>>,
     /** membership of Pharmacist at the moment of the read */
     val isPharmacist: Boolean,
     /** membership of Technician at the moment of the read */
@@ -5191,13 +5627,9 @@ data class LicensedPharmacist(
     val licenceReminders: List<Ref<LicenceReminder>>,
     val stockAdjustments: List<Ref<StockAdjustment>>,
     val countConfirmations: List<Ref<CountConfirmation>>,
-    val prescriberOrders: List<Ref<PrescriberOrder>>,
     val entryVoids: List<Ref<EntryVoid>>,
-    val conflictOverrides: List<Ref<ConflictOverride>>,
-    val monitoringChecks: List<Ref<MonitoringCheck>>,
     val fills: List<Ref<Fill>>,
     val verifications: List<Ref<Verification>>,
-    val counsellings: List<Ref<Counselling>>,
     /** membership of Pharmacist at the moment of the read */
     val isPharmacist: Boolean,
     /** membership of Technician at the moment of the read */
@@ -5220,13 +5652,9 @@ data class LicenceExpiringSoon(
     val licenceReminders: List<Ref<LicenceReminder>>,
     val stockAdjustments: List<Ref<StockAdjustment>>,
     val countConfirmations: List<Ref<CountConfirmation>>,
-    val prescriberOrders: List<Ref<PrescriberOrder>>,
     val entryVoids: List<Ref<EntryVoid>>,
-    val conflictOverrides: List<Ref<ConflictOverride>>,
-    val monitoringChecks: List<Ref<MonitoringCheck>>,
     val fills: List<Ref<Fill>>,
     val verifications: List<Ref<Verification>>,
-    val counsellings: List<Ref<Counselling>>,
     /** membership of Pharmacist at the moment of the read */
     val isPharmacist: Boolean,
     /** membership of Technician at the moment of the read */
@@ -6558,6 +6986,7 @@ class StaffFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class LicenceRenewalFields(path: List<String> = emptyList()) : Fields(path) {
+    val actor: AdministratorFields get() = AdministratorFields(fieldPath + "actor")
     val pharmacist: StaffFields get() = StaffFields(fieldPath + "pharmacist")
     val licenceNumber: TextField get() = TextField(fieldPath + "licenceNumber")
     val expiresOn: DateField get() = DateField(fieldPath + "expiresOn")
@@ -6694,10 +7123,10 @@ class NoticeFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class PrescriberOrderFields(path: List<String> = emptyList()) : Fields(path) {
+    val enteredBy: StaffFields get() = StaffFields(fieldPath + "enteredBy")
     val prescriber: PrescriberFields get() = PrescriberFields(fieldPath + "prescriber")
     val patient: PatientFields get() = PatientFields(fieldPath + "patient")
     val writtenOn: DateField get() = DateField(fieldPath + "writtenOn")
-    val enteredBy: StaffFields get() = StaffFields(fieldPath + "enteredBy")
 }
 
 class PrescriptionFields(path: List<String> = emptyList()) : Fields(path) {
@@ -6752,8 +7181,8 @@ class VoidRefusalFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class ConflictOverrideFields(path: List<String> = emptyList()) : Fields(path) {
+    val actor: PharmacistFields get() = PharmacistFields(fieldPath + "actor")
     val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
-    val pharmacist: StaffFields get() = StaffFields(fieldPath + "pharmacist")
     val justification: TextField get() = TextField(fieldPath + "justification")
 }
 
@@ -6764,8 +7193,8 @@ class PharmacistAlertFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class MonitoringCheckFields(path: List<String> = emptyList()) : Fields(path) {
+    val actor: PharmacistFields get() = PharmacistFields(fieldPath + "actor")
     val prescription: PrescriptionFields get() = PrescriptionFields(fieldPath + "prescription")
-    val pharmacist: StaffFields get() = StaffFields(fieldPath + "pharmacist")
     val checkedAt: DateTimeField get() = DateTimeField(fieldPath + "checkedAt")
     val cleared: BoolField get() = BoolField(fieldPath + "cleared")
 }
@@ -6814,8 +7243,8 @@ class VerificationFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class CounsellingFields(path: List<String> = emptyList()) : Fields(path) {
+    val actor: PharmacistFields get() = PharmacistFields(fieldPath + "actor")
     val fill: FillFields get() = FillFields(fieldPath + "fill")
-    val pharmacist: StaffFields get() = StaffFields(fieldPath + "pharmacist")
     val notes: TextField get() = TextField(fieldPath + "notes")
 }
 
@@ -7573,7 +8002,7 @@ class StaleClaimFields(path: List<String> = emptyList()) : Fields(path) {
 fun main() {
     val sys = PharmacySystem()
     println("Velle MockHarness — Pharmacy")
-    println("Commits: commitStaff(...), commitLicenceRenewal(...), commitIngredient(...), commitDrug(...), commitInteraction(...), commitPriceChange(...), commitWithdrawPriceChange(...), commitSetReorderPoint(...), commitStockLot(...), commitCountLot(...), commitRecall(...), commitInsurancePlan(...), commitPatient(...), commitPrescriber(...), commitSetAllergies(...), commitAddAllergy(...), commitPrescriberOrder(...), commitDiscontinuation(...), commitCorrectEntry(...), commitVoidEntry(...), commitConflictOverride(...), commitFillPrescription(...), commitMonitoringCheck(...), commitVerifyFill(...), commitCounselling(...), commitPickUp(...), commitRequestRefill(...), commitAutoRefillEnrolment(...), commitAutoRefillCancellation(...), commitAdjudication(...)")
+    println("Commits: commit(NewHireStaff(...), actor), commit(NewLicenceRenewal(...), actor), commit(NewIngredient(...)), commit(NewDrug(...)), commit(NewInteraction(...)), commit(NewPriceChange(...)), commit(NewWithdrawPriceChange(...), actor), commit(NewSetReorderPoint(...), actor), commit(NewStockLot(...)), commit(NewCountLot(...), actor), commit(NewRecall(...)), commit(NewInsurancePlan(...)), commit(NewPatient(...)), commit(NewPrescriber(...)), commit(NewSetAllergies(...)), commit(NewAddAllergy(...)), commit(NewPrescriberOrder(...), enteredBy), commit(NewDiscontinuation(...)), commit(NewCorrectEntry(...), actor), commit(NewVoidEntry(...), actor), commit(NewConflictOverride(...), actor), commit(NewFillPrescription(...), filledBy), commit(NewMonitoringCheck(...), actor), commit(NewVerifyFill(...), actor), commit(NewCounselling(...), actor), commit(NewPickUp(...)), commit(NewRequestRefill(...)), commit(NewAutoRefillEnrolment(...)), commit(NewAutoRefillCancellation(...)), commit(NewAdjudication(...))")
     println("Ticks: tickDaily(), tickNightly(), tickHourly(), tickMonthly()")
     println("Edit this main to drive the system; state prints below.")
 

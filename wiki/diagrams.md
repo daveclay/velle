@@ -57,11 +57,17 @@ what Velle derives:
   hollow-triangle arrow, each carrying its membership predicate in a note —
   membership is decided by the predicate, instant by instant, not fixed at
   creation. Composed refinements point at their operands with dashed arrows.
+- An act declared `by` draws one more association, from the act to the
+  actor's base shape, labelled with the bound name and the clause
+  (`actor (by LicensedPharmacist)`): who commits it, read off the diagram
+  (Reference §22, "The actor").
 - `/name` marks a derived property — UML's marker for a derived attribute.
   Derivation expressions stay out of the class boxes (they live in the spec;
   Mermaid also treats parenthesized member lines as methods); the box says
   only that the property is derived. `captured` fields carry "captured at
-  entry"; `frozen` clauses render as member lines.
+  entry"; `frozen` clauses render as member lines, and so do visibility
+  clauses, record-level ones as lines of their own and field-level ones on
+  the field (Reference §8, "Who may see a record").
 - Declared relationships are edges labeled with the declaring field and the
   inferred inverse collection where one exists (`invoice (inverse lineItems)`),
   with cardinalities from the declaration (`one` / `many` / optional).

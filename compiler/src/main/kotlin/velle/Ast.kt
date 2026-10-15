@@ -13,7 +13,10 @@ data class ShapeDecl(
     val transient: Boolean = false,
     /** the act's closure — `act ... with` (Reference §6, "Inline part creation") */
     val with: List<WithEntry> = emptyList(),
-) : Decl
+) : Decl {
+    /** The act's `by` clause, carried as a member (Reference §22, "The actor"); null when the act has no actor. */
+    val actor: ActorProp? get() = members.filterIsInstance<ActorProp>().singleOrNull()
+}
 
 /** One closure edge: an inverse-edge name on the enclosing level, with its own
  *  nested closure when the part arrives with parts of its own (Reference §6,
@@ -60,10 +63,22 @@ data class RuleDecl(
     /** `tolerates contention` — the author accepts the wide serialization domain
      *  this rule's condition creates (OQ40; advisory A5). */
     val toleratesContention: Boolean = false,
+    /** `by Shape[?] [as name]` — the rule reads the actor of the transaction it
+     *  fires in (Reference §22, "The actor"); null when it reads none. */
+    val by: RuleActor? = null,
 ) : Decl {
     /** Exit-shaped: the subject is a leaver (any cause) — reads captures as a last reader. */
     val leaving: Boolean get() = trigger.exit
 }
+
+/**
+ * A rule's actor clause: the committer of the act whose transaction the rule
+ * fires in, bound under [name] (`actor` unless the author wrote `as`). [optional]
+ * is the author's `?`: some path to the rule's trigger starts at a tick, an
+ * `after commit` firing, or an act without `by`, and there the actor is absent
+ * (checks V31).
+ */
+data class RuleActor(val shape: String, val optional: Boolean, val name: String, val named: Boolean = false)
 
 /**
  * A prohibition (Reference §21). Spelled `never <condition>`, or as a requirement,
@@ -79,6 +94,9 @@ data class NeverDecl(
     val toleratesContention: Boolean = false,
     /** Non-null when the prohibition was written `Subject requires <predicate>`. */
     val requirement: Requirement? = null,
+    /** True for the requirement an act's `by <Refinement>` clause desugars to
+     *  (`Act requires actor to be Refinement`, Reference §22): the role gate in the header. */
+    val fromActorClause: Boolean = false,
 ) : Decl {
     /** The declaration's keyword, for labels: `never` or `requires`. */
     val keyword: String get() = if (requirement == null) "never" else "requires"
@@ -87,9 +105,30 @@ data class NeverDecl(
 /** The requirement spelling of a prohibition, as written: `subject requires predicate`. */
 data class Requirement(val subject: String, val predicate: Expr)
 
+/**
+ * The spec-wide visibility default (Reference §22, "The actor"; OQ33 §5.9):
+ * `visible to Staff` or `visible to anyone` at the top level, which every
+ * readable shape without a clause of its own takes.
+ */
+data class VisibilityDefault(val clause: VisibleClause) : Decl
+
 // ── Shape / refinement members ───────────────────────────────────────────────
 
 sealed interface Member
+
+/**
+ * A visibility clause (Reference §22, "The actor"; OQ33 §5.7–§5.10):
+ * `visible to <Shape> [as name] [where predicate]`, or `visible to anyone`
+ * ([shape] null). On a shape body it is record-level: a member of the body
+ * beside `frozen` and `undeletable`, saying which viewers a record is
+ * returned to. On a field it narrows within the record's. The viewer is bound
+ * in [where] under [name] (`actor` unless `as` chose another). Applied by the
+ * read surface only, never inside evaluation.
+ */
+data class VisibleClause(val shape: String?, val name: String = "actor", val named: Boolean = false, val where: Expr? = null) : Member {
+    val anyone: Boolean get() = shape == null
+}
+
 data class StoredProp(
     val name: String,
     val type: TypeRef,
@@ -99,6 +138,8 @@ data class StoredProp(
      *  creation must supply a value — never-set is impossible, so `is none`
      *  means "was present, now gone" (target deleted, or assigned `none`). */
     val initiallyRequired: Boolean = false,
+    /** Field-level visibility (Reference §22): which viewers this field is returned to. */
+    val visible: List<VisibleClause> = emptyList(),
 ) : Member
 
 data class DerivedProp(
@@ -106,9 +147,20 @@ data class DerivedProp(
     val type: TypeRef,
     val expr: Expr,
     val captured: Boolean = false,
+    val visible: List<VisibleClause> = emptyList(),
 ) : Member
 
-data class TimestampProp(val name: String, val on: String) : Member // "create" | "update"
+data class TimestampProp(val name: String, val on: String, val visible: List<VisibleClause> = emptyList()) : Member // "create" | "update"
+
+/**
+ * The actor an act is committed by (Reference §22, "The actor"): the act's
+ * `by Shape [as name]` clause, carried as a language-populated member — never
+ * in the committer's input, never assignable, stored on a durable act like a
+ * timestamp. [name] is `actor` unless the author chose one with `as` ([named]).
+ * [shape] is a shape, a static union, or a refinement; a refinement is the role
+ * gate in the header, desugared to `Act requires <name> to be Refinement`.
+ */
+data class ActorProp(val name: String, val shape: String, val named: Boolean = false) : Member
 
 /** `frozen a, b` — empty list means bare `frozen` (every stored field). */
 data class FrozenClause(val fields: List<String>) : Member

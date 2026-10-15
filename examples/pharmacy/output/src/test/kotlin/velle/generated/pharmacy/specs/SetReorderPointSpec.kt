@@ -11,7 +11,7 @@ import velle.generated.pharmacy.*
  *     drug.reorderPoint = reorderPoint
  * }
  *
- * SetReorderPoint requires (requestedBy to be Administrator) or (requestedBy to be Pharmacist)
+ * SetReorderPoint requires (actor to be Administrator) or (actor to be Pharmacist)
  *
  * never (SetReorderPoint where reorderPoint < 0)
  *
@@ -26,23 +26,23 @@ class SetReorderPointSpec : SpecSupport() {
 
     @Test
     fun `never - a SetReorderPoint where reorderPoint below 0 is refused`() {
+        // the actor: any committed 'Staff'
+        val actor = givens.someStaff()
         // given: any committed 'Drug'
         val drug = givens.someDrug()
-        // given: any committed 'Staff'
-        val requestedBy = givens.someStaff()
         val before = count("SetReorderPoint")
-        val result = sys.system.commit("SetReorderPoint", mapOf("drug" to idOf(drug), "requestedBy" to idOf(requestedBy), "reorderPoint" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("SetReorderPoint", mapOf("drug" to idOf(drug), "reorderPoint" to java.math.BigDecimal("-1")), actor = idOf(actor))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("SetReorderPoint"), "a refused act commits nothing")
     }
 
     @Test
     fun `never - a SetReorderPoint with reorderPoint 0 is accepted`() {
+        // the actor: any committed 'Staff'
+        val actor = givens.someStaff()
         // given: any committed 'Drug'
         val drug = givens.someDrug()
-        // given: any committed 'Staff'
-        val requestedBy = givens.someStaff()
-        val result = sys.system.commit("SetReorderPoint", mapOf("drug" to idOf(drug), "requestedBy" to idOf(requestedBy), "reorderPoint" to java.math.BigDecimal("0")))
+        val result = sys.system.commit("SetReorderPoint", mapOf("drug" to idOf(drug), "reorderPoint" to java.math.BigDecimal("0")), actor = idOf(actor))
         assertIs<CommitResult.Accepted>(result)
     }
 }

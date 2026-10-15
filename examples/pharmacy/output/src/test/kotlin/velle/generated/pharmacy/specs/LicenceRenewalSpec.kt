@@ -9,6 +9,8 @@ import velle.generated.pharmacy.*
 /**
  * LicenceRenewal requires pharmacist to be Pharmacist
  *
+ * LicenceRenewal requires actor to be Administrator
+ *
  */
 class LicenceRenewalSpec : SpecSupport() {
 }

@@ -241,7 +241,14 @@ object SpecGen {
                 }
             }
             if (subjectRefs != 1) return null
-            return ExitCommit(setup, "sys.commit(New${act.name}(${args.joinToString(", ")}))")
+            // an act declared `by` is committed by someone (Reference §22): a given supplies the actor
+            val actorArg = act.actor?.let { a ->
+                val given = "some${a.shape}"
+                demandGiven(given, "Provide any committed '${a.shape}' to commit '${act.name}' as; return it.", a.shape)
+                setup.add("val ${a.name} = givens.$given()")
+                ", ${a.name}"
+            } ?: ""
+            return ExitCommit(setup, "sys.commit(New${act.name}(${args.joinToString(", ")})$actorArg)")
         }
 
         fun guardWindowDays(rule: RuleDecl): Long? {
@@ -636,6 +643,7 @@ object SpecGen {
 
         fun neverTests(never: NeverDecl, ordinal: Int, file: String): List<String> {
             fun skip(ordinal: Int, reason: String) = skip(ordinal, never.keyword, reason)
+            if (never.fromActorClause) return skip(ordinal, "the role gate an act's `by` clause states")
             val target = never.target as? RefName ?: return skip(ordinal, "composite never")
             val shape = model.shapes[target.name] ?: return skip(ordinal, "never over a refinement")
             if (target.name !in model.exposed) return skip(ordinal, "shape is not an act")
@@ -665,7 +673,7 @@ object SpecGen {
                 val body = StringBuilder()
                 fields.setup.forEach { body.line(2, it) }
                 body.line(2, "val before = count(\"${shape.name}\")")
-                body.line(2, "val result = sys.system.commit(\"${shape.name}\", mapOf(${fields.entries(fieldPath.root, violating)}))")
+                body.line(2, "val result = sys.system.commit(\"${shape.name}\", mapOf(${fields.entries(fieldPath.root, violating)})${fields.actorArg})")
                 body.line(2, "assertIs<CommitResult.Refused>(result)")
                 body.line(2, "assertEquals(before, count(\"${shape.name}\"), \"a refused act commits nothing\")")
                 recordCase(sentence)
@@ -677,7 +685,7 @@ object SpecGen {
                 val sentence = "${never.keyword} - a ${shape.name} with ${fieldPath.root} ${plain(legal)} is accepted"
                 val body = StringBuilder()
                 fields.setup.forEach { body.line(2, it) }
-                body.line(2, "val result = sys.system.commit(\"${shape.name}\", mapOf(${fields.entries(fieldPath.root, legal)}))")
+                body.line(2, "val result = sys.system.commit(\"${shape.name}\", mapOf(${fields.entries(fieldPath.root, legal)})${fields.actorArg})")
                 body.line(2, "assertIs<CommitResult.Accepted>(result)")
                 recordCase(sentence)
                 recordNeverScenario(never, sentence, shape.name, fieldPath.root, plain(legal), relGivens,
@@ -764,7 +772,9 @@ object SpecGen {
             }
         }
 
-        class ActFields(val setup: List<String>, private val pairs: List<Pair<String, String>>) {
+        class ActFields(val setup: List<String>, private val pairs: List<Pair<String, String>>,
+                        /** `, actor = idOf(x)` for an act declared `by`; empty otherwise */
+                        val actorArg: String = "") {
             fun entries(overrideField: String, value: BigDecimal): String =
                 pairs.joinToString(", ") { (name, expr) ->
                     if (name == overrideField) "\"$name\" to java.math.BigDecimal(\"${value.toPlainString()}\")"
@@ -776,6 +786,14 @@ object SpecGen {
         fun commitFields(shape: ShapeDecl, constrainedField: String): ActFields? {
             val setup = mutableListOf<String>()
             val pairs = mutableListOf<Pair<String, String>>()
+            // the actor an act declared `by` is committed by (Reference §22): a given supplies it
+            val actorArg = shape.actor?.let { a ->
+                val given = "some${a.shape}"
+                demandGiven(given, "Provide any committed '${a.shape}' to commit '${shape.name}' as; return it.", a.shape)
+                setup.add("// the actor: any committed '${a.shape}'")
+                setup.add("val ${a.name} = givens.$given()")
+                ", actor = idOf(${a.name})"
+            } ?: ""
             for (p in shape.members.filterIsInstance<StoredProp>()) {
                 if (p.initially != null) continue
                 when (val t = p.type) {
@@ -809,7 +827,7 @@ object SpecGen {
                     }
                 }
             }
-            return ActFields(setup, pairs)
+            return ActFields(setup, pairs, actorArg)
         }
 
         fun opWords(op: String): String = when (op) {

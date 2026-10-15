@@ -34,6 +34,9 @@ class Evaluator(private val system: VelleSystem) {
         val subjectId: Long,
         val elements: List<Pair<String, Long>> = emptyList(), // (scope name, instance)
         val aliases: Map<String, Pair<String, Long>> = emptyMap(),
+        /** A rule's `by` binding (Reference §22, "The actor"): the bound name and
+         *  the transaction's root actor, null when the firing has none. */
+        val actor: Pair<String, Long?>? = null,
     ) {
         fun innermost(): Pair<String, Long> = elements.lastOrNull() ?: (subjectScope to subjectId)
         fun push(scope: String, id: Long, alias: String?): Ctx = copy(
@@ -167,6 +170,8 @@ class Evaluator(private val system: VelleSystem) {
         var v: Value = when {
             p.root == "this" -> Value.VRef(ctx.subjectId)
             p.root in ctx.aliases -> Value.VRef(ctx.aliases.getValue(p.root).second)
+            // the rule's actor: present when the transaction's root act carried one
+            ctx.actor?.first == p.root -> ctx.actor.second?.let { Value.VRef(it) } ?: Value.VNone
             p.root in model.refinements || p.root in model.shapes -> {
                 // bare shape/refinement name: membership test of the innermost element
                 val (_, id) = ctx.innermost()

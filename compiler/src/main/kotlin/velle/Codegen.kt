@@ -48,6 +48,7 @@ object Codegen {
             actInputTypes()
             closureInputTypes()
             dataClasses()
+            viewerInterfaces()
             fieldsClasses()
             mainFn()
             return sb.toString()
@@ -174,11 +175,20 @@ object Codegen {
             queueKeyDoc(shape)
             val input = actInputNames.getValue(shape)
             val edges = model.closures[shape].orEmpty()
-            line("    fun commit(input: $input): Commit<$input> =")
-            if (edges.isEmpty()) line("        system.commit(\"$shape\", input.raw(system)).carrying(input)")
-            else line("        system.commit(\"$shape\", input.raw(system), input.parts(system)).carrying(input)")
+            // an act declared `by` takes its actor as a parameter beside the input
+            // (Reference §22, "The actor"): the committer, never a field of the input
+            val actor = model.actorOf(shape)
+            val actorParam = actor?.let { ", ${it.name}: Ref<${refBase(it.shape)}>" } ?: ""
+            val actorArg = actor?.let { ", actor = system.idOf(${it.name})" } ?: ""
+            val parts = if (edges.isEmpty()) "" else ", input.parts(system)"
+            line("    fun commit(input: $input$actorParam): Commit<$input> =")
+            line("        system.commit(\"$shape\", input.raw(system)$parts$actorArg).carrying(input)")
             line()
         }
+
+        /** The reference type a value typed by [shape] is: a refinement's base shape (an actor
+         *  declared `by Administrator` is a `Ref<Staff>`), a union or base shape itself. */
+        fun refBase(shape: String): String = model.baseOf(shape) ?: shape
 
         /** The serialization contract (OQ40): the queue keys this commit's work
          *  joins, stated on the generated surface so the engineer reads them
@@ -246,6 +256,34 @@ object Codegen {
             return model.refinements.keys.filter { r -> isRoot(r) && r != root && !isUnion(r) && over(r) && "is$r" !in members }
         }
 
+        // ── visibility (Reference §22, "The actor"; OQ33 §5.7–§5.10, §6.1) ──────
+        // One class per shape, declaring each field once; one interface per viewer
+        // shape that a clause names, listing what that viewer may see. A field
+        // with a clause is nullable in the class — for some viewer it is absent —
+        // and appears in a viewer's interface only when some clause admits that
+        // viewer's shape, nullable there since membership and predicates are
+        // runtime facts. The engineer's own read returns the class, unfiltered.
+
+        val viewerShapes: List<String> = model.viewerShapes.toList().sorted()
+        fun gated(m: MemberInfo) = m.visible.isNotEmpty()
+        fun hasGated(root: String) = !isUnion(root) && dataMembers(root).any { gated(it.second) }
+        fun admits(c: VisibleClause, viewer: String) = c.anyone || viewer in model.basesOf(c.shape!!)
+        fun fieldShown(m: MemberInfo, viewer: String) = m.visible.isEmpty() || m.visible.any { admits(it, viewer) }
+        /** Can a record of [root] ever be returned to a viewer of [viewer]'s shape? */
+        fun recordShown(root: String, viewer: String): Boolean {
+            if (isUnion(root)) return model.basesOf(root).any { recordShown(it, viewer) }
+            val cs = model.recordVisibility(root)
+            return cs.isEmpty() || cs.any { admits(it, viewer) }
+        }
+        /** The type a viewer of [viewer]'s shape receives for [root]: its interface when fields are gated, else the class. */
+        fun viewType(root: String, viewer: String) = if (hasGated(root)) "${root}For$viewer" else root
+        /** The class's type for a member: nullable when a clause can hide it. */
+        fun fieldType(m: MemberInfo): String = kotlinType(m.type).let { if (gated(m) && !it.endsWith("?")) "$it?" else it }
+        /** A union's member is nullable when any operand gates it. */
+        fun unionFieldType(union: String, name: String, t: VType): String =
+            kotlinType(t).let { k -> if (!k.endsWith("?") && model.basesOf(union).any { b -> model.membersOf(b)[name]?.let(::gated) == true }) "$k?" else k }
+        fun viewersOf(root: String): List<String> = viewerShapes.filter { recordShown(root, it) }
+
         // ── accessors: the degenerate query — every instance, as model objects ──
         fun shapeAccessors(shape: String) {
             if (shape in model.transients) return // an input to the state, never readable after its commit
@@ -303,6 +341,90 @@ object Codegen {
             line("        else -> throw IllegalStateException(\"no model object for '\$shape'\")")
             line("    }")
             queryRoots.forEach { root -> materializer(root) }
+            viewerShapes.forEach { v -> viewerReadSurface(v) }
+        }
+
+        /** The read surface for a viewer of shape [v] (Reference §22, "The actor"): the same
+         *  roots, each query carrying the viewer so the engine admits only what the shape's
+         *  clauses admit, each fetch resolving absent for an invisible record, each model
+         *  object projected to the viewer's interface where fields are gated. A root no
+         *  clause ever shows to this viewer's shape is not on the surface at all. */
+        fun viewerReadSurface(v: String) {
+            val roots = queryRoots.filter { recordShown(it, v) }
+            line()
+            line("    // ── reads for a $v: what the surface returns to one of them (Reference §22, \"The actor\") ──")
+            line("    fun read(viewer: Ref<$v>): ${v}Read = ${v}Read(system.idOf(viewer))")
+            line()
+            line("    inner class ${v}Read(private val viewer: Long) {")
+            for (root in roots) {
+                val view = viewType(root, v)
+                val query = if (hasGated(root)) "${root}QueryFor$v" else "${root}Query"
+                line("        val ${plural(root)}: $query get() = $query(Query(\"$root\", viewer = viewer))")
+                val mat = if (hasGated(root)) "materialize${root}For$v(viewer, it)" else "materialize$root(it)"
+                when {
+                    root in model.shapes -> {
+                        line("        /** The record behind [ref], or null when it is gone or not shown to this viewer. */")
+                        line("        fun ${decap(root)}(ref: Ref<$root>): $view? =")
+                        line("            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists(\"$root\", it)) $mat else null }")
+                        line("        fun ${decap(root)}(key: StoreKey): $view? = ${decap(root)}(Ref.Persisted(\"$root\", key))")
+                        line("        fun ${decap(root)}(key: Long): $view? = ${decap(root)}(StoreKey(key))")
+                    }
+                    !isUnion(root) -> {
+                        line("        /** The record behind [ref] as a member of $root, or null when it is not one or not shown to this viewer. */")
+                        line("        fun ${decap(root)}(ref: Ref<${refTarget(root)}>): $view? =")
+                        line("            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists(\"$root\", it)) $mat else null }")
+                    }
+                }
+            }
+            line("    }")
+            for (root in roots.filter { hasGated(it) }) {
+                line()
+                line("    inner class ${root}QueryFor$v(q: Query) : TypedQuery<${root}Fields, ${root}For$v>(system, q, ${root}Fields(), { materialize${root}For$v(q.viewer!!, it) }) {")
+                line("        override fun with(q: Query) = ${root}QueryFor$v(q)")
+                line("    }")
+            }
+            for (root in roots.filter { hasGated(it) }) viewerMaterializer(root, v)
+        }
+
+        /** A model object projected for a viewer: the class, its hidden fields absent (null). */
+        fun viewerMaterializer(root: String, v: String) {
+            val own = model.refinements[root]?.members?.filterIsInstance<DerivedProp>()?.map { it.name }?.toSet().orEmpty()
+            line()
+            line("    fun materialize${root}For$v(viewer: Long, id: Long): ${root}For$v {")
+            line("        val hidden = system.hiddenFields(viewer, id, \"$root\")")
+            line("        return $root(")
+            line("            key = system.refFor(id).key,")
+            for ((name, m) in dataMembers(root)) {
+                val call = if (name in own) "system.getAs(id, \"$root\", \"$name\")" else "system.get(id, \"$name\")"
+                val read = readExpr(call, m.type)
+                line("            $name = ${if (gated(m)) "if (\"$name\" in hidden) null else $read" else read},")
+            }
+            if (root in model.shapes) unionMembers(root).forEach { (name, u, t) ->
+                line("            $name = ${readExpr("system.getAs(id, \"$u\", \"$name\")", t)},")
+            }
+            membershipsOf(root).forEach { r -> line("            is$r = system.isMember(id, \"$r\"),") }
+            line("        )")
+            line("    }")
+        }
+
+        /** One interface per viewer shape per root with gated fields (Reference §22, "The actor"; OQ33 §6.1). */
+        fun viewerInterfaces() {
+            val pairs = queryRoots.filter { hasGated(it) }.flatMap { root -> viewersOf(root).map { root to it } }
+            if (pairs.isEmpty()) return
+            line()
+            line("// ── what a viewer receives (Reference §22, \"The actor\"): one interface per viewer shape per shape")
+            line("// with gated fields — the fields that viewer may see, a gated one nullable, the rest as the class ──")
+            for ((root, v) in pairs) {
+                line()
+                line("interface ${root}For$v : Keyed {")
+                for ((name, m) in dataMembers(root)) {
+                    if (!fieldShown(m, v)) continue
+                    line("    val $name: ${fieldType(m)}")
+                }
+                if (root in model.shapes) unionMembers(root).forEach { (name, _, t) -> line("    val $name: ${kotlinType(t)}") }
+                membershipsOf(root).forEach { r -> line("    val is$r: Boolean") }
+                line("}")
+            }
         }
 
         /** The model object from a handle: every member read at the moment of the read (R5). */
@@ -338,14 +460,17 @@ object Codegen {
                 val target = refTarget(root)
                 val unionNames = if (root in model.shapes) unionsOf(root) else emptyList()
                 val inherited = unionNames.flatMap { model.membersOf(it).keys + membershipsOf(it).map { r -> "is$r" } }.toSet()
-                val supertypes = listOf("Ref<$target>") + unionNames
+                // the viewer interfaces this class implements: one per viewer shape a record of it can be shown to
+                val viewerIfaces = if (hasGated(root)) viewersOf(root).map { "${root}For$it" } else emptyList()
+                val viewerMembers = if (hasGated(root)) viewersOf(root).flatMap { v -> dataMembers(root).filter { fieldShown(it.second, v) }.map { it.first } }.toSet() else emptySet()
+                val supertypes = listOf("Ref<$target>") + unionNames + viewerIfaces
                 line("data class $root(")
                 line("    override val key: StoreKey,")
-                for ((name, m) in dataMembers(root)) line("    ${if (name in inherited) "override " else ""}val $name: ${kotlinType(m.type)},")
+                for ((name, m) in dataMembers(root)) line("    ${if (name in inherited || name in viewerMembers) "override " else ""}val $name: ${fieldType(m)},")
                 if (root in model.shapes) unionMembers(root).forEach { (name, _, t) -> line("    override val $name: ${kotlinType(t)},") }
                 membershipsOf(root).forEach { r ->
                     line("    /** membership of $r at the moment of the read */")
-                    line("    ${if ("is$r" in inherited) "override " else ""}val is$r: Boolean,")
+                    line("    ${if ("is$r" in inherited || viewerIfaces.isNotEmpty()) "override " else ""}val is$r: Boolean,")
                 }
                 line(") : ${supertypes.joinToString(", ")} {")
                 line("    override val shape: String get() = \"$target\"")
@@ -362,7 +487,7 @@ object Codegen {
             line("interface $union : Keyed {")
             line("    /** this record as a reference typed by the union, for a parameter that takes one */")
             line("    val ref: Ref<$union> get() = Ref.Persisted(shape, key)")
-            for ((name, m) in dataMembers(union)) line("    val $name: ${kotlinType(m.type)}")
+            for ((name, m) in dataMembers(union)) line("    val $name: ${unionFieldType(union, name, m.type)}")
             membershipsOf(union).forEach { r -> line("    val is$r: Boolean") }
             line("}")
         }
@@ -412,7 +537,7 @@ object Codegen {
             line("fun main() {")
             line("    val sys = ${name}System()")
             line("    println(\"Velle MockHarness — $name\")")
-            line("    println(\"Commits: ${model.exposed.joinToString(", ") { "commit$it(...)" }}\")")
+            line("    println(\"Commits: ${model.exposed.joinToString(", ") { a -> "commit(New$a(...)" + (model.actorOf(a)?.let { ", ${it.name}" } ?: "") + ")" }}\")")
             if (schedules.isNotEmpty())
                 line("    println(\"Ticks: ${schedules.joinToString(", ") { "tick$it()" }}\")")
             line("    println(\"Edit this main to drive the system; state prints below.\")")
@@ -463,7 +588,7 @@ object Codegen {
             VType.Bool -> "Boolean"
             VType.DateT -> "LocalDate"
             VType.DateTimeT -> "Instant"
-            is VType.Inst -> "Ref<${t.shape}>"
+            is VType.Inst -> "Ref<${refBase(t.shape)}>"
             is VType.Coll -> "List<Ref<${t.shape}>>"
             is VType.CollS -> "List<${scalarKotlin(t.name)}>"
             is VType.Optional -> kotlinType(t.inner) + "?"

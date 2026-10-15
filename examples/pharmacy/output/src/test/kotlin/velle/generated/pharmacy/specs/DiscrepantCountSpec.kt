@@ -12,7 +12,7 @@ import velle.generated.pharmacy.*
  * shape MatchingCount = CountLot where counted == lot.onHand
  *
  * rule AdjustCount when DiscrepantCount {
- *     StockAdjustment from { lot: lot, delta: counted - lot.onHand, countedBy: technician }
+ *     StockAdjustment from { lot: lot, delta: counted - lot.onHand, countedBy: actor }
  * }
  *
  */

@@ -13,6 +13,7 @@ import velle.StoreKey
 import velle.StoredProp
 import velle.TEXT_OPERATORS
 import velle.TimestampProp
+import velle.ActorProp
 import velle.VType
 import velle.VelleSystem
 import java.math.BigDecimal
@@ -90,6 +91,8 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
                     else Col(m.name, t, t.instanceShape()?.let { isUnion(it) } == true)
                 }
                 is TimestampProp -> Col(m.name, VType.DateTimeT, union = false)
+                // the actor of a durable act (Reference §22): a reference column to the clause's base shape
+                is ActorProp -> (model.baseOf(m.shape) ?: m.shape).let { Col(m.name, VType.Inst(it), isUnion(it)) }
                 else -> null
             }
         }

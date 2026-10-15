@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * CountLot requires (technician to be Technician) or (technician to be Pharmacist)
+ * CountLot requires (actor to be Technician) or (actor to be Pharmacist)
  *
  * never (CountLot where counted < 0)
  *
@@ -16,23 +16,23 @@ class CountLotSpec : SpecSupport() {
 
     @Test
     fun `never - a CountLot where counted below 0 is refused`() {
+        // the actor: any committed 'Staff'
+        val actor = givens.someStaff()
         // given: any committed 'StockLot'
         val lot = givens.someStockLot()
-        // given: any committed 'Staff'
-        val technician = givens.someStaff()
         val before = count("CountLot")
-        val result = sys.system.commit("CountLot", mapOf("lot" to idOf(lot), "technician" to idOf(technician), "counted" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("CountLot", mapOf("lot" to idOf(lot), "counted" to java.math.BigDecimal("-1")), actor = idOf(actor))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("CountLot"), "a refused act commits nothing")
     }
 
     @Test
     fun `never - a CountLot with counted 0 is accepted`() {
+        // the actor: any committed 'Staff'
+        val actor = givens.someStaff()
         // given: any committed 'StockLot'
         val lot = givens.someStockLot()
-        // given: any committed 'Staff'
-        val technician = givens.someStaff()
-        val result = sys.system.commit("CountLot", mapOf("lot" to idOf(lot), "technician" to idOf(technician), "counted" to java.math.BigDecimal("0")))
+        val result = sys.system.commit("CountLot", mapOf("lot" to idOf(lot), "counted" to java.math.BigDecimal("0")), actor = idOf(actor))
         assertIs<CommitResult.Accepted>(result)
     }
 }

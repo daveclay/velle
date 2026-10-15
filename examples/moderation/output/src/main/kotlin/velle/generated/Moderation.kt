@@ -845,7 +845,7 @@ class OrphanedListingFields(path: List<String> = emptyList()) : Fields(path) {
 fun main() {
     val sys = ModerationSystem()
     println("Velle MockHarness — Moderation")
-    println("Commits: commitSeller(...), commitListing(...), commitPublish(...), commitListingReport(...), commitDiscardDraft(...), commitCloseAccount(...)")
+    println("Commits: commit(NewSeller(...)), commit(NewListing(...)), commit(NewPublish(...)), commit(NewListingReport(...)), commit(NewDiscardDraft(...)), commit(NewCloseAccount(...))")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>

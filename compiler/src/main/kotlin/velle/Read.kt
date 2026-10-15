@@ -19,7 +19,9 @@ import java.time.LocalDate
  * One read request. [where] is a predicate over the members of [root] in the
  * spec's predicate language; [orderBy] is required (R10) — one or more orderable
  * members with a direction; [page] is a window over the ordered rows; [viewer]
- * is the slot visibility will fill (OQ33; R8: present, unused).
+ * is the person the read is for (Reference §22, "The actor"): with one, the
+ * answer holds only the records the root's visibility clauses admit to them;
+ * null is the engineer's own view of the store, unfiltered.
  */
 data class Query(
     val root: String,
@@ -95,9 +97,14 @@ internal class QueryEngine(private val system: VelleSystem) {
         val cond = RefName(q.root, q.where)
         // a cross-base union (Reference §9) has no one table: every operand's instances, then the predicate
         val base = model.baseOf(q.root)
-            ?: return model.basesOf(q.root).flatMap { system.idsOf(it) }.filter { system.evaluator.memberOfRefExpr(it, cond) }
+            ?: return model.basesOf(q.root).flatMap { system.idsOf(it) }
+                .filter { system.evaluator.memberOfRefExpr(it, cond) && system.visibleTo(q.viewer, it) }
         val filter = system.queryCompiler().filterFor(cond)
-        return system.idsOfCandidates(base, filter).filter { system.evaluator.memberOfRefExpr(it, cond) }
+        // a viewer's query admits only the records the shape's visibility clauses admit
+        // (Reference §22, "The actor"): the authoritative check, in memory, after the
+        // pre-filter's superset
+        return system.idsOfCandidates(base, filter)
+            .filter { system.evaluator.memberOfRefExpr(it, cond) && system.visibleTo(q.viewer, it) }
     }
 
     private class Keyed(val id: Long, val datums: List<Value>, val key: Comparable<Any>)

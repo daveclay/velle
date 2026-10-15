@@ -308,6 +308,7 @@ class VelleSystem(
             val (name, vtype) = when (m) {
                 is StoredProp -> m.name to model.typeOf(m.type)
                 is TimestampProp -> m.name to VType.DateTimeT
+                is ActorProp -> m.name to VType.Inst(model.baseOf(m.shape) ?: m.shape)
                 else -> continue
             }
             val raw = row.fields[name] ?: continue
@@ -393,6 +394,9 @@ class VelleSystem(
         var depth = 0
         /** The act this transaction is for, once inserted; null for a tick or after-commit firing. */
         var act: Long? = null
+        /** The act's actor (Reference §22, "The actor"): the committer of the root act, read by
+         *  a rule declared `by`; null for a tick, an after-commit firing, or an act without `by`. */
+        var actor: Long? = null
         /** The rule firing this transaction is, and its subject; null for an act. */
         var firing: Pair<RuleDecl, Long>? = null
         /** The schedule whose tick this transaction serves; null otherwise. */
@@ -418,10 +422,11 @@ class VelleSystem(
 
     private var txn: Txn? = null
 
-    private fun <T> inTransaction(body: () -> T): Result<T> {
+    private fun <T> inTransaction(actor: Long? = null, body: () -> T): Result<T> {
         check(txn == null) { "nested harness transaction" }
         beginSnapshot()
         val t = Txn()
+        t.actor = actor
         txn = t
         return try {
             val out = body()
@@ -499,6 +504,7 @@ class VelleSystem(
                 for (m in decl.members) when (m) {
                     is StoredProp -> put(m.name, storeValue(inst.fields[m.name] ?: Value.VNone))
                     is TimestampProp -> put(m.name, storeValue(inst.fields[m.name] ?: Value.VNone))
+                    is ActorProp -> put(m.name, storeValue(inst.fields[m.name] ?: Value.VNone))
                     else -> {}
                 }
             }
@@ -587,10 +593,20 @@ class VelleSystem(
 
     // ── the exposed commit surface ────────────────────────────────────────────
 
+    /**
+     * [actor] is the committer (Reference §22, "The actor"): the handle of a record of
+     * the shape the act's `by` clause names, required exactly when the act declares
+     * `by` and refused otherwise. It is never a supplied field — a fact about the
+     * commit the committer may not claim (Reference §5) — and it lands on the act's
+     * instance under the bound name, stored on a durable act like a timestamp. A
+     * record outside the base shape is a type-level refusal here; one outside the
+     * refinement the clause names is the desugared requirement's refusal (Model).
+     */
     fun commit(
         shape: String,
         suppliedFields: Map<String, Any?>,
         parts: Map<String, List<Map<String, Any?>>> = emptyMap(),
+        actor: Long? = null,
     ): CommitResult {
         val decl = model.shapes[shape]
             ?: return CommitResult.Refused("type: unknown shape '$shape'")
@@ -599,8 +615,22 @@ class VelleSystem(
 
         duplicateRefusal(decl, suppliedFields)?.let { return CommitResult.Refused(it) }
 
-        val converted = convertFields(decl, suppliedFields)
+        val actorProp = decl.actor
+        if (actorProp != null && actorProp.name in suppliedFields)
+            return CommitResult.Refused("type: '$shape.${actorProp.name}' is the actor — a fact of the commit the committer cannot claim (Reference §22)")
+        if (actorProp == null && actor != null)
+            return CommitResult.Refused("type: '$shape' declares no actor (no `by` clause), yet one was given")
+        if (actorProp != null && actor == null)
+            return CommitResult.Refused("type: '$shape' is committed by a ${actorProp.shape} (`by ${actorProp.shape}`), and none was given")
+        if (actorProp != null) {
+            val bases = model.basesOf(actorProp.shape)
+            if (bases.none { acceptedReference(actor!!, it) })
+                return CommitResult.Refused("type: the actor of '$shape' is not a ${bases.joinToString(" or ")}")
+        }
+
+        val supplied = convertFields(decl, suppliedFields)
             ?: return CommitResult.Refused(typeFailure(decl, suppliedFields))
+        val converted = if (actorProp != null) supplied + (actorProp.name to Value.VRef(actor!!)) else supplied
 
         // the exposure closure (Reference §6, "Inline part creation"): the act plus
         // its declared inline parts land as ONE commit — parts are values created
@@ -616,7 +646,7 @@ class VelleSystem(
             return CommitResult.Refused(e.reason)
         }
 
-        val result = inTransaction { applyCommit(mutations, actCommit = true).first() }
+        val result = inTransaction(actor) { applyCommit(mutations, actCommit = true).first() }
         return result.fold(
             onSuccess = { id ->
                 // a transient act is an input to the state, not a member of it: at
@@ -636,6 +666,44 @@ class VelleSystem(
                 if (e is NeverViolation) CommitResult.Refused(e.rejection.message, e.rejection) else throw e
             }
         )
+    }
+
+    /**
+     * Seed a record outside the trust boundary (Reference §22, "The actor";
+     * OQ33 §6.2): the in-memory equivalent of a row the engineer's own code or a
+     * migration wrote to the store. No act is committed — no door, no rule fires,
+     * no prohibition is checked — the record simply exists, as a hydrated row
+     * does; with a store connected, it is written through the commit callback.
+     * The first administrator of a system whose hiring act is gated on an
+     * administrator arrives this way. Any shape, exposed or not; never a
+     * transient act, which is not a record.
+     */
+    fun seed(shape: String, fields: Map<String, Any?>): Long {
+        val decl = model.shapes[shape] ?: throw VelleRuntimeError("seed: unknown shape '$shape'")
+        if (shape in model.transients) throw VelleRuntimeError("seed: '$shape' is a transient act, not a record")
+        duplicateRefusal(decl, fields)?.let { throw VelleRuntimeError("seed: $it") }
+        val converted = convertFields(decl, fields) ?: throw VelleRuntimeError("seed: " + typeFailure(decl, fields))
+        check(txn == null) { "nested harness transaction" }
+        beginSnapshot()
+        val t = Txn()
+        txn = t
+        try {
+            val id = applyCreate(Mutation.Create(shape, converted), t)
+            onCommit?.let { cb ->
+                val pending = buildCommitSet(t)
+                val keys = cb.onCommit(pending.set)
+                pending.createdHandles.forEachIndexed { i, h ->
+                    keyOf[h] = keys[i]
+                    handleOf[Ref.Persisted(idShape.getValue(h), keys[i])] = h
+                }
+            }
+            txn = null
+            return id
+        } catch (e: Exception) {
+            rollback(t)
+            txn = null
+            throw e
+        }
     }
 
     /** The set refusal: a duplicate reference in a committed collection is a
@@ -1091,7 +1159,10 @@ class VelleSystem(
 
     private fun fire(rule: RuleDecl, subject: Long) {
         val scope = conditionScopeName(rule)
-        val ctx = Evaluator.Ctx(scope, subject)
+        // a rule declared `by` reads the transaction's root actor (Reference §22):
+        // present when the root act carried one, absent on the paths V31 made
+        // the clause say `?` for
+        val ctx = Evaluator.Ctx(scope, subject, actor = rule.by?.let { it.name to txn?.actor })
         val mutations = mutableListOf<Mutation>()
         for (item in rule.body) when (item) {
             is Assignment -> {
@@ -1304,6 +1375,25 @@ class VelleSystem(
             it != actId && it != subjectId && it !in produced && it !in violating && it !in pivots
         }
 
+        // a refusal is handed back through the same surface a read is (Reference §22,
+        // "The actor"; OQ33 §5.10): the records it carries are projected for the actor
+        // as a read would project them — invisible records dropped, hidden fields
+        // absent — while the act itself, which the actor committed, stays whole
+        val actor = t.actor?.takeIf { model.hasAuthorization }
+        fun visible(id: Long) = actor == null || visibleTo(actor, id)
+        fun project(id: Long): RecordSnapshot {
+            val s = snapshot(id)
+            if (actor == null || id == actId) return s
+            val hidden = hiddenFields(actor, id)
+            return if (hidden.isEmpty()) s else RecordSnapshot(s.ref, s.fields.filterKeys { it !in hidden })
+        }
+        val shownEvaluation = if (actor == null) evaluation else evaluation.filter { step ->
+            when (step) {
+                is EvalStep.Read -> step.record.id == actId || (visible(step.record.id) && step.member !in hiddenFields(actor, step.record.id))
+                is EvalStep.Membership -> step.record.id == actId || visible(step.record.id)
+            }
+        }
+
         return Rejection(
             never = ordinal,
             prohibition = Printer.refExpr(n.target),
@@ -1313,14 +1403,59 @@ class VelleSystem(
             act = actId?.let(::snapshot),
             rule = t.firing?.first?.name,
             schedule = t.schedule,
-            subject = subjectId?.let(::snapshot),
-            produced = produced.map(::snapshot),
-            violating = violating.map(::snapshot),
-            pivots = pivots.map(::snapshot),
-            witnesses = witnesses.map(::snapshot),
-            evaluation = evaluation,
+            subject = subjectId?.takeIf(::visible)?.let(::project),
+            produced = produced.filter(::visible).map(::project),
+            violating = violating.filter { it == actId || visible(it) }.map(::project),
+            pivots = pivots.filter(::visible).map(::project),
+            witnesses = witnesses.filter(::visible).map(::project),
+            evaluation = shownEvaluation,
             today = if (w.summary.readsTime) effectiveToday.toString() else null,
         )
+    }
+
+    // ── visibility (Reference §22, "The actor"; OQ33 §5.7–§5.10) ─────────────
+    //
+    // Applied by the read surface only: a query with a viewer admits the records
+    // the shape's clauses admit, a fetch of an invisible record resolves absent,
+    // and a model object is projected with its hidden fields absent. Evaluation
+    // never consults any of this — a derived property is calculated over every
+    // input whether or not the viewer may see it.
+
+    /** Does one of [c]'s clauses admit [viewer] to the record [id] of [scope]? */
+    private fun admits(c: VisibleClause, viewer: Long, scope: String, id: Long): Boolean {
+        val shape = c.shape ?: return true
+        val v = instance(viewer) ?: return false
+        if (v.shape !in model.basesOf(shape)) return false
+        if (shape in model.refinements && !evaluator.memberOfRefExpr(viewer, RefName(shape))) return false
+        val p = c.where ?: return true
+        return evaluator.truthy(evaluator.eval(p, Evaluator.Ctx(scope, id, actor = c.name to viewer)))
+    }
+
+    /** Is the record [id] returned to [viewer]? The engineer's own view (null) sees everything. */
+    fun visibleTo(viewer: Long?, id: Long): Boolean {
+        if (viewer == null) return true
+        val inst = instance(id) ?: return false
+        val clauses = model.recordVisibility(inst.shape)
+        if (clauses.isEmpty()) return true
+        return clauses.any { admits(it, viewer, inst.shape, id) }
+    }
+
+    /** The members of [id], read as [scope], that [viewer] may not see: a field with
+     *  clauses none of which admit the viewer. Empty for the engineer's own view. */
+    fun hiddenFields(viewer: Long?, id: Long, scope: String? = null): Set<String> {
+        if (viewer == null) return emptySet()
+        val inst = instance(id) ?: return emptySet()
+        val sc = scope ?: inst.shape
+        return model.membersOf(sc).values
+            .filter { m -> m.visible.isNotEmpty() && m.visible.none { admits(it, viewer, sc, id) } }
+            .map { it.name }.toSet()
+    }
+
+    /** The record behind [id] is current and returned to [viewer]: the fetch half of a viewer's read. */
+    fun visibleCurrent(viewer: Long?, id: Long): Boolean {
+        openReadSnapshot()
+        if (id in pendingDeleted) return false
+        return instance(id) != null && visibleTo(viewer, id)
     }
 
     // ── the read protocol (Reference §22, the composed query; Read.kt) ──────────

@@ -49,7 +49,7 @@ open class PharmacyFlowTest {
         val oxycodone = s.controlledDrug("oxycodone")
 
         // a schedule II line with refills refuses the whole order: nothing lands, not the clean line either
-        refuse(sys.commit(NewPrescriberOrder(dr, patient, s.today, tech, listOf(s.line(amoxicillin), s.line(oxycodone, refills = 1)))))
+        refuse(sys.commit(NewPrescriberOrder(dr, patient, s.today, listOf(s.line(amoxicillin), s.line(oxycodone, refills = 1))), tech))
         assertEquals(0, sys.prescriberOrders().size)
         assertEquals(0, sys.prescriptions().size)
 
@@ -73,7 +73,7 @@ open class PharmacyFlowTest {
     @Test
     fun `order - corrections and voids are refused once a prescription has been filled`() {
         val c = s.counter()
-        accept(sys.commit(NewCorrectEntry(c.prescription, c.technician, "two daily")))
+        accept(sys.commit(NewCorrectEntry(c.prescription, "two daily"), c.technician))
         assertEquals("two daily", sys.read(c.prescription).directions)
 
         // only the prescriber who wrote it may discontinue it
@@ -81,18 +81,18 @@ open class PharmacyFlowTest {
 
         s.filled(c)
         assertTrue(c.prescription.isA("FilledPrescription"))
-        accept(sys.commit(NewCorrectEntry(c.prescription, c.technician, "three daily")))
+        accept(sys.commit(NewCorrectEntry(c.prescription, "three daily"), c.technician))
         assertEquals("two daily", sys.read(c.prescription).directions, "frozen by FilledPrescription")
         assertEquals("the prescription has been filled", sys.read(sys.correctionRefusals().single()).reason)
 
-        accept(sys.commit(NewVoidEntry(c.prescription, c.pharmacist, "wrong patient")))
+        accept(sys.commit(NewVoidEntry(c.prescription, "wrong patient"), c.pharmacist))
         assertEquals(1, sys.voidRefusals().size)
         assertFalse(c.prescription.isA("Voided"))
 
         // an unfilled one is voided, and leaves the patient's active list
         val other = s.prescription(c.patient, c.drug, c.prescriber, c.technician)
-        refuse(sys.commit(NewVoidEntry(other, c.technician, "wrong patient")))
-        accept(sys.commit(NewVoidEntry(other, c.pharmacist, "wrong patient")))
+        refuse(sys.commit(NewVoidEntry(other, "wrong patient"), c.technician))
+        accept(sys.commit(NewVoidEntry(other, "wrong patient"), c.pharmacist))
         assertTrue(other.isA("Voided"))
         assertFalse(other.isA("ActivePrescription"))
         assertEquals(1, sys.entryVoids().size)
@@ -119,15 +119,15 @@ open class PharmacyFlowTest {
         assertTrue(future.isA("EffectivePrice"))
 
         // now it is in force: withdrawal is refused on record
-        accept(sys.commit(NewWithdrawPriceChange(future, admin, "second thoughts")))
+        accept(sys.commit(NewWithdrawPriceChange(future, "second thoughts"), admin))
         assertEquals("the price is already in force", sys.read(sys.priceWithdrawalRefusals().single()).reason)
         assertEquals(2, sys.read(d).priceChanges.size)
 
         // a fresh future change can be withdrawn — by an administrator only
         accept(sys.commit(NewPriceChange(d, s.today.plusDays(5), dec("9.99"))))
         val mistaken = sys.priceChanges().last()
-        refuse(sys.commit(NewWithdrawPriceChange(mistaken, s.technician(), "typo")))
-        accept(sys.commit(NewWithdrawPriceChange(mistaken, admin, "typo")))
+        refuse(sys.commit(NewWithdrawPriceChange(mistaken, "typo"), s.technician()))
+        accept(sys.commit(NewWithdrawPriceChange(mistaken, "typo"), admin))
         assertEquals(2, sys.read(d).priceChanges.size, "removed")
         val withdrawal = sys.priceWithdrawals().single()
         assertEquals("9.99", sys.read(withdrawal).unitPrice.plain(), "what was removed, copied out")
@@ -153,8 +153,8 @@ open class PharmacyFlowTest {
         assertEquals(key, sys.read(refusal).requestKey, "the counter finds its answer by the key")
         assertEquals("unresolved allergy or interaction conflict", sys.read(refusal).reason)
 
-        refuse(sys.commit(NewConflictOverride(c.prescription, c.technician, "patient tolerates it")))
-        accept(sys.commit(NewConflictOverride(c.prescription, c.pharmacist, "patient tolerates it")))
+        refuse(sys.commit(NewConflictOverride(c.prescription, "patient tolerates it"), c.technician))
+        accept(sys.commit(NewConflictOverride(c.prescription, "patient tolerates it"), c.pharmacist))
         assertTrue(c.prescription.isA("Cleared"))
         s.fill(c.prescription, c.lot, c.technician)
         assertEquals(1, sys.fills().size)
@@ -203,12 +203,12 @@ open class PharmacyFlowTest {
         val otherLot = s.lot(otherDrug)
         val expired = s.lot(c.drug, lotNumber = "OLD", expiresOn = s.today.minusDays(1))
 
-        refuse(sys.commit(NewFillPrescription("K1", c.prescription, otherLot, 30, 1, c.technician)))   // the wrong drug's lot
-        refuse(sys.commit(NewFillPrescription("K2", c.prescription, expired, 30, 1, c.technician)))    // an unusable lot
-        refuse(sys.commit(NewFillPrescription("K3", c.prescription, c.lot, 101, 1, c.technician)))     // more than the lot holds
-        refuse(sys.commit(NewFillPrescription("K4", c.prescription, c.lot, 31, 1, c.technician)))      // more than prescribed
-        refuse(sys.commit(NewFillPrescription("K5", c.prescription, c.lot, 30, 2, c.technician)))      // out of sequence
-        refuse(sys.commit(NewFillPrescription("K6", c.prescription, c.lot, 30, 1, s.administrator()))) // not a dispenser
+        refuse(sys.commit(NewFillPrescription("K1", c.prescription, otherLot, 30, 1), c.technician))   // the wrong drug's lot
+        refuse(sys.commit(NewFillPrescription("K2", c.prescription, expired, 30, 1), c.technician))    // an unusable lot
+        refuse(sys.commit(NewFillPrescription("K3", c.prescription, c.lot, 101, 1), c.technician))     // more than the lot holds
+        refuse(sys.commit(NewFillPrescription("K4", c.prescription, c.lot, 31, 1), c.technician))      // more than prescribed
+        refuse(sys.commit(NewFillPrescription("K5", c.prescription, c.lot, 30, 2), c.technician))      // out of sequence
+        refuse(sys.commit(NewFillPrescription("K6", c.prescription, c.lot, 30, 1), s.administrator())) // not a dispenser
         assertEquals(0, sys.fills().size)
         assertEquals(0, sys.fillRefusals().size, "a boundary refusal keeps nothing")
 
@@ -249,14 +249,14 @@ open class PharmacyFlowTest {
     @Test
     fun `fill - a controlled fill needs a clear monitoring check within a day and goes in the log with the balance after`() {
         val c = s.counter(drug = s.controlledDrug(), refills = 0)
-        refuse(sys.commit(NewFillPrescription("K1", c.prescription, c.lot, 30, 1, c.technician)))
-        refuse(sys.commit(NewMonitoringCheck(c.prescription, c.technician, s.now, true)))
-        accept(sys.commit(NewMonitoringCheck(c.prescription, c.pharmacist, s.now, false)))
-        refuse(sys.commit(NewFillPrescription("K2", c.prescription, c.lot, 30, 1, c.technician)), ) // not cleared
+        refuse(sys.commit(NewFillPrescription("K1", c.prescription, c.lot, 30, 1), c.technician))
+        refuse(sys.commit(NewMonitoringCheck(c.prescription, s.now, true), c.technician))
+        accept(sys.commit(NewMonitoringCheck(c.prescription, s.now, false), c.pharmacist))
+        refuse(sys.commit(NewFillPrescription("K2", c.prescription, c.lot, 30, 1), c.technician), ) // not cleared
 
         s.monitoringCheck(c.prescription, c.pharmacist)
         sys.advanceSeconds(25 * 3600)
-        refuse(sys.commit(NewFillPrescription("K3", c.prescription, c.lot, 30, 1, c.technician)))   // a day old
+        refuse(sys.commit(NewFillPrescription("K3", c.prescription, c.lot, 30, 1), c.technician))   // a day old
         s.monitoringCheck(c.prescription, c.pharmacist)
         val fill = s.fill(c.prescription, c.lot, c.technician)
 
@@ -272,19 +272,19 @@ open class PharmacyFlowTest {
     fun `verify - a licensed pharmacist verifies once, never their own controlled fill, and a rejection returns the stock`() {
         val c = s.filled(s.counter(drug = s.controlledDrug(), refills = 0))
         val lapsed = s.pharmacist("Lapsed", licensedUntil = s.today.minusDays(1))
-        refuse(sys.commit(NewVerifyFill(c.fill, lapsed, "approved", "")))
-        refuse(sys.commit(NewVerifyFill(c.fill, c.technician, "approved", "")))
-        refuse(sys.commit(NewVerifyFill(c.fill, c.pharmacist, "maybe", "")))
+        refuse(sys.commit(NewVerifyFill(c.fill, "approved", ""), lapsed))
+        refuse(sys.commit(NewVerifyFill(c.fill, "approved", ""), c.technician))
+        refuse(sys.commit(NewVerifyFill(c.fill, "maybe", ""), c.pharmacist))
 
         // the pharmacist fills the second one themself: another pharmacist must verify it
         val other = s.counter(patient = c.patient, drug = c.drug, refills = 0)
         s.monitoringCheck(other.prescription, c.pharmacist)
         val ownFill = s.fill(other.prescription, other.lot, c.pharmacist)
-        refuse(sys.commit(NewVerifyFill(ownFill, c.pharmacist, "approved", "")))
+        refuse(sys.commit(NewVerifyFill(ownFill, "approved", ""), c.pharmacist))
         s.verify(ownFill, s.pharmacist("Colleague"))
 
         s.verify(c.fill, c.pharmacist, "rejected")
-        refuse(sys.commit(NewVerifyFill(c.fill, c.pharmacist, "approved", "")), ) // verified once
+        refuse(sys.commit(NewVerifyFill(c.fill, "approved", ""), c.pharmacist), ) // verified once
         assertTrue(c.fill.isA("RejectedFill"))
         assertFalse(c.fill.isA("ConsumingFill"))
         assertEquals(100, sys.read(c.lot).onHand, "the rejected fill went back on the shelf")
@@ -305,7 +305,7 @@ open class PharmacyFlowTest {
         assertTrue(c.fill.isA("CounsellingDue"), "a first fill is counselled")
 
         refuse(sys.commit(NewPickUp(c.fill, "the patient", sys.read(c.fill).amountDue)))
-        refuse(sys.commit(NewCounselling(c.fill, c.technician, "...")))
+        refuse(sys.commit(NewCounselling(c.fill, "..."), c.technician))
         s.counsel(c.fill, c.pharmacist)
         assertFalse(c.fill.isA("CounsellingDue"))
         assertEquals("45", sys.read(c.fill).amountDue.plain(), "no insurer: the patient pays the lot")
@@ -380,16 +380,16 @@ open class PharmacyFlowTest {
     fun `stock - on hand is a derivation, counts confirm or adjust it, expired lots are quarantined overnight`() {
         val c = s.filled()
         assertEquals(70, sys.read(c.lot).onHand)
-        accept(sys.commit(NewCountLot(c.lot, c.technician, 70)))
+        accept(sys.commit(NewCountLot(c.lot, 70), c.technician))
         assertEquals(1, sys.countConfirmations().size)
         assertEquals(0, sys.stockAdjustments().size)
 
-        accept(sys.commit(NewCountLot(c.lot, c.technician, 68)))
+        accept(sys.commit(NewCountLot(c.lot, 68), c.technician))
         val adj = sys.stockAdjustments().single()
         assertEquals(-2, sys.read(adj).delta, "counted less the balance it replaced")
         assertEquals(68, sys.read(c.lot).onHand)
         assertEquals(68, sys.read(c.drug).onHand)
-        refuse(sys.commit(NewCountLot(c.lot, s.administrator(), 68)))
+        refuse(sys.commit(NewCountLot(c.lot, 68), s.administrator()))
 
         val shortDated = s.lot(c.drug, lotNumber = "SHORT", expiresOn = s.today.plusDays(2), received = 10)
         assertEquals(78, sys.read(c.drug).onHand)
@@ -401,7 +401,7 @@ open class PharmacyFlowTest {
         assertTrue(shortDated.isA("QuarantinedLot"))
         sys.tickNightly()
         assertEquals(1, sys.quarantines().size)
-        refuse(sys.commit(NewFillPrescription("K", c.prescription, shortDated, 5, 2, c.technician)))
+        refuse(sys.commit(NewFillPrescription("K", c.prescription, shortDated, 5, 2), c.technician))
     }
 
     @Test
@@ -422,7 +422,7 @@ open class PharmacyFlowTest {
         assertEquals(0, sys.read(c2.lot).recalls.size, "the other lot is untouched")
 
         // nothing more can be filled from it
-        refuse(sys.commit(NewFillPrescription("K", c1.prescription, c1.lot, 30, 2, c1.technician)))
+        refuse(sys.commit(NewFillPrescription("K", c1.prescription, c1.lot, 30, 2), c1.technician))
         s.fill(c1.prescription, c2.lot, c1.technician)
         assertEquals(2, sys.recallNotices().size)
     }
@@ -441,9 +441,9 @@ open class PharmacyFlowTest {
         assertEquals(1, sys.purchaseOrders().size, "an open order stops a second")
 
         // the administrator lowers the point: no longer low, but the order stays open
-        accept(sys.commit(NewSetReorderPoint(d, s.administrator(), 20)))
-        refuse(sys.commit(NewSetReorderPoint(d, s.technician(), 10)))
-        refuse(sys.commit(NewSetReorderPoint(d, s.administrator(), -1)))
+        accept(sys.commit(NewSetReorderPoint(d, 20), s.administrator()))
+        refuse(sys.commit(NewSetReorderPoint(d, 10), s.technician()))
+        refuse(sys.commit(NewSetReorderPoint(d, -1), s.administrator()))
         assertFalse(d.isA("LowStock"))
 
         val delivered = s.lot(d, lotNumber = "L-PO", received = 80, purchaseOrder = po)
@@ -590,14 +590,30 @@ open class PharmacyFlowTest {
         assertEquals(1, sys.claims().size, "claimed once")
     }
 
+    // ── reads for a person ───────────────────────────────────────────────────
+
+    @Test
+    fun `reads - staff see the pharmacy's records, a claim is shown to pharmacists and administrators only`() {
+        val c = s.ready(s.filled(s.counter(patient = s.patient("Insured", plan = s.plan()))))
+        val claim = sys.claims().single()
+        val tech = sys.read(c.technician)
+        assertEquals(1, tech.fills.orderBy { filledOn.ascending }.list().size, "the spec-wide default: staff see fills")
+        assertNotNull(tech.fill(c.fill))
+        assertEquals(0, tech.claims.orderBy { submittedAt.ascending }.list().size, "a technician is shown no claim")
+        assertNull(tech.claim(claim))
+        assertNotNull(sys.read(c.pharmacist).claim(claim))
+        assertNotNull(sys.read(s.founder).claim(claim))
+        assertEquals(1, sys.read.claims.orderBy { submittedAt.ascending }.list().size, "the engineer's own view is unfiltered")
+    }
+
     // ── administration ───────────────────────────────────────────────────────
 
     @Test
     fun `admin - staff roles are a closed list, licences near lapsing are reminded weekly, and the monthly snapshot counts every controlled drug`() {
-        refuse(sys.commit(NewStaff("Jo", "janitor")))
+        refuse(sys.commit(NewHireStaff("Jo", "janitor"), s.founder))
         val soon = s.pharmacist("Soon", licensedUntil = s.today.plusDays(20))
         val fine = s.pharmacist("Fine", licensedUntil = s.today.plusDays(200))
-        refuse(sys.commit(NewLicenceRenewal(s.technician(), "RPH-X", s.today.plusDays(365))))
+        refuse(sys.commit(NewLicenceRenewal(s.technician(), "RPH-X", s.today.plusDays(365)), s.founder))
         assertTrue(soon.isA("LicenceExpiringSoon"))
         assertFalse(fine.isA("LicenceExpiringSoon"))
 
@@ -612,7 +628,7 @@ open class PharmacyFlowTest {
         assertEquals(2, sys.licenceReminders().size)
 
         // a renewal ends the reminders; the lapse ends the right to verify
-        accept(sys.commit(NewLicenceRenewal(soon, "RPH-NEW", s.today.plusDays(400))))
+        accept(sys.commit(NewLicenceRenewal(soon, "RPH-NEW", s.today.plusDays(400)), s.founder))
         assertFalse(soon.isA("LicenceExpiringSoon"))
         sys.advanceDays(7)
         sys.tickDaily()

@@ -2897,7 +2897,7 @@ class LateEscalatedMemberFields(path: List<String> = emptyList()) : Fields(path)
 fun main() {
     val sys = MembershipSystem()
     println("Velle MockHarness — Membership")
-    println("Commits: commitPlan(...), commitSignUp(...), commitChangeEmail(...), commitVisit(...), commitMakeDeposit(...), commitAgent(...), commitRaiseTicket(...), commitCloseTicket(...), commitReopenTicket(...), commitAssignTicket(...)")
+    println("Commits: commit(NewPlan(...)), commit(NewSignUp(...)), commit(NewChangeEmail(...)), commit(NewVisit(...)), commit(NewMakeDeposit(...)), commit(NewAgent(...)), commit(NewRaiseTicket(...)), commit(NewCloseTicket(...)), commit(NewReopenTicket(...)), commit(NewAssignTicket(...))")
     println("Ticks: tickHourly(), tickMonthly(), tickNightly(), tickDaily()")
     println("Edit this main to drive the system; state prints below.")
 

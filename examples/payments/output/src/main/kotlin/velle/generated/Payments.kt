@@ -3942,7 +3942,7 @@ class ClosableDunningFlagFields(path: List<String> = emptyList()) : Fields(path)
 fun main() {
     val sys = PaymentsSystem()
     println("Velle MockHarness — Payments")
-    println("Commits: commitContact(...), commitCard(...), commitCustomer(...), commitCardUpdate(...), commitPlaceOrder(...), commitProcessorVerdict(...), commitChangeShippingAddress(...), commitIssueRefund(...), commitManualCharge(...), commitExtensionRequest(...)")
+    println("Commits: commit(NewContact(...)), commit(NewCard(...)), commit(NewCustomer(...)), commit(NewCardUpdate(...)), commit(NewPlaceOrder(...)), commit(NewProcessorVerdict(...)), commit(NewChangeShippingAddress(...)), commit(NewIssueRefund(...)), commit(NewManualCharge(...)), commit(NewExtensionRequest(...))")
     println("Ticks: tickDaily(), tickQuarterHourly(), tickNightly()")
     println("Edit this main to drive the system; state prints below.")
 

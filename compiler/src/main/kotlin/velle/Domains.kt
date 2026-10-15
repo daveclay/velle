@@ -530,7 +530,12 @@ class DomainAnalysis(private val model: Model) {
 
     private fun fireRule(rule: RuleDecl, subject: Anchor, acc: Acc, events: MutableList<Event>) {
         val walker = Walker(acc, "rule ${rule.name}", rule.toleratesContention)
-        val ctx = walker.ctxOf(conditionScope(rule.condition), subject)
+        // a rule declared `by` reads the transaction's actor (Reference §22): a
+        // reference the root act carried, anchored as a reach from the act — the
+        // same row every commit by that person keys on
+        val ctx = walker.ctxOf(conditionScope(rule.condition), subject).let { c ->
+            rule.by?.let { b -> walker.Ctx(c.subject, c.elements, c.aliases + (b.name to walker.Scope(b.shape, Anchor.Reach(listOf(b.name))))) } ?: c
+        }
         walker.walkRef(rule.condition, ctx)
         for (item in rule.body) when (item) {
             is Assignment -> walker.walkAssignment(item, ctx, events)

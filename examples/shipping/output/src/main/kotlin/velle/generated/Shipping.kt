@@ -350,7 +350,7 @@ class ShippedOrderFields(path: List<String> = emptyList()) : Fields(path) {
 fun main() {
     val sys = ShippingSystem()
     println("Velle MockHarness — Shipping")
-    println("Commits: commitOrder(...), commitCancellation(...), commitShipment(...)")
+    println("Commits: commit(NewOrder(...)), commit(NewCancellation(...)), commit(NewShipment(...))")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>

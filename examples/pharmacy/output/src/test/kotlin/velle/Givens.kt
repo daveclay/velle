@@ -13,7 +13,14 @@ class Givens(private val sys: PharmacySystem) : RequiredGivens {
 
     private val s = Scenario(sys)
 
+    /** The founder is seeded before any case counts records: the generated cases
+     *  measure one firing's products, and the fixture row is not one of them. */
+    init { s.founder }
+
     // ── staff ────────────────────────────────────────────────────────────────
+
+    /** A hire by the founder, the seeded first administrator (Reference §22, "The actor"). */
+    override fun hireStaff() { s.technician("New hire") }
 
     /** Licensed for twenty more days: within the thirty-day reminder window. */
     override fun staffForRemindLicence(): Staff = s.pharmacist(licensedUntil = s.today.plusDays(20))
@@ -32,17 +39,17 @@ class Givens(private val sys: PharmacySystem) : RequiredGivens {
     override fun applicableWithdrawal() {
         val d = s.drug()
         s.accept(sys.commit(NewPriceChange(d, s.today.plusDays(30), s.dec("2.00"))))
-        s.accept(sys.commit(NewWithdrawPriceChange(sys.priceChanges().last(), s.administrator(), "entered in error")))
+        s.accept(sys.commit(NewWithdrawPriceChange(sys.priceChanges().last(), "entered in error"), s.administrator()))
     }
 
     /** The price in force since today cannot be withdrawn. */
     override fun refusedWithdrawal() {
         s.drug()
-        s.accept(sys.commit(NewWithdrawPriceChange(sys.priceChanges().last(), s.administrator(), "too late")))
+        s.accept(sys.commit(NewWithdrawPriceChange(sys.priceChanges().last(), "too late"), s.administrator()))
     }
 
     override fun setReorderPoint() {
-        s.accept(sys.commit(NewSetReorderPoint(s.drug(), s.administrator(), 40)))
+        s.accept(sys.commit(NewSetReorderPoint(s.drug(), 40), s.administrator()))
     }
 
     // ── stock ────────────────────────────────────────────────────────────────
@@ -51,12 +58,12 @@ class Givens(private val sys: PharmacySystem) : RequiredGivens {
 
     override fun matchingCount() {
         val lot = s.lot(s.drug(), received = 100)
-        s.accept(sys.commit(NewCountLot(lot, s.technician(), 100)))
+        s.accept(sys.commit(NewCountLot(lot, 100), s.technician()))
     }
 
     override fun discrepantCount() {
         val lot = s.lot(s.drug(), received = 100)
-        s.accept(sys.commit(NewCountLot(lot, s.technician(), 97)))
+        s.accept(sys.commit(NewCountLot(lot, 97), s.technician()))
     }
 
     /** A lot that expired yesterday with stock left, and no nightly tick yet. */
@@ -104,22 +111,22 @@ class Givens(private val sys: PharmacySystem) : RequiredGivens {
 
     override fun applicableCorrection() {
         val c = s.counter()
-        s.accept(sys.commit(NewCorrectEntry(c.prescription, c.technician, "two daily")))
+        s.accept(sys.commit(NewCorrectEntry(c.prescription, "two daily"), c.technician))
     }
 
     override fun refusedCorrection() {
         val c = s.filled()
-        s.accept(sys.commit(NewCorrectEntry(c.prescription, c.technician, "two daily")))
+        s.accept(sys.commit(NewCorrectEntry(c.prescription, "two daily"), c.technician))
     }
 
     override fun applicableVoid() {
         val c = s.counter()
-        s.accept(sys.commit(NewVoidEntry(c.prescription, c.pharmacist, "wrong patient")))
+        s.accept(sys.commit(NewVoidEntry(c.prescription, "wrong patient"), c.pharmacist))
     }
 
     override fun refusedVoid() {
         val c = s.filled()
-        s.accept(sys.commit(NewVoidEntry(c.prescription, c.pharmacist, "wrong patient")))
+        s.accept(sys.commit(NewVoidEntry(c.prescription, "wrong patient"), c.pharmacist))
     }
 
     /** A patient allergic to penicillin, prescribed a drug containing it. */

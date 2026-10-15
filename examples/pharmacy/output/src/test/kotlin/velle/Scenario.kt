@@ -37,14 +37,23 @@ class Scenario(val sys: PharmacySystem) {
 
     // ── staff ────────────────────────────────────────────────────────────────
 
-    fun staff(name: String, role: String): Staff {
-        accept(sys.commit(NewStaff(name, role))); return sys.staffs().last()
+    /** The first administrator: hiring is gated on an administrator (`HireStaff by
+     *  Administrator`), so the first one is seeded by the engineer outside the trust
+     *  boundary — a fixture row, no act, no door, no rule (Reference §22, "The actor"). */
+    val founder: Staff by lazy {
+        sys.system.seed("Staff", mapOf("name" to "Founder", "role" to "admin"))
+        sys.staffs().last()
     }
 
-    /** A pharmacist whose licence runs until [licensedUntil]. */
+    /** Everyone else is hired by the founder through the gated act. */
+    fun staff(name: String, role: String): Staff {
+        accept(sys.commit(NewHireStaff(name, role), founder)); return sys.staffs().last()
+    }
+
+    /** A pharmacist whose licence runs until [licensedUntil], recorded by the founder. */
     fun pharmacist(name: String = "Priya", licensedUntil: LocalDate = today.plusDays(365)): Staff {
         val p = staff(name, "pharmacist")
-        accept(sys.commit(NewLicenceRenewal(p, "RPH-${p.key}", licensedUntil)))
+        accept(sys.commit(NewLicenceRenewal(p, "RPH-${p.key}", licensedUntil), founder))
         return p
     }
 
@@ -120,7 +129,7 @@ class Scenario(val sys: PharmacySystem) {
         lines: List<NewPrescription>,
         writtenOn: LocalDate = today,
     ): PrescriberOrder {
-        accept(sys.commit(NewPrescriberOrder(prescriber, patient, writtenOn, enteredBy, lines))); return sys.prescriberOrders().last()
+        accept(sys.commit(NewPrescriberOrder(prescriber, patient, writtenOn, lines), enteredBy)); return sys.prescriberOrders().last()
     }
 
     /** A one-line order; returns the prescription. */
@@ -139,7 +148,7 @@ class Scenario(val sys: PharmacySystem) {
 
     /** A monitoring-programme check cleared now by [pharmacist]. */
     fun monitoringCheck(prescription: Prescription, pharmacist: Staff) {
-        accept(sys.commit(NewMonitoringCheck(prescription, pharmacist, now, true)))
+        accept(sys.commit(NewMonitoringCheck(prescription, now, true), pharmacist))
     }
 
     /** Submits a fill request at the next fill number; returns the request's key. */
@@ -151,7 +160,7 @@ class Scenario(val sys: PharmacySystem) {
         fillNumber: Int = sys.read(prescription).fillsRecorded + 1,
     ): String {
         val k = key("FILL")
-        accept(sys.commit(NewFillPrescription(k, prescription, lot, quantity, fillNumber, filledBy)))
+        accept(sys.commit(NewFillPrescription(k, prescription, lot, quantity, fillNumber), filledBy))
         return k
     }
 
@@ -169,11 +178,11 @@ class Scenario(val sys: PharmacySystem) {
     }
 
     fun verify(fill: Fill, pharmacist: Staff, outcome: String = "approved") {
-        accept(sys.commit(NewVerifyFill(fill, pharmacist, outcome, "checked")))
+        accept(sys.commit(NewVerifyFill(fill, outcome, "checked"), pharmacist))
     }
 
     fun counsel(fill: Fill, pharmacist: Staff) {
-        accept(sys.commit(NewCounselling(fill, pharmacist, "take with food")))
+        accept(sys.commit(NewCounselling(fill, "take with food"), pharmacist))
     }
 
     fun pickUp(fill: Fill, amount: BigDecimal = sys.read(fill).amountDue) {

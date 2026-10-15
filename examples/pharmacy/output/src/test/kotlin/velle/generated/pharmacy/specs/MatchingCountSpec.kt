@@ -12,7 +12,7 @@ import velle.generated.pharmacy.*
  * shape DiscrepantCount = CountLot where not (counted == lot.onHand)
  *
  * rule ConfirmCount when MatchingCount {
- *     CountConfirmation from { lot: lot, counted: counted, countedBy: technician }
+ *     CountConfirmation from { lot: lot, counted: counted, countedBy: actor }
  * }
  *
  */

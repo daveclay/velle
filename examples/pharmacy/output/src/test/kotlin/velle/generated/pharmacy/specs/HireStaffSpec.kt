@@ -7,7 +7,9 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * shape Pharmacist = Staff where role == "pharmacist"
+ * rule RecordHire when HireStaff {
+ *     Staff from { name: name, role: role }
+ * }
  *
  * shape LicenceExpiringSoon = LicensedPharmacist where not (exists (licenceRenewals where expiresOn >= (today + 30 days)))
  *
@@ -15,8 +17,18 @@ import velle.generated.pharmacy.*
  *     LicenceReminder from { pharmacist: this, sentOn: today }
  * }
  *
+ * HireStaff requires actor to be Administrator
+ *
  */
-class PharmacistSpec : SpecSupport() {
+class HireStaffSpec : SpecSupport() {
+
+    @Test
+    fun `RecordHire - a new HireStaff produces a Staff`() {
+        val beforeStaff = count("Staff")
+        // given: a 'HireStaff' committed entering 'HireStaff' — transient: the act is not kept
+        givens.hireStaff()
+        assertEquals(beforeStaff + 1, count("Staff"), "rule RecordHire: one 'Staff' per firing")
+    }
 
     @Test
     fun `RemindLicence - at the Daily tick a LicenceExpiringSoon produces a LicenceReminder`() {

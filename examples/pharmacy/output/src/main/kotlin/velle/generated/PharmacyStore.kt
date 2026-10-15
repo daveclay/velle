@@ -23,6 +23,7 @@ data class StaffRow(
 /** One stored LicenceRenewal row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class LicenceRenewalRow(
     val key: StoreKey,
+    val actor: Ref.Persisted,
     val pharmacist: Ref.Persisted,
     val licenceNumber: String,
     val expiresOn: LocalDate,
@@ -184,10 +185,10 @@ data class NoticeRow(
 /** One stored PrescriberOrder row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class PrescriberOrderRow(
     val key: StoreKey,
+    val enteredBy: Ref.Persisted,
     val prescriber: Ref.Persisted,
     val patient: Ref.Persisted,
     val writtenOn: LocalDate,
-    val enteredBy: Ref.Persisted,
 )
 
 /** One stored Prescription row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -237,8 +238,8 @@ data class VoidRefusalRow(
 /** One stored ConflictOverride row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class ConflictOverrideRow(
     val key: StoreKey,
+    val actor: Ref.Persisted,
     val prescription: Ref.Persisted,
-    val pharmacist: Ref.Persisted,
     val justification: String,
 )
 
@@ -253,8 +254,8 @@ data class PharmacistAlertRow(
 /** One stored MonitoringCheck row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class MonitoringCheckRow(
     val key: StoreKey,
+    val actor: Ref.Persisted,
     val prescription: Ref.Persisted,
-    val pharmacist: Ref.Persisted,
     val checkedAt: Instant,
     val cleared: Boolean,
 )
@@ -304,8 +305,8 @@ data class VerificationRow(
 /** One stored Counselling row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class CounsellingRow(
     val key: StoreKey,
+    val actor: Ref.Persisted,
     val fill: Ref.Persisted,
-    val pharmacist: Ref.Persisted,
     val notes: String,
 )
 
@@ -554,7 +555,6 @@ interface PharmacyStore {
     fun noticesByRecipient(target: Ref.Persisted): List<NoticeRow>
     fun prescriberOrdersByPrescriber(target: Ref.Persisted): List<PrescriberOrderRow>
     fun prescriberOrdersByPatient(target: Ref.Persisted): List<PrescriberOrderRow>
-    fun prescriberOrdersByEnteredBy(target: Ref.Persisted): List<PrescriberOrderRow>
     fun prescriptionsByOrder(target: Ref.Persisted): List<PrescriptionRow>
     fun prescriptionsByDrug(target: Ref.Persisted): List<PrescriptionRow>
     fun discontinuationsByPrescription(target: Ref.Persisted): List<DiscontinuationRow>
@@ -564,10 +564,8 @@ interface PharmacyStore {
     fun entryVoidsByPharmacist(target: Ref.Persisted): List<EntryVoidRow>
     fun voidRefusalsByPrescription(target: Ref.Persisted): List<VoidRefusalRow>
     fun conflictOverridesByPrescription(target: Ref.Persisted): List<ConflictOverrideRow>
-    fun conflictOverridesByPharmacist(target: Ref.Persisted): List<ConflictOverrideRow>
     fun pharmacistAlertsByPrescription(target: Ref.Persisted): List<PharmacistAlertRow>
     fun monitoringChecksByPrescription(target: Ref.Persisted): List<MonitoringCheckRow>
-    fun monitoringChecksByPharmacist(target: Ref.Persisted): List<MonitoringCheckRow>
     fun fillsByPrescription(target: Ref.Persisted): List<FillRow>
     fun fillsByLot(target: Ref.Persisted): List<FillRow>
     fun fillsByFilledBy(target: Ref.Persisted): List<FillRow>
@@ -577,7 +575,6 @@ interface PharmacyStore {
     fun verificationsByFill(target: Ref.Persisted): List<VerificationRow>
     fun verificationsByPharmacist(target: Ref.Persisted): List<VerificationRow>
     fun counsellingsByFill(target: Ref.Persisted): List<CounsellingRow>
-    fun counsellingsByPharmacist(target: Ref.Persisted): List<CounsellingRow>
     fun returnToStocksByFill(target: Ref.Persisted): List<ReturnToStockRow>
     fun counterExitsByFill(target: Ref.Persisted): List<CounterExitRow>
     fun pickupsByFill(target: Ref.Persisted): List<PickupRow>
@@ -718,33 +715,24 @@ interface PharmacyStore {
     /** Serves never #6 — `PriceChange where unitPrice < 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never6Candidates(): List<PriceChangeRow>
-    /** Serves never #11 — `StockLot where received <= 0`.
+    /** Serves never #10 — `StockLot where received <= 0`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never11Candidates(): List<StockLotRow>
-    /** Serves never #14 — `Prescription where quantity <= 0`.
+    fun never10Candidates(): List<StockLotRow>
+    /** Serves never #13 — `Prescription where quantity <= 0`.
+     *  Superset contract: any superset of the matching rows is correct. */
+    fun never13Candidates(): List<PrescriptionRow>
+    /** Serves never #14 — `Prescription where daysSupply <= 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never14Candidates(): List<PrescriptionRow>
-    /** Serves never #15 — `Prescription where daysSupply <= 0`.
+    /** Serves never #15 — `Prescription where refillsAuthorized < 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never15Candidates(): List<PrescriptionRow>
-    /** Serves never #16 — `Prescription where refillsAuthorized < 0`.
+    /** Serves never #16 — `Prescription where (drug is ScheduleTwo) and (refillsAuthorized > 0)`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never16Candidates(): List<PrescriptionRow>
-    /** Serves never #17 — `Prescription where (drug is ScheduleTwo) and (refillsAuthorized > 0)`.
+    /** Serves never #17 — `Prescription where (drug is Controlled) and (refillsAuthorized > 5)`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never17Candidates(): List<PrescriptionRow>
-    /** Serves never #18 — `Prescription where (drug is Controlled) and (refillsAuthorized > 5)`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never18Candidates(): List<PrescriptionRow>
-    /** Serves never #21 — `ConflictOverride where pharmacist is not Pharmacist`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never21Candidates(): List<ConflictOverrideRow>
-    /** Serves never #27 — `MonitoringCheck where pharmacist is not Pharmacist`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never27Candidates(): List<MonitoringCheckRow>
-    /** Serves never #33 — `Counselling where pharmacist is not Pharmacist`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never33Candidates(): List<CounsellingRow>
 
     // ── capture memory: null when no current membership (Reference §13) ──
     fun readyForPickupCapture(instance: Ref.Persisted): ReadyForPickupCapture?
@@ -793,15 +781,12 @@ class PharmacyStoreQuestions(model: Model) {
     val never3Candidates = QTemplate.of(model, "Drug", model.nevers[2].target)
     val never5Candidates = QTemplate.of(model, "Interaction", model.nevers[4].target)
     val never6Candidates = QTemplate.of(model, "PriceChange", model.nevers[5].target)
-    val never11Candidates = QTemplate.of(model, "StockLot", model.nevers[10].target)
+    val never10Candidates = QTemplate.of(model, "StockLot", model.nevers[9].target)
+    val never13Candidates = QTemplate.of(model, "Prescription", model.nevers[12].target)
     val never14Candidates = QTemplate.of(model, "Prescription", model.nevers[13].target)
     val never15Candidates = QTemplate.of(model, "Prescription", model.nevers[14].target)
     val never16Candidates = QTemplate.of(model, "Prescription", model.nevers[15].target)
     val never17Candidates = QTemplate.of(model, "Prescription", model.nevers[16].target)
-    val never18Candidates = QTemplate.of(model, "Prescription", model.nevers[17].target)
-    val never21Candidates = QTemplate.of(model, "ConflictOverride", model.nevers[20].target)
-    val never27Candidates = QTemplate.of(model, "MonitoringCheck", model.nevers[26].target)
-    val never33Candidates = QTemplate.of(model, "Counselling", model.nevers[32].target)
 }
 
 /**
@@ -956,8 +941,6 @@ open class PharmacyStoreOverGeneric(
         backend.fetchReferencing("PrescriberOrder", "prescriber", target).map { it.toPrescriberOrderRow() }
     override fun prescriberOrdersByPatient(target: Ref.Persisted): List<PrescriberOrderRow> =
         backend.fetchReferencing("PrescriberOrder", "patient", target).map { it.toPrescriberOrderRow() }
-    override fun prescriberOrdersByEnteredBy(target: Ref.Persisted): List<PrescriberOrderRow> =
-        backend.fetchReferencing("PrescriberOrder", "enteredBy", target).map { it.toPrescriberOrderRow() }
     override fun prescriptionsByOrder(target: Ref.Persisted): List<PrescriptionRow> =
         backend.fetchReferencing("Prescription", "order", target).map { it.toPrescriptionRow() }
     override fun prescriptionsByDrug(target: Ref.Persisted): List<PrescriptionRow> =
@@ -976,14 +959,10 @@ open class PharmacyStoreOverGeneric(
         backend.fetchReferencing("VoidRefusal", "prescription", target).map { it.toVoidRefusalRow() }
     override fun conflictOverridesByPrescription(target: Ref.Persisted): List<ConflictOverrideRow> =
         backend.fetchReferencing("ConflictOverride", "prescription", target).map { it.toConflictOverrideRow() }
-    override fun conflictOverridesByPharmacist(target: Ref.Persisted): List<ConflictOverrideRow> =
-        backend.fetchReferencing("ConflictOverride", "pharmacist", target).map { it.toConflictOverrideRow() }
     override fun pharmacistAlertsByPrescription(target: Ref.Persisted): List<PharmacistAlertRow> =
         backend.fetchReferencing("PharmacistAlert", "prescription", target).map { it.toPharmacistAlertRow() }
     override fun monitoringChecksByPrescription(target: Ref.Persisted): List<MonitoringCheckRow> =
         backend.fetchReferencing("MonitoringCheck", "prescription", target).map { it.toMonitoringCheckRow() }
-    override fun monitoringChecksByPharmacist(target: Ref.Persisted): List<MonitoringCheckRow> =
-        backend.fetchReferencing("MonitoringCheck", "pharmacist", target).map { it.toMonitoringCheckRow() }
     override fun fillsByPrescription(target: Ref.Persisted): List<FillRow> =
         backend.fetchReferencing("Fill", "prescription", target).map { it.toFillRow() }
     override fun fillsByLot(target: Ref.Persisted): List<FillRow> =
@@ -1002,8 +981,6 @@ open class PharmacyStoreOverGeneric(
         backend.fetchReferencing("Verification", "pharmacist", target).map { it.toVerificationRow() }
     override fun counsellingsByFill(target: Ref.Persisted): List<CounsellingRow> =
         backend.fetchReferencing("Counselling", "fill", target).map { it.toCounsellingRow() }
-    override fun counsellingsByPharmacist(target: Ref.Persisted): List<CounsellingRow> =
-        backend.fetchReferencing("Counselling", "pharmacist", target).map { it.toCounsellingRow() }
     override fun returnToStocksByFill(target: Ref.Persisted): List<ReturnToStockRow> =
         backend.fetchReferencing("ReturnToStock", "fill", target).map { it.toReturnToStockRow() }
     override fun counterExitsByFill(target: Ref.Persisted): List<CounterExitRow> =
@@ -1199,9 +1176,13 @@ open class PharmacyStoreOverGeneric(
         backend.fetchCandidates("PriceChange", questions.never6Candidates.instantiate(listOf()))
             .map { it.toPriceChangeRow() }
 
-    override fun never11Candidates(): List<StockLotRow> =
-        backend.fetchCandidates("StockLot", questions.never11Candidates.instantiate(listOf()))
+    override fun never10Candidates(): List<StockLotRow> =
+        backend.fetchCandidates("StockLot", questions.never10Candidates.instantiate(listOf()))
             .map { it.toStockLotRow() }
+
+    override fun never13Candidates(): List<PrescriptionRow> =
+        backend.fetchCandidates("Prescription", questions.never13Candidates.instantiate(listOf()))
+            .map { it.toPrescriptionRow() }
 
     override fun never14Candidates(): List<PrescriptionRow> =
         backend.fetchCandidates("Prescription", questions.never14Candidates.instantiate(listOf()))
@@ -1218,22 +1199,6 @@ open class PharmacyStoreOverGeneric(
     override fun never17Candidates(): List<PrescriptionRow> =
         backend.fetchCandidates("Prescription", questions.never17Candidates.instantiate(listOf()))
             .map { it.toPrescriptionRow() }
-
-    override fun never18Candidates(): List<PrescriptionRow> =
-        backend.fetchCandidates("Prescription", questions.never18Candidates.instantiate(listOf()))
-            .map { it.toPrescriptionRow() }
-
-    override fun never21Candidates(): List<ConflictOverrideRow> =
-        backend.fetchCandidates("ConflictOverride", questions.never21Candidates.instantiate(listOf()))
-            .map { it.toConflictOverrideRow() }
-
-    override fun never27Candidates(): List<MonitoringCheckRow> =
-        backend.fetchCandidates("MonitoringCheck", questions.never27Candidates.instantiate(listOf()))
-            .map { it.toMonitoringCheckRow() }
-
-    override fun never33Candidates(): List<CounsellingRow> =
-        backend.fetchCandidates("Counselling", questions.never33Candidates.instantiate(listOf()))
-            .map { it.toCounsellingRow() }
 
     override fun readyForPickupCapture(instance: Ref.Persisted): ReadyForPickupCapture? =
         backend.fetchCaptures(instance, "ReadyForPickup")?.toReadyForPickupCapture()
@@ -1373,7 +1338,6 @@ class PharmacyStoreResolver(
         shape == "Notice" && field == "recipient" -> store.noticesByRecipient(target).map { it.toRow() }
         shape == "PrescriberOrder" && field == "prescriber" -> store.prescriberOrdersByPrescriber(target).map { it.toRow() }
         shape == "PrescriberOrder" && field == "patient" -> store.prescriberOrdersByPatient(target).map { it.toRow() }
-        shape == "PrescriberOrder" && field == "enteredBy" -> store.prescriberOrdersByEnteredBy(target).map { it.toRow() }
         shape == "Prescription" && field == "order" -> store.prescriptionsByOrder(target).map { it.toRow() }
         shape == "Prescription" && field == "drug" -> store.prescriptionsByDrug(target).map { it.toRow() }
         shape == "Discontinuation" && field == "prescription" -> store.discontinuationsByPrescription(target).map { it.toRow() }
@@ -1383,10 +1347,8 @@ class PharmacyStoreResolver(
         shape == "EntryVoid" && field == "pharmacist" -> store.entryVoidsByPharmacist(target).map { it.toRow() }
         shape == "VoidRefusal" && field == "prescription" -> store.voidRefusalsByPrescription(target).map { it.toRow() }
         shape == "ConflictOverride" && field == "prescription" -> store.conflictOverridesByPrescription(target).map { it.toRow() }
-        shape == "ConflictOverride" && field == "pharmacist" -> store.conflictOverridesByPharmacist(target).map { it.toRow() }
         shape == "PharmacistAlert" && field == "prescription" -> store.pharmacistAlertsByPrescription(target).map { it.toRow() }
         shape == "MonitoringCheck" && field == "prescription" -> store.monitoringChecksByPrescription(target).map { it.toRow() }
-        shape == "MonitoringCheck" && field == "pharmacist" -> store.monitoringChecksByPharmacist(target).map { it.toRow() }
         shape == "Fill" && field == "prescription" -> store.fillsByPrescription(target).map { it.toRow() }
         shape == "Fill" && field == "lot" -> store.fillsByLot(target).map { it.toRow() }
         shape == "Fill" && field == "filledBy" -> store.fillsByFilledBy(target).map { it.toRow() }
@@ -1396,7 +1358,6 @@ class PharmacyStoreResolver(
         shape == "Verification" && field == "fill" -> store.verificationsByFill(target).map { it.toRow() }
         shape == "Verification" && field == "pharmacist" -> store.verificationsByPharmacist(target).map { it.toRow() }
         shape == "Counselling" && field == "fill" -> store.counsellingsByFill(target).map { it.toRow() }
-        shape == "Counselling" && field == "pharmacist" -> store.counsellingsByPharmacist(target).map { it.toRow() }
         shape == "ReturnToStock" && field == "fill" -> store.returnToStocksByFill(target).map { it.toRow() }
         shape == "CounterExit" && field == "fill" -> store.counterExitsByFill(target).map { it.toRow() }
         shape == "Pickup" && field == "fill" -> store.pickupsByFill(target).map { it.toRow() }
@@ -1499,7 +1460,9 @@ class PharmacyStoreResolver(
         if (shape == "PriceChange")
             questions.never6Candidates.match(filter)?.let { h -> return store.never6Candidates().map { it.toRow() } }
         if (shape == "StockLot")
-            questions.never11Candidates.match(filter)?.let { h -> return store.never11Candidates().map { it.toRow() } }
+            questions.never10Candidates.match(filter)?.let { h -> return store.never10Candidates().map { it.toRow() } }
+        if (shape == "Prescription")
+            questions.never13Candidates.match(filter)?.let { h -> return store.never13Candidates().map { it.toRow() } }
         if (shape == "Prescription")
             questions.never14Candidates.match(filter)?.let { h -> return store.never14Candidates().map { it.toRow() } }
         if (shape == "Prescription")
@@ -1508,14 +1471,6 @@ class PharmacyStoreResolver(
             questions.never16Candidates.match(filter)?.let { h -> return store.never16Candidates().map { it.toRow() } }
         if (shape == "Prescription")
             questions.never17Candidates.match(filter)?.let { h -> return store.never17Candidates().map { it.toRow() } }
-        if (shape == "Prescription")
-            questions.never18Candidates.match(filter)?.let { h -> return store.never18Candidates().map { it.toRow() } }
-        if (shape == "ConflictOverride")
-            questions.never21Candidates.match(filter)?.let { h -> return store.never21Candidates().map { it.toRow() } }
-        if (shape == "MonitoringCheck")
-            questions.never27Candidates.match(filter)?.let { h -> return store.never27Candidates().map { it.toRow() } }
-        if (shape == "Counselling")
-            questions.never33Candidates.match(filter)?.let { h -> return store.never33Candidates().map { it.toRow() } }
         return fetchAll(shape) // unrecognized filters fall back to the scan floor
     }
 
@@ -1543,12 +1498,14 @@ fun StaffRow.toRow(): Row = Row("Staff", key, buildMap {
 
 fun Row.toLicenceRenewalRow(): LicenceRenewalRow = LicenceRenewalRow(
     key = key,
+    actor = fields["actor"] as Ref.Persisted,
     pharmacist = fields["pharmacist"] as Ref.Persisted,
     licenceNumber = fields["licenceNumber"] as String,
     expiresOn = fields["expiresOn"] as LocalDate,
 )
 
 fun LicenceRenewalRow.toRow(): Row = Row("LicenceRenewal", key, buildMap {
+    put("actor", actor)
     put("pharmacist", pharmacist)
     put("licenceNumber", licenceNumber)
     put("expiresOn", expiresOn)
@@ -1808,17 +1765,17 @@ fun NoticeRow.toRow(): Row = Row("Notice", key, buildMap {
 
 fun Row.toPrescriberOrderRow(): PrescriberOrderRow = PrescriberOrderRow(
     key = key,
+    enteredBy = fields["enteredBy"] as Ref.Persisted,
     prescriber = fields["prescriber"] as Ref.Persisted,
     patient = fields["patient"] as Ref.Persisted,
     writtenOn = fields["writtenOn"] as LocalDate,
-    enteredBy = fields["enteredBy"] as Ref.Persisted,
 )
 
 fun PrescriberOrderRow.toRow(): Row = Row("PrescriberOrder", key, buildMap {
+    put("enteredBy", enteredBy)
     put("prescriber", prescriber)
     put("patient", patient)
     put("writtenOn", writtenOn)
-    put("enteredBy", enteredBy)
 })
 
 fun Row.toPrescriptionRow(): PrescriptionRow = PrescriptionRow(
@@ -1896,14 +1853,14 @@ fun VoidRefusalRow.toRow(): Row = Row("VoidRefusal", key, buildMap {
 
 fun Row.toConflictOverrideRow(): ConflictOverrideRow = ConflictOverrideRow(
     key = key,
+    actor = fields["actor"] as Ref.Persisted,
     prescription = fields["prescription"] as Ref.Persisted,
-    pharmacist = fields["pharmacist"] as Ref.Persisted,
     justification = fields["justification"] as String,
 )
 
 fun ConflictOverrideRow.toRow(): Row = Row("ConflictOverride", key, buildMap {
+    put("actor", actor)
     put("prescription", prescription)
-    put("pharmacist", pharmacist)
     put("justification", justification)
 })
 
@@ -1922,15 +1879,15 @@ fun PharmacistAlertRow.toRow(): Row = Row("PharmacistAlert", key, buildMap {
 
 fun Row.toMonitoringCheckRow(): MonitoringCheckRow = MonitoringCheckRow(
     key = key,
+    actor = fields["actor"] as Ref.Persisted,
     prescription = fields["prescription"] as Ref.Persisted,
-    pharmacist = fields["pharmacist"] as Ref.Persisted,
     checkedAt = fields["checkedAt"] as Instant,
     cleared = fields["cleared"] as Boolean,
 )
 
 fun MonitoringCheckRow.toRow(): Row = Row("MonitoringCheck", key, buildMap {
+    put("actor", actor)
     put("prescription", prescription)
-    put("pharmacist", pharmacist)
     put("checkedAt", checkedAt)
     put("cleared", cleared)
 })
@@ -2009,14 +1966,14 @@ fun VerificationRow.toRow(): Row = Row("Verification", key, buildMap {
 
 fun Row.toCounsellingRow(): CounsellingRow = CounsellingRow(
     key = key,
+    actor = fields["actor"] as Ref.Persisted,
     fill = fields["fill"] as Ref.Persisted,
-    pharmacist = fields["pharmacist"] as Ref.Persisted,
     notes = fields["notes"] as String,
 )
 
 fun CounsellingRow.toRow(): Row = Row("Counselling", key, buildMap {
+    put("actor", actor)
     put("fill", fill)
-    put("pharmacist", pharmacist)
     put("notes", notes)
 })
 

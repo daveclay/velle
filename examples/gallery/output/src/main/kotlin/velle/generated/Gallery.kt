@@ -579,7 +579,7 @@ class PhotoCommentFields(path: List<String> = emptyList()) : Fields(path) {
 fun main() {
     val sys = GallerySystem()
     println("Velle MockHarness — Gallery")
-    println("Commits: commitMember(...), commitPost(...), commitPhoto(...), commitComment(...)")
+    println("Commits: commit(NewMember(...)), commit(NewPost(...)), commit(NewPhoto(...)), commit(NewComment(...))")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>

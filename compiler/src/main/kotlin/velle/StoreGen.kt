@@ -45,6 +45,8 @@ object StoreGen {
                     // list in membership order, like the generic Row carries it
                     is StoredProp -> RowField(m.name, model.typeOf(m.type))
                     is TimestampProp -> RowField(m.name, VType.DateTimeT)
+                    // the actor of a durable act: a stored reference to the clause's base shape (Reference §22)
+                    is ActorProp -> RowField(m.name, VType.Inst(model.baseOf(m.shape) ?: m.shape))
                     else -> null
                 }
             }

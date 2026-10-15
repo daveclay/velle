@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * Counselling requires pharmacist to be Pharmacist
+ * Counselling requires actor to be Pharmacist
  *
  */
 class CounsellingSpec : SpecSupport() {

@@ -5,7 +5,6 @@ Feature: CountLot
   # never (CountLot where counted < 0)
   Scenario: A CountLot where counted below 0 is refused
     Given any committed "StockLot"
-    Given any committed "Staff"
     When a "CountLot" with counted -1 is committed
     Then it is refused
     And nothing has committed
@@ -13,6 +12,5 @@ Feature: CountLot
   # never (CountLot where counted < 0)
   Scenario: A CountLot with counted 0 is accepted
     Given any committed "StockLot"
-    Given any committed "Staff"
     When a "CountLot" with counted 0 is committed
     Then it is accepted

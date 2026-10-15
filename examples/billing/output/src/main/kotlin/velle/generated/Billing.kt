@@ -1367,7 +1367,7 @@ class ArchivedInvoiceFields(path: List<String> = emptyList()) : Fields(path) {
 fun main() {
     val sys = BillingSystem()
     println("Velle MockHarness — Billing")
-    println("Commits: commitSignUp(...), commitCorrectEmail(...), commitBillCustomer(...), commitLineItem(...), commitSubmitPayment(...), commitIssuance(...), commitChangeDueDate(...), commitArchiveRequest(...), commitUnarchiveRequest(...)")
+    println("Commits: commit(NewSignUp(...)), commit(NewCorrectEmail(...)), commit(NewBillCustomer(...)), commit(NewLineItem(...)), commit(NewSubmitPayment(...)), commit(NewIssuance(...)), commit(NewChangeDueDate(...)), commit(NewArchiveRequest(...)), commit(NewUnarchiveRequest(...))")
     println("Ticks: tickHourly(), tickWeekly()")
     println("Edit this main to drive the system; state prints below.")
 

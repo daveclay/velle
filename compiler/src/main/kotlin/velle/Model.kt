@@ -27,6 +27,9 @@ class Model(val decls: List<Decl>) {
     /** raw `with` declarations per act, resolved lazily by [closures] */
     private val withDecls = mutableMapOf<String, List<WithEntry>>()
 
+    /** the spec-wide `visible to` default, declared at the top level (Reference §22) */
+    private var visibilityDefaultDecl: VisibleClause? = null
+
     init {
         for (d in decls) when (d) {
             is ShapeDecl -> {
@@ -41,7 +44,73 @@ class Model(val decls: List<Decl>) {
                 if (rules.put(d.name, d) != null)
                     error("F1", "duplicate rule '${d.name}'")
             is NeverDecl -> nevers.add(d)
+            is VisibilityDefault -> {
+                if (visibilityDefaultDecl != null) error("F3", "a second spec-wide 'visible to' — the default is written once")
+                visibilityDefaultDecl = d.clause
+            }
         }
+        // an act's `by <Refinement>` is the role gate in the header (Reference §22,
+        // "The actor"): `act X by Administrator` means `by <base>` plus
+        // `X requires actor to be Administrator`, one desugaring, so the door,
+        // the rejection data, and every analysis see the requirement a body
+        // line would have stated. A base shape or static union after `by` is
+        // type-checked at the boundary and gates nothing here.
+        for ((name, shape) in shapes) {
+            val a = shape.actor ?: continue
+            if (a.shape !in refinements || isStaticUnion(a.shape)) continue
+            val predicate = IsExpr(PathExpr(a.name), "refinement", a.shape, toBe = true)
+            nevers.add(NeverDecl(RefName(name, complementOf(predicate)), requirement = Requirement(name, predicate),
+                fromActorClause = true))
+        }
+    }
+
+    /** The actor clause of an act, or null (Reference §22, "The actor"). */
+    fun actorOf(shape: String): ActorProp? = shapes[shape]?.actor
+
+    // ── visibility (Reference §22, "The actor"; OQ33 §5.7–§5.10) ─────────────
+
+    /** The spec-wide `visible to` default, or null. */
+    val visibilityDefault: VisibleClause? get() = visibilityDefaultDecl
+
+    /** A spec has authorization once any act declares `by` or any `visible to` is written:
+     *  from then on every readable shape declares its visibility (checks V32). */
+    val hasAuthorization: Boolean by lazy {
+        visibilityDefault != null || shapes.values.any { s ->
+            s.actor != null || s.members.any { it is VisibleClause || fieldClausesOf(it).isNotEmpty() }
+        } || refinements.values.any { r -> r.members.any { fieldClausesOf(it).isNotEmpty() } }
+    }
+
+    fun fieldClausesOf(m: Member): List<VisibleClause> = when (m) {
+        is StoredProp -> m.visible
+        is DerivedProp -> m.visible
+        is TimestampProp -> m.visible
+        else -> emptyList()
+    }
+
+    /** A base shape's own record-level clauses, as written (empty when it says nothing). */
+    fun ownRecordVisibility(shape: String): List<VisibleClause> =
+        shapes[shape]?.members?.filterIsInstance<VisibleClause>().orEmpty()
+
+    /** The record-level clauses that apply to a base shape: its own, else the spec-wide
+     *  default, else none — none meaning visible to every viewer. A shape's own clauses
+     *  replace the default rather than add to it. A refinement takes its base's. */
+    fun recordVisibility(scope: String): List<VisibleClause> {
+        val base = baseOf(scope) ?: scope
+        val own = ownRecordVisibility(base)
+        if (own.isNotEmpty()) return own
+        return listOfNotNull(visibilityDefault)
+    }
+
+    /** Every base shape a `visible to` clause (or the default) names a viewer by. */
+    val viewerShapes: Set<String> by lazy {
+        val named = mutableListOf<String>()
+        visibilityDefault?.shape?.let { named.add(it) }
+        shapes.values.forEach { s -> s.members.forEach { m ->
+            if (m is VisibleClause) m.shape?.let { named.add(it) }
+            fieldClausesOf(m).forEach { c -> c.shape?.let { named.add(it) } }
+        } }
+        refinements.values.forEach { r -> r.members.forEach { m -> fieldClausesOf(m).forEach { c -> c.shape?.let { named.add(it) } } } }
+        named.flatMap { basesOf(it) }.toSet()
     }
 
     private fun register(name: String): Boolean {
@@ -151,11 +220,17 @@ class Model(val decls: List<Decl>) {
         val out = linkedMapOf<String, MemberInfo>()
         fun add(owner: String, m: Member) {
             when (m) {
-                is StoredProp -> out[m.name] = MemberInfo(m.name, owner, typeOf(m.type), stored = true)
+                is StoredProp -> out[m.name] = MemberInfo(m.name, owner, typeOf(m.type), stored = true, visible = m.visible)
                 is DerivedProp -> out[m.name] =
-                    MemberInfo(m.name, owner, typeOf(m.type), stored = false, derived = m, captured = m.captured)
+                    MemberInfo(m.name, owner, typeOf(m.type), stored = false, derived = m, captured = m.captured, visible = m.visible)
                 is TimestampProp -> out[m.name] =
-                    MemberInfo(m.name, owner, VType.DateTimeT, stored = false, timestamp = true)
+                    MemberInfo(m.name, owner, VType.DateTimeT, stored = false, timestamp = true, visible = m.visible)
+                is VisibleClause -> {}
+                // the actor: a stored, language-populated reference typed by the
+                // clause's shape — a refinement there types reads in the act's
+                // own scope, where the gate has held (Reference §22, "The actor")
+                is ActorProp -> out[m.name] =
+                    MemberInfo(m.name, owner, VType.Inst(m.shape), stored = true, actor = true)
                 is FrozenClause -> {}
                 UndeletableClause -> {}
             }
@@ -542,6 +617,10 @@ data class MemberInfo(
     val derived: DerivedProp? = null,
     val captured: Boolean = false,
     val timestamp: Boolean = false,
+    /** The act's actor (Reference §22): language-populated at the commit, never supplied or assigned. */
+    val actor: Boolean = false,
+    /** Field-level visibility clauses (Reference §22): empty means visible wherever the record is. */
+    val visible: List<VisibleClause> = emptyList(),
     /** Set on an inferred inverse collection: the declared side it is a view of (Reference §6). */
     val inverse: InverseInfo? = null,
 )

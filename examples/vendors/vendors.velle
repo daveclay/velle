@@ -1,0 +1,123 @@
+-- Vendors: a catalogue of products from vendors, kept by staff who are each
+-- assigned to some of the vendors. The tenth Velle spec, written to exercise
+-- the read side of authorization end to end (Reference §22, "The actor"):
+-- who may see which records, and which fields of them, applied by the read
+-- surface and never inside evaluation.
+--
+-- What the domain asks of the language, and where each answer lives:
+--   · a staff member sees the products of the vendors they are assigned to —
+--     a record-level `visible to` clause whose predicate reads the data
+--     graph with the viewer bound as `actor`
+--   · an administrator sees every product, and alone sees what a product
+--     cost — a second record clause, and a field-level clause on `cost`
+--   · a vendor's name is public — `visible to anyone`
+--   · everything else is staff business — the spec-wide default at the top,
+--     which a shape's own clauses replace rather than add to
+--   · the margin is calculated from the cost for everyone, whoever asks, and
+--     so the margin carries its own clause — the leak through a derivation
+--     is the author's to close, never the evaluator's to guess at
+--   · a price change below cost is refused, and the refusal handed back to a
+--     staff member names the product without its cost — a rejection is
+--     projected for the actor as a read is
+--
+-- Comment convention (as in payments.velle): plain comments tell the business
+-- story; `velle:` comments note the language machinery on show.
+
+-- velle: the spec-wide default — every readable shape without a clause of its
+-- own is shown to staff and to nobody else
+visible to Staff
+
+-- ── People ───────────────────────────────────────────────────────────────────
+
+-- Everyone who keeps the catalogue is staff; administrators also assign
+-- vendors and list products. Staff records are seeded by the engineer
+-- outside the trust boundary (fixtures, a migration): nothing here hires.
+shape Staff {
+    name: text
+    role: text
+}
+
+Staff requires role == "staff" or role == "admin"
+
+shape Administrator = Staff where role == "admin"
+
+-- A staff member is assigned to vendors by an administrator.
+shape VendorAssignment {
+    staff: one Staff
+    vendor: one Vendor
+}
+
+transient act AssignVendor by Administrator {
+    staff: one Staff
+    vendor: one Vendor
+}
+
+rule RecordAssignment when AssignVendor {
+    VendorAssignment from { staff: staff, vendor: vendor }
+}
+
+-- ── Vendors and products ─────────────────────────────────────────────────────
+
+-- velle: `visible to anyone` — a vendor's name is shown to every viewer the
+-- binding provides; the clause replaces the spec-wide default for this shape
+shape Vendor {
+    name: text
+    visible to anyone
+}
+
+-- A product belongs to a vendor and has a price and a cost. Staff assigned to
+-- the vendor see it; administrators see every product and alone see the cost.
+-- velle: two record-level clauses disjoin; the field-level clause on `cost`
+-- narrows within the record's; `margin` is calculated from `cost` on every
+-- read whoever asks, so it carries its own clause
+shape Product {
+    vendor: one Vendor
+    name: text
+    price: decimal
+    cost: decimal visible to Administrator
+    margin: decimal = price - cost visible to Administrator
+    visible to Staff where exists (VendorAssignment where staff == actor and vendor == this.vendor)
+    visible to Administrator
+}
+
+shape ThinMargin = Product where margin < 1.00
+
+transient act ListProduct by Administrator {
+    vendor: one Vendor
+    name: text
+    price: decimal
+    cost: decimal
+}
+
+rule RecordProduct when ListProduct {
+    Product from { vendor: vendor, name: name, price: price, cost: cost }
+}
+
+-- A staff member assigned to the vendor may change a product's price, never
+-- to below its cost.
+-- velle: the gate reads the actor through the data graph (`this.actor` inside
+-- the nested `where`, where bare names resolve against the assignment); the
+-- prohibition reads a cost the staff member may not see, and refuses all the same
+transient act ChangePrice by Staff {
+    product: one Product
+    price: decimal
+}
+
+ChangePrice requires exists (VendorAssignment where staff == this.actor and vendor == this.product.vendor)
+never (ChangePrice where price < product.cost)
+
+rule ApplyPrice when ChangePrice {
+    product.price = price
+}
+
+-- A product whose margin falls under a dollar is flagged once.
+-- velle: a rule reading the cost through `margin` for every product — no
+-- viewer anywhere in evaluation
+shape MarginAlert {
+    product: one Product
+    raisedOn: timestamp on create
+}
+
+rule FlagThinMargin when (ThinMargin where not exists MarginAlert for this) {
+    MarginAlert from { product: this }
+}

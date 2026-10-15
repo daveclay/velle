@@ -70,7 +70,13 @@ reach the interesting state* is human judgment. The contract:
   no given owed — and only a drift exit (a value predicate like `balance < 0`)
   demands a human-owned exit action beside the state-given
   (`delinquent()` / `exitDelinquent(member)`), since which commit recovers
-  the value is business judgment. The developer implements it as `class Givens(sys)` beside
+  the value is business judgment. An act declared `by` is committed by
+  someone (Reference §22, "The actor"), so a derived commit demands a given
+  for the actor too — `someStaff()`, or `someAdministrator()` when the
+  header names the role — and passes it beside the input
+  (`sys.commit(NewVerifyFill(fill, ...), actor)`); the role gate the header
+  states is not synthesized into a refusal case, since its subject is the
+  actor and not a field. The developer implements it as `class Givens(sys)` beside
   the generated specs; a missing given is a compile error naming exactly
   what's owed. Human judgment stays, but in one findable place, named in
   business language.

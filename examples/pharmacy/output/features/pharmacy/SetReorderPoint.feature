@@ -10,7 +10,6 @@ Feature: SetReorderPoint
   # never (SetReorderPoint where reorderPoint < 0)
   Scenario: A SetReorderPoint where reorderPoint below 0 is refused
     Given any committed "Drug"
-    Given any committed "Staff"
     When a "SetReorderPoint" with reorderPoint -1 is committed
     Then it is refused
     And nothing has committed
@@ -18,6 +17,5 @@ Feature: SetReorderPoint
   # never (SetReorderPoint where reorderPoint < 0)
   Scenario: A SetReorderPoint with reorderPoint 0 is accepted
     Given any committed "Drug"
-    Given any committed "Staff"
     When a "SetReorderPoint" with reorderPoint 0 is committed
     Then it is accepted

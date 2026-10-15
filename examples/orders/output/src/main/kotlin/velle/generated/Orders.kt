@@ -378,7 +378,7 @@ class ReservationFields(path: List<String> = emptyList()) : Fields(path) {
 fun main() {
     val sys = OrdersSystem()
     println("Velle MockHarness — Orders")
-    println("Commits: commitCustomer(...), commitProduct(...), commitOrder(...)")
+    println("Commits: commit(NewCustomer(...)), commit(NewProduct(...)), commit(NewOrder(...))")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>

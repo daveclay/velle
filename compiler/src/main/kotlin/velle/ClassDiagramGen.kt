@@ -40,6 +40,11 @@ internal object ClassDiagramGen {
                     edges.add(relEdge(model, name, m.name, m.type))
                     continue
                 }
+                // the actor an act is committed by (Reference §22): an edge to the clause's shape, marked `by`
+                if (m is ActorProp) {
+                    edges.add("$name \"*\" --> \"1\" ${model.baseOf(m.shape) ?: m.shape} : ${m.name} (by ${m.shape})")
+                    continue
+                }
                 memberLine(m)?.let { appendLine("        $it") }
             }
             appendLine("    }")
@@ -65,6 +70,8 @@ internal object ClassDiagramGen {
             (m.initially?.let { init -> Printer.expr(init).takeIf { "(" !in it }?.let { " = $it" } } ?: "")
         is DerivedProp -> "/${m.name}: ${Printer.type(m.type)}" + if (m.captured) " captured at entry" else ""
         is TimestampProp -> "${m.name}: timestamp on ${m.on}"
+        is ActorProp -> "${m.name}: one ${m.shape} (by)"
+        is VisibleClause -> Printer.visible(m)
         is FrozenClause -> "frozen " + (m.fields.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: "all stored fields")
         UndeletableClause -> "undeletable"
     }

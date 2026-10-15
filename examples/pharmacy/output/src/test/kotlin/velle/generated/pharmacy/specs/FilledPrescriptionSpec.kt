@@ -28,7 +28,7 @@ import velle.generated.pharmacy.*
  * shape RefusedVoid = VoidEntry where prescription is FilledPrescription
  *
  * rule ApplyVoid when ApplicableVoid {
- *     EntryVoid from { prescription: prescription, pharmacist: pharmacist, reason: reason }
+ *     EntryVoid from { prescription: prescription, pharmacist: actor, reason: reason }
  * }
  *
  * rule RefuseVoid when RefusedVoid {

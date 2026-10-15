@@ -3,8 +3,9 @@
 Generated from the Velle spec (testgen.md). One file per business state;
 each case below is an executable test.
 
-## PharmacistSpec.kt
+## HireStaffSpec.kt
 
+- RecordHire - a new HireStaff produces a Staff
 - RemindLicence - at the Daily tick, a LicenceExpiringSoon produces a LicenceReminder
 
 ## EffectivePriceSpec.kt
@@ -125,9 +126,6 @@ each case below is an executable test.
 - never - a PriceChange where unitPrice below 0 is refused
 - never - a PriceChange with unitPrice 0 is accepted
 
-## WithdrawPriceChangeSpec.kt
-
-
 ## StockLotSpec.kt
 
 - never - a StockLot where received at most 0 is refused
@@ -144,13 +142,16 @@ each case below is an executable test.
 ## DiscontinuationSpec.kt
 
 
+## FillPrescriptionSpec.kt
+
+
+## WithdrawPriceChangeSpec.kt
+
+
 ## VoidEntrySpec.kt
 
 
 ## ConflictOverrideSpec.kt
-
-
-## FillPrescriptionSpec.kt
 
 
 ## MonitoringCheckSpec.kt
@@ -161,38 +162,40 @@ each case below is an executable test.
 
 ## Not yet generated
 
-- requires #9: multi-conjunct predicate
-- requires #26: shape is not an act
-- never #32: shape is not an act
-- never #37: shape is not an act
-- requires #29: non-comparison predicate
-- never #30: multi-conjunct predicate
-- requires #31: multi-conjunct predicate
-- requires #34: complex comparison subject
-- never #35: non-comparison predicate
-- never #36: non-literal bound
-- requires #38: multi-conjunct predicate
-- never #39: complex comparison subject
-- requires #1: multi-conjunct predicate
+- requires #34: the role gate an act's `by` clause states
+- requires #8: multi-conjunct predicate
+- requires #23: shape is not an act
+- never #27: shape is not an act
+- never #31: shape is not an act
+- never #25: multi-conjunct predicate
+- requires #26: multi-conjunct predicate
+- requires #40: the role gate an act's `by` clause states
+- requires #28: complex comparison subject
+- never #29: non-comparison predicate
+- never #30: non-literal bound
+- requires #32: multi-conjunct predicate
+- never #33: complex comparison subject
+- requires #1: shape is not an act
 - requires #2: non-comparison predicate
+- requires #35: the role gate an act's `by` clause states
 - never #3: complex comparison subject
 - never #4: non-literal bound
 - requires #5: multi-conjunct predicate
 - never #7: complex comparison subject
-- requires #8: non-comparison predicate
-- requires #12: multi-conjunct predicate
+- requires #11: multi-conjunct predicate
+- never #13: shape is not an act
 - never #14: shape is not an act
 - never #15: shape is not an act
 - never #16: shape is not an act
 - never #17: shape is not an act
-- never #18: shape is not an act
-- requires #19: non-literal bound
-- requires #20: non-comparison predicate
-- requires #21: non-comparison predicate
-- requires #22: multi-conjunct predicate
-- requires #23: multi-hop comparison subject
-- never #24: complex comparison subject
-- never #25: complex comparison subject
-- never #28: multi-conjunct predicate
-- requires #27: non-comparison predicate
-- requires #33: non-comparison predicate
+- requires #18: non-literal bound
+- requires #19: multi-conjunct predicate
+- requires #20: multi-hop comparison subject
+- never #21: complex comparison subject
+- never #22: complex comparison subject
+- never #24: multi-conjunct predicate
+- requires #36: the role gate an act's `by` clause states
+- requires #37: the role gate an act's `by` clause states
+- requires #38: the role gate an act's `by` clause states
+- requires #39: the role gate an act's `by` clause states
+- requires #41: the role gate an act's `by` clause states

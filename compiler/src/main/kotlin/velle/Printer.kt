@@ -11,8 +11,10 @@ object Printer {
     fun print(d: Decl): String = when (d) {
         is ShapeDecl -> buildString {
             append(if (d.exposed) (if (d.transient) "transient act " else "act ") else "shape ")
-            append("${d.name} {\n")
-            d.members.forEach { append("    ${member(it)}\n") }
+            append(d.name)
+            d.actor?.let { append(" by ${it.shape}"); if (it.named) append(" as ${it.name}") }
+            append(" {\n")
+            d.members.filterNot { it is ActorProp }.forEach { append("    ${member(it)}\n") }
             append("}")
             if (d.with.isNotEmpty()) append(" with " + withClause(d.with))
         }
@@ -29,6 +31,7 @@ object Printer {
             append(d.trigger.keyword)
             append(condition(d.condition))
             if (d.preposition != null) append(" ${d.preposition} ${d.triggers.joinToString(", ")}")
+            d.by?.let { append(" by ${it.shape}${if (it.optional) "?" else ""}"); if (it.named) append(" as ${it.name}") }
             if (d.toleratesLoss || d.toleratesContention) append(
                 " tolerates " + listOfNotNull(
                     "loss".takeIf { d.toleratesLoss }, "contention".takeIf { d.toleratesContention }
@@ -47,7 +50,17 @@ object Printer {
         }
         is NeverDecl -> prohibition(d) +
             if (d.toleratesContention) " tolerates contention" else ""
+        is VisibilityDefault -> visible(d.clause)
     }
+
+    /** `visible to Staff as viewer where ...` / `visible to anyone` (Reference §22). */
+    fun visible(c: VisibleClause): String = buildString {
+        append("visible to ").append(c.shape ?: "anyone")
+        if (c.named) append(" as ${c.name}")
+        c.where?.let { append(" where ${expr(it)}") }
+    }
+
+    private fun fieldVisibility(cs: List<VisibleClause>): String = cs.joinToString("") { " " + visible(it) }
 
     /** The prohibition as the author wrote it, without its tolerance clause:
      *  `never (X where P)` or `X requires P`. */
@@ -80,9 +93,12 @@ object Printer {
             m.initially?.let { append(" initially ${expr(it)}") }
             if (m.initiallyRequired) append(" initially required")
             m.tolerates?.let { append(" tolerates $it") }
+            append(fieldVisibility(m.visible))
         }
-        is DerivedProp -> (if (m.captured) "captured " else "") + "${m.name}: ${type(m.type)} = ${expr(m.expr)}"
-        is TimestampProp -> "${m.name}: timestamp on ${m.on}"
+        is DerivedProp -> (if (m.captured) "captured " else "") + "${m.name}: ${type(m.type)} = ${expr(m.expr)}" + fieldVisibility(m.visible)
+        is TimestampProp -> "${m.name}: timestamp on ${m.on}" + fieldVisibility(m.visible)
+        is VisibleClause -> visible(m)
+        is ActorProp -> "by ${m.shape}" + if (m.named) " as ${m.name}" else ""
         is FrozenClause -> "frozen" + if (m.fields.isEmpty()) "" else " ${m.fields.joinToString(", ")}"
         UndeletableClause -> "undeletable"
     }

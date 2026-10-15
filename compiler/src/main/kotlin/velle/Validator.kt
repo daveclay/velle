@@ -40,6 +40,8 @@ class Validator(private val model: Model) {
         checkOneWriter()          // V1 (+ same-commit read-write, V15 coarse)
         model.rules.values.forEach { checkBoundaryAndDisarm(it) }  // V2, V4, V7
         model.rules.values.forEach { checkReachability(it) }       // V3
+        checkRuleActors()         // V31 (Reference §22, "The actor": a rule's `by` typed by reachability)
+        checkVisibility()         // V32 (Reference §22: every readable shape declares its visibility once the spec has authorization)
         checkFreezes()            // V5
         checkCaptures()           // V6
         checkFolds()              // V8
@@ -133,10 +135,201 @@ class Validator(private val model: Model) {
                         diags.add(Diagnostic("F3", "'$name.${m.name}' — fields tolerate 'duplication' or 'reordering', not '${m.tolerates}'"))
                 }
                 is DerivedProp -> checkExpr(m.expr, name)
+                is ActorProp -> checkActorClause(name, shape, m)
                 else -> {}
             }
         }
     }
+
+    // ── the actor clause (Reference §22, "The actor") ────────────────────────
+    //
+    // `act X by Shape [as name]`: the shape is a `shape`, a static union of
+    // shapes, or a refinement of one — never an act, since an act is an input
+    // and the person who commits one is a record. The bound name is `actor`
+    // unless `as` chose another, and nothing is reserved: a scope that declares
+    // a field under the bound name is told to name the actor, not to rename
+    // the field.
+
+    private fun checkActorClause(act: String, shape: ShapeDecl, a: ActorProp) {
+        if (a.shape !in model.shapes && a.shape !in model.refinements) {
+            diags.add(Diagnostic("F1", "'$act by ${a.shape}' names unknown shape '${a.shape}'"))
+            return
+        }
+        val bases = model.basesOf(a.shape)
+        bases.filter { it in model.exposed }.forEach { b ->
+            diags.add(Diagnostic("F2", "'$act by ${a.shape}' — the actor's shape is a `shape`, never an act: " +
+                "an act is an input, and the person who commits one is a record; declare '$b' as a shape " +
+                "and create its records with a rule (Reference §22, \"The actor\")"))
+        }
+        if (a.name == "id")
+            diags.add(Diagnostic("F3", "'$act by ${a.shape} as id' — 'id' is reserved (Reference §5)"))
+        val clash = shape.members.any { it !is ActorProp && memberName(it) == a.name }
+        if (clash) diags.add(Diagnostic("F3",
+            if (a.named) "'$act' declares a field '${a.name}' and names its actor '${a.name}' too — one name, two things"
+            else "'$act' declares a field 'actor' and binds its actor under that name by default — " +
+                "name the actor: `act $act by ${a.shape} as <name>` (Reference §22, \"The actor\")"))
+    }
+
+    private fun memberName(m: Member): String? = when (m) {
+        is StoredProp -> m.name
+        is DerivedProp -> m.name
+        is TimestampProp -> m.name
+        is ActorProp -> m.name
+        else -> null
+    }
+
+    // ── visibility (Reference §22, "The actor"; OQ33 §5.7–§5.10) ─────────────
+    //
+    // `visible to <Shape> [as name] [where p]` on a shape body (record-level) or a
+    // field, `visible to anyone` for a public one, a top-level clause as the
+    // spec-wide default. Applied by the read surface only; here the clauses are
+    // checked as predicates over the shape with the viewer bound, and V32 makes
+    // every readable shape say what it is once the spec has any authorization.
+
+    private fun checkVisibility() {
+        fun checkClause(c: VisibleClause, scope: String?, where: String) {
+            val shape = c.shape ?: return
+            if (shape !in model.shapes && shape !in model.refinements) {
+                diags.add(Diagnostic("F1", "$where — 'visible to $shape' names unknown shape '$shape'"))
+                return
+            }
+            model.basesOf(shape).filter { it in model.exposed }.forEach { b ->
+                diags.add(Diagnostic("F2", "$where — 'visible to $shape': a viewer's shape is a `shape`, never an act " +
+                    "('$b' is one): the person a record is shown to is a record (Reference §22, \"The actor\")"))
+            }
+            if (scope == null) return
+            if (model.membersOf(scope).containsKey(c.name))
+                diags.add(Diagnostic("F3", "$where — binds the viewer as '${c.name}', which is already a member of '$scope'" +
+                    " — name the viewer: `visible to $shape as <name>`"))
+            c.where?.let { p ->
+                aliasScopes[c.name] = shape
+                try { checkExpr(p, scope) } finally { aliasScopes.remove(c.name) }
+            }
+        }
+        model.visibilityDefault?.let { checkClause(it, null, "the spec-wide 'visible to'") }
+        for ((name, shape) in model.shapes) {
+            val record = shape.members.filterIsInstance<VisibleClause>()
+            val fieldClauses = shape.members.flatMap { m -> model.fieldClausesOf(m).map { memberName(m) to it } }
+            if (name in model.transients && (record.isNotEmpty() || fieldClauses.isNotEmpty()))
+                diags.add(Diagnostic("F3", "'$name' is a transient act, never read, and declares visibility"))
+            record.forEach { checkClause(it, name, "'$name'") }
+            fieldClauses.forEach { (f, c) -> checkClause(c, name, "'$name.$f'") }
+        }
+        for ((name, r) in model.refinements) {
+            r.members.flatMap { m -> model.fieldClausesOf(m).map { memberName(m) to it } }
+                .forEach { (f, c) -> checkClause(c, name, "'$name.$f'") }
+        }
+        if (!model.hasAuthorization) return
+        // V32: once a spec has authorization, every readable shape declares its visibility
+        for ((name, _) in model.shapes) {
+            if (name in model.transients) continue
+            if (model.recordVisibility(name).isNotEmpty()) continue
+            diags.add(Diagnostic("V32", "'$name' declares no visibility, and this spec has authorization — say who may " +
+                "see it: a `visible to <Shape> [where ...]` clause in its body, `visible to anyone` for a public one, " +
+                "or a spec-wide `visible to <Shape>` at the top of the spec (Reference §22, \"The actor\")"))
+        }
+    }
+
+    // ── V31: a rule's actor, typed by reachability (Reference §22, "The actor") ─
+    //
+    // `rule R when Product by Staff? [as name]`: the rule reads the committer of
+    // the root act of the transaction it fires in. Inside a transaction that is
+    // a fact of the commit, so the type is decided by which commits can fire
+    // the rule: every path starting at an act declared `by` a shape the clause
+    // accepts → the actor is present; some path starting at a tick, an
+    // `after commit` firing, or an act without `by` → the actor may be absent,
+    // and the clause must say `?`. Outside any act's transaction there is no
+    // actor to read: an `after commit` or scheduled rule reads the stored
+    // actor of a durable act through the data instead.
+
+    private sealed interface ActorRoot {
+        data class Act(val name: String, val actor: ActorProp?) : ActorRoot
+        data class Boundary(val description: String) : ActorRoot
+    }
+
+    private fun actorRoots(rule: RuleDecl, visiting: Set<String> = emptySet()): Set<ActorRoot> {
+        val out = mutableSetOf<ActorRoot>()
+        for (k in commitKinds()) {
+            if (!affects(k, rule)) continue
+            val by = k.byRule
+            if (by == null) {
+                val act = (k as CommitKind.Creates).source.removePrefix("act ").substringBefore(" ")
+                out.add(ActorRoot.Act(act, model.actorOf(act)))
+            } else if (by.preposition == "after" || by.triggers.any { it != "commit" }) {
+                val how = if (by.preposition == "after") "after commit"
+                    else "on ${by.triggers.filter { it != "commit" }.joinToString(", ")}"
+                out.add(ActorRoot.Boundary("rule '${by.name}', which fires $how"))
+            } else if (by.name !in visiting) {
+                out.addAll(actorRoots(by, visiting + by.name))
+            }
+        }
+        return out
+    }
+
+    private fun checkRuleActors() {
+        for (rule in model.rules.values) {
+            val by = rule.by ?: continue
+            val scope = subjectScope(rule) ?: continue
+            if (by.shape !in model.shapes && by.shape !in model.refinements) {
+                diags.add(Diagnostic("F1", "rule '${rule.name}' — 'by ${by.shape}' names unknown shape '${by.shape}'"))
+                continue
+            }
+            val declaredBases = model.basesOf(by.shape)
+            declaredBases.filter { it in model.exposed }.forEach { b ->
+                diags.add(Diagnostic("F2", "rule '${rule.name}' — 'by ${by.shape}': the actor's shape is a `shape`, " +
+                    "never an act ('$b' is one) (Reference §22, \"The actor\")"))
+            }
+            if (rule.preposition == "after" || rule.triggers.any { it != "commit" }) {
+                diags.add(Diagnostic("V31", "rule '${rule.name}' declares 'by ${by.shape}', but it fires outside any " +
+                    "act's transaction (${if (rule.preposition == "after") "after commit" else "on a schedule"}), " +
+                    "where there is nobody asking — the actor is a fact of the act: read it off a durable act's " +
+                    "record through the data, or copy it when materializing (Reference §22, \"The actor\")"))
+                continue
+            }
+            val base = model.baseOf(scope)
+            if (base != null && model.actorOf(base) != null) {
+                diags.add(Diagnostic("V31", "rule '${rule.name}' declares 'by ${by.shape}', but its subject '$scope' " +
+                    "is an act that carries its own actor — '${model.actorOf(base)!!.name}' is already in scope"))
+                continue
+            }
+            if (model.membersOf(scope).containsKey(by.name)) {
+                diags.add(Diagnostic("F3", "rule '${rule.name}' binds its actor as '${by.name}', which is already a " +
+                    "member of '$scope' — name the actor: `by ${by.shape}${if (by.optional) "?" else ""} as <name>`"))
+                continue
+            }
+            val roots = actorRoots(rule)
+            val withActor = roots.filterIsInstance<ActorRoot.Act>().filter { it.actor != null }
+            val without = roots.filter { it !is ActorRoot.Act || it.actor == null }
+            if (withActor.isEmpty()) {
+                diags.add(Diagnostic("V31", "rule '${rule.name}' declares 'by ${by.shape}', but no path to its trigger " +
+                    "starts at an act declared `by` — nothing it can fire in carries an actor"))
+                continue
+            }
+            for (r in withActor) {
+                val actorBases = model.basesOf(r.actor!!.shape)
+                if (!declaredBases.containsAll(actorBases))
+                    diags.add(Diagnostic("V31", "rule '${rule.name}' declares 'by ${by.shape}', but it can fire in the " +
+                        "transaction of act '${r.name}', which is committed by a '${r.actor.shape}' — " +
+                        "declare the union, or a shape every path's actor belongs to"))
+            }
+            if (without.isNotEmpty() && !by.optional) {
+                val paths = without.joinToString("; ") {
+                    when (it) {
+                        is ActorRoot.Act -> "act '${it.name}', which declares no actor"
+                        is ActorRoot.Boundary -> it.description
+                    }
+                }
+                diags.add(Diagnostic("V31", "rule '${rule.name}' declares 'by ${by.shape}', but its trigger is also " +
+                    "reached from $paths, where there is no actor — declare `by ${by.shape}?` and narrow with " +
+                    "'${by.name} is some' (Reference §22, \"The actor\")"))
+            }
+        }
+    }
+
+    /** The alias a rule's `by` clause binds, for the read summaries: the actor's
+     *  reads are reads on its shape, not an unresolvable root. */
+    private fun ruleAliases(rule: RuleDecl): Map<String, String> =
+        rule.by?.let { mapOf(it.name to it.shape) }.orEmpty()
 
     // ── V19: relationship declaration coherence (Reference §6) ──────────────────
     //
@@ -245,14 +438,24 @@ class Validator(private val model: Model) {
 
     private fun checkRuleNamesAndBody(rule: RuleDecl) {
         val scope = subjectScope(rule) ?: return
-        (rule.condition as? RefName)?.where?.let { checkExpr(it, scope) }
-        for (item in rule.body) when (item) {
-            is Assignment -> checkAssignment(rule, scope, item)
-            is Creation -> checkCreation(rule, scope, item)
-            is DeleteStmt -> {} // legality is V23's (checkDeleteStatements)
-            ThenMarker -> {}
+        // the rule's actor (Reference §22): an alias typed by the clause's shape,
+        // in scope for the condition's predicate and the body
+        rule.by?.let { aliasScopes[it.name] = it.shape; ruleActor = it }
+        try {
+            (rule.condition as? RefName)?.where?.let { checkExpr(it, scope) }
+            for (item in rule.body) when (item) {
+                is Assignment -> checkAssignment(rule, scope, item)
+                is Creation -> checkCreation(rule, scope, item)
+                is DeleteStmt -> {} // legality is V23's (checkDeleteStatements)
+                ThenMarker -> {}
+            }
+        } finally {
+            rule.by?.let { aliasScopes.remove(it.name); ruleActor = null }
         }
     }
+
+    /** The actor clause of the rule being checked, for the optional-read check in [resolvePath]. */
+    private var ruleActor: RuleActor? = null
 
     private fun checkAssignment(rule: RuleDecl, scope: String, a: Assignment) {
         val resolved = resolveWrite(rule, scope, a) ?: return
@@ -293,6 +496,7 @@ class Validator(private val model: Model) {
             when {
                 m == null -> diags.add(Diagnostic("F1", "rule '${rule.name}' — '${c.shape}' has no field '${f.name}'"))
                 m.timestamp -> diags.add(Diagnostic("F3", "rule '${rule.name}' supplies '${c.shape}.${f.name}' — timestamp fields are commit metadata"))
+                m.actor -> diags.add(Diagnostic("F3", "rule '${rule.name}' supplies '${c.shape}.${f.name}' — the actor is a fact of the act's commit, never supplied (Reference §22)"))
                 !m.stored -> diags.add(Diagnostic("F3", "rule '${rule.name}' supplies derived '${c.shape}.${f.name}'"))
             }
             checkExpr(f.value, scope)
@@ -531,6 +735,14 @@ class Validator(private val model: Model) {
         // a narrowed prefix (`target is Post` governing this branch) resolves the
         // rest of the path against the narrowed scope — V11's union slice
         narrowedPrefix(p)?.let { (k, sc) -> walkSegs(sc, p.segs.drop(k)); return }
+        // a rule's `by Shape?`: the actor may be absent on some path to the
+        // trigger (V31), so a read through it needs an `is some` first, as any
+        // optional does (Reference §10)
+        ruleActor?.let { a ->
+            if (p.root == a.name && a.optional && p.segs.isNotEmpty())
+                diags.add(Diagnostic("F2", "'${Printer.expr(p)}' reads through '${a.name}', which may be absent here " +
+                    "(the rule's `by ${a.shape}?`) — narrow with '${a.name} is some' first (Reference §10)"))
+        }
         val current: String? = when {
             p.root == "this" -> thisScope ?: scope
             p.root in aliasScopes -> aliasScopes[p.root]
@@ -538,8 +750,11 @@ class Validator(private val model: Model) {
             else -> {
                 val m = model.membersOf(scope)[p.root]
                 if (m == null) {
+                    val hint = if (p.root == "actor" && model.shapes.values.any { it.actor != null })
+                        " — 'actor' is what an act's `by` clause binds in the act's own scope, and what a rule reads " +
+                        "when its header declares `by <Shape>?` (Reference §22, \"The actor\")" else ""
                     diags.add(Diagnostic("F1", "'${p.root}' is not a member of '$scope' " +
-                        "(bare names resolve in the innermost scope only — use this.<field> for the subject)"))
+                        "(bare names resolve in the innermost scope only — use this.<field> for the subject)$hint"))
                     return
                 }
                 m.type.instanceShape() ?: (m.type as? VType.Coll)?.shape
@@ -582,14 +797,24 @@ class Validator(private val model: Model) {
 
     private fun narrowingsOf(cond: Expr): List<Pair<PathExpr, String>> =
         predicateConjuncts(cond).mapNotNull { c ->
-            (c as? IsExpr)?.takeIf { it.kind == "refinement" }
-                ?.let { i -> (i.subject as? PathExpr)?.let { it to i.refinement!! } }
+            val i = c as? IsExpr ?: return@mapNotNull null
+            val p = i.subject as? PathExpr ?: return@mapNotNull null
+            when {
+                i.kind == "refinement" -> p to i.refinement!!
+                // `actor is some` on a rule's optional actor: present in this branch
+                i.kind == "some" && p.segs.isEmpty() && ruleActor?.let { it.optional && it.name == p.root } == true ->
+                    p to ruleActor!!.shape
+                else -> null
+            }
         }
 
     private fun complementNarrowingsOf(cond: Expr, scope: String): List<Pair<PathExpr, String>> {
         val i = cond as? IsExpr ?: return emptyList()
-        if (i.kind != "refinement") return emptyList()
         val p = i.subject as? PathExpr ?: return emptyList()
+        // `if actor is none then ... else <present>` on a rule's optional actor
+        if (i.kind == "none" && p.segs.isEmpty() && ruleActor?.let { it.optional && it.name == p.root } == true)
+            return listOf(p to ruleActor!!.shape)
+        if (i.kind != "refinement") return emptyList()
         val declared = pathTypeName(p, scope) ?: return emptyList()
         if (!model.isStaticUnion(declared)) return emptyList()
         val operands = model.basesOf(declared)
@@ -658,8 +883,13 @@ class Validator(private val model: Model) {
                 diags.add(Diagnostic("F1", "rule '${rule.name}' assigns through unknown member '${a.target.root}'"))
                 return null
             }
-            if (a.target.segs.isEmpty())
+            if (a.target.segs.isEmpty()) {
+                if (m.actor) {
+                    diags.add(Diagnostic("F3", "rule '${rule.name}' assigns '${a.target.root}' — the actor is a fact of the act's commit, never assigned (Reference §22)"))
+                    return null
+                }
                 return Write(rule, model.baseOf(scope) ?: scope, m, a.target, a.value)
+            }
             stepThrough(m, model.baseOf(scope) ?: scope, atPenultimate = a.target.segs.size == 1)
         }
         for ((i, seg) in a.target.segs.withIndex()) {
@@ -669,7 +899,13 @@ class Validator(private val model: Model) {
                 diags.add(Diagnostic("F1", "rule '${rule.name}' assigns through unknown member '${seg.name}' of '$sc'"))
                 return null
             }
-            if (i == a.target.segs.lastIndex) return Write(rule, model.baseOf(sc) ?: sc, m, a.target, a.value, fanOut)
+            if (i == a.target.segs.lastIndex) {
+                if (m.actor) {
+                    diags.add(Diagnostic("F3", "rule '${rule.name}' assigns '${Printer.expr(a.target)}' — the actor is a fact of the act's commit, never assigned (Reference §22)"))
+                    return null
+                }
+                return Write(rule, model.baseOf(sc) ?: sc, m, a.target, a.value, fanOut)
+            }
             current = stepThrough(m, sc, atPenultimate = i == a.target.segs.lastIndex - 1)
         }
         return null
@@ -1128,15 +1364,15 @@ class Validator(private val model: Model) {
             rule.body.forEach { item ->
                 when (item) {
                     is Assignment -> {
-                        model.collectExpr(item.value, scope, s)
+                        model.collectExpr(item.value, scope, s, ruleAliases(rule))
                         if (item.target.segs.isNotEmpty())
-                            model.collectExpr(PathExpr(item.target.root, item.target.segs.dropLast(1)), scope, s)
+                            model.collectExpr(PathExpr(item.target.root, item.target.segs.dropLast(1)), scope, s, ruleAliases(rule))
                     }
                     is Creation -> {
-                        item.forExpr?.let { model.collectExpr(it, scope, s) }
-                        item.fields.forEach { model.collectExpr(it.value, scope, s) }
+                        item.forExpr?.let { model.collectExpr(it, scope, s, ruleAliases(rule)) }
+                        item.fields.forEach { model.collectExpr(it.value, scope, s, ruleAliases(rule)) }
                     }
-                    is DeleteStmt -> model.collectExpr(item.target, scope, s) // the route to the target
+                    is DeleteStmt -> model.collectExpr(item.target, scope, s, ruleAliases(rule)) // the route to the target
                     ThenMarker -> {}
                 }
             }
@@ -1413,16 +1649,16 @@ class Validator(private val model: Model) {
         if (scope != null) {
             (rule.condition as? RefName)?.let { c ->
                 if (c.name in model.refinements) s.absorb(model.predicateSummary(c.name))
-                c.where?.let { model.collectExpr(it, scope, s) }
+                c.where?.let { model.collectExpr(it, scope, s, ruleAliases(rule)) }
             }
             if (rule.condition !is RefName) collectComposite(rule.condition, s)
             val base = model.baseOfExpr(rule.condition)
             base?.let { summary.conditionBase = it }
             rule.body.forEach { item ->
                 when (item) {
-                    is Assignment -> model.collectExpr(item.value, scope, s)
-                    is Creation -> item.fields.forEach { model.collectExpr(it.value, scope, s) }
-                    is DeleteStmt -> model.collectExpr(item.target, scope, s)
+                    is Assignment -> model.collectExpr(item.value, scope, s, ruleAliases(rule))
+                    is Creation -> item.fields.forEach { model.collectExpr(it.value, scope, s, ruleAliases(rule)) }
+                    is DeleteStmt -> model.collectExpr(item.target, scope, s, ruleAliases(rule))
                     ThenMarker -> {}
                 }
             }

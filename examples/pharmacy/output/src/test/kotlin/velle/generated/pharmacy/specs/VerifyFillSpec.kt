@@ -8,14 +8,14 @@ import velle.generated.pharmacy.*
 
 /**
  * rule RecordVerification when VerifyFill {
- *     Verification from { fill: fill, pharmacist: pharmacist, outcome: outcome, note: note }
+ *     Verification from { fill: fill, pharmacist: actor, outcome: outcome, note: note }
  * }
  *
- * VerifyFill requires pharmacist to be LicensedPharmacist
- *
- * never (VerifyFill where (pharmacist == fill.filledBy) and (fill.lot.drug is Controlled))
+ * never (VerifyFill where (actor == fill.filledBy) and (fill.lot.drug is Controlled))
  *
  * VerifyFill requires (outcome == "approved") or (outcome == "rejected")
+ *
+ * VerifyFill requires actor to be LicensedPharmacist
  *
  */
 class VerifyFillSpec : SpecSupport() {

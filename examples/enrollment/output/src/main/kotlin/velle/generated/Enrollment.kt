@@ -458,7 +458,7 @@ class UntaggedFields(path: List<String> = emptyList()) : Fields(path) {
 fun main() {
     val sys = EnrollmentSystem()
     println("Velle MockHarness — Enrollment")
-    println("Commits: commitAdvisor(...), commitCourse(...), commitStudent(...), commitSetEnrollment(...), commitEnroll(...), commitDrop(...), commitTag(...), commitAssignAdvisor(...)")
+    println("Commits: commit(NewAdvisor(...)), commit(NewCourse(...)), commit(NewStudent(...)), commit(NewSetEnrollment(...)), commit(NewEnroll(...)), commit(NewDrop(...)), commit(NewTag(...)), commit(NewAssignAdvisor(...))")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>

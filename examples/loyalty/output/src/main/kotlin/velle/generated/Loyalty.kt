@@ -722,7 +722,7 @@ class CertifiedMemberFields(path: List<String> = emptyList()) : Fields(path) {
 fun main() {
     val sys = LoyaltySystem()
     println("Velle MockHarness — Loyalty")
-    println("Commits: commitJoin(...), commitDuesPayment(...), commitPurchase(...), commitEnrollment(...)")
+    println("Commits: commit(NewJoin(...)), commit(NewDuesPayment(...)), commit(NewPurchase(...)), commit(NewEnrollment(...))")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>

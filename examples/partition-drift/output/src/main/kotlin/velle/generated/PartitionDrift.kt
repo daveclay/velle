@@ -967,7 +967,7 @@ class RefusedSafeEditFields(path: List<String> = emptyList()) : Fields(path) {
 fun main() {
     val sys = PartitionDriftSystem()
     println("Velle MockHarness — PartitionDrift")
-    println("Commits: commitCreateNote(...), commitLockNote(...), commitUnlockNote(...), commitRenameText(...), commitBareEdit(...), commitSafeEdit(...), commitTransientEdit(...)")
+    println("Commits: commit(NewCreateNote(...)), commit(NewLockNote(...)), commit(NewUnlockNote(...)), commit(NewRenameText(...)), commit(NewBareEdit(...)), commit(NewSafeEdit(...)), commit(NewTransientEdit(...))")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>

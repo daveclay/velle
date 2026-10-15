@@ -35,7 +35,12 @@ class Parser(private val tokens: List<Token>) {
             t.isKw("never") -> parseNever()
             t.type == TokType.UIDENT && peekAhead(1).isKw("requires") -> parseRequires()
             t.isKw("act") || t.isKw("transient") -> parseAct()
-            else -> fail("expected a declaration (shape/act/rule/never/requires)", t)
+            // the spec-wide visibility default (Reference §22): `visible to Staff` / `visible to anyone`
+            atVisible() -> {
+                val c = parseVisibleClause(allowWhere = false)
+                VisibilityDefault(c)
+            }
+            else -> fail("expected a declaration (shape/act/rule/never/requires/visible)", t)
         }
     }
 
@@ -70,8 +75,53 @@ class Parser(private val tokens: List<Token>) {
         return members
     }
 
+    /** `visible` is contextual (grammar.md): the visibility clause's first word only
+     *  at the start of a body member, after a field, or at the top level. */
+    private fun atVisible() = at(TokType.LIDENT) && peek().text == "visible"
+
+    /**
+     * `visible to <Shape> [as name] [where predicate]` | `visible to anyone`
+     * (Reference §22, "The actor"). [allowWhere] is false for the top-level
+     * default, which names a shape and nothing else.
+     */
+    private fun parseVisibleClause(allowWhere: Boolean): VisibleClause {
+        expect(TokType.LIDENT) // `visible`
+        val to = expect(TokType.LIDENT)
+        if (to.text != "to") fail("expected 'to' after 'visible' (visible to <Shape> | visible to anyone)", to)
+        val shape: String? = when {
+            at(TokType.UIDENT) -> next().text
+            at(TokType.LIDENT) && peek().text == "anyone" -> { next(); null }
+            else -> fail("expected a shape name or 'anyone' after 'visible to'", peek())
+        }
+        var name = "actor"
+        var named = false
+        if (peek().isKw("as")) {
+            if (shape == null) fail("'visible to anyone' binds no viewer to name", peek())
+            next(); name = expect(TokType.LIDENT).text; named = true
+        }
+        var where: Expr? = null
+        if (peek().isKw("where")) {
+            if (!allowWhere) fail("the spec-wide default names a shape and nothing else: a predicate belongs on the shape it reads", peek())
+            if (shape == null) fail("'visible to anyone' takes no predicate — it admits every viewer", peek())
+            next(); skipNewlines()
+            where = parsePredicate()
+        }
+        return VisibleClause(shape, name, named, where)
+    }
+
+    /** The field-level clauses after a property's declaration, if any. */
+    private fun parseFieldVisibility(): List<VisibleClause> {
+        val out = mutableListOf<VisibleClause>()
+        while (atVisible()) out.add(parseVisibleClause(allowWhere = true))
+        return out
+    }
+
     private fun parseMember(refinementBody: Boolean): Member {
         val t = peek()
+        if (atVisible()) {
+            // record-level: a body clause in the family of `frozen` and `undeletable`
+            return parseVisibleClause(allowWhere = true)
+        }
         if (t.isKw("frozen")) {
             next()
             val fields = mutableListOf<String>()
@@ -95,7 +145,8 @@ class Parser(private val tokens: List<Token>) {
             expect(TokType.ASSIGN)
             skipNewlines()
             if (!refinementBody) fail("'captured' is only legal in a refinement body", t)
-            return DerivedProp(name, type, parseValue(), captured = true)
+            val value = parseValue()
+            return DerivedProp(name, type, value, captured = true, visible = parseFieldVisibility())
         }
         val name = expect(TokType.LIDENT).text
         expect(TokType.COLON)
@@ -104,12 +155,13 @@ class Parser(private val tokens: List<Token>) {
             val on = peek()
             if (!(on.isKw("create") || on.isKw("update"))) fail("expected 'create' or 'update'", on)
             next()
-            return TimestampProp(name, on.text)
+            return TimestampProp(name, on.text, visible = parseFieldVisibility())
         }
         val type = parseTypeRef()
         if (at(TokType.ASSIGN)) {
             next(); skipNewlines()
-            return DerivedProp(name, type, parseValue())
+            val value = parseValue()
+            return DerivedProp(name, type, value, visible = parseFieldVisibility())
         }
         var initially: Expr? = null
         var initiallyRequired = false
@@ -122,9 +174,10 @@ class Parser(private val tokens: List<Token>) {
             else initially = parseValue()
         }
         if (peek().isKw("tolerates")) { next(); tolerates = expect(TokType.LIDENT).text }
+        val visible = parseFieldVisibility()
         if (refinementBody)
             fail("a refinement property is derived (= expr) or captured — stored properties belong to the base shape", peek())
-        return StoredProp(name, type, initially, tolerates, initiallyRequired)
+        return StoredProp(name, type, initially, tolerates, initiallyRequired, visible)
     }
 
     private fun parseTypeRef(): TypeRef {
@@ -195,6 +248,18 @@ class Parser(private val tokens: List<Token>) {
             while (at(TokType.COMMA)) { next(); skipNewlines(); triggers.add(parseTrigger()) }
             skipNewlines()
         }
+        // `by Shape[?] [as name]` (Reference §22, "The actor"): the rule reads the
+        // actor of the transaction it fires in. `by` is contextual (grammar.md):
+        // it reads as this clause only here, after the trigger clause
+        var by: RuleActor? = null
+        if (atBy()) {
+            next()
+            val shape = expect(TokType.UIDENT).text
+            val optional = consumeIf(TokType.QMARK)
+            val (name, named) = parseActorName()
+            by = RuleActor(shape, optional, name, named)
+            skipNewlines()
+        }
         var toleratesLoss = false
         var toleratesContention = false
         if (peek().isKw("tolerates")) {
@@ -210,7 +275,21 @@ class Parser(private val tokens: List<Token>) {
             skipNewlines()
         }
         val body = parseRuleBody()
-        return RuleDecl(name, trigger, condition, preposition, triggers, toleratesLoss, body, toleratesContention)
+        return RuleDecl(name, trigger, condition, preposition, triggers, toleratesLoss, body, toleratesContention, by)
+    }
+
+    /** `by` is contextual, not reserved: the actor clause's keyword only in the
+     *  two header positions the grammar gives it (an act's, a rule's), and the
+     *  selector-ordering keyword after `latest`/`first`; an identifier elsewhere. */
+    private fun atBy() = at(TokType.LIDENT) && peek().text == "by"
+
+    /** The optional `as name` after an actor clause's shape: the name the actor
+     *  is bound under, `actor` by default. Nothing is reserved — a scope that
+     *  declares a field under the bound name is the validator's error (F3). */
+    private fun parseActorName(): Pair<String, Boolean> {
+        if (!peek().isKw("as")) return "actor" to false
+        next()
+        return expect(TokType.LIDENT).text to true
     }
 
     private fun parseCondition(): RefExpr = when {
@@ -326,7 +405,7 @@ class Parser(private val tokens: List<Token>) {
         skipNewlines()
         inRequirement = true
         val predicate = try { parsePredicate() } finally { inRequirement = false }
-        val target = RefName(subject, complement(predicate))
+        val target = RefName(subject, complementOf(predicate))
         return NeverDecl(target, parseToleratesContention("requirement"), Requirement(subject, predicate))
     }
 
@@ -342,25 +421,6 @@ class Parser(private val tokens: List<Token>) {
      *  position where `to be` spells membership (Reference §21). */
     private var inRequirement = false
 
-    /** The negation of a two-valued predicate, pushed to the atoms: comparisons flip,
-     *  `and`/`or` swap, membership and its negation exchange, anything else is wrapped.
-     *  The forbidden configuration is spelled with `is`, whatever the requirement wrote. */
-    private fun complement(e: Expr): Expr = when {
-        e is NotExpr -> asIs(e.inner)
-        e is IsExpr && e.kind == "refinement" -> NotExpr(e.copy(toBe = false))
-        e is Binary && e.op == "and" -> Binary("or", complement(e.left), complement(e.right))
-        e is Binary && e.op == "or" -> Binary("and", complement(e.left), complement(e.right))
-        e is Binary && e.op in inverseOp -> Binary(inverseOp.getValue(e.op), e.left, e.right)
-        e is IsExpr && e.kind == "none" -> IsExpr(e.subject, "some")
-        e is IsExpr && e.kind == "some" -> IsExpr(e.subject, "none")
-        e is IsExpr && e.kind == "empty" -> IsExpr(e.subject, "notEmpty")
-        e is IsExpr && e.kind == "notEmpty" -> IsExpr(e.subject, "empty")
-        else -> NotExpr(e)
-    }
-
-    private fun asIs(e: Expr): Expr = if (e is IsExpr) e.copy(toBe = false) else e
-
-    private val inverseOp = mapOf("==" to "!=", "!=" to "==", "<" to ">=", ">=" to "<", ">" to "<=", "<=" to ">")
 
     /** An act (Reference §22, "External input"): a base shape whose instances arrive
      *  from outside, declared in exactly one place — `[transient] act Name { ... } [with ...]`. */
@@ -368,10 +428,22 @@ class Parser(private val tokens: List<Token>) {
         val transient = if (peek().isKw("transient")) { next(); true } else false
         expectKw("act")
         val name = expect(TokType.UIDENT).text
+        // `by Shape [as name]` (Reference §22, "The actor"): who commits this act,
+        // bound in the act's scope and stored on a durable act. An act without
+        // the clause has no actor — a processor verdict arrives from a machine
+        var actor: ActorProp? = null
+        if (atBy()) {
+            val byTok = next()
+            val shape = expect(TokType.UIDENT).text
+            if (at(TokType.QMARK))
+                fail("an act's actor is never absent: an act declared `by` takes one at every commit, and an act without `by` has none", byTok)
+            val (actorName, named) = parseActorName()
+            actor = ActorProp(actorName, shape, named)
+        }
         if (!at(TokType.LBRACE))
             fail("expected '{' after the act's name — an act is a base shape declared with its fields, never a refinement", peek())
         val members = parseMemberBlock(refinementBody = false)
-        return ShapeDecl(name, members, exposed = true, transient = transient, with = parseWithClause())
+        return ShapeDecl(name, listOfNotNull(actor) + members, exposed = true, transient = transient, with = parseWithClause())
     }
 
     // ── the exposure closure (Reference §6, "Inline part creation") ─────────────
@@ -741,3 +813,25 @@ class Parser(private val tokens: List<Token>) {
     private fun fail(message: String, t: Token): Nothing =
         throw VelleSyntaxError("$message, found ${t.type}('${t.text}')", t.line, t.col)
 }
+
+/** The negation of a two-valued predicate, pushed to the atoms: comparisons flip,
+ *  `and`/`or` swap, membership and its negation exchange, anything else is wrapped.
+ *  The forbidden configuration is spelled with `is`, whatever the requirement wrote.
+ *  Shared by the parser (`requires`) and the model (the `by <Refinement>` gate an
+ *  act's header desugars to, Reference §22). */
+internal fun complementOf(e: Expr): Expr = when {
+    e is NotExpr -> asIsExpr(e.inner)
+    e is IsExpr && e.kind == "refinement" -> NotExpr(e.copy(toBe = false))
+    e is Binary && e.op == "and" -> Binary("or", complementOf(e.left), complementOf(e.right))
+    e is Binary && e.op == "or" -> Binary("and", complementOf(e.left), complementOf(e.right))
+    e is Binary && e.op in INVERSE_OP -> Binary(INVERSE_OP.getValue(e.op), e.left, e.right)
+    e is IsExpr && e.kind == "none" -> IsExpr(e.subject, "some")
+    e is IsExpr && e.kind == "some" -> IsExpr(e.subject, "none")
+    e is IsExpr && e.kind == "empty" -> IsExpr(e.subject, "notEmpty")
+    e is IsExpr && e.kind == "notEmpty" -> IsExpr(e.subject, "empty")
+    else -> NotExpr(e)
+}
+
+private fun asIsExpr(e: Expr): Expr = if (e is IsExpr) e.copy(toBe = false) else e
+
+private val INVERSE_OP = mapOf("==" to "!=", "!=" to "==", "<" to ">=", ">=" to "<", ">" to "<=", "<=" to ">")

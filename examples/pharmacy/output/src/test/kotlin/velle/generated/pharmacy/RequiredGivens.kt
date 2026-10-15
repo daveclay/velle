@@ -14,6 +14,9 @@ import velle.generated.*
  */
 interface RequiredGivens {
 
+    /** Commit ONE new 'HireStaff' that enters 'HireStaff' at its commit. The act is transient — nothing to return. */
+    fun hireStaff()
+
     /** Bring ONE subject into 'LicenceExpiringSoon' without ticking 'Daily'; return the subject. */
     fun staffForRemindLicence(): Staff
 
@@ -26,11 +29,11 @@ interface RequiredGivens {
     /** Commit ONE new 'SetReorderPoint' that enters 'SetReorderPoint' at its commit. The act is transient — nothing to return. */
     fun setReorderPoint()
 
+    /** Provide any committed 'Staff' to commit 'SetReorderPoint' as; return it. */
+    fun someStaff(): Staff
+
     /** Provide any committed 'Drug'; return it. */
     fun someDrug(): Drug
-
-    /** Provide any committed 'Staff'; return it. */
-    fun someStaff(): Staff
 
     /** Commit ONE new 'CountLot' that enters 'MatchingCount' at its commit. The act is transient — nothing to return. */
     fun matchingCount()
