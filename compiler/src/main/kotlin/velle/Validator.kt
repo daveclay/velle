@@ -66,7 +66,7 @@ class Validator(private val model: Model) {
         checkDeadOptionality()        // A2 (advisory: `? initially required` nothing can absent)
     }
 
-    // ── V22: closure declaration legality + V1 closure extension (README §6,
+    // ── V22: closure declaration legality + V1 closure extension (Reference §6,
     // "Inline part creation") ─────────────────────────────────────────────────
     //
     // Edge resolution (and its V22 diagnostics) lives in Model.closures — forced
@@ -95,7 +95,7 @@ class Validator(private val model: Model) {
                             "'${edge.backRef}' — at a closure commit this rule fires once per inline " +
                             "'${base}', every firing writing the same field of the same container: a " +
                             "proven write-write conflict. Derive the aggregate on the container, or " +
-                            "move the condition to the container for once-per-act granularity (README §6)"))
+                            "move the condition to the container for once-per-act granularity (Reference §6)"))
                 }
             }
         }
@@ -107,18 +107,18 @@ class Validator(private val model: Model) {
         for ((name, shape) in model.shapes) {
             for (m in shape.members) when (m) {
                 is StoredProp -> {
-                    if (m.name == "id") diags.add(Diagnostic("F3", "'$name.id' — 'id' is reserved (README §5)"))
+                    if (m.name == "id") diags.add(Diagnostic("F3", "'$name.id' — 'id' is reserved (Reference §5)"))
                     val t = m.type
                     if (t is RelType && t.shape !in model.shapes && t.shape !in model.refinements)
                         diags.add(Diagnostic("F1", "'$name.${m.name}' relates to unknown shape '${t.shape}'"))
                     // a static union — a pure `or` of base shapes — is a stable target
-                    // type (README §6); any refinement carrying a predicate is not
+                    // type (Reference §6); any refinement carrying a predicate is not
                     if (t is RelType && t.shape in model.refinements && !model.isStaticUnion(t.shape))
                         diags.add(Diagnostic("F2", "'$name.${m.name}' — relationships target base shapes, not refinements: " +
-                            "a field type is fixed at the write, a membership drifts after it (README §6). " +
+                            "a field type is fixed at the write, a membership drifts after it (Reference §6). " +
                             (if (model.isCrossBase(t.shape))
                                 "'${t.shape}' is a union whose operands carry a predicate; a field's target union must be " +
-                                "a pure `or` of base shapes (README §9)"
+                                "a pure `or` of base shapes (Reference §9)"
                             else "State the condition on the act that creates '$name': '$name requires ${m.name} to be ${t.shape}', or a gate refinement")))
                     m.initially?.let { checkExpr(it, name, allowGenerator = true) }
                     // `initially required` demands an optional type: the whole point of
@@ -138,7 +138,7 @@ class Validator(private val model: Model) {
         }
     }
 
-    // ── V19: relationship declaration coherence (README §6) ──────────────────
+    // ── V19: relationship declaration coherence (Reference §6) ──────────────────
     //
     // The declared side owns a relationship; the inverse is inferred. A bare
     // declared `many` *means* an owned m2m edge set, so declaring both sides of
@@ -146,7 +146,7 @@ class Validator(private val model: Model) {
     // is either two distinct relationships or two owners of one edge set, and
     // the compiler refuses to guess. (Ambiguous inference — two same-target
     // declared sides on one shape — is handled by not inferring the inverse;
-    // use sites then demand declared derived views, README §6's Transfer case.)
+    // use sites then demand declared derived views, Reference §6's Transfer case.)
 
     private fun checkRelationshipCoherence() {
         for ((aName, a) in model.shapes) {
@@ -163,7 +163,7 @@ class Validator(private val model: Model) {
                         "'${t.shape}.${g.name}: ${if (bt.many) "many" else "one"} $aName' declare both sides — " +
                         "two owners of one edge set, or two distinct relationships; drop one side " +
                         "(the inverse is inferred), or make the collection a derived view " +
-                        "(`${f.name}: many ${t.shape} = (...)`), README §6"))
+                        "(`${f.name}: many ${t.shape} = (...)`), Reference §6"))
                 }
             }
         }
@@ -191,28 +191,28 @@ class Validator(private val model: Model) {
     }
 
     /**
-     * A cross-base union (README §9 extended across unrelated bases): the
+     * A cross-base union (Reference §9 extended across unrelated bases): the
      * property rule is unchanged, so its body may carry derived properties only
-     * (README §9 — `frozen` has no base to name, a creation-entered capture is
+     * (Reference §9 — `frozen` has no base to name, a creation-entered capture is
      * `initially` on each operand), and a transient operand is refused until
-     * OQ35's mixin lands (README §9).
+     * OQ35's mixin lands (Reference §9).
      */
     private fun checkCrossBaseUnion(name: String, r: RefinementDecl, bases: Set<String>) {
         bases.filter { it in model.transients }.forEach {
             diags.add(Diagnostic("V17", "'$name' composes transient act '$it' with unrelated shapes — " +
                 "a union with a transient operand is refused until unrelated shapes can share a declaration " +
-                "(README §9; OQ35): give the acts one declaration to inherit, or write one rule per act"))
+                "(Reference §9; OQ35): give the acts one declaration to inherit, or write one rule per act"))
         }
         for (m in r.members) when (m) {
             is DerivedProp -> if (m.captured)
                 diags.add(Diagnostic("F3", "'$name.${m.name}' — a cross-base union is entered only by creation, " +
-                    "so a capture there is `initially` on each operand; declare it on ${bases.joinToString(" and ")} (README §9)"))
+                    "so a capture there is `initially` on each operand; declare it on ${bases.joinToString(" and ")} (Reference §9)"))
             is FrozenClause ->
                 diags.add(Diagnostic("F3", "'$name' declares `frozen` — a cross-base union has no base shape whose " +
-                    "stored fields it could name; freeze on a refinement of each operand (README §9)"))
+                    "stored fields it could name; freeze on a refinement of each operand (Reference §9)"))
             UndeletableClause ->
                 diags.add(Diagnostic("F3", "'$name' declares `undeletable` on a cross-base union — " +
-                    "gate deletion on a refinement of each operand (README §9)"))
+                    "gate deletion on a refinement of each operand (Reference §9)"))
             else -> {}
         }
     }
@@ -238,7 +238,7 @@ class Validator(private val model: Model) {
         else -> model.baseOfExpr(rule.condition) ?: run {
             if (model.basesOfExpr(rule.condition).size > 1)
                 diags.add(Diagnostic("F2", "rule '${rule.name}' — its condition composes unrelated shapes inline; " +
-                    "name the union (`shape X = A or B`) and react to the name (README §9)"))
+                    "name the union (`shape X = A or B`) and react to the name (Reference §9)"))
             null
         }
     }
@@ -258,11 +258,11 @@ class Validator(private val model: Model) {
         val resolved = resolveWrite(rule, scope, a) ?: return
         if (!resolved.member.stored) {
             // V20: an inferred inverse or derived collection is a view, never a
-            // target — you may only assign what is stored (README §6)
+            // target — you may only assign what is stored (Reference §6)
             if (resolved.member.inverse != null || resolved.member.type is VType.Coll) {
                 diags.add(Diagnostic("V20", "rule '${rule.name}' assigns ${resolved.owner}.${resolved.member.name} — " +
                     "a collection view is never an assignment target: assign the declared side " +
-                    "(whole-set replacement) or write through it (fan-out), README §6"))
+                    "(whole-set replacement) or write through it (fan-out), Reference §6"))
             } else {
                 val kind = when {
                     resolved.member.timestamp -> "a timestamp field (commit metadata)"
@@ -332,7 +332,7 @@ class Validator(private val model: Model) {
     }
 
     /** The outermost subject of the expression being checked: what `this` names
-     *  (README §10). Set by the outermost [checkExpr] call and left alone by the
+     *  (Reference §10). Set by the outermost [checkExpr] call and left alone by the
      *  nested ones, so a collection filter's element scope never captures it. */
     private var thisScope: String? = null
 
@@ -352,10 +352,10 @@ class Validator(private val model: Model) {
             is UnaryMinus -> checkExpr(e.inner, scope)
             is Binary -> {
                 checkExpr(e.left, scope)
-                // a conjunction narrows what follows it (README §10)
+                // a conjunction narrows what follows it (Reference §10)
                 if (e.op == "and") withNarrowing(narrowingsOf(e.left)) { checkExpr(e.right, scope) }
                 else checkExpr(e.right, scope)
-                // the text operators take text on both sides (README §10; OQ51 R1)
+                // the text operators take text on both sides (Reference §10; OQ51 R1)
                 if (e.op in TEXT_OPERATORS) {
                     for (side in listOf(e.left, e.right)) {
                         val t = scalarTypeOf(side, scope) ?: continue
@@ -399,7 +399,7 @@ class Validator(private val model: Model) {
             )
             is FunCall -> {
                 if (e.name !in setOf("lowercase", "max", "min"))
-                    diags.add(Diagnostic("F2", "unknown function '${e.name}' — the builtin list is closed (README §5)"))
+                    diags.add(Diagnostic("F2", "unknown function '${e.name}' — the builtin list is closed (Reference §5)"))
                 e.args.forEach { checkExpr(it, scope) }
             }
             is SingularFor -> {
@@ -452,7 +452,7 @@ class Validator(private val model: Model) {
     }
 
     /**
-     * The query API's check (README §22, the composed query; OQ51): [expr] is a
+     * The query API's check (Reference §22, the composed query; OQ51): [expr] is a
      * predicate over the members of [scope], a shape or refinement, checked with
      * the rules a refinement's own predicate gets. Returns the diagnostics
      * without leaving them on the model.
@@ -466,16 +466,16 @@ class Validator(private val model: Model) {
     }
 
     /** The query API's order datums: each an orderable member of [scope], never
-     *  `id` (README §5, §10; OQ51 R2, R10). */
+     *  `id` (Reference §5, §10; OQ51 R2, R10). */
     fun checkQueryOrder(datums: List<String>, scope: String): List<Diagnostic> = buildList {
         if (datums.isEmpty())
-            add(Diagnostic("F2", "a query names its order — one or more orderable members of '$scope' with a direction (README §22)"))
+            add(Diagnostic("F2", "a query names its order — one or more orderable members of '$scope' with a direction (Reference §22)"))
         for (d in datums) {
             val m = model.membersOf(scope)[d]
             when {
                 m == null -> add(Diagnostic("F2", "order by '$d' — '$scope' has no member '$d'"))
-                d == "id" -> add(Diagnostic("F2", "order by 'id' — identity orders nothing (README §5); name a datum the data carries"))
-                !isOrderable(m.type) -> add(Diagnostic("F2", "order by '$d' — $scope.$d is not orderable (README §10)"))
+                d == "id" -> add(Diagnostic("F2", "order by 'id' — identity orders nothing (Reference §5); name a datum the data carries"))
+                !isOrderable(m.type) -> add(Diagnostic("F2", "order by '$d' — $scope.$d is not orderable (Reference §10)"))
             }
         }
     }
@@ -500,7 +500,7 @@ class Validator(private val model: Model) {
                 else -> checkExpr(src, scope)
             }
             // an alias names this binding's element, visible to the shared `where`
-            // and anything nested inside it (README §10, `as`)
+            // and anything nested inside it (Reference §10, `as`)
             b.alias?.let { aliasScopes[it] = element; introduced.add(it) }
         }
         c.where?.let { checkExpr(it, element) }
@@ -509,7 +509,7 @@ class Validator(private val model: Model) {
                 diags.add(Diagnostic("F1", "sum(..., $it) — '$element' has no member '$it'"))
         }
         // selectors' `by` datums: each must be an orderable member of the
-        // element — the author's ordering statement, typechecked (F2, README §10)
+        // element — the author's ordering statement, typechecked (F2, Reference §10)
         orderBy?.forEach { d ->
             val m = model.membersOf(element)[d]
             if (m == null)
@@ -518,7 +518,7 @@ class Validator(private val model: Model) {
                 val t = (m.type as? VType.Optional)?.inner ?: m.type
                 val orderable = t is VType.Num || t == VType.Text || t == VType.DateT || t == VType.DateTimeT
                 if (!orderable)
-                    diags.add(Diagnostic("F2", "selector 'by $d' — $element.$d is not orderable (README §10)"))
+                    diags.add(Diagnostic("F2", "selector 'by $d' — $element.$d is not orderable (Reference §10)"))
             }
         }
         introduced.forEach { aliasScopes.remove(it) }
@@ -561,7 +561,7 @@ class Validator(private val model: Model) {
         }
     }
 
-    // ── narrowing (README §10; V11's union slice) ────────────────────────────
+    // ── narrowing (Reference §10; V11's union slice) ────────────────────────────
     //
     // `path is Name` in a governing predicate licenses Name's own properties on
     // that path inside the licensed branch: the then-branch of a conditional,
@@ -621,7 +621,7 @@ class Validator(private val model: Model) {
 
     private data class Write(val rule: RuleDecl, val owner: String, val member: MemberInfo, val target: PathExpr,
                              val value: Expr,
-                             /** the target traverses a `many` hop: one write per member (README §6);
+                             /** the target traverses a `many` hop: one write per member (Reference §6);
                               *  one-writer treats it as a write to the field on every instance (V1, coarse) */
                              val fanOut: Boolean = false)
 
@@ -631,16 +631,16 @@ class Validator(private val model: Model) {
             val coll = m.type as? VType.Coll
             if (coll != null) {
                 // V20: a collection path fans out exactly at the penultimate hop —
-                // it writes a field *of* the members, never through them (README §6)
+                // it writes a field *of* the members, never through them (Reference §6)
                 if (!atPenultimate) {
                     diags.add(Diagnostic("V20", "rule '${rule.name}' assigns through '$sc.${m.name}' and onward — " +
                         "a collection path writes a field of the collection's members, never through them; " +
-                        "the deeper write is its own rule on the shape that owns the field (README §6)"))
+                        "the deeper write is its own rule on the shape that owns the field (Reference §6)"))
                     return null
                 }
                 if (fanOut) {
                     diags.add(Diagnostic("V20", "rule '${rule.name}' assigns through two `many` hops — " +
-                        "a fan-out traverses exactly one (README §6)"))
+                        "a fan-out traverses exactly one (Reference §6)"))
                     return null
                 }
                 fanOut = true
@@ -784,7 +784,7 @@ class Validator(private val model: Model) {
                 // reference at the deleted shape flips value-dependently (either
                 // direction — `is none` becomes true, `is some` false)
                 // deleting the subject's own shape is the exit cause only the
-                // deletion-side forms react to (README §13); a predicate-exit
+                // deletion-side forms react to (Reference §13); a predicate-exit
                 // rule sees it through consults alone
                 if (k.shape in bases && rule.trigger.onDeletion) true
                 else {
@@ -1146,7 +1146,7 @@ class Validator(private val model: Model) {
 
     private val bodySummaries = mutableMapOf<String, ReadSummary>()
 
-    // ── spent invariants: `never`s as proof inputs (README §21, checks.md V10) ─
+    // ── spent invariants: `never`s as proof inputs (Reference §21, checks.md V10) ─
     //
     // Only a fully-discharged prohibition is spendable. In v0 that is exactly
     // the refusals and constraints: no rule writes any field the predicate
@@ -1168,7 +1168,7 @@ class Validator(private val model: Model) {
         }
     }
 
-    // ── the door set: prohibitions checked at the act's own commit (README §21,
+    // ── the door set: prohibitions checked at the act's own commit (Reference §21,
     // ruled 2026-10-14) ───────────────────────────────────────────────────────
     //
     // A prohibition constrains the settled transaction, and its rejection names
@@ -1258,7 +1258,7 @@ class Validator(private val model: Model) {
         val basesA = model.basesOfExpr(a.condition)
         val basesB = model.basesOfExpr(b.condition)
         if (basesA.isEmpty() || basesB.isEmpty()) return false
-        // distinct bases are disjoint by construction; a union overlaps each operand (README §9)
+        // distinct bases are disjoint by construction; a union overlaps each operand (Reference §9)
         if (basesA != basesB) return !(canShareCommit(a, b))
         val ca = conditionConjuncts(a.condition)
         val cb = conditionConjuncts(b.condition)
@@ -1314,7 +1314,7 @@ class Validator(private val model: Model) {
             if (atoms.isEmpty() || schedules.isEmpty())
                 diags.add(Diagnostic("V4", "rule '${rule.name}' declares 'after commit' without " +
                     (if (atoms.isEmpty()) "a dischargeable guard" else "a backstop schedule") +
-                    " — this firing can be lost at the declared boundary (README §11, §18)"))
+                    " — this firing can be lost at the declared boundary (Reference §11, §18)"))
         }
         // V2: a guarded rule that can re-evaluate (boundary or tick) must disarm its own
         // trigger. Falsifying any one conjunct falsifies the conjunction, so one
@@ -1329,7 +1329,7 @@ class Validator(private val model: Model) {
                         is GuardAtom.Flag -> "assign '${atom.name}'"
                     }
                 }
-                diags.add(Diagnostic("V2", "rule '${rule.name}' never leaves its trigger state — its body must $what (the disarm law, README §18)"))
+                diags.add(Diagnostic("V2", "rule '${rule.name}' never leaves its trigger state — its body must $what (the disarm law, Reference §18)"))
             }
         }
         // V7: a capture-reading rule is transaction-bound
@@ -1339,7 +1339,7 @@ class Validator(private val model: Model) {
                 bodyReadsCapturedMember(rule, scope)
             if (readsCapture && (rule.preposition == "after" || schedules.isNotEmpty()))
                 diags.add(Diagnostic("V7", "rule '${rule.name}' reads a captured property, which does not survive " +
-                    "the transaction boundary it declares (README §13)"))
+                    "the transaction boundary it declares (Reference §13)"))
         }
     }
 
@@ -1376,7 +1376,7 @@ class Validator(private val model: Model) {
     private val commitKindsCache: List<CommitKind> by lazy {
         val kinds = mutableListOf<CommitKind>()
         model.exposed.forEach { kinds.add(CommitKind.Creates(it, source = "act $it")) }
-        // closure parts are committable-via-closure (README §6, "Inline part
+        // closure parts are committable-via-closure (Reference §6, "Inline part
         // creation"): the closure commit creates them, so they join the trigger,
         // reachability, and co-firability analyses as ordinary creations
         fun addClosure(container: String, e: ClosureEdge) {
@@ -1467,7 +1467,7 @@ class Validator(private val model: Model) {
         val bases = model.basesOfExpr(rule.condition)
         if (bases.isEmpty()) return false
         // a transient act's refinements are evaluated exactly once, at its
-        // creation commit — no other commit can ever fire the rule (README §4)
+        // creation commit — no other commit can ever fire the rule (Reference §4)
         if (bases.any { it in model.transients })
             return k is CommitKind.Creates && k.shape in bases
         if (rule.trigger == Trigger.DELETED) return k is CommitKind.Deletes && k.shape in bases
@@ -1515,35 +1515,35 @@ class Validator(private val model: Model) {
         val base = bases.joinToString(" or ")
         // the bare-shape edge (OQ37-R17): a bare shape has no predicate to flip,
         // and `when leaving` never fires at deletion — a record leaves a bare
-        // shape only by being deleted (README §13). A static union is bare the
-        // same way: entry is creation of an operand instance (README §9)
+        // shape only by being deleted (Reference §13). A static union is bare the
+        // same way: entry is creation of an operand instance (Reference §9)
         val bareShape = (rule.condition as? RefName)
             ?.let { it.where == null && (it.name in model.shapes || model.isStaticUnion(it.name)) } == true
         if (bareShape && rule.trigger.onPredicateExit && !rule.trigger.onDeletion && bases.none { it in model.transients }) {
             diags.add(Diagnostic("V3", "rule '${rule.name}' can never fire — '$base' is a bare shape with no " +
                 "predicate to flip, and 'when leaving' never fires at deletion; a record leaves a bare shape " +
-                "only by being deleted. Did you mean 'when deleted $base'? (README §13)"))
+                "only by being deleted. Did you mean 'when deleted $base'? (Reference §13)"))
             return
         }
         if (rule.trigger == Trigger.DELETED && bases.isNotEmpty() && bases.none { it in model.deletedShapes }) {
-            diags.add(Diagnostic("V3", "rule '${rule.name}' can never fire — no rule deletes '$base' (README §13)"))
+            diags.add(Diagnostic("V3", "rule '${rule.name}' can never fire — no rule deletes '$base' (Reference §13)"))
             return
         }
         val cond = conditionSummary(rule)
         // A transient act's partition is evaluated exactly once, at the act's
-        // own commit (README §4, "Transient acts"): the act cannot age into a
+        // own commit (Reference §4, "Transient acts"): the act cannot age into a
         // state, and V17 bans a schedule on it — so a time-dependent condition
         // over a transient act is not under-firing, it is read at the request.
         val transientSubject = bases.isNotEmpty() && bases.all { it in model.transients }
         if (cond.readsTime && schedules.isEmpty() && !transientSubject) {
             diags.add(Diagnostic("V3", "rule '${rule.name}' — its condition depends on the passage of time, " +
-                "which no act commit changes: entry by aging is unobserved. Add a schedule to 'on', or this rule under-fires (README §11)"))
+                "which no act commit changes: entry by aging is unobserved. Add a schedule to 'on', or this rule under-fires (Reference §11)"))
             return
         }
         if (schedules.isNotEmpty()) return // tick-served
         if (commitKinds().none { affects(it, rule) })
             diags.add(Diagnostic("V3", "rule '${rule.name}' can never fire — no act declaration, rule effect, or tick " +
-                "in the spec can affect its condition (README §11, §22)"))
+                "in the spec can affect its condition (Reference §11, §22)"))
     }
 
     // ── V5: freeze disjointness ──────────────────────────────────────────────
@@ -1563,7 +1563,7 @@ class Validator(private val model: Model) {
                 }
                 if (!excluded)
                     diags.add(Diagnostic("V5", "rule '${w.rule.name}' writes $base.${w.member.name}, frozen by '$refName' — " +
-                        "the trigger does not provably exclude membership; partition the act (README §8, \"Frozen fields\")"))
+                        "the trigger does not provably exclude membership; partition the act (Reference §8, \"Frozen fields\")"))
             }
         }
     }
@@ -1581,7 +1581,7 @@ class Validator(private val model: Model) {
                 // only accepts what the exists-atoms of the predicate mention
                 val guaranteed = model.predicateSummary(refName).existsShapes
                 s.existsShapes.filterNot { it in guaranteed }.forEach {
-                    diags.add(Diagnostic("V6", "capture '$refName.${m.name}' reads '$it', which its predicate does not guarantee at entry (README §8)"))
+                    diags.add(Diagnostic("V6", "capture '$refName.${m.name}' reads '$it', which its predicate does not guarantee at entry (Reference §8)"))
                 }
                 s.fields.filterNot { (owner, _) -> owner == base }.forEach { (owner, f) ->
                     if (owner !in guaranteed)
@@ -1612,14 +1612,14 @@ class Validator(private val model: Model) {
             if (duplicationExposed && tolerates != "duplication")
                 diags.add(Diagnostic("V8", "'${w.owner}.${w.member.name}' folds its own value and can be applied twice " +
                     "(rule '${w.rule.name}') — gate it on a dischargeable state, derive it, add a reconciliation sweep, " +
-                    "or declare `tolerates duplication` (README §19)"))
+                    "or declare `tolerates duplication` (Reference §19)"))
             // +/- folds commute with each other ((x-a)-b == (x-b)-a); only genuinely
             // order-dependent forms (streaks, resets) fail this
             val orderSafe = assignment.value.let { it is Binary && it.op in setOf("+", "-") }
             if (schedules.isNotEmpty() && !orderSafe && tolerates != "reordering")
                 diags.add(Diagnostic("V8", "'${w.owner}.${w.member.name}' is an order-dependent fold on a tick cadence " +
                     "(rule '${w.rule.name}') — nothing orders one tick's firings; " +
-                    "spell the value as a predecessor recurrence over the ordering datum (README §19)"))
+                    "spell the value as a predecessor recurrence over the ordering datum (Reference §19)"))
         }
     }
 
@@ -1633,7 +1633,7 @@ class Validator(private val model: Model) {
             (s.fields intersect written).forEach { (shape, field) ->
                 val writer = writes.first { it.owner == shape && it.member.name == field }.rule.name
                 diags.add(Diagnostic("V10", "never over $shape.$field is a guarantee ('$writer' writes the field it reads) — " +
-                    "v0 cannot yet prove it inductively over its writers; fail closed (README §21, OQ16)"))
+                    "v0 cannot yet prove it inductively over its writers; fail closed (Reference §21, OQ16)"))
             }
         }
     }
@@ -1650,10 +1650,10 @@ class Validator(private val model: Model) {
     //   (a) strict descent: the hop is a derived selector over the same shape
     //       whose predicate strictly compares a creation-fixed datum against
     //       the subject's (`previous` = latest(... receivedOn < this.receivedOn
-    //       ...) — the streakAfter recurrence, README §19);
+    //       ...) — the streakAfter recurrence, Reference §19);
     //   (b) spent acyclicity: the hop is a stored to-one and a spendable
     //       `never (S where hop == this)` forbids it pointing back at its own
-    //       instance (`root` through `parent`, README §7, §21 — the direct case).
+    //       instance (`root` through `parent`, Reference §7, §21 — the direct case).
     // Everything else — direct self-reads, deeper paths, multi-node cycles,
     // refinement cycles — fails closed; fixpoint semantics are never attempted.
 
@@ -2011,7 +2011,7 @@ class Validator(private val model: Model) {
                 if (!broken)
                     diags.add(Diagnostic("V16", "rule cascade may not quiesce: " +
                         cycle.joinToString(" -> ") { it.name } +
-                        " — no disarming guard breaks the cycle (README §11, OQ16)"))
+                        " — no disarming guard breaks the cycle (Reference §11, OQ16)"))
                 return
             }
             visiting.add(node)
@@ -2025,7 +2025,7 @@ class Validator(private val model: Model) {
     // ── V12 (refinement slice): at-most-one proofs for (Refinement for expr) ─
     //
     // A singular reference to a refinement R is licensed by the whole-spec
-    // singularity proof (README §10; §20 "Episodes as data"): at most one
+    // singularity proof (Reference §10; §20 "Episodes as data"): at most one
     // member of R can reference a given subject. The proof is inductive over
     // commits, with two legs — every producer of R's base carries the entry
     // guard, and R's predicate is anti-monotone (membership, once lost, can't
@@ -2152,7 +2152,7 @@ class Validator(private val model: Model) {
         }
     }
 
-    // ── V17/V18: transient acts (README §4, "Transient acts") ────────────────
+    // ── V17/V18: transient acts (Reference §4, "Transient acts") ────────────────
     //
     // A transient act exists only within its own commit's transaction — an
     // input to the state, not a member of it. V17 (isolation): nothing durable
@@ -2224,7 +2224,7 @@ class Validator(private val model: Model) {
         // V18: every request gets a response — either a rule fires, or the
         // boundary refuses. A `never` over the act is an answer too: the
         // refused configuration gets its response as the commit's refusal,
-        // with nothing kept (README §4; §21).
+        // with nothing kept (Reference §4; §21).
         for (t in model.transients) {
             val handlers = model.rules.values.filter {
                 !it.leaving && subjectScope(it)?.let { s -> model.baseOf(s) } == t
@@ -2258,7 +2258,7 @@ class Validator(private val model: Model) {
     //
     // Delete is instance-granularity mutation whose legality is derived from
     // what the spec proves *using* the instance's existence — never banned by
-    // category. The boundary principle (README §12 "Deletion";
+    // category. The boundary principle (Reference §12 "Deletion";
     // checks.md V23–V28): a delete errors when it can break
     // something the spec proves or declares — never merely because state
     // changes; recalculation is drift, the design working. The disjointness
@@ -2332,7 +2332,7 @@ class Validator(private val model: Model) {
                 if (shape in model.transients)
                     diags.add(Diagnostic("V23", "rule '${rule.name}' deletes transient act '$shape' — " +
                         "a transient act is an input to the state, not a member of it: there is " +
-                        "nothing to delete (README §4)"))
+                        "nothing to delete (Reference §4)"))
                 // a collection anywhere in the target is a fan-out — refused
                 if (pathHasCollectionHop(t, scope))
                     diags.add(Diagnostic("V23", "rule '${rule.name}' — 'delete ${Printer.expr(t)}' " +
@@ -2397,7 +2397,7 @@ class Validator(private val model: Model) {
     // is resolved — deleted in the same commit (the cascade, spelled), the
     // reference declared `? initially required` (absorbing — it goes absent),
     // or restructured to copies. Never transitive magic: each hop is its own
-    // visible decision (README §8's freeze-depth precedent).
+    // visible decision (Reference §8's freeze-depth precedent).
     private fun checkReferentialCompleteness() {
         for (site in model.deleteSites) {
             val cascaded = site.rule.body.filterIsInstance<DeleteStmt>()
@@ -2447,7 +2447,7 @@ class Validator(private val model: Model) {
                         "rule applies again. Restructure the guard onto a field witness, write the " +
                         "disjointness into the predicates (the shared refinement-overlap prover, nothing " +
                         "finer — OQ37, ruled conservative), or — for intentional re-triggering — model " +
-                        "the reversal as data (README §22); this hazard is not `tolerates`-signable"))
+                        "the reversal as data (Reference §22); this hazard is not `tolerates`-signable"))
                 }
             }
         }
@@ -2475,7 +2475,7 @@ class Validator(private val model: Model) {
         if (model.deleteSites.isEmpty()) return
         for ((i, n) in model.nevers.withIndex()) {
             val nBase = model.baseOfExpr(n.target)
-            // A refusal — a prohibition over a transient act (README §21) — binds
+            // A refusal — a prohibition over a transient act (Reference §21) — binds
             // the caller at the request and nothing afterwards: no act instance
             // exists at a tick or behind the after-commit boundary for the firing
             // to leave in the forbidden state.
@@ -2502,11 +2502,11 @@ class Validator(private val model: Model) {
     // forbidden set, where deletion only shrinks it, V26) is the case, and v0
     // cannot prove the rule's condition excludes it — fail closed, the V10
     // posture. A commit-triggered rule is not here: its rejection answers the
-    // act that triggered it, and the caller is told (README §21).
+    // act that triggered it, and the caller is told (Reference §21).
     private fun checkUncalledCreations() {
         for ((i, n) in model.nevers.withIndex()) {
             val nBase = model.baseOfExpr(n.target)
-            // A refusal — a prohibition over a transient act (README §21) — binds
+            // A refusal — a prohibition over a transient act (Reference §21) — binds
             // the caller at the request and nothing afterwards: no act instance
             // exists at a tick or behind the after-commit boundary for the firing
             // to leave in the forbidden state.
@@ -2525,13 +2525,13 @@ class Validator(private val model: Model) {
                         "(${Printer.prohibitionBody(n)}) consults — the firing can end its transaction in the " +
                         "forbidden state with no caller to refuse, and v0 cannot prove the condition excludes it: " +
                         "guard the record's creation on a state the prohibition cannot reach, restore within the " +
-                        "firing, or retract the prohibition (README §21)"))
+                        "firing, or retract the prohibition (Reference §21)"))
                 }
             }
         }
     }
 
-    // V30 — a constraint that reads the clock (ruled 2026-10-14; README §21).
+    // V30 — a constraint that reads the clock (ruled 2026-10-14; Reference §21).
     // Time advancing is a commit — the tick — so `today` and `now` are data
     // with a writer, and that writer fires with nobody asking: the V29 case
     // with the clock as the writer. A constraint on a persistent shape whose
@@ -2552,7 +2552,7 @@ class Validator(private val model: Model) {
                 "${nBase ?: Printer.refExpr(n.target)} reads the clock — the books can age into the forbidden " +
                 "state with no act to refuse, and the clock has no caller: state it on a transient request, " +
                 "where the clock is read once at the moment of the act; record the decision as a field the " +
-                "prohibition reads instead of the clock; or retract it (README §21)"))
+                "prohibition reads instead of the clock; or retract it (Reference §21)"))
         }
     }
 
@@ -2570,7 +2570,7 @@ class Validator(private val model: Model) {
                 diags.add(Diagnostic("V27", "${siteLabel(site)}, undeletable while a member of " +
                     "'$refName' — the trigger does not provably exclude membership; partition the " +
                     "deleter onto the deletable subset so refusal lands as data (OQ37; the " +
-                    "README §8 \"Frozen fields\" idiom, aimed at existence)"))
+                    "Reference §8 \"Frozen fields\" idiom, aimed at existence)"))
             }
             if (guarded.isEmpty() && model.deleteSites.isNotEmpty())
                 diags.add(Diagnostic("A2", "'$refName' declares `undeletable` but no rule deletes " +
@@ -2594,7 +2594,7 @@ class Validator(private val model: Model) {
             if (rule.trigger.onDeletion) {
                 diags.add(Diagnostic("V28", "rule '${rule.name}' — 'when ${rule.trigger.keyword.trim()}' is " +
                     "transaction-bound: the deleted subject does not survive to an after-commit firing or a " +
-                    "tick (README §13). React on commit as a last reader, or hang the durable reaction off " +
+                    "tick (Reference §13). React on commit as a last reader, or hang the durable reaction off " +
                     "the outcome record the deleting commit produces"))
                 continue
             }
@@ -2616,7 +2616,7 @@ class Validator(private val model: Model) {
     // V24 (deletion side, OQ37-R14) — a deletion-side body may not keep a
     // reference to its subject: the product would outlive the deleted
     // instance. It copies the fields it needs; a predicate-exit body may keep
-    // the reference (README §13, "One reading rule").
+    // the reference (Reference §13, "One reading rule").
     private fun checkDeletionSideReferences() {
         for (rule in model.rules.values) {
             if (!rule.trigger.onDeletion) continue
@@ -2640,7 +2640,7 @@ class Validator(private val model: Model) {
             if (keeps)
                 diags.add(Diagnostic("V24", "rule '${rule.name}' — a 'when ${rule.trigger.keyword.trim()}' body " +
                     "may not keep a reference to its subject ('this'): the record will not exist after the " +
-                    "deleting commit. Copy the fields that must survive instead (README §13)"))
+                    "deleting commit. Copy the fields that must survive instead (Reference §13)"))
         }
     }
 
@@ -2664,7 +2664,7 @@ class Validator(private val model: Model) {
                     "deletion: if the rule means \"for any reason\", it silently stops there. State the cause — " +
                     "'when leaving not deleted' (the transition only), 'when leaving or deleted' (either), or a " +
                     "separate 'when deleted' rule — or partition the deleter to provably exclude " +
-                    "'${left ?: base}' (README §13)", advisory = true))
+                    "'${left ?: base}' (Reference §13)", advisory = true))
             }
         }
     }
@@ -2684,13 +2684,13 @@ class Validator(private val model: Model) {
                     if (reaching.isEmpty())
                         diags.add(Diagnostic("A2", "rule '${rule.name}' says 'not deleted', but no rule's delete " +
                             "can reach '${cond?.name ?: base}' — the qualifier refuses nothing (dead machinery); " +
-                            "plain 'when leaving' means the same here (README §13)", advisory = true))
+                            "plain 'when leaving' means the same here (Reference §13)", advisory = true))
                 }
                 Trigger.LEAVING_OR_DELETED -> {
                     if (cond != null && cond.where == null && cond.name in model.shapes && base !in model.transients)
                         diags.add(Diagnostic("A2", "rule '${rule.name}' — the 'leaving' half is inert: '$base' is a " +
                             "bare shape with no predicate to flip, so only deletion fires this rule; " +
-                            "'when deleted $base' says the same (dead machinery, README §13)", advisory = true))
+                            "'when deleted $base' says the same (dead machinery, Reference §13)", advisory = true))
                 }
                 else -> {}
             }

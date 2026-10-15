@@ -18,7 +18,7 @@ import velle.generated.Invoice
 import velle.sqlite.SqliteStore
 
 /**
- * The query API (README §22, the composed query; OQ51 R1–R11): the caller
+ * The query API (Reference §22, the composed query; OQ51 R1–R11): the caller
  * composes a query from the spec's declared vocabulary — filter in the spec's
  * predicate language, a required order, a page — and gets the shape's data
  * classes back. Run in memory and over SQLite through both store layers.
@@ -126,7 +126,7 @@ open class QueryApiTest {
         val unordered = assertFailsWith<QueryRefused> { sys.read.customers.list() }
         assertTrue(unordered.diagnostics.single().message.contains("names its order"), unordered.message)
 
-        // the checks without running: identity orders nothing (README §5)
+        // the checks without running: identity orders nothing (Reference §5)
         val byId = sys.system.check(Query("Customer", orderBy = listOf(OrderDatum("id"))))
         assertTrue(byId.single().message.contains("identity orders nothing"), byId.toString())
 

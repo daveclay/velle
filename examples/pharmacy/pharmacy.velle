@@ -9,14 +9,14 @@
 --
 -- What the domain asks of the language, and where each answer lives:
 --   · a prescriber's order arriving with several prescriptions at once — the
---     exposure closure (README §6, "Inline part creation"), with the
+--     exposure closure (Reference §6, "Inline part creation"), with the
 --     prohibitions on a prescription refusing the whole order
 --   · a drug interacting with another drug, in either direction — a shape
 --     with two fields of one type, so no inverse is inferred and the drug
---     declares its view with an `or` in the formula (README §6, "Renamed and
+--     declares its view with an `or` in the formula (Reference §6, "Renamed and
 --     derived collections")
 --   · an allergy match between a drug's ingredients and a patient's allergies
---     — a sibling join over two declared `many` edge sets (README §10)
+--     — a sibling join over two declared `many` edge sets (Reference §10)
 --   · a conflict with another of the patient's active prescriptions — a
 --     derived view two hops long on the patient, an alias tested against a
 --     refinement, and a nested `exists` over the drug's interaction view
@@ -24,16 +24,16 @@
 --     only a licensed pharmacist verifies, nobody verifies their own
 --     controlled fill, nobody fills from an expired or quarantined lot
 --   · why a fill was turned away, on record for the patient — rejection as
---     data with a per-reason conditional (README §4, checks.md V18)
+--     data with a per-reason conditional (Reference §4, checks.md V18)
 --   · a fill waiting at the counter — a capture of the day it became ready,
 --     read by a nightly sweep that returns it to stock and read one last
---     time when the fill leaves the counter (README §8, §13)
+--     time when the fill leaves the counter (Reference §8, §13)
 --   · a prescription expiring by age, as distinct from being used up or
 --     discontinued — a `when leaving` rule naming only a schedule
 --     (`evaluation.md`, "Ticks")
 --   · prices that change on a date — a ledger ordered by a business date and
 --     read through `today`; a future-dated change may be removed, a change in
---     force may not (README §12, "Deletion"; §8, `undeletable`)
+--     force may not (Reference §12, "Deletion"; §8, `undeletable`)
 --   · stock on hand — a derivation over receipts, fills, returns, and cycle
 --     count adjustments, never a stored count; a reorder sweep guarded by the
 --     open purchase order it creates
@@ -140,7 +140,7 @@ Interaction requires severity == "major" or severity == "moderate"
 -- Prices change on a date, and the history matters for billing disputes:
 -- nothing is overwritten. The price in force is the latest change whose date
 -- has arrived; a change dated in the future waits its turn.
--- velle: the ledger pattern (README §12) ordered by a business date rather
+-- velle: the ledger pattern (Reference §12) ordered by a business date rather
 -- than a commit timestamp, read through `today`; the date must be unique per
 -- drug so the selector discriminates
 act PriceChange {
@@ -392,7 +392,7 @@ rule ApplyAllergy when AddAllergy {
 
 -- Notices go to a patient or to a prescriber. The channel follows who it is:
 -- patients are texted, prescribers are faxed.
--- velle: a static union as a field type (README §6); per-operand narrowing
+-- velle: a static union as a field type (Reference §6); per-operand narrowing
 -- in a value expression reads a different field on each side
 shape Recipient = Patient or Prescriber
 
@@ -510,7 +510,7 @@ rule RefuseCorrection when RefusedCorrection {
 -- A prescription entered against the wrong patient, never filled, is voided
 -- by a pharmacist. Nothing is removed: fourteen shapes refer to a
 -- prescription, so the void is a record and every state reads it.
--- velle: reversal as data (README §22, "Reversal") where a `delete` would
+-- velle: reversal as data (Reference §22, "Reversal") where a `delete` would
 -- have to resolve every required reference (checks V24); the void is
 -- refused on record once the prescription has been filled
 transient act VoidEntry {
@@ -622,7 +622,7 @@ shape MultiplePrescribers = Patient where
 --
 -- Two things the request must not do are stated elsewhere than on the
 -- request. Fill numbers run 1, 2, 3 with no gaps or repeats: a prohibition is
--- checked at the settled transaction (README §21), and the request's own fill
+-- checked at the settled transaction (Reference §21), and the request's own fill
 -- is what takes the "next" number, so a refusal reading `fillsRecorded + 1`
 -- through the request would turn its own request away; on the fill record the
 -- same sentence means what it says. And a fill never takes more than the lot
@@ -820,7 +820,7 @@ rule ReturnUncollected when Uncollected on Nightly {
 
 -- Whichever way a fill leaves the counter, the day it arrived there goes on
 -- record with it.
--- velle: the capture's last reader (README §13)
+-- velle: the capture's last reader (Reference §13)
 shape CounterExit {
     fill: one Fill
     readyOn: Date
@@ -948,7 +948,7 @@ rule NagRefillTask
 -- A patient may enrol a prescription in automatic refills, and leave again.
 -- While enrolled, a refill is queued when the last fill is twenty-five days
 -- old and no refill work is open.
--- velle: enrolment as paired records (simple unordered pairing, README §22);
+-- velle: enrolment as paired records (simple unordered pairing, Reference §22);
 -- `is some` narrowing licensing `.`-free comparison on an optional date
 act AutoRefillEnrolment {
     prescription: one Prescription

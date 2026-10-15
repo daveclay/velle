@@ -6,7 +6,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * The exposure closure (README §6, "Inline part creation"; checks V22, V1's
+ * The exposure closure (Reference §6, "Inline part creation"; checks V22, V1's
  * closure extension): `expose ... with` — parsing, edge resolution, the V22
  * refusals, the V1 self-pair refusal, the runtime's one-commit landing, and
  * the generated input types.

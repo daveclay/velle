@@ -333,7 +333,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun openDunningFlags(): List<OpenDunningFlag> = system.instancesOf("OpenDunningFlag").map { materializeOpenDunningFlag(it) }
     fun closableDunningFlags(): List<ClosableDunningFlag> = system.instancesOf("ClosableDunningFlag").map { materializeClosableDunningFlag(it) }
 
-    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
     inner class Read {
@@ -1619,7 +1619,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         private val SPEC = """
 -- Payments: an order-payment system charging through an external card
 -- processor — the third Velle spec, designed business-outward. Assembles the
--- errors-are-refinements pattern end-to-end (README §2): an interaction shape
+-- errors-are-refinements pattern end-to-end (Reference §2): an interaction shape
 -- whose verdict arrives as a later external commit, outcome-state dispatch
 -- with a rule per branch, compensation on the failure branch, retry with a
 -- cap, and timeouts. Also exercises surface neither earlier spec does: a
@@ -2045,7 +2045,7 @@ rule CloseDunningEpisode when ClosableDunningFlag on Daily {
     }
 }
 
-// ── act inputs (README §22, "External input"): one typed value per act,
+// ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewContact(
     val name: String,
@@ -2150,7 +2150,7 @@ data class NewExtensionRequest(
 }
 
 
-// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// ── the shapes as model objects: what a read returns (Reference §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,
 // a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
 // the record's membership at the moment of the read.

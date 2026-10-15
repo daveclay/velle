@@ -76,7 +76,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
     fun applicableSafeEdits(): List<ApplicableSafeEdit> = system.instancesOf("ApplicableSafeEdit").map { materializeApplicableSafeEdit(it) }
     fun refusedSafeEdits(): List<RefusedSafeEdit> = system.instancesOf("RefusedSafeEdit").map { materializeRefusedSafeEdit(it) }
 
-    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
     inner class Read {
@@ -403,7 +403,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
 -- Three spellings are here, over one domain. `BareEdit` carries the defect.
 -- `SafeEdit` is the handled-once fix for a *persistent* act — the partition
 -- scoped to *unhandled* acts, each side anchored by the outcome evidence its
--- own rule produces. `TransientEdit` is the language answer (README §4,
+-- own rule produces. `TransientEdit` is the language answer (Reference §4,
 -- "Transient acts"): the act is an input to the state, not a member of it —
 -- its partition evaluates exactly once, at its only commit, and drift has
 -- nothing left to attach to.
@@ -577,7 +577,7 @@ rule RefuseTransientEdit when RefusedTransientEdit {
     }
 }
 
-// ── act inputs (README §22, "External input"): one typed value per act,
+// ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewCreateNote(
     val title: String,
@@ -646,7 +646,7 @@ data class NewTransientEdit(
 }
 
 
-// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// ── the shapes as model objects: what a read returns (Reference §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,
 // a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
 // the record's membership at the moment of the read.

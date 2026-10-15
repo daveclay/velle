@@ -1,7 +1,7 @@
 package velle
 
 /**
- * MockHarness codegen (README §22, the milestone scope statement): transpiles a
+ * MockHarness codegen (Reference §22, the milestone scope statement): transpiles a
  * spec to a typed Kotlin surface over the runtime — one typed input value and
  * one `commit` overload per act, one tick function per schedule, one model object (data class) per shape
  * and refinement, the query API over them, and a `main` for driving the
@@ -81,13 +81,13 @@ object Codegen {
             line()
         }
 
-        // ── the exposure closure: nested input types (README §6, "Inline part
+        // ── the exposure closure: nested input types (Reference §6, "Inline part
         // creation") — the projection, not the mirror: no `id`, no back-reference
         // (language-populated); an out-of-closure relationship stays a typed view
         // (the reference handle), an in-closure edge is a nested input value. ──
 
         /** act → its input class: `New<Act>`, the act's stored fields as the
-         *  engineer's own type (README §22, "External input") */
+         *  engineer's own type (Reference §22, "External input") */
         val actInputNames: Map<String, String> = model.exposed.associateWith { "New$it" }
 
         /** structural signature (prop name excluded) → generated class name */
@@ -132,7 +132,7 @@ object Codegen {
             if (!partsApart) edges.forEach { line("        put(\"${it.prop}\", ${it.prop}.map { it.raw(system) })") }
             line("    }")
             if (partsApart && edges.isNotEmpty()) {
-                // an act's inline parts travel beside its fields (README §6,
+                // an act's inline parts travel beside its fields (Reference §6,
                 // "Inline part creation"); a part's own nested parts ride in its map
                 line("    internal fun parts(system: VelleSystem): Map<String, List<Map<String, Any?>>> = buildMap {")
                 edges.forEach { line("        put(\"${it.prop}\", ${it.prop}.map { it.raw(system) })") }
@@ -144,7 +144,7 @@ object Codegen {
 
         fun actInputTypes() {
             if (model.exposed.isEmpty()) return
-            line("// ── act inputs (README §22, \"External input\"): one typed value per act,")
+            line("// ── act inputs (Reference §22, \"External input\"): one typed value per act,")
             line("// every stored field the committer supplies and nothing else ──")
             for (shape in model.exposed) {
                 val stored = model.shapes.getValue(shape).members.filterIsInstance<StoredProp>()
@@ -166,7 +166,7 @@ object Codegen {
             }
             model.exposed.forEach { shape -> model.closures[shape].orEmpty().forEach { visit(it) } }
             if (toEmit.isEmpty()) return
-            line("// ── closure input values (README §6, \"Inline part creation\") ──")
+            line("// ── closure input values (Reference §6, \"Inline part creation\") ──")
             for ((name, edge) in toEmit) emitClosureClass(name, edge)
         }
 
@@ -202,7 +202,7 @@ object Codegen {
             else -> "Queue ${if (keys.size == 1) "key" else "keys"}: ${keys.joinToString(", ") { "[$it]" }}."
         }
 
-        // ── the surface (README §22): model objects in, model objects out ─────
+        // ── the surface (Reference §22): model objects in, model objects out ─────
         // The spec declares definitions; the caller composes queries. What an
         // engineer holds is a model object — the shape's data class, every field
         // read once at the moment of the read — and a model object is itself a
@@ -210,7 +210,7 @@ object Codegen {
         // reference field holds a `Ref<T>`; `read(ref)` resolves it. Nothing is
         // read *through* a reference.
 
-        /** The roots a query may name: every readable shape and refinement, static unions included (README §9). */
+        /** The roots a query may name: every readable shape and refinement, static unions included (Reference §9). */
         val queryRoots: List<String> =
             model.shapes.keys.filterNot { it in model.transients } +
                 model.refinements.keys.filter { r ->
@@ -259,7 +259,7 @@ object Codegen {
 
         fun readSurface() {
             line()
-            line("    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──")
+            line("    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──")
             line("    val read = Read()")
             line()
             line("    inner class Read {")
@@ -328,7 +328,7 @@ object Codegen {
 
         fun dataClasses() {
             line()
-            line("// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──")
+            line("// ── the shapes as model objects: what a read returns (Reference §22; OQ51 R5) ──")
             line("// A model object is a reference to its own record (`Ref<T>`): equality is identity,")
             line("// a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is")
             line("// the record's membership at the moment of the read.")
@@ -355,7 +355,7 @@ object Codegen {
             }
         }
 
-        /** A static union (README §9) as an interface its operands' model objects implement:
+        /** A static union (Reference §9) as an interface its operands' model objects implement:
          *  the shared members, the union's own derived members, and its membership flags.
          *  Covariance makes a `Ref<Post>` a `Ref<Content>`, which is how an operand widens. */
         fun unionInterface(union: String) {

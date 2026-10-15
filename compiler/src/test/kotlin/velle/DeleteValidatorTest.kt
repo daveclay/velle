@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The delete checks (checks.md V23–V28; README §12 "Deletion"), one fixture
+ * The delete checks (checks.md V23–V28; Reference §12 "Deletion"), one fixture
  * per case: each error case is a check's refusal, each clean case its
  * documented discharge.
  */

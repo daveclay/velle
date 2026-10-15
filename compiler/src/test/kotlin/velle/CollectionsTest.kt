@@ -7,7 +7,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * The collection constructs of README §6, driven end-to-end through
+ * The collection constructs of Reference §6, driven end-to-end through
  * enrollment.velle: declared m2m `many` with its inferred inverse,
  * `many <scalar>`, reference-set act fields, whole-set replacement, `+`/`-`
  * union and removal, fan-out assignment, `initially empty`, derived collection
@@ -43,7 +43,7 @@ class CollectionsTest {
         val c2 = sys.mustCommit("Course", "title" to "Sets", "capacity" to 30)
         val s = sys.mustCommit("Student", "name" to "Ada", "courses" to listOf(c1, c2))
         assertEquals(setOf(c1, c2), coll(sys.get(s, "courses")).toSet())
-        // Course.students is the inferred inverse of the declared many (README §6)
+        // Course.students is the inferred inverse of the declared many (Reference §6)
         assertEquals(listOf(s), coll(sys.get(c1, "students")))
         assertTrue(sys.isMember(s, "Untagged")) // initially empty scalar collection
     }
@@ -128,7 +128,7 @@ class CollectionsTest {
         assertTrue(sys.isMember(s, "Overloaded"))
     }
 
-    // ── validator: V19/V20 (README §6; checks.md) ────────────────────────────
+    // ── validator: V19/V20 (Reference §6; checks.md) ────────────────────────────
 
     @Test
     fun `V19 - declaring both sides of one relationship is refused`() {

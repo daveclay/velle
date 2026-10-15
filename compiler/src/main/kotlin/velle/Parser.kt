@@ -134,7 +134,7 @@ class Parser(private val tokens: List<Token>) {
                 next()
                 val many = t.isKw("many")
                 val target = peek()
-                // `many` also takes a scalar — an owned collection of values (README §6)
+                // `many` also takes a scalar — an owned collection of values (Reference §6)
                 val scalar = when {
                     target.type == TokType.KW && target.text in SCALAR_KEYWORDS -> target.text
                     target.type == TokType.UIDENT && (target.text == "Date" || target.text == "DateTime") -> target.text
@@ -169,7 +169,7 @@ class Parser(private val tokens: List<Token>) {
         skipNewlines()
         expectKw("when")
         skipNewlines()
-        // the trigger family (README §13): `when X` / `when leaving X` /
+        // the trigger family (Reference §13): `when X` / `when leaving X` /
         // `when deleted X` / `when leaving or deleted X` / `when leaving not deleted X`
         val trigger = when {
             peek().isKw("leaving") -> {
@@ -259,7 +259,7 @@ class Parser(private val tokens: List<Token>) {
             return DeleteStmt(PathExpr(root, segs))
         }
         if (at(TokType.UIDENT)) return parseCreation()
-        // assignment: literal static path (README §12) — plain '.' only
+        // assignment: literal static path (Reference §12) — plain '.' only
         val root = when {
             peek().isKw("this") -> { next(); "this" }
             at(TokType.LIDENT) -> next().text
@@ -315,7 +315,7 @@ class Parser(private val tokens: List<Token>) {
 
     /**
      * `Subject requires <predicate>` — the requirement spelling of a prohibition
-     * (README §21): every Subject satisfies the predicate. Desugared here to
+     * (Reference §21): every Subject satisfies the predicate. Desugared here to
      * `never (Subject where <complement>)`, with the complement pushed through
      * the predicate so the rest of the compiler sees the same forbidden
      * configuration a hand-written `never` would state.
@@ -339,7 +339,7 @@ class Parser(private val tokens: List<Token>) {
     }
 
     /** True while the predicate of a `requires` declaration is being read: the one
-     *  position where `to be` spells membership (README §21). */
+     *  position where `to be` spells membership (Reference §21). */
     private var inRequirement = false
 
     /** The negation of a two-valued predicate, pushed to the atoms: comparisons flip,
@@ -362,7 +362,7 @@ class Parser(private val tokens: List<Token>) {
 
     private val inverseOp = mapOf("==" to "!=", "!=" to "==", "<" to ">=", ">=" to "<", ">" to "<=", "<=" to ">")
 
-    /** An act (README §22, "External input"): a base shape whose instances arrive
+    /** An act (Reference §22, "External input"): a base shape whose instances arrive
      *  from outside, declared in exactly one place — `[transient] act Name { ... } [with ...]`. */
     private fun parseAct(): Decl {
         val transient = if (peek().isKw("transient")) { next(); true } else false
@@ -374,7 +374,7 @@ class Parser(private val tokens: List<Token>) {
         return ShapeDecl(name, members, exposed = true, transient = transient, with = parseWithClause())
     }
 
-    // ── the exposure closure (README §6, "Inline part creation") ─────────────
+    // ── the exposure closure (Reference §6, "Inline part creation") ─────────────
     // `with` is contextual, not reserved (grammar.md): it reads as the closure
     // keyword only here — after the act's body (or a closure entry) — and is
     // an ordinary identifier everywhere else.
@@ -435,7 +435,7 @@ class Parser(private val tokens: List<Token>) {
         }
     }
 
-    // ── predicates (README §10) ──────────────────────────────────────────────
+    // ── predicates (Reference §10) ──────────────────────────────────────────────
 
     fun parsePredicate(): Expr {
         var left = parseConjunction()
@@ -627,7 +627,7 @@ class Parser(private val tokens: List<Token>) {
                 // `by` is contextual (an identifier elsewhere), required here
                 val coll = parseCollectionExpr()
                 if (!(at(TokType.LIDENT) && peek().text == "by"))
-                    fail("$name(...) requires 'by <property>' — the ordering datum is the author's statement, never implicit (README §10)", peek())
+                    fail("$name(...) requires 'by <property>' — the ordering datum is the author's statement, never implicit (Reference §10)", peek())
                 next() // consume 'by'
                 val order = mutableListOf(expect(TokType.LIDENT).text)
                 while (at(TokType.COMMA)) { next(); order.add(expect(TokType.LIDENT).text) }
@@ -664,7 +664,7 @@ class Parser(private val tokens: List<Token>) {
             return SingularFor(shape, e)
         }
         val inner = parsePredicate()
-        // set denotation: `(Shape where pred)` / `(this.invoices where Overdue)` (README §6)
+        // set denotation: `(Shape where pred)` / `(this.invoices where Overdue)` (Reference §6)
         if (peek().isKw("where")) {
             val p = inner as? PathExpr
                 ?: fail("a set denotation filters a shape name or relationship path", peek())

@@ -12,7 +12,7 @@
 -- Three spellings are here, over one domain. `BareEdit` carries the defect.
 -- `SafeEdit` is the handled-once fix for a *persistent* act — the partition
 -- scoped to *unhandled* acts, each side anchored by the outcome evidence its
--- own rule produces. `TransientEdit` is the language answer (README §4,
+-- own rule produces. `TransientEdit` is the language answer (Reference §4,
 -- "Transient acts"): the act is an input to the state, not a member of it —
 -- its partition evaluates exactly once, at its only commit, and drift has
 -- nothing left to attach to.

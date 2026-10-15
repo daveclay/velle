@@ -91,7 +91,7 @@ class DeleteRuntimeTest {
         assertEquals("Draft thing", sys.get(sys.instancesOf("ReporterNotice").single(), "listingTitle"))
     }
 
-    // ── the trigger family, driven through the fixture (README §13) ──────────
+    // ── the trigger family, driven through the fixture (Reference §13) ──────────
 
     @Test
     fun `publishing a draft - the stated predicate-exit rule and the combined form fire, the deletion rule does not`() {
@@ -149,7 +149,7 @@ class DeleteRuntimeTest {
 
     @Test
     fun `a deletion rule fires at the deleting commit as the instance's last reader`() {
-        // `when deleted` is the trigger for the deletion cause (README §13);
+        // `when deleted` is the trigger for the deletion cause (Reference §13);
         // bare `when leaving OpenTask` would never fire here — nothing flips
         // `done` — and is V3 (TriggerFamilyTest)
         val source = """

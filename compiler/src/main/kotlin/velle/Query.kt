@@ -28,7 +28,7 @@ sealed interface QF {
 
     /** The subject row's stored (or timestamp) column [field] compared to a
      *  constant; op is one of `==`, `!=`, `<`, `<=`, `>`, `>=`, or a text
-     *  operator (`contains`, `starts with`, `ends with`, `like` — README §10),
+     *  operator (`contains`, `starts with`, `ends with`, `like` — Reference §10),
      *  whose constant is always the right operand and always text. */
     data class Cmp(val field: String, val op: String, val value: QConst) : QF
 
@@ -53,7 +53,7 @@ sealed interface QConst {
     data class QDate(val v: LocalDate) : QConst
     data class QDateTime(val v: Instant) : QConst
     /** An instance the store already holds — the query API's "this customer"
-     *  (README §22) against a to-one reference column. */
+     *  (Reference §22) against a to-one reference column. */
     data class QRef(val ref: Ref.Persisted) : QConst
 }
 
@@ -106,7 +106,7 @@ class QueryCompiler(
     /**
      * [depth] 0 compiles against the subject row; >0 inside an element scope
      * (an exists/collection body). `this` always names the *outermost* subject
-     * (README §10), and only a top-level exists can express that correlation —
+     * (Reference §10), and only a top-level exists can express that correlation —
      * at depth > 0 any `this`-touching conjunct degrades by polarity rather
      * than silently compiling against the wrong row.
      */

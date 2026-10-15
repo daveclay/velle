@@ -110,7 +110,7 @@ never (Visit where minutes <= 0)
 
 -- velle: unguarded self-referential fold on a backstopped cadence — the
 -- duplication hazard is real and signed on the field (`tolerates duplication`,
--- README §19)
+-- Reference §19)
 rule CountVisit when Visit on commit, Hourly {
     member.visitCount = member.visitCount + 1
 }
@@ -118,7 +118,7 @@ rule CountVisit when Visit on commit, Hourly {
 -- Each visit also pings the analytics pipeline. If a ping goes missing,
 -- nobody minds.
 -- velle: previews the external-effect escape — the ping may be dropped
--- (`tolerates loss`; README §11, "forced boundaries")
+-- (`tolerates loss`; Reference §11, "forced boundaries")
 shape AnalyticsPing {
     visit: one Visit
     pingedOn: DateTime

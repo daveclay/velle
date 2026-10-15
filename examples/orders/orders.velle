@@ -1,4 +1,4 @@
--- The exposure closure (README §6, "Inline part creation"): an order arrives
+-- The exposure closure (Reference §6, "Inline part creation"): an order arrives
 -- together with its line items — the parts don't exist yet, so they can't be
 -- references; they are values created in the act's commit. `act ... with`
 -- names the inverse edges that ride the closure; back-references are
@@ -44,6 +44,6 @@ rule ReserveStock when OrderLine {
     Reservation from { line: this, quantity: this.quantity }
 }
 
--- a constraint no rule can move, checked at the door (README §21) — a closure
+-- a constraint no rule can move, checked at the door (Reference §21) — a closure
 -- carrying a non-positive quantity is refused whole, nothing lands
 never (OrderLine where quantity <= 0)

@@ -1,4 +1,4 @@
--- gallery.velle — cross-base unions exercised end-to-end (README §9 extended
+-- gallery.velle — cross-base unions exercised end-to-end (Reference §9 extended
 -- across unrelated shapes; OQ29): a static union as a field's target type (the
 -- polymorphic association), the inverse it infers onto every operand, a derived
 -- body on the union, a refinement and a rule over the union, per-operand

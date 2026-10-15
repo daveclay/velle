@@ -111,7 +111,7 @@ data class UnarchiveNoticeRow(
     val noticedOn: Instant,
 )
 
-/** Per-membership memory for ArchivedInvoice (README §8; evaluation.md U2). */
+/** Per-membership memory for ArchivedInvoice (Reference §8; evaluation.md U2). */
 data class ArchivedInvoiceCapture(
     val archivedOn: LocalDate,
 )
@@ -193,7 +193,7 @@ interface BillingStore {
      *  Superset contract: any superset of the matching rows is correct. */
     fun never2Candidates(): List<LineItemRow>
 
-    // ── capture memory: null when no current membership (README §13) ──
+    // ── capture memory: null when no current membership (Reference §13) ──
     fun archivedInvoiceCapture(instance: Ref.Persisted): ArchivedInvoiceCapture?
 }
 

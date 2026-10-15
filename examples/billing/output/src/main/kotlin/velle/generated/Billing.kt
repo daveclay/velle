@@ -95,7 +95,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     fun issuedInvoices(): List<IssuedInvoice> = system.instancesOf("IssuedInvoice").map { materializeIssuedInvoice(it) }
     fun archivedInvoices(): List<ArchivedInvoice> = system.instancesOf("ArchivedInvoice").map { materializeArchivedInvoice(it) }
 
-    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
     inner class Read {
@@ -616,7 +616,7 @@ act LineItem {
 
 -- No line item may have a zero quantity or a negative price — bad submissions
 -- are refused at the door, before they ever become data.
--- velle: constraints no rule can move, checked at the door (README §21)
+-- velle: constraints no rule can move, checked at the door (Reference §21)
 never (LineItem where quantity <= 0)
 never (LineItem where price < 0)
 
@@ -704,7 +704,7 @@ rule RemindOverdue
 -- The request itself is a message, not a record: it is decided at its own
 -- commit and not kept — the refusal copies what it needs.
 -- velle: `frozen` write-gate; rejection as data over a `transient` act — the
--- partition evaluates exactly once, at the act's commit (README §4); the
+-- partition evaluates exactly once, at the act's commit (Reference §4); the
 -- complement pair (P / not P) is what proves every request gets a response (V18)
 act Issuance {
     invoice: one Invoice
@@ -769,7 +769,7 @@ rule NoteUnarchival when leaving ArchivedInvoice {
     }
 }
 
-// ── act inputs (README §22, "External input"): one typed value per act,
+// ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewSignUp(
     val name: String,
@@ -860,7 +860,7 @@ data class NewUnarchiveRequest(
 }
 
 
-// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// ── the shapes as model objects: what a read returns (Reference §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,
 // a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
 // the record's membership at the moment of the read.

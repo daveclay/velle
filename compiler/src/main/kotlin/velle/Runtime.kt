@@ -15,12 +15,12 @@ sealed interface Value {
     data class VDateTime(val v: Instant) : Value
     data class VRef(val id: Long) : Value
     data class VColl(val ids: List<Long>, val shape: String) : Value
-    /** An owned collection of scalar values (`many text`) — a set (README §6). */
+    /** An owned collection of scalar values (`many text`) — a set (Reference §6). */
     data class VVals(val values: List<Value>) : Value
     /** The `empty` literal before its collection kind is known; coerced at the write site. */
     data object VEmpty : Value
     /** A closure part's back-reference before its target exists: index into the
-     *  commit's creation list, resolved to a VRef as creations land (README §6,
+     *  commit's creation list, resolved to a VRef as creations land (Reference §6,
      *  "Inline part creation"). Never escapes applyCommit. */
     data class VPendingRef(val index: Int) : Value
     data class VDuration(val amount: Long, val unit: String) : Value
@@ -52,12 +52,12 @@ sealed interface CommitResult {
      *  persisted — what the application's own queries key on. */
     data class Accepted(val id: Long, val storeKey: Any? = null) : CommitResult
     /** [reason] is the rendered message; [rejection] is the same as data when a
-     *  `never` refused the act (README §21), null for a type-level refusal. */
+     *  `never` refused the act (Reference §21), null for a type-level refusal. */
     data class Refused(val reason: String, val rejection: Rejection? = null) : CommitResult
 }
 
 /**
- * A typed commit's outcome (README §22, "External input"): the generated
+ * A typed commit's outcome (Reference §22, "External input"): the generated
  * surface commits one typed input value per act and hands back the same
  * value with the verdict, so a refusal holds what was refused as the
  * engineer's own type — never a map — and an acceptance holds what was
@@ -71,7 +71,7 @@ sealed interface Commit<out I> {
      *  key when a store is connected and the act persisted. */
     data class Accepted<out I>(override val input: I, val id: Long, val storeKey: Any? = null) : Commit<I>
     /** [reason] is the rendered message; [rejection] is the same as data when a
-     *  `never` refused the act (README §21), null for a type-level refusal. */
+     *  `never` refused the act (Reference §21), null for a type-level refusal. */
     data class Refused<out I>(override val input: I, val reason: String, val rejection: Rejection? = null) : Commit<I>
 }
 
@@ -162,7 +162,7 @@ class VelleSystem(
     private val fetchedRefs = mutableSetOf<Triple<String, String, Long>>()
     private val fetchedFilters = mutableSetOf<Pair<String, QF>>()
     /** Handles whose by-key fetch found no row this envelope — a reference at a
-     *  deleted row (README §12) is read as absent every time, and one snapshot
+     *  deleted row (Reference §12) is read as absent every time, and one snapshot
      *  answers it once. */
     private val fetchMisses = mutableSetOf<Long>()
 
@@ -470,7 +470,7 @@ class VelleSystem(
      *  pending refs point backward; assigns collapsed to the final value per
      *  (instance, field). References cross as typed [Ref]s: persisted rows by
      *  their store key, same-set creates as [Ref.Pending] indices. Transient
-     *  acts are excluded: only their consequences persist (README §4). */
+     *  acts are excluded: only their consequences persist (Reference §4). */
     private fun buildCommitSet(t: Txn): PendingCommit {
         val createdSet = t.created.toSet()
         // created-then-deleted inside one envelope nets to nothing (OQ37)
@@ -602,7 +602,7 @@ class VelleSystem(
         val converted = convertFields(decl, suppliedFields)
             ?: return CommitResult.Refused(typeFailure(decl, suppliedFields))
 
-        // the exposure closure (README §6, "Inline part creation"): the act plus
+        // the exposure closure (Reference §6, "Inline part creation"): the act plus
         // its declared inline parts land as ONE commit — parts are values created
         // here, back-references language-populated, entrants container-and-parts
         val edges = model.closures[shape].orEmpty()
@@ -621,7 +621,7 @@ class VelleSystem(
             onSuccess = { id ->
                 // a transient act is an input to the state, not a member of it: at
                 // the close of its transaction the instance is removed — only its
-                // consequences persist (README §4 "Transient acts"; evaluation.md).
+                // consequences persist (Reference §4 "Transient acts"; evaluation.md).
                 // Removing after the transaction (nevers checked, after-queue
                 // drained) is observably equivalent to removing at its close: V17
                 // bans every read of the act from anything that runs later.
@@ -639,7 +639,7 @@ class VelleSystem(
     }
 
     /** The set refusal: a duplicate reference in a committed collection is a
-     *  caller bug or a multiplicity claim `many` cannot express (README §6).
+     *  caller bug or a multiplicity claim `many` cannot express (Reference §6).
      *  Inline part *values* are a bag — two identical values mint two distinct
      *  instances — so this applies to reference collections only. */
     private fun duplicateRefusal(decl: ShapeDecl, supplied: Map<String, Any?>): String? {
@@ -649,7 +649,7 @@ class VelleSystem(
             val raw = supplied[m.name] as? List<*> ?: continue
             if (raw.size != raw.distinct().size)
                 return "type: duplicate in '${decl.name}.${m.name}' — a `many` is a set; " +
-                    "if multiplicity is meaningful, it is data on an edge shape (README §6)"
+                    "if multiplicity is meaningful, it is data on an edge shape (Reference §6)"
         }
         return null
     }
@@ -673,7 +673,7 @@ class VelleSystem(
             for (raw in supplied[edge.prop].orEmpty()) {
                 if (edge.backRef in raw)
                     throw PartRefusal("type: '${edge.partShape}.${edge.backRef}' is language-populated — " +
-                        "a back-reference cannot be claimed by the committer (README §6)")
+                        "a back-reference cannot be claimed by the committer (Reference §6)")
                 val childKeys = edge.children.map { it.prop }.toSet()
                 val own = raw.filterKeys { it !in childKeys }
                 duplicateRefusal(partDecl, own)?.let { throw PartRefusal(it) }
@@ -698,7 +698,7 @@ class VelleSystem(
         for (m in decl.members.filterIsInstance<StoredProp>()) {
             val raw = supplied[m.name]
             if (raw == null) {
-                // an absent `many` is the empty collection — the absence (README §6)
+                // an absent `many` is the empty collection — the absence (Reference §6)
                 when {
                     (m.type as? RelType)?.many == true ->
                         out[m.name] = Value.VColl(emptyList(), (m.type as RelType).shape)
@@ -736,7 +736,7 @@ class VelleSystem(
     }
 
     /** A committed reference names an existing instance the field's declared
-     *  type accepts — the shape itself, or an operand of a static union (README §9):
+     *  type accepts — the shape itself, or an operand of a static union (Reference §9):
      *  a handle of the wrong shape can't inhabit the type, a boundary refusal. */
     private fun acceptedReference(handle: Long, declared: String): Boolean {
         if (declared in model.shapes) idShape.putIfAbsent(handle, declared)
@@ -788,7 +788,7 @@ class VelleSystem(
     private class Watcher(
         val key: String,
         val condition: RefExpr,
-        /** the base shapes the condition's subjects are drawn from — several for a cross-base union (README §9) */
+        /** the base shapes the condition's subjects are drawn from — several for a cross-base union (Reference §9) */
         val bases: Set<String>,
         val summary: ReadSummary,
         val sensShapes: Set<String>,
@@ -857,7 +857,7 @@ class VelleSystem(
 
     /**
      * Can this commit change the watcher's member set? The runtime sibling of
-     * the compiler's derived trigger set (README §11, "Rules ground in
+     * the compiler's derived trigger set (Reference §11, "Rules ground in
      * commits"): membership flips only when data the predicate reads changes,
      * and the footprint says exactly what changed. `today`/`now` are constant
      * within an envelope, so time reads never make a commit relevant here —
@@ -881,7 +881,7 @@ class VelleSystem(
         return ids.filter { evaluator.memberOfRefExpr(it, w.condition) }.toSet()
     }
 
-    /** The door set (README §21, ruled 2026-10-14): the prohibitions whose verdict
+    /** The door set (Reference §21, ruled 2026-10-14): the prohibitions whose verdict
      *  no rule can change, evaluated once at the act's own commit and skipped at
      *  the transaction end. Computed by the validator from the rules' writes,
      *  creations, and deletions against each predicate's reads. */
@@ -906,7 +906,7 @@ class VelleSystem(
         for (m in mutations) when (m) {
             is Mutation.Create -> {
                 // a closure part's back-reference lands here: pending index →
-                // the already-created container's id (README §6, "Inline part
+                // the already-created container's id (Reference §6, "Inline part
                 // creation" — materialization order is topological, never observable)
                 val resolved =
                     if (m.fields.values.any { it is Value.VPendingRef })
@@ -928,7 +928,7 @@ class VelleSystem(
         }
 
         if (actCommit) {
-            // the door (README §21; evaluation.md "An exposed call", step 1): the
+            // the door (Reference §21; evaluation.md "An exposed call", step 1): the
             // act's closure is in, nothing is processed, and the prohibitions no
             // rule can move are evaluated here — over this commit's footprint
             // alone, with the act named — and not again at the end. A refusal
@@ -957,7 +957,7 @@ class VelleSystem(
         // the spec must not observe (step 6, [S3]). A leaver left either
         // because its predicate flipped or because this commit deleted it —
         // different exit causes, and each rule says which it reacts to
-        // (README §13, "Deletion as a second exit cause"): bare `when leaving`
+        // (Reference §13, "Deletion as a second exit cause"): bare `when leaving`
         // never fires at deletion
         val deletedNow = mutations.filterIsInstance<Mutation.Delete>().map { it.id }.toSet()
         val pending = mutableListOf<Pair<RuleDecl, Long>>()
@@ -976,7 +976,7 @@ class VelleSystem(
                 }
             // a transient act's partitions are decided exactly once, at its
             // creation commit — consequence commits within the transaction
-            // never re-partition it (README §4, "Transient acts")
+            // never re-partition it (Reference §4, "Transient acts")
             if (w.bases.any { it in model.transients }) subjects = subjects intersect createdIds.toSet()
             for (subject in subjects) {
                 if (rule.preposition == "after") t.afterQueue.add(rule to subject)
@@ -1004,7 +1004,7 @@ class VelleSystem(
                 continue
             }
             if (p.initially == null) {
-                // an unsupplied `many` starts empty — the empty collection is the absence (README §6)
+                // an unsupplied `many` starts empty — the empty collection is the absence (Reference §6)
                 coerceCollection(Value.VEmpty, p.type).takeIf { it != Value.VEmpty }
                     ?.let { inst.fields[p.name] = it }
                 continue
@@ -1075,7 +1075,7 @@ class VelleSystem(
     }
 
     /** Fit a collection value to its declared field type: type the bare `empty`
-     *  literal, and dedupe — a `many` is a set (README §6). Non-collections pass through. */
+     *  literal, and dedupe — a `many` is a set (Reference §6). Non-collections pass through. */
     internal fun coerceCollection(v: Value, type: TypeRef): Value = when {
         v == Value.VEmpty && type is RelType && type.many -> Value.VColl(emptyList(), type.shape)
         v == Value.VEmpty && type is ScalarType && type.many -> Value.VVals(emptyList())
@@ -1096,7 +1096,7 @@ class VelleSystem(
         for (item in rule.body) when (item) {
             is Assignment -> {
                 // a collection path fans out: one write per member, the same value
-                // (README §6, "fan-out assignment"); a plain path is one target
+                // (Reference §6, "fan-out assignment"); a plain path is one target
                 val (targetIds, field) = evaluator.resolveTargets(item.target, ctx)
                 val value = evaluator.eval(item.value, ctx)
                 for (targetId in targetIds) {
@@ -1211,7 +1211,7 @@ class VelleSystem(
     }
 
     /**
-     * A `never` constrains every transaction's *final* state (README §21), and
+     * A `never` constrains every transaction's *final* state (Reference §21), and
      * state changes only through commits — so a prohibition reading nothing this
      * envelope wrote (and not reading the clock, which moves between envelopes)
      * held at the last transaction end and still holds. The relevance test is
@@ -1323,7 +1323,7 @@ class VelleSystem(
         )
     }
 
-    // ── the read protocol (README §22, the composed query; Read.kt) ──────────
+    // ── the read protocol (Reference §22, the composed query; Read.kt) ──────────
 
     private val queries by lazy { QueryEngine(this) }
 
@@ -1342,7 +1342,7 @@ class VelleSystem(
         (keyOf[id]?.value as? Comparable<Any>) ?: (id as Comparable<Any>)
 
     /**
-     * The reference an engineer holds for [id] (README §22): the row's store key
+     * The reference an engineer holds for [id] (Reference §22): the row's store key
      * when it has one; in memory, with no store, the handle itself is the key.
      */
     fun refFor(id: Long): Ref.Persisted {
@@ -1363,7 +1363,7 @@ class VelleSystem(
     }
 
     /**
-     * Fetch by identity (README §22): true when [id] is a current instance of
+     * Fetch by identity (Reference §22): true when [id] is a current instance of
      * [root] — a shape, or a refinement it is a member of — read from a fresh
      * snapshot outside a transaction, so the data class built next is one
      * consistent read.
@@ -1396,7 +1396,7 @@ class VelleSystem(
         name in model.refinements -> {
             val bases = model.basesOf(name)
             val ids = if (bases.size == 1) idsOfCandidates(bases.single(), queryCompiler().filterFor(RefName(name)))
-            else bases.flatMap { idsOf(it) } // a cross-base union: every operand's instances (README §9)
+            else bases.flatMap { idsOf(it) } // a cross-base union: every operand's instances (Reference §9)
             ids.filter { evaluator.memberOfRefExpr(it, RefName(name)) }
         }
         else -> throw IllegalArgumentException("unknown shape or refinement '$name'")
@@ -1405,7 +1405,7 @@ class VelleSystem(
     fun isMember(id: Long, refinement: String): Boolean =
         evaluator.memberOfRefExpr(id, RefName(refinement))
 
-    /** The concrete base shape of an instance — which operand a union-typed reference points at (README §9). */
+    /** The concrete base shape of an instance — which operand a union-typed reference points at (Reference §9). */
     fun shapeOf(id: Long): String =
         instance(id)?.shape ?: throw IllegalArgumentException("no instance $id")
 

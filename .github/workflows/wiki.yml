@@ -1,0 +1,47 @@
+# Publishes the wiki/ folder to the repository's GitHub wiki.
+#
+# The wiki is its own git repository (<repo>.wiki.git). On every push to main
+# that touches wiki/, this job clones it, replaces its content with the folder's
+# (deleting pages the folder no longer holds), and pushes. The folder is the
+# source of truth: an edit made on the wiki site is overwritten by the next run.
+#
+# The wiki must exist before the first run (create any page once through the
+# site), and the job's GITHUB_TOKEN must be allowed to write repository contents.
+name: Publish wiki
+
+on:
+  push:
+    branches: [main]
+    paths: ['wiki/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Replace the wiki's content with wiki/ and push
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" "${RUNNER_TEMP}/wiki"
+          rsync -a --delete --exclude .git wiki/ "${RUNNER_TEMP}/wiki/"
+          cd "${RUNNER_TEMP}/wiki"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "wiki already matches wiki/"
+            exit 0
+          fi
+          git commit -m "Publish wiki from ${GITHUB_REPOSITORY}@${GITHUB_SHA::12}"
+          git push

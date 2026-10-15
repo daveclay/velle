@@ -1,6 +1,6 @@
 # Singular references
 
-How a Velle spec reads "*the* one instance for this subject" — the `(Shape for expr)` query form — and exactly when that claim is legal. Companion to `README.md` §10 (`## Predicate expressions`, the `for`-query rule) and §20 ("Episodes as data"); diagnostics referenced here are `checks.md` V12/V13.
+How a Velle spec reads "*the* one instance for this subject" — the `(Shape for expr)` query form — and exactly when that claim is legal. Companion to Reference §10 (`## Predicate expressions`, the `for`-query rule) and §20 ("Episodes as data"); diagnostics referenced here are `checks.md` V12/V13.
 
 ## The forms
 
@@ -48,7 +48,7 @@ Everything else fails closed: use `latest`/`first`.
 
 ## Worked example: episodes
 
-The delinquency-episode pattern (`README.md` §20), where the singular reference closes the episode:
+The delinquency-episode pattern (Reference §20), where the singular reference closes the episode:
 
 ```
 -- an account is delinquent while its balance is negative
@@ -137,7 +137,7 @@ flag: (OpenDelinquencyFlag for this)                  -- ✔ where the proof hol
 flag: latest(OpenDelinquencyFlag where account == this)  -- ✔ always
 ```
 
-**A transient act as the subject.** `(TransientShape for x)` is illegal everywhere outside the act's own transaction — a transient act is not kept after its commit, so there is no instance to select (check V17; README §4, "Transient acts"). Read the durable outcomes its rules produced instead.
+**A transient act as the subject.** `(TransientShape for x)` is illegal everywhere outside the act's own transaction — a transient act is not kept after its commit, so there is no instance to select (check V17; Reference §4, "Transient acts"). Read the durable outcomes its rules produced instead.
 
 ## `exists` needs no proof
 

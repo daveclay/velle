@@ -67,7 +67,7 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     fun orphanReports(): List<OrphanReport> = system.instancesOf("OrphanReport").map { materializeOrphanReport(it) }
     fun orphanedListings(): List<OrphanedListing> = system.instancesOf("OrphanedListing").map { materializeOrphanedListing(it) }
 
-    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
     inner class Read {
@@ -327,7 +327,7 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
 -- deletion gate, `? initially required` as the reference that absorbs its
 -- target's deletion, the per-field copy discipline for what must survive —
 -- and the trigger family that tells a state's two exit causes apart
--- (README §13, "Deletion as a second exit cause"): `when leaving not
+-- (Reference §13, "Deletion as a second exit cause"): `when leaving not
 -- deleted`, `when deleted`, and `when leaving or deleted`.
 --
 -- Comment convention (as in payments.velle): plain comments tell the business
@@ -528,7 +528,7 @@ rule SweepOrphanedDrafts when (OrphanedListing where isDraft) {
     }
 }
 
-// ── act inputs (README §22, "External input"): one typed value per act,
+// ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewSeller(
     val name: String,
@@ -589,7 +589,7 @@ data class NewCloseAccount(
 }
 
 
-// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// ── the shapes as model objects: what a read returns (Reference §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,
 // a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
 // the record's membership at the moment of the read.

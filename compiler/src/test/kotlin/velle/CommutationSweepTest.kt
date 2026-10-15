@@ -249,7 +249,7 @@ class CommutationSweepTest {
             for (act in model.exposed) for (variant in 0..1) {
                 // the clock moves between world commits so `on create`
                 // timestamps discriminate (`latest ... by respondedOn` refuses
-                // ties, README §10) — but never between a *pair's* commits,
+                // ties, Reference §10) — but never between a *pair's* commits,
                 // where a moving clock would break commutation trivially
                 sys.advance(60)
                 val c = candidate(model, act, variant, salt++, pools)

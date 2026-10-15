@@ -349,7 +349,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun openTasks(): List<OpenTask> = system.instancesOf("OpenTask").map { materializeOpenTask(it) }
     fun overdueTasks(): List<OverdueTask> = system.instancesOf("OverdueTask").map { materializeOverdueTask(it) }
 
-    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
     inner class Read {
@@ -2095,7 +2095,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 --
 -- What the domain asks of the language, and where each answer lives:
 --   · a running value over an ordered series (peak inhibition; the area under
---     a disease-progress curve) — the predecessor recurrence (README §19)
+--     a disease-progress curve) — the predecessor recurrence (Reference §19)
 --   · a series ordered by a business datum, not by arrival — `latest ... by`
 --     the hour or day mark, so late-entered points slot into place
 --   · means over a series — `sum` / `count`, since there is no mean builtin
@@ -2184,7 +2184,7 @@ act Assay {
 -- and its predecessor's peak, where the predecessor is the latest earlier hour
 -- mark. A reading entered late slots in at its hour and every later reading's
 -- peak re-derives.
--- velle: the predecessor recurrence (README §19): a derived `previous` by
+-- velle: the predecessor recurrence (Reference §19): a derived `previous` by
 -- `latest ... by` a creation-fixed datum plus one self-referential hop; V14's
 -- descent certificate; `max` as the duplication- and order-safe fold
 act AssayReading {
@@ -2275,7 +2275,7 @@ act GreenhouseProtocol {
 -- peptide has a standing lab hit against that pathogen, refused as data
 -- otherwise. The request key lets the requester find the answer.
 -- velle: a transient act partitioned on evidence two shapes away; the
--- complement pair satisfies V18; the correlation-key idiom (README §4)
+-- complement pair satisfies V18; the correlation-key idiom (Reference §4)
 transient act RequestGreenhouseTrial {
     requestKey: text
     peptide: one Peptide
@@ -2348,7 +2348,7 @@ never (GreenhousePlot where treatment != "peptide" and treatment != "control")
 -- Treatment day: the plants are inoculated and the peptide applied. The
 -- record is the fact; a trial is treated once.
 -- velle: an act rather than an assignment into the trial, so the
--- prohibitions that read the treatment stay door-checked (README §21)
+-- prohibitions that read the treatment stay door-checked (Reference §21)
 act Treatment {
     trial: one GreenhouseTrial
     treatedAt: DateTime
@@ -2364,7 +2364,7 @@ shape TreatedTrial = GreenhouseTrial where treatments is not empty
 -- the standard plant-pathology summary of a severity series) accumulates by
 -- the trapezoid rule from the predecessor's running total, over the score in
 -- force.
--- velle: the ledger pattern (README §12) for the current score; the
+-- velle: the ledger pattern (Reference §12) for the current score; the
 -- recurrence again, over the day mark; mixed decimal and integer arithmetic
 -- in the trapezoid
 act PlotObservation {
@@ -2576,8 +2576,8 @@ shape ActiveTrial = TreatedTrial where not exists GreenhouseResult for this
 -- is the open excursion itself, entered into "closable" by the reading that
 -- brings the greenhouse back in band; it runs as its own transaction right
 -- after that reading lands, and the hourly check heals any it missed.
--- velle: episodes as data (README §20) over a drift refinement fed by a
--- sensor series; the closer is the compensation pattern (README §13) rather
+-- velle: episodes as data (Reference §20) over a drift refinement fed by a
+-- sensor series; the closer is the compensation pattern (Reference §13) rather
 -- than `when leaving`, and it is `after commit` with a backstop because the
 -- sibling-order check (checks.md V15) pairs it with the opener otherwise
 shape OutOfBand = Greenhouse where
@@ -2892,7 +2892,7 @@ rule NoticeHalt when (HaltedTrial where not exists HaltNotice for this) {
 -- The due date is a date the admin states, not a rule the spec computes:
 -- "seven days after treatment" would need a duration built from data
 -- (`treatedAt + interval days`), and a duration takes a literal count only.
--- velle: a static union as a relationship target (README §6) — one task
+-- velle: a static union as a relationship target (Reference §6) — one task
 -- shape for both stages. The pending count reads each stage's plots by
 -- comparing their trial to the union-typed reference: a greenhouse task
 -- matches no field plot and a field task no greenhouse plot, so the two
@@ -2999,7 +2999,7 @@ rule RefuseCancel when RefusedCancel {
     }
 }
 
-// ── act inputs (README §22, "External input"): one typed value per act,
+// ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewCrop(
     val name: String,
@@ -3376,7 +3376,7 @@ data class NewCancelTask(
 }
 
 
-// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// ── the shapes as model objects: what a read returns (Reference §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,
 // a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
 // the record's membership at the moment of the read.

@@ -68,7 +68,7 @@ internal class KindCatalog(private val model: Model) {
     /**
      * Can deleting an instance of [k]'s shape change what a predicate over that
      * same shape reads for OTHER instances? The deleted instance's own fields
-     * vanish with it — that is exit by deletion, not a predicate flip (README
+     * vanish with it — that is exit by deletion, not a predicate flip (Reference
      * §13), so a predicate-exit rule sees such a deletion only through the
      * consults the predicate makes of the shape.
      */

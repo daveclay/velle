@@ -34,7 +34,7 @@ only authored thing; the runtime, the tests, and every diagram are projections
 computed from it — same spec in, same artifact out, regenerated at every
 compile. A projection cannot drift, and cannot disagree with a sibling
 projection, because none of them is maintained; all of them are derived. This
-is the README's "code is fungible" stance (§2) extended to documentation.
+is the Reference's "code is fungible" stance (§2) extended to documentation.
 Determinism is also what makes the artifacts *reviewable*: a spec edit
 surfaces as an artifact diff in the pull request, the system's behavioral
 change visible as a picture change, with no human in the loop to forget to
@@ -77,7 +77,7 @@ proves their predicates disjoint (whole-expression complements, or
 complementary comparisons on the same reads — `balance <= 0` against
 `balance > 0`); everything else gets its own two-state axis. Where a proof is
 missing the diagram gets weaker, never wrong. The author-declared state
-partition (README §22) is the future sharpener — it would name the else-state
+partition (Reference §22) is the future sharpener — it would name the else-state
 and turn proved-disjoint axes into declared ones.
 
 Arrow directions are proven, not guessed, from three sources:
@@ -144,7 +144,7 @@ semantics:
   (`commitInvoice` is inert — a new invoice wakes no rule, visibly).
 - **Guard-disarm is a labeled self-loop.** A rule whose own write provably
   moves its own condition toward false gets a self-edge reading "disarms its
-  own guard" — the canonical-guard pattern (README §13) made visible as
+  own guard" — the canonical-guard pattern (Reference §13) made visible as
   negative feedback, for both the after-commit disarm and the
   sweep-with-memory.
 
@@ -185,7 +185,7 @@ and nothing begins), and unresolved conditions stay visible as "when
 1. **Static, per act** (compile time — built): the may-fire cascade
    from the derived trigger sets, with unresolved conditions left as guards.
    Complete, but branchy for deep cascades.
-2. **Example-grounded** (future — rides the `example` construct, README §22;
+2. **Example-grounded** (future — rides the `example` construct, Reference §22;
    `testgen.md` phase 3): spec-carried example instances collapse every `alt`,
    diamond, and guard to the branch actually taken — one clean diagram per
    named scenario, generated alongside the test that executes it. Drift

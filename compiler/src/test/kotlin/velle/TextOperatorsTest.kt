@@ -8,7 +8,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * The text operators (README §5, §10; OQ51 R1): `contains`, `starts with`,
+ * The text operators (Reference §5, §10; OQ51 R1): `contains`, `starts with`,
  * `ends with`, `like` — contextual words in comparison position, exact and
  * case-sensitive, typed text-on-both-sides, evaluated in memory, and rendered
  * to the pre-filter as a column test the authoritative predicate implies.

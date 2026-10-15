@@ -56,7 +56,7 @@ open class PeptidesPipelineTest {
 
         // a second reading at an hour already on file would leave the series unordered.
         // The prohibition reads nothing any rule writes, so it is checked at the door
-        // (README §21; evaluation.md "An exposed call"): over pre-state plus the act,
+        // (Reference §21; evaluation.md "An exposed call"): over pre-state plus the act,
         // before any rule runs. The caller gets the refusal the author wrote, not a
         // selector's tie error from the rules that read the series through
         // `latest ... by hoursElapsed`, and nothing lands

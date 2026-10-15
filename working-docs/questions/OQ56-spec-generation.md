@@ -20,9 +20,9 @@
 
 ## The generated suite's own reads
 
-- **`last(shape)` over the runtime's scan order.** The generated specs read the newest record with `last(shape)` (`SpecGen.kt`; `SpecSupport`'s `last(shape)`), and the store promises no order (README §22). **Wanted:** name an ordering datum. The plain accessors (`invoices()`) keep today's order until then (OQ57).
+- **`last(shape)` over the runtime's scan order.** The generated specs read the newest record with `last(shape)` (`SpecGen.kt`; `SpecSupport`'s `last(shape)`), and the store promises no order (Reference §22). **Wanted:** name an ordering datum. The plain accessors (`invoices()`) keep today's order until then (OQ57).
 - **The generated specs run in memory only.** `SpecSupport` builds its system directly. **Wanted:** a `newSystem()` hook so the generated specs run over a store as the flow tests do (`examples/*/output/src/test/kotlin/velle/*OverSqliteTest.kt`).
 
 ## Phases 2 and 3 (`testgen.md`)
 
-Boundary synthesis, the scenario DSL, no-refire cases (phase 2); the `example` construct, letting the spec declare its own named instances so the generated specs derive scenario data from the description (phase 3; README §22 "Spec-carried examples").
+Boundary synthesis, the scenario DSL, no-refire cases (phase 2); the `example` construct, letting the spec declare its own named instances so the generated specs derive scenario data from the description (phase 3; Reference §22 "Spec-carried examples").

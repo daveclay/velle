@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 /**
  * Drives orders.velle through the generated typed surface: the exposure
- * closure (README §6, "Inline part creation") end to end — one commit landing
+ * closure (Reference §6, "Inline part creation") end to end — one commit landing
  * container and parts, language-populated back-references, nested parts,
  * per-part rule firings, the derived aggregate on the container, bag
  * semantics for inline values, and the boundary refusal rolling back whole.

@@ -72,7 +72,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     fun overloadeds(): List<Overloaded> = system.instancesOf("Overloaded").map { materializeOverloaded(it) }
     fun untaggeds(): List<Untagged> = system.instancesOf("Untagged").map { materializeUntagged(it) }
 
-    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
     inner class Read {
@@ -185,7 +185,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
 
     companion object {
         private val SPEC = """
--- enrollment.velle — the collection constructs of README §6 exercised end-to-end:
+-- enrollment.velle — the collection constructs of Reference §6 exercised end-to-end:
 -- a declared m2m `many` (the owned edge set) with its inferred inverse, `many <scalar>`,
 -- reference-set act fields, whole-set replacement, `+`/`-` union and removal, fan-out
 -- assignment through a one-to-many, derived collection views (the renamed inverse),
@@ -269,7 +269,7 @@ never (Course where capacity < 0)
     }
 }
 
-// ── act inputs (README §22, "External input"): one typed value per act,
+// ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewAdvisor(
     val name: String,
@@ -354,7 +354,7 @@ data class NewAssignAdvisor(
 }
 
 
-// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// ── the shapes as model objects: what a read returns (Reference §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,
 // a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
 // the record's membership at the moment of the read.

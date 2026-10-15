@@ -4,19 +4,19 @@ package velle
 
 sealed interface Decl
 
-/** Base shape. `exposed` is set by the `act` declaration (README §22, "External input"). */
+/** Base shape. `exposed` is set by the `act` declaration (Reference §22, "External input"). */
 data class ShapeDecl(
     val name: String,
     val members: List<Member>,
     val exposed: Boolean = false,
-    /** `transient act` — an input to the state, not a member of it (README §4). */
+    /** `transient act` — an input to the state, not a member of it (Reference §4). */
     val transient: Boolean = false,
-    /** the act's closure — `act ... with` (README §6, "Inline part creation") */
+    /** the act's closure — `act ... with` (Reference §6, "Inline part creation") */
     val with: List<WithEntry> = emptyList(),
 ) : Decl
 
 /** One closure edge: an inverse-edge name on the enclosing level, with its own
- *  nested closure when the part arrives with parts of its own (README §6,
+ *  nested closure when the part arrives with parts of its own (Reference §6,
  *  "Inline part creation"; grammar.md, withEntry). */
 data class WithEntry(val name: String, val children: List<WithEntry> = emptyList())
 
@@ -28,7 +28,7 @@ data class RefinementDecl(
 ) : Decl
 
 /**
- * The trigger family (README §13, "Deletion as a second exit cause"): what a
+ * The trigger family (Reference §13, "Deletion as a second exit cause"): what a
  * rule reacts to. A record leaves a state for two different business reasons —
  * its predicate flipped, or it was deleted — and the rule says which.
  */
@@ -66,7 +66,7 @@ data class RuleDecl(
 }
 
 /**
- * A prohibition (README §21). Spelled `never <condition>`, or as a requirement,
+ * A prohibition (Reference §21). Spelled `never <condition>`, or as a requirement,
  * `Subject requires <predicate>`, which means `never (Subject where not <predicate>)`:
  * [target] is always the forbidden configuration, and [requirement] keeps the
  * declaration as the author wrote it, so rejections and diagnostics quote the
@@ -120,9 +120,9 @@ data class FrozenClause(val fields: List<String>) : Member
 data object UndeletableClause : Member
 
 sealed interface TypeRef
-/** `many` marks an owned collection of values (`tags: many text`) — never optional (README §6). */
+/** `many` marks an owned collection of values (`tags: many text`) — never optional (Reference §6). */
 data class ScalarType(val name: String, val optional: Boolean, val many: Boolean = false) : TypeRef
-/** `many` here is the owned edge set of a many-to-many; `one` the owned side of a one-to-many (README §6). */
+/** `many` here is the owned edge set of a many-to-many; `one` the owned side of a one-to-many (Reference §6). */
 data class RelType(val many: Boolean, val shape: String, val optional: Boolean) : TypeRef
 
 // ── Refinement expressions (grammar.md, "Refinement declarations") ───────────
@@ -150,7 +150,7 @@ data class FieldInit(val name: String, val value: Expr)
 
 /** `delete <path>` — instance-granularity mutation (OQ37): the instance ceases
  *  to be part of the state at this commit's close. The target is a literal
- *  static path, like assignment's (README §12), and always a to-one instance —
+ *  static path, like assignment's (Reference §12), and always a to-one instance —
  *  no fan-out deletes in v0. Semantics: the instance becomes transient at its
  *  final commit — fully present within the deleting transaction (rules fired
  *  by the commit are its last readers), removed at transaction close. */
@@ -167,11 +167,11 @@ data class BoolLit(val value: Boolean) : Expr
 data object NoneLit : Expr
 data object NowLit : Expr
 data object TodayLit : Expr
-/** The empty collection — the one collection literal (README §6); types only where a `many` is expected. */
+/** The empty collection — the one collection literal (Reference §6); types only where a `many` is expected. */
 data object EmptyLit : Expr
 data class DurationLit(val amount: Long, val unit: String) : Expr
 
-/** A constant the parser never produces: a value the query API (README §22,
+/** A constant the parser never produces: a value the query API (Reference §22,
  *  the composed query) supplies at the moment of asking — a date, a decimal,
  *  or an instance (`Value.VRef`) standing for "this customer". Evaluates to
  *  itself; the pre-filter compiler folds it like any literal. */
@@ -182,7 +182,7 @@ data class ValueLit(val value: Value) : Expr
 data class RefLit(val ref: Keyed) : Expr
 
 /** Set denotation as a value: `(Shape where pred)` / `(this.invoices where Overdue)` —
- *  legal in `many`-typed derived-property position and collection-valued contexts (README §6). */
+ *  legal in `many`-typed derived-property position and collection-valued contexts (Reference §6). */
 data class SetExpr(val collection: CollectionExpr) : Expr
 
 data class Seg(val name: String, val viaQdot: Boolean)
@@ -195,7 +195,7 @@ data class NotExpr(val inner: Expr) : Expr
 data class IfExpr(val condition: Expr, val thenExpr: Expr, val elseExpr: Expr) : Expr
 
 /** kind: "none" | "some" | "empty" | "notEmpty" | "refinement" */
-/** `toBe` records the requirement spelling of membership (`x to be R`, README §21); it is the same predicate as `x is R`. */
+/** `toBe` records the requirement spelling of membership (`x to be R`, Reference §21); it is the same predicate as `x is R`. */
 data class IsExpr(val subject: Expr, val kind: String, val refinement: String? = null, val toBe: Boolean = false) : Expr
 
 /** `exists Shape for expr` (sugar) or `exists (collection)` (general). */
@@ -206,7 +206,7 @@ data class ExistsExpr(
 ) : Expr
 
 /** count/sum/latest/first. `field` is sum's second argument; `orderBy` is the
- *  selectors' mandatory `by` list — the author's ordering statement (README §10):
+ *  selectors' mandatory `by` list — the author's ordering statement (Reference §10):
  *  no implicit ordering source exists. */
 data class AggCall(
     val name: String,

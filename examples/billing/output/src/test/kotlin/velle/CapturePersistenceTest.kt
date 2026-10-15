@@ -12,7 +12,7 @@ import velle.sqlite.SqliteStore
 import velle.generated.BillingSystem
 
 /**
- * Capture persistence over engineer-owned storage (README §8; evaluation.md U2):
+ * Capture persistence over engineer-owned storage (Reference §8; evaluation.md U2):
  * per-membership memory survives the process, the exit rule reads it as last
  * reader wherever the exit happens, and the retraction deletes the row. This
  * is exactly the failure the first store pass found — archive in one run, unarchive in the next, the

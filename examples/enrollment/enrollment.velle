@@ -1,4 +1,4 @@
--- enrollment.velle — the collection constructs of README §6 exercised end-to-end:
+-- enrollment.velle — the collection constructs of Reference §6 exercised end-to-end:
 -- a declared m2m `many` (the owned edge set) with its inferred inverse, `many <scalar>`,
 -- reference-set act fields, whole-set replacement, `+`/`-` union and removal, fan-out
 -- assignment through a one-to-many, derived collection views (the renamed inverse),

@@ -23,7 +23,7 @@ data class StoreKey(val value: Any)
 
 /**
  * A reference to a record: its concrete base shape and its store key. One type
- * for both sides of the store boundary (README §22): a store row carries it
+ * for both sides of the store boundary (Reference §22): a store row carries it
  * for every to-one field, and an application engineer holds it, typed by the
  * model object it points at — `Ref<Customer>` — and resolves it with
  * `read(ref)`. A model object is itself a `Ref<T>` to its own record, so it
@@ -57,7 +57,7 @@ interface Ref<out T> : Keyed {
 /**
  * What identifies a record: its concrete base shape and its store key. Every
  * reference is one, and so is every model object — including one typed as a
- * static union's interface (README §9), which is a model object of one of the
+ * static union's interface (Reference §9), which is a model object of one of the
  * union's operands and is why the identity sits here rather than on [Ref].
  */
 interface Keyed {
@@ -79,7 +79,7 @@ sealed interface RowRef {
  * every to-one reference is a [Ref.Persisted] built by the store, and a
  * declared `many` is a List of those (or of scalars) in membership order.
  *
- * A field typed with a static union (README §9) still arrives as a
+ * A field typed with a static union (Reference §9) still arrives as a
  * [Ref.Persisted] naming the concrete operand: keys are unique only per
  * table, so the store must have kept the shape beside the key — a bare key
  * cannot say whether `target` is Post#1 or Photo#1 (SqliteStore keeps a
@@ -129,7 +129,7 @@ interface StateResolver {
      * values as [Ref.Persisted]).
      *
      * Deliberately not defaulted: a capture is stored state the spec's exit
-     * rules depend on (the last-reader contract, README §13), so a store facing
+     * rules depend on (the last-reader contract, Reference §13), so a store facing
      * a capture-carrying spec must decide how to persist it — a table per
      * refinement, nullable columns on the base table, a discriminator — the
      * same catalog as any subtype-state mapping. [Model.captureSchemas]
@@ -160,8 +160,8 @@ interface StateResolver {
  * persisted, because create-then-exit inside one envelope nets to nothing. A
  * retraction and a [Deletion] are the contract's only removals — the first
  * legal because a capture is per-membership *memory*, not a record of
- * something that happened in the world (README §8; history is occurrence
- * facts, not captures), the second because the spec said `delete` (README §12).
+ * something that happened in the world (Reference §8; history is occurrence
+ * facts, not captures), the second because the spec said `delete` (Reference §12).
  */
 data class CommitSet(
     val created: List<Creation>,
@@ -175,7 +175,7 @@ data class CommitSet(
 
     data class Assign(val target: Ref.Persisted, val field: String, val value: Any?)
 
-    /** Per-membership memory for [refinement] on [instance] (README §8). */
+    /** Per-membership memory for [refinement] on [instance] (Reference §8). */
     data class Capture(val instance: RowRef, val refinement: String, val values: Map<String, Any?>)
     data class Retraction(val instance: Ref.Persisted, val refinement: String)
 

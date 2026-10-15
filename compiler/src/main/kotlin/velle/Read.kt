@@ -4,7 +4,7 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-// ── The read protocol (README §22, the composed query; OQ51 R5, R7, R10) ────
+// ── The read protocol (Reference §22, the composed query; OQ51 R5, R7, R10) ────
 //
 // A query is a value: a root (a shape or refinement name), an optional filter
 // written as the spec's own predicate AST over the root's members, a required
@@ -41,7 +41,7 @@ data class Page(val size: Int, val after: Cursor? = null) {
  * Where a page ended (R2): the last row's order datums plus its store key as
  * the hidden tie-break, so the next page starts after a pair that tells every
  * row apart. Opaque to callers — pass it back as [Page.after]. The key is never
- * an ordering datum the caller sees (README §5).
+ * an ordering datum the caller sees (Reference §5).
  */
 class Cursor internal constructor(internal val datums: List<Value>, internal val key: Comparable<Any>) {
     override fun toString() = "Cursor(${datums.joinToString()}; key=$key)"
@@ -70,11 +70,11 @@ internal class QueryEngine(private val system: VelleSystem) {
         val out = mutableListOf<Diagnostic>()
         when {
             root in model.transients ->
-                out.add(Diagnostic("F1", "'$root' is a transient act: an input to the state, never readable (README §4)"))
+                out.add(Diagnostic("F1", "'$root' is a transient act: an input to the state, never readable (Reference §4)"))
             root in model.shapes -> {}
             root in model.refinements -> {
                 if (model.basesOf(root).any { it in model.transients })
-                    out.add(Diagnostic("F1", "'$root' refines a transient act: never readable (README §4)"))
+                    out.add(Diagnostic("F1", "'$root' refines a transient act: never readable (Reference §4)"))
             }
             else -> out.add(Diagnostic("F1", "unknown shape or refinement '$root'"))
         }
@@ -93,7 +93,7 @@ internal class QueryEngine(private val system: VelleSystem) {
     private fun matching(q: Query): List<Long> {
         system.openReadSnapshot()
         val cond = RefName(q.root, q.where)
-        // a cross-base union (README §9) has no one table: every operand's instances, then the predicate
+        // a cross-base union (Reference §9) has no one table: every operand's instances, then the predicate
         val base = model.baseOf(q.root)
             ?: return model.basesOf(q.root).flatMap { system.idsOf(it) }.filter { system.evaluator.memberOfRefExpr(it, cond) }
         val filter = system.queryCompiler().filterFor(cond)
@@ -191,7 +191,7 @@ abstract class ScalarField<T : Any>(path: List<String>) : Fields(path) {
 
 class TextField(path: List<String>) : ScalarField<String>(path) {
     override fun lit(v: String): Expr = TextLit(v)
-    /** The text operators (README §10): exact and case-sensitive. */
+    /** The text operators (Reference §10): exact and case-sensitive. */
     infix fun contains(v: String): Expr = Binary("contains", pathExpr(), TextLit(v))
     infix fun startsWith(v: String): Expr = Binary("starts with", pathExpr(), TextLit(v))
     infix fun endsWith(v: String): Expr = Binary("ends with", pathExpr(), TextLit(v))

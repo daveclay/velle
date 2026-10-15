@@ -15,7 +15,7 @@ import velle.generated.OrdersSystem
 import velle.sqlite.SqliteStore
 
 /**
- * The orders flows over real storage — the exposure closure (README §6,
+ * The orders flows over real storage — the exposure closure (Reference §6,
  * "Inline part creation") landing container and parts as one storage
  * transaction, pending references resolved as rows are minted. Once through
  * the generic protocol, once through the generated typed store surface.

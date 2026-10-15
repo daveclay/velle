@@ -10,7 +10,7 @@ import velle.Commit
 import velle.generated.ModerationSystem
 
 /**
- * Deletion driven through the generated typed surface (README §12, §13;
+ * Deletion driven through the generated typed surface (Reference §12, §13;
  * OQ37) — the business-flow companion to the generated per-rule specs:
  * `delete` as a rule effect, the records a deletion leaves behind, the
  * `undeletable` gate refusing as data, the absorbing reference reading as

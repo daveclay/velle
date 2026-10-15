@@ -7,7 +7,7 @@ import velle.generated.OrdersSystem
 /**
  * The human-owned scenarios the generated orders specs demand (testgen.md).
  * An OrderLine enters state only through the exposure closure — an order
- * committed with one inline line (README §6, "Inline part creation").
+ * committed with one inline line (Reference §6, "Inline part creation").
  */
 class Givens(private val sys: OrdersSystem) : RequiredGivens {
 

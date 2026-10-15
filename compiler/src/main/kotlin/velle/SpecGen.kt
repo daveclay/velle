@@ -328,7 +328,7 @@ object SpecGen {
             val schedules = rule.triggers.filter { it != "commit" }
             val tickOnly = rule.preposition != "after" && schedules.isNotEmpty() && "commit" !in rule.triggers
             // the subject reads as what it is: the condition's base-shape instance —
-            // or, over a cross-base union, the static union it is drawn from (README §9)
+            // or, over a cross-base union, the static union it is drawn from (Reference §9)
             val base = model.baseOfExpr(rule.condition)
                 ?: (rule.condition as? RefName)?.name?.let { model.unionRootOf(it) }
             val subject = base?.replaceFirstChar { it.lowercase() } ?: "subject"
@@ -339,7 +339,7 @@ object SpecGen {
             // (`memberForRestoreService()`)
             val bare = (rule.condition as? RefName)?.takeIf { it.where == null }
             val viewType = "${base ?: "Unknown"}"
-            // a transient act is not kept after its commit (README §4): the given
+            // a transient act is not kept after its commit (Reference §4): the given
             // performs the commit and returns nothing; the spec asserts only the
             // durable outcomes — there is no subject to hold, test, or read
             val transientSubject = base != null && base in model.transients
@@ -376,7 +376,7 @@ object SpecGen {
                     if (rule.trigger.onPredicateExit) exitAct(rule)?.let { act -> exitCommit(act, subject, base)?.let { act to it } }
                     else null
                 if (rule.trigger == Trigger.DELETED) {
-                    // the deletion-side trigger (README §13): the "when" is the deleting commit
+                    // the deletion-side trigger (Reference §13): the "when" is the deleting commit
                     val deleteGiven = if (bare != null) "delete${bare.name}" else "deleteFor${rule.name}"
                     demandGiven(deleteGiven, "Perform the commit that deletes [$subject].", viewType, takesSubject = true)
                     body.line(2, "// when: the commit that deletes it")
@@ -517,7 +517,7 @@ object SpecGen {
         }
 
         /** True when an assignment target reads a collection anywhere on its route or writes one —
-         *  the generated scalar-equality assert would misread it (README §6). */
+         *  the generated scalar-equality assert would misread it (Reference §6). */
         fun traversesCollection(target: PathExpr, base: String?): Boolean {
             var scope = base ?: return true
             val segs = (listOf(target.root) + target.segs.map { it.name }).filterNot { it == "this" }

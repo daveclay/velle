@@ -13,7 +13,7 @@ import velle.CommitResult
 import velle.generated.GallerySystem
 
 /**
- * Cross-base unions (README §9 extended across unrelated shapes; OQ29) driven
+ * Cross-base unions (Reference §9 extended across unrelated shapes; OQ29) driven
  * through the generated typed surface — the business-flow companion to the
  * generated per-rule specs.
  */

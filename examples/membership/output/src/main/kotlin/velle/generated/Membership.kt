@@ -133,7 +133,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     fun memberWithDisputedCharges(): List<MemberWithDisputedCharge> = system.instancesOf("MemberWithDisputedCharge").map { materializeMemberWithDisputedCharge(it) }
     fun lateEscalatedMembers(): List<LateEscalatedMember> = system.instancesOf("LateEscalatedMember").map { materializeLateEscalatedMember(it) }
 
-    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
     inner class Read {
@@ -1196,7 +1196,7 @@ never (Visit where minutes <= 0)
 
 -- velle: unguarded self-referential fold on a backstopped cadence — the
 -- duplication hazard is real and signed on the field (`tolerates duplication`,
--- README §19)
+-- Reference §19)
 rule CountVisit when Visit on commit, Hourly {
     member.visitCount = member.visitCount + 1
 }
@@ -1204,7 +1204,7 @@ rule CountVisit when Visit on commit, Hourly {
 -- Each visit also pings the analytics pipeline. If a ping goes missing,
 -- nobody minds.
 -- velle: previews the external-effect escape — the ping may be dropped
--- (`tolerates loss`; README §11, "forced boundaries")
+-- (`tolerates loss`; Reference §11, "forced boundaries")
 shape AnalyticsPing {
     visit: one Visit
     pingedOn: DateTime
@@ -1518,7 +1518,7 @@ shape LateEscalatedMember = Member where
     }
 }
 
-// ── act inputs (README §22, "External input"): one typed value per act,
+// ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewPlan(
     val name: String,
@@ -1629,7 +1629,7 @@ data class NewAssignTicket(
 }
 
 
-// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// ── the shapes as model objects: what a read returns (Reference §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,
 // a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
 // the record's membership at the moment of the read.

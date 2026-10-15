@@ -16,7 +16,7 @@ import velle.sqlite.SqliteStore
 
 /**
  * The enrollment flows over real storage — the collection constructs of
- * README §6 persisted: a declared `many` is a junction table, `many text`
+ * Reference §6 persisted: a declared `many` is a junction table, `many text`
  * a value table, and the inferred inverses scan them. Once through the
  * generic protocol, once through the generated typed store surface.
  */

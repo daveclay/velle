@@ -507,7 +507,7 @@ class DomainAnalysis(private val model: Model) {
             if (!seenEvents.add(ek)) continue
             for (w in watchers) {
                 // a transient act's partitions are decided exactly once, at its
-                // creation commit (README §4); no other event can fire them
+                // creation commit (Reference §4); no other event can fire them
                 if (w.base in model.transients && !(e is Event.Create && e.shape == w.base)) continue
                 if (!relevant(w, e)) continue
                 for (subject in subjectAnchors(w, e)) {
@@ -746,7 +746,7 @@ class DomainAnalysis(private val model: Model) {
 
         /**
          * A read the validator licensed by narrowing (`target is Post` governing
-         * `target.author`, README §9): the name is no shared member of the union, but
+         * `target.author`, Reference §9): the name is no shared member of the union, but
          * an operand's own. Attribute the read to every operand that declares it,
          * at the same anchor — the over-approximation of the one operand the
          * branch actually reads, which is all the derivation ever claims.

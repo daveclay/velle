@@ -1,10 +1,10 @@
 # Worked patterns
 
-Worked spellings the normative documents cite and the README does not carry: each section states a settled idiom with one complete example and the reasoning that makes it the served spelling. Cited from README §8, `evaluation.md`, `checks.md`, and the example specs.
+Worked spellings the normative documents cite and the Reference does not carry: each section states a settled idiom with one complete example and the reasoning that makes it the served spelling. Cited from Reference §8, `evaluation.md`, `checks.md`, and the example specs.
 
 ## A cascade, concretely
 
-*The transaction shape README §11 defines: one act, the commits its rules fire, all-or-nothing. This is the shape the sibling-firing checks (`checks.md` V15, V16) reason about.*
+*The transaction shape Reference §11 defines: one act, the commits its rules fire, all-or-nothing. This is the shape the sibling-firing checks (`checks.md` V15, V16) reason about.*
 
 ```
 shape Account {
@@ -36,7 +36,7 @@ rule NotifyRestored when ServiceRestoration {
 
 A $50 `Deposit` against a −$20 account is **one transaction containing four commits**: the `Deposit` act; `ApplyDeposit`'s effects (at this commit the transition out of `Delinquent` occurs); `RestoreService`'s `ServiceRestoration`; `NotifyRestored`'s `RestorationEmail`. An unexpected error at any of them rolls back the whole envelope — the deposit never happened, and retrying the act re-produces the same sequence of commits intact.
 
-Because each firing is its own commit, transitions inside a transaction are ordinary commit-local transitions — nothing new to define. A mid-transaction blip is real: if a later commit in the same transaction (a reinstatement fee, say) drops the balance negative again, the account genuinely left and re-entered `Delinquent`, and rules watching either transition fire — the same stance README §17 takes ("commit-triggered rules observe every membership the commit stream produces").
+Because each firing is its own commit, transitions inside a transaction are ordinary commit-local transitions — nothing new to define. A mid-transaction blip is real: if a later commit in the same transaction (a reinstatement fee, say) drops the balance negative again, the account genuinely left and re-entered `Delinquent`, and rules watching either transition fire — the same stance Reference §17 takes ("commit-triggered rules observe every membership the commit stream produces").
 
 ## Conditioned acceptance is a definition
 
@@ -60,11 +60,11 @@ shape AcceptedOrder = Order where exists (AuthResponse where order == this and a
 shape DeclinedOrder = Order where exists (AuthResponse where order == this and not approved)
 ```
 
-Fulfillment rules hang off `AcceptedOrder`, never `Order`. The order landing as a fact ("placed, authorization pending") is honest; nothing downstream can act until membership says so. Exhaustiveness checking (README §8) proves the partition covers every order.
+Fulfillment rules hang off `AcceptedOrder`, never `Order`. The order landing as a fact ("placed, authorization pending") is honest; nothing downstream can act until membership says so. Exhaustiveness checking (Reference §8) proves the partition covers every order.
 
 ## Validation rejection is data
 
-*The second pattern. Also referenced from README §8 ("Frozen fields") and `evaluation.md`.*
+*The second pattern. Also referenced from Reference §8 ("Frozen fields") and `evaluation.md`.*
 
 There is nothing to throw and nowhere to throw it — Velle has no stack and no functions, so exception propagation doesn't exist; a validation failure is a shape or a refinement membership, never a control-flow event. A validate-and-reject flow needs no transaction machinery:
 
@@ -87,13 +87,13 @@ rule RecordRefusal when RefusedVoid {
 }
 ```
 
-The request is answered in its own transaction: the consequence never fires for the refused subset, and the refusal lands as a record the caller reads back (delivery is compilation's job), carrying what it needs to say from the request, since the request itself leaves nothing but its consequences (README §4). `ApplicableVoid`/`RefusedVoid` partition `VoidPayment`, exhaustiveness-checked — the forgotten `catch` block becomes a compile-time uncovered-subset error. Three levels of "invalid," only the first pre-commit: **(1)** can't inhabit the shape's type at all — rejected below the language, at the trust/input boundary, the `act` surface (README §22, "External input (`act`)"); **(2)** well-shaped, business-invalid — rejection-as-data, above; **(3)** well-shaped, valid, consequence forbidden — resolved as the `frozen` write-gate (README §8, "Frozen fields").
+The request is answered in its own transaction: the consequence never fires for the refused subset, and the refusal lands as a record the caller reads back (delivery is compilation's job), carrying what it needs to say from the request, since the request itself leaves nothing but its consequences (Reference §4). `ApplicableVoid`/`RefusedVoid` partition `VoidPayment`, exhaustiveness-checked — the forgotten `catch` block becomes a compile-time uncovered-subset error. Three levels of "invalid," only the first pre-commit: **(1)** can't inhabit the shape's type at all — rejected below the language, at the trust/input boundary, the `act` surface (Reference §22, "External input (`act`)"); **(2)** well-shaped, business-invalid — rejection-as-data, above; **(3)** well-shaped, valid, consequence forbidden — resolved as the `frozen` write-gate (Reference §8, "Frozen fields").
 
-*`VoidPayment` is a `transient act` (README §4), so its partition is evaluated once, at its own commit, and cannot drift as the invoice's state moves. A bare state partition over a **persistent** act is drift-exposed (`checks.md` A4): the act persists, so its partition is re-evaluated at every later change to the state it reads. Where the request itself must be a durable record, the partition is scoped to unhandled requests and anchored by each side's outcome evidence (the handled-once act partition, `examples/payments/payments.velle`).*
+*`VoidPayment` is a `transient act` (Reference §4), so its partition is evaluated once, at its own commit, and cannot drift as the invoice's state moves. A bare state partition over a **persistent** act is drift-exposed (`checks.md` A4): the act persists, so its partition is re-evaluated at every later change to the state it reads. Where the request itself must be a durable record, the partition is scoped to unhandled requests and anchored by each side's outcome evidence (the handled-once act partition, `examples/payments/payments.velle`).*
 
 ## Three answers to one request
 
-*Which of three mechanisms a sentence about a request belongs to (README §21). From the fill counter in `examples/pharmacy/pharmacy.velle`.*
+*Which of three mechanisms a sentence about a request belongs to (Reference §21). From the fill counter in `examples/pharmacy/pharmacy.velle`.*
 
 A request can be answered three ways, and they are not interchangeable:
 
@@ -105,7 +105,7 @@ One question decides which: does the request's own handling change what the sent
 
 ## Materialize, then decide
 
-*The transient-act idiom for asynchronous work and external effects (README §4, §11).*
+*The transient-act idiom for asynchronous work and external effects (Reference §4, §11).*
 
 A bid over $10,000 cannot be accepted until the fraud service answers, and a transient act must be fully handled in its own transaction. That is not a wall: the handler materializes the *undecided state* synchronously, and the decision machinery hangs off the durable intent:
 
@@ -140,7 +140,7 @@ rule ApplyReviewedBid when (BidReview where exists (FraudVerdict where review ==
 }
 ```
 
-The transient act *was* fully handled at its commit: its handling produced the pending review. Everything asynchronous happens to the durable intent, which is intent-before-effect (README §11). The same move answers external effects (notify the winner: materialize a `SettlementIntent`, and the `after commit` plus backstop machinery hangs off it, since an `after commit` rule can never be triggered by the act itself, the act being gone). History acts, evidence acts, and idempotent ingestion each use the same idiom: materialize a durable record and copy the payload forward, so the durable/transient split is an explicit authoring decision.
+The transient act *was* fully handled at its commit: its handling produced the pending review. Everything asynchronous happens to the durable intent, which is intent-before-effect (Reference §11). The same move answers external effects (notify the winner: materialize a `SettlementIntent`, and the `after commit` plus backstop machinery hangs off it, since an `after commit` rule can never be triggered by the act itself, the act being gone). History acts, evidence acts, and idempotent ingestion each use the same idiom: materialize a durable record and copy the payload forward, so the durable/transient split is an explicit authoring decision.
 
 ## A wide domain: the two authors
 

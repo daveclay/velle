@@ -53,7 +53,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     fun vipPurchases(): List<VipPurchase> = system.instancesOf("VipPurchase").map { materializeVipPurchase(it) }
     fun certifiedMembers(): List<CertifiedMember> = system.instancesOf("CertifiedMember").map { materializeCertifiedMember(it) }
 
-    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
     inner class Read {
@@ -281,9 +281,9 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 -- the fifth Velle spec, written to put the prover's vocabulary on display in
 -- business terms. Every construct here that LOOKS like it could race or
 -- recurse forever is accepted because a stated fact about the data proves it
--- safe: a `never` the compiler spends as a proof input (README §21), a
+-- safe: a `never` the compiler spends as a proof input (Reference §21), a
 -- predecessor recurrence whose ordering lives in a datum rather than in
--- firing order (README §19), sibling rules whose effects provably push one
+-- firing order (Reference §19), sibling rules whose effects provably push one
 -- way, and a condition-only read the commit semantics pin (evaluation.md,
 -- "Processing one commit").
 --
@@ -310,7 +310,7 @@ shape Member {
     tier: text initially "basic"
 
     -- Who brought this whole branch in: walk the referral chain to its end.
-    -- Self-reference one hop through a relationship (README §7) — legal
+    -- Self-reference one hop through a relationship (Reference §7) — legal
     -- because the walk provably bottoms out, and the proof input is the
     -- `never` below: no member's referrer can point back at them, so the
     -- chain descends and the base case (`referrer is none`) is reached.
@@ -344,7 +344,7 @@ never (Member where referrer == this)
 -- so a payment that arrives late (posted today, dated last month) slots into
 -- its true position and every later payment's streak re-derives to the truth.
 -- A stored streak counter updated per arrival would have folded the late
--- payment last and kept the wrong answer (README §19, "Order-dependent folds
+-- payment last and kept the wrong answer (Reference §19, "Order-dependent folds
 -- at a tick: the predecessor recurrence").
 -- velle: the predecessor recurrence — a derived to-one `previous` whose
 -- selector strictly descends a datum fixed at creation (checks.md V14, the
@@ -458,7 +458,7 @@ rule IssueKeycard when (CertifiedMember where not exists Keycard for this) {
     }
 }
 
-// ── act inputs (README §22, "External input"): one typed value per act,
+// ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewJoin(
     val name: String,
@@ -503,7 +503,7 @@ data class NewEnrollment(
 }
 
 
-// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// ── the shapes as model objects: what a read returns (Reference §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,
 // a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
 // the record's membership at the moment of the read.

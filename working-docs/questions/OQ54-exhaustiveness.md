@@ -1,8 +1,8 @@
 # OQ54 — The exhaustiveness engine: V9, every request answered, `states of`
 
-**Status:** open (2026-10-14) — README §8 names refinement exhaustiveness as a compiler goal; nothing has built it, and three settled designs lean on it
-**In plain terms:** can the compiler prove that a set of refinements covers every instance of a shape in every reachable state? Three things wait on the answer: a transient request must provably get a response (V18 today proves only a complement pair); a declared state partition (`states of Invoice = Draft | Issued | Paid | Voided`, README §22) is that proof made into a declaration; and deletion's positive-exhaustive sentence ("deletable only in Draft") was ruled to ride the partition declaration.
-**See:** README §8 (the goal), §22 "State partition declaration" · `checks.md` V18 (the complement slice) · README §8 "Frozen fields" (`undeletable`; the gate is negative only) · OQ43 §2 (V18's reach over transient parts)
+**Status:** open (2026-10-14) — Reference §8 names refinement exhaustiveness as a compiler goal; nothing has built it, and three settled designs lean on it
+**In plain terms:** can the compiler prove that a set of refinements covers every instance of a shape in every reachable state? Three things wait on the answer: a transient request must provably get a response (V18 today proves only a complement pair); a declared state partition (`states of Invoice = Draft | Issued | Paid | Voided`, Reference §22) is that proof made into a declaration; and deletion's positive-exhaustive sentence ("deletable only in Draft") was ruled to ride the partition declaration.
+**See:** Reference §8 (the goal), §22 "State partition declaration" · `checks.md` V18 (the complement slice) · Reference §8 "Frozen fields" (`undeletable`; the gate is negative only) · OQ43 §2 (V18's reach over transient parts)
 
 ---
 
@@ -59,7 +59,7 @@ What v0 has (`checks.md` V18): coverage is proven when some answer is the bare a
 
 ## 2. `states of`: the partition declaration, and the sentence deletion handed it
 
-README §22 carries the construct. One requirement was attached by the deletion rulings (README §8 "Frozen fields", `undeletable`): the deletion gate is negative and state-scoped (`undeletable` on the state where deletion is denied), and with richer state the negative spelling becomes N declarations that silently under-cover the moment a state is added:
+Reference §22 carries the construct. One requirement was attached by the deletion rulings (Reference §8 "Frozen fields", `undeletable`): the deletion gate is negative and state-scoped (`undeletable` on the state where deletion is denied), and with richer state the negative spelling becomes N declarations that silently under-cover the moment a state is added:
 
 ```
 shape Draft     = Listing where status == "draft"

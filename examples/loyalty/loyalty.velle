@@ -2,9 +2,9 @@
 -- the fifth Velle spec, written to put the prover's vocabulary on display in
 -- business terms. Every construct here that LOOKS like it could race or
 -- recurse forever is accepted because a stated fact about the data proves it
--- safe: a `never` the compiler spends as a proof input (README §21), a
+-- safe: a `never` the compiler spends as a proof input (Reference §21), a
 -- predecessor recurrence whose ordering lives in a datum rather than in
--- firing order (README §19), sibling rules whose effects provably push one
+-- firing order (Reference §19), sibling rules whose effects provably push one
 -- way, and a condition-only read the commit semantics pin (evaluation.md,
 -- "Processing one commit").
 --
@@ -31,7 +31,7 @@ shape Member {
     tier: text initially "basic"
 
     -- Who brought this whole branch in: walk the referral chain to its end.
-    -- Self-reference one hop through a relationship (README §7) — legal
+    -- Self-reference one hop through a relationship (Reference §7) — legal
     -- because the walk provably bottoms out, and the proof input is the
     -- `never` below: no member's referrer can point back at them, so the
     -- chain descends and the base case (`referrer is none`) is reached.
@@ -65,7 +65,7 @@ never (Member where referrer == this)
 -- so a payment that arrives late (posted today, dated last month) slots into
 -- its true position and every later payment's streak re-derives to the truth.
 -- A stored streak counter updated per arrival would have folded the late
--- payment last and kept the wrong answer (README §19, "Order-dependent folds
+-- payment last and kept the wrong answer (Reference §19, "Order-dependent folds
 -- at a tick: the predecessor recurrence").
 -- velle: the predecessor recurrence — a derived to-one `previous` whose
 -- selector strictly descends a datum fixed at creation (checks.md V14, the

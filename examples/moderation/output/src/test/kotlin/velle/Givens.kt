@@ -7,7 +7,7 @@ import velle.generated.*
  * The human-owned scenarios the generated moderation specs demand (testgen.md).
  * A listing enters as a draft under a seller; it leaves Draft by publication
  * (the predicate flips) or by discard (the row is deleted) — the two exit
- * causes the spec's trigger family tells apart (README §13).
+ * causes the spec's trigger family tells apart (Reference §13).
  */
 class Givens(private val sys: ModerationSystem) : RequiredGivens {
 

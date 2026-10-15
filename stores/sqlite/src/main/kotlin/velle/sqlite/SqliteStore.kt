@@ -23,7 +23,7 @@ import java.time.Instant
 import java.time.LocalDate
 
 /**
- * A generic, model-driven store over SQLite: the framework role in README §22's
+ * A generic, model-driven store over SQLite: the framework role in Reference §22's
  * architecture, implementing the runtime's resolver and commit-callback
  * protocol (compiler/.../Hydration.kt; evaluation.md "The universal
  * transaction") for any spec. It contains no business names — every example's
@@ -36,20 +36,20 @@ import java.time.LocalDate
  * - One table per non-transient shape, one column per stored scalar, to-one
  *   reference, or timestamp field. Derived properties have no columns — they
  *   recompute from these rows on read.
- * - A reference typed with a static union (README §9, `target: one Content`)
+ * - A reference typed with a static union (Reference §9, `target: one Content`)
  *   gets a sibling discriminator column, `<field>__shape`, holding the concrete
  *   base shape: the protocol's [Ref.Persisted] always names the concrete shape,
  *   and keys are only unique per table, so the key alone cannot say which row
  *   a union-typed column points at.
- * - A collection field (`many Course`, `many text`; README §6) is a junction
+ * - A collection field (`many Course`, `many text`; Reference §6) is a junction
  *   table `<Shape>__<field>` — one row per member, in membership order, with a
  *   discriminator column when the element type is a union.
- * - Per-membership capture memory (README §8) is a table per capture-carrying
+ * - Per-membership capture memory (Reference §8) is a table per capture-carrying
  *   refinement, one row per current membership, deleted on exit
  *   ([Model.captureSchemas] states exactly what must survive).
  * - Keys are `INTEGER PRIMARY KEY AUTOINCREMENT`: a deleted row's key is never
  *   reused. A surviving row may still hold a reference at a deleted one — the
- *   absorbing reference (README §12), which the runtime reads as absent — and
+ *   absorbing reference (Reference §12), which the runtime reads as absent — and
  *   that reading is only sound while no new row can inherit the dead key.
  *
  * Column encoding: references and integer/long as INTEGER, decimal/double as
@@ -259,7 +259,7 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
                 ?: return degrade(positive)
             val encoded = encode(f.value, colType) ?: return degrade(positive)
             val col = """$alias."${f.field}""""
-            // the text operators (README §10) render to LIKE with `\` as the escape
+            // the text operators (Reference §10) render to LIKE with `\` as the escape
             // character; SQLite's LIKE folds ASCII case, so the rendering may
             // over-return against the case-sensitive predicate — legal under the
             // superset contract, and the evaluator decides in memory
@@ -489,7 +489,7 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
     }
 
     /**
-     * The row removal (README §12): the row, its own collections, and any
+     * The row removal (Reference §12): the row, its own collections, and any
      * capture memory keyed on it go; the key is never reused (AUTOINCREMENT).
      * References *at* the row from surviving rows stay as they are — the
      * runtime reads them as absent (the absorbing reference). A store that

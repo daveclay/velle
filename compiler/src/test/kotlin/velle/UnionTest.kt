@@ -7,7 +7,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * Cross-base unions (README §9 extended across unrelated shapes; OQ29): the
+ * Cross-base unions (Reference §9 extended across unrelated shapes; OQ29): the
  * validator's union rules, and the runtime driven end-to-end through
  * gallery.velle.
  */
@@ -37,7 +37,7 @@ class UnionTest {
         assertEquals(setOf("Post", "Photo"), model.basesOf("Content"))
         assertTrue("comments" in model.membersOf("Photo"), "inverse on each operand")
         assertTrue("comments" in model.membersOf("Content"), "the one shared member")
-        assertTrue("author" !in model.membersOf("Content"), "two declarations that agree are not shared (README §9)")
+        assertTrue("author" !in model.membersOf("Content"), "two declarations that agree are not shared (Reference §9)")
     }
 
     @Test

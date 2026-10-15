@@ -1,6 +1,6 @@
 # OQ35 — Cross-shape structural mixins
 
-**Status:** open — post-v0; design sketched 2026-09-13, syntax undecided. README §9 still points at a §22 item that does not exist; restore the item when this promotes.
+**Status:** open — post-v0; design sketched 2026-09-13, syntax undecided. Reference §9 still points at a §22 item that does not exist; restore the item when this promotes.
 **In plain terms:** can unrelated shapes share one declaration — a field like `due`, a trait like "overdue", a field like `member` — so that one rule or one refinement covers all of them, without pretending they share a hierarchy?
 
 ---
@@ -9,14 +9,14 @@
 
 Two sentences that today need one declaration per shape:
 
-- "A ticket or an invoice is overdue when its due date has passed." README §9 names this as unsolved: `Overdue` over `SupportTicket.due` and `Invoice.due` is two refinements with the same predicate.
-- "Any change to a member's profile touches the profile." A `ChangeEmail` and a `ChangeName` that each declare `member: one Member`; a union of the two exposes neither, because README §9 shares only what both operands inherit from *one* declaration, and a rule over the union reaches `member` only by a branch per operand that reads absurdly (README §9, the cross-base property rule).
+- "A ticket or an invoice is overdue when its due date has passed." Reference §9 names this as unsolved: `Overdue` over `SupportTicket.due` and `Invoice.due` is two refinements with the same predicate.
+- "Any change to a member's profile touches the profile." A `ChangeEmail` and a `ChangeName` that each declare `member: one Member`; a union of the two exposes neither, because Reference §9 shares only what both operands inherit from *one* declaration, and a rule over the union reaches `member` only by a branch per operand that reads absurdly (Reference §9, the cross-base property rule).
 
 Both are the same gap: there is no way to make one declaration part of several shapes.
 
 ## 2. The sketch
 
-A **mixin** is a shape fragment other shapes include. It declares properties like any shape body; it has no instances of its own; its member set is every instance of every including shape. Syntax is a placeholder — `includes` here; `with` is taken by the exposure closure (README §6) and `=` by refinements.
+A **mixin** is a shape fragment other shapes include. It declares properties like any shape body; it has no instances of its own; its member set is every instance of every including shape. Syntax is a placeholder — `includes` here; `with` is taken by the exposure closure (Reference §6) and `=` by refinements.
 
 ```
 shape MemberChange {                      -- a mixin: no instances of its own
@@ -41,7 +41,7 @@ rule TouchProfile when MemberChange {
 }
 ```
 
-Because `member` is one declaration both acts inherit, README §9's existing rule exposes it — through the mixin, and through any union of includers (`ChangeEmail or ChangeName`) — with no change to the rule.
+Because `member` is one declaration both acts inherit, Reference §9's existing rule exposes it — through the mixin, and through any union of includers (`ChangeEmail or ChangeName`) — with no change to the rule.
 
 The trait case is the same construct plus a refinement over it:
 
@@ -73,8 +73,8 @@ shape Reminder {
 ## 3. What a mixin is, in the language's own terms
 
 - **A rule subject and a refinement base.** `when MemberChange` fires once per entrant of any includer; `Dated where due < today` is an ordinary refinement whose base is the mixin. Entry into a bare mixin is creation of an instance of any includer.
-- **A stable field type.** `about: one Dated` is legal by the same test as the static-union field-type rule (README §6): the member set is fixed whole-spec by the `includes` declarations, never by a predicate, so it cannot drift (README §6's base-shape rule, `checks.md` F2).
-- **An open union.** Its members are whoever opts in. README §9's cross-base `or` is the closed form — exactly the named operands. The two compose: `ChangeEmail or ChangeName` is a subset of `MemberChange`, and exposes `member` because both operands inherit it from the mixin.
+- **A stable field type.** `about: one Dated` is legal by the same test as the static-union field-type rule (Reference §6): the member set is fixed whole-spec by the `includes` declarations, never by a predicate, so it cannot drift (Reference §6's base-shape rule, `checks.md` F2).
+- **An open union.** Its members are whoever opts in. Reference §9's cross-base `or` is the closed form — exactly the named operands. The two compose: `ChangeEmail or ChangeName` is a subset of `MemberChange`, and exposes `member` because both operands inherit it from the mixin.
 - **Not a base shape.** A mixin cannot be created (`MemberChange from { ... }` is refused), cannot be an act, and has no inverses of its own beyond those its declarations infer.
 
 ## 4. Rulings the construct forces
@@ -82,11 +82,11 @@ shape Reminder {
 Proposed; each owed a home when this promotes.
 
 - **Not instantiable.** If `MemberChange` could have instances of its own, the else branch after `is ChangeEmail` would not be `ChangeName`, and narrowing exhaustiveness over includers would die. As a pure fragment, members are exactly the includers, known whole-spec.
-- **Collision.** Two mixins each declaring `member`, included by one shape, is README §9's existing same-name collision between distinct declarations — an error. One mixin reached twice (a mixin including a mixin, included by two paths) is one declaration and is fine, as §9 already says for a shared base. An includer redeclaring a mixin's field collides the same way.
+- **Collision.** Two mixins each declaring `member`, included by one shape, is Reference §9's existing same-name collision between distinct declarations — an error. One mixin reached twice (a mixin including a mixin, included by two paths) is one declaration and is fine, as §9 already says for a shared base. An includer redeclaring a mixin's field collides the same way.
 - **Inverses.** `MemberChange.member: one Member` infers one `memberChanges` collection on `Member`, spanning every includer, named from the declaring mixin. A per-includer view (`changeEmails: many ChangeEmail = (ChangeEmail where member == this)`) is the derived spelling. V19's both-sides and collision checks run once, on the mixin's declaration.
 - **Overlap.** Two mixins overlap exactly on the shapes including both; a mixin and a base overlap iff the base includes it; distinct bases stay disjoint. One static axiom for V1, V5, V9, and V27.
-- **Transience.** A mixin included by a transient act is fine as a source of that act's fields. A field typed with the mixin (`about: one Dated`) is refused by V17 if *any* includer is transient — a connected diagnostic naming the field and the transient includer. A rule over a mixin with transient includers is the case README §9 refuses for a union with a transient operand — the mixin is the construct that refusal waits for.
-- **Acts.** An act includer's generated input value carries the mixin's stored fields like its own (README §22, "External input"); `initially` and `timestamp` declared in a mixin are V21 errors on an act includer exactly as if declared inline.
+- **Transience.** A mixin included by a transient act is fine as a source of that act's fields. A field typed with the mixin (`about: one Dated`) is refused by V17 if *any* includer is transient — a connected diagnostic naming the field and the transient includer. A rule over a mixin with transient includers is the case Reference §9 refuses for a union with a transient operand — the mixin is the construct that refusal waits for.
+- **Acts.** An act includer's generated input value carries the mixin's stored fields like its own (Reference §22, "External input"); `initially` and `timestamp` declared in a mixin are V21 errors on an act includer exactly as if declared inline.
 - **Derived properties in a mixin** read only the mixin's own declarations; `this` is the including instance. A mixin's derived property that needs an includer's field is a refinement over the mixin narrowed by `is <Includer>`, or belongs on the includer.
 - **Refinement bodies over a mixin** are ordinary: `frozen due` names a stored field every member has; `captured` reads at the predicate's entry. The bare mixin's own body carries declarations, not refinement members — `frozen`/`captured` there are position errors (F3).
 - **Closures.** `act Member { ... } with memberChanges` would name a mixin-inferred inverse whose parts are of several shapes; refused — a closure edge's part shape must be one shape (V22). Per-includer views are the served spelling.
@@ -95,7 +95,7 @@ Proposed; each owed a home when this promotes.
 
 ## 5. Relation to cross-base `or`
 
-README §9 extends `or` across unrelated bases under its unchanged property rule, which leaves the rule-subject use verbose until unrelated shapes can share a declaration. This construct is that sharing. The division of labour: a mixin is the open union with shared fields; cross-base `or` is the closed enumeration with none of its own; every README §6/§9 ruling about polymorphic *references* (`for` matching, comparison typing, boundary discriminators, deletion, contention) applies to mixin-typed fields unchanged.
+Reference §9 extends `or` across unrelated bases under its unchanged property rule, which leaves the rule-subject use verbose until unrelated shapes can share a declaration. This construct is that sharing. The division of labour: a mixin is the open union with shared fields; cross-base `or` is the closed enumeration with none of its own; every Reference §6/§9 ruling about polymorphic *references* (`for` matching, comparison typing, boundary discriminators, deletion, contention) applies to mixin-typed fields unchanged.
 
 ## 6. Open
 

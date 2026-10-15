@@ -40,7 +40,7 @@ val KEYWORDS: Set<String> = setOf(
 val DURATION_UNITS = setOf("seconds", "minutes", "hours", "days", "weeks")
 
 /**
- * The text comparison operators (README §10; OQ51 R1): contextual words that
+ * The text comparison operators (Reference §10; OQ51 R1): contextual words that
  * read as an operator only between two value expressions — `contains`, `like`,
  * and the pairs `starts with` / `ends with`. The operator's name in the AST is
  * the spelling, space included. All are exact and case-sensitive; `like` takes

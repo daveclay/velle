@@ -42,7 +42,7 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
     fun customizations(): List<Customization> = system.instancesOf("Customization").map { materializeCustomization(it) }
     fun reservations(): List<Reservation> = system.instancesOf("Reservation").map { materializeReservation(it) }
 
-    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
     inner class Read {
@@ -166,7 +166,7 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
 
     companion object {
         private val SPEC = """
--- The exposure closure (README §6, "Inline part creation"): an order arrives
+-- The exposure closure (Reference §6, "Inline part creation"): an order arrives
 -- together with its line items — the parts don't exist yet, so they can't be
 -- references; they are values created in the act's commit. `act ... with`
 -- names the inverse edges that ride the closure; back-references are
@@ -212,14 +212,14 @@ rule ReserveStock when OrderLine {
     Reservation from { line: this, quantity: this.quantity }
 }
 
--- a constraint no rule can move, checked at the door (README §21) — a closure
+-- a constraint no rule can move, checked at the door (Reference §21) — a closure
 -- carrying a non-positive quantity is refused whole, nothing lands
 never (OrderLine where quantity <= 0)
 """
     }
 }
 
-// ── act inputs (README §22, "External input"): one typed value per act,
+// ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewCustomer(
     val name: String,
@@ -251,7 +251,7 @@ data class NewOrder(
     }
 }
 
-// ── closure input values (README §6, "Inline part creation") ──
+// ── closure input values (Reference §6, "Inline part creation") ──
 data class NewCustomization(
     val note: String,
 ) {
@@ -273,7 +273,7 @@ data class NewOrderLine(
 }
 
 
-// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// ── the shapes as model objects: what a read returns (Reference §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,
 // a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
 // the record's membership at the moment of the read.

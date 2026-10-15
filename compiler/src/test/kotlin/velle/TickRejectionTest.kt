@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
  * A tick rejected by a constraint (`evaluation.md`, "Ticks"). V29 refuses a
  * scheduled rule whose record a constraint consults, and V30 refuses a
  * constraint that reads the clock, since the books can age into it with no
- * act to refuse (README §21). The runtime backstop remains for a record that
+ * act to refuse (Reference §21). The runtime backstop remains for a record that
  * aged into a constraint the compiler never saw: run unvalidated, the tick
  * throws [TickRejected] carrying the same [Rejection] an act's refusal
  * returns, with the rule and the record it ran for in the act's place.

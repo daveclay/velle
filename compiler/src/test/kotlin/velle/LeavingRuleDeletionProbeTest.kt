@@ -19,7 +19,7 @@ import kotlin.test.assertTrue
  *    validates clean, and under v0's original default (every exit rule
  *    fired at the deleting commit) a deletion counterfeited the transition
  *    the rule was written for — a publication notice for a listing that
- *    was never published. Under the settled semantics (OQ37-R12, README
+ *    was never published. Under the settled semantics (OQ37-R12, Reference
  *    §13) bare `when leaving` fires only when the predicate flips, never at
  *    deletion: the probe asserts no notice, and the A6 advisory (OQ37-R18)
  *    names the reaching deleter;

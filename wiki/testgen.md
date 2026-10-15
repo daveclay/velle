@@ -1,7 +1,7 @@
 # Velle Spec Generation (testgen)
 
 The design for generated executable specs — the third artifact of the transpile
-output (README §22, "The extension framework"): alongside the runtime surface,
+output (Reference §22, "The extension framework"): alongside the runtime surface,
 the transpiler emits **tests derived from the Velle spec**, organized so a human
 can *find* the use case. The philosophy this serves: reading code is the hardest
 problem in software; Velle surfaces what matters — the spec, and readable,
@@ -92,4 +92,4 @@ reach the interesting state* is human judgment. The contract:
    fold value assertions via the evaluator.
 3. **The `example` construct**: the spec itself carries named example instances,
    collapsing the human-givens tier into full derivation — the description
-   becomes self-illustrating (README §22).
+   becomes self-illustrating (Reference §22).

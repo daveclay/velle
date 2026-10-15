@@ -65,7 +65,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     fun postComments(): List<PostComment> = system.instancesOf("PostComment").map { materializePostComment(it) }
     fun photoComments(): List<PhotoComment> = system.instancesOf("PhotoComment").map { materializePhotoComment(it) }
 
-    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
     inner class Read {
@@ -260,7 +260,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
     companion object {
         private val SPEC = """
--- gallery.velle — cross-base unions exercised end-to-end (README §9 extended
+-- gallery.velle — cross-base unions exercised end-to-end (Reference §9 extended
 -- across unrelated shapes; OQ29): a static union as a field's target type (the
 -- polymorphic association), the inverse it infers onto every operand, a derived
 -- body on the union, a refinement and a rule over the union, per-operand
@@ -338,7 +338,7 @@ shape PhotoComment = Comment where target is Photo
     }
 }
 
-// ── act inputs (README §22, "External input"): one typed value per act,
+// ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewMember(
     val name: String,
@@ -381,7 +381,7 @@ data class NewComment(
 }
 
 
-// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// ── the shapes as model objects: what a read returns (Reference §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,
 // a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
 // the record's membership at the moment of the read.

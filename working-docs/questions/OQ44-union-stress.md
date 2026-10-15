@@ -2,7 +2,7 @@
 
 **Status:** open (2026-09-13) — the construct is built and exercised by one cooperative example; nothing adversarial has been run against it
 **In plain terms:** where does a union of unrelated shapes break the checks that assume one base shape, the runtime, the generated output, or the diagrams? Each case below is a spec to write and a verdict to record: the check holds, it holds at a cost, or it has a gap.
-**See:** README §6 (a static union as a relationship target — the polymorphic association) · README §9 (`or` across unrelated bases; the unchanged property rule; what a union body and a union rule may do) · README §10 (narrowing by `is <Operand>`) · `checks.md` F2, F3, V1, V3, V11, V13, V17, A2 · `examples/gallery/gallery.velle` (the cooperative spec) · `compiler/src/test/kotlin/velle/UnionTest.kt`
+**See:** Reference §6 (a static union as a relationship target — the polymorphic association) · Reference §9 (`or` across unrelated bases; the unchanged property rule; what a union body and a union rule may do) · Reference §10 (narrowing by `is <Operand>`) · `checks.md` F2, F3, V1, V3, V11, V13, V17, A2 · `examples/gallery/gallery.velle` (the cooperative spec) · `compiler/src/test/kotlin/velle/UnionTest.kt`
 
 ---
 
@@ -47,4 +47,4 @@ Each is a compile-error today where it should license the read, or an unguarded 
 
 ## 5. Method
 
-One adversarial spec per numbered case, either as a `UnionTest` case (a diagnostic expected) or under `examples/union-stress/` (a runtime behavior expected), with the verdict recorded here in the HOLDS / TAX / GAP vocabulary (`GLOSSARY.md`). Gaps that need a ruling get one here; rulings promote to the README and `checks.md` as they settle, and the items under this question in `QUESTIONS.md` close as the checks tighten.
+One adversarial spec per numbered case, either as a `UnionTest` case (a diagnostic expected) or under `examples/union-stress/` (a runtime behavior expected), with the verdict recorded here in the HOLDS / TAX / GAP vocabulary (`GLOSSARY.md`). Gaps that need a ruling get one here; rulings promote to the Reference and `checks.md` as they settle, and the items under this question in `QUESTIONS.md` close as the checks tighten.

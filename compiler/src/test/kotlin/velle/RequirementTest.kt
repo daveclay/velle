@@ -8,7 +8,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The requirement spelling of a prohibition (README §21): `Subject requires P`
+ * The requirement spelling of a prohibition (Reference §21): `Subject requires P`
  * means `never (Subject where not P)`. The parser derives the complement, so the
  * rest of the compiler sees the forbidden configuration a hand-written `never`
  * would state; the declaration as written survives on the AST, and rejections

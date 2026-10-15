@@ -42,7 +42,7 @@ class ModerationFlowOverTypedStoreTest : ModerationFlowTest() {
 }
 
 /**
- * Deletion in storage (README §12): the row leaves, its key is never reused,
+ * Deletion in storage (Reference §12): the row leaves, its key is never reused,
  * and a surviving row's reference at it stays in the column — the absorbing
  * reference the runtime reads as absent, in this process and the next.
  */

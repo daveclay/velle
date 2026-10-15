@@ -165,7 +165,7 @@ data class EscalationRow(
     val raisedOn: LocalDate,
 )
 
-/** Per-membership memory for ClosedTicket (README §8; evaluation.md U2). */
+/** Per-membership memory for ClosedTicket (Reference §8; evaluation.md U2). */
 data class ClosedTicketCapture(
     val closedOn: LocalDate,
     val closedBy: Ref.Persisted,
@@ -299,7 +299,7 @@ interface MembershipStore {
      *  Superset contract: any superset of the matching rows is correct. */
     fun never2Candidates(): List<VisitRow>
 
-    // ── capture memory: null when no current membership (README §13) ──
+    // ── capture memory: null when no current membership (Reference §13) ──
     fun closedTicketCapture(instance: Ref.Persisted): ClosedTicketCapture?
 }
 

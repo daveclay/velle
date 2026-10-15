@@ -1,6 +1,6 @@
 -- Payments: an order-payment system charging through an external card
 -- processor — the third Velle spec, designed business-outward. Assembles the
--- errors-are-refinements pattern end-to-end (README §2): an interaction shape
+-- errors-are-refinements pattern end-to-end (Reference §2): an interaction shape
 -- whose verdict arrives as a later external commit, outcome-state dispatch
 -- with a rule per branch, compensation on the failure branch, retry with a
 -- cap, and timeouts. Also exercises surface neither earlier spec does: a

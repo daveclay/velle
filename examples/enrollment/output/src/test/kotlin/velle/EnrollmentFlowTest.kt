@@ -9,7 +9,7 @@ import velle.Commit
 import velle.generated.EnrollmentSystem
 
 /**
- * The collection constructs of README §6 driven through the generated typed
+ * The collection constructs of Reference §6 driven through the generated typed
  * surface — the business-flow companion to the generated per-rule specs.
  */
 open class EnrollmentFlowTest {

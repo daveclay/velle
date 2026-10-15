@@ -5,7 +5,7 @@
 -- deletion gate, `? initially required` as the reference that absorbs its
 -- target's deletion, the per-field copy discipline for what must survive —
 -- and the trigger family that tells a state's two exit causes apart
--- (README §13, "Deletion as a second exit cause"): `when leaving not
+-- (Reference §13, "Deletion as a second exit cause"): `when leaving not
 -- deleted`, `when deleted`, and `when leaving or deleted`.
 --
 -- Comment convention (as in payments.velle): plain comments tell the business

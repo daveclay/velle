@@ -1,7 +1,7 @@
 package velle
 
 /**
- * The typed store surface (README §22's architecture): per spec, a generated
+ * The typed store surface (Reference §22's architecture): per spec, a generated
  * interface stating — in the domain's own names and types — every question the
  * runtime can ask of storage. The generic StateResolver stays the wire
  * protocol; this layer is developer-owned output on top of it:
@@ -41,7 +41,7 @@ object StoreGen {
         fun rowFields(shape: String): List<RowField> =
             model.shapes.getValue(shape).members.mapNotNull { m ->
                 when (m) {
-                    // a declared `many` / `many <scalar>` (README §6) travels as a
+                    // a declared `many` / `many <scalar>` (Reference §6) travels as a
                     // list in membership order, like the generic Row carries it
                     is StoredProp -> RowField(m.name, model.typeOf(m.type))
                     is TimestampProp -> RowField(m.name, VType.DateTimeT)
@@ -165,7 +165,7 @@ object StoreGen {
         }
 
         fun captureType(cs: CaptureSchema) {
-            line("/** Per-membership memory for ${cs.refinement} (README §8; evaluation.md U2). */")
+            line("/** Per-membership memory for ${cs.refinement} (Reference §8; evaluation.md U2). */")
             line("data class ${cs.refinement}Capture(")
             cs.props.forEach { line("    val ${it.name}: ${rowKotlin(it.type)},") }
             line(")")
@@ -202,7 +202,7 @@ object StoreGen {
             }
             if (model.captureSchemas.isNotEmpty()) {
                 line()
-                line("    // ── capture memory: null when no current membership (README §13) ──")
+                line("    // ── capture memory: null when no current membership (Reference §13) ──")
                 model.captureSchemas.forEach {
                     line("    fun ${decap(it.refinement)}Capture(instance: Ref.Persisted): ${it.refinement}Capture?")
                 }

@@ -5,7 +5,7 @@ import java.math.BigDecimal
 /**
  * Expression and membership evaluation against the runtime state.
  *
- * Scoping follows README §10: `this` is the outermost subject, a bare name means
+ * Scoping follows Reference §10: `this` is the outermost subject, a bare name means
  * the innermost collection-filter's element (or the subject where no filter is
  * open), and `as` aliases keep middle scopes reachable.
  */
@@ -71,7 +71,7 @@ class Evaluator(private val system: VelleSystem) {
     /** Read a member of [id] in scope [scope] (a shape or refinement name). */
     fun readMember(id: Long, scope: String, name: String): Value {
         val m = model.membersOf(scope)[name]
-            // a read the validator licensed by narrowing (`target is Post`, README
+            // a read the validator licensed by narrowing (`target is Post`, Reference
             // §10): the scope is a union, the instance has one concrete shape
             ?: return system.instance(id)?.let { readMemberAnyScope(id, it.shape, name) }
                 ?: throw VelleRuntimeError("'$name' is not a member of '$scope'")
@@ -88,7 +88,7 @@ class Evaluator(private val system: VelleSystem) {
         }
         m.derived?.let { return eval(it.expr, Ctx(m.owner, id)) }
         m.inverse?.let { inv ->
-            // inferred inverse collection: a view over the declared side (README §6);
+            // inferred inverse collection: a view over the declared side (Reference §6);
             // liveIds excludes instances the current transaction deleted (OQ37)
             return if (!inv.many) {
                 // one-to-many: children whose stored pointer references this instance
@@ -152,7 +152,7 @@ class Evaluator(private val system: VelleSystem) {
         is ShapeForSource -> throw VelleRuntimeError("shape-for is a collection source, not a value")
     }
 
-    /** `(Shape where pred)` / `(path where pred)` as a collection value (README §6). */
+    /** `(Shape where pred)` / `(path where pred)` as a collection value (Reference §6). */
     private fun evalSetExpr(e: SetExpr, ctx: Ctx): Value {
         val b = e.collection.bindings.single()
         val (scope, ids) = bindingCandidates(b, ctx)
@@ -243,7 +243,7 @@ class Evaluator(private val system: VelleSystem) {
      */
     private fun instancesReferencing(shape: String, id: Long): List<Long> {
         val targetShape = (system.instance(id) ?: throw VelleRuntimeError("missing instance $id")).shape
-        // a union subject (README §9) scans each operand; a field typed with a static
+        // a union subject (Reference §9) scans each operand; a field typed with a static
         // union accepts an instance of any operand
         val referencing = model.basesOf(shape).flatMap { base ->
             val field = model.shapes.getValue(base).members.filterIsInstance<StoredProp>()
@@ -328,7 +328,7 @@ class Evaluator(private val system: VelleSystem) {
         val keyableWhere = c.where.takeIf { c.bindings.size == 1 }
         for (b in c.bindings) {
             // sibling bindings all resolve against the same enclosing subject
-            // (README §10) — only the shared `where` sees the pushed frames
+            // (Reference §10) — only the shared `where` sees the pushed frames
             val (scope, ids) = bindingCandidates(b, ctx, keyableWhere)
             ctxs = ctxs.flatMap { outer -> ids.asSequence().map { outer.push(scope, it, b.alias) } }
         }
@@ -354,7 +354,7 @@ class Evaluator(private val system: VelleSystem) {
             if (all.isEmpty()) Value.VNone
             else {
                 // ordering is the author's declared `by` datums, nothing else —
-                // no creation-order fallback, no minted tiebreak (README §10)
+                // no creation-order fallback, no minted tiebreak (Reference §10)
                 val keyed = all.map { (scope, id) ->
                     Triple(scope, id, e.orderBy.map { d -> readMember(id, scope, d) })
                 }
@@ -366,7 +366,7 @@ class Evaluator(private val system: VelleSystem) {
                 if (tied > 1)
                     throw VelleRuntimeError(
                         "${e.name}(... by ${e.orderBy.joinToString(", ")}) does not discriminate: " +
-                            "$tied instances share the ordering datum — declare a further criterion (README §10)"
+                            "$tied instances share the ordering datum — declare a further criterion (Reference §10)"
                     )
                 Value.VRef(chosen.second)
             }
@@ -436,7 +436,7 @@ class Evaluator(private val system: VelleSystem) {
                     }
                 )
             }
-            // the text operators (README §10; OQ51 R1): exact, case-sensitive;
+            // the text operators (Reference §10; OQ51 R1): exact, case-sensitive;
             // an absent operand satisfies none of them, like every ordered comparison
             in TEXT_OPERATORS -> {
                 val a = (l as? Value.VText)?.v
@@ -468,7 +468,7 @@ class Evaluator(private val system: VelleSystem) {
     private fun arith(op: String, l: Value, r: Value): Value {
         if (l is Value.VNum && r is Value.VNum)
             return Value.VNum(if (op == "+") l.v.add(r.v) else l.v.subtract(r.v))
-        // set union (`+`) and removal (`-`) over a declared `many` (README §6):
+        // set union (`+`) and removal (`-`) over a declared `many` (Reference §6):
         // element or collection on the right; present-`+` and absent-`-` are no-ops
         if (l is Value.VColl || l is Value.VVals || l == Value.VEmpty) {
             if (l is Value.VColl || (l == Value.VEmpty && (r is Value.VColl || r is Value.VRef))) {
@@ -504,7 +504,7 @@ class Evaluator(private val system: VelleSystem) {
                     when (r.unit) {
                         "days" -> l.v.plusDays(sign * r.amount)
                         "weeks" -> l.v.plusWeeks(sign * r.amount)
-                        else -> throw VelleRuntimeError("'${r.unit}' is clock time — not applicable to a Date (README §10)")
+                        else -> throw VelleRuntimeError("'${r.unit}' is clock time — not applicable to a Date (Reference §10)")
                     }
                 )
                 is Value.VDateTime -> Value.VDateTime(l.v.plusSeconds(sign * r.amount * unitSeconds(r.unit)))
@@ -541,7 +541,7 @@ class Evaluator(private val system: VelleSystem) {
         return Regex(sb.toString(), RegexOption.DOT_MATCHES_ALL)
     }
 
-    /** Ordering for the query API (README §22; OQ51 R10): orderable values
+    /** Ordering for the query API (Reference §22; OQ51 R10): orderable values
      *  compare by value, and an absent value sorts after every present one. */
     internal fun orderCompare(l: Value, r: Value): Int = when {
         l == Value.VNone && r == Value.VNone -> 0
@@ -552,7 +552,7 @@ class Evaluator(private val system: VelleSystem) {
 
     private fun valueEquals(l: Value, r: Value): Boolean = when {
         l is Value.VNum && r is Value.VNum -> l.v.compareTo(r.v) == 0
-        l is Value.VRef && r is Value.VRef -> l.id == r.id // identity comparison (README §5)
+        l is Value.VRef && r is Value.VRef -> l.id == r.id // identity comparison (Reference §5)
         else -> l == r
     }
 
@@ -571,7 +571,7 @@ class Evaluator(private val system: VelleSystem) {
 
     /**
      * Resolve an assignment target to its instances and field. A plain path
-     * yields one target; a path through a `many` (one hop, README §6) fans out —
+     * yields one target; a path through a `many` (one hop, Reference §6) fans out —
      * one write per member of the collection at that hop.
      */
     fun resolveTargets(target: PathExpr, ctx: Ctx): Pair<List<Long>, String> {

@@ -7,7 +7,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * `expose transient` (README §4, "Transient acts"): the act is an input to the
+ * `expose transient` (Reference §4, "Transient acts"): the act is an input to the
  * state, not a member of it — V17 isolates it, V18 demands every request get a
  * response, and the runtime removes the instance at its transaction's close.
  */

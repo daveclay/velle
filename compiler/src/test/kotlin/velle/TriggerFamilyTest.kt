@@ -6,12 +6,12 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * The trigger family (README §13, "Deletion as a second exit cause";
+ * The trigger family (Reference §13, "Deletion as a second exit cause";
  * OQ37-R11–R20): `when leaving X` fires only when the predicate flips,
  * `when deleted X` only at deletion, `when leaving or deleted X` for either
  * cause, `when leaving not deleted X` the predicate flip stated out loud —
  * each over a bare state name or an inline refinement. The runtime probes
- * drive the README's own worked case; the validator probes cover the
+ * drive the Reference's own worked case; the validator probes cover the
  * checks the family adds (V3's bare-shape edge, V24 and V28 on the deletion
  * side, A6, A2's dead halves).
  */
@@ -88,7 +88,7 @@ class TriggerFamilyTest {
         assertEquals("Bike", sys.get(sys.instancesOf("SellerNotice").single(), "listingTitle"))
     }
 
-    // ── the README's worked case ─────────────────────────────────────────────
+    // ── the Reference's worked case ─────────────────────────────────────────────
 
     private val workedCase = """
         act Seller { name: text }

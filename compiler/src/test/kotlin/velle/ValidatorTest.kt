@@ -94,7 +94,7 @@ class ValidatorTest {
         assertFalse(codes(src).contains("V30"), "got: ${diags(src)}")
     }
 
-    // README §21, "Where the prohibition is written decides which it is": one
+    // Reference §21, "Where the prohibition is written decides which it is": one
     // business sentence, two placements. On the transient request it is a
     // refusal and a past-due invoice stays an ordinary state; on the record it
     // is a constraint the books would age into, and V30 refuses it.
@@ -208,7 +208,7 @@ class ValidatorTest {
 
     @Test
     fun `F1 - this inside a collection filter names the outermost subject, not the element`() {
-        // README §10: `this` is the outermost subject; a bare name is the innermost
+        // Reference §10: `this` is the outermost subject; a bare name is the innermost
         // element. The runtime always read it that way; the validator once resolved
         // `this` against the filter's element too (found by examples/peptides).
         val src = """
@@ -600,7 +600,7 @@ class ValidatorTest {
 
     // ── V12 (refinement slice): (Refinement for expr) singularity proofs ─────
 
-    /** README §20's episodes pattern — the flagship whole-spec singularity proof. */
+    /** Reference §20's episodes pattern — the flagship whole-spec singularity proof. */
     private val episodes = """
         act Account {
             balance: decimal
@@ -823,7 +823,7 @@ class ValidatorTest {
 
     // ── V14: well-foundedness (stratify, then certify) ───────────────────────
 
-    /** README §19's predecessor recurrence — the streak as derived history. */
+    /** Reference §19's predecessor recurrence — the streak as derived history. */
     private val recurrence = """
         shape Account {
             note: text
@@ -883,7 +883,7 @@ class ValidatorTest {
         assertTrue(codes(src).contains("V14"), "got: ${diags(src)}")
     }
 
-    /** README §7's root/parent example — acyclicity supplied by a spent `never`. */
+    /** Reference §7's root/parent example — acyclicity supplied by a spent `never`. */
     private val rootParent = """
         act Node {
             parent: one Node?

@@ -1,6 +1,6 @@
 rootProject.name = "velle"
 
-// The architecture's separation (README §22, "The extension framework"):
+// The architecture's separation (Reference §22, "The extension framework"):
 // :compiler                   — the Velle language + compiler/validator + runtime engine
 // :examples:<system>:output   — each example spec's transpiled, developer-owned output
 // :stores:sqlite              — a generic, model-driven store backend (the framework role),

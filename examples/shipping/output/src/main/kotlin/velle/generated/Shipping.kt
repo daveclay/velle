@@ -43,7 +43,7 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun cancelledOrders(): List<CancelledOrder> = system.instancesOf("CancelledOrder").map { materializeCancelledOrder(it) }
     fun shippedOrders(): List<ShippedOrder> = system.instancesOf("ShippedOrder").map { materializeShippedOrder(it) }
 
-    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (README §22) ──
+    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
     inner class Read {
@@ -153,10 +153,10 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         private val SPEC = """
 -- Shipping: orders, shipments, and cancellations. A deliberately small spec
 -- whose only point is one prohibition and the rejections it produces, written
--- to explore what a rejection message can say (README §21; `evaluation.md`,
+-- to explore what a rejection message can say (Reference §21; `evaluation.md`,
 -- "Errors, refusals, and retry").
 --
--- The prohibition is a constraint on the books (README §21): a shipment is
+-- The prohibition is a constraint on the books (Reference §21): a shipment is
 -- never on the books for a cancelled order. It is one sentence, but it
 -- rejects two different acts, and names the shipment either way:
 --
@@ -189,7 +189,7 @@ act Order {
 
 -- A cancellation is a record, not a request: the business keeps who asked
 -- and when. An order with a cancellation on file is a cancelled order.
--- velle: the inferred inverse `cancellations` on Order (README §6); a named
+-- velle: the inferred inverse `cancellations` on Order (Reference §6); a named
 -- refinement over its existence, so the rejection can speak in the author's
 -- name for the state rather than in the predicate
 act Cancellation {
@@ -215,14 +215,14 @@ shape ShippedOrder = Order where exists (shipments)
 -- A shipment is never on the books for a cancelled order.
 -- velle: a `never` over a persistent act whose predicate reads
 -- through `order` into another shape's records — a constraint, not a refusal
--- (README §21). It binds every transaction that would leave a Shipment in
+-- (Reference §21). It binds every transaction that would leave a Shipment in
 -- this state, whichever record the transaction touched.
 never (Shipment where order is CancelledOrder)
 """
     }
 }
 
-// ── act inputs (README §22, "External input"): one typed value per act,
+// ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewOrder(
     val reference: String,
@@ -253,7 +253,7 @@ data class NewShipment(
 }
 
 
-// ── the shapes as model objects: what a read returns (README §22; OQ51 R5) ──
+// ── the shapes as model objects: what a read returns (Reference §22; OQ51 R5) ──
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,
 // a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
 // the record's membership at the moment of the read.

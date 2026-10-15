@@ -5,9 +5,9 @@ package velle
  * (including refinement properties and inferred inverse relationships), and the
  * read/write summaries the checks in Validator.kt consume.
  *
- * Inverse relationships (README §6): `LineItem.invoice: one Invoice` gives
+ * Inverse relationships (Reference §6): `LineItem.invoice: one Invoice` gives
  * `Invoice` a derived collection member named decapitalize(LineItem) + "s" =
- * `lineItems`. The naming rule is a convention the README uses by example
+ * `lineItems`. The naming rule is a convention the Reference uses by example
  * (`invoices`, `payments`) without stating it — flagged for the docs.
  */
 class Model(val decls: List<Decl>) {
@@ -18,10 +18,10 @@ class Model(val decls: List<Decl>) {
     val refinements = linkedMapOf<String, RefinementDecl>()
     val rules = linkedMapOf<String, RuleDecl>()
     val nevers = mutableListOf<NeverDecl>()
-    /** externally committable shapes — the `act` declarations (README §22) */
+    /** externally committable shapes — the `act` declarations (Reference §22) */
     val exposed = linkedSetOf<String>()
 
-    /** shapes declared `transient act` — inputs to the state, not members of it (README §4) */
+    /** shapes declared `transient act` — inputs to the state, not members of it (Reference §4) */
     val transients = mutableSetOf<String>()
 
     /** raw `with` declarations per act, resolved lazily by [closures] */
@@ -61,7 +61,7 @@ class Model(val decls: List<Decl>) {
     /**
      * The base shapes a shape-or-refinement's members are drawn from. One for a
      * base shape or an ordinary refinement; several for a cross-base union —
-     * `or` composed across unrelated shapes (README §9). Empty,
+     * `or` composed across unrelated shapes (Reference §9). Empty,
      * with F1, when a name is unknown.
      */
     fun basesOf(name: String): Set<String> = basesCache.getOrPut(name) {
@@ -83,7 +83,7 @@ class Model(val decls: List<Decl>) {
             val r = basesOfExpr(expr.right)
             val both = l intersect r
             // distinct bases are disjoint by construction: an instance has one
-            // base, so `Car and Bicycle` has no members (README §9)
+            // base, so `Car and Bicycle` has no members (Reference §9)
             if (both.isEmpty() && l.isNotEmpty() && r.isNotEmpty())
                 diagnostics.add(Diagnostic("A2", "'${Printer.refExpr(expr)}' is provably empty — " +
                     "its operands have no base shape in common, and an instance has exactly one base", advisory = true))
@@ -105,7 +105,7 @@ class Model(val decls: List<Decl>) {
      * A static union: a named refinement that is a pure `or` of base shapes (or
      * of static unions) with no predicate anywhere. Its member set is fixed by
      * declarations, never by data, so it is stable enough to be a field's
-     * target type (README §6, the static-union field-type rule).
+     * target type (Reference §6, the static-union field-type rule).
      */
     fun isStaticUnion(name: String): Boolean =
         refinements[name]?.let { pureOr(it.expr) && basesOf(name).size > 1 } == true
@@ -139,7 +139,7 @@ class Model(val decls: List<Decl>) {
     /**
      * Members visible on a shape-or-refinement scope: for a base shape, its own
      * declared members plus inferred inverse collections; for a refinement, its
-     * own body members plus everything visible on its operands (union — README §9's
+     * own body members plus everything visible on its operands (union — Reference §9's
      * `or`-restriction is a check's concern, not lookup's).
      */
     fun membersOf(scope: String): Map<String, MemberInfo> =
@@ -162,16 +162,16 @@ class Model(val decls: List<Decl>) {
         }
         shapes[scope]?.let { shape ->
             shape.members.forEach { add(scope, it) }
-            // inferred inverse collections (README §6) — from the declared side's
+            // inferred inverse collections (Reference §6) — from the declared side's
             // `one` (a one-to-many's child pointer) or bare `many` (an m2m edge
             // set). None from a transient act: the collection would be a read of
-            // instances that are not kept (README §4, "Transient acts"). Two
+            // instances that are not kept (Reference §4, "Transient acts"). Two
             // declared sides at the same target make the decapitalize-and-
             // pluralize name ambiguous — no inverse is inferred, and use sites
-            // demand declared derived views (README §6; the `Transfer` example).
+            // demand declared derived views (Reference §6; the `Transfer` example).
             for ((otherName, other) in shapes) {
                 if (otherName in transients) continue
-                // a field typed with a static union targets every operand (README §9):
+                // a field typed with a static union targets every operand (Reference §9):
                 // `Comment.target: one Content` puts `comments` on each operand
                 val targeting = other.members.filterIsInstance<StoredProp>()
                     .filter { (it.type as? RelType)?.shape?.let { t -> typeAccepts(t, scope) } == true }
@@ -187,7 +187,7 @@ class Model(val decls: List<Decl>) {
         refinements[scope]?.let { r ->
             if (isCrossBase(scope)) {
                 // a cross-base union exposes only what every operand inherits from
-                // ONE declaration (README §9, unchanged): `id`, and the
+                // ONE declaration (Reference §9, unchanged): `id`, and the
                 // inverses inferred through a field typed with the union. Two
                 // same-named declarations on different bases are never shared.
                 val operandMaps = collectOperandScopes(r.expr).map { membersOf(it) }
@@ -221,7 +221,7 @@ class Model(val decls: List<Decl>) {
         is RefOr -> collectOperandScopes(expr.left) + collectOperandScopes(expr.right)
     }
 
-    // ── the exposure closure (README §6, "Inline part creation"; checks V22) ─
+    // ── the exposure closure (Reference §6, "Inline part creation"; checks V22) ─
 
     /**
      * Resolved closure per act: each `with` entry pinned to its part
@@ -248,7 +248,7 @@ class Model(val decls: List<Decl>) {
 
     private fun resolveClosureEdge(scope: String, entry: WithEntry): ClosureEdge? {
         val m = membersOf(scope)[entry.name]
-        val fix = "a closure edge must be the inverse of a declared `one` field (README §6)"
+        val fix = "a closure edge must be the inverse of a declared `one` field (Reference §6)"
         val edge = when {
             m == null -> {
                 error("V22", "'act ... with ${entry.name}': '$scope' has no such collection — $fix")
@@ -279,7 +279,7 @@ class Model(val decls: List<Decl>) {
         return ClosureEdge(entry.name, partShape, backRef, resolveClosureLevel(partShape, entry.children))
     }
 
-    /** The recognized inverse form `(P where field == this)` (README §6, the
+    /** The recognized inverse form `(P where field == this)` (Reference §6, the
      *  `Transfer` example): the view pins the language-populated back-reference. */
     private fun recognizedInverse(scope: String, d: DerivedProp): Pair<String, String>? {
         val set = d.expr as? SetExpr ?: return null
@@ -385,7 +385,7 @@ class Model(val decls: List<Decl>) {
     }
 
     /** Collect reads of an expression evaluated with `subject` as its scope.
-     *  [aliases] maps `as`-bound names to their element scopes (README §10). */
+     *  [aliases] maps `as`-bound names to their element scopes (Reference §10). */
     fun collectExpr(e: Expr, subject: String, s: ReadSummary, aliases: Map<String, String> = emptyMap(), root: String = subject) {
         when (e) {
             is TodayLit, is NowLit -> s.readsTime = true
@@ -473,7 +473,7 @@ class Model(val decls: List<Decl>) {
             if (bScope != null) elementScope = bScope
         }
         // the shared `where` resolves bare names against the innermost element,
-        // while `this` keeps naming the outermost subject (README §10)
+        // while `this` keeps naming the outermost subject (Reference §10)
         c.where?.let { collectExpr(it, elementScope ?: subject, s, env, root) }
         return elementScope
     }
@@ -542,7 +542,7 @@ data class MemberInfo(
     val derived: DerivedProp? = null,
     val captured: Boolean = false,
     val timestamp: Boolean = false,
-    /** Set on an inferred inverse collection: the declared side it is a view of (README §6). */
+    /** Set on an inferred inverse collection: the declared side it is a view of (Reference §6). */
     val inverse: InverseInfo? = null,
 )
 
@@ -552,7 +552,7 @@ data class InverseInfo(val shape: String, val field: String, val many: Boolean)
 /** One `delete` statement, resolved: [rule] deletes an instance of [shape] via [stmt]. */
 data class DeleteSite(val rule: RuleDecl, val stmt: DeleteStmt, val shape: String)
 
-/** One resolved closure edge (README §6, "Inline part creation"): the act
+/** One resolved closure edge (Reference §6, "Inline part creation"): the act
  *  commit takes [prop] as inline [partShape] values; [backRef] is the part's
  *  language-populated pointer at the enclosing level. The closure graph is a
  *  tree by construction — entries only name inverse edges of their level. */
@@ -572,7 +572,7 @@ sealed interface VType {
     data object Id : VType
     data class Inst(val shape: String) : VType
     data class Coll(val shape: String) : VType
-    /** An owned collection of scalar values (`many text`, README §6). */
+    /** An owned collection of scalar values (`many text`, Reference §6). */
     data class CollS(val name: String) : VType
     data class Optional(val inner: VType) : VType
     data object Unknown : VType

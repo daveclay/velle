@@ -7,7 +7,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * Runs README §20's episodes pattern end-to-end: the exit rule's singular
+ * Runs Reference §20's episodes pattern end-to-end: the exit rule's singular
  * reference `(OpenDelinquencyFlag for this)` — a refinement name in the
  * proof-gated `for` query — resolves through base-instance scan plus
  * membership filter.

@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
  * Final states are compared by an id-insensitive fingerprint: per shape, the
  * multiset of instances with references expanded structurally — the two
  * orders assign different internal ids, and identity is the store's, not the
- * runtime's (README §5), so only structure may be compared.
+ * runtime's (Reference §5), so only structure may be compared.
  */
 class CommutationTest {
 

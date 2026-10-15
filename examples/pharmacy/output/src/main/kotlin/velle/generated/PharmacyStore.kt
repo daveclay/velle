@@ -419,7 +419,7 @@ data class ControlledInventorySnapshotRow(
     val takenOn: LocalDate,
 )
 
-/** Per-membership memory for ReadyForPickup (README §8; evaluation.md U2). */
+/** Per-membership memory for ReadyForPickup (Reference §8; evaluation.md U2). */
 data class ReadyForPickupCapture(
     val readyOn: LocalDate,
 )
@@ -746,7 +746,7 @@ interface PharmacyStore {
      *  Superset contract: any superset of the matching rows is correct. */
     fun never33Candidates(): List<CounsellingRow>
 
-    // ── capture memory: null when no current membership (README §13) ──
+    // ── capture memory: null when no current membership (Reference §13) ──
     fun readyForPickupCapture(instance: Ref.Persisted): ReadyForPickupCapture?
 }
 
