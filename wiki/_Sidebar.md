@@ -36,6 +36,10 @@
 - [[singular_references|singular_references]]
 - [[GLOSSARY|GLOSSARY]]
 
+**Guides**
+
+- [[Authorization|Authorization]]
+
 **Notes**
 
 - [[Velle UI|Velle-UI]]

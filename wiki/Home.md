@@ -50,6 +50,12 @@ Cited by bare name (`checks.md`, `evaluation.md`) throughout the Reference and t
 - [[singular_references|singular_references]] — The `(Shape for expr)` query form and when its claim holds
 - [[GLOSSARY|GLOSSARY]] — Coined terms, one line each, with the pointer that defines them
 
+## Guides
+
+Walkthroughs that gather what the Reference and the normative documents settle, in the order an author meets it.
+
+- [[Authorization|Authorization]] — who may commit an act and who may see a record: the actor, role gates, data-driven constraints, visibility, the generated surface, and how it compares with role-based access control
+
 ## Working notes
 
 - [[Velle UI|Velle-UI]] — notes toward a declarative UI layer
