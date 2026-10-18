@@ -21,4 +21,5 @@ include(
     "examples:shipping:output",
     "examples:pharmacy:output",
     "examples:vendors:output",
+    "examples:batches:output",
 )

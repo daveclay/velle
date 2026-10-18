@@ -1,18 +1,18 @@
 # Open questions and work items — the index
 
-One line per question and per work item here; the discussion lives in `questions/OQ<n>-*.md`, where each file's header states the question in plain terms before the dense part begins. OQ tags are stable — numbers are never renumbered or reused (next free: OQ63), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
+One line per question and per work item here; the discussion lives in `questions/OQ<n>-*.md`, where each file's header states the question in plain terms before the dense part begins. OQ tags are stable — numbers are never renumbered or reused (next free: OQ64), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
 
-**Questions and items.** A question (an OQ) is a design decision with discussion worth keeping. A work item is one action, verb-first, one line. An item whose whole context fits in its line stands alone; an item with context lives under the question that holds it, and the context is in that question's file, never here. Items are grouped by the part of Velle they change, not by where they were found; S-numbers and P-numbers are findings of the peptides and pharmacy passes, recorded in OQ16's calibration record.
+**Questions and items.** A question (an OQ) is a design decision with discussion worth keeping. A work item is one action, verb-first, one line. An item whose whole context fits in its line stands alone; an item with context lives under the question that holds it, and the context is in that question's file, never here. Items are grouped by the part of Velle they change, not by where they were found; S-numbers, P-numbers, and B-numbers are findings of the peptides, pharmacy, and batches passes, recorded in OQ16's calibration record.
 
 **When a question gets a tag:** any open design question with discussion worth keeping, or referenced from more than one doc, gets a tag and a file *at birth* — wherever it surfaced. An investigation document is a working file for an open question. When the question settles, the result promotes to the Reference or the normative docs, anything else worth keeping finds a permanent home (`patterns.md` at the root for a worked spelling, `GLOSSARY.md` for a coined term, or another open question), and the file is deleted; an investigation's reasoning is not kept. History is git.
 
 **Lifecycle:** opened (tag + file) → discussion and items accumulate in the file → settled → the result promotes, the file is deleted, and the entry moves to the settled table with a pointer to where it retired.
 
-The current milestone is calibrating v0 against realistic specs. Nothing here blocks the build; OQ16 — which since OQ15's settling also carries the V14 certificate-whitelist calibration — is precisely the question v0 exists to answer empirically, and `examples/peptides/` and `examples/pharmacy/` are its first two data points.
+The current milestone is calibrating v0 against realistic specs. Nothing here blocks the build; OQ16 — which since OQ15's settling also carries the V14 certificate-whitelist calibration — is precisely the question v0 exists to answer empirically, and `examples/peptides/` and `examples/pharmacy/` are its first two data points, and `examples/batches/` a third aimed at one modeling question (polymorphism over a shared record).
 
 ## Calibration
 
-- **[OQ16](questions/OQ16-order-independence.md)** — can the compiler prove sibling firing order never matters? · calibration; completeness audit done 2026-08-20 (probes in `SiblingConfluenceAuditTest`; F1–F5 fixed, payments C1 resolved spec-side and held for ratification, Newman argument + residue); carries the V14 certificate-whitelist calibration (OQ15's residue) and the calibration record of the two realistic specs
+- **[OQ16](questions/OQ16-order-independence.md)** — can the compiler prove sibling firing order never matters? · calibration; completeness audit done 2026-08-20 (probes in `SiblingConfluenceAuditTest`; F1–F5 fixed, payments C1 resolved spec-side and held for ratification, Newman argument + residue); carries the V14 certificate-whitelist calibration (OQ15's residue) and the calibration record of the two realistic specs and the batches pass
   - [ ] Write more realistic specs against the v0 pipeline — the empirical answer to OQ16; peptides and pharmacy are the first two.
   - [ ] While spec-writing, exercise the calibration riders: rung-recognition boundaries (Reference §20), boundary/apparatus legibility at scale (formerly OQ19), and `when leaving R on <schedule>` tick-exit semantics (`evaluation.md` "Ticks" — derived, unexercised; pharmacy exercised it once and it held).
   - [ ] Ratify C1: payments' stock release runs as its own transaction after the exhausting commit (OQ16, "Residue held here"; live in `examples/payments/payments.velle` since 2026-08-20).
@@ -35,6 +35,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
   - [ ] Let V29, V10, and V26 discharge a creation or deletion whose only effect on the aggregate a prohibition consults is in the safe direction (P4).
   - [ ] Teach the disarm proof (V2, and V16 through it) to look through a named refinement whose predicate is an inverse collection's `is not empty` (P7).
   - [ ] Prove a `never` over a rule-written field inductively instead of failing closed (S7, P5; rides OQ16's discharge vocabulary).
+  - [ ] Put a derived collection's self-read through a `many` hop into V14's definition graph, so it fails closed as Reference §19 says (B6; masked today by the evaluator's refusal of the read, B5).
   - [ ] Collect the data point OQ37's coarseness ruling asked for: whether V25's accepted false positive (window arithmetic the refinement-overlap prover cannot see) forces the field-witness restructure often enough to justify sharpening the prover.
   - [ ] Let V24 discharge a referrer whose existence the deleter's scope provably excludes (P6: the fills of a never-filled prescription).
   - [ ] Write a spec that deletes against a stored fold twin or a snapshot and rule whether the existence-dependency check should name them (OQ37's flagged edge).
@@ -47,16 +48,20 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **[OQ44](questions/OQ44-union-stress.md)** — stress-testing cross-base unions: the checks that still assume one base, the runtime, the generated output, and the diagrams, each against an adversarial spec · opened 2026-09-13 at OQ29's close
   - [ ] Tighten V5, V6, V10, V12, V14, and V15's transition leg to reason per operand of a cross-base refinement (today: skipped, fail-open); rides OQ16's calibration.
   - [ ] Extend narrowing to `x is not A`, nested conditionals, and three-or-more-operand else-branches (`Validator.kt`, the narrowing block).
-  - [ ] Carry narrowing into a collection filter's source path, in the name check and in the read-summary collector (`Model.collectExpr`) (S14).
+  - [ ] Carry narrowing into a collection filter's source path, in the name check and in the read-summary collector (`Model.collectExpr`) (S14, B4).
+  - [ ] Name-check the predicate of a refinement or `never` whose subject is a cross-base union (`Validator.walkRefExpr` skips it when `Model.baseOf` has no single base), so a field the operands declare separately is the Reference §9 error and not a per-instance read at runtime (B1).
   - [ ] Resolve the element of a refinement-filtered collection as the refinement, so an aggregate or selector over `claims where PaidClaim` can read `PaidClaim`'s own body properties (P8).
   - [ ] Add a union notation to the class and state-flow diagrams (`diagrams.md`).
 - **[OQ34](questions/OQ34-schedule-definition.md)** — schedule definition (deferred, post-v0; carries event-anchored timeouts and data-derived durations)
   - [ ] Decide whether a duration may be built from a data value (`treatedAt + interval days`); today a duration takes a literal count only (S13, P12).
 - [ ] Decide: `if ... then` sharing the condition's line — language rule, or parser limitation to lift? (S10, P12)
+- [ ] Decide whether a field may be read through a `many` hop as a collection (`(Component where ...).source`, `origin.components.source`): the validator accepts both and the evaluator refuses both, so a derived set of ancestor records has no spelling that runs; either the grammar gains the collection path or the validator refuses it (B5).
+- [ ] Decide whether the inferred inverse's name is pluralized properly (`PeptideBatch` → `peptideBatches`) or stays Reference §6's literal `s` (`peptideBatchs`); the batches spec declares the readable view on the union body (B3).
 - [ ] Decide whether the value vocabulary grows: a mean or maximum over a collection, an nth selector (second-largest), `Date - Date`, a boolean written as a comparison; by design today, and both passes spelled around all of them (S10, P12).
 
 ## Acts, transient and exposed
 
+- **[OQ63](questions/OQ63-forward-closure.md)** — a record and the record it points at, arriving in one commit: a closure creates parts that point back at the act, a batch points forward at its origin, so the origin lands a commit earlier and is unclaimed in between · opened 2026-10-16 from the batches pass (B2); no design yet
 - **[OQ43](questions/OQ43-transient-containers.md)** — transient containers: a closure whose container is `transient act` · V17's direction forces the all-transient tree; v0 refuses the combination (`checks.md` V22) — remaining: the scoped V17 carve-out, V18's reach over transient parts, the durable-container/transient-branch mix; holds the transient-acts decision's residue
   - [ ] Revisit: can rules copy a transient container act *and its parts* into a durable tree? Confirm or break the tracing; the outcome scopes OQ43.
   - [ ] Confirm outcome-mediated provenance satisfies `why` when provenance lands (Reference §22's `why` item).

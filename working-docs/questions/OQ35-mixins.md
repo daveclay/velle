@@ -12,7 +12,9 @@ Two sentences that today need one declaration per shape:
 - "A ticket or an invoice is overdue when its due date has passed." Reference §9 names this as unsolved: `Overdue` over `SupportTicket.due` and `Invoice.due` is two refinements with the same predicate.
 - "Any change to a member's profile touches the profile." A `ChangeEmail` and a `ChangeName` that each declare `member: one Member`; a union of the two exposes neither, because Reference §9 shares only what both operands inherit from *one* declaration, and a rule over the union reaches `member` only by a branch per operand that reads absurdly (Reference §9, the cross-base property rule).
 
-Both are the same gap: there is no way to make one declaration part of several shapes.
+- "A peptide batch is fermented, ordered, or mixed, and every batch has a peptide and a quantity." The object-language spelling — three base shapes, a union over them — shares nothing the three declare separately, so the common fields are unreadable from the union by Reference §9. The batches pass (`examples/batches/`, 2026-10-16) inverted the hierarchy instead: one batch shape, three origin shapes, a union-typed `origin` field — which holds, at the cost recorded in OQ63. The validator does not enforce §9's rule on a predicate over the union today (OQ44 §2 item 10), so the direct spelling is accepted by accident.
+
+All are the same gap: there is no way to make one declaration part of several shapes.
 
 ## 2. The sketch
 

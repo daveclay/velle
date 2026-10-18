@@ -108,6 +108,19 @@ Two whole businesses have been written against v0, each starting from the domain
 | P13 | three answering mechanisms on one request, chosen by one question | HOLDS | `patterns.md` "Three answers to one request", Reference §21 |
 | P14 | inline and standalone exposure together is "exposed twice" | — | moot since OQ50: an act is declared in one place |
 
+**Batches** (`examples/batches/`, first pass 2026-10-16): a peptide inventory whose containers come from three places — fermented from a strain, ordered from a vendor, mixed from other batches. Not a whole business: one modeling question (polymorphism over a shared record, the supertype-with-three-subtypes of an object language) stressed against a domain that needs it. The spelling that holds inverts the hierarchy: one base shape for what every batch has, one shape per kind of provenance, `origin: one Origin` over a static union of the three (Reference §6, §9). Each finding is pinned by a probe in `examples/batches/output/src/test/kotlin/velle/BatchesProbesTest.kt`.
+
+| # | finding | verdict | where it stands |
+|---|---|---|---|
+| B1 | a predicate over a cross-base union is not name-checked: a field the operands declare separately reads fine in a `never` over the union, against Reference §9, and the runtime resolves it per instance; a nonsense name passes too (`Validator.walkRefExpr` skips a subject with no single base) | GAP | OQ44 §2 item 10; the want behind it is OQ35 |
+| B2 | the batch and its origin cannot arrive in one commit: a closure creates parts pointing back at the act, the batch points forward; the unclaimed origin is reportable state (`UnclaimedOrigin`) and a `never` over it refuses the origin's own commit | TAX | OQ63 |
+| B3 | the inferred inverse of `PeptideBatch.origin` is `peptideBatchs` — Reference §6's "pluralized with `s`" is literal; the spec declares the view under the readable name on the union body | TAX | item under "Expressions, refinements, and unions" in `QUESTIONS.md` |
+| B4 | `origin is Composition` does not license `origin.components` as a filter's source; the spec filters over the declared shape and matches the composition by comparison | TAX | OQ44 §3 (S14's form) |
+| B5 | a field read through a `many` hop (`(Component where ...).source`, `origin.components.source`) validates and cannot be evaluated; so a derived set of ancestor batches, and the transitive "never draws from itself", has no spelling that runs; the one-step `never` stands, and the commit order makes it the only reachable case | GAP | item under "Expressions, refinements, and unions"; the acyclicity certificate is OQ44 §2 item 8 |
+| B6 | a derived collection reading itself through a `many` hop draws no V14 — the self-read is not in V14's definition graph; masked by B5 | GAP | OQ53 |
+| B7 | the generator synthesized a boundary case for `never (PeptideBatch where remainingMg < 0)` with nothing to vary, since `remainingMg` is derived; the case failed | GAP | fixed in `SpecGen.kt` ("derived comparison subject"); `SPEC_INDEX-Batches.md` |
+| B8 | the inverted spelling: a union-typed field as the one-of-three, narrowing per operand at the surface, the kind as a derivation, refinements per kind, the closure for a mixture's components, what is left as a derivation over the inverse, four refusals and a depletion rule | HOLDS | `BatchesFlowTest.kt`, over SQLite twice |
+
 **V15's episodes discharge does not cover a state fed by a series (peptides S8).** A greenhouse is out of band when its latest climate reading is outside its limits, and each stretch out of band is an episode:
 
 ```

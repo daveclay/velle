@@ -1,6 +1,6 @@
 # Singular references
 
-How a Velle spec reads "*the* one instance for this subject" — the `(Shape for expr)` query form — and exactly when that claim is legal. Companion to Reference §10 (`## Predicate expressions`, the `for`-query rule) and §20 ("Episodes as data"); diagnostics referenced here are `checks.md` V12/V13.
+How a Velle spec reads "*the* one instance for this subject" — the `(Shape for expr)` query form — and exactly when that claim is legal. Companion to [Reference §10](Reference-10-Predicate-expressions) (`## Predicate expressions`, the `for`-query rule) and [§20](Reference-20-State-change-patterns) ("Episodes as data"); diagnostics referenced here are [`checks.md`](checks) [V12](checks#v12--singular-reference-proofs)/[V13](checks#v13--ambiguity-is-a-connected-diagnostic).
 
 ## The forms
 
@@ -12,7 +12,7 @@ latest(Shape where field == expr)      -- ordered selection: the general fallbac
 first(Shape where field == expr)
 ```
 
-- **`(Shape for expr)`** claims there is *at most one* matching instance, and the compiler must be able to prove it. It matches by type: the one to-one field of `Shape` whose type matches `expr`'s type is the field compared. It is legal only when exactly one field type-matches (otherwise V13 — use the `where`-filtered form) *and* the at-most-one proof holds (otherwise V12 — use `latest`/`first`).
+- **`(Shape for expr)`** claims there is *at most one* matching instance, and the compiler must be able to prove it. It matches by type: the one to-one field of `Shape` whose type matches `expr`'s type is the field compared. It is legal only when exactly one field type-matches (otherwise [V13](checks#v13--ambiguity-is-a-connected-diagnostic) — use the `where`-filtered form) *and* the at-most-one proof holds (otherwise [V12](checks#v12--singular-reference-proofs) — use `latest`/`first`).
 - **`latest(...)`/`first(...)`** make no singularity claim — they select from possibly-many by order (the element shape's `timestamp on create` by default). Whenever the proof doesn't hold, this is the honest spelling.
 
 One spelling that is **not** a value: a bare parenthesized filter, `(Shape where field == expr)`, standing alone. `Shape where ...` is Velle's set-denotation — what you write inside `exists (...)`, `count(...)`, `latest(...)` — and a set expression can't stand in element position; nothing in it says "there is one." Wrap it in a selector (`latest(...)`) or, where the proof holds, use the `for` form.
@@ -48,7 +48,7 @@ Everything else fails closed: use `latest`/`first`.
 
 ## Worked example: episodes
 
-The delinquency-episode pattern (Reference §20), where the singular reference closes the episode:
+The delinquency-episode pattern ([Reference §20](Reference-20-State-change-patterns)), where the singular reference closes the episode:
 
 ```
 -- an account is delinquent while its balance is negative
@@ -137,7 +137,7 @@ flag: (OpenDelinquencyFlag for this)                  -- ✔ where the proof hol
 flag: latest(OpenDelinquencyFlag where account == this)  -- ✔ always
 ```
 
-**A transient act as the subject.** `(TransientShape for x)` is illegal everywhere outside the act's own transaction — a transient act is not kept after its commit, so there is no instance to select (check V17; Reference §4, "Transient acts"). Read the durable outcomes its rules produced instead.
+**A transient act as the subject.** `(TransientShape for x)` is illegal everywhere outside the act's own transaction — a transient act is not kept after its commit, so there is no instance to select (check [V17](checks#v17--transient-isolation); [Reference §4, "Transient acts"](Reference-04-State-and-commits#transient-acts-transient-act)). Read the durable outcomes its rules produced instead.
 
 ## `exists` needs no proof
 

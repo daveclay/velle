@@ -652,6 +652,10 @@ object SpecGen {
             val cmp = conjunct.single() as? Binary ?: return skip(ordinal, "non-comparison predicate")
             val fieldPath = cmp.left as? PathExpr ?: return skip(ordinal, "complex comparison subject")
             if (fieldPath.segs.isNotEmpty()) return skip(ordinal, "multi-hop comparison subject")
+            // a derived subject has no boundary value to supply: the committer never
+            // sets it, so no input can be synthesized to cross the bound (batches B7)
+            if (shape.members.filterIsInstance<StoredProp>().none { it.name == fieldPath.root })
+                return skip(ordinal, "derived comparison subject")
             val literal = literalOf(cmp.right) ?: return skip(ordinal, "non-literal bound")
 
             val violating = pickValue(shape.name, fieldPath.root, mustSatisfy = cmp, literal = literal)

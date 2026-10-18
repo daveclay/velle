@@ -2,7 +2,7 @@
 
 The design for generated diagrams — the comprehension artifacts of the
 transpile output, alongside the runtime surface and the executable specs
-(`testgen.md`). Compiling a Velle spec can produce pictures that let an
+([`testgen.md`](testgen)). Compiling a Velle spec can produce pictures that let an
 engineer or a product owner *see* the system: its shapes, its states and what
 moves them, what causes what, and what one act's arrival sets in motion. Every
 picture is derived from the same resolved model the validator checks.
@@ -34,7 +34,7 @@ only authored thing; the runtime, the tests, and every diagram are projections
 computed from it — same spec in, same artifact out, regenerated at every
 compile. A projection cannot drift, and cannot disagree with a sibling
 projection, because none of them is maintained; all of them are derived. This
-is the Reference's "code is fungible" stance (§2) extended to documentation.
+is the Reference's "code is fungible" stance ([§2](Reference-02-Philosophy)) extended to documentation.
 Determinism is also what makes the artifacts *reviewable*: a spec edit
 surfaces as an artifact diff in the pull request, the system's behavioral
 change visible as a picture change, with no human in the loop to forget to
@@ -60,14 +60,14 @@ what Velle derives:
 - An act declared `by` draws one more association, from the act to the
   actor's base shape, labelled with the bound name and the clause
   (`actor (by LicensedPharmacist)`): who commits it, read off the diagram
-  (Reference §22, "The actor").
+  ([Reference §22](Reference-22-Open-unresolved), "The actor").
 - `/name` marks a derived property — UML's marker for a derived attribute.
   Derivation expressions stay out of the class boxes (they live in the spec;
   Mermaid also treats parenthesized member lines as methods); the box says
   only that the property is derived. `captured` fields carry "captured at
   entry"; `frozen` clauses render as member lines, and so do visibility
   clauses, record-level ones as lines of their own and field-level ones on
-  the field (Reference §8, "Who may see a record").
+  the field ([Reference §8](Reference-08-Refinements), "Who may see a record").
 - Declared relationships are edges labeled with the declaring field and the
   inferred inverse collection where one exists (`invoice (inverse lineItems)`),
   with cardinalities from the declaration (`one` / `many` / optional).
@@ -83,7 +83,7 @@ proves their predicates disjoint (whole-expression complements, or
 complementary comparisons on the same reads — `balance <= 0` against
 `balance > 0`); everything else gets its own two-state axis. Where a proof is
 missing the diagram gets weaker, never wrong. The author-declared state
-partition (Reference §22) is the future sharpener — it would name the else-state
+partition ([Reference §22](Reference-22-Open-unresolved)) is the future sharpener — it would name the else-state
 and turn proved-disjoint axes into declared ones.
 
 Arrow directions are proven, not guessed, from three sources:
@@ -109,7 +109,7 @@ property of being in the state. A transient act renders as UML's choice
 pseudostate — partitions decided once, at the commit, the final state being
 the instance's removal — and when the partition guards are complements the
 diagram states the totality outright: every commit takes exactly one branch,
-V18 as a picture.
+[V18](checks#v18--transient-totality-every-request-gets-a-response-coarse) as a picture.
 
 The first build demonstrated that these are analyses, not illustrations: the
 once-through classifier noticed that billing's `ArchivedInvoice = exists
@@ -150,7 +150,7 @@ semantics:
   (`commitInvoice` is inert — a new invoice wakes no rule, visibly).
 - **Guard-disarm is a labeled self-loop.** A rule whose own write provably
   moves its own condition toward false gets a self-edge reading "disarms its
-  own guard" — the canonical-guard pattern (Reference §13) made visible as
+  own guard" — the canonical-guard pattern ([Reference §13](Reference-13-Exit-triggers)) made visible as
   negative feedback, for both the after-commit disarm and the
   sweep-with-memory.
 
@@ -175,7 +175,7 @@ One diagram per act, showing the act's **may-fire cascade**:
   arrow leaves the triggering frame and starts a new one, entered only after
   the first is durable.
 - **Independent sibling firings are a `par` fragment** — and Velle is the rare
-  system where drawing that is *provably honest*: V16 requires sibling order
+  system where drawing that is *provably honest*: [V16](checks#v16--quiescence-coarse) requires sibling order
   not to matter, so the diagram never has to invent a false sequence.
 - **A partition or outcome dispatch is an `alt` fragment**, with the
   refinement predicates as the branch guards.
@@ -191,8 +191,8 @@ and nothing begins), and unresolved conditions stay visible as "when
 1. **Static, per act** (compile time — built): the may-fire cascade
    from the derived trigger sets, with unresolved conditions left as guards.
    Complete, but branchy for deep cascades.
-2. **Example-grounded** (future — rides the `example` construct, Reference §22;
-   `testgen.md` phase 3): spec-carried example instances collapse every `alt`,
+2. **Example-grounded** (future — rides the `example` construct, [Reference §22](Reference-22-Open-unresolved);
+   [`testgen.md`](testgen) phase 3): spec-carried example instances collapse every `alt`,
    diamond, and guard to the branch actually taken — one clean diagram per
    named scenario, generated alongside the test that executes it. Drift
    between "what the picture says" and "what the test asserts" becomes
@@ -228,7 +228,7 @@ so a spec edit surfaces as a readable diagram diff in review.
   `DIAGRAMS-<System>.md` after the rule graph) is the family's *between*-envelope
   member: which acts queue on which keys, and where a system-wide queue forms.
   Per act and per schedule-fired rule, it states the derived queue keys
-  in business words, marks an unexamined system-wide width ⚠ (the A5 advisory's
+  in business words, marks an unexamined system-wide width ⚠ (the [A5](checks#a5--contention-width) advisory's
   row), and shows a tolerated width as accepted, naming the declaration that
   carries `tolerates contention`.
   A sequence diagram is the *within*-envelope view; together they answer "what

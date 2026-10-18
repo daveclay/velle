@@ -1,0 +1,198 @@
+-- Batches: a peptide inventory whose containers come from three places. A
+-- PeptideBatch is a container of one peptide, and it was either fermented
+-- from a bacteria strain, ordered from an outside vendor, or mixed from other
+-- batches already on the shelf. The eleventh Velle spec, written to stress one
+-- modeling question against a domain that needs it: polymorphism over a shared
+-- record. In an object language this is a supertype with three subtypes, each
+-- carrying its own fields; here it has to be said with shapes, a static union,
+-- and refinements.
+--
+-- What the domain asks of the language, and where each answer lives:
+--   · one record, three kinds, each kind with its own data — the hierarchy
+--     inverted: the batch is one base shape holding what every batch has, each
+--     kind of provenance is its own shape, and `origin: one Origin` points at a
+--     static union of the three (Reference §6, "the polymorphic association";
+--     §9). "Exactly one kind" costs nothing: a `one` field holds one value.
+--   · the kind as a question, never a stored tag — refinements over the batch
+--     narrowing by `origin is Fermentation` (Reference §10)
+--   · the components of a mixture, each with how much was taken — an edge that
+--     carries data is a shape of its own (Reference §6, the graduation point),
+--     arriving inline with the composition as its closure (`with`)
+--   · what a batch has left — a derivation over the components that drew from
+--     it, read through the inferred inverse, never a mutated counter
+--   · the books rules — a batch never claims the same origin as another, a
+--     mixture is of one peptide, nothing draws more than a batch holds
+--
+-- What it cannot say, or says at a cost. Each is a probe in this example's
+-- output module (`BatchesProbesTest.kt`) and a finding in OQ16's calibration
+-- record (B1–B8); the one-commit arrival is OQ63.
+--   · the direct translation. Three base shapes under a union share nothing
+--     they declare separately (Reference §9), so a common field like the
+--     quantity is unreadable from the union by the Reference. That is the
+--     cross-shape mixin gap, OQ35. (The validator does not enforce the rule on
+--     a predicate over the union today, and the runtime then resolves the name
+--     per instance — the accepted-by-accident spelling Reference §9 rejects.)
+--   · the batch and its origin in one commit. The batch points forward at its
+--     origin, and a closure only creates parts that point back at their
+--     container (Reference §6, "Closures are trees"), so the origin is committed
+--     first and the batch second. Between the two the origin is on the books
+--     unclaimed, which the spec can show (`UnclaimedOrigin`) but cannot forbid:
+--     a `never` over it would refuse the origin's own commit.
+--   · "a mixture never contains itself, however many steps removed". The
+--     transitive sentence wants a derived set of ancestor batches, and every
+--     spelling of that set reads a field through a `many` hop, which the
+--     evaluator does not do. One step removed is a books rule (`never` below),
+--     and the sequence of commits makes it the only reachable case.
+--   · the inferred inverse of `PeptideBatch.origin` is spelled `peptideBatchs`
+--     (Reference §6 pluralizes with a literal `s`), so the union declares the
+--     view under the readable name (Reference §6, "Renamed and derived
+--     collections").
+--
+-- Comment convention (as in payments.velle): plain comments tell the business
+-- story; `velle:` comments note the language machinery on show.
+
+-- ── Reference data ───────────────────────────────────────────────────────────
+
+act Peptide {
+    code: text
+}
+
+act BacteriaStrain {
+    name: text
+}
+
+-- The fermenter process the lab runs; a batch fermented from a strain comes
+-- out of one of these.
+act FermenterRun {
+    vessel: text
+    startedOn: Date
+}
+
+act Vendor {
+    name: text
+}
+
+-- ── The three kinds of provenance ────────────────────────────────────────────
+
+-- Each kind of provenance is a durable act of its own, holding only what that
+-- kind knows. None of them knows the peptide or the quantity: those belong to
+-- every batch, so they live on the batch.
+
+act Fermentation {
+    strain: one BacteriaStrain
+    run: one FermenterRun
+}
+
+act ExternalOrder {
+    vendor: one Vendor
+    orderItem: text
+}
+
+-- A composition arrives with its components: which batches were drawn from
+-- and how much of each. The components are created in the composition's own
+-- commit; the batches they draw from already exist and are named by reference.
+-- velle: the act's closure (Reference §6, "Inline part creation") — `components`
+-- is the inverse inferred from Component.composition
+act Composition {
+    mixedOn: Date
+    drawnMg: decimal = sum(components, amountMg)
+} with components
+
+-- velle: the edge carries an amount, so it is a shape, not a bare `many`
+-- (Reference §6, the graduation point). Its two `one` fields target different
+-- shapes, so both inverses infer under their default names.
+shape Component {
+    composition: one Composition
+    source: one PeptideBatch
+    amountMg: decimal
+}
+
+never (Component where amountMg <= 0)
+
+-- velle: a static union — a pure `or` of base shapes, so a legal field type
+-- (Reference §6). It exposes `id` and the inverses inferred through fields
+-- typed with it; everything a kind knows is reached by narrowing. The body
+-- declares the inferred inverse under its readable name (the inferred one is
+-- `peptideBatchs`), a derived view over the declared side (Reference §6,
+-- "Renamed and derived collections").
+shape Origin = Fermentation or ExternalOrder or Composition {
+    peptideBatches: many PeptideBatch = (PeptideBatch where origin == this)
+}
+
+-- ── The batch ────────────────────────────────────────────────────────────────
+
+-- velle: `origin: one Origin` is the polymorphic association. A `one` field
+-- holds exactly one value, so "a batch has exactly one kind of provenance" is
+-- structural, with no exclusivity rule to write and none to forget.
+act PeptideBatch {
+    peptide: one Peptide
+    quantityMg: decimal
+    origin: one Origin
+    -- what has been drawn from this batch into mixtures, and what is left
+    -- velle: a derivation over the inverse inferred from Component.source
+    consumedMg: decimal = sum(components, amountMg)
+    remainingMg: decimal = quantityMg - consumedMg
+    -- the kind, read off the origin, never stored
+    -- velle: narrowing in a conditional; with three operands the final else
+    -- is the third operand (Reference §10)
+    kind: text = if origin is Fermentation then "fermented"
+                 else if origin is ExternalOrder then "ordered"
+                 else "composite"
+}
+
+never (PeptideBatch where quantityMg <= 0)
+
+-- The three kinds, as refinements the rest of the spec and the read side use.
+-- velle: `is <Operand>` on a union-typed field (Reference §10)
+shape Fermented = PeptideBatch where origin is Fermentation
+shape Ordered   = PeptideBatch where origin is ExternalOrder
+shape Composite = PeptideBatch where origin is Composition
+
+-- One origin, one batch: a fermentation or an order or a mixture yields one
+-- container. Counting the arriving batch among its origin's batches refuses
+-- the second claim at the door.
+-- velle: the view declared on the union, read through the union-typed field
+never (PeptideBatch where count(origin.peptideBatches) > 1)
+
+-- A mixture is of one peptide: every component was drawn from a batch of the
+-- peptide the mixture is labelled as.
+-- velle: the filter runs over the declared shape and matches the composition
+-- by comparison. The narrowed spelling — `origin is Composition and exists
+-- (origin.components where ...)` — is refused today: narrowing is lost on a
+-- filter's source path (OQ44 §3; probe B4). `this.` reaches the batch from
+-- inside the filter.
+never (PeptideBatch where exists (Component where composition == this.origin and source.peptide != this.peptide))
+
+-- Nothing draws more than a batch holds. The components arrive in the
+-- composition's commit, so this is checked once the whole closure has landed.
+never (PeptideBatch where remainingMg < 0)
+
+-- A mixture never draws from the batch it produces. One step removed is a
+-- books rule over the component. The transitive sentence is not evaluable
+-- (see the header and `BatchesProbesTest.kt`), and does not need to be: a
+-- component's source is a batch that existed before the composition, and the
+-- composition exists before the batch it becomes, so a batch can only ever
+-- draw from batches older than itself.
+never (Component where source.origin == composition)
+
+-- ── What happens as batches are used up ──────────────────────────────────────
+
+-- The origin side of the two-commit arrival, as data: an origin on the books
+-- that no batch has claimed yet. Visible, and reportable; not forbiddable.
+shape UnclaimedOrigin = Origin where peptideBatches is empty
+
+-- A batch drawn down to nothing is depleted; the lab is told once per
+-- depletion, with the batch's kind in the notice.
+-- velle: entry by a series creation read through an inferred inverse — a
+-- Composition's closure landing, not a write to the batch's own columns
+shape Depleted = PeptideBatch where remainingMg <= 0
+
+shape DepletionNotice {
+    batch: one PeptideBatch
+    kind: text
+    noticedOn: DateTime
+}
+
+rule NoteDepletion when Depleted {
+    DepletionNotice from { batch: this, kind: kind, noticedOn: now }
+}

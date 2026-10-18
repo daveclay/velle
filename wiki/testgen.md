@@ -1,7 +1,7 @@
 # Velle Spec Generation (testgen)
 
 The design for generated executable specs — the third artifact of the transpile
-output (Reference §22, "The extension framework"): alongside the runtime surface,
+output ([Reference §22](Reference-22-Open-unresolved), "The extension framework"): alongside the runtime surface,
 the transpiler emits **tests derived from the Velle spec**, organized so a human
 can *find* the use case. The philosophy this serves: reading code is the hardest
 problem in software; Velle surfaces what matters — the spec, and readable,
@@ -71,7 +71,7 @@ reach the interesting state* is human judgment. The contract:
   demands a human-owned exit action beside the state-given
   (`delinquent()` / `exitDelinquent(member)`), since which commit recovers
   the value is business judgment. An act declared `by` is committed by
-  someone (Reference §22, "The actor"), so a derived commit demands a given
+  someone ([Reference §22](Reference-22-Open-unresolved), "The actor"), so a derived commit demands a given
   for the actor too — `someStaff()`, or `someAdministrator()` when the
   header names the role — and passes it beside the input
   (`sys.commit(NewVerifyFill(fill, ...), actor)`); the role gate the header
@@ -98,4 +98,4 @@ reach the interesting state* is human judgment. The contract:
    fold value assertions via the evaluator.
 3. **The `example` construct**: the spec itself carries named example instances,
    collapsing the human-givens tier into full derivation — the description
-   becomes self-illustrating (Reference §22).
+   becomes self-illustrating ([Reference §22](Reference-22-Open-unresolved)).
