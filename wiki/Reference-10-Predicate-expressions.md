@@ -1,37 +1,63 @@
 # 10. Predicate expressions
 
-The expression language usable inside `where` — refinement definitions, inline collection filters, and `never` declarations.
+A predicate is a yes-or-no question asked of one record: is this invoice overdue, does this ticket have an assignee, has a receipt been sent for this payment. Predicates are how a spec says which records a rule applies to and which configurations are forbidden. This page teaches the expressions you can write inside one. After reading it you can write the `where` clause of any [refinement](Reference-08-Refinements), any inline filter over a collection, and any [`never`](Reference-21-never) declaration.
 
-**Comparisons:** `==`, `!=`, `<`, `<=`, `>`, `>=`. `==` is the only spelling for value equality — `=` is reserved for shape definition (`shape X = Y where ...`). On shape instances, `==` compares identity — `a == b` is `a.id == b.id` (`## Scalars`) — never field-by-field structure.
+## Comparing values
 
-**`is`** — one operator, three sanctioned right-hand forms:
-- optionality: `assignee is none`, `response is some` — valid on an optional (`?`) field or to-one relationship
-- collection emptiness: `corrections is not empty` — valid on a `many` relationship or collection expression
-- refinement membership: `alert is UnacknowledgedAlert`, `this is FlaggedCustomer` (in the predicate of a `requires` declaration, and only there, also spelled `pharmacist to be LicensedPharmacist` — `## never`), and its negation `invoice is not IssuedInvoice` — the spelling of non-membership, the same predicate as the general negation `not (invoice is IssuedInvoice)`, and the one the language's own diagnostics and examples use — valid whenever the left side's shape shares a base with the named refinement, or the named set is an operand of the left side's static union (`target is Post` on a `target: one Content` — a base shape is a member set like any other); a test with no base in common is a compile error, never trivially false. Within a conjunction it also *narrows*, licensing access to the named set's own properties (`## Refinements`; an operand's own fields, `## Composing refinements`), the same way `is some` licenses `.` on an optional — and in a conditional the else-branch of a two-operand union narrows to the other operand, since an instance has exactly one base
+The comparison operators are `==`, `!=`, `<`, `<=`, `>`, and `>=`.
 
-**`exists`** — `exists Receipt for this`, `not exists AccountFlagResolved for this` — tests whether any instance of a shape references the given subject via `for`.
+- `==` is the only spelling of equality. `=` is for defining a shape (`shape X = Y where ...`) and for [assignment](Reference-12-Assignment).
+- Comparing two records with `==` asks whether they are the same record, by their `id` ([§5](Reference-05-Scalars)). It never compares them field by field.
 
-**Bare boolean atoms** — a boolean-typed path is a complete predicate atom on its own: `where applied` and `where not applied` are grammatical, equivalent to `applied == true` / `applied == false` — so a flag refinement reads as the business phrase (`Deposit where not applied`).
+Text values also support `contains`, `starts with`, `ends with`, and `like`, all case-sensitive. In a `like` pattern, `%` matches any run of characters, including none, `_` matches one character, and `\` escapes either.
 
-**`for` field ambiguity.** `for <expr>` matches by type: whichever field on the shape has a type matching `<expr>`'s type is the one compared against (or populated, in an effect clause). This breaks the moment a shape has two fields of the same type — e.g. `Referral { referrer: one Customer, referee: one Customer }` makes `exists Referral for this` ambiguous, and there's no reading of "this customer" that says whether it means referrer or referee. `for <expr>` is sugar for the common, unambiguous case; when it doesn't apply — two fields match, or a second condition on the same matched instance is needed — fall back to the general `where`-filtered form `exists` already shares with `count`/`sum`:
+## Testing presence, emptiness, and membership with `is`
+
+`is` has three uses.
+
+**Presence of an optional value.** `assignee is none` and `response is some` test whether an optional field or an optional to-one relationship holds a value.
+
+**Emptiness of a collection.** `corrections is empty` and `corrections is not empty` test a `many` relationship or any collection expression.
+
+**Membership of a refinement.** `alert is UnacknowledgedAlert` asks whether the record is currently in that refinement. `invoice is not IssuedInvoice` is the negation, the same as `not (invoice is IssuedInvoice)` and the spelling Velle's diagnostics use. Inside a `requires` declaration, and only there, membership may also be written `pharmacist to be LicensedPharmacist` ([§21](Reference-21-never)).
+
+A membership test is legal when the left side and the named refinement share a base shape, or when the named shape is an operand of the left side's static union ([§6](Reference-06-Relationships)): `target is Post` on a field `target: one Content`. A test between shapes with no base in common is a compile error, not a test that is always false.
+
+**A membership test also narrows.** Once `x is Refinement` holds earlier in the same `and` chain, the rest of the chain may read the refinement's own properties through `x` ([§8](Reference-08-Refinements); for a union operand's own fields, [§9](Reference-09-Composing-refinements)). In an `if` expression, the `else` branch of a test over a two-operand union narrows to the other operand, since a record has exactly one base.
+
+## Testing for related records with `exists`
+
+`exists Receipt for this` asks whether any `Receipt` points at the current record, and `not exists AccountFlagResolved for this` that none does. `for` picks the field on `Receipt` whose type matches the subject.
+
+That shorthand stops working when the shape has two fields of the matching type. Given `Referral { referrer: one Customer, referee: one Customer }`, `exists Referral for this` cannot say which field is meant. Write the general form, which filters the shape with `where`:
 
 ```
 exists (Referral where referee == this)
 exists (Referral where referee == this and referrer is VipCustomer)
 ```
 
-Reads as an actual sentence and needs nothing beyond `==` and `where`. `for <expr>` never grows a second syntax to handle what it can't — it just stops applying, and the general form was already there to fall back to.
+The general form is also how to add a second condition on the related record, as the second line shows.
 
-**Aggregates** take a collection expression as their first argument — a relationship filtered by `where` (`invoices where OverdueInvoice`) is already a complete collection expression on its own, not special call syntax:
+## Boolean fields as conditions
+
+A boolean field is a complete condition on its own. `where applied` means `applied == true`, and `where not applied` means `applied == false`, so a flag refinement reads as the business phrase: `Deposit where not applied`.
+
+## Counting and summing
 
 ```
 count(<collection-expr>)
 sum(<collection-expr>, <field>)
 ```
 
-**Relationship traversal** is ordinary dot access (`response.outcome`, `ward.admissions`), including through a relationship back to the same shape (self-reference — no special syntax needed).
+The first argument is any collection expression. A relationship filtered with `where`, such as `invoices where OverdueInvoice`, is one, so `count(invoices where OverdueInvoice)` needs no further syntax.
 
-**Dot access through an optional** requires the left side to be provably non-absent — either its type isn't optional, or it's been narrowed by an `is some`/`is none` check earlier in the same conjunction (`and`) or the corresponding branch of a value-expression conditional. Plain, unnarrowed `.` on an optional is a compile error. `?.` — reusing the existing `?` optionality marker in a new position, not a new symbol — is the explicit escape valve: it short-circuits the rest of the chain to `none` if that link is absent, with no narrowing required:
+## Reaching through relationships
+
+A relationship is followed with a dot: `response.outcome`, `ward.admissions`, including a relationship back to the same shape.
+
+A dot through an optional value is allowed only when the value is known to be present: its type is not optional, or an `is some` or `is none` test earlier in the same `and` chain, or in the matching branch of an `if`, has established it. Plain `.` on an optional value with no such test is a compile error.
+
+`?.` needs no test. If the value on its left is absent, the rest of the path evaluates to `none`:
 
 ```
 shape Foo {
@@ -40,9 +66,11 @@ shape Foo {
 }
 ```
 
-Both forms stay legal — narrowed `.` when a predicate already needs to branch on presence anyway, `?.` when it doesn't and propagation is all that's wanted.
+## Naming a level with `as`
 
-**`as` — naming an intermediate binding.** `this` is the built-in, always-present alias for the outermost subject a refinement is defined over; a bare unqualified field name means the innermost collection-filter's element. Plain traversal through any number of hops needs neither — `exists (invoices where OverdueInvoice and count(payments where FailedPayment) >= 1)` needs no binding at all, since each hop is evaluated relative to whatever scope is current at that point in the text. `as` only earns its keep when a *deeper* nested scope needs to reach back to a *middle* level's own field — `this` skips past the middle straight to the root, and bare names in the deeper scope mean the deeper level, not the middle one:
+Inside a predicate, `this` always means the record the refinement is defined over, however deep the nesting. A bare field name means a field of the innermost collection being filtered. Most nested expressions need nothing more: `exists (invoices where OverdueInvoice and count(payments where FailedPayment) >= 1)` reads each name relative to the collection it sits in.
+
+`as` names a middle level so a deeper level can read it. Here the filter over `payments` must compare against the invoice's own amount. `this` would mean the customer, and a bare `amount` the payment's:
 
 ```
 shape CustomerWithOverpayment =
@@ -52,9 +80,11 @@ shape CustomerWithOverpayment =
   )
 ```
 
-`inv.amount`, needed from inside `payments`' own `where`, has nowhere else to come from — `inv` is what keeps the middle level reachable once a deeper scope opens. An alias is visible within the predicate it's declared over and anything nested inside that scope, the same as a SQL correlated subquery — it doesn't leak to the enclosing scope or across to a sibling `as` binding.
+An `as` name is visible inside the predicate it is declared in and anything nested within it, not outside it and not to a second `as` name beside it.
 
-**Sibling joins** — correlating two independently-filtered collections against each other (not a straight chain) — take a comma-separated list of bindings instead of one, all visible to each other and to a single shared `where`:
+## Comparing two collections at once
+
+To match records from two collections of the same subject against each other, list both bindings with a comma and write one shared `where`:
 
 ```
 shape CustomerWithMatchingIssue = Customer where
@@ -62,9 +92,13 @@ shape CustomerWithMatchingIssue = Customer where
         where tix is OverdueTicket and ord is ReturnedOrder and ord.product == tix.product)
 ```
 
-Every binding in the list must be reachable as a relationship from the same enclosing subject (`this`, or the enclosing `as` alias) — a correlated join relative to a shared parent, not an arbitrary cross-product of any two shapes in the system. A single binding (`invoices where OverdueInvoice`, `invoices as inv where ...`) is just the one-binding case of this same rule.
+Every binding in the list must be a relationship of the same enclosing subject. Collections of unrelated shapes cannot be joined this way.
 
-**`for` as a query expression** (e.g. `(NurseVerification for this).nurse`) is legal only when the compiler can prove at most one matching instance exists *and* exactly one field matches by type — because a guard refinement elsewhere in the spec proves at most one can exist (the whole-spec singularity proof — `## Run-once guards` and "Episodes as data" in `## State-change patterns`), or the relationship is to-one from the other side. The subject may be a refinement (`(OpenDelinquencyFlag for this)`) — at-most-one is usually a property of a *state*, not a shape; the full legality catalog, worked examples and diagnostics included, is [`singular_references.md`](singular_references). Otherwise, disambiguate with `latest`/`first` over a `where`-filtered collection instead — the same fallback as the field-ambiguity case above, not a second mechanism:
+## Reading the one related record
+
+Sometimes a predicate needs the related record itself, not just whether it exists: `(NurseVerification for this).nurse`. This form is allowed only when exactly one field on `NurseVerification` matches the subject's type and the compiler can prove at most one such record exists. The proof usually comes from a rule elsewhere in the spec whose condition prevents a second record, as in [§20, "Counting and timing the episodes"](Reference-20-State-change-patterns#counting-and-timing-the-episodes), or from the relationship being to-one from the other side. The subject may be a refinement, as in `(OpenDelinquencyFlag for this)`, since "at most one" is usually true of a state rather than a shape. The full set of cases, with examples and diagnostics, is [`singular_references.md`](singular_references).
+
+When at most one cannot be proved, or two fields match, pick the record with `latest` or `first` over a filtered collection:
 
 ```
 latest(Shape for expr by receivedOn)
@@ -72,11 +106,20 @@ first(Shape for expr by receivedOn)
 latest(Referral where referrer == this by referredOn).referee
 ```
 
-**Selector ordering is the author's statement — explicit and mandatory.** `latest`/`first` carry a `by` clause naming one or more orderable properties of the element (`latest(payments by receivedOn)`; further comma-separated datums break ties). There is no implicit ordering source: "creation order" is spelled by naming the shape's declared creation timestamp (`by correctedOn`), and a shape with no orderable datum simply cannot be selected over until the author declares one — ordering comes from data, never from minted values (`## Scalars`: `id` is unordered). A selection whose declared datums fail to discriminate the winning position is the model underspecified, and fails loudly rather than silently picking. The sharpest instance is structural: two instances committed in one transaction carry *identical* commit timestamps by definition — a commit is one discrete moment — so discriminating same-transaction siblings always requires an author-carried datum (an act-supplied sequence, a business time), which is the tick law's cousin: ordering, like memory, must be data.
+**`by` is required.** `latest` and `first` always name the property to order by, and further comma-separated properties break ties: `latest(fills by filledOn, fillNumber)`. There is no default order. To order by creation, name the shape's declared creation timestamp ([§5](Reference-05-Scalars)); `id` carries no order. If the named properties do not single out a winner, the selection fails rather than choosing silently. Two records committed in one transaction carry identical commit timestamps, so telling them apart needs a property the business supplies, such as a sequence number.
 
-**Duration arithmetic**: `today - 7 days`, `now + 14 days` — an integer literal plus a unit (`seconds`/`minutes`/`hours`/`days`/`weeks`), added to or subtracted from a `Date`/`DateTime`. Semantically, `3 days` is the duration constructor `days(3)` — a function returning a duration value — and `+`/`-` are the duration-accepting operations on `Date`/`DateTime`: sugar the compiler lays over what `java.time` already provides, not a bespoke temporal engine. The step follows the receiver: on a `Date` it is a calendar step (`java.time.Period` semantics — `+ 1 days` is the next calendar date); on a `DateTime` it is exact clock time (`java.time.Duration` — `days(3)` is 72 hours).
+## Dates and durations
 
-Grammar, informally:
+`today - 7 days` and `now + 14 days` add or subtract a duration from a `Date` or `DateTime`. A duration is an integer followed by `seconds`, `minutes`, `hours`, `days`, or `weeks`. On a `Date` the step is a calendar step: `+ 1 days` is the next calendar date. On a `DateTime` it is exact clock time: `3 days` is seventy-two hours.
+
+## What the compiler checks
+
+- The compiler rejects a comparison between values of different types, a text operator on a non-text value, duration arithmetic on anything but a `Date` or `DateTime`, a `by` property that is not orderable, and `x is R` when `x` and `R` share no base shape ([checks.md, F2](checks#f2--type-checking)).
+- The compiler rejects plain `.` through an optional value with no earlier presence test, and names `?.` as the alternative ([checks.md, V11](checks#v11--narrowing-analysis)).
+- The compiler rejects `(Shape for expr)` and `exists Shape for expr` when more than one field matches the subject's type, or when it cannot prove at most one record exists. The diagnostic asks for `latest` or `first` over a filtered collection ([checks.md, V12](checks#v12--singular-reference-proofs)).
+- When a change to a shape, such as a second `Customer` field, makes an existing `for` ambiguous, the compiler reports one diagnostic naming the declaration and every expression it broke ([checks.md, V13](checks#v13--ambiguity-is-a-connected-diagnostic)).
+
+## Grammar
 
 ```
 predicate      := disjunction
@@ -124,4 +167,10 @@ binding        := path ("as" Identifier)?
 duration       := IntegerLiteral ("seconds"|"minutes"|"hours"|"days"|"weeks")
 ```
 
-The **whole-language grammar** — declarations, statements, and value expressions — is [`grammar.md`](grammar), which incorporates this section's predicate grammar by reference and generalizes its `expr` to full value expressions.
+The grammar for the whole language is [`grammar.md`](grammar). It includes this predicate grammar and widens `expr` to full value expressions.
+
+## Related pages
+
+- [§8 Refinements](Reference-08-Refinements) and [§9 Composing refinements](Reference-09-Composing-refinements), where predicates define named subsets of a shape.
+- [§14 `for`](Reference-14-for), the same keyword used when creating a record.
+- [§21 `never`](Reference-21-never), a predicate naming a forbidden configuration.

@@ -1,6 +1,8 @@
 # 15. `then`
 
-Explicit, opt-in ordering between two effects that have no data dependency forcing an order:
+A rule body may hold several statements. Velle runs them in any order unless one depends on another's result. `then` forces an order between two statements when the data does not. This page teaches when `then` is needed.
+
+"Write the audit entry before attempting the charge":
 
 ```
 rule InitiateCharge when Order {
@@ -16,6 +18,16 @@ rule InitiateCharge when Order {
 }
 ```
 
-Effects listed without `then` are unordered — the transpiler/AI-assisted codegen is free to run them in any order or in parallel. Effects joined by `then` are forced into that order. Ordering that *is* implied by data dependency (one effect's input is another's output) never needs `then` — it falls out of the input/output graph for free.
+Neither statement reads what the other produces, so without `then` either could run first. With `then`, the audit entry is always written first.
 
-`then` and `from` don't compete: `then` orders *statements*, `from` is the *form* of one statement. There is no one-effect header collapse — a rule whose body is a single effect is simply a one-statement body (`## Assignment (mutation in place)`'s no-sugar stance extends here). A rule's body is exactly one commit, so `then` orders effects *within* that commit — an ordering commitment for compilation, never an observable intermediate state (`## rule`, "Transactions and `after commit`").
+When one statement reads another's result, the order is already fixed and `then` is not needed.
+
+A rule body is one commit ([§11](Reference-11-rule-when-on)). `then` orders statements inside it. Nothing outside the rule can see a state between the two statements.
+
+`then` sits between two statements; `from` is the form of one creation statement ([§14](Reference-14-for)). A one-statement body has no `then`.
+
+Rules using `then`: `examples/membership/membership.velle`, `examples/pharmacy/pharmacy.velle`.
+
+## Related pages
+
+- [§11 rule](Reference-11-rule-when-on), for what one commit means.

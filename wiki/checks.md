@@ -80,7 +80,7 @@ A `from { ... }` block supplies every field the created shape declares (minus la
 
 ### V12 — Singular-reference proofs
 
-([§10](Reference-10-Predicate-expressions).) `(Shape for expr)` and bare `for`-sugar are legal only when exactly one field type-matches *and* at-most-one instance is provable — from a guard refinement elsewhere in the spec (the whole-spec singularity proof, [§20 "Episodes as data"](Reference-20-State-change-patterns#episodes-as-data)) or a to-one inverse. Otherwise: demand `latest`/`first` over a `where`-filtered collection.
+([§10](Reference-10-Predicate-expressions).) `(Shape for expr)` and bare `for`-sugar are legal only when exactly one field type-matches *and* at-most-one instance is provable — from a guard refinement elsewhere in the spec (the whole-spec singularity proof, [§20 "Counting and timing the episodes"](Reference-20-State-change-patterns#counting-and-timing-the-episodes)) or a to-one inverse. Otherwise: demand `latest`/`first` over a `where`-filtered collection.
 
 ### V13 — Ambiguity is a connected diagnostic
 

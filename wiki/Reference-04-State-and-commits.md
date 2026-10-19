@@ -1,16 +1,41 @@
 # 4. State and commits
 
-Velle abstracts away the database. The system's **state** is a black box: the set of all shape instances and their stored properties. How that state is physically kept — tables, documents, caches, indexes — is a compiling concern (`## 1. Principles`); no CRUD vocabulary, storage API, or save/load call exists in the language.
+Velle has no database vocabulary. There is no save, load, insert, or query call to write. Instead, the system has a *state*, the set of every record and its stored values, and the only way that state ever changes is a *commit*: one change entering the state at one moment. This page covers where commits come from, how create, update, read, and delete are written, which changes land together as one transaction, and how to declare a request that is answered but not kept.
 
-The one way state ever changes is a **commit**: one mutation entering the state at a discrete moment — an external act submitting a new shape instance (committing an instance *is* persisting the record — `## Assignment (mutation in place)`, "No act-level sugar"), a scheduled tick, which is a commit whose changed datum is `today` (`## Schedule triggers`), or a rule firing's effects (`## rule`). A rule's body is exactly one commit, and a firing's effects are a *new* commit that may match further rules' conditions just as an act's commit would — rules react to conditions holding at commits, never to other rules; there is no call graph. A system never does anything on its own; every change to state traces to some commit.
+## What the state is
 
-The CRUD replacement reads off directly: "create" is committing a new instance, "update" is an assignment fired by a rule (`## Assignment (mutation in place)`), "read" is any predicate or derivation evaluated against current state, and "delete" is a rule effect, `delete <path>`, whose legality the compiler derives from everything the spec proves using the instance's existence (`## Assignment (mutation in place)`, "Deletion"). What that derivation protects is the fact-recording stance: a produced fact records something that happened in the world, and deleting it would make the description lie (`## Exit triggers`) — while a current-state record is deletable exactly where nothing the spec proves depends on it. Where the business needs reversal rather than removal, that's a policy expressed as data (`## Open / unresolved`, Reversal).
+The state is every instance of every [shape](Reference-03-shape), with its stored properties. How it is physically kept is decided when the spec is compiled, not in the spec ([§1](Reference-01-Principles)).
 
-Because a commit is a discrete moment, pre-state and post-state are both well-defined at it — which is what lets entry into and exit from a refinement mean something precise, with no hidden bookkeeping (`## rule ... when ... on ...`). By default, an act's commit and every commit its consequences produce stand or fall together — one all-or-nothing envelope that a rule opts out of with `after commit` (`## rule`, "Transactions and `after commit`"). An act's commit carries exactly **one statically-shaped closure** — a single instance in the common case, the act plus its declared inline parts when the act's declaration says the parts arrive with it (`## Relationships`, "Inline part creation"). "Several things arrive together" is not a special commit kind but an ordinary modeling call — a container shape whose single instance is the committed act, with the parts as related shapes — and closure membership is declared, never data-dependent, which is what lets "can these triggers coincide?" be answered from trigger shapes alone (`## Assignment (mutation in place)`, one-writer). Still open: the order-independence and quiescence proofs (OQ16).
+## Where commits come from
+
+Nothing happens on its own. Every change traces to one of three kinds of commit:
+
+- **An act arrives.** Something outside the system submits a new instance of a shape declared `act`. Committing the instance is what stores it; there is no separate save step ([§12, "A shape body cannot assign"](Reference-12-Assignment#a-shape-body-cannot-assign)).
+- **A schedule ticks.** A [scheduled rule](Reference-17-Schedule-triggers) runs because the date changed. The tick is a commit whose changed value is `today`.
+- **A rule fires.** A [rule](Reference-11-rule-when-on) whose condition holds at a commit runs its body. The body is exactly one commit.
+
+A rule's effects are a new commit, which can match other rules' conditions in turn. Rules never call each other; they react to what a commit changed.
+
+## Create, update, read, delete
+
+- **Create** is committing a new instance, from an act or from a rule body.
+- **Update** is an [assignment](Reference-12-Assignment) in a rule body.
+- **Read** is any predicate or [derived property](Reference-07-Derived-properties) evaluated against the current state.
+- **Delete** is the rule effect `delete <path>` ([§12, "Deletion"](Reference-12-Assignment#deletion-delete)). A record of something that happened in the world is not deletable, because removing it would make the spec's account of the past false ([§13](Reference-13-Exit-triggers)). A record of current state is deletable wherever nothing the spec proves depends on it.
+
+When the business needs to reverse something rather than remove it, write the reversal as a record of its own ([§22](Reference-22-Open-unresolved), "Reversal").
+
+## One commit, one transaction
+
+A commit happens at one moment, so the state before it and after it are both well defined. That is what lets a rule fire when a record *enters* or *leaves* a [refinement](Reference-08-Refinements) ([§11](Reference-11-rule-when-on)).
+
+By default, an act's commit and every commit its rules produce stand or fall together. If any of them fails, none of them lands. A rule opts out with `after commit`, which runs its body in a transaction of its own ([§11, "Transactions and `after commit`"](Reference-11-rule-when-on#transactions-and-after-commit)).
+
+An act's commit carries one instance, or the act plus the parts its declaration says arrive with it ([§6, "Inline part creation"](Reference-06-Relationships#inline-part-creation-with)). Which parts belong is fixed by the declaration, never by the data. When several things arrive together, make the thing that contains them the act and the parts related shapes.
 
 ## Transient acts (`transient act`)
 
-By default, committing an act *is* persisting the record — the act is simultaneously a request and a durable business fact (`Payment`, `EmailChange`). But some incoming acts are **inputs to the state, not members of it**: a request whose entire meaning is decided at arrival, whose durable trace should be what the system *did about it*, not the request itself. Declaring the act `transient` declares that:
+Committing an act normally stores it: a `Payment` or an `EmailChange` is both a request and a durable business fact. Some requests should not be kept. Their meaning is decided when they arrive, and the durable record should be what the system did about them, not the request itself. Declare such an act `transient`. From `examples/billing/billing.velle`:
 
 ```
 transient act ChangeDueDate {
@@ -19,11 +44,31 @@ transient act ChangeDueDate {
 }
 ```
 
-A transient act's instance exists only within its own commit's transaction: its refinements are evaluated exactly once — at that commit, against the state of that moment — its rules fire, its consequences persist, and at the transaction's close the instance is gone ([`evaluation.md`, "Transient acts"](evaluation#transient-acts-transient-act)). For an ordinary act, a partition like applicable/refused is re-evaluated whenever the partitioning state changes — an act applied long ago can drift into the refused side when the state later flips (the drift hazard, advisory [A4](checks#a4--drift-exposed-act-partition); worked exhibit `examples/partition-drift/`). For a transient act that re-evaluation never happens, because there is no later act: the hazard is structurally impossible rather than checked.
+A transient act's instance exists only inside its own commit's transaction. Its refinements are evaluated once, at that commit. Its rules fire, and what they create or change is stored. When the transaction closes, the instance is gone ([`evaluation.md`, "Transient acts"](evaluation#transient-acts-transient-act)).
 
-The declaration carries two obligations (checks [V17](checks#v17--transient-isolation)–[V18](checks#v18--transient-totality-every-request-gets-a-response-coarse)):
+**Why a request would be transient.** An ordinary act stays in the state, so a refinement over it such as "refused" is re-evaluated whenever the data it reads changes. A request applied long ago can drift into the refused side when its invoice is later issued, and a rule on that side would fire again. The compiler warns about that ([checks.md, A4](checks#a4--drift-exposed-act-partition); worked example: `examples/partition-drift/partition_drift.velle`). A transient act is evaluated once and is then gone, so it cannot drift.
 
-- **Isolation** — nothing durable or later may depend on the act: no shape may hold a relationship to it (outcome records *copy* the fields they need — which is also the author declaring which slice of the request is durable business data), its name may appear in no expression, and its rules may fire only `on commit` — no `after commit`, no schedules, no `when leaving`. Asynchronous work hangs off a durable intent the handling rule materializes, the intent-before-effect pattern (`## rule`, "Transactions and `after commit`").
-- **Every request gets a response** — a transient act nothing answers would be ignored with *no record it ever arrived* (an ordinary act at least sits visibly unprocessed). So the answers must provably cover every instance in every reachable state — a compile error otherwise, which is the compiler asking the product question "what should happen to this request in this situation?" and refusing to proceed until the spec answers. An answer is a rule's condition *or a `never` over the act* — the boundary refusal is a response, and pairing a rule with a complementary `never` is the pure-validation rung: the caller is told, and nothing is kept at all (membership's `AssignTicket`; contrast billing's `ChangeDueDate`, where the refusal is a business record — which to keep is a product decision, made per act). v0 proves the coarse slice: an answer on the bare act shape, or a complementary pair (`P` / `not P`); per-reason refusals live in one complement rule with a conditional reason value.
+**What a transient act may not do.** Nothing durable or later may depend on it:
 
-**Correlating responses to requests.** Because the instance is gone at the transaction's close, there is no system-assigned request id for a caller to point at later. Where a durable outcome must be matched back to the request that caused it — or the same request submitted twice must be applied once — the act carries a **correlation key**: a client-supplied field (`requestKey: text`) whose value every outcome record copies, the idempotency-key pattern real APIs already use (the caller mints one key per logical request, so a resubmission arrives carrying the same key). Everything the pattern needs already exists: the caller supplies the key, outcomes copy it like any other field, and a duplicate-detection guard reads it off the durable outcome (`not exists (BidRecord where requestKey == this.requestKey)`). This is deliberately a documented idiom rather than language machinery (settled OQ26): the key's uniqueness is the client's to own — the language can neither check nor supply it without storing or minting client keys, a layer below the abstraction it occupies. The per-outcome copy and the per-rule guard conjunct are the author's visible decisions about which requests must be idempotent, the same trade as `## Run-once guards`' "No guard sugar"; and two copies of one request racing in flight are simply two transactions, serialized like any others ([`evaluation.md`, "The universal transaction"](evaluation#the-universal-transaction)), the later one meeting whatever guard the author wrote.
+- No shape may hold a relationship to it. A record that needs some of the request's values copies them into its own fields. Choosing which fields to copy is choosing which parts of the request are durable.
+- Its name may not appear in any expression.
+- Its rules fire only `on commit`: no `after commit`, no schedule, no `when leaving`. Work that must happen later hangs off a durable record a rule creates from the request ([§11, "Transactions and `after commit`"](Reference-11-rule-when-on#transactions-and-after-commit)).
+
+**Every request gets a response.** A transient act that no rule answers in some situation would be ignored, with no record that it arrived. The compiler therefore requires that every instance is answered in every reachable state. Otherwise the spec is rejected with a message naming the act and the unanswered situation.
+
+An answer is a rule whose condition covers the instance, or a [`never`](Reference-21-never) over the act. A `never` refuses the request at the door and keeps nothing. A rule can instead create a refusal record, making the refusal a business fact. Which to use is a product decision, made per act. `AssignTicket` in `examples/membership/membership.velle` is refused by a `never`; `ChangeDueDate` in `examples/billing/billing.velle` creates a `DueChangeRefusal`.
+
+The compiler proves coverage when one answer covers the bare act, or when two answers have complementary conditions, `P` and `not P`. Anything else is rejected. To refuse for several reasons, write one rule on the complement whose reason field is a conditional value.
+
+**Matching a response to its request.** The instance is gone when the transaction closes, so there is no system-assigned id a caller can refer to afterwards. When a caller must find a request's outcome, or may submit it twice, give the act a caller-supplied field such as `requestKey: text`, and copy it into every outcome record. The caller mints one key per request, so a resubmission carries the same key, and a rule can refuse the duplicate with a guard such as `not exists (BidRecord where requestKey == this.requestKey)`. Velle does not check that keys are unique; that is the caller's job. Two copies arriving at once run as two transactions, one after the other, and the second meets the guard. `RequestGreenhouseTrial` in `examples/peptides/peptides.velle` copies the key into its approval and refusal records.
+
+## What the compiler checks
+
+- **Rejects** anything that would depend on a transient act after its commit, as listed above ([checks.md, V17](checks#v17--transient-isolation)).
+- **Rejects** a transient act that is not provably answered in every state ([checks.md, V18](checks#v18--transient-totality-every-request-gets-a-response-coarse)).
+- **Warns** about a rule on a refinement of an ordinary act that could fire again when the data drifts ([checks.md, A4](checks#a4--drift-exposed-act-partition)).
+
+## Related pages
+
+- [§11 rule](Reference-11-rule-when-on), for when rules fire and `after commit`.
+- [§12 Assignment](Reference-12-Assignment), for updates and deletion.

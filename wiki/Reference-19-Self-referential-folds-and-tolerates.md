@@ -1,10 +1,14 @@
 # 19. Self-referential folds and `tolerates`
 
-Static analysis splits assignment right-hand sides into three classes; only the last needs machinery.
+Some stored values are updated from their own previous value: a balance that grows by each deposit, a count that goes up by one, a streak that resets on a miss. Velle calls such a value a *fold*, because the stored number folds every commit so far into one value. A fold is correct only if each commit is folded in exactly once and, for some folds, in the right order. This page shows when an assignment is a fold, which folds the compiler accepts as written, and the four ways to answer when it does not.
 
-**1. Act-only** — reads nothing but the triggering act (`customer.email = corrected`). Idempotent; re-firing is harmless.
+## Three kinds of right-hand side
 
-**2. Recomputing** — reads state, but *not the target itself*: a deterministic formula over current data. Convergent — same inputs, same value — so exactly-once is moot on any trigger. Per-commit recompute is an incrementally maintained materialization (semantically a derived property that happens to be stored); tick recompute is a *snapshot* — "the score as of last night," deliberately stable between ticks, a business concept live derivation can't express. Both valid, no guard:
+An [assignment](Reference-12-Assignment) is one of three kinds, by what its right side reads:
+
+**Reads only the triggering act.** `customer.email = corrected`. Running it twice writes the same value twice.
+
+**Reads other data, but not the field being written.** A formula over current data. Running it twice gives the same answer, so it is safe on any trigger:
 
 ```
 -- "every commit, update this value": materialized derivation
@@ -18,15 +22,18 @@ rule RecalculateRiskScore when Account on Nightly {
 }
 ```
 
-Where a fold is expressible as a recompute, the incremental spelling (`rating = (rating * n + stars) / (n + 1)`) and the recompute spelling are the same description with different *execution strategies* — and incremental maintenance is what `## Principles` assigns to compilation, not description. Both spellings stay legal (flexible, not restrictive); surfacing the twin as guidance is rung recognition's advisory job (`## State-change patterns`).
+`UpdateRating` keeps a stored value current at every commit; it could equally be a [derived property](Reference-07-Derived-properties). `RecalculateRiskScore` runs on a [schedule](Reference-17-Schedule-triggers) and gives "the score as of last night," a value that holds still between runs. `rating` could also be written incrementally, as `rating = (rating * n + stars) / (n + 1)`. Both spellings are legal; the compiler may point out the twin ([checks.md, A1](checks#a1--rung-recognition)).
 
-**3. Self-referential — a denormalized fold.** The RHS reads the target's own current value, so the next value is a function of the previous one (`value′ = f(value, commit data)`): the stored field denormalizes a *fold over the commit sequence*. `balance = balance + amount` is only the simplest instance — streaks, peaks, and moving averages are all folds.
+**Reads the field being written.** `balance = balance + amount`. The next value depends on the previous one, so the stored field is a fold. Streaks, highest-ever values, and moving averages are folds too. The rest of this page is about this kind.
 
-**The compiler never determines the algebra of `f` — it doesn't need to.** Two decidable facts replace it:
+## The two hazards
 
-- **Self-reference is syntactic.** The RHS reads the field it assigns — reliably decidable; this is what triggers the analysis.
-- **Exposure is structural, per hazard.** *Duplication exposure*: an unguarded fold can be applied twice for one commit (the crash/replay window, and trivially under a `, Hourly` backstop). A fold gated on a dischargeable state cannot. *Reordering exposure*: a commit-cadence rule folding one act at a time cannot reorder — commits are serialized, so fold order *is* commit order; a tick-cadence rule's pending records fire separately at the tick (`## Sweeps`) with no defined order among the firings.
-- **Insensitivity is a fail-closed whitelist, per axis** — the compiler proves safety only for known forms, along the two axes independently:
+A fold can go wrong in two ways:
+
+- **Duplication.** The same commit is folded in twice. An unguarded rule can fire again for a record it already handled: after a crash and replay, or on every run of a backup schedule such as `on commit, Hourly`. A rule with a [run-once guard](Reference-18-Run-once-guards) cannot.
+- **Reordering.** Commits are folded in a different order than the business meant. A rule that fires `on commit` folds one act at a time, in commit order, so it cannot reorder. A scheduled rule handles all its pending records at the tick, in no defined order ([§16](Reference-16-Sweeps)).
+
+The compiler does not analyze your formula. It recognizes a short list of forms known to be safe, per hazard:
 
 | fold | duplication-safe? | order-safe? |
 |---|---|---|
@@ -34,12 +41,12 @@ Where a fold is expressible as a recompute, the incremental spelling (`rating = 
 | `x + amount` (`sum`, `count`) | no | provably yes (commutative) |
 | streak, moving average, "reset on miss" | no | no |
 
-**An obligation exists exactly where a rule is exposed to a hazard its fold is not provably insensitive to.** An undischarged obligation is a compile error — fail-closed, mandated. The diagnostic is a demand for a stated policy, not an accusation of a bug: "this value's correctness depends on each qualifying commit being folded exactly once — state how that's ensured." Legitimate use cases carry the obligation *correctly* — a streak really does break under replay — so legit-but-unprovable and dangerous-but-unprovable get the same diagnostic; the difference is only that the legit author has an answer to give. Four ways to give it:
+A fold is rejected when the rule is exposed to a hazard its form is not known to be safe under. The error asks for a policy: "this value's correctness depends on each qualifying commit being folded exactly once; state how that is ensured." A streak really does break under replay, so the error is correct even when the code is what you meant. The four answers:
 
-1. **Guard** — make exactly-once true (`## Run-once guards`).
-2. **Derivation twin / recompute** — make it irrelevant: the value re-derives from source records.
-3. **Reconciliation sweep** — bound the drift: the fold stays cheap and unguarded on the hot path; a periodic recompute (`viewCount = count(PageView for this)` nightly) restores truth on a cadence (`## State-change patterns`' reconciliation rung).
-4. **`tolerates <hazard>`** — accept the named risk, declared where the risk lives (the field for fold hazards; the rule for `loss`):
+1. **Guard the rule** so it fires once per record ([§18](Reference-18-Run-once-guards)).
+2. **Derive the value** from the source records instead. A derived `balance = sum(deposits, amount)` cannot double count.
+3. **Add a periodic recompute.** Keep the unguarded fold, and add a nightly rule such as `viewCount = count(PageView for this)` that restores the true value ([§20](Reference-20-State-change-patterns)).
+4. **Declare that the business accepts the hazard** with `tolerates`:
 
 ```
 shape Article {
@@ -47,9 +54,11 @@ shape Article {
 }
 ```
 
-The vocabulary is closed and mirrors the hazards one-for-one — `tolerates duplication` and `tolerates reordering` on fields; `tolerates loss` on a rule whose external effect may be dropped (`## rule`, "Transactions and `after commit`") — so checking is mechanical set-coverage: exposed hazards, minus those discharged by a guard, an ordering, a reconciliation, or a tolerance, must be empty. A dead tolerance is itself a diagnostic ("this rule cannot experience reordering — did you mean duplication?"): the author never needs the exposure model in their head; the compiler names the specific risk, and the author fixes it or signs it by name. The declaration is self-vetting because it *is* the business claim — `balance: Money tolerates duplication` is visibly absurd in exactly the way that forces the author to confront what they're signing.
+`tolerates duplication` and `tolerates reordering` go on the field. `tolerates loss` goes on a rule whose external effect may be dropped ([§11](Reference-11-rule-when-on#transactions-and-after-commit)). In `examples/membership/membership.velle`, `visitCount: long initially 0 tolerates duplication` is fed by a rule firing `on commit, Hourly`. Read the declaration as a business claim: `balance: Money tolerates duplication` is visibly wrong, and that is the point.
 
-**The showcase trio** — same trigger, same cadence, three different verdicts:
+## Three rules, three verdicts
+
+Same trigger, different outcomes:
 
 ```
 -- error: the canonical guard example minus its guard. The Hourly tick re-folds
@@ -75,7 +84,15 @@ rule TrackStreak when Payment {
 }
 ```
 
-**Order-dependent folds at a tick: the predecessor recurrence.** A tick-cadence order-dependent fold (a nightly streak sweep) is exposed to reordering that nothing on the rule can discharge: one tick's firings have no defined order (`## Sweeps`), and declared tolerance would be a false statement for a streak. Velle deliberately has no ordering clause on rules — firing order is never language surface — because the order such a fold needs is business data, and it belongs in the data model. The served spelling is a **predecessor recurrence** over ordered history: a derived `previous` (`latest ... by` the ordering datum) plus sanctioned self-reference one hop through it (`## Derived properties`), so each record derives its running value from its predecessor's, and the current total is a selector read. Concretely, the streak:
+- `ApplyDeposit` is rejected. The hourly run folds every existing deposit again. The guarded form is the example in [§18](Reference-18-Run-once-guards).
+- `TrackLargest` compiles silently. `max` gives the same answer however often, and in whatever order, it runs.
+- `TrackStreak` is rejected, correctly. It fires `on commit`, so order is safe, but a replay would count a payment twice. A guard fixes it.
+
+## Order-dependent folds at a tick
+
+A streak updated by a nightly sweep is exposed to reordering, and nothing on the rule can fix that: the tick's firings have no order, and `tolerates reordering` would be a false claim for a streak. Rules have no ordering clause. The order a streak needs is business data, such as the payment date, so it goes in the data model.
+
+Write the value as derived history. Each record finds its predecessor by the ordering field and derives its running value from the predecessor's. The current value is a read of the latest record:
 
 ```
 shape Payment {
@@ -96,4 +113,24 @@ shape Account {
 }
 ```
 
-No stored field, no guard, no obligation — and more than a fold: the per-record value is readable history ("the streak as of each payment"), and order-sensitivity is structurally impossible, since the order comes from the declared datum rather than from when firings happen to run. Late-arriving records show the recurrence is also the more truthful description: a backdated payment slots into the chain at its datum's position and every successor re-derives, where a stored fold would have folded it last — arrival order — and kept the wrong value with no repair. What the recurrence owes is **well-foundedness** — every chain of definition references must reach a base case in finitely many steps — checked by stratification plus a certificate whitelist ([`checks.md`](checks) [V14](checks#v14--well-foundedness-coarse)): the acyclic part of the definition graph passes free; each static cycle needs a certificate — strict descent on a creation-fixed datum plus a base case, or acyclicity supplied by a `never` prohibition (`## never`) — and no certificate is a compile error: the check rejects what it cannot prove rather than warning, and never attempts fixpoint semantics. A tie on the ordering datum where the result depends on it is the model's problem — the author declares a further ordering datum; `id` cannot serve, being deliberately unordered (`## Scalars`). Growing the certificate whitelist is open calibration, one vocabulary shared with the cascade-quiescence proof (OQ16). The mutation form's spelling is commit-cadence, and that is a semantic statement, not a limitation: commits are serialized, so fold order *is* commit order — arrival order — the right description exactly where arrival order is the business order.
+- `previous` is the latest earlier payment for the same account, ordered by `receivedOn`.
+- `streakAfter` is the streak as of this payment: zero on a miss, otherwise one more than the predecessor's. A derived property may read the same property on another record, one hop away ([§7](Reference-07-Derived-properties)).
+- `streak` on the account reads `streakAfter` off the latest payment.
+
+There is no stored field, no guard, and nothing to tolerate. Every payment carries the streak as of itself: readable history. A backdated payment slots into place by `receivedOn`, and every later payment's streak re-derives. A stored fold would have folded it last and kept the wrong value. This pattern is the [predecessor recurrence](GLOSSARY#patterns); a fuller version is `DuesPayment` in `examples/loyalty/loyalty.velle`.
+
+If two records can tie on the ordering field and the result depends on which comes first, declare a further ordering field. `id` cannot serve, because ids are unordered ([§5](Reference-05-Scalars)).
+
+A stored fold on an `on commit` rule folds in arrival order. Use it when arrival order is the business order.
+
+## What the compiler checks
+
+- **Rejects** a self-referential assignment exposed to duplication (the rule can fire twice for one commit) or reordering (a scheduled rule) when the formula is not on the safe list for that hazard, unless a guard, a periodic recompute, or the matching `tolerates` covers it ([checks.md, V8](checks#v8--fold-obligations-and-tolerance-coverage)).
+- **Rejects** a `tolerates` that covers no hazard the rule can meet, such as `tolerates reordering` on an `on commit` rule. The message names the hazard you may have meant ([checks.md, V8](checks#v8--fold-obligations-and-tolerance-coverage)).
+- **Rejects** a derived property that refers to itself through another record unless the chain provably ends: a reference that strictly descends a field fixed at creation, as `previous` does by `receivedOn`, with a base case, or a `never` that rules out the cycle ([checks.md, V14](checks#v14--well-foundedness-coarse)).
+- **Rejects** a derived property whose result depends on the order of records that can tie on the ordering field ([checks.md, V14](checks#v14--well-foundedness-coarse)).
+
+## Related pages
+
+- [§18 Run-once guards](Reference-18-Run-once-guards), for making a rule fire once per record.
+- [§20 State-change patterns](Reference-20-State-change-patterns), for choosing between stored, derived, and periodically recomputed values.

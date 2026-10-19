@@ -1,6 +1,8 @@
 # 16. Sweeps: rules fire per record
 
-There is no loop construct. A rule fires once per matching record — from `on commit`, once per entrant at the triggering commit; from a schedule source, once per *current member* of its condition at the tick (`## rule`). Transaction scope follows the source. A schedule firing is its own transaction (`## Schedule triggers`): one record's failure never unwinds another's handling — a poison record blocks only itself, everything else stands and disarms its guard, and the next tick retries exactly the stragglers. Commit-source firings are consequences of the triggering commit and share its transaction (`## rule`, "Transactions and `after commit`") — which is what makes a fan-out atomic when the business wants all-or-nothing: N records entering a condition at one commit yield N firings that stand or fall together with the act. A sweep is therefore just a schedule-triggered rule whose condition selects the records needing work:
+Velle has no loop. To act on every record that meets a condition, you write one rule with that condition, and Velle runs it once per matching record. A scheduled rule that works through every record still needing attention is a *sweep*. This page shows how to write one and what happens when one firing fails.
+
+"Every night, suspend every delinquent member who is not suspended yet." From `examples/membership/membership.velle`:
 
 ```
 rule SuspendDelinquents when (Delinquent where not suspended) on Nightly {
@@ -8,4 +10,17 @@ rule SuspendDelinquents when (Delinquent where not suspended) on Nightly {
 }
 ```
 
-`this` is the matched record. A guard against re-handling is part of the condition's own predicate (`where not suspended`, above — inline or as a named refinement; `## Run-once guards`), so the run-once obligation is per record — and because a schedule source quantifies current members, the sweep is self-healing: a record whose handling was lost is simply still a member at the next tick. Two consequences: every rule has a `when` condition — subjects come from the condition, so there are no subjectless rules — and a batch of records never needs an envelope of its own (`## State-change patterns`, "All-or-nothing batches").
+- `when (Delinquent where not suspended)` selects the records that need work. Every rule has a `when` condition.
+- `on Nightly` names the [schedule](Reference-17-Schedule-triggers).
+- `this` is the record the current firing is handling.
+- `where not suspended` stops the rule handling a member twice. It can be inline or a named [refinement](Reference-08-Refinements) ([§18](Reference-18-Run-once-guards)).
+
+## How many times a rule fires
+
+A rule `on commit` fires once per record entering its condition at that commit ([§11](Reference-11-rule-when-on)). A scheduled rule fires once per record meeting its condition when the schedule runs.
+
+## When one firing fails
+
+Each scheduled firing is its own transaction. If one member's handling fails, the others are still handled. The failed member still meets the condition, so the next run picks it up. A sweep repairs itself.
+
+Firings triggered by a commit run inside that commit's transaction ([§11, "Transactions and `after commit`"](Reference-11-rule-when-on#transactions-and-after-commit)). If ten records enter a condition at one commit, all ten firings land or fail with the commit. That is how to get "all or none" without a batch construct ([§20, "All-or-nothing batches"](Reference-20-State-change-patterns#all-or-nothing-batches)).

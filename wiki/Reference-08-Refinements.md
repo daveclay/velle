@@ -1,20 +1,26 @@
 # 8. Refinements (`where`)
 
-The core idea of the language: a condition is a named subset of a shape, defined by a predicate — not a branch.
+A refinement is a named subset of a shape: every record that satisfies a condition. "Overdue invoices" and "issued invoices" are refinements. A refinement is not a status field and not a branch in code. It is a name for a condition, and a record is a member whenever the condition is true of it. Rules fire when records enter or leave refinements, queries filter by them, and the data and permissions that belong to one state of a record are declared on that state's refinement. After reading this page you can define a refinement, give it properties, lock fields while a record is in it, forbid deleting it, and say who may see a record.
+
+Code blocks from an example file name it. The rest are illustrations.
+
+## Defining a refinement
+
+A product owner says "an invoice is overdue when it has a balance and its due date has passed."
 
 ```
 shape OverdueInvoice = Invoice where balance > 0 and due < today
 ```
 
-`where` is reused for two purposes with the same meaning: defining a refinement (above), and filtering a collection inline by one (`invoices where OverdueInvoice`, used inside `count(...)`). The compiler goal (not yet exercised in examples) is to check refinement **exhaustiveness and overlap** — proving a set of refinements fully partitions a shape, or flagging when two overlap.
+From `examples/billing/billing.velle`. `OverdueInvoice` is now a name you can use anywhere a shape name goes. An invoice is a member while the condition holds and stops being one when it no longer holds. Nothing is stored and nothing fires. Only a [rule](Reference-11-rule-when-on) reacts to a record entering or leaving it.
 
-Refinements are **pure predicates, not triggers** — `OverdueInvoice` doesn't "fire" when it becomes true; it's simply evaluable against current data at any time. Only rules (`## rule`, [§11](Reference-11-rule-when-on)) react to something actually happening.
+The condition is a [predicate expression](Reference-10-Predicate-expressions). It may read the record's own fields, as above, or reach other records through its [relationships](Reference-06-Relationships) and through `exists`.
 
-A refinement's predicate may reference the shape it refines, directly or through a relationship — self-reference needs no special syntax (see `## Derived properties`, [§7](Reference-07-Derived-properties), and `## Predicate expressions`, [§10](Reference-10-Predicate-expressions)).
+The same `where` filters a collection inline: `count(invoices where OverdueInvoice)` counts a customer's overdue invoices. See [§10](Reference-10-Predicate-expressions).
 
-## Refinement properties
+## Properties of a refinement
 
-A refinement can declare properties of its own, in a body after its predicate — data that belongs to the refined state rather than to the base shape:
+Some data only makes sense for a record in a particular state. Only an archived invoice has an archive date. Rather than add an optional field to `Invoice` that is empty for every unarchived invoice, declare the property on the refinement. The base shape says what every invoice has, and each refinement says what membership adds.
 
 ```
 shape ArchivedInvoice = Invoice where exists ArchiveRequest for this {
@@ -23,22 +29,18 @@ shape ArchivedInvoice = Invoice where exists ArchiveRequest for this {
 }
 ```
 
-Asking an `Invoice` for `archivedBy` is nonsensical — only an archived invoice has an archiver. Rather than polluting the base shape with an optional field for every refined state's data (secretly correlated with that state), the property lives on the refinement, where membership itself guarantees its presence. The base shape's declaration stays a clean statement of what *every* instance has; each refinement's body states what membership *adds*.
+A refinement body declares properties of the same two kinds a shape body does:
 
-Refinement properties come in exactly the same two kinds as base-shape properties — there is no third, "assigned" kind:
+- **Derived**, written `name: Type = expr`. It is recalculated from current data every time it is read, exactly like a [derived property](Reference-07-Derived-properties) on a shape. It can be read only on a member.
+- **Captured**, written `captured name: Type = expr`. It is calculated once, at the commit where the record enters the refinement, and keeps that value for as long as the record stays a member. It does not exist before entry. When the record leaves, the value is dropped at the end of the exit commit, so a rule that fires on leaving may still read it ([§13](Reference-13-Exit-triggers)). If the record enters again later, the value is calculated again.
 
-- **Derived** — plain `= expr`, recomputed live from current data, exactly as in `## Derived properties`. The only novelty is scope: it's evaluable exactly where membership holds (`priceDrift` below is one).
-- **Captured** — marked with the leading keyword `captured`: evaluated once at the moment the current membership begins, fixed for the duration of that membership, absent before entry, retracted at the close of the exit commit — an exit rule may still read it, as its last reader (`## Exit triggers`) — and re-captured on re-entry. The marker is required because a bare `= expr` in body position is a live derivation — the two kinds must read differently. Capturing `today`/`now` anchors them to the entry moment: `archivedOn` above is the membership's start date, recorded as model data.
+Capturing `today` or `now` records the moment of entry. `archivedOn` above is the date the invoice was archived.
 
-`captured` is `initially`'s refinement-position sibling (`## Scalars`): each evaluates its expression once, at the moment its declaring scope begins — `initially` at the creation commit, `captured` at the entry commit. The differences follow from those scopes, not from separate machinery: a creation is forever, so an `initially` field is stored and assignable ever after; a membership can end, so a capture is fixed for its duration and retracted on exit. This is also why `captured` is legal only in a refinement body — only a refinement's predicate provides an entry moment to capture at; a base shape's one such moment is creation, and `initially` is its spelling.
+`captured` is the refinement's counterpart of `initially` on a shape field ([§5](Reference-05-Scalars)). Both calculate their expression once, when their scope begins. A record lasts until deleted, so an `initially` value is stored and may be assigned later. A membership can end, so a captured value is fixed while it lasts and dropped when it ends. `captured` is allowed only in a refinement body.
 
-**Who may see a record is scoped the same way (`visible to`).** A shape's body — a base shape's, since a refinement takes its base's — may declare which viewers its records are returned to: `visible to Staff where exists (VendorAssignment where staff == actor and vendor == this.vendor)`, `visible to Administrator`, `visible to anyone` for a public one, several clauses disjoining; a field narrows within its record's with the same clause after its type (`cost: Money visible to Administrator`), a derived property included, since a derivation is calculated from every input whoever asks and what it reveals is the author's to close. The viewer is bound in the predicate as `actor`, or under the name `as` chooses, exactly as an act's `by` clause binds its committer ([§22](Reference-22-Open-unresolved), "The actor"); the clause is applied by the read surface only — a query for a viewer admits what the clauses admit, a fetch of an invisible record resolves absent, a model object is projected with its hidden fields absent — and never inside evaluation, so no rule, derivation, or prohibition ever depends on who is reading. Once a spec has any `by` or `visible to`, every readable shape declares its visibility, in its body or through a spec-wide `visible to Staff` written once at the top that a shape's own clauses replace rather than add to ([`checks.md`](checks) [V32](checks#v32--every-readable-shape-declares-its-visibility)). The worked spec is `examples/vendors/vendors.velle`.
+A captured value can only come from data. There is no "current user" or request context to read. The person who archived the invoice reaches `archivedBy` because `ArchiveRequest` is an act whose `by` clause records who committed it, and the capture reads that from the request ([§22, "The actor"](Reference-22-Open-unresolved)). The form `(ArchiveRequest for this)` picks out one record, so the compiler must be able to prove at most one archive request per invoice exists ([checks.md, V12](checks#v12--singular-reference-proofs)). If an invoice can be archived more than once, select the request with `latest(... by ...)` instead ([§10](Reference-10-Predicate-expressions)).
 
-**Every captured value traces to data.** There is no ambient execution context — no "current user", no request-scoped magic. The person who committed an act is a fact *of that commit*, bound by the act's `by` clause and stored on a durable act like its timestamp ([§22](Reference-22-Open-unresolved), "The actor"), so `archivedBy` reaches a `User` only through the data graph: the act carrying that data is reified as a shape (`ArchiveRequest by User`, say) before the refinement can capture from it, and the capture reads `actor` off the request. That's a feature, not a workaround: reified acts are independently required for occurrence identity under re-entry, and they are what `why`/provenance will walk. (`(ArchiveRequest for this)` above is legal only while the spec proves at most one can exist per invoice — `## Predicate expressions`' `for`-query rule; the moment re-archival enters the model, the reference must become an ordered selection — see Open/unresolved.)
-
-**Entry-evaluability guardrail.** A captured property's expression must be provably evaluable at the moment membership begins: every reference in it must be guaranteed by the refinement's own predicate, or be unconditionally present on the base shape. `(ArchiveRequest for this)` is legal above precisely because the predicate asserts `exists ArchiveRequest for this` — the predicate narrows the capture expression, the same machinery by which `is some` licenses `.`. A capture reading something its predicate doesn't guarantee is a compile error. A refinement whose captures need nothing beyond the base shape's own data (`captured balanceWhenOverdue: Money = balance` on `OverdueInvoice`) can be entered by drift; one whose predicate requires an act-fact can only be entered by that act occurring — the compiler derives which kind each refinement is from its predicate, the human never declares it.
-
-**Visibility and narrowing.** From the base shape, refinement properties are invisible: `invoice.archivedBy` is a compile error unless `invoice` has been narrowed by `is ArchivedInvoice` earlier in the same conjunction (or the corresponding branch of a conditional) — `is <Refinement>` narrows exactly the way `is some` does. A property whose formula reads properties of *two* refinements lives on their intersection, where both are in scope and provably present:
+**Reading a refinement property.** From the base shape, a refinement's properties are not visible. `invoice.archivedBy` does not compile unless the expression has already established `invoice is ArchivedInvoice`, earlier in the same `and` chain or in the matching branch of an `if`. This works the same way `is some` lets you read through an optional field ([§10](Reference-10-Predicate-expressions)). A property that reads the properties of two refinements is declared on their intersection, where both are known to hold ([§9](Reference-09-Composing-refinements)):
 
 ```
 shape Reconciled = Quoted and Delivered {
@@ -46,11 +48,37 @@ shape Reconciled = Quoted and Delivered {
 }
 ```
 
-**Membership is unchanged.** A refinement with properties is still a pure predicate as to *membership* — properties change what a member *has*, never when membership *holds*. Captured properties are per-membership memory, state-layer through and through: they retract on exit. If the business cares about past memberships ("who archived it back in March, before it was unarchived?"), that was never a property — it's history, modeled as occurrence facts plus `latest(... by ...)`.
+Properties never affect whether a record is a member. They only change what a member has. Captured values are memory for the current membership only. If the business needs to know who archived an invoice last March, before it was unarchived, that is history. Model it as a record created per occurrence and read with `latest(... by ...)` ([§12](Reference-12-Assignment)).
+
+## Who may see a record (`visible to`)
+
+A shape body may say which readers its records are returned to. "Staff assigned to a vendor can see its products. Administrators see every product, and only they see the cost." From `examples/vendors/vendors.velle`:
+
+```
+shape Product {
+    vendor: one Vendor
+    name: text
+    price: decimal
+    cost: decimal visible to Administrator
+    margin: decimal = price - cost visible to Administrator
+    visible to Staff where exists (VendorAssignment where staff == actor and vendor == this.vendor)
+    visible to Administrator
+}
+```
+
+- A `visible to` line in the body names a shape of reader, with an optional `where` condition. The condition sees the reader as `actor`, or under a name chosen with `as`, as an act's `by` clause names its committer ([§22, "The actor"](Reference-22-Open-unresolved)).
+- Several lines in one body add up: a reader who satisfies any of them sees the record.
+- `visible to anyone` makes a shape public.
+- The same clause after a field's type narrows that field within the record. A derived property takes one too, since it is calculated from all its inputs whoever asks.
+- The clause goes on a base shape. A refinement is seen by whoever sees its base.
+
+Visibility is applied only when data is read. A query returns the records the clauses admit for that reader, a fetch of a hidden record returns nothing, and a returned record has its hidden fields absent. No rule, derived property, or `never` ever depends on who is reading.
+
+Once a spec has any `by` clause or any `visible to`, every shape that can be read must declare its visibility. Write it in each shape's body, or write a single `visible to Staff` at the top of the spec as the default. A shape's own clauses replace the default for that shape rather than adding to it. The compiler rejects a spec that has authorization but leaves a readable shape without a declaration ([checks.md, V32](checks#v32--every-readable-shape-declares-its-visibility)). The [Authorization](Authorization) guide walks through the whole feature.
 
 ## Frozen fields (`frozen`)
 
-A refinement body may constrain as well as extend: a `frozen` clause names stored fields of the base shape that may not be written while membership holds — immutability scoped to a state:
+"Once an invoice is issued, its line items and billing address cannot change." The field is editable on a draft and locked on an issued invoice, so the lock belongs to the state, not to the field. Declare it on the refinement for that state:
 
 ```
 shape IssuedInvoice = Invoice where exists Issuance for this {
@@ -58,11 +86,27 @@ shape IssuedInvoice = Invoice where exists Issuance for this {
 }
 ```
 
-Immutability in Velle is state-scoped, never field-scoped: the same field is freely editable on a draft and frozen once issued, so a declaration-site marker (`final`, `readonly`) is the wrong granularity — the business sentence is about the *state*, and the refinement is the state's name. `frozen` is a **conditional write permission**, a new kind of statement in the same family as one-writer (`## Assignment (mutation in place)`): one-writer says who may write a field; `frozen` says when writing it is legal at all. A write to a frozen field is illegal at any commit where the instance is a member in the commit's **pre-state** — so the entering commit may still write (the instance is a member only in post-state: a rule reacting to the `Issuance` can normalize a field in the same commit that freezes it), and a non-monotone predicate thaws the freeze the moment membership ends. Bare `frozen` (no list) freezes every stored field of the base shape, auto-extending to fields added later (the same virtue as derived trigger sets — `## rule`); the listed form narrows deliberately. Only stored fields are eligible: derived properties were never assignable, and captured properties are fixed by definition. Composition (`## Composing refinements`) needs no extra rule — each refinement's freeze applies wherever its own membership holds.
+- `frozen` followed by field names locks those stored fields of the base shape while the record is a member.
+- `frozen` alone locks every stored field, including fields added to the shape later.
+- Only stored fields can be listed. Derived properties are never assigned, and captured values are fixed already.
+- A write to a frozen field is illegal at any commit where the record was a member before the commit. The commit that makes it a member may still write, so a rule reacting to the `Issuance` can tidy a field in the same commit.
+- When the record leaves the refinement, the fields unlock.
+- Under [composition](Reference-09-Composing-refinements), each refinement's freeze applies wherever that refinement holds.
 
-**The check is static, whole-spec.** Every write to stored state is a rule assignment to a literal static path (`## Assignment (mutation in place)`), so the compiler knows every writer of every field; the freeze check is the one-writer disjointness question re-aimed — *can this writer's trigger coincide with membership in the freezing refinement?* — fail-closed, reported as one connected diagnostic naming writer and freeze. The fix is the rejection-as-data idiom: make the edit a `transient act` ([§4](Reference-04-State-and-commits)), partition it (`ApplicableEdit = LineItemEdit where invoice is not IssuedInvoice` / `RefusedEdit = ...`), hang the writing rule off the applicable subset — now provably disjoint — and let the refusal land as a record the caller reads back. A transient act's partition is evaluated once, at its own commit, so it cannot drift as the invoice's state moves ([`checks.md`](checks) [A4](checks#a4--drift-exposed-act-partition)); where the request itself must be a durable record, the partition is scoped to unhandled requests and anchored by each side's outcome evidence ([`patterns.md`, "Validation rejection is data"](patterns#validation-rejection-is-data)). No commit is ever unwound: immutability needs no rejection machinery, only proofs and partitions. A freeze no rule could ever violate is advisory dead machinery ("serves no writer" — the dead-tolerance shape, `## Self-referential folds and tolerates`).
+**The compiler checks every freeze against every writer.** Every write in Velle is an [assignment](Reference-12-Assignment) in a rule, so the compiler knows every rule that writes each field. It rejects the spec when a rule that writes a frozen field could fire while the record is a member, naming the rule and the freeze ([checks.md, V5](checks#v5--freeze-disjointness)). If it cannot prove they never coincide, it rejects.
 
-**Freeze depth is declared, not inferred.** "Can't edit line items" usually means the `LineItem` instances too; that's a conditioned refinement on the related shape, not transitive magic:
+The fix is to make the edit a request sorted before it is applied. Declare it as a `transient act` ([§4](Reference-04-State-and-commits)) and split it into the edits that may apply and the edits that are refused. From `examples/billing/billing.velle`:
+
+```
+shape ApplicableDueChange = ChangeDueDate where invoice is not IssuedInvoice
+shape RefusedDueChange    = ChangeDueDate where invoice is IssuedInvoice
+```
+
+The writing rule triggers on `ApplicableDueChange`, which the compiler can prove never coincides with the freeze. A second rule triggers on `RefusedDueChange` and records the refusal, so the caller reads it back as data. No commit is ever rolled back. A transient act is sorted once, at its own commit, so the sort cannot change as the invoice's state moves ([checks.md, A4](checks#a4--drift-exposed-act-partition)). If the request must be kept as a durable record, scope the two refinements to requests not yet handled; see [patterns.md, "Validation rejection is data"](patterns#validation-rejection-is-data).
+
+The compiler warns when a freeze could never be violated, because no rule writes the listed fields while the record could be a member ([checks.md, A2](checks#a2--dead-machinery)).
+
+**A freeze reaches only the fields it names.** "Can't edit the line items" usually means the `LineItem` records too. Say so on the related shape, with the issued state as the condition:
 
 ```
 shape LockedLineItem = LineItem where invoice is IssuedInvoice {
@@ -70,9 +114,9 @@ shape LockedLineItem = LineItem where invoice is IssuedInvoice {
 }
 ```
 
-Each hop of the freeze is its own visible business decision (issuing freezes the line item's price, not the product's name) — the same stance as "No guard sugar" (`## Run-once guards`).
+Each step of the lock is its own declaration, so the spec says plainly that issuing locks a line item's price and not the product's name.
 
-**An evidence-held lien is this construct with the evidence in the predicate.** "The receipt freezes the invoice" is a freeze on an evidence-entered refinement, and lifting the lien is a non-monotone predicate — no lien vocabulary needed:
+**A lock that is lifted by a later event** is a freeze on a refinement whose condition includes both events:
 
 ```
 shape ReceiptedInvoice = Invoice where
@@ -81,12 +125,31 @@ shape ReceiptedInvoice = Invoice where
 }
 ```
 
-Frozen while a receipt stands unvoided; thawed the moment the void lands. Provenance reads off the predicate (`why`: "frozen because a receipt stands, unvoided").
+The invoice is locked while a receipt stands and unlocks when a void lands.
 
-**Deletion permission is scoped the same way (`undeletable`).** A refinement body may also declare `undeletable`: while membership holds, no rule may delete the instance (`## Assignment (mutation in place)`, "Deletion"). It is `frozen`'s sibling, not its consequence — "cannot be edited" and "cannot be removed" are separate business sentences, and neither implies the other. The check is the same static, whole-spec one: every deleter of the base shape must provably exclude membership, by the same disjointness proof, and the fix-it idiom is the same partition — hang the deleter off the deletable subset, with the refusal landing as data. The gate is negative only: "may be deleted while in this state" is the default and is never written; positive-exhaustive sentences belong to the state partition declaration (`## Open / unresolved`). A gate no deleter could trip is dead machinery, reported as such.
+## Deletion permission (`undeletable`)
+
+A refinement body may also declare `undeletable`. While the record is a member, no rule may delete it ([§12, "Deletion"](Reference-12-Assignment#deletion-delete)). From `examples/moderation/moderation.velle`:
 
 ```
 shape PublishedListing = Listing where not isDraft {
     undeletable
 }
 ```
+
+"Cannot be edited" and "cannot be removed" are separate business sentences, so `frozen` and `undeletable` are separate declarations. Neither implies the other. A record may be deleted by default, in any state. Only the prohibition is written.
+
+The compiler rejects the spec when a rule that deletes the base shape could fire while the record is a member, by the same proof as a freeze ([checks.md, V27](checks#v27--the-deletion-gate)). The fix is the same: sort the deletion request into the deletable and refused cases and trigger the deleting rule on the deletable one. The compiler warns when no rule could ever delete a member ([checks.md, A2](checks#a2--dead-machinery)).
+
+## What the compiler checks
+
+- **It rejects** two refinements that overlap where the spec needs them disjoint, and a set that fails to cover a shape where the spec needs it covered ([checks.md, V9](checks#v9--refinement-overlap-and-exhaustiveness)). The one-writer, freeze, and deletion checks rely on this proof.
+- **It rejects** a captured expression that reads something the refinement's condition does not guarantee ([checks.md, V6](checks#v6--capture-entry-evaluability)). `(ArchiveRequest for this)` is allowed above only because the condition says `exists ArchiveRequest for this`. A capture that reads only the base shape's own fields, such as `captured balanceWhenOverdue: Money = balance` on `OverdueInvoice`, needs no such guarantee.
+- **It rejects** reading a refinement property on a record not yet narrowed to that refinement ([checks.md, V11](checks#v11--narrowing-analysis)).
+
+## Related pages
+
+- [§9 Composing refinements](Reference-09-Composing-refinements), for `and`, `or`, and `not` between refinements.
+- [§10 Predicate expressions](Reference-10-Predicate-expressions), for what may appear after `where`.
+- [§11 rule](Reference-11-rule-when-on) and [§13 Exit triggers](Reference-13-Exit-triggers), for reacting to entry and exit.
+- [Authorization](Authorization), for `by` and `visible to` together.

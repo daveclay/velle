@@ -1,6 +1,8 @@
 # 17. Schedule triggers (`on <schedule>`)
 
-A rule can be triggered by a named schedule instead of (or in addition to) `on commit`, by naming the schedule in the header's `on` clause:
+Most rules fire when a commit changes the data. Some business rules are about time: "chase overdue invoices daily." Nothing in Velle runs just because time has passed. To run a rule on a cadence, you name a schedule in its `on` clause. This page shows how to write that clause, what a scheduled rule can remember, and when to prefer it.
+
+"Remind the customer about each overdue invoice daily, but not more than once every three days." Shortened from `RemindOverdue` in `examples/billing/billing.velle`:
 
 ```
 rule RemindOverdue
@@ -11,10 +13,34 @@ rule RemindOverdue
 }
 ```
 
-`on` accepts a comma-separated list (`on Daily, Hourly`) for a rule that needs to run on more than one cadence — including mixed with commit (`on commit, Daily`: fire the moment the condition is entered, *and* re-check on the cadence). The list is distributive — each entry independently triggers the rule: `after commit, Hourly` declares two triggers, *fire after the commit* and *fire at the Hourly tick*. The `on`/`after` preposition is meaningful only for the `commit` entry, the one trigger source where sharing the triggering transaction is possible at all; a schedule entry's firings inherently begin their own transactions either way (`## rule`, "Transactions and `after commit`"). `Daily` is a placeholder name, not a built-in or sugar for a specific interval — what actually defines a schedule (cadence, timezone, one-off vs. recurring) is a separate, not-yet-designed construct, assumed to be provided by some cron-like scheduling framework. Only the rule-side trigger syntax is settled.
+- `on Daily` runs the rule at each run of `Daily`.
+- `OverdueInvoice` is a refinement that reads `today`. Only a scheduled rule can notice an invoice becoming overdue by the calendar, because no commit happens when a day passes.
+- `not exists (Reminder ...)` is how the rule remembers it already sent a reminder: the record it creates is its memory.
+- The rule fires once per matching invoice, each in its own transaction ([§16](Reference-16-Sweeps)).
 
-A schedule trigger is the *only* way a purely time-dependent refinement (like `OverdueInvoice`, which depends on `today`) gets re-checked — nothing in Velle executes purely on the passage of time by default. A scheduled tick is conceptually a commit like any other (the same category as a `Payment` arriving or a `ChargeResponse` coming back — a tick is a commit whose changed datum is `today`), but it's referenced by name in `on`, not declared inline as a custom shape. A tick's firings inherently begin new transactions — by the time a schedule fires, any originating act's transaction is long gone (`## rule`, "Transactions and `after commit`") — and each firing at a tick is its **own** transaction: a tick is a moment, not an envelope, so one firing's failure at the nightly tick never unwinds another's work, whether the firings belong to different rules or to different records of one rule (`## Sweeps`), and each firing's own consequences share that firing's transaction in the ordinary way.
+## Writing the `on` clause
 
-**The tick law: cross-tick memory must be data.** A tick-triggered rule sees only current state — "what changed since last tick" would require persistent memory between ticks, and memory must be data. Sweeps carry their memory as witnesses, flags, or evidence: the example's "at most every 3 days" lives in the `Reminder` evidence itself, with no hidden last-run timestamp anywhere.
+`on` takes comma-separated triggers, each firing the rule on its own:
 
-**Transient membership is a policy, stated in the header.** An account goes negative Monday 09:00 and recovers at 17:00. Under `when Delinquent on commit`, suspension fires at 09:00 and restoration at 17:00 — the blip was real, service was off for eight hours. Under an `on Nightly` sweep, the check sees a positive balance — the blip never mattered. Neither is wrong: commit-triggered observes every membership the commit stream produces; tick-triggered observes what persists to the tick. The choice is business-visible in one clause, answered per rule by the author rather than globally by the language.
+- `on Daily`: at each run of the schedule.
+- `on commit, Daily`: the moment a record enters the condition, and again at each run.
+- `after commit, Hourly`: right after the triggering commit, in its own transaction, and again each hour ([§18](Reference-18-Run-once-guards)).
+
+`on` versus `after` matters only for `commit`, the only trigger that can share the triggering transaction ([§11, "Transactions and `after commit`"](Reference-11-rule-when-on#transactions-and-after-commit)). A schedule's firings always start their own transactions.
+
+`Daily`, `Hourly`, and `Nightly` are names, not built-in intervals. Velle does not define schedules; the engineer sets up cadence and timezone in whatever scheduler runs the system.
+
+## What a scheduled rule can see
+
+A scheduled rule sees the data as it is when it runs. It does not know what changed since the last run. Anything it must remember between runs must be a record or field the spec declares, like `Reminder` above.
+
+Each run of the schedule is a commit whose changed value is `today`. Every firing at that run is its own transaction: one invoice's failure undoes neither another invoice's reminder nor another rule's firing. What a firing creates triggers further rules inside that firing's transaction.
+
+## Commit or schedule: a business choice
+
+A member's balance goes negative at 09:00 and recovers at 17:00. With `when Delinquent` on commit, suspension fires at 09:00 and restoration at 17:00: service was off for eight hours. With `on Nightly`, the night's run sees a positive balance and the dip never mattered. Neither is wrong. A commit-triggered rule reacts to every change; a scheduled rule reacts to what is still true when it runs.
+
+## What the compiler checks
+
+- **It rejects** a rule whose condition reads `today` but has no schedule in `on`, because the rule could never fire ([checks.md, V3](checks#v3--unfireable-rule)).
+- **It rejects** a schedule trigger, or `after commit`, on a rule whose subject is a `transient act`, which is gone when the schedule runs ([§4, "Transient acts"](Reference-04-State-and-commits#transient-acts-transient-act); [checks.md, V17](checks#v17--transient-isolation)).

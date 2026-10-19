@@ -1,6 +1,12 @@
 # 13. Exit triggers (`when leaving`)
 
-`when R` reacts to an instance *entering* a refinement — becoming a member. `when leaving R` is its mirror: a reaction to an instance that was a member of R and stopped being one — the same commit-local transition reversed (`## rule`).
+A rule normally reacts to a record *entering* a condition: an invoice becoming overdue, a member becoming delinquent. Some business reactions belong to the opposite moment, when a record *stops* satisfying a condition: restore service when a member is no longer delinquent, notify someone when an invoice is taken out of the archive. Velle writes that with `when leaving`. A record can also stop satisfying a condition by being deleted, and Velle treats that as a separate event with its own trigger, `when deleted`.
+
+After reading this page you can write a rule that fires when a record leaves a refinement, know what its body may read, choose between an exit rule and the compensation pattern, and say which of the exit forms to use when the record might be deleted.
+
+## Reacting to a record leaving a refinement
+
+`when leaving R` fires at the commit where a record that was a member of `R` stops being one. It is the mirror of `when R` ([§11](Reference-11-rule-when-on)), the same transition in the other direction. The example below is from `examples/membership/membership.velle`, which writes the same rule as `CloseDelinquencyEpisode`.
 
 ```
 rule RestoreService when leaving Delinquent {
@@ -11,9 +17,13 @@ rule RestoreService when leaving Delinquent {
 }
 ```
 
-**Not expressible as a complement.** Reacting to entering `Compliant` is not the same thing: a newly created, never-delinquent account also "enters" `Compliant` — *became compliant* and *was always compliant* are indistinguishable from current data alone. `leaving` needs no such reconstruction: only a member can leave, so the trigger is inherently transitional. This completes the condition vocabulary — `when` for entry, `when leaving` for exit; the trigger source (`on commit` / `on <schedule>`, see `## Schedule triggers`, [§17](Reference-17-Schedule-triggers)) is orthogonal to both. A run-once guard applies identically when durability demands one, and guard granularity — the guard predicate's content (`## Run-once guards`) — decides what a *repeated* exit means, exactly as it does for repeated entries.
+You cannot write this as entering the opposite refinement. A newly created account that was never delinquent also enters `Compliant`, and "became compliant" and "was always compliant" look the same in current data. Only a member can leave, so `when leaving` needs no such reconstruction.
 
-**What an exit rule may read — the last-reader rule.** At the exit commit the body reads current (post-state) data as any body does, plus exactly one thing more: the leaving refinement's **captured properties**. A capture is stored per-membership memory the runtime demonstrably holds for the membership's duration, and its retraction lands at the *close* of the exit commit, not at the moment the rule fires — so the exit rule is the capture's **last reader**, the one place per-membership memory can be read on its way out, typically to convert what matters into a durable fact before it's gone:
+The trigger source is independent of the direction: `when leaving Delinquent on Nightly` checks at the tick ([§17](Reference-17-Schedule-triggers)). A [run-once guard](Reference-18-Run-once-guards) applies to an exit rule exactly as to an entry rule, and the guard's condition decides what a second exit means.
+
+## What an exit rule may read
+
+The body reads the record's current values, after the commit, as any rule body does. It may read one thing more: the **captured properties** of the refinement being left ([§8, "Properties of a refinement"](Reference-08-Refinements#properties-of-a-refinement)). A capture is a value stored when the record entered the refinement, and it is removed at the close of the exit commit. The exit rule is its last reader. The usual use is to copy what matters into a durable record before it goes. A version of this example with a different capture is in `examples/billing/billing.velle` as `NoteUnarchival`.
 
 ```
 shape ArchivedInvoice = Invoice where
@@ -30,21 +40,31 @@ rule NotifyArchiver when leaving ArchivedInvoice {
 }
 ```
 
-This is a re-timing of retraction, not a second evaluation context: base fields read post-state everywhere, a capture has no post-state value to collide with, and no temporal operator exists. Full pre-state access — base fields as they were before the commit, a `before(...)`-style operator — is rejected: reads would be ambiguous for any field the exit-causing commit itself wrote, and the operator would grow into the delta-inspection vocabulary the language excludes (rules react to conditions, never diffs). The leaving refinement's *derived* properties stay unreadable — live computations licensed by a predicate that is now false; there is nothing to re-time. Evaluability is the mirror of the entry-side guardrail (`## Refinements`): beyond ordinary reads, an exit body may reference exactly the captures of the refinement it is leaving. Where the business needs a base field's pre-state ("the balance it recovered from"), the spelling is a capture declared at entry — `captured balanceWhenDelinquent: Money = balance` — the pre-state an exit body may read is the pre-state the author declared they would need; memory is visible data, never ambient context.
+Line by line:
 
-The residue is transaction-boundedness: a capture does not survive the exit commit's transaction, so a capture-reading exit rule can never be `after commit` and can never carry a schedule backstop — a compile error in the stranding family ("this rule reads `archivedBy`, which does not survive the transaction boundary it declares"). Evidence remains the only thing that survives *beyond the transaction*: a reaction that must be durable reads the reified act instead of the capture — `notify: latest(ArchiveRequest where invoice == this by requestedOn).requestedBy` (and must say `latest(...)`, not `(ArchiveRequest for this)`: the singular form was licensed by a predicate this instance no longer satisfies, and with re-archival in the model nothing proves at-most-one — `## Predicate expressions`) — or hangs off the evidence itself, the compensation pattern below.
+- `ArchivedInvoice` is an invoice with an archive request and no later unarchive request.
+- `captured archivedBy` stores who asked for the archive, evaluated once at entry.
+- `NotifyArchiver` fires when the invoice leaves the archived state. `archivedBy` is still readable here, and nowhere later.
 
-**Evidence outlives its premise.** A rule fired, its evidence escaped, and then the instance left the refinement: what happens to evidence whose premise has been falsified? Nothing needs declaring — each case is expressed by machinery the language already has:
+Three limits follow:
 
-- **Evidence that is simply history** ("the quote is the quote; prices drift") needs nothing declared — silence is the behavior, and a spec that records evidence and reacts no further is complete and correct as written (the ledger stance, `## Assignment (mutation in place)`).
-- **Immutability** ("you can't edit line items on an issued invoice") was never about the exit at all — it's a write-gate on a state, declared as `frozen` in the refinement's body (`## Refinements`, "Frozen fields"). The evidence-held lien is a freeze on an evidence-entered refinement, and lifting the lien is a non-monotone predicate.
-- **Compensation** ("invoices are never edited — voided and reissued") is a pattern over the same machinery — next subsection.
+- **No reading of a field's old value.** There is no operator for a base field's value before the commit. If the business needs the old value, such as "the balance it recovered from," declare it as a capture at entry: `captured balanceWhenDelinquent: Money = balance`. The old value an exit body may read is the one the author said they would need.
+- **The left refinement's derived properties are not readable.** They are live computations that depended on a condition that is now false.
+- **A rule that reads a capture must run inside the exit commit's transaction.** The capture does not outlive that transaction, so such a rule may not say `after commit` and may not carry a schedule. The compiler rejects it, naming the capture that would not survive the boundary ([checks.md, V7](checks#v7--capture-transaction-boundedness)). A reaction that must be durable reads the stored act instead: `notify: latest(ArchiveRequest where invoice == this by requestedOn).requestedBy`. It must say `latest(...)` rather than `(ArchiveRequest for this)`, because once an invoice can be re-archived nothing proves there is only one request ([§10](Reference-10-Predicate-expressions)).
 
-Deleting evidence is never on the menu — a produced fact records something that happened in the world (the email was sent), and deleting the record makes the description lie.
+## Records a rule created before the exit
+
+Suppose an entry rule created a `ServiceSuspension`, and then the member left `Delinquent`. Nothing happens to the suspension by itself. Each business answer uses machinery you already have:
+
+- **It is history.** "The quote is the quote; prices drift." Nothing needs to be declared. A spec that records the fact and reacts no further is complete ([§12, "The ledger alternative"](Reference-12-Assignment#the-ledger-alternative)).
+- **It must not be edited.** "You can't edit line items on an issued invoice" is a write restriction on a state, declared with `frozen` in the refinement's body ([§8, "Frozen fields"](Reference-08-Refinements#frozen-fields-frozen)).
+- **It must be undone by a new record.** "Invoices are never edited; they are voided and reissued." That is the compensation pattern in the next section.
+
+Do not delete the record. It records something that happened in the world, and deleting it makes the data lie.
 
 ## The compensation pattern
 
-Compensation — the exit produces a compensating fact — is fully expressed by ordinary machinery once the rule's subject is the *evidence* rather than the instance that left:
+To react to an exit by producing a compensating record, write an ordinary entry rule whose subject is the earlier record, not the record that left:
 
 ```
 shape UncompensatedSuspension = ServiceSuspension where not exists ServiceRestoration for this
@@ -55,13 +75,33 @@ rule CompensateSuspension when RestorableSuspension {
 }
 ```
 
-An ordinary guarded entry rule — no `when leaving` anywhere. (Note the `ServiceRestoration` here references its *suspension*, not just the account as the section-top `RestoreService` example's did — the evidence linkage is exactly what the pattern is about.) The account's exit from `Delinquent` is observed as the suspension's *entry* into `RestorableSuspension`, at the same balance-changing commit (drift is commit-mediated — `## rule`, "Rules ground in commits"). Everything compensation requires, the pattern provides: evidence scoping is by construction (no suspension → no subject → no firing — a membership too brief for the entry rule to observe compensates nothing); once-per-evidence is the canonical guard with the disarm proof (`## Run-once guards` — the body produces the `ServiceRestoration` that falsifies `UncompensatedSuspension`); there is no singular selection and no at-most-one proof, because `this` *is* the evidence; and durability composes on demand (`when RestorableSuspension after commit, Hourly`), which no transition-triggered rule can have — a transition is not data (`## rule`, "Transactions and `after commit`"). The correlation decisions — per-suspension? per-account-ever? time-windowed? — are visibly the refinement predicates, where granularity always lives (`## Run-once guards`, "No guard sugar"). The pattern is also *more* correct than any exit-scoped spelling: evidence that lands after the exit (a tick-cadence or `after commit` entry rule, the account recovering in the gap) is born a member of `RestorableSuspension` and compensates immediately, where an exit-scoped rule — its transition already past when the evidence landed — would strand it uncompensated forever.
+Line by line:
 
-Compensation therefore never needs `when leaving`: uncompensated evidence is durable memory that the membership happened, so exactly where there is something to compensate, the exit is reconstructible from current state. `when leaving` remains irreducible only for reactions that carry no evidence (`RestoreService` at the top of this section) — which is exactly where there is nothing to compensate.
+- `UncompensatedSuspension` is a suspension with no restoration yet.
+- `RestorableSuspension` is one of those whose account is no longer delinquent.
+- `CompensateSuspension` fires when a suspension enters that state, which happens at the same commit that took the account out of `Delinquent`. Its `ServiceRestoration` points at the suspension it compensates, which is the point of the pattern.
+
+There is no `when leaving` here, and the pattern has advantages over one:
+
+- A membership too brief for the entry rule to notice produced no suspension, so there is nothing to compensate and the rule does not fire.
+- The `not exists ServiceRestoration` condition is a run-once guard, so each suspension is compensated once ([§18](Reference-18-Run-once-guards)).
+- The rule may be made durable, as `when RestorableSuspension after commit, Hourly`, because its trigger is stored data. A `when leaving` rule cannot be, because a transition is not data.
+- A suspension that lands *after* the account recovered, from a scheduled or `after commit` entry rule, is born restorable and is compensated at once. An exit rule would have missed it, because its moment had passed.
+
+What counts as "the same suspension" is written in the refinement conditions, per suspension, per account, or within a time window, as with any guard ([§18, "Once per what"](Reference-18-Run-once-guards#once-per-what)).
+
+Use `when leaving` only when the reaction has no earlier record to hang off, as in `RestoreService` at the top of this page.
 
 ## Deletion as a second exit cause (`when deleted`)
 
-A record leaves a state for two different business reasons: a field changed and the state's predicate flipped false, or the record was deleted (`## Assignment (mutation in place)`, "Deletion"). *The listing was published* and *the draft was discarded* are different events, and a rule says which one it reacts to. Bare `when leaving X` means the predicate flipped, never deletion — if it also fired at deletion, a discard could counterfeit a publication, producing a notice for a listing that was never published. Reacting to a deletion is its own trigger, and the family is one grammar slot: `when leaving X` (the predicate flipped), `when deleted X` (the record was deleted), `when leaving or deleted X` (either cause), and `when leaving not deleted X` (the predicate flipped, stated — below). Both participles elide the same frame — "when [the record is] leaving," "when [the record is] deleted" — and the voice difference is real: a record leaves a state by its own data changing, and is deleted by something else. The condition is the ordinary one, a bare state name or an inline refinement (`when deleted (Draft where seller is some)`), exactly as for entry and predicate exit. The checked-in version of the case below, with the combined form beside the other two, is `examples/moderation/moderation.velle`:
+A record leaves a state for two different business reasons. Either a field changed and the state's condition became false, or the record was deleted ([§12, "Deletion"](Reference-12-Assignment#deletion-delete)). "The listing was published" and "the draft was discarded" are different events, and a rule says which one it reacts to.
+
+- `when leaving X` fires when the condition became false, and never at deletion.
+- `when deleted X` fires at the commit that deletes a member of `X`.
+- `when leaving or deleted X` fires for either cause, with one body.
+- `when leaving not deleted X` means the same as the bare form, stated out loud. See "What the compiler checks" below for when to write it.
+
+In every form the condition is an ordinary one: a state name, or an inline refinement such as `when deleted (Draft where seller is some)`. A fuller version of the example below, with the combined form beside the other two, is in `examples/moderation/moderation.velle`.
 
 ```
 act Seller {
@@ -108,6 +148,29 @@ rule ApplyDiscard when (DiscardDraft where listing is Draft) {
 }
 ```
 
-**One reading rule.** Whichever form a rule uses, the body reads the subject's properties as of the triggering commit plus the named state's captured properties as their last reader — the last-reader rule above, extended unchanged: deletion ends the membership, and the capture's retraction lands at the close of the deleting commit. The record's non-existence after that commit forces two differences, and both surface only as compile errors, never as silently different behavior. A deletion-side body may not keep a reference to its subject — the product copies the fields it needs — where a predicate-exit body may. And a deletion-side rule is transaction-bound, with no `after commit` and no schedule backstop, because a record kept around to be read later would be the deletion memory the language excludes. The combined form is checked against the deletion-side constraints; where the two causes want different bodies, the author writes two rules.
+Line by line:
 
-**Where the two causes could be confused, the compiler says so.** A predicate-exit trigger over a bare shape can never fire — a bare shape has no predicate to flip, so a record leaves it only by deletion — and that is the ordinary unfireable-rule error (`## rule ... when ... on ...`), with the diagnostic offering `when deleted`. And a `delete` whose scope can reach a bare `when leaving` rule's state draws an advisory: the rule's meaning is defined, the predicate flipped, but an author who meant "for any reason" would get a rule that silently stops at deletion. The advisory names the rule and the deleter, and the author either states the cause — `not deleted`, `or deleted`, or a separate `when deleted` rule — or restructures the deleter to provable disjointness. `when leaving not deleted X` exists for exactly this: it means what the bare form means, said out loud, and where no deleter reaches the state its `not deleted` half is dead machinery, reported as such.
+- `Draft` is a listing whose `isDraft` flag is set. Publishing clears the flag, so the listing leaves `Draft` by its condition becoming false.
+- `AnnouncePublication` reacts only to that. If it were written as bare `when leaving Draft` it would mean the same thing, but the compiler would warn, because `ApplyDiscard` below can also make a listing leave `Draft`.
+- `NoteDiscard` reacts only to deletion. Its body reads the listing's `title` and `seller` one last time and copies them into the notice.
+- `ApplyDiscard` is the rule that deletes. `DiscardDraft` is a transient act, a request that is not stored ([§4, "Transient acts"](Reference-04-State-and-commits#transient-acts-transient-act)).
+
+**What a deletion-side body may read.** The same as any exit body: the record's values as of the triggering commit, plus the captures of the named state as their last reader. Deletion ends the membership, so the capture is removed at the close of the deleting commit. Two differences follow from the record not existing afterwards, and both are compile errors rather than quiet changes of behavior:
+
+- The record a deletion-side rule creates may not hold a reference to the deleted record. Copy the fields you need, as `NoteDiscard` copies `title` ([checks.md, V24](checks#v24--referential-completeness-coarse)). A body under plain `when leaving` may keep a reference.
+- A deletion-side rule may not say `after commit` and may not carry a schedule. A record kept around to be read later would be a deleted record still in the data ([checks.md, V28](checks#v28--deletion-stranding)). The same applies to a plain `when leaving` rule over a shape some rule deletes, unless the deleter provably cannot reach the state.
+
+The combined form `when leaving or deleted X` is checked under the deletion-side rules. If the two causes need different bodies, write two rules.
+
+## What the compiler checks
+
+- **`when leaving` over a shape with no condition is rejected.** A bare shape has no condition to become false, so a record leaves it only by deletion, and the rule could never fire ([checks.md, V3](checks#v3--unfireable-rule)). The error offers `when deleted`.
+- **A `delete` that can reach a bare `when leaving` draws a warning.** The rule's meaning is defined, the condition became false, but an author who meant "for any reason" would get a rule that silently does nothing at deletion. The warning names the rule and the deleting rule. Fix it by stating the cause, `not deleted`, `or deleted`, or a separate `when deleted` rule, or by restructuring the deleter so it provably cannot reach the state ([checks.md, A6](checks#a6--deleter-reaches-a-bare-when-leaving)).
+- **`not deleted` where no deleter can reach the state is dead machinery**, and the compiler says so ([checks.md, A2](checks#a2--dead-machinery)).
+
+## Related pages
+
+- [§11 rule ... when ... on ...](Reference-11-rule-when-on), for entry triggers and transactions.
+- [§8 Refinements](Reference-08-Refinements), for captured properties and `frozen`.
+- [§12 Assignment](Reference-12-Assignment), for `delete` and the ledger alternative.
+- [§18 Run-once guards](Reference-18-Run-once-guards), for guards on exit rules and in the compensation pattern.

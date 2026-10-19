@@ -1,14 +1,20 @@
 # 14. `for`
 
-Associates a newly created shape instance with the subject it's about:
+A rule usually creates a record *about* another record: a welcome note for a member. `for` is the short way to say which record the new one is about. This page teaches both forms of creation.
+
+"Every new member gets a welcome note," from `examples/membership/membership.velle`:
 
 ```
-Receipt for invoice sentOn: now
+rule SendWelcome when Member {
+    WelcomeNote for this sentOn: now
+}
 ```
 
-`for <expr>` matches by **type**, not name: whichever field on the created shape has a type matching `<expr>`'s type is the one populated — a field typed with a static union matches an expression of any operand's type (`## Relationships`). When a shape has more than one field of that type, name the field explicitly: `Referral for referrer: this.referrer`.
+`WelcomeNote for this` creates a `WelcomeNote` with the current member in whichever field has type `Member`. Remaining fields follow as `name: value` pairs.
 
-Inside a rule body, `from { field: value, ... }` is the general, clearer way to write this — every field as an ordinary, totality-checked mapping entry, with no field singled out syntactically:
+`for` matches a field by **type**. A static-union field matches any operand type ([§6](Reference-06-Relationships)). When two fields match, name the field: `Referral for referrer: this.referrer`.
+
+The general form is `from`, which lists every field:
 
 ```
 Referral from {
@@ -18,4 +24,11 @@ Referral from {
 }
 ```
 
-Creating an instance is an ordinary body statement, nothing more — no header annotation is involved. When the created shape serves as a guard witness, the connection to the trigger is the disarm proof's job, checked rather than spelled. `for` as a *query* expression (`(NurseVerification for this).nurse`, `exists Shape for expr`) is unaffected by this — see `## Predicate expressions`, above.
+## What the compiler checks
+
+- The compiler rejects a `from` block that omits a declared field, other than ones Velle fills itself such as `id` ([checks.md, F4](checks#f4--mapping-totality)).
+- The compiler rejects `for` when more than one field matches the value's type ([checks.md, V13](checks#v13--ambiguity-is-a-connected-diagnostic)).
+
+## Related pages
+
+- [§10 Predicate expressions](Reference-10-Predicate-expressions): `for` inside a predicate.

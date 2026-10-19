@@ -1,16 +1,61 @@
 # 5. Scalars
 
-Property types: `text`, `integer`, `long`, `decimal`, `double`, `boolean`, `Date`, `DateTime`. Their semantics are grounded in Kotlin's corresponding types — Kotlin is the first transpilation target, and a scalar behaves as Kotlin's type unless this document states otherwise: `integer` is `Int`, `long` is `Long`, `double` is `Double`, and `decimal` is `BigDecimal`. The temporal types are `java.time`: `Date` is `LocalDate`, and `DateTime` is `Instant` — a timestamp is a point on the global timeline; a wall-clock moment with a zone attached is domain data, not a scalar. `now` is a `DateTime`; `today` is a `Date` — the current date in the system's one declared time zone (harness-configured in v0 — the milestone scope statement, `## Open / unresolved`).
+A scalar is a single value a property holds: text, a number, true or false, a date, or a moment in time. This page lists the scalar types, the built-in functions, and three things that go with a property declaration: a starting value, a timestamp the system keeps, and the identity every record carries. After it you can declare the properties of a [shape](Reference-03-shape) and know which values the system fills in.
 
-Examples in this document also use `Money`. It is not a builtin: it stands in for an **author-extended data type** — extending the scalar vocabulary is a planned, post-v0 capability (`## Open / unresolved`).
+## The types
 
-The builtin **function vocabulary is closed** — a validator can't typecheck calls into an open-ended list, so what ships *is* the list, and growth is ordinary vocabulary expansion rather than redesign. v0 ships: the aggregates and selectors `count`, `sum`, `latest`, `first` (`## Predicate expressions`), the text predicates `contains`, `starts with`, `ends with`, and `like` (`## Predicate expressions`), `lowercase`, `max`/`min`, the duration constructors `seconds`/`minutes`/`hours`/`days`/`weeks` (written as duration literals — `## Predicate expressions`), and the generator `randomUUID` (`initially` position only). A trailing `?` marks a property optional (`processedOn: Date?`); properties are required by default.
+| Type | Holds |
+|---|---|
+| `text` | characters |
+| `integer` | a whole number (Kotlin `Int`) |
+| `long` | a larger whole number (Kotlin `Long`) |
+| `decimal` | an exact decimal, for money and quantities (Kotlin `BigDecimal`) |
+| `double` | a floating-point number (Kotlin `Double`) |
+| `boolean` | true or false |
+| `Date` | a calendar date (`java.time.LocalDate`) |
+| `DateTime` | a moment on the global timeline (`java.time.Instant`) |
 
-`initially` gives a property a starting value, and it is allowed on any stored property of a `shape`, whatever its type, relationships included: `applied: boolean initially false`. (On an *act*, `initially` and `timestamp` declarations are compile errors — every stored field there is the committer's, and a system-maintained value lives on the `shape` a rule materializes; `## Open / unresolved`, "External input".) The field stays stored and assignable (`## Assignment (mutation in place)`); the initializer is evaluated once, at the instance's creation commit — so `submittedOn: Date initially now` records commit time as model data. It is an optional clause on a stored declaration, not a separate property kind — but it is distinct from derivation: `applied: boolean = false` in shape-body position would mean *derived, always false* — unassignable (`## Derived properties`). The two places `initially` can't appear follow from those properties' own rules, not from a restriction on the clause: a derived property has no stored value to initialize, and a `timestamp` field's value is commit metadata, never author-supplied (below). Its refinement-position sibling is `captured`, which evaluates at the entry commit instead of the creation commit (`## Refinements`).
+Each type behaves as its Kotlin counterpart unless the Reference says otherwise. A `DateTime` has no time zone; when the business needs one, store it as data beside the value.
 
-`initially` also accepts a **generator**: `processorKey: text initially randomUUID` mints a unique value at the creation commit — how a system-originated act gets an outward-facing key (`## rule`, "Transactions and `after commit`"). Like `now`, a generator is evaluated once, at the creation commit, and a rolled-back-and-retried transaction re-evaluates it. Which generators exist beyond `randomUUID` is open (`## Open / unresolved`); sequence-flavored generators are excluded deliberately — ordering comes from timestamps or declared fields, never minted values.
+`now` is the current `DateTime`. `today` is the current `Date` in the system's one time zone, set at deployment, not in the spec.
 
-`timestamp` declares a property whose value is **commit metadata** — populated by the commit itself, never by a committer or a rule — with the persistence behavior part of the declaration:
+The Reference also uses `Money`. It is not built in; it stands for a type you will be able to declare later ([§22](Reference-22-Open-unresolved)).
+
+## The built-in functions
+
+The list is fixed. A spec may call only these:
+
+- `count`, `sum`, `latest`, `first`, for collections ([§10](Reference-10-Predicate-expressions)).
+- `contains`, `starts with`, `ends with`, `like`, for text ([§10](Reference-10-Predicate-expressions)).
+- `lowercase`, `max`, `min`.
+- Duration literals such as `3 days`, in `seconds`, `minutes`, `hours`, `days`, or `weeks` ([§10](Reference-10-Predicate-expressions)).
+- `randomUUID`, only after `initially`.
+
+## Optional properties
+
+A property is required unless its type ends in `?`: `processedOn: Date?` may be absent.
+
+## Starting values (`initially`)
+
+`initially` gives a stored property its value when the record is created:
+
+```
+applied: boolean initially false
+```
+
+It is allowed on any stored property of a `shape`, relationships included. The value is computed once, at the commit that creates the record. The property stays stored, and a rule may [assign](Reference-12-Assignment) it later. So `submittedOn: Date initially now` records the creation time as business data an administrator could later correct.
+
+`initially` is not a derivation. `applied: boolean = false` in a shape body would declare a [derived property](Reference-07-Derived-properties) that is always false and never assignable. A derived property has no stored value, so it cannot take `initially`; neither can a `timestamp` field, whose value the commit supplies (below). The counterpart inside a [refinement](Reference-08-Refinements) is `captured`, which computes its value when the record enters the refinement.
+
+`initially` is not allowed on an `act`, whose every stored field the committer supplies. A system-kept value belongs on the `shape` a rule creates from the act ([§22](Reference-22-Open-unresolved), "External input").
+
+## Generated values
+
+`initially` also accepts a generator. `reference: text initially randomUUID` mints a unique value when the record is created, which is how a record gets a key the outside world can use (`examples/billing/billing.velle`). The generator runs once at the creation commit; if that transaction is rolled back and retried, it runs again. `randomUUID` is the only generator. There is no sequence generator; ordering comes from timestamps or declared fields.
+
+## Timestamps (`timestamp`)
+
+A `timestamp` property is filled in by the commit itself. Neither the committer nor any rule supplies it:
 
 ```
 shape Review {
@@ -22,6 +67,31 @@ shape Review {
 }
 ```
 
-`on create` fixes the value at the instance's creation commit; `on update` advances it at every commit that writes a stored field of the instance (creation included, so the field is never absent). The names are the author's — `correctedOn: timestamp on create` is fine. The values are never committer-suppliable (a fact about the commit can't be claimed by the client) and never assignable (`this.updatedAt = now` is a compile error) — which is the point: `updatedAt` maintained by hand would mean every writing rule also assigns it, boilerplate that lies the first time a rule forgets. Contrast `initially now`: also evaluated at the creation commit, but it declares ordinary *stored business data*, assignable ever after (a submission date an admin may later correct); `timestamp on create` declares unassignable bookkeeping fact. Choose by whether the moment is a business datum or a fact about the commit. A declared creation timestamp is also the natural datum to name in a selector's `by` clause (`## Predicate expressions`) — but it is consulted only by name, never implicitly.
+- `createdAt: timestamp on create` is set once, at the commit that creates the review.
+- `updatedAt: timestamp on update` moves forward at every commit that writes a stored field of the review. The creating commit counts, so the field is never absent.
 
-Every instance carries **`id`** — identity as a readable value, present with no declaration. An act declared `by` carries one more language-populated property, its **actor**, the committer the binding handed in, under the name the clause binds (`actor`, or the `as` name): never supplied, never assigned, stored on a durable act like a timestamp, and readable through any reference to the act ([§22](Reference-22-Open-unresolved), "The actor"). It is unique per instance, fixed at creation, never assignable, and supports `==` and nothing else: not ordered, not arithmetic, not parseable text, so a spec can never depend on representation — whether `id` is a UUID, an auto-increment, or an existing table's `some_unique_id` primary key supplied at an integration boundary is compilation's business (`## 1. Principles`). `id` is a reserved name; a domain whose business vocabulary includes an "id" (an externally meaningful account number) declares its own field for it — business identifiers are data, `id` is identity. Instance comparison was always identity comparison (`## Predicate expressions`); `id` is its readable form: `a == b` is `a.id == b.id`. One deliberate asymmetry with `timestamp` fields: those are declared surface with language-populated values, while `id` appears in no declaration — identity is the one fact every record carries whether or not the author writes it down.
+The names are yours; `correctedOn: timestamp on create` is fine. A committer cannot supply the value, and `this.updatedAt = now` in a rule is a compile error.
+
+Choose `initially now` when the moment is a business fact someone may later correct, and `timestamp on create` when it is a fact about the commit. A timestamp can be named in a selector's `by` clause like any field ([§10](Reference-10-Predicate-expressions)), but only by name.
+
+## Identity (`id`)
+
+Every record carries an `id` without declaring it. It is unique to the record, fixed at creation, and never assignable. It supports `==` and nothing else: not ordered, not arithmetic, not text. Whether it is a UUID, an auto-increment, or an existing table's primary key is decided at compilation ([§1](Reference-01-Principles)).
+
+`id` is a reserved name. A business identifier such as an account number gets its own declared field: identifiers are data, `id` is identity. Comparing two records compares identity ([§10](Reference-10-Predicate-expressions)): `a == b` means `a.id == b.id`.
+
+## The actor
+
+An act declared `by` carries one more system-filled property: the actor who committed it, named `actor` or whatever the `as` clause says. It is never supplied or assigned, and on a durable act it is stored like a timestamp and readable through any reference to the act ([§22](Reference-22-Open-unresolved), "The actor").
+
+## What the compiler checks
+
+- **Rejects** a call to a function outside the list above, an operator or comparison on mismatched types, and duration arithmetic on anything but a `Date` or `DateTime` ([checks.md, F2](checks#f2--type-checking)).
+- **Rejects** `initially` on anything but a stored property, and any assignment to a `timestamp` field or `id` ([checks.md, F3](checks#f3--position-rules)).
+- **Rejects** `initially` or `timestamp` on an act, naming the field and where it should move ([checks.md, V21](checks#v21--act-field-forms)).
+- **Rejects** a declared field named `id` ([checks.md, F1](checks#f1--name-resolution-and-casing)).
+
+## Related pages
+
+- [§7 Derived properties](Reference-07-Derived-properties), for values computed instead of stored.
+- [§10 Predicate expressions](Reference-10-Predicate-expressions), for the functions in use.

@@ -1,5 +1,11 @@
 # 6. Relationships (`one`, `many`)
 
+A relationship is a link between records: an invoice has a customer, a student takes courses. In Velle you declare a relationship once, on the shape that stores the link, and the other side appears on its own. Declaring `customer: one Customer` on `Invoice` gives every `Customer` an `invoices` collection with no declaration at all. The two keywords say how many records the declaring side points at: `one` points at a single record, `many` holds a set of them. This page shows how to declare each kind, what the other side is called, how an act supplies collections and how a rule changes them, how to name the inferred side yourself, and how an act can create a record together with its parts in one commit.
+
+The code on this page comes from `examples/enrollment/enrollment.velle`, `examples/orders/orders.velle`, `examples/gallery/gallery.velle`, and `examples/batches/batches.velle`.
+
+## Declaring a relationship
+
 ```
 shape Invoice {
     customer: one Customer
@@ -10,66 +16,98 @@ shape Payment {
 }
 ```
 
-`one`/`many` declare **ownership of the relationship, not its direction**. The declaring shape owns the relationship: the declared property is its stored side — the side rules assign and committers supply — and its cardinality says how many the *owner* points at. The inverse side is never declared and never chosen: it is inferred — derived, unassignable — and its cardinality is structural fallout from the declared side. `Invoice.customer: one Customer` gives `Customer` an inferred `invoices` collection with no declaration on `Customer` (`Customer where count(invoices ...)` just works); the inferred name is the related shape's name, decapitalized and pluralized with `s` (`Payment.invoice: one Invoice` gives `Invoice` a `payments` collection — the `sum(payments, amount)` of `## Derived properties`).
+Each line declares one relationship from the shape that stores it:
 
-Cardinality reads off the declared side alone:
+- `Invoice.customer: one Customer` says each invoice points at one customer. Many invoices may point at the same customer, so this is a one-to-many relationship, written from the many side. It is the only way to write one-to-many.
+- `Customer` gets a collection called `invoices` without declaring anything. The name is the declaring shape's name, lowercased and with an `s` added. `Payment.invoice` gives `Invoice` a `payments` collection, so `sum(payments, amount)` works on an invoice.
+- The inferred side is a view. Rules never assign it, and committers never supply it. Both sides can be traversed in expressions.
 
-- **`one` declared** — each owner points at one target; nothing constrains how many owners point at the same target, so the relationship is **one-to-many**, declared from the "many-of" side. This is the only spelling of one-to-many, deliberately: the pointer on that side makes "exactly one per member" structurally impossible to violate, where declaring a collection on the other side would degrade the same invariant to a checked global disjointness constraint (no member in two collections, none in zero) — and structural impossibility beats checked discipline (`## 4`, "Transient acts", makes the same trade).
-- **`many` declared** — the owner holds an edge set, and nothing constrains how many owners' sets a target appears in, so the relationship is **many-to-many**, with no intermediary join shape required. A declared `many` is exactly the *data-free* edge set: the moment an edge carries data (when it was made, by whom, a grade), it is a business fact wanting its own shape — a graduation point, never ceremony. `many` also takes a scalar (`tags: many text`) — an owned collection of values, since scalars have no identity to reference. The commit and assignment story for collections is below.
+`many` declares a set of links owned by the declaring shape:
 
-Direction is not encoded because it would carry no information: inference means both sides always traverse. The traditional parent/child framing conflates three separate things, and these descriptors take exactly one of them — traversal direction (symmetric and free, per the above), **write ownership** (what `one`/`many` declare), and lifecycle dependency ("children die with the parent" — no part of the relationship descriptor; existence-dependency is delete territory (OQ37)). "Invoice has payments" and "payment belongs to invoice" were never two directions of one arrow: only the second is a declaration.
+```
+act Student {
+    name: text
+    advisor: one Advisor?
+    tags: many text
+    courses: many Course
+}
+```
 
-**A relationship targets a base shape, never a refinement.** `invoice: one Invoice` is legal; `invoice: one OverdueInvoice` is a compile error ([`checks.md`](checks) [F2](checks#f2--type-checking)). A field's type is checked once, at the commit that writes the field, while a refinement's membership drifts with every later commit that touches its predicate — so a refinement-typed field would be violated by a commit that never wrote it, and the language would have no honest response: refusing the unrelated commit enforces an invariant nobody declared, clearing the field is a write with no assignment behind it (`## Assignment (mutation in place)`), and letting it stand makes the type a lie. The business sentence "an escalation chains only from an unacknowledged escalation" is a condition on the *act* that creates the escalation — a requirement or a gate refinement over it (`## never`) — not a property of the field's type.
+- `courses: many Course` says a student holds a set of courses. Nothing limits how many students hold the same course, so this is many-to-many, with no join shape needed. `Course` gets an inferred `students` collection.
+- `tags: many text` is a set of values rather than links. Scalars have no identity to point at, so the shape owns the values.
+- `advisor: one Advisor?` is an optional link. The `?` means the student may have no advisor.
 
-**The one refinement that is a legal target is a static union.** `shape Content = Post or Photo` — a pure `or` of base shapes with no predicate anywhere (`## Composing refinements`) — has a member set fixed by declarations, never by data, so it cannot drift, and `target: one Content` is legal. This is the **polymorphic association**: one role, filled by an instance of either shape ("a comment is on a post or on a photo"), where the alternative is one optional field per shape plus exclusivity invariants that grow with every shape added. The union-typed field infers its inverse onto every operand *and* the union from the one declaration — `comments` on `Post`, on `Photo`, and on `Content` — and a committed reference to an instance outside the union is a type-level refusal at the boundary, like any value that cannot inhabit the field's type. A union carrying a predicate anywhere (`Post or (Photo where published)`) is refused as a target for the same reason as any refinement. The worked spec is `examples/gallery/gallery.velle`; `examples/batches/batches.velle` works the other direction of the same association — a record whose provenance is one of three kinds, where the union-typed field on the shared record (`origin: one Origin`) replaces a supertype with three subtypes, each kind's own data living on its own shape and the shared data on the one record.
+A `many` set carries no data about each link. If a link needs data of its own, such as when it was made or a grade, write a shape for it with a `one` field to each end. That shape is a business fact, not ceremony.
 
-One consequence is an ambiguity rule: because a bare declared `many` *means* an owned many-to-many edge set, declaring **both** sides of one relationship (`Payment.invoice: one Invoice` *and* `Invoice.payments: many Payment`) is not a restatement — it is either two distinct relationships between the same shapes or two owners of one edge set, and the compiler refuses to guess (`## 1. Principles`): a compile error demanding intent. Renaming an inferred inverse where the derived name reads badly is therefore *not* spelled as a bare stored `many`; a renamed inverse is a view, not owned data, and its spelling is the derived form below ("Renamed and derived collections").
+Declaring a relationship says nothing about what happens when a linked record is deleted. See [§12, "Deletion"](Reference-12-Assignment#deletion-delete) for that.
+
+### Rules the compiler enforces
+
+- **A relationship targets a base shape, never a refinement.** `invoice: one Invoice` is allowed. `invoice: one OverdueInvoice` is rejected ([checks.md, F2](checks#f2--type-checking)). A field's type is checked once, when the field is written, but refinement membership changes with later commits that never touched the field. To say "an escalation chains only from an unacknowledged escalation", put a requirement on the act that creates the escalation ([§21](Reference-21-never)).
+- **A static union is an allowed target.** A refinement that is only `or` over base shapes, with no `where` anywhere ([§9](Reference-09-Composing-refinements)), has a fixed set of members and may be a target. From `examples/gallery/gallery.velle`, `shape Content = Post or Photo` lets a comment declare `target: one Content`: one role, filled by either kind of record. The one declaration gives `comments` to `Post`, to `Photo`, and to `Content`. A committed reference to a record outside the union is refused at the boundary like any wrong-typed value. A union with a `where` on any operand is rejected as a target. `examples/batches/batches.velle` shows the same idea from the other side: `origin: one Origin` on a shared record, where `Origin` is a union of three shapes that each carry their own data.
+- **Declare each relationship on one side only.** Writing both `Payment.invoice: one Invoice` and `Invoice.payments: many Payment` is an error, because it could mean two different relationships or two owners of one set ([checks.md, V19](checks#v19--relationship-declaration-coherence)). To name the inferred side yourself, use the derived form under "Renamed and derived collections" below.
 
 ## Committing and assigning collections
 
-On an act, `many X` is the plural of what `one X` already means there: the committer names several existing instances by reference (`ChangeDueDate.invoice: one Invoice` names one; `courses: many Course` names several). `many <scalar>` on an act supplies the values themselves. The act's generated input value ([§22](Reference-22-Open-unresolved), "External input") carries the collection; supplying it — possibly empty — satisfies mapping totality ([F4](checks#f4--mapping-totality)), and the empty collection *is* the absence, which is why `many` takes no `?`.
+On an act, `many Course` means the committer names several existing courses by reference, just as `one Course` names one. `many text` on an act means the committer supplies the values. The committer always supplies a `many` field, possibly as the empty set ([checks.md, F4](checks#f4--mapping-totality)). An empty set already means "none", so `many` never takes `?`.
 
-A collection is a **set**: unordered, duplicate-free. Ordering comes from declared data, never from position ([§5](Reference-05-Scalars), selectors) — a positional list would smuggle in an ordering with no datum behind it. A duplicate reference in a committed collection is refused at the boundary, a type-level refusal like any other: it is either a caller bug or a multiplicity claim `many` cannot express, and multiplicity that matters is data on an edge shape — the graduation point; the diagnostic says so.
+A collection is a set: no order, no duplicates. To order records, name a field to order by ([§10](Reference-10-Predicate-expressions), selectors). A committed collection containing the same reference twice is refused at the boundary. If how many times a link occurs matters, that count is data and belongs on a link shape.
 
-What a rule may do with a collection follows one sentence — **you may only assign what is stored, and a statement assigns exactly the field it names** — met by the two relationship kinds:
+A rule changes a collection in one of three ways. The rule in every case is that a statement assigns exactly the stored field it names.
 
-- **Whole-set replacement.** A declared `many` is stored, so it is assignable as a value; the edge set becomes exactly the right-hand side:
+**Replace the whole set.** A declared `many` is stored, so a rule can assign it. The set becomes exactly the right-hand side:
 
-  ```
-  transient act SetEnrollment {
-      student: one Student
-      courses: many Course
-  }
+```
+transient act SetEnrollment {
+    student: one Student
+    courses: many Course
+}
 
-  rule SetEnrollment {
-      this.student.courses = this.courses
-  }
-  ```
+rule ApplyEnrollmentSet when SetEnrollment {
+    this.student.courses = this.courses
+}
+```
 
-  Replacement is well-defined because m2m edges are free-standing: removal just deletes edges, and nothing else moves. Concurrent replacement needs no special rule — acts serialize as commits, so two full-set replacements are last-in-wins, exactly as two assignments to a scalar field are.
+Links removed by the replacement simply disappear. Nothing else changes. Two acts that replace the same set are applied one after the other, and the later one wins, as with any field.
 
-- **Fan-out assignment.** A one-to-many's collection side is inferred — a view over the children's stored pointers — and a view is never an assignment target: "setting" it is really a per-child write of the stored field, spelled *through* the collection:
+**Add or remove one link.** `+` adds to a declared `many` and `-` removes from it. The right-hand side may be one record or a collection:
 
-  ```
-  transient act ReassignInvoices {
-      customer: one Customer
-      invoices: many Invoice       -- a selector: which children get this parent
-  }
+```
+rule ApplyEnroll when Enroll {
+    this.student.courses = this.student.courses + this.course
+}
 
-  rule ReassignInvoices {
-      this.invoices.customer = this.customer
-  }
-  ```
+rule ApplyDrop when Drop {
+    this.student.courses = this.student.courses - this.course
+}
+```
 
-  One write per member, the mutated field named in the statement. **One hop only**: a collection path assigns a field *of* the members, never through them (`this.invoices.customer`, never `this.invoices.customer.tier`) — the same instinct as the derived-property self-reference rule ([§7](Reference-07-Derived-properties)). The act's collection selects; nothing is removed, so totality is trivial — removal is its own explicit act, spelled on the child (reassignment, or `none` where the pointer is optional). For one-writer analysis a collection-path write counts as a write to that field on *every* instance of the member shape — the coarse fail-closed rule ([checks catalog](checks), [V1](checks#v1--one-writer-disjointness)); refining it with disjointness proofs is post-v0 calibration.
+Adding a course the student already has, or removing one they do not have, changes nothing.
 
-- **Incremental edits.** `+` and `-` on a declared `many` are union and removal — `this.student.courses = this.student.courses + this.course` — element or collection on the right. Set semantics keep the edges quiet: adding a present member and removing an absent one are no-ops. This and the duration case are the only operator overloads ([`grammar.md`](grammar), value expressions).
+**Write one field on every member.** The collection side of a one-to-many is inferred, so a rule cannot assign it. To move several invoices to a new customer, write the stored field through the collection:
 
-- **`empty`.** The empty collection, legal wherever a `many` value is expected: `tags: many text initially empty`; `courses: empty` as a `from { ... }` entry. There are no collection literals — composing a collection out of elements in-spec is the same territory as composing text out of data ([`grammar.md`](grammar), TextLiteral): collections enter from the boundary, from traversals (`this.invoices where OverdueInvoice`), or start `empty`.
+```
+transient act ReassignInvoices {
+    customer: one Customer
+    invoices: many Invoice       -- a selector: which children get this parent
+}
+
+rule ApplyReassignment when ReassignInvoices {
+    this.invoices.customer = this.customer
+}
+```
+
+- The statement writes `customer` once on each invoice in the act's collection.
+- A collection path goes through one `many` and stops. `this.invoices.customer` is allowed. `this.invoices.customer.tier` is not. To write the deeper field, write a rule on the shape that owns it.
+- Nothing is removed from the old customer's invoices. The invoices now point elsewhere, so they leave that collection on their own. Removing an invoice from a customer entirely is a separate act on the invoice, setting the pointer elsewhere or to `none` if it is optional.
+
+The compiler rejects assigning an inferred or derived collection, and rejects a path through more than one `many` ([checks.md, V20](checks#v20--collection-assignment-legality)). For the one-writer check, a write through a collection counts as a write to that field on every record of the member shape ([checks.md, V1](checks#v1--one-writer-disjointness)).
+
+**`empty`** is the empty collection and may appear wherever a `many` value is expected: `tags: many text initially empty`, or `courses: empty` inside a `from { ... }` block. There is no way to write a collection of specific records inline. Collections come from the committer, from a traversal such as `this.invoices where OverdueInvoice`, or start `empty`.
 
 ## Renamed and derived collections
 
-An inferred inverse under an author-chosen name is a **derived `many` property with a set-denotation formula** — visibly a view over the declared side:
+To give an inferred collection your own name, declare it as a derived `many` property with a formula:
 
 ```
 shape Person {
@@ -81,9 +119,9 @@ shape Company {
 }
 ```
 
-`many` is the type in both stored and derived positions — the type word says what the value *is*, and `=` says where it comes from, exactly as `applied: boolean initially false` vs `applied: boolean = false` ([§5](Reference-05-Scalars)). The misread this could invite — forgetting the `=` and declaring an owned edge set — is structurally caught: a renamed inverse's other side is declared by definition, so the omission trips the both-sides error above, and the diagnostic suggests the `=` form.
+The `=` makes it a view over the stored side, in the same way `applied: boolean = false` is a derived value and `applied: boolean initially false` is a stored one ([§5](Reference-05-Scalars)). Leave out the `=` and you have declared a second stored side, which the compiler rejects as described above. The diagnostic suggests the `=` form.
 
-Renaming is *necessary*, not cosmetic, when two declared sides share a target: the decapitalized-pluralized name would be ambiguous (which fields feed `Account.transfers`?), so no inverse is inferred and the spec declares its views — ambiguity is a compile error ([§1](Reference-01-Principles)):
+You must declare the views yourself when two `one` fields on one shape point at the same target. The inferred name would be ambiguous, so none is inferred:
 
 ```
 shape Transfer {
@@ -97,11 +135,11 @@ shape Account {
 }
 ```
 
-Derived `many <scalar>` collections use the same form. A derived collection is a view like any derived property: computed on read, never stored, never assigned ([§7](Reference-07-Derived-properties)).
+A derived collection of scalars uses the same form. Like any [derived property](Reference-07-Derived-properties), it is computed when read, never stored, and never assigned.
 
 ## Inline part creation (`with`)
 
-An order committed together with its line items is a different arrival than anything above: the parts *don't exist yet*, so they can't be references — they are values created in the act's commit. Committing the parts first can't serve it (each `OrderLine.order: one Order` needs an order that doesn't exist, and per-part commits are the wrong granularity for "these arrive together"), and `many` never will (references-always, above). The act's declaration declares it, with a `with` clause after the body:
+Sometimes a record arrives together with its parts: an order and its line items are placed in one request. The lines do not exist yet, so the request cannot refer to them. Instead the act declares, after its body, which parts arrive with it:
 
 ```
 act Order {
@@ -116,11 +154,14 @@ shape OrderLine {
 }
 ```
 
-`with` names a **collection-typed property of the act** — here the inferred inverse — and that one name determines everything: the part shape (`OrderLine`), the language-populated back-reference (`order`), and the addition to the act's generated input value ([§22](Reference-22-Open-unresolved), "External input"): per part, every stored field minus the back-reference, which only the language can populate — a committer-suppliable back-reference would be a claim about an instance that doesn't exist yet. References-always survives trivially: the inferred inverse is derived, not stored, so `orderLines` would never appear in the input value at all without the `with` — the clause adds a field that had no other way to exist, and a declared `many` on an act keeps meaning references, untouched.
+- `OrderLine.order: one Order` declares the one-to-many as usual, which gives `Order` an inferred `orderLines` collection.
+- `with orderLines` names that collection. From the one name the compiler knows the part shape, `OrderLine`, and the field that points back at the order, `order`.
+- The generated input for the act now carries a list of line values. Each line value has every stored field of `OrderLine` except `order`, which the system fills in. The committer cannot supply a reference to a record that does not exist yet.
+- A `many` field on an act still means references. Only `with` makes parts arrive as values.
 
-The commit carries the act *plus* its declared parts as **one statically-shaped closure** ([§4](Reference-04-State-and-commits)): membership is declared, never data-dependent, so trigger and one-writer analyses read it from the declaration exactly as they read a single-instance commit. At the closure's commit the entrants are the container and each part — `rule ... when Order` fires once, `rule ... when OrderLine` once per line, all sharing the act's transaction ([§20](Reference-20-State-change-patterns)'s fan-out precedent); an author who wants once-per-act granularity writes the condition on the container. The order the records physically land in is compilation's business (the topological order over the closure's reference tree, container first) and is never observable: pre-state and post-state are defined at the one commit, and no state where the order exists without its lines ever exists to observe.
+The order and its lines land as one commit. A rule `when Order` fires once. A rule `when OrderLine` fires once per line, in the order's transaction, so if any line's rule fails the whole order is refused ([§20, "All-or-nothing batches"](Reference-20-State-change-patterns#all-or-nothing-batches)). For something that should happen once per order, write the rule on the order. There is never a moment when the order exists without its lines.
 
-Nesting and multiple edges — a flat list for multiple edges; braces when an edge carries its own closure:
+Parts can have their own parts, and an act can declare several part collections. Use a flat list for several collections, and braces when a part has parts of its own:
 
 ```
 act Order { customer: one Customer, placedOn: Date } with orderLines, shipments
@@ -131,14 +172,25 @@ act Order { customer: one Customer, placedOn: Date } with {
 }
 ```
 
-Each nested `with` resolves against the part shape the same way. Where no inverse is inferred — two `one` fields sharing a target, the `Transfer` situation above — `with` names the declared view, and the view's recognized form pins the back-reference: `act Account { ... } with outgoing` populates `source`, because `outgoing = (Transfer where source == this)`. An arbitrary-predicate view is a compile error: a closure edge must be the inverse of a declared `one` field ([checks catalog](checks), [V22](checks#v22--closure-declaration-legality)).
+Each nested `with` is read against the part's shape the same way. Where no inverse was inferred, as with `Transfer` above, `with` names the declared view, and the view's formula tells the compiler which field is the back-reference: `act Account { ... } with outgoing` fills in `source`.
 
-The rules that keep the construct honest:
+### Rules the compiler enforces for parts
 
-- **Closures are trees.** `with` only ever names inverse edges pointing at the enclosing level, so a sibling reference is unspellable — and an in-closure reference targeting an instance created in the same closure is refused: commit it and name it in a later act, or restructure. The tree matches the write side's grain (one hop only, above), and it is what makes the generated input plainly serializable — strictly nested values, no closure-local naming scheme.
-- **Inline parts are a bag, not a set.** The set semantics above are about references — two identical handles name the same instance. Two identical inline part values mint two *distinct* instances, each with its own `id`: quantity 1 twice is not quantity 2 once. The post-commit inverse is trivially a set of distinct instances.
-- **Creation-only.** The closure exists because its targets can't be referenced. Anything that exists is referenceable, and changing it is already served — an act carrying references plus a rule's assignment ([§12](Reference-12-Assignment)) or fan-out (above); nothing update-shaped ever rides the closure, and "create it if it doesn't exist" is a spec decision (a rule, a gate, a `never`), never input structure.
-- **Parts never write the container.** A part-triggered rule assigning through the back-reference is N sibling firings writing one field of one instance — a proven write-write conflict, refused totally ([checks catalog](checks), [V1](checks#v1--one-writer-disjointness)). The served spellings: derive the aggregate on the container (`total: Money = sum(orderLines.subtotal)` — usually the value was a denormalized derivation all along), or condition on the container for a once-per-act effect.
-- **Ordinary instances after the commit.** The closure is a fact about one commit's input, never a property of the instances it creates: once landed, container and parts are updated, frozen, exited, and referenced like anything else.
+- A `with` entry must name an inferred inverse, or a derived view of the exact form `(P where field == this)`. Any other view is rejected: a part collection must be the inverse of a declared `one` field ([checks.md, V22](checks#v22--closure-declaration-legality)).
+- Parts form a tree. A part can point only at the record it arrived under. A part that refers to another record created in the same commit is rejected. Commit that record first and refer to it in a later act, or restructure.
+- Inline parts are not de-duplicated. Two identical line values create two distinct lines, each with its own `id`. The duplicate refusal above applies to references only.
+- `with` creates records. It never updates existing ones. To change a record that exists, commit a reference to it and let a rule assign the field ([§12](Reference-12-Assignment)).
+- A rule on a part may not write a field of the record it arrived under. Several lines writing one field of one order is a write conflict, and the compiler rejects it ([checks.md, V1](checks#v1--one-writer-disjointness)). Derive the aggregate on the order instead, as `examples/orders/orders.velle` does with `total: integer = sum(orderLines, quantity)`, or write a rule on the order.
+- Once committed, the order and its lines are ordinary records. They are updated, frozen, exited, and referenced like any other.
+- A `transient act` may not have a `with` clause.
 
-The generated input structure is a **projection, not a mirror**: the boundary type is the shape minus everything the committer may not claim — no `id`, no `timestamp` fields, no derived properties ([§22](Reference-22-Open-unresolved)), and no back-references on inline parts. An out-of-closure relationship generates a typed reference handle (how `id` opacity survives the boundary, [§5](Reference-05-Scalars)); a closure edge generates a nested input type, recursively. Everything unrepresentable in the input type needs no runtime refusal, so the runtime surface shrinks to what only runtime can know: the referenced instance exists, no duplicate references, and the `never` guardrails at this act's boundary — the refusals and constraints ([§21](Reference-21-never)). Minimum-parts policy needs no closure feature — "an order must have at least one line" is a `never` or gate refinement over committed state ([§20](Reference-20-State-change-patterns), [§21](Reference-21-never)); the empty part collection is the absence, as ever. A `transient act` with a closure is refused for now (OQ43).
+The generated input for any act is the shape minus what the committer may not claim: no `id`, no `timestamp` fields, no derived properties, and no back-references on parts ([§22](Reference-22-Open-unresolved), "External input"). A reference to a record outside the commit is a typed handle. A part is a nested value. To require at least one line, write a `never` or a gate refinement over the committed order ([§21](Reference-21-never)). An empty part list is allowed and means no parts.
+
+## Related pages
+
+- [§4 State and commits](Reference-04-State-and-commits), for what one commit contains.
+- [§5 Scalars](Reference-05-Scalars), for `initially`, `?`, and `id`.
+- [§7 Derived properties](Reference-07-Derived-properties), for the `=` form a renamed collection uses.
+- [§9 Composing refinements](Reference-09-Composing-refinements), for static unions.
+- [§12 Assignment](Reference-12-Assignment), for the one-writer rule and deletion.
+- [§22 Open / unresolved](Reference-22-Open-unresolved), "External input", for what the generated input carries.
