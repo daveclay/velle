@@ -8,11 +8,27 @@
 
 ## 1. The want
 
-The batches spec inverts the object-language hierarchy: one `PeptideBatch` shape holds what every batch has, each kind of provenance is a shape of its own, and `origin: one Origin` points at the static union of the three. The pointer is what makes "exactly one kind" structural (Reference §6: a `one` field holds one value). It is also what forces two commits:
+The business: a lab keeps peptides in batches. Every batch came from one of three places. It was fermented in-house from a bacteria strain, it was ordered from an outside vendor, or it was mixed from other batches already on the shelf. Where a batch came from is its *origin*, and a batch has exactly one.
+
+The spec, from `examples/batches/batches.velle`, cut down to the records involved:
 
 ```
-act Fermentation { strain: one BacteriaStrain, run: one FermenterRun }
+act Peptide { code: text }
+act BacteriaStrain { name: text }
+act FermenterRun { vessel: text, startedOn: Date }
+act Vendor { name: text }
 
+-- The three kinds of origin. Each is a record of its own, holding only what that kind knows.
+act Fermentation  { strain: one BacteriaStrain, run: one FermenterRun }
+act ExternalOrder { vendor: one Vendor, orderItem: text }
+act Composition   { mixedOn: Date } with components
+
+-- One name for "any of the three", so a field can point at whichever one applies.
+shape Origin = Fermentation or ExternalOrder or Composition {
+    peptideBatches: many PeptideBatch = (PeptideBatch where origin == this)
+}
+
+-- The batch. It points at its origin.
 act PeptideBatch {
     peptide: one Peptide
     quantityMg: decimal
@@ -20,7 +36,13 @@ act PeptideBatch {
 }
 ```
 
-Between the fermentation's commit and the batch's, the fermentation is on the books with no batch. The spec can show that state (`shape UnclaimedOrigin = Origin where peptideBatches is empty`) and cannot forbid it: `never (Fermentation where peptideBatchs is empty)` is a constraint on a persistent shape, checked at the fermentation's own commit, when no batch can exist yet, so it refuses every fermentation (probe B2).
+In order:
+
+- `Fermentation`, `ExternalOrder`, and `Composition` are the three kinds of origin. They share nothing but the fact that a batch can come from them.
+- `Origin` is a static union: a name that means "a Fermentation, or an ExternalOrder, or a Composition" (Reference §9). Its body declares `peptideBatches`, the batches that point at this origin.
+- `PeptideBatch.origin: one Origin` is the pointer. A `one` field holds exactly one value, so "a batch has exactly one origin" needs no rule; it is how the field works (Reference §6).
+
+The pointer is what forces two commits. The batch's input must name an origin that exists, so the lab commits the fermentation first and the batch second, even though in the lab they are one event: the fermenter run finished and produced this batch. Between the two commits the fermentation is on the books with no batch. The spec can show that state (`shape UnclaimedOrigin = Origin where peptideBatches is empty`) and cannot forbid it: `never (Fermentation where peptideBatchs is empty)` is checked at the fermentation's own commit, when no batch can exist yet, so it refuses every fermentation (probe B2).
 
 ## 2. The two spellings available today, and what each gives up
 
