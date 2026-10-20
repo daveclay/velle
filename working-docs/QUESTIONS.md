@@ -61,7 +61,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 
 ## Acts, transient and exposed
 
-- **[OQ63](questions/OQ63-forward-closure.md)** — a record and the record it points at, arriving in one commit: a closure creates parts that point back at the act, a batch points forward at its origin, so the origin lands a commit earlier and is unclaimed in between · opened 2026-10-16 from the batches pass (B2); no design yet
+- **[OQ63](questions/OQ63-forward-closure.md)** — a record and the record it points at, arriving in one commit: a closure creates parts that point back at the act, a batch points forward at its origin, so the origin lands a commit earlier and is unclaimed in between; the tree rule was a limitation, not a principle, and the mechanism (a name for a record before it has an id) also serves a rule creating linked records, OQ64's nesting · opened 2026-10-16 from the batches pass (B2); reframed 2026-10-20; Dave's current focus
 - **[OQ43](questions/OQ43-transient-containers.md)** — transient containers: a closure whose container is `transient act` · V17's direction forces the all-transient tree; v0 refuses the combination (`checks.md` V22) — remaining: the scoped V17 carve-out, V18's reach over transient parts, the durable-container/transient-branch mix; holds the transient-acts decision's residue
   - [ ] Revisit: can rules copy a transient container act *and its parts* into a durable tree? Confirm or break the tracing; the outcome scopes OQ43.
   - [ ] Confirm outcome-mediated provenance satisfies `why` when provenance lands (Reference §22's `why` item).
