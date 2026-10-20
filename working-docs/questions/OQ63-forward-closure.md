@@ -62,7 +62,7 @@ Neither is the sentence the owner said: "a batch arrives with its provenance, an
 ## 4. Open
 
 - Whether this is a `with` extension (a forward field named in the clause) or a property of the field's declaration.
-- Whether the want is common enough to carry a construct. The gap itself is not in question: a record that must point at another record cannot be committed with it, and no spelling closes the window (Dave, 2026-10-16: the pass is about gaps in Velle, not about whether a domain could live with the window).
+- ~~Whether the want is common enough to carry a construct.~~ Yes (Dave, 2026-10-20). The gap itself was never in question: a record that must point at another record cannot be committed with it, and no spelling closes the window (Dave, 2026-10-16: the pass is about gaps in Velle, not about whether a domain could live with the window).
 - The generated input: a Kotlin sealed type per forward field (`Existing(ref)` / `New(input)`), and how the boundary's type-level refusal reads when the inline value is of a shape outside the union.
 
 ## 5. The same mechanism inside a rule
