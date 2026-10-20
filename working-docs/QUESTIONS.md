@@ -1,6 +1,6 @@
 # Open questions and work items — the index
 
-One line per question and per work item here; the discussion lives in `questions/OQ<n>-*.md`, where each file's header states the question in plain terms before the dense part begins. OQ tags are stable — numbers are never renumbered or reused (next free: OQ64), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
+One line per question and per work item here; the discussion lives in `questions/OQ<n>-*.md`, where each file's header states the question in plain terms before the dense part begins. OQ tags are stable — numbers are never renumbered or reused (next free: OQ65), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
 
 **Questions and items.** A question (an OQ) is a design decision with discussion worth keeping. A work item is one action, verb-first, one line. An item whose whole context fits in its line stands alone; an item with context lives under the question that holds it, and the context is in that question's file, never here. Items are grouped by the part of Velle they change, not by where they were found; S-numbers, P-numbers, and B-numbers are findings of the peptides, pharmacy, and batches passes, recorded in OQ16's calibration record.
 
@@ -120,6 +120,8 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 
 ## Larger language questions
 
+- **[OQ64](questions/OQ64-creation-multiplicity.md)** — many records from one request: a creation statement creates one record and a rule fires once per record, so a request carrying counts, or a product of two sets, or a tree of created records, cannot be laid out by the spec; the client computes it and the spec can only count it back · opened 2026-10-20 from a science system Dave worked on (containers × wells per container × replicates, with conditions spread across the wells); no design yet
+  - [ ] Write `examples/platelayout/`: the three spellings available today (client-expanded closure, reference-table wells, hand-committed and counted back) with what each refuses.
 - **[OQ28](questions/OQ28-bootstrap-backfill.md)** — bootstrap/backfill: a new rule against pre-existing state · not designed
 - **[OQ59](questions/OQ59-escape-hatch.md)** — the escape hatch: open codegen · deferred, post-v0; the demands from the project's earliest notes, kept when those notes were retired
 - **[OQ35](questions/OQ35-mixins.md)** — cross-shape structural mixins · design sketched 2026-09-13; syntax undecided
