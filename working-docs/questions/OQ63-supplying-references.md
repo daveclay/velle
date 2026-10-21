@@ -1,7 +1,7 @@
-# OQ63 — Supplying a reference: by handle, by value, or by label
+# OQ63 — Supplying a reference: by handle, by value, or in the act
 
 **Status:** open (2026-10-16) — found by the batches pass (`examples/batches/`, finding B2); no design yet. Reframed 2026-10-20: the tree rule is a limitation, not a principle (§3, "Trees"), so the question is how, not whether; and this question now owns the mechanism OQ64's nested creation needs (§5), so it is the one Dave is focusing on.
-**In plain terms:** a peptide batch points at its provenance (`origin: one Origin`), and the two are one event in the lab: the batch and where it came from are known together. Today they are two commits, origin first, because the only construct that creates several records in one commit is the act's closure, and a closure creates parts that point *back* at the act. A `one` field on an act is a reference, and today the committer supplies it only one way: by handle, naming a record already on the books. Can the committer also supply it by value, with the pointed-at record nested inside this one, or by label, naming a new record elsewhere in the same request, without giving up what the `one` field buys?
+**In plain terms:** a peptide batch points at its provenance (`origin: one Origin`), and the two are one event in the lab: the batch and where it came from are known together. Today they are two commits, origin first, because the only construct that creates several records in one commit is the act's closure, and a closure creates parts that point *back* at the act. A `one` field on an act is a reference, and today the committer supplies it only one way: by handle, naming a record already on the books. Can the committer also supply it by value, with the pointed-at record nested inside this one, or in the act, pointing at a new record that arrives elsewhere in the same act, without giving up what the `one` field buys?
 **See:** Reference §6 ("Inline part creation"; "Closures are trees") · Reference §4 (one commit, one statically-shaped closure) · `checks.md` V22 · `examples/batches/batches.velle` (the two-commit spelling, with `UnclaimedOrigin` as its residue) · `examples/batches/output/src/test/kotlin/velle/BatchesProbesTest.kt` (B2: the books rule that would close the gap refuses the origin's own commit)
 
 ---
@@ -121,7 +121,7 @@ A value of a shape outside the union has no type here, so the client cannot writ
 
 ### 6.2 A name for a record that has no `id` yet
 
-A record gets its `id` when its commit lands. Until then nothing can point at it, because a reference is an `id`. That blocks two things 6.1 does not cover: a rule cannot create a record and then a second record that points at the first, and a client cannot send a request in which one new record references another new record that is neither nested inside it nor its container. Both need the same thing: a local name that stands for a record before it exists, accepted wherever a reference is. Settle 6.2 after 6.1 is built.
+A record gets its `id` when its commit lands. Until then nothing can point at it, because a reference is an `id`. That blocks two things 6.1 does not cover: a rule cannot create a record and then a second record that points at the first, and a client cannot commit an act in which one new record references another new record that is neither nested inside it nor its container. Both need the same thing: a local name that stands for a record before it exists, accepted wherever a reference is. Settle 6.2 after 6.1 is built.
 
 ### 6.2.1 In a rule: `as <name>` on a creation statement
 
@@ -204,7 +204,7 @@ rule LayOut when ExperimentDesign {
 - A name read by another statement orders the two, as any read does (Reference §15). A cycle (`A ... as a` reading `b`, `B ... as b` reading `a`) is rejected: no record can be created first.
 - One-writer (V1) is unchanged: a name is a reference to a new record, never a write to an existing one.
 
-### 6.2.2 In a client request: a label on a nested value
+### 6.2.2 In an act: a reference to another new value in the same act
 
 #### 6.2.2.1 The case
 
@@ -236,48 +236,48 @@ shape Well {
 }
 ```
 
-Nothing new is written in Velle. The compiler can see from the `with` tree that `Well.condition` targets a shape that arrives elsewhere in the same closure, and that is what makes the field label-able.
+Nothing new is written in Velle. The compiler can see from the `with` tree that `Well.condition` targets a shape that arrives elsewhere in the same closure, and that is what lets the reference be supplied in the act.
 
 #### 6.2.2.2 The Kotlin input class the compiler generates for the act
 
-A nested value may carry a label, and a field that may point across branches accepts a label in place of a handle:
+The client already holds the new condition as a Kotlin object, and an object reference is a reference. A field that may point across branches accepts the object itself in place of a handle:
 
 ```kotlin
+val low  = NewCondition(block = 1, value = 0.1)
+val high = NewCondition(block = 2, value = 1.0)
+
 NewExperimentDesign(
     containerType = containerTypeRef,
     containerCount = 1,
     replicates = 1,
-    conditions = listOf(
-        NewCondition(label = ConditionLabel("low"),  block = 1, value = 0.1),
-        NewCondition(label = ConditionLabel("high"), block = 2, value = 1.0),
-    ),
+    conditions = listOf(low, high),
     containers = listOf(
         NewContainer(replicate = 1, position = 1, wells = listOf(
-            NewWell(position = 1, condition = ConditionReference.ByLabel(ConditionLabel("low"))),
-            NewWell(position = 2, condition = ConditionReference.ByLabel(ConditionLabel("high"))),
+            NewWell(position = 1, condition = ConditionReference.InAct(low)),
+            NewWell(position = 2, condition = ConditionReference.InAct(high)),
         )),
     ),
 )
 ```
 
-- `label` is an optional field on every part input whose shape some field in the closure can point at. A part without a label is as today.
-- `condition` is a choice, as in 6.1: the reference supplied `ByHandle(ref)` for a record already on the books, or `ByLabel(label)` for one arriving elsewhere in this request.
-- The label is typed per shape (`ConditionLabel`), so a well cannot name a container where a condition is wanted; that refusal is the client compiler's.
-- The boundary reads the whole request, assigns ids, resolves every label, and refuses the request if a label is unknown or declared twice. Order inside the request does not matter: the request is one value, and resolution happens after all of it is read.
+- `condition` is a choice, as in 6.1: `ByHandle(Ref<Condition>)` for a record already on the books, or `InAct(NewCondition)` for one arriving elsewhere in this act.
+- `InAct` takes a `NewCondition`, so a well cannot hand it a `NewContainer`; that refusal is the client compiler's.
+- The boundary reads the whole act, assigns each part its id, and resolves every `InAct` by object identity: the same `NewCondition` instance must appear among the act's parts, and its id is substituted. Order inside the act does not matter, because resolution happens after all of it is read.
+- Nothing is declared on the part. There is no label to invent, spell twice, or mistype.
 
 #### 6.2.2.3 What the compiler checks
 
-- A field may take a label only when its type is a shape that arrives in the same closure, read from the `with` tree. Any other `one` field keeps today's handle-only input.
-- The generated boundary refuses an unknown label and a duplicate label as a rejection of the whole request, before the door check (Reference §21), since the request has no meaning until every reference resolves.
-- Cycles are not possible: a part points at a part, and both are created in the one commit, so no order of creation is implied. (The closure is no longer a tree, but it is still one commit; the tree rule was a limitation, OQ63 §3.)
+- A field's input gains the `InAct` case only when its type is a shape that arrives in the same closure, read from the `with` tree. Any other `one` field keeps today's handle-only input.
+- The generated boundary refuses an `InAct` object that is not among the act's parts, and a part object that appears in two creating positions (one record claimed twice), as a type-level refusal of the whole act before the door check (Reference §21), since the act has no meaning until every reference resolves.
+- Cycles are not possible: a part points at a part, and both are created in the one commit, so no order of creation is implied. (The closure is no longer a tree, but it is still one commit; the tree rule was a limitation, §3.)
 
 ### 6.2.3 Open points for 6.2
 
 Each is one decision. The decision is stated first, the context and the costs after, and a line for the answer.
 
-#### 6.2.3.1 Are the rule-side name and the request-side label documented as one idea or two?
+#### 6.2.3.1 Are the rule-side name and the act-side `InAct` documented as one idea or two?
 
-**Decision:** whether the wiki presents "a record may be named before it exists" once, with `as` and the label as its two faces, or presents `as` on Reference §14 and the label on Reference §6 as unrelated constructs that mention each other.
+**Decision:** whether the wiki presents "a record may be referenced before it exists" once, with `as` and `InAct` as its two faces, or presents `as` on Reference §14 and `InAct` on Reference §6 as unrelated constructs that mention each other.
 
 **Context.** A Velle author types `as review` in a rule body:
 
@@ -290,7 +290,7 @@ rule OpenAccountReview
 }
 ```
 
-The same author never types a label. The label lives in the generated Kotlin input, and the Velle source for the plate design is unchanged by it:
+The same author never types `InAct`. It lives in the generated Kotlin input class, and the Velle source for the plate design is unchanged by it:
 
 ```
 act ExperimentDesign {
@@ -302,22 +302,22 @@ act ExperimentDesign {
 shape Well {
     container: one Container
     position: integer
-    condition: one Condition        -- points across branches; the client supplies a label
+    condition: one Condition        -- points across branches; the client supplies the object
 }
 ```
 
 **Options.**
 
-- *One idea.* A GLOSSARY entry and one paragraph, linked from §6 and §14. Cost: the wiki rules say every sentence must help the reader write Velle today, and the label is not Velle; a reader of §14 is told about Kotlin they will not type.
-- *Two constructs.* §14 documents `as`; §6 documents, under "Inline part creation", that a part may point at a part in another branch and that the act's generated Kotlin input class carries a label for it. Each page has one sentence pointing at the other. Cost: the shared reason (no `id` yet) is said twice.
+- *One idea.* A GLOSSARY entry and one paragraph, linked from §6 and §14. Cost: the wiki rules say every sentence must help the reader write Velle today, and `InAct` is not Velle; a reader of §14 is told about Kotlin they will not type.
+- *Two constructs.* §14 documents `as`; §6 documents, under "Inline part creation", that a part may point at a part in another branch and that the act's generated Kotlin input class takes the object for it. Each page has one sentence pointing at the other. Cost: the shared reason (no `id` yet) is said twice.
 
 **Recommendation:** two constructs. The reader of each page gets what they type.
 
 **Dave:**
 
-#### 6.2.3.2 May a `one` field named in `with` (6.1) also be supplied by label, so a record can name a sibling instead of nesting it?
+#### 6.2.3.2 May a `one` field named in `with` (6.1) also be supplied in the act, so a record can name a sibling instead of nesting it?
 
-**Decision:** whether `origin: OriginReference`, the field's type in the Kotlin input class the compiler generates for the act, has a third case, `ByLabel`, beside `ByHandle` and `ByValue`.
+**Decision:** whether `origin: OriginReference`, the field's type in the Kotlin input class the compiler generates for the act, has a third case, `InAct`, beside `ByHandle` and `ByValue`.
 
 **Context.** With 6.1 the origin nests inside the batch, one origin inside one batch:
 
@@ -329,9 +329,9 @@ act PeptideBatch {
 } with origin
 ```
 
-Supplying that reference by label would let two new records in one request point at one new sibling without nesting. The batches spec forbids that case (`never (PeptideBatch where count(origin.peptideBatches) > 1)`), so the example below is a variant of it, not the shipped spec.
+Supplying that reference in the act would let two new records in one act point at one new sibling without nesting. The batches spec forbids that case (`never (PeptideBatch where count(origin.peptideBatches) > 1)`), so the example below is a variant of it, not the shipped spec.
 
-The business: a fermenter run finishes and the lab splits its product into two containers at once. Each container is a batch, both batches came from the one fermentation, and the lab records the whole thing as one request: the split, the fermentation it came from, and the two batches. The records, with the shipped batches spec's reference data and the one-origin-one-batch rule dropped:
+The business: a fermenter run finishes and the lab splits its product into two containers at once. Each container is a batch, both batches came from the one fermentation, and the lab records the whole thing as one act: the split, the fermentation it came from, and the two batches. The records, with the shipped batches spec's reference data and the one-origin-one-batch rule dropped:
 
 ```
 act Peptide { code: text }
@@ -344,7 +344,7 @@ shape Origin = Fermentation {
     peptideBatches: many PeptideBatch = (PeptideBatch where origin == this)
 }
 
--- The request: a split. It references the fermentation it splits,
+-- The act: a split. It references the fermentation it splits,
 -- and the batches it produces arrive as its parts.
 act SplitFermentation {
     fermentation: one Fermentation
@@ -364,13 +364,13 @@ In order:
 
 - `SplitFermentation.fermentation: one Fermentation` is a reference, and `with { fermentation, ... }` says it may be supplied by value, the fermentation nested inside the split (6.1).
 - `PeptideBatch.split: one SplitFermentation?` gives the split an inferred inverse, `batches`, and `with { ..., batches }` says the batches arrive as the split's parts (Reference §6).
-- `PeptideBatch.origin: one Origin` is the pointer every batch has. In this request each batch's origin is the fermentation nested inside the split.
+- `PeptideBatch.origin: one Origin` is the pointer every batch has. In this act each batch's origin is the fermentation nested inside the split.
 
-The fermentation and the batches are sibling branches of the split's closure. Each batch's `origin` must point at the fermentation in the other branch. In the batch's generated Kotlin input class, `origin` is, under 6.1, `ByHandle(ref)` or `ByValue(value)`; neither names a sibling. Without `ByLabel` on `origin`, the batches cannot point at the new fermentation, and the lab is back to two commits: the fermentation first, the split with its batches second.
+The fermentation and the batches are sibling branches of the split's closure. Each batch's `origin` must point at the fermentation in the other branch. In the batch's generated Kotlin input class, `origin` is, under 6.1, `ByHandle(ref)` or `ByValue(value)`; neither names a sibling. Without `InAct` on `origin`, the batches cannot point at the new fermentation, and the lab is back to two commits: the fermentation first, the split with its batches second.
 
 **Options.**
 
-- *By value and by label never on one field.* A reference supplied by value is for one-to-one arrival; a shared new target arrives as a part of a common container, and the references to it are supplied by label as in 6.2.2. The split example is then respelled so the fermentation is a part of the split rather than nested at its `one` field:
+- *By value and in the act never on one field.* A reference supplied by value is for one-to-one arrival; a shared new target arrives as a part of a common container, and the references to it are supplied in the act as in 6.2.2. The split example is then respelled so the fermentation is a part of the split rather than nested at its `one` field:
 
   ```
   act SplitFermentation {
@@ -384,24 +384,24 @@ The fermentation and the batches are sibling branches of the split's closure. Ea
   }
   ```
 
-  The fermentation and the batches are both parts, the batches' `origin` points across branches with a label (6.2.2), and supplying by value is not used for the shared case at all. Cost: a `many` (`fermentations`) stands where the business has exactly one, and "a split is of one fermentation" becomes a `never` over the count instead of a `one` field.
-- *By label everywhere.* Any field that targets a shape arriving anywhere in the closure, nested or part, may be supplied by label. Cost: in the generated Kotlin input class, the choice type gains a case on every `one` field named in `with` whether or not the spec needs it, and the boundary must check that a record referenced by label is not also supplied by value somewhere (two creators for one record).
+  The fermentation and the batches are both parts, the batches' `origin` points across branches with `InAct` (6.2.2), and supplying by value is not used for the shared case at all. Cost: a `many` (`fermentations`) stands where the business has exactly one, and "a split is of one fermentation" becomes a `never` over the count instead of a `one` field.
+- *In the act everywhere.* Any field that targets a shape arriving anywhere in the closure, nested or part, may be supplied in the act. Cost: in the generated Kotlin input class, the choice type gains a case on every `one` field named in `with` whether or not the spec needs it, and the boundary must check that an object referenced with `InAct` is not also supplied by value somewhere (two creators for one record).
 
-**Recommendation:** by value and by label never on one field. One rule for the reader: a record that one new record points at nests inside it; a record that several new records point at arrives as a part of their common container, and they name it.
+**Recommendation:** by value and in the act never on one field. One rule for the reader: a record that one new record points at nests inside it; a record that several new records point at arrives as a part of their common container, and they reference it.
 
 **Dave:**
 
-#### 6.2.3.3 Where are labels resolved: in the generated boundary before the runtime sees the request, or inside the runtime's transaction?
+#### 6.2.3.3 Where are in-act references resolved: in the generated boundary before the runtime sees the act, or inside the runtime's transaction?
 
-**Decision:** whether the label is a boundary-only notion, translated to session handles before any `Mutation.Create` is built, or a runtime notion that `applyCreate` resolves as it assigns ids.
+**Decision:** whether `InAct` is a boundary-only notion, translated to session handles before any `Mutation.Create` is built, or a runtime notion that `applyCreate` resolves as it assigns ids.
 
-**Context.** The runtime assigns a session-local id in memory at `applyCreate` (`compiler/src/main/kotlin/velle/Runtime.kt`, `nextId++`), and the store is written at transaction close; a refused transaction is rolled back before any row exists. So either placement resolves labels before a store write. The difference is who knows about labels.
+**Context.** The runtime assigns a session-local id in memory at `applyCreate` (`compiler/src/main/kotlin/velle/Runtime.kt`, `nextId++`), and the store is written at transaction close; a refused transaction is rolled back before any row exists. So either placement resolves in-act references before a store write. The difference is who knows about them.
 
 **Options.**
 
-- *Boundary.* The generated commit function walks the request, gives every labelled value a session handle, rewrites every `ByLabel(label)` to that handle, and refuses an unknown or duplicate label with a type-level `Refused` before the runtime is entered. The runtime, the door check, and the rules see handles only. Cost: the boundary gains a pass over the request; the refusal carries no `Rejection` data (there is no `never`), which matches a type-level refusal today.
-- *Runtime.* `Mutation.Create` carries an optional label and label references; `applyCreate` records the id under the label and later creates look it up. Cost: every store binding and the runtime's mutation model learn a notion that exists only to be erased; a rule body's `as` name would then be the same mechanism, which is tidy, but the rule-side name is already resolved by the compiler when it orders statements, so nothing is gained.
+- *Boundary.* The generated commit function walks the act, gives every part object a session handle, rewrites every `InAct(object)` to the handle of that same object, and refuses an object not among the parts, or a part in two creating positions, with a type-level `Refused` before the runtime is entered. The runtime, the door check, and the rules see handles only. Cost: the boundary gains a pass over the act; the refusal carries no `Rejection` data (there is no `never`), which matches a type-level refusal today.
+- *Runtime.* `Mutation.Create` carries object identities and in-act references; `applyCreate` records the id under the identity and later creates look it up. Cost: every store binding and the runtime's mutation model learn a notion that exists only to be erased; a rule body's `as` name would then be the same mechanism, which is tidy, but the rule-side name is already resolved by the compiler when it orders statements, so nothing is gained.
 
-**Recommendation:** boundary. Labels are a serialization affordance and never reach the runtime; `as` is a compile-time binding and never reaches it either.
+**Recommendation:** boundary. `InAct` is a serialization affordance and never reaches the runtime; `as` is a compile-time binding and never reaches it either.
 
 **Dave:**
