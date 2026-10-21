@@ -273,11 +273,11 @@ NewExperimentDesign(
 
 ### 6.2.3 Open points for 6.2
 
-Each is one decision. The decision is stated first, the context and the costs after, and a line for the answer.
+Each is one question. The question is stated first, the context and the costs after, and a line for the answer.
 
 #### 6.2.3.1 Are the rule-side name and the act-side `New` reference documented as one idea or two?
 
-**Decision:** whether the wiki presents "a record may be referenced before it exists" once, with `as` and the `New` reference as its two faces, or presents `as` on Reference §14 and the `New` reference on Reference §6 as unrelated constructs that mention each other.
+**Question:** whether the wiki presents "a record may be referenced before it exists" once, with `as` and the `New` reference as its two faces, or presents `as` on Reference §14 and the `New` reference on Reference §6 as unrelated constructs that mention each other.
 
 **Context.** A Velle author types `as review` in a rule body:
 
@@ -317,7 +317,7 @@ shape Well {
 
 #### 6.2.3.2 May a `one` field named in `with` (6.1) also be supplied in the act, so a record can name a sibling instead of nesting it?
 
-**Decision:** whether `origin: OriginReference`, the field's type in the Kotlin input class the compiler generates for the act, lets `New(value)` mean "a sibling arriving elsewhere in this act" as well as "nested here".
+**Question:** whether `origin: OriginReference`, the field's type in the Kotlin input class the compiler generates for the act, lets `New(value)` mean "a sibling arriving elsewhere in this act" as well as "nested here".
 
 **Context.** With 6.1 the origin nests inside the batch, one origin inside one batch:
 
@@ -393,7 +393,7 @@ The fermentation and the batches are sibling branches of the split's closure. Ea
 
 #### 6.2.3.3 Where are in-act references resolved: in the generated boundary before the runtime sees the act, or inside the runtime's transaction?
 
-**Decision:** whether a `New` reference to a sibling is a boundary-only notion, translated to session handles before any `Mutation.Create` is built, or a runtime notion that `applyCreate` resolves as it assigns ids.
+**Question:** whether a `New` reference to a sibling is a boundary-only notion, translated to session handles before any `Mutation.Create` is built, or a runtime notion that `applyCreate` resolves as it assigns ids.
 
 **Context.** The runtime assigns a session-local id in memory at `applyCreate` (`compiler/src/main/kotlin/velle/Runtime.kt`, `nextId++`), and the store is written at transaction close; a refused transaction is rolled back before any row exists. So either placement resolves in-act references before a store write. The difference is who knows about them.
 
