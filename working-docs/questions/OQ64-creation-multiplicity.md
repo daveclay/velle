@@ -181,8 +181,242 @@ None is impossible in B; each is a proof, a stored field, or a refinement. A is 
 - `then` inside a block orders its statements per element, as it does today (Reference §15); a block is itself one statement to the `then` around it.
 - The number of created records is not bounded by the grammar. Whether a product over three ranges earns an advisory (Reference §22, the advisory series) is open.
 
-## 6. Open
+## 6. Questions for Dave
 
-- Whether a derived collection on the design (the laid-out positions as values) should exist first, with creation reading it, or whether creation names the sets directly.
-- How a condition is assigned to a well. The product gives every well; which condition each well holds is a second function of the design (round-robin across positions, a block per condition, a plate map the scientist supplies). The first two are arithmetic over the position, and the third is more client-supplied data. §5 takes the block per condition so the candidates can be written out; the choice is not made. Settle whether the assignment is the spec's or the client's, since it decides whether `condition` is created with the well or assigned after.
+Every example below uses the shapes from §5 unless it says otherwise: a `ContainerType` with `wellsPerContainer`, an `ExperimentDesign` with `containerCount`, `replicates`, a derived `wellsPerBlock`, and its `conditions` parts, and a `Container` and `Well` created by rule.
+
+### 6.1 Should the spec lay out the records at all?
+
+**Context.** Today every "many" in Velle comes from records: the records a client commits in one closure, and the records already on the books. A rule never turns a number into that many records. The construct this question proposes would be the first place a spec creates records from a count, and it moves the layout algorithm from the client into the spec. The alternative is to leave the layout in the client and have the spec count it back, which is the pattern `examples/peptides/peptides.velle` uses for `GreenhouseProtocol.plotsPerArm`.
+
+**Example.** The scientist submits one design. With the construct, the spec creates the six containers and the five hundred and seventy-six wells:
+
+```
+act ExperimentDesign {
+    containerType: one ContainerType
+    containerCount: integer
+    replicates: integer
+} with conditions
+
+rule LayOutContainers when ExperimentDesign {
+    for each replicate in 1..replicates, position in 1..containerCount {
+        Container from { design: this, replicate: replicate, position: position }
+    }
+}
+```
+
+Without it, the client creates them and the spec checks the number:
+
+```
+act ExperimentDesign {
+    containerType: one ContainerType
+    containerCount: integer
+    replicates: integer
+} with { conditions, containers with { wells } }
+
+never (ExperimentDesign where count(containers) != containerCount * replicates)
+never (Container where count(wells) != design.containerType.wellsPerContainer)
+```
+
+**Options.**
+
+- Build the construct. The spec says "lay out every container and every well", which is the sentence the owner said.
+- Leave the layout to the client. Document the count-back pattern as the spelling, and close this question.
+
+**Recommendation.** Build it. The layout is the feature, and a feature that every client reimplements is the thing Velle exists to take out of clients. Counting back names the symptom, not the rule.
+
+**Dave:**
+
+### 6.2 Where may a number become a set?
+
+**Context.** Something has to turn `replicates: integer` into the values one through `replicates`. The spelling in §5 is a range, `1..n`. The question is whether a range is a value the spec can use anywhere a collection is allowed, or only the thing a `for each` runs over. If it is a value anywhere, a design could carry its positions as a derived field and the rule would read that field. If it is only a loop source, the range appears after `in` and nowhere else.
+
+**Example.** A range as a derived field, read by the rule:
+
+```
+act ExperimentDesign {
+    containerType: one ContainerType
+    containerCount: integer
+    replicates: integer
+    positions: many integer = 1..containerCount
+    replicateNumbers: many integer = 1..replicates
+} with conditions
+
+rule LayOutContainers when ExperimentDesign {
+    for each replicate in replicateNumbers, position in positions {
+        Container from { design: this, replicate: replicate, position: position }
+    }
+}
+```
+
+A range only after `in`:
+
+```
+rule LayOutContainers when ExperimentDesign {
+    for each replicate in 1..replicates, position in 1..containerCount {
+        Container from { design: this, replicate: replicate, position: position }
+    }
+}
+```
+
+**Options.**
+
+- A range is a value. It can be a derived field, an argument to `count`, and a loop source. This adds a collection of plain integers to Velle, which has only collections of records today, so every construct that takes a collection (`count`, `all`, `exists`, filters, fan-out assignment) has to say what it does with integers.
+- A range is a loop source only. It is legal after `in` in a `for each` and nowhere else. The grammar gains one production, and no other construct changes.
+
+**Recommendation.** Loop source only. The one want is creation. A collection of integers as a field would be the first stored or derived collection that is not records, and nothing here needs it.
+
+**Dave:**
+
+### 6.3 May a block contain another block?
+
+**Context.** Candidate A in §5 is one rule with a `for each` inside a `for each`: the outer block creates a container and names it with `as`, and the inner block creates that container's wells. Candidate B is two rules, one per level, chained through ordinary firing. If a block may not contain a block, Candidate A is not available and every tree is a chain. The product of two sets is a separate thing and is spelled with a comma in one `for each`, so this question is only about nesting a block that holds a creation between the levels.
+
+**Example.** Nested, one rule:
+
+```
+rule LayOut when ExperimentDesign {
+    for each replicate in 1..replicates, position in 1..containerCount {
+        Container from { design: this, replicate: replicate, position: position } as container
+        for each condition in conditions, slot in 1..wellsPerBlock {
+            Well from {
+                container: container
+                condition: condition
+                position: (condition.block - 1) * wellsPerBlock + slot
+            }
+        }
+    }
+}
+```
+
+Not nested, two rules:
+
+```
+rule LayOutContainers when ExperimentDesign {
+    for each replicate in 1..replicates, position in 1..containerCount {
+        Container from { design: this, replicate: replicate, position: position }
+    }
+}
+
+rule LayOutWells when Container {
+    for each condition in design.conditions, slot in 1..design.wellsPerBlock {
+        Well from {
+            container: this
+            condition: condition
+            position: (condition.block - 1) * design.wellsPerBlock + slot
+        }
+    }
+}
+```
+
+The difference the author feels: the chained rule fires for every container, however it came to exist. If containers also arrive by a client closure, the chained rule lays out their wells too, and the author needs a refinement to stop it. The nested rule runs only for the design.
+
+**Options.**
+
+- Allow nesting. Both spellings exist, and the author picks per rule. The grammar gains nothing beyond the block itself, since a block is a statement and statements already nest in `then` groups.
+- Forbid nesting. Every tree is a chain, each rule is one business sentence, and an `as` name is never bound inside a block.
+
+**Recommendation.** Allow it. Forbidding it forces a stored field on the intermediate for every datum the inner level reads, and a refinement for every intermediate that can arrive by another route. Both are the costs §5 lists for Candidate B.
+
+**Dave:**
+
+### 6.4 Does the construct run over a part collection as well as a range?
+
+**Context.** Which condition a well gets is the domain's choice, not Velle's. In §5 the spec computes it: the conditions arrive numbered, and each container holds a block of wells per condition. In a real lab the scientist often supplies a plate map instead, one entry per well position naming the condition for that position, and the software copies the map onto every container. Both wants exist. The plate map is a part collection on the design, so supporting it means a `for each` can run over a part collection and the created record reads fields off each element.
+
+**Example.** The plate map as parts of the design:
+
+```
+act ExperimentDesign {
+    containerType: one ContainerType
+    containerCount: integer
+    replicates: integer
+} with { conditions, plateMap }
+
+shape Condition {
+    design: one ExperimentDesign
+    value: decimal
+}
+
+shape PlateMapEntry {
+    design: one ExperimentDesign
+    position: integer
+    condition: one Condition
+}
+
+rule LayOutWells when Container {
+    for each entry in design.plateMap {
+        Well from {
+            container: this
+            position: entry.position
+            condition: entry.condition
+        }
+    }
+}
+```
+
+The entry's `condition` is a reference into another branch of the design's closure, which Reference §6 allows.
+
+**Options.**
+
+- A `for each` runs over any collection the rule can reach (a `many` field, an inferred inverse, a filter) and over a range. The plate map spelling above is legal with nothing added.
+- A `for each` runs over ranges only. Conditions are assigned by arithmetic, and a plate map is not expressible.
+
+**Recommendation.** Any collection. Running over records is the ordinary case for every other construct in Velle, and the range is the addition. The question is only whether to say so in the grammar from the start.
+
+**Dave:**
+
+### 6.5 What may a block contain?
+
+**Context.** The want is creation. A block could also hold an assignment, which would write one field once per element, or a deletion. Velle already has a spelling for writing one field on every member of a collection: fan-out assignment, `this.containers.status = "laid out"` (Reference §12). Deleting every member of a collection is the fan-out Reference §12 refuses for `delete`.
+
+**Example.** The same write, two ways:
+
+```
+rule MarkLaidOut when LaidOutDesign {
+    this.containers.status = "laid out"
+}
+
+rule MarkLaidOut when LaidOutDesign {
+    for each container in containers {
+        container.status = "laid out"
+    }
+}
+```
+
+**Options.**
+
+- Creations and nested blocks only. Assignment keeps its one spelling, and the block never deletes.
+- Any statement. Assignment in a block is a second spelling of fan-out, and deletion in a block is a new fan-out delete that Reference §12 refuses today.
+
+**Recommendation.** Creations and nested blocks only. One spelling per want. If fan-out delete is ever wanted, it is its own question.
+
+**Dave:**
+
+### 6.6 Should the compiler say anything about a large product?
+
+**Context.** A product over three ranges can be large. The worked design in §1 is five hundred and seventy-six wells in one transaction. A plate of 1536 wells in ten replicates is fifteen thousand three hundred and sixty. Every created record is an entrant of the design's transaction, so each one goes through the door, and one refused well refuses the whole design (Reference §20, "All-or-nothing batches"). Nothing in the grammar bounds the number.
+
+**Example.**
+
+```
+rule LayOut when ExperimentDesign {
+    for each replicate in 1..replicates, position in 1..containerCount, slot in 1..containerType.wellsPerContainer {
+        Well from { ... }
+    }
+}
+```
+
+**Options.**
+
+- Nothing. The size is the data's, and the store's problem to hold. All-or-nothing is what the owner asked for.
+- An advisory when a `for each` multiplies three or more sources, naming the product as something the author should mean (Reference §22, the advisory series).
+- A hard bound, refused at the door when the product exceeds it.
+
+**Recommendation.** Nothing. A bound invents a number Velle has no basis for, and an advisory fires on the one case the construct exists for.
+
+**Dave:**
+
+## 7. Work left
+
 - Write the example: `examples/platelayout/` in the stress-pass style, the three spellings of §3 with what each refuses, so the gap has probes before it has a design. The client-expands-the-product spelling can now be written in full, with wells pointing at conditions across the closure.
