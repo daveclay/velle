@@ -404,4 +404,4 @@ The fermentation and the batches are sibling branches of the split's closure. Ea
 
 **Recommendation:** boundary. The `New` reference is a serialization affordance and never reaches the runtime; `as` is a compile-time binding and never reaches it either.
 
-**Dave:**
+**Dave (2026-10-21):** boundary.
