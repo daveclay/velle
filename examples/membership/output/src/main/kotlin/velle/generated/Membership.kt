@@ -605,6 +605,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     fun materializeAuditEntry(id: Long): AuditEntry = AuditEntry(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
+        review = (system.get(id, "review") as Long?)?.let { system.refFor(it) },
         note = system.get(id, "note") as String,
         loggedOn = system.get(id, "loggedOn") as Instant,
     )
@@ -613,6 +614,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         openedOn = system.get(id, "openedOn") as Instant,
+        auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { system.refFor(it as Long) },
     )
 
     fun materializeAgent(id: Long): Agent = Agent(
@@ -1093,7 +1095,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
 -- bindings with a reach-back, a sibling join, bare `frozen`, an act-sourced
 -- capture read at exit, the reconciliation latch pair, episodes as data with
 -- the refinement-subject singular query (`(OpenDelinquencyFlag for this)`),
--- `then` ordering, the compact `for` creation form, `tolerates loss`, mixed
+-- `as` on a creation, the compact `for` creation form, `tolerates loss`, mixed
 -- `on commit, <tick>` triggers, and a pure-classification refinement (rung 1).
 --
 -- Comment convention (as in billing.velle): plain comments tell the business
@@ -1342,13 +1344,15 @@ rule CloseDelinquencyEpisode when leaving Delinquent {
 }
 
 -- A third episode makes a member chronic: open an account review — once,
--- ever — writing the audit trail before the review itself.
--- velle: count over a shape-name collection, a `then` ordering, and a mixed
--- commit-plus-tick trigger
+-- ever — and write the audit entry that names the review it opened.
+-- velle: count over a shape-name collection, `as` naming a created record so
+-- a second creation in the same body can point at it (Reference §14), and a
+-- mixed commit-plus-tick trigger
 shape ChronicDelinquent = Member where count(DelinquencyFlag where member == this) >= 3
 
 shape AuditEntry {
     member: one Member
+    review: one AccountReview?
     note: text
     loggedOn: DateTime
 }
@@ -1361,9 +1365,8 @@ shape AccountReview {
 rule OpenAccountReview
     when (ChronicDelinquent where not exists (AccountReview where member == this))
     on commit, Daily {
-    AuditEntry from { member: this, note: "account review opened", loggedOn: now }
-    then
-    AccountReview from { member: this, openedOn: now }
+    AccountReview from { member: this, openedOn: now } as review
+    AuditEntry from { member: this, review: review, note: "account review opened", loggedOn: now }
 }
 
 -- ── Nightly engagement snapshot ──────────────────────────────────────────────
@@ -1524,10 +1527,11 @@ data class NewPlan(
     val name: String,
     val price: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("name", name)
         put("price", price)
     }
+    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "Plan")
 }
 
 data class NewSignUp(
@@ -1536,52 +1540,57 @@ data class NewSignUp(
     val plan: Ref<Plan>,
     val referredBy: Ref<Member>? = null,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("name", name)
         put("signupEmail", signupEmail)
         put("plan", system.idOf(plan))
         referredBy?.let { put("referredBy", system.idOf(it)) }
     }
+    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "SignUp")
 }
 
 data class NewChangeEmail(
     val member: Ref<Member>,
     val newEmail: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("newEmail", newEmail)
     }
+    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "ChangeEmail")
 }
 
 data class NewVisit(
     val member: Ref<Member>,
     val minutes: Int,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("minutes", minutes)
     }
+    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "Visit")
 }
 
 data class NewMakeDeposit(
     val member: Ref<Member>,
     val amount: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("amount", amount)
     }
+    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "MakeDeposit")
 }
 
 data class NewAgent(
     val name: String,
     val email: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("name", name)
         put("email", email)
     }
+    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "Agent")
 }
 
 data class NewRaiseTicket(
@@ -1591,41 +1600,45 @@ data class NewRaiseTicket(
     val priority: String,
     val assignee: Ref<Agent>? = null,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("subject", subject)
         put("due", due)
         put("priority", priority)
         assignee?.let { put("assignee", system.idOf(it)) }
     }
+    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "RaiseTicket")
 }
 
 data class NewCloseTicket(
     val ticket: Ref<Ticket>,
     val closedBy: Ref<Agent>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("ticket", system.idOf(ticket))
         put("closedBy", system.idOf(closedBy))
     }
+    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "CloseTicket")
 }
 
 data class NewReopenTicket(
     val ticket: Ref<Ticket>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("ticket", system.idOf(ticket))
     }
+    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "ReopenTicket")
 }
 
 data class NewAssignTicket(
     val ticket: Ref<Ticket>,
     val agent: Ref<Agent>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("ticket", system.idOf(ticket))
         put("agent", system.idOf(agent))
     }
+    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "AssignTicket")
 }
 
 
@@ -1796,6 +1809,7 @@ data class DelinquencyResolution(
 data class AuditEntry(
     override val key: StoreKey,
     val member: Ref<Member>,
+    val review: Ref<AccountReview>?,
     val note: String,
     val loggedOn: Instant,
 ) : Ref<AuditEntry> {
@@ -1808,6 +1822,7 @@ data class AccountReview(
     override val key: StoreKey,
     val member: Ref<Member>,
     val openedOn: Instant,
+    val auditEntrys: List<Ref<AuditEntry>>,
 ) : Ref<AccountReview> {
     override val shape: String get() = "AccountReview"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
@@ -2548,6 +2563,7 @@ class DelinquencyResolutionFields(path: List<String> = emptyList()) : Fields(pat
 
 class AuditEntryFields(path: List<String> = emptyList()) : Fields(path) {
     val member: MemberFields get() = MemberFields(fieldPath + "member")
+    val review: AccountReviewFields get() = AccountReviewFields(fieldPath + "review")
     val note: TextField get() = TextField(fieldPath + "note")
     val loggedOn: DateTimeField get() = DateTimeField(fieldPath + "loggedOn")
 }

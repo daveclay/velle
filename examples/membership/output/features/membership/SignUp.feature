@@ -50,10 +50,10 @@ Feature: SignUp
     And one more "DelinquencyResolution" exists
 
   # rule OpenAccountReview
-  Scenario: A new ChronicDelinquent produces an AuditEntry and an AccountReview
+  Scenario: A new ChronicDelinquent produces an AccountReview and an AuditEntry
     When a commit brings one new member into "ChronicDelinquent"
-    Then one more "AuditEntry" exists
-    And that AuditEntry's "member" is the member
-    And one more "AccountReview" exists
+    Then one more "AccountReview" exists
     And that AccountReview's "member" is the member
+    And one more "AuditEntry" exists
+    And that AuditEntry's "member" is the member
     And another "Daily" tick produces nothing more

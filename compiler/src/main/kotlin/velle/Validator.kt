@@ -331,7 +331,11 @@ class Validator(private val model: Model) {
     /** The alias a rule's `by` clause binds, for the read summaries: the actor's
      *  reads are reads on its shape, not an unresolvable root. */
     private fun ruleAliases(rule: RuleDecl): Map<String, String> =
-        rule.by?.let { mapOf(it.name to it.shape) }.orEmpty()
+        rule.by?.let { mapOf(it.name to it.shape) }.orEmpty() + creationAliases(rule)
+
+    /** The names the body's `as` clauses bind, each to the shape it creates (Reference §14). */
+    private fun creationAliases(rule: RuleDecl): Map<String, String> =
+        rule.body.filterIsInstance<Creation>().mapNotNull { c -> c.alias?.let { it to c.shape } }.toMap()
 
     // ── V19: relationship declaration coherence (Reference §6) ──────────────────
     //
@@ -443,6 +447,10 @@ class Validator(private val model: Model) {
         // the rule's actor (Reference §22): an alias typed by the clause's shape,
         // in scope for the condition's predicate and the body
         rule.by?.let { aliasScopes[it.name] = it.shape; ruleActor = it }
+        // the body's `as` names (Reference §14; V33): each stands for the record its
+        // statement creates, as a reference, for the other statements of the body
+        val created = checkCreationAliases(rule, scope)
+        created.forEach { (name, shape) -> aliasScopes[name] = shape }
         try {
             (rule.condition as? RefName)?.where?.let { checkExpr(it, scope) }
             for (item in rule.body) when (item) {
@@ -453,7 +461,130 @@ class Validator(private val model: Model) {
             }
         } finally {
             rule.by?.let { aliasScopes.remove(it.name); ruleActor = null }
+            created.keys.forEach { aliasScopes.remove(it) }
         }
+    }
+
+    // ── V33: a creation's `as` name (Reference §14; OQ63 §6.2.1) ─────────────
+    //
+    // The name is a reference to a record that has no id until the commit
+    // lands. It may be read where a reference is taken — a creation's field, a
+    // `for` target — and nowhere else: not through (`review.member` would read a
+    // record that does not exist yet), not in an assignment or a delete, not
+    // from a name already in scope, and never in a cycle between two creations,
+    // since no record could then be created first.
+
+    private fun checkCreationAliases(rule: RuleDecl, scope: String): Map<String, String> {
+        val creations = rule.body.filterIsInstance<Creation>()
+        val out = linkedMapOf<String, String>()
+        for (c in creations) {
+            val name = c.alias ?: continue
+            val taken = name == "this" || name in aliasScopes || name in out ||
+                model.membersOf(scope).containsKey(name) || name in model.shapes || name in model.refinements
+            if (taken) {
+                diags.add(Diagnostic("V33", "rule '${rule.name}' — '${c.shape} ... as $name': '$name' is already a name in this rule " +
+                    "(a field of the subject, the actor, a shape, or another `as`); choose another"))
+                continue
+            }
+            out[name] = c.shape
+        }
+        if (out.isEmpty()) return out
+        // where a name may appear: as a whole value in a creation's field or `for`
+        fun badReads(e: Expr, where: String) = aliasReads(e, whole = true, names = out.keys, rule = rule, where = where)
+        for (item in rule.body) when (item) {
+            is Creation -> {
+                item.forExpr?.let { badReads(it, "a `for` target") }
+                item.fields.forEach { badReads(it.value, "a field of '${item.shape}'") }
+            }
+            is Assignment -> {
+                if (item.target.root in out)
+                    diags.add(Diagnostic("V33", "rule '${rule.name}' assigns through '${item.target.root}', a record this rule creates — " +
+                        "give the value in the creation instead"))
+                else if (mentions(item.value, out.keys))
+                    diags.add(Diagnostic("V33", "rule '${rule.name}' assigns '${Printer.expr(item.target)}' from '${out.keys.first { mentions(item.value, setOf(it)) }}', " +
+                        "a record this rule creates — a name bound by `as` is read only where a creation takes a reference"))
+            }
+            is DeleteStmt -> if (item.target.root in out)
+                diags.add(Diagnostic("V33", "rule '${rule.name}' deletes '${item.target.root}', a record this rule creates in the same body"))
+            ThenMarker -> {}
+        }
+        // no cycle: a creation naming a record whose creation names it back
+        val deps = creations.filter { it.alias != null }.associate { c ->
+            c.alias!! to creations.filter { it.alias != null }.map { it.alias!! }.filter { other ->
+                other != c.alias && (c.fields.any { mentions(it.value, setOf(other)) } || c.forExpr?.let { mentions(it, setOf(other)) } == true)
+            }.toSet()
+        }
+        val visiting = mutableSetOf<String>(); val done = mutableSetOf<String>()
+        fun cyclic(n: String): Boolean {
+            if (n in done) return false
+            if (!visiting.add(n)) return true
+            val r = deps[n].orEmpty().any { cyclic(it) }
+            visiting.remove(n); done.add(n); return r
+        }
+        deps.keys.firstOrNull { cyclic(it) }?.let {
+            diags.add(Diagnostic("V33", "rule '${rule.name}' — the records created as ${deps.keys.joinToString(", ") { "'$it'" }} point at each other; " +
+                "no record can be created first. Point one way, and let the other side be the inferred inverse (Reference §6)"))
+        }
+        return out
+    }
+
+    /** V33's read walk: a name bound by `as` may stand only as a whole reference. */
+    private fun aliasReads(x: Expr, whole: Boolean, names: Set<String>, rule: RuleDecl, where: String) {
+        when (x) {
+            is PathExpr -> if (x.root in names) {
+                if (x.segs.isNotEmpty())
+                    diags.add(Diagnostic("V33", "rule '${rule.name}' — '${Printer.expr(x)}' reads through '${x.root}', " +
+                        "a record this rule creates; it has no fields until the commit lands. Read the value you built it from instead"))
+                else if (!whole)
+                    diags.add(Diagnostic("V33", "rule '${rule.name}' — '${x.root}' names a record this rule creates; " +
+                        "in $where it may only stand as a whole reference"))
+            }
+            is Binary -> { aliasReads(x.left, false, names, rule, where); aliasReads(x.right, false, names, rule, where) }
+            is UnaryMinus -> aliasReads(x.inner, false, names, rule, where)
+            is NotExpr -> aliasReads(x.inner, false, names, rule, where)
+            is IfExpr -> { aliasReads(x.condition, false, names, rule, where); aliasReads(x.thenExpr, whole, names, rule, where); aliasReads(x.elseExpr, whole, names, rule, where) }
+            is IsExpr -> aliasReads(x.subject, false, names, rule, where)
+            is Access -> aliasReads(x.target, false, names, rule, where)
+            is FunCall -> x.args.forEach { aliasReads(it, false, names, rule, where) }
+            is ExistsExpr -> { x.forExpr?.let { aliasReads(it, false, names, rule, where) }; x.collection?.let { aliasColl(it, names, rule, where) } }
+            is AggCall -> aliasColl(x.collection, names, rule, where)
+            is SingularFor -> aliasReads(x.forExpr, false, names, rule, where)
+            is ShapeForSource -> aliasReads(x.forExpr, false, names, rule, where)
+            is SetExpr -> aliasColl(x.collection, names, rule, where)
+            else -> {}
+        }
+    }
+
+    private fun aliasColl(c: CollectionExpr, names: Set<String>, rule: RuleDecl, where: String) {
+        c.bindings.forEach { b -> (b.source as? PathExpr)?.let { if (it.root in names) diags.add(Diagnostic("V33",
+            "rule '${rule.name}' — '${Printer.expr(it)}' reads through '${it.root}', a record this rule creates; it has no fields until the commit lands")) } }
+        c.where?.let { aliasReads(it, false, names, rule, where) }
+    }
+
+    /** Does [e] mention any of [names] as a path root? */
+    private fun mentions(e: Expr, names: Set<String>): Boolean {
+        var found = false
+        fun walk(x: Expr) {
+            if (found) return
+            when (x) {
+                is PathExpr -> if (x.root in names) found = true
+                is Binary -> { walk(x.left); walk(x.right) }
+                is UnaryMinus -> walk(x.inner)
+                is NotExpr -> walk(x.inner)
+                is IfExpr -> { walk(x.condition); walk(x.thenExpr); walk(x.elseExpr) }
+                is IsExpr -> walk(x.subject)
+                is Access -> walk(x.target)
+                is FunCall -> x.args.forEach { walk(it) }
+                is ExistsExpr -> { x.forExpr?.let { walk(it) }; x.collection?.let { c -> c.bindings.forEach { walk(it.source) }; c.where?.let { walk(it) } } }
+                is AggCall -> { x.collection.bindings.forEach { walk(it.source) }; x.collection.where?.let { walk(it) } }
+                is SingularFor -> walk(x.forExpr)
+                is ShapeForSource -> walk(x.forExpr)
+                is SetExpr -> { x.collection.bindings.forEach { walk(it.source) }; x.collection.where?.let { walk(it) } }
+                else -> {}
+            }
+        }
+        walk(e)
+        return found
     }
 
     /** The actor clause of the rule being checked, for the optional-read check in [resolvePath]. */

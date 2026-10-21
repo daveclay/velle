@@ -107,6 +107,7 @@ data class DelinquencyResolutionRow(
 data class AuditEntryRow(
     val key: StoreKey,
     val member: Ref.Persisted,
+    val review: Ref.Persisted?,
     val note: String,
     val loggedOn: Instant,
 )
@@ -233,6 +234,7 @@ interface MembershipStore {
     fun delinquencyFlagsByMember(target: Ref.Persisted): List<DelinquencyFlagRow>
     fun delinquencyResolutionsByFlag(target: Ref.Persisted): List<DelinquencyResolutionRow>
     fun auditEntrysByMember(target: Ref.Persisted): List<AuditEntryRow>
+    fun auditEntrysByReview(target: Ref.Persisted): List<AuditEntryRow>
     fun accountReviewsByMember(target: Ref.Persisted): List<AccountReviewRow>
     fun ticketsByMember(target: Ref.Persisted): List<TicketRow>
     fun ticketsByAssignee(target: Ref.Persisted): List<TicketRow>
@@ -399,6 +401,8 @@ open class MembershipStoreOverGeneric(
         backend.fetchReferencing("DelinquencyResolution", "flag", target).map { it.toDelinquencyResolutionRow() }
     override fun auditEntrysByMember(target: Ref.Persisted): List<AuditEntryRow> =
         backend.fetchReferencing("AuditEntry", "member", target).map { it.toAuditEntryRow() }
+    override fun auditEntrysByReview(target: Ref.Persisted): List<AuditEntryRow> =
+        backend.fetchReferencing("AuditEntry", "review", target).map { it.toAuditEntryRow() }
     override fun accountReviewsByMember(target: Ref.Persisted): List<AccountReviewRow> =
         backend.fetchReferencing("AccountReview", "member", target).map { it.toAccountReviewRow() }
     override fun ticketsByMember(target: Ref.Persisted): List<TicketRow> =
@@ -560,6 +564,7 @@ class MembershipStoreResolver(
         shape == "DelinquencyFlag" && field == "member" -> store.delinquencyFlagsByMember(target).map { it.toRow() }
         shape == "DelinquencyResolution" && field == "flag" -> store.delinquencyResolutionsByFlag(target).map { it.toRow() }
         shape == "AuditEntry" && field == "member" -> store.auditEntrysByMember(target).map { it.toRow() }
+        shape == "AuditEntry" && field == "review" -> store.auditEntrysByReview(target).map { it.toRow() }
         shape == "AccountReview" && field == "member" -> store.accountReviewsByMember(target).map { it.toRow() }
         shape == "Ticket" && field == "member" -> store.ticketsByMember(target).map { it.toRow() }
         shape == "Ticket" && field == "assignee" -> store.ticketsByAssignee(target).map { it.toRow() }
@@ -773,12 +778,14 @@ fun DelinquencyResolutionRow.toRow(): Row = Row("DelinquencyResolution", key, bu
 fun Row.toAuditEntryRow(): AuditEntryRow = AuditEntryRow(
     key = key,
     member = fields["member"] as Ref.Persisted,
+    review = fields["review"] as Ref.Persisted?,
     note = fields["note"] as String,
     loggedOn = fields["loggedOn"] as Instant,
 )
 
 fun AuditEntryRow.toRow(): Row = Row("AuditEntry", key, buildMap {
     put("member", member)
+    review?.let { put("review", it) }
     put("note", note)
     put("loggedOn", loggedOn)
 })

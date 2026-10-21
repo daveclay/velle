@@ -196,6 +196,9 @@ data class Creation(
     /** `for <expr>` in the compact form; null for `from { ... }` */
     val forExpr: Expr? = null,
     val fields: List<FieldInit> = emptyList(),
+    /** `as <name>` (Reference §14; OQ63 §6.2.1): the created record, usable as a
+     *  reference by the body's other statements before its commit lands. */
+    val alias: String? = null,
 ) : BodyItem
 
 data class FieldInit(val name: String, val value: Expr)

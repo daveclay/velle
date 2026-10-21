@@ -85,6 +85,7 @@ object Printer {
             append(c.fields.joinToString(", ") { "${it.name}: ${expr(it.value)}" })
             append(" }")
         }
+        c.alias?.let { append(" as $it") }
     }
 
     fun member(m: Member): String = when (m) {

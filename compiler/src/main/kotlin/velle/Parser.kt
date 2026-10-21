@@ -353,6 +353,13 @@ class Parser(private val tokens: List<Token>) {
 
     private fun parseCreation(): Creation {
         val shape = expect(TokType.UIDENT).text
+        val creation = parseCreationBody(shape)
+        // `as <name>` names the created record for the rest of the body (Reference §14)
+        if (peek().isKw("as")) { next(); return creation.copy(alias = expect(TokType.LIDENT).text) }
+        return creation
+    }
+
+    private fun parseCreationBody(shape: String): Creation {
         return when {
             peek().isKw("from") -> {
                 next()

@@ -45,9 +45,8 @@ import velle.generated.membership.*
  * shape ChronicDelinquent = Member where count(DelinquencyFlag where member == this) >= 3
  *
  * rule OpenAccountReview when (ChronicDelinquent where not (exists (AccountReview where member == this))) on commit, Daily {
- *     AuditEntry from { member: this, note: "account review opened", loggedOn: now }
- *     then
- *     AccountReview from { member: this, openedOn: now }
+ *     AccountReview from { member: this, openedOn: now } as review
+ *     AuditEntry from { member: this, review: review, note: "account review opened", loggedOn: now }
  * }
  *
  */
@@ -131,20 +130,20 @@ class SignUpSpec : SpecSupport() {
     }
 
     @Test
-    fun `OpenAccountReview - a new ChronicDelinquent produces an AuditEntry and an AccountReview`() {
-        val beforeAuditEntry = count("AuditEntry")
+    fun `OpenAccountReview - a new ChronicDelinquent produces an AccountReview and an AuditEntry`() {
         val beforeAccountReview = count("AccountReview")
+        val beforeAuditEntry = count("AuditEntry")
         // given: one new subject entered 'ChronicDelinquent'
         val member = givens.memberForOpenAccountReview()
         member.assertIsA("ChronicDelinquent", "the given must deliver a member of 'ChronicDelinquent'")
-        assertEquals(beforeAuditEntry + 1, count("AuditEntry"), "rule OpenAccountReview: one 'AuditEntry' per firing")
-        val producedAuditEntry = last("AuditEntry")
-        assertEquals(idOf(member), field(producedAuditEntry, "member"), "AuditEntry.member: this")
         assertEquals(beforeAccountReview + 1, count("AccountReview"), "rule OpenAccountReview: one 'AccountReview' per firing")
         val producedAccountReview = last("AccountReview")
         assertEquals(idOf(member), field(producedAccountReview, "member"), "AccountReview.member: this")
+        assertEquals(beforeAuditEntry + 1, count("AuditEntry"), "rule OpenAccountReview: one 'AuditEntry' per firing")
+        val producedAuditEntry = last("AuditEntry")
+        assertEquals(idOf(member), field(producedAuditEntry, "member"), "AuditEntry.member: this")
         sys.system.tick("Daily")
-        assertEquals(beforeAuditEntry + 1, count("AuditEntry"), "the guard makes re-evaluation harmless")
         assertEquals(beforeAccountReview + 1, count("AccountReview"), "the guard makes re-evaluation harmless")
+        assertEquals(beforeAuditEntry + 1, count("AuditEntry"), "the guard makes re-evaluation harmless")
     }
 }

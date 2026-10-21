@@ -1196,9 +1196,9 @@ class VelleSystem(
         // a rule declared `by` reads the transaction's root actor (Reference §22):
         // present when the root act carried one, absent on the paths V31 made
         // the clause say `?` for
-        val ctx = Evaluator.Ctx(scope, subject, actor = rule.by?.let { it.name to txn?.actor })
+        var ctx = Evaluator.Ctx(scope, subject, actor = rule.by?.let { it.name to txn?.actor })
         val mutations = mutableListOf<Mutation>()
-        for (item in rule.body) when (item) {
+        for (item in orderedBody(rule)) when (item) {
             is Assignment -> {
                 // a collection path fans out: one write per member, the same value
                 // (Reference §6, "fan-out assignment"); a plain path is one target
@@ -1213,15 +1213,23 @@ class VelleSystem(
             is Creation -> {
                 val fields = mutableMapOf<String, Value>()
                 item.forExpr?.let { forE ->
-                    val ref = evaluator.eval(forE, ctx) as? Value.VRef
-                        ?: throw VelleRuntimeError("'for' target is not an instance")
-                    val target = (instance(ref.id) ?: throw VelleRuntimeError("missing instance ${ref.id}")).shape
+                    val ref = evaluator.eval(forE, ctx)
+                    // the target's shape: read off the instance, or, for a record this
+                    // firing creates (`as name`), off the creation that named it
+                    val target = when (ref) {
+                        is Value.VRef -> (instance(ref.id) ?: throw VelleRuntimeError("missing instance ${ref.id}")).shape
+                        is Value.VPendingRef -> (mutations[ref.index] as Mutation.Create).shape
+                        else -> throw VelleRuntimeError("'for' target is not an instance")
+                    }
                     val matched = model.shapes.getValue(item.shape).members
                         .filterIsInstance<StoredProp>()
                         .single { (it.type as? RelType)?.let { t -> !t.many && model.typeAccepts(t.shape, target) } == true }
                     fields[matched.name] = ref
                 }
                 item.fields.forEach { f -> fields[f.name] = evaluator.eval(f.value, ctx) }
+                // `as name` (Reference §14): later statements reference this record by its
+                // index in the creation list; applyCommit resolves the pending reference
+                item.alias?.let { ctx = ctx.copy(pending = ctx.pending + (it to mutations.size)) }
                 mutations.add(Mutation.Create(item.shape, fields))
             }
             is DeleteStmt -> {
@@ -1236,6 +1244,58 @@ class VelleSystem(
             ThenMarker -> {} // ordering within one commit is a compilation concern
         }
         if (mutations.isNotEmpty()) applyCommit(mutations)
+    }
+
+    /**
+     * The body in an order every `as` name is bound before it is read (Reference
+     * §15: a read orders the two statements). The validator refused cycles (V33),
+     * so a stable topological order exists; statements without such reads keep
+     * their written order.
+     */
+    private fun orderedBody(rule: RuleDecl): List<BodyItem> {
+        val creations = rule.body.filterIsInstance<Creation>().filter { it.alias != null }
+        if (creations.isEmpty()) return rule.body
+        val names = creations.map { it.alias!! }.toSet()
+        fun reads(item: BodyItem): Set<String> = when (item) {
+            is Creation -> (item.fields.map { it.value } + listOfNotNull(item.forExpr)).flatMap { rootsOf(it) }.filter { it in names }.toSet()
+            else -> emptySet()
+        }
+        val out = mutableListOf<BodyItem>()
+        val placed = mutableSetOf<BodyItem>()
+        val bound = mutableSetOf<String>()
+        fun place(item: BodyItem) {
+            if (item in placed) return
+            placed.add(item)
+            for (dep in reads(item)) place(creations.first { it.alias == dep })
+            out.add(item)
+            (item as? Creation)?.alias?.let { bound.add(it) }
+        }
+        rule.body.forEach { place(it) }
+        return out
+    }
+
+    private fun rootsOf(e: Expr): List<String> {
+        val out = mutableListOf<String>()
+        fun walk(x: Expr) {
+            when (x) {
+                is PathExpr -> out.add(x.root)
+                is Binary -> { walk(x.left); walk(x.right) }
+                is UnaryMinus -> walk(x.inner)
+                is NotExpr -> walk(x.inner)
+                is IfExpr -> { walk(x.condition); walk(x.thenExpr); walk(x.elseExpr) }
+                is IsExpr -> walk(x.subject)
+                is Access -> walk(x.target)
+                is FunCall -> x.args.forEach { walk(it) }
+                is ExistsExpr -> { x.forExpr?.let { walk(it) }; x.collection?.let { c -> c.bindings.forEach { walk(it.source) }; c.where?.let { walk(it) } } }
+                is AggCall -> { x.collection.bindings.forEach { walk(it.source) }; x.collection.where?.let { walk(it) } }
+                is SingularFor -> walk(x.forExpr)
+                is ShapeForSource -> walk(x.forExpr)
+                is SetExpr -> { x.collection.bindings.forEach { walk(it.source) }; x.collection.where?.let { walk(it) } }
+                else -> {}
+            }
+        }
+        walk(e)
+        return out
     }
 
     internal fun conditionScopeName(rule: RuleDecl): String {

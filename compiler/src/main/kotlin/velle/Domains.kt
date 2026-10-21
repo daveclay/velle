@@ -535,6 +535,11 @@ class DomainAnalysis(private val model: Model) {
         // same row every commit by that person keys on
         val ctx = walker.ctxOf(conditionScope(rule.condition), subject).let { c ->
             rule.by?.let { b -> walker.Ctx(c.subject, c.elements, c.aliases + (b.name to walker.Scope(b.shape, Anchor.Reach(listOf(b.name))))) } ?: c
+        }.let { c ->
+            // a record the body creates (`as name`, Reference §14) is fresh in this
+            // envelope: a reference to it keys nothing
+            val created = rule.body.filterIsInstance<Creation>().mapNotNull { cr -> cr.alias?.let { it to walker.Scope(cr.shape, Anchor.Fresh(emptyMap())) } }
+            if (created.isEmpty()) c else walker.Ctx(c.subject, c.elements, c.aliases + created)
         }
         walker.walkRef(rule.condition, ctx)
         for (item in rule.body) when (item) {

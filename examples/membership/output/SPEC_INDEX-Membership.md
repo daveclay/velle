@@ -12,7 +12,7 @@ each case below is an executable test.
 - SuspendDelinquents - at the Nightly tick, a Delinquent sets suspended
 - OpenDelinquencyEpisode - a new Delinquent produces a DelinquencyFlag
 - CloseDelinquencyEpisode - a member that leaves Delinquent produces a DelinquencyResolution
-- OpenAccountReview - a new ChronicDelinquent produces an AuditEntry and an AccountReview
+- OpenAccountReview - a new ChronicDelinquent produces an AccountReview and an AuditEntry
 
 ## MemberSpec.kt
 

@@ -7,7 +7,7 @@
 -- bindings with a reach-back, a sibling join, bare `frozen`, an act-sourced
 -- capture read at exit, the reconciliation latch pair, episodes as data with
 -- the refinement-subject singular query (`(OpenDelinquencyFlag for this)`),
--- `then` ordering, the compact `for` creation form, `tolerates loss`, mixed
+-- `as` on a creation, the compact `for` creation form, `tolerates loss`, mixed
 -- `on commit, <tick>` triggers, and a pure-classification refinement (rung 1).
 --
 -- Comment convention (as in billing.velle): plain comments tell the business
@@ -256,13 +256,15 @@ rule CloseDelinquencyEpisode when leaving Delinquent {
 }
 
 -- A third episode makes a member chronic: open an account review — once,
--- ever — writing the audit trail before the review itself.
--- velle: count over a shape-name collection, a `then` ordering, and a mixed
--- commit-plus-tick trigger
+-- ever — and write the audit entry that names the review it opened.
+-- velle: count over a shape-name collection, `as` naming a created record so
+-- a second creation in the same body can point at it (Reference §14), and a
+-- mixed commit-plus-tick trigger
 shape ChronicDelinquent = Member where count(DelinquencyFlag where member == this) >= 3
 
 shape AuditEntry {
     member: one Member
+    review: one AccountReview?
     note: text
     loggedOn: DateTime
 }
@@ -275,9 +277,8 @@ shape AccountReview {
 rule OpenAccountReview
     when (ChronicDelinquent where not exists (AccountReview where member == this))
     on commit, Daily {
-    AuditEntry from { member: this, note: "account review opened", loggedOn: now }
-    then
-    AccountReview from { member: this, openedOn: now }
+    AccountReview from { member: this, openedOn: now } as review
+    AuditEntry from { member: this, review: review, note: "account review opened", loggedOn: now }
 }
 
 -- ── Nightly engagement snapshot ──────────────────────────────────────────────
