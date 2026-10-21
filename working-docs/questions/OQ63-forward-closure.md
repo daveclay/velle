@@ -61,9 +61,9 @@ Neither is the sentence the owner said: "a batch arrives with its provenance, an
 
 ## 4. Open
 
-- Whether this is a `with` extension (a forward field named in the clause) or a property of the field's declaration.
+- ~~Whether this is a `with` extension (a forward field named in the clause) or a property of the field's declaration.~~ Proposed as the `with` extension, §6 (2026-10-20).
 - ~~Whether the want is common enough to carry a construct.~~ Yes (Dave, 2026-10-20). The gap itself was never in question: a record that must point at another record cannot be committed with it, and no spelling closes the window (Dave, 2026-10-16: the pass is about gaps in Velle, not about whether a domain could live with the window).
-- The generated input: a Kotlin sealed type per forward field (`Existing(ref)` / `New(input)`), and how the boundary's type-level refusal reads when the inline value is of a shape outside the union.
+- ~~The generated input: a Kotlin sealed type per forward field (`Existing(ref)` / `New(input)`), and how the boundary's type-level refusal reads when the inline value is of a shape outside the union.~~ Proposed in §6.
 
 ## 5. The same mechanism inside a rule
 
@@ -75,3 +75,53 @@ Well from { container: container, ... }
 ```
 
 Today no rule can do even the two-statement case: a creation statement cannot be named, so a second statement has nothing to refer to (no example does it; `OpenAccountReview` in `examples/membership/membership.velle` and `AskPrescriber` in `examples/pharmacy/pharmacy.velle` each create two unrelated records). Whatever this question settles for a value inside an act's input, a creation statement inside a rule wants the same: a local name that stands for a record before it exists, usable wherever a reference is. Settle the mechanism here; OQ64 keeps the loops and counts.
+
+## 6. Proposal (2026-10-20, read right by Dave)
+
+Two constructs, settled in this order. The first closes this question's own example and needs no name. The second is what OQ64's Candidate A waits on.
+
+### 6.1 The forward edge is declared in `with`
+
+Today `with` names inverse collections: parts that point back at the act. Let it also name a `one` field, meaning the field's value may arrive inline:
+
+```
+act PeptideBatch {
+    peptide: one Peptide
+    quantityMg: decimal
+    origin: one Origin
+} with origin
+```
+
+It reads as the business sentence: "a batch arrives with its origin." The compiler tells the two cases apart by what the name resolves to on the act. An inverse collection (or a recognized-form view) means parts, as today. A `one` field means a forward edge.
+
+- The pointed-at record is created once, by the one field pointing at it, so the closure is still a tree and V22's reading of the closure from the declaration is unchanged.
+- The batch and its origin land or are refused as one. `never (Fermentation where peptideBatchs is empty)` becomes satisfiable at the closure's commit, since the door check sees both (Reference §21). `UnclaimedOrigin` has no members on this route.
+- The forward value is an ordinary instance after the commit, and `when Fermentation` fires once for it in the batch's transaction, as a part's rule does (Reference §6, the closure's entrants).
+- A forward field whose type is a base shape works the same way with one input type instead of a choice among operands.
+- Nesting composes: the forward value's own `with` clause applies to it (`with { origin with { components } }` if a composition arrives with its components), read against the value's shape as nested parts are today.
+
+**The generated input.** For a forward field the input carries a choice, a handle to an existing record or a value to create. For a union-typed field the value is one of the union's input types.
+
+```kotlin
+origin: OriginArrival
+
+sealed interface OriginArrival {
+    data class Existing(val ref: OriginRef) : OriginArrival
+    data class New(val value: OriginInput) : OriginArrival   // FermentationInput | ExternalOrderInput | CompositionInput
+}
+```
+
+A value of a shape outside the union has no type here, so the client cannot write it and the boundary never sees it. The refusal is the compiler's, in the client's language, not a runtime rejection.
+
+**Checks.** V22 gains the forward case: a `with` entry that resolves to a `one` field on the enclosing level. An entry that resolves to anything else keeps today's error. A `transient act` keeps today's refusal of `with` (OQ43). The one-writer analysis (V1) treats the forward value as an entrant, as it treats a part.
+
+**What this does not need.** No name mechanism. The origin value sits inside the batch's input at the field, so nothing refers to it. The batches case is closed by 6.1 alone.
+
+### 6.2 A name for a record that has no `id` yet
+
+Needed in two places, and it is one construct:
+
+- **In a rule**, a creation statement that a later statement points at (§5): `as <name>` on the creation, the alias keyword Velle already has; the name is a value of the created shape, usable wherever a reference is, within the rule body.
+- **In a client closure**, a value in one branch that points at a value in another branch (OQ64 §3, a well pointing at a condition when both arrive under the design). The client puts a label on a nested value and uses the label in place of a handle elsewhere in the same input; the boundary resolves labels to ids after the commit assigns them, and refuses an unknown or duplicate label.
+
+Settle 6.2 after 6.1. Its open points: the input-side label's type in the generated Kotlin (a typed local token per labelled shape, so a well cannot name a container where a condition is wanted); whether a label may be used before the value that declares it appears in the input's order; and whether the rule-side name may be read by a `then`-ordered later statement only, or by any sibling statement.
