@@ -13,7 +13,9 @@ import velle.generated.*
 /**
  * Polymorphism over a shared record (Reference §6, §9) driven through the
  * generated typed surface: a batch whose provenance is one of three kinds,
- * spelled as a static union on one field rather than as three subtypes. The
+ * spelled as a static union on one field rather than as three subtypes, and
+ * arriving with the batch as one commit: `origin` is named in the batch's
+ * `with`, so the reference is supplied by value (Reference §6). The
  * business-flow companion to the generated per-rule specs; the things the
  * spelling cannot say are in `BatchesProbesTest`.
  */
@@ -30,26 +32,24 @@ open class BatchesFlowTest {
         return sys.peptides().last()
     }
 
-    private fun fermentation(strain: String = "B. subtilis 168", vessel: String = "F-1"): Fermentation {
+    // Each kind of origin is a new value the batch arrives with (`OriginReference.New`);
+    // the reference data it points at is committed first, by handle.
+    private fun fermentation(strain: String = "B. subtilis 168", vessel: String = "F-1"): OriginReference {
         accept(sys.commit(NewBacteriaStrain(strain)))
         accept(sys.commit(NewFermenterRun(vessel, LocalDate.of(2026, 3, 2))))
-        accept(sys.commit(NewFermentation(sys.bacteriaStrains().last(), sys.fermenterRuns().last())))
-        return sys.fermentations().last()
+        return OriginReference.New(NewFermentation(sys.bacteriaStrains().last(), sys.fermenterRuns().last()))
     }
 
-    private fun order(vendor: String, item: String): ExternalOrder {
+    private fun order(vendor: String, item: String): OriginReference {
         accept(sys.commit(NewVendor(vendor)))
-        accept(sys.commit(NewExternalOrder(sys.vendors().last(), item)))
-        return sys.externalOrders().last()
+        return OriginReference.New(NewExternalOrder(sys.vendors().last(), item))
     }
 
-    private fun composition(vararg draws: Pair<PeptideBatch, String>): Composition {
-        accept(sys.commit(NewComposition(LocalDate.of(2026, 4, 1), draws.map { (b, mg) -> NewComponent(b, BigDecimal(mg)) })))
-        return sys.compositions().last()
-    }
+    private fun composition(vararg draws: Pair<PeptideBatch, String>): OriginReference =
+        OriginReference.New(NewComposition(LocalDate.of(2026, 4, 1), draws.map { (b, mg) -> NewComponent(b, BigDecimal(mg)) }))
 
-    private fun batch(peptide: Peptide, mg: String, origin: Origin): PeptideBatch {
-        accept(sys.commit(NewPeptideBatch(peptide, BigDecimal(mg), origin.ref)))
+    private fun batch(peptide: Peptide, mg: String, origin: OriginReference): PeptideBatch {
+        accept(sys.commit(NewPeptideBatch(peptide, BigDecimal(mg), origin)))
         return sys.peptideBatchs().last()
     }
 
@@ -82,20 +82,19 @@ open class BatchesFlowTest {
     }
 
     @Test
-    fun `one origin yields one batch - the second claim is refused at the door`() {
+    fun `a batch arrives with its origin as one commit, and one origin yields one batch`() {
         val pep = peptide("PEP-7")
-        val ferm = fermentation()
+        assertEquals(emptyList(), sys.fermentations())
 
-        // between the origin's commit and the batch's, the origin is on the
-        // books unclaimed: visible as data, not forbiddable (OQ63)
-        assertEquals(listOf(ferm.key), sys.unclaimedOrigins().map { it.key })
-        assertTrue(sys.read(ferm).isUnclaimedOrigin)
+        // the fermentation is created in the batch's own commit: there is no
+        // moment when it is on the books without its batch
+        val fermented = batch(pep, "100", fermentation())
+        val ferm = sys.fermentations().single()
+        assertEquals(ferm, sys.read(sys.read(fermented).origin))
+        assertEquals(listOf(fermented), sys.read(ferm).peptideBatches.map { sys.read(it) })
 
-        batch(pep, "100", ferm)
-        assertEquals(emptyList(), sys.unclaimedOrigins())
-        assertEquals(1, sys.read(ferm).peptideBatches.size)
-
-        val refused = sys.commit(NewPeptideBatch(pep, BigDecimal("5"), ferm.ref))
+        // a second batch naming that fermentation by handle is refused at the door
+        val refused = sys.commit(NewPeptideBatch(pep, BigDecimal("5"), OriginReference.Existing(ferm.ref)))
         assertIs<Commit.Refused<*>>(refused, "a fermentation yields one container")
         assertEquals(1, sys.peptideBatchs().size)
     }
@@ -108,11 +107,12 @@ open class BatchesFlowTest {
         val b = batch(pep9, "100", fermentation(strain = "E. coli BL21", vessel = "F-2"))
         val mix = composition(a to "10", b to "10")
 
-        assertIs<Commit.Refused<*>>(sys.commit(NewPeptideBatch(pep7, BigDecimal("20"), mix.ref)), "one component is PEP-9")
-        assertIs<Commit.Refused<*>>(sys.commit(NewPeptideBatch(pep9, BigDecimal("20"), mix.ref)), "one component is PEP-7")
+        assertIs<Commit.Refused<*>>(sys.commit(NewPeptideBatch(pep7, BigDecimal("20"), mix)), "one component is PEP-9")
+        assertIs<Commit.Refused<*>>(sys.commit(NewPeptideBatch(pep9, BigDecimal("20"), mix)), "one component is PEP-7")
         assertEquals(2, sys.peptideBatchs().size)
-        // the mixture stays on the books unclaimed — the two-commit arrival's residue
-        assertEquals(listOf(mix.key), sys.unclaimedOrigins().map { it.key })
+        // the mixture arrived with the batch, so the refusal leaves nothing behind
+        assertEquals(emptyList(), sys.compositions())
+        assertEquals(emptyList(), sys.components())
     }
 
     @Test
@@ -133,8 +133,10 @@ open class BatchesFlowTest {
         assertEquals(source, notice.batch)
         assertEquals("fermented", notice.kind)
 
-        // nothing draws more than a batch holds: the whole closure is refused
-        val over = sys.commit(NewComposition(LocalDate.of(2026, 4, 2), listOf(NewComponent(source, BigDecimal("1")))))
+        // nothing draws more than a batch holds: the batch, its mixture, and the
+        // mixture's components are one closure, refused whole
+        val over = sys.commit(NewPeptideBatch(pep, BigDecimal("1"),
+            OriginReference.New(NewComposition(LocalDate.of(2026, 4, 2), listOf(NewComponent(source, BigDecimal("1")))))))
         assertIs<Commit.Refused<*>>(over)
         assertEquals(2, sys.compositions().size)
         assertEquals(BigDecimal("0"), sys.read(source).remainingMg)

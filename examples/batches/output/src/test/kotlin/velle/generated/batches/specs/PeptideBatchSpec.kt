@@ -22,10 +22,10 @@ class PeptideBatchSpec : SpecSupport() {
     fun `never - a PeptideBatch where quantityMg at most 0 is refused`() {
         // given: any committed 'Peptide'
         val peptide = givens.somePeptide()
-        // given: any committed 'Origin'
-        val origin = givens.someOrigin()
+        // given: a new 'Origin', arriving nested in 'origin'
+        val origin = givens.newOrigin()
         val before = count("PeptideBatch")
-        val result = sys.system.commit("PeptideBatch", mapOf("peptide" to idOf(peptide), "quantityMg" to java.math.BigDecimal("-1"), "origin" to idOf(origin)))
+        val result = sys.system.commit("PeptideBatch", mapOf("peptide" to idOf(peptide), "quantityMg" to java.math.BigDecimal("-1")), parts = mapOf("origin" to listOf(origin.asValue(sys.system))))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("PeptideBatch"), "a refused act commits nothing")
     }
@@ -34,9 +34,9 @@ class PeptideBatchSpec : SpecSupport() {
     fun `never - a PeptideBatch with quantityMg 1 is accepted`() {
         // given: any committed 'Peptide'
         val peptide = givens.somePeptide()
-        // given: any committed 'Origin'
-        val origin = givens.someOrigin()
-        val result = sys.system.commit("PeptideBatch", mapOf("peptide" to idOf(peptide), "quantityMg" to java.math.BigDecimal("1"), "origin" to idOf(origin)))
+        // given: a new 'Origin', arriving nested in 'origin'
+        val origin = givens.newOrigin()
+        val result = sys.system.commit("PeptideBatch", mapOf("peptide" to idOf(peptide), "quantityMg" to java.math.BigDecimal("1")), parts = mapOf("origin" to listOf(origin.asValue(sys.system))))
         assertIs<CommitResult.Accepted>(result)
     }
 }

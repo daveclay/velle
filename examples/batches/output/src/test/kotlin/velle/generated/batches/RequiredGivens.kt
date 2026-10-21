@@ -20,6 +20,6 @@ interface RequiredGivens {
     /** Provide any committed 'Peptide'; return it. */
     fun somePeptide(): Peptide
 
-    /** Provide any committed 'Origin'; return it. */
-    fun someOrigin(): Origin
+    /** Provide a new 'Origin' value to arrive nested in 'PeptideBatch.origin'; return it uncommitted. */
+    fun newOrigin(): NewOrigin
 }

@@ -41,30 +41,12 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     fun commit(input: NewVendor): Commit<NewVendor> =
         system.commit("Vendor", input.raw(system)).carrying(input)
 
-    /** Queue keys: [fermentation.run], [fermentation.strain].
-     *  Commits sharing a queue key are handled one at a time, in arrival
-     *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewFermentation): Commit<NewFermentation> =
-        system.commit("Fermentation", input.raw(system)).carrying(input)
-
-    /** Queue key: [externalOrder.vendor].
-     *  Commits sharing a queue key are handled one at a time, in arrival
-     *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewExternalOrder): Commit<NewExternalOrder> =
-        system.commit("ExternalOrder", input.raw(system)).carrying(input)
-
-    /** Queue keys: none — this commit contends with no other work.
-     *  Commits sharing a queue key are handled one at a time, in arrival
-     *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewComposition): Commit<NewComposition> =
-        system.commit("Composition", input.raw(system), input.parts(system)).carrying(input)
-
     /** Queue keys: [peptideBatch.origin], [peptideBatch.peptide] — plus system-wide width below.
      *  System-wide over PeptideBatch — reads PeptideBatch.peptide with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewPeptideBatch): Commit<NewPeptideBatch> =
-        system.commit("PeptideBatch", input.raw(system)).carrying(input)
+        system.commit("PeptideBatch", input.raw(system), input.parts(system)).carrying(input)
 
     fun peptides(): List<Peptide> = system.instancesOf("Peptide").map { materializePeptide(it) }
     fun bacteriaStrains(): List<BacteriaStrain> = system.instancesOf("BacteriaStrain").map { materializeBacteriaStrain(it) }
@@ -80,7 +62,6 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     fun fermenteds(): List<Fermented> = system.instancesOf("Fermented").map { materializeFermented(it) }
     fun ordereds(): List<Ordered> = system.instancesOf("Ordered").map { materializeOrdered(it) }
     fun composites(): List<Composite> = system.instancesOf("Composite").map { materializeComposite(it) }
-    fun unclaimedOrigins(): List<UnclaimedOrigin> = system.instancesOf("UnclaimedOrigin").map { materializeUnclaimedOrigin(it) }
     fun depleteds(): List<Depleted> = system.instancesOf("Depleted").map { materializeDepleted(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
@@ -165,11 +146,6 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         fun composite(ref: Ref<PeptideBatch>): Composite? =
             system.idOf(ref).let { if (system.exists("Composite", it)) materializeComposite(it) else null }
 
-        val unclaimedOrigins: UnclaimedOriginQuery get() = UnclaimedOriginQuery(Query("UnclaimedOrigin"))
-        /** The record behind [ref] as a member of UnclaimedOrigin, or null when it is not one. */
-        fun unclaimedOrigin(ref: Ref<Origin>): UnclaimedOrigin? =
-            system.idOf(ref).let { if (system.exists("UnclaimedOrigin", it)) materializeUnclaimedOrigin(it) else null }
-
         val depleteds: DepletedQuery get() = DepletedQuery(Query("Depleted"))
         /** The record behind [ref] as a member of Depleted, or null when it is not one. */
         fun depleted(ref: Ref<PeptideBatch>): Depleted? =
@@ -232,10 +208,6 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun with(q: Query) = CompositeQuery(q)
     }
 
-    inner class UnclaimedOriginQuery(q: Query) : TypedQuery<UnclaimedOriginFields, UnclaimedOrigin>(system, q, UnclaimedOriginFields(), { materializeUnclaimedOrigin(it) }) {
-        override fun with(q: Query) = UnclaimedOriginQuery(q)
-    }
-
     inner class DepletedQuery(q: Query) : TypedQuery<DepletedFields, Depleted>(system, q, DepletedFields(), { materializeDepleted(it) }) {
         override fun with(q: Query) = DepletedQuery(q)
     }
@@ -286,7 +258,6 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         run = system.refFor(system.get(id, "run") as Long),
         peptideBatchs = (system.get(id, "peptideBatchs") as List<*>).map { system.refFor(it as Long) },
         peptideBatches = (system.getAs(id, "Origin", "peptideBatches") as List<*>).map { system.refFor(it as Long) },
-        isUnclaimedOrigin = system.isMember(id, "UnclaimedOrigin"),
     )
 
     fun materializeExternalOrder(id: Long): ExternalOrder = ExternalOrder(
@@ -295,7 +266,6 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         orderItem = system.get(id, "orderItem") as String,
         peptideBatchs = (system.get(id, "peptideBatchs") as List<*>).map { system.refFor(it as Long) },
         peptideBatches = (system.getAs(id, "Origin", "peptideBatches") as List<*>).map { system.refFor(it as Long) },
-        isUnclaimedOrigin = system.isMember(id, "UnclaimedOrigin"),
     )
 
     fun materializeComposition(id: Long): Composition = Composition(
@@ -305,7 +275,6 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         components = (system.get(id, "components") as List<*>).map { system.refFor(it as Long) },
         peptideBatchs = (system.get(id, "peptideBatchs") as List<*>).map { system.refFor(it as Long) },
         peptideBatches = (system.getAs(id, "Origin", "peptideBatches") as List<*>).map { system.refFor(it as Long) },
-        isUnclaimedOrigin = system.isMember(id, "UnclaimedOrigin"),
     )
 
     fun materializeComponent(id: Long): Component = Component(
@@ -385,12 +354,6 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isDepleted = system.isMember(id, "Depleted"),
     )
 
-    fun materializeUnclaimedOrigin(id: Long): UnclaimedOrigin = UnclaimedOrigin(
-        key = system.refFor(id).key,
-        peptideBatchs = (system.get(id, "peptideBatchs") as List<*>).map { system.refFor(it as Long) },
-        peptideBatches = (system.get(id, "peptideBatches") as List<*>).map { system.refFor(it as Long) },
-    )
-
     fun materializeDepleted(id: Long): Depleted = Depleted(
         key = system.refFor(id).key,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -428,6 +391,10 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 --   · the components of a mixture, each with how much was taken — an edge that
 --     carries data is a shape of its own (Reference §6, the graduation point),
 --     arriving inline with the composition as its closure (`with`)
+--   · the batch and its origin as one event — the origin is a `one` field named
+--     in the batch's `with`, so the reference is supplied by value: the new
+--     fermentation, order, or mixture arrives nested inside the batch and the
+--     two land as one commit (Reference §6, "A reference supplied by value")
 --   · what a batch has left — a derivation over the components that drew from
 --     it, read through the inferred inverse, never a mutated counter
 --   · the books rules — a batch never claims the same origin as another, a
@@ -435,19 +402,13 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 --
 -- What it cannot say, or says at a cost. Each is a probe in this example's
 -- output module (`BatchesProbesTest.kt`) and a finding in OQ16's calibration
--- record (B1–B7); the one-commit arrival is OQ63.
+-- record (B1–B8).
 --   · the direct translation. Three base shapes under a union share nothing
 --     they declare separately (Reference §9), so a common field like the
 --     quantity is unreadable from the union by the Reference. That is the
 --     cross-shape mixin gap, OQ35. (The validator does not enforce the rule on
 --     a predicate over the union today, and the runtime then resolves the name
 --     per instance — the accepted-by-accident spelling Reference §9 rejects.)
---   · the batch and its origin in one commit. The batch points forward at its
---     origin, and a closure only creates parts that point back at their
---     container (Reference §6, "Closures are trees"), so the origin is committed
---     first and the batch second. Between the two the origin is on the books
---     unclaimed, which the spec can show (`UnclaimedOrigin`) but cannot forbid:
---     a `never` over it would refuse the origin's own commit.
 --   · "a mixture never contains itself, however many steps removed". The
 --     transitive sentence wants a derived set of ancestor batches, and every
 --     spelling of that set reads a field through a `many` hop, which the
@@ -484,29 +445,33 @@ act Vendor {
 
 -- ── The three kinds of provenance ────────────────────────────────────────────
 
--- Each kind of provenance is a durable act of its own, holding only what that
--- kind knows. None of them knows the peptide or the quantity: those belong to
--- every batch, so they live on the batch.
+-- Each kind of provenance is a durable record of its own, holding only what
+-- that kind knows. None of them knows the peptide or the quantity: those belong
+-- to every batch, so they live on the batch. None is an act: an origin exists
+-- only because a batch arrived with it (below), so there is never an origin on
+-- the books without its batch, and no rule has to say so.
 
-act Fermentation {
+shape Fermentation {
     strain: one BacteriaStrain
     run: one FermenterRun
 }
 
-act ExternalOrder {
+shape ExternalOrder {
     vendor: one Vendor
     orderItem: text
 }
 
 -- A composition arrives with its components: which batches were drawn from
--- and how much of each. The components are created in the composition's own
--- commit; the batches they draw from already exist and are named by reference.
--- velle: the act's closure (Reference §6, "Inline part creation") — `components`
--- is the inverse inferred from Component.composition
-act Composition {
+-- and how much of each. The components are created in the same commit as the
+-- composition; the batches they draw from already exist and are named by
+-- reference.
+-- velle: `components` is the inverse inferred from Component.composition; the
+-- batch's `with` clause names it under `origin` (Reference §6, "Inline part
+-- creation")
+shape Composition {
     mixedOn: Date
     drawnMg: decimal = sum(components, amountMg)
-} with components
+}
 
 -- velle: the edge carries an amount, so it is a shape, not a bare `many`
 -- (Reference §6, the graduation point). Its two `one` fields target different
@@ -533,7 +498,10 @@ shape Origin = Fermentation or ExternalOrder or Composition {
 
 -- velle: `origin: one Origin` is the polymorphic association. A `one` field
 -- holds exactly one value, so "a batch has exactly one kind of provenance" is
--- structural, with no exclusivity rule to write and none to forget.
+-- structural, with no exclusivity rule to write and none to forget. Naming
+-- `origin` in `with` lets the reference be supplied by value: the batch arrives
+-- with its new origin nested inside it, and a composition arriving that way
+-- brings its components (Reference §6, "A reference supplied by value").
 act PeptideBatch {
     peptide: one Peptide
     quantityMg: decimal
@@ -548,7 +516,7 @@ act PeptideBatch {
     kind: text = if origin is Fermentation then "fermented"
                  else if origin is ExternalOrder then "ordered"
                  else "composite"
-}
+} with { origin with { components } }
 
 never (PeptideBatch where quantityMg <= 0)
 
@@ -559,8 +527,9 @@ shape Ordered   = PeptideBatch where origin is ExternalOrder
 shape Composite = PeptideBatch where origin is Composition
 
 -- One origin, one batch: a fermentation or an order or a mixture yields one
--- container. Counting the arriving batch among its origin's batches refuses
--- the second claim at the door.
+-- container. A batch normally arrives with its own new origin; a batch naming
+-- an origin that already has one is refused at the door, by counting the
+-- arriving batch among its origin's batches.
 -- velle: the view declared on the union, read through the union-typed field
 never (PeptideBatch where count(origin.peptideBatches) > 1)
 
@@ -574,7 +543,8 @@ never (PeptideBatch where count(origin.peptideBatches) > 1)
 never (PeptideBatch where exists (Component where composition == this.origin and source.peptide != this.peptide))
 
 -- Nothing draws more than a batch holds. The components arrive in the
--- composition's commit, so this is checked once the whole closure has landed.
+-- commit of the batch they are mixed into, so this is checked once the whole
+-- closure has landed, and a mixture that over-draws is refused with its batch.
 never (PeptideBatch where remainingMg < 0)
 
 -- A mixture never draws from the batch it produces. One step removed is a
@@ -586,10 +556,6 @@ never (PeptideBatch where remainingMg < 0)
 never (Component where source.origin == composition)
 
 -- ── What happens as batches are used up ──────────────────────────────────────
-
--- The origin side of the two-commit arrival, as data: an origin on the books
--- that no batch has claimed yet. Visible, and reportable; not forbiddable.
-shape UnclaimedOrigin = Origin where peptideBatches is empty
 
 -- A batch drawn down to nothing is depleted; the lab is told once per
 -- depletion, with the batch's kind in the notice.
@@ -615,79 +581,55 @@ rule NoteDepletion when Depleted {
 data class NewPeptide(
     val code: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("code", code)
     }
+    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "Peptide")
 }
 
 data class NewBacteriaStrain(
     val name: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("name", name)
     }
+    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "BacteriaStrain")
 }
 
 data class NewFermenterRun(
     val vessel: String,
     val startedOn: LocalDate,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("vessel", vessel)
         put("startedOn", startedOn)
     }
+    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "FermenterRun")
 }
 
 data class NewVendor(
     val name: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("name", name)
     }
-}
-
-data class NewFermentation(
-    val strain: Ref<BacteriaStrain>,
-    val run: Ref<FermenterRun>,
-) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
-        put("strain", system.idOf(strain))
-        put("run", system.idOf(run))
-    }
-}
-
-data class NewExternalOrder(
-    val vendor: Ref<Vendor>,
-    val orderItem: String,
-) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
-        put("vendor", system.idOf(vendor))
-        put("orderItem", orderItem)
-    }
-}
-
-data class NewComposition(
-    val mixedOn: LocalDate,
-    val components: List<NewComponent> = emptyList(),
-) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
-        put("mixedOn", mixedOn)
-    }
-    internal fun parts(system: VelleSystem): Map<String, List<Map<String, Any?>>> = buildMap {
-        put("components", components.map { it.raw(system) })
-    }
+    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "Vendor")
 }
 
 data class NewPeptideBatch(
     val peptide: Ref<Peptide>,
     val quantityMg: BigDecimal,
-    val origin: Ref<Origin>,
+    val origin: OriginReference,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("peptide", system.idOf(peptide))
         put("quantityMg", quantityMg)
-        put("origin", system.idOf(origin))
+        (origin as? OriginReference.Existing)?.let { put("origin", system.idOf(it.ref)) }
     }
+    internal fun parts(system: VelleSystem): Map<String, List<Map<String, Any?>>> = buildMap {
+        (origin as? OriginReference.New)?.let { put("origin", listOf(it.value.asValue(system))) }
+    }
+    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + parts(system) + ("@shape" to "PeptideBatch")
 }
 
 // ── closure input values (Reference §6, "Inline part creation") ──
@@ -695,10 +637,55 @@ data class NewComponent(
     val source: Ref<PeptideBatch>,
     val amountMg: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
         put("source", system.idOf(source))
         put("amountMg", amountMg)
     }
+    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "Component")
+}
+
+data class NewComposition(
+    val mixedOn: LocalDate,
+    val components: List<NewComponent> = emptyList(),
+) : NewOrigin {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("mixedOn", mixedOn)
+        put("components", components.map { it.raw(system) })
+    }
+    override fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "Composition")
+}
+
+data class NewExternalOrder(
+    val vendor: Ref<Vendor>,
+    val orderItem: String,
+) : NewOrigin {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("vendor", system.idOf(vendor))
+        put("orderItem", orderItem)
+    }
+    override fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "ExternalOrder")
+}
+
+data class NewFermentation(
+    val strain: Ref<BacteriaStrain>,
+    val run: Ref<FermenterRun>,
+) : NewOrigin {
+    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+        put("strain", system.idOf(strain))
+        put("run", system.idOf(run))
+    }
+    override fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "Fermentation")
+}
+
+// ── references supplied by value (Reference §6): a `one` field named in `with` takes
+// `Existing(ref)`, a record already on the books, or `New(value)`, one arriving nested here ──
+/** A new Origin arriving nested: one of NewComposition, NewExternalOrder, NewFermentation. */
+sealed interface NewOrigin { fun asValue(system: VelleSystem): Map<String, Any?> }
+sealed interface OriginReference {
+    /** A Origin already on the books. */
+    data class Existing(val ref: Ref<Origin>) : OriginReference
+    /** A new Origin, created in this commit, nested here. */
+    data class New(val value: NewOrigin) : OriginReference
 }
 
 
@@ -754,8 +741,6 @@ data class Fermentation(
     val run: Ref<FermenterRun>,
     override val peptideBatchs: List<Ref<PeptideBatch>>,
     override val peptideBatches: List<Ref<PeptideBatch>>,
-    /** membership of UnclaimedOrigin at the moment of the read */
-    override val isUnclaimedOrigin: Boolean,
 ) : Ref<Fermentation>, Origin {
     override val shape: String get() = "Fermentation"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
@@ -768,8 +753,6 @@ data class ExternalOrder(
     val orderItem: String,
     override val peptideBatchs: List<Ref<PeptideBatch>>,
     override val peptideBatches: List<Ref<PeptideBatch>>,
-    /** membership of UnclaimedOrigin at the moment of the read */
-    override val isUnclaimedOrigin: Boolean,
 ) : Ref<ExternalOrder>, Origin {
     override val shape: String get() = "ExternalOrder"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
@@ -783,8 +766,6 @@ data class Composition(
     val components: List<Ref<Component>>,
     override val peptideBatchs: List<Ref<PeptideBatch>>,
     override val peptideBatches: List<Ref<PeptideBatch>>,
-    /** membership of UnclaimedOrigin at the moment of the read */
-    override val isUnclaimedOrigin: Boolean,
 ) : Ref<Composition>, Origin {
     override val shape: String get() = "Composition"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
@@ -842,7 +823,6 @@ interface Origin : Keyed {
     val ref: Ref<Origin> get() = Ref.Persisted(shape, key)
     val peptideBatchs: List<Ref<PeptideBatch>>
     val peptideBatches: List<Ref<PeptideBatch>>
-    val isUnclaimedOrigin: Boolean
 }
 
 data class Fermented(
@@ -911,16 +891,6 @@ data class Composite(
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
 
-data class UnclaimedOrigin(
-    override val key: StoreKey,
-    val peptideBatchs: List<Ref<PeptideBatch>>,
-    val peptideBatches: List<Ref<PeptideBatch>>,
-) : Ref<Origin> {
-    override val shape: String get() = "Origin"
-    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
-    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
-}
-
 data class Depleted(
     override val key: StoreKey,
     val peptide: Ref<Peptide>,
@@ -965,19 +935,16 @@ class VendorFields(path: List<String> = emptyList()) : Fields(path) {
 class FermentationFields(path: List<String> = emptyList()) : Fields(path) {
     val strain: BacteriaStrainFields get() = BacteriaStrainFields(fieldPath + "strain")
     val run: FermenterRunFields get() = FermenterRunFields(fieldPath + "run")
-    fun isUnclaimedOrigin(): Expr = isA("UnclaimedOrigin")
 }
 
 class ExternalOrderFields(path: List<String> = emptyList()) : Fields(path) {
     val vendor: VendorFields get() = VendorFields(fieldPath + "vendor")
     val orderItem: TextField get() = TextField(fieldPath + "orderItem")
-    fun isUnclaimedOrigin(): Expr = isA("UnclaimedOrigin")
 }
 
 class CompositionFields(path: List<String> = emptyList()) : Fields(path) {
     val mixedOn: DateField get() = DateField(fieldPath + "mixedOn")
     val drawnMg: NumField get() = NumField(fieldPath + "drawnMg")
-    fun isUnclaimedOrigin(): Expr = isA("UnclaimedOrigin")
 }
 
 class ComponentFields(path: List<String> = emptyList()) : Fields(path) {
@@ -1006,7 +973,6 @@ class DepletionNoticeFields(path: List<String> = emptyList()) : Fields(path) {
 }
 
 class OriginFields(path: List<String> = emptyList()) : Fields(path) {
-    fun isUnclaimedOrigin(): Expr = isA("UnclaimedOrigin")
 }
 
 class FermentedFields(path: List<String> = emptyList()) : Fields(path) {
@@ -1045,9 +1011,6 @@ class CompositeFields(path: List<String> = emptyList()) : Fields(path) {
     fun isDepleted(): Expr = isA("Depleted")
 }
 
-class UnclaimedOriginFields(path: List<String> = emptyList()) : Fields(path) {
-}
-
 class DepletedFields(path: List<String> = emptyList()) : Fields(path) {
     val peptide: PeptideFields get() = PeptideFields(fieldPath + "peptide")
     val quantityMg: NumField get() = NumField(fieldPath + "quantityMg")
@@ -1063,7 +1026,7 @@ class DepletedFields(path: List<String> = emptyList()) : Fields(path) {
 fun main() {
     val sys = BatchesSystem()
     println("Velle MockHarness — Batches")
-    println("Commits: commit(NewPeptide(...)), commit(NewBacteriaStrain(...)), commit(NewFermenterRun(...)), commit(NewVendor(...)), commit(NewFermentation(...)), commit(NewExternalOrder(...)), commit(NewComposition(...)), commit(NewPeptideBatch(...))")
+    println("Commits: commit(NewPeptide(...)), commit(NewBacteriaStrain(...)), commit(NewFermenterRun(...)), commit(NewVendor(...)), commit(NewPeptideBatch(...))")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>

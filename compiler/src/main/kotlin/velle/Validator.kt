@@ -79,8 +79,10 @@ class Validator(private val model: Model) {
     // a write-write conflict, refused totally (value-equal RHS included).
 
     private fun checkClosures() {
+        // a by-value edge (OQ63 §6.1) nests one record per commit, so no sibling
+        // multiplicity and no back-reference: only part edges carry the self-pair
         val parts = mutableListOf<ClosureEdge>()
-        fun collect(e: ClosureEdge) { parts.add(e); e.children.forEach { collect(it) } }
+        fun collect(e: ClosureEdge) { if (!e.byValue) parts.add(e); e.children.forEach { collect(it) } }
         model.closures.values.flatten().forEach { collect(it) }
         if (parts.isEmpty()) return
 
@@ -1616,7 +1618,9 @@ class Validator(private val model: Model) {
         // creation"): the closure commit creates them, so they join the trigger,
         // reachability, and co-firability analyses as ordinary creations
         fun addClosure(container: String, e: ClosureEdge) {
-            kinds.add(CommitKind.Creates(e.partShape, source = "act $container with ${e.prop}"))
+            // a by-value edge creates one of its target's operands (OQ63 §6.1)
+            if (e.byValue) model.basesOf(e.partShape).forEach { kinds.add(CommitKind.Creates(it, source = "act $container with ${e.prop}")) }
+            else kinds.add(CommitKind.Creates(e.partShape, source = "act $container with ${e.prop}"))
             e.children.forEach { addClosure(container, it) }
         }
         model.closures.forEach { (container, edges) -> edges.forEach { addClosure(container, it) } }

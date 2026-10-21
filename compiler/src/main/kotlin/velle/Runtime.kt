@@ -628,25 +628,28 @@ class VelleSystem(
                 return CommitResult.Refused("type: the actor of '$shape' is not a ${bases.joinToString(" or ")}")
         }
 
-        val supplied = convertFields(decl, suppliedFields)
-            ?: return CommitResult.Refused(typeFailure(decl, suppliedFields))
-        val converted = if (actorProp != null) supplied + (actorProp.name to Value.VRef(actor!!)) else supplied
-
         // the exposure closure (Reference §6, "Inline part creation"): the act plus
         // its declared inline parts land as ONE commit — parts are values created
-        // here, back-references language-populated, entrants container-and-parts
+        // here, back-references language-populated, entrants container-and-parts.
+        // A `one` field named in `with` may arrive by value instead of by handle
+        // (OQ63 §6.1): the nested record is created in the same commit, first.
         val edges = model.closures[shape].orEmpty()
         parts.keys.find { key -> edges.none { it.prop == key } }?.let {
             return CommitResult.Refused("type: '$shape' declares no closure edge '$it'")
         }
-        val mutations = mutableListOf<Mutation>(Mutation.Create(shape, converted))
-        try {
-            appendParts(edges, parts, parentIndex = 0, mutations)
+        val byValueHere = edges.filter { it.byValue && parts[it.prop]?.isNotEmpty() == true }.map { it.prop }.toSet()
+        val supplied = convertFields(decl, suppliedFields, skipRequired = byValueHere)
+            ?: return CommitResult.Refused(typeFailure(decl, suppliedFields))
+        val converted = if (actorProp != null) supplied + (actorProp.name to Value.VRef(actor!!)) else supplied
+
+        val mutations = mutableListOf<Mutation>()
+        val rootIndex = try {
+            appendRecord(shape, converted, parts, edges, mutations)
         } catch (e: PartRefusal) {
             return CommitResult.Refused(e.reason)
         }
 
-        val result = inTransaction(actor) { applyCommit(mutations, actCommit = true).first() }
+        val result = inTransaction(actor) { applyCommit(mutations, actCommit = true)[rootIndex] }
         return result.fold(
             onSuccess = { id ->
                 // a transient act is an input to the state, not a member of it: at
@@ -724,41 +727,72 @@ class VelleSystem(
 
     private class PartRefusal(val reason: String) : Exception(reason)
 
+    companion object {
+        /** The key a raw nested value carries to name its concrete shape when the field's type is a union (OQ63 §6.1). */
+        const val SHAPE_KEY = "@shape"
+    }
+
     /**
-     * Flatten a closure's inline parts into the commit's creation list, depth
-     * first — parents always precede children, so a part's back-reference is a
-     * [Value.VPendingRef] at an earlier index, resolved as creations land.
+     * Append one record and its closure to the commit's creation list, returning
+     * the record's index. Order is dependency order, so every pending reference
+     * points backward (Hydration.kt, [Ref.Pending]): a value nested at a `one`
+     * field named in `with` is appended before the record that points at it, and
+     * a part is appended after the record its back-reference points at.
      */
-    private fun appendParts(
-        edges: List<ClosureEdge>,
+    private fun appendRecord(
+        shape: String,
+        converted: Map<String, Value>,
         supplied: Map<String, List<Map<String, Any?>>>,
-        parentIndex: Int,
+        edges: List<ClosureEdge>,
         out: MutableList<Mutation>,
-    ) {
-        for (edge in edges) {
-            val partDecl = model.shapes[edge.partShape]
-                ?: throw PartRefusal("type: unknown part shape '${edge.partShape}'")
+    ): Int {
+        val nested = mutableMapOf<String, Value>()
+        for (edge in edges.filter { it.byValue }) {
+            val raws = supplied[edge.prop].orEmpty()
+            if (raws.size > 1)
+                throw PartRefusal("type: '$shape.${edge.prop}' is a `one` field — one value may arrive there, ${raws.size} were given")
+            val raw = raws.singleOrNull() ?: continue
+            if (edge.prop in converted)
+                throw PartRefusal("type: '$shape.${edge.prop}' was given both as a reference to an existing record and as a new value")
+            val concrete = (raw[SHAPE_KEY] as? String) ?: edge.partShape
+            if (concrete !in model.shapes || !model.typeAccepts(edge.partShape, concrete))
+                throw PartRefusal("type: a value of '$concrete' cannot arrive at '$shape.${edge.prop}', which takes a ${edge.partShape}")
+            nested[edge.prop] = Value.VPendingRef(appendValue(concrete, raw, edge.childrenFor(concrete), out, "new value for '$shape.${edge.prop}'"))
+        }
+        val index = out.size
+        out.add(Mutation.Create(shape, converted + nested))
+        for (edge in edges.filter { !it.byValue }) {
             for (raw in supplied[edge.prop].orEmpty()) {
                 if (edge.backRef in raw)
                     throw PartRefusal("type: '${edge.partShape}.${edge.backRef}' is language-populated — " +
                         "a back-reference cannot be claimed by the committer (Reference §6)")
-                val childKeys = edge.children.map { it.prop }.toSet()
-                val own = raw.filterKeys { it !in childKeys }
-                duplicateRefusal(partDecl, own)?.let { throw PartRefusal(it) }
-                val converted = convertFields(partDecl, own, skipRequired = setOf(edge.backRef))
-                    ?: throw PartRefusal(typeFailure(partDecl, own) + " (inline part)")
-                val index = out.size
-                out.add(Mutation.Create(edge.partShape,
-                    converted + (edge.backRef to Value.VPendingRef(parentIndex))))
-                if (edge.children.isNotEmpty()) {
-                    @Suppress("UNCHECKED_CAST")
-                    val nested = edge.children.associate { child ->
-                        child.prop to ((raw[child.prop] as? List<Map<String, Any?>>).orEmpty())
-                    }
-                    appendParts(edge.children, nested, parentIndex = index, out)
-                }
+                appendValue(edge.partShape, raw, edge.childrenFor(edge.partShape), out, "inline part",
+                    extra = mapOf(edge.backRef to Value.VPendingRef(index)), skipRequired = setOf(edge.backRef))
             }
         }
+        return index
+    }
+
+    /** Convert one raw nested value (a part or a by-value record) and append it with its own closure. */
+    @Suppress("UNCHECKED_CAST")
+    private fun appendValue(
+        shape: String,
+        raw: Map<String, Any?>,
+        children: List<ClosureEdge>,
+        out: MutableList<Mutation>,
+        what: String,
+        extra: Map<String, Value> = emptyMap(),
+        skipRequired: Set<String> = emptySet(),
+    ): Int {
+        val decl = model.shapes[shape] ?: throw PartRefusal("type: unknown shape '$shape'")
+        val childKeys = children.map { it.prop }.toSet()
+        val own = raw.filterKeys { it !in childKeys && it != SHAPE_KEY }
+        duplicateRefusal(decl, own)?.let { throw PartRefusal(it) }
+        val nestedParts = children.associate { c -> c.prop to ((raw[c.prop] as? List<Map<String, Any?>>).orEmpty()) }
+        val byValueHere = children.filter { it.byValue && nestedParts[it.prop]?.isNotEmpty() == true }.map { it.prop }.toSet()
+        val converted = convertFields(decl, own, skipRequired = skipRequired + byValueHere)
+            ?: throw PartRefusal(typeFailure(decl, own) + " ($what)")
+        return appendRecord(shape, converted + extra, nestedParts, children, out)
     }
 
     private fun convertFields(decl: ShapeDecl, supplied: Map<String, Any?>, skipRequired: Set<String> = emptySet()): Map<String, Value>? {

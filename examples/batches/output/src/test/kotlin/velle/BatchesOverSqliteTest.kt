@@ -75,17 +75,16 @@ class BatchesPersistenceTest {
         val pep = first.peptides().last()
         accept(first.commit(NewBacteriaStrain("B. subtilis 168")))
         accept(first.commit(NewFermenterRun("F-1", LocalDate.of(2026, 3, 2))))
-        accept(first.commit(NewFermentation(first.bacteriaStrains().last(), first.fermenterRuns().last())))
-        val ferm = first.fermentations().last()
         accept(first.commit(NewVendor("Bachem")))
-        accept(first.commit(NewExternalOrder(first.vendors().last(), "PO-4471/3")))
-        val order = first.externalOrders().last()
-        accept(first.commit(NewPeptideBatch(pep, BigDecimal("100"), ferm.ref)))
+        // each batch arrives with its new origin nested inside it (Reference §6)
+        accept(first.commit(NewPeptideBatch(pep, BigDecimal("100"),
+            OriginReference.New(NewFermentation(first.bacteriaStrains().last(), first.fermenterRuns().last())))))
         val fermented = first.peptideBatchs().last()
-        accept(first.commit(NewPeptideBatch(pep, BigDecimal("50"), order.ref)))
+        accept(first.commit(NewPeptideBatch(pep, BigDecimal("50"),
+            OriginReference.New(NewExternalOrder(first.vendors().last(), "PO-4471/3")))))
         val ordered = first.peptideBatchs().last()
-        accept(first.commit(NewComposition(LocalDate.of(2026, 4, 1), listOf(NewComponent(fermented, BigDecimal("20")), NewComponent(ordered, BigDecimal("10"))))))
-        accept(first.commit(NewPeptideBatch(pep, BigDecimal("30"), first.compositions().last().ref)))
+        accept(first.commit(NewPeptideBatch(pep, BigDecimal("30"),
+            OriginReference.New(NewComposition(LocalDate.of(2026, 4, 1), listOf(NewComponent(fermented, BigDecimal("20")), NewComponent(ordered, BigDecimal("10"))))))))
 
         // Fermentation#1, ExternalOrder#1, Composition#1 share a key; the discriminator tells them apart
         assertEquals(
@@ -105,11 +104,10 @@ class BatchesPersistenceTest {
         assertEquals(BigDecimal("80"), b1.remainingMg)
         assertEquals(BigDecimal("40"), b2.remainingMg)
         assertEquals(BigDecimal("30"), b3.remainingMg)
-        assertTrue(second.read(second.read.fermentation(1L)).isUnclaimedOrigin.not())
-        assertEquals(emptyList(), second.unclaimedOrigins())
+        assertEquals(1, second.read(second.read.fermentation(1L)).peptideBatches.size)
 
         // the one-origin-one-batch refusal is decided against stored rows
-        assertIs<Commit.Refused<*>>(second.commit(NewPeptideBatch(second.read.peptide(1L), BigDecimal("1"), second.read.fermentation(1L).ref)))
+        assertIs<Commit.Refused<*>>(second.commit(NewPeptideBatch(second.read.peptide(1L), BigDecimal("1"), OriginReference.Existing(second.read.fermentation(1L).ref))))
         assertEquals(listOf(listOf(3L)), rows("""SELECT COUNT(*) FROM PeptideBatch"""))
     }
 }

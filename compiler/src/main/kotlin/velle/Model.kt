@@ -323,10 +323,15 @@ class Model(val decls: List<Decl>) {
 
     private fun resolveClosureEdge(scope: String, entry: WithEntry): ClosureEdge? {
         val m = membersOf(scope)[entry.name]
-        val fix = "a closure edge must be the inverse of a declared `one` field (Reference §6)"
+        val fix = "a closure edge must be the inverse of a declared `one` field, or a declared `one` field " +
+            "whose value may arrive nested (Reference §6)"
+        // a declared `one` field named in `with`: the reference may be supplied by
+        // value, the pointed-at record nested inside this one (Reference §6, OQ63 §6.1)
+        if (m != null && m.stored && !m.actor && m.inverse == null && m.type.instanceShape() != null)
+            return resolveByValueEdge(scope, entry, m.type.instanceShape()!!)
         val edge = when {
             m == null -> {
-                error("V22", "'act ... with ${entry.name}': '$scope' has no such collection — $fix")
+                error("V22", "'act ... with ${entry.name}': '$scope' has no such collection or `one` field — $fix")
                 null
             }
             m.inverse != null ->
@@ -341,7 +346,7 @@ class Model(val decls: List<Decl>) {
                     "an arbitrary-predicate view cannot ride a closure")
             }
             else -> {
-                error("V22", "'act ... with ${entry.name}': '${entry.name}' is not a collection view of '$scope' — $fix")
+                error("V22", "'act ... with ${entry.name}': '${entry.name}' is not a collection view or a `one` field of '$scope' — $fix")
                 null
             }
         } ?: return null
@@ -351,7 +356,40 @@ class Model(val decls: List<Decl>) {
                 "closure parts are durable records created at the commit")
             return null
         }
-        return ClosureEdge(entry.name, partShape, backRef, resolveClosureLevel(partShape, entry.children))
+        return ClosureEdge(entry.name, partShape, backRef, resolveClosureLevel(partShape, entry.children), owner = scope)
+    }
+
+    /**
+     * A `one` field named in `with` (Reference §6, "a reference supplied by value"):
+     * the committer may nest a new [target] record at the field instead of naming
+     * an existing one. For a union-typed field the nested value is one of the
+     * operands, so the entry's own `with` children are resolved against each
+     * operand that has them, and each child edge records its [ClosureEdge.owner].
+     */
+    private fun resolveByValueEdge(scope: String, entry: WithEntry, target: String): ClosureEdge? {
+        val operands = basesOf(target)
+        if (operands.isEmpty() || operands.any { it !in shapes }) {
+            error("V22", "'act ... with ${entry.name}': '$scope.${entry.name}' targets '$target', which is not a shape " +
+                "or a static union of shapes, so no value can arrive there")
+            return null
+        }
+        operands.filter { it in transients }.forEach {
+            error("V22", "'act ... with ${entry.name}': '$it' is a transient act — a value arriving nested is a durable record created at the commit")
+            return null
+        }
+        entry.children.groupBy { it.name }.filterValues { it.size > 1 }.keys.forEach {
+            error("V22", "'act ... with': closure edge '$it' declared twice under '$scope.${entry.name}'")
+        }
+        val children = mutableListOf<ClosureEdge>()
+        for (child in entry.children.distinctBy { it.name }) {
+            val owners = operands.filter { membersOf(it).containsKey(child.name) }
+            if (owners.isEmpty()) {
+                error("V22", "'act ... with ${entry.name} with { ${child.name} }': no operand of '$target' has '${child.name}'")
+                continue
+            }
+            for (owner in owners) resolveClosureEdge(owner, child)?.let { children.add(it) }
+        }
+        return ClosureEdge(entry.name, target, backRef = "", children = children, byValue = true, owner = scope)
     }
 
     /** The recognized inverse form `(P where field == this)` (Reference §6, the
@@ -640,7 +678,18 @@ data class ClosureEdge(
     val partShape: String,
     val backRef: String,
     val children: List<ClosureEdge> = emptyList(),
-)
+    /** A `one` field named in `with` (Reference §6; OQ63 §6.1): the committer supplies the
+     *  reference by value, one [partShape] record nested at [prop]; no back-reference. For a
+     *  union-typed field [partShape] is the union, and [children] carry the edges resolved on
+     *  each operand, each marked with its [owner]. */
+    val byValue: Boolean = false,
+    /** The shape this edge was resolved on: the enclosing level, or, for a child of a
+     *  union-typed by-value edge, the operand that declares it. */
+    val owner: String = "",
+) {
+    /** The children that apply when the nested or part record is of [shape]. */
+    fun childrenFor(shape: String): List<ClosureEdge> = children.filter { it.owner == shape }
+}
 
 sealed interface VType {
     data class Num(val name: String) : VType

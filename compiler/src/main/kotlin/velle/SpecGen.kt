@@ -202,13 +202,21 @@ object SpecGen {
             val setup = mutableListOf<String>()
             val args = mutableListOf<String>()
             var subjectRefs = 0
+            // a `one` field named in `with` takes a `<Target>Reference` (Reference §6; OQ63 §6.1):
+            // the generated case commits it `New`, with a given supplying the value that arrives nested
+            val byValue = model.closures[act.name].orEmpty().filter { it.byValue }.map { it.prop }.toSet()
             for (p in act.members.filterIsInstance<StoredProp>()) {
                 if (p.initially != null) continue
                 when (val t = p.type) {
                     is RelType -> {
                         if (t.many) return null // collection-valued act fields: exit given, not a derived commit
                         if (t.optional) continue
-                        if (t.shape == subjectBase) {
+                        if (p.name in byValue) {
+                            val given = "new${t.shape}"
+                            demandGiven(given, "Provide a new '${t.shape}' value to arrive nested in '${act.name}.${p.name}'; return it uncommitted.", "New${t.shape}")
+                            setup.add("val ${p.name} = givens.$given()")
+                            args.add("${t.shape}Reference.New(${p.name})")
+                        } else if (t.shape == subjectBase) {
                             subjectRefs++
                             args.add(subjectVar)
                         } else {
@@ -677,7 +685,7 @@ object SpecGen {
                 val body = StringBuilder()
                 fields.setup.forEach { body.line(2, it) }
                 body.line(2, "val before = count(\"${shape.name}\")")
-                body.line(2, "val result = sys.system.commit(\"${shape.name}\", mapOf(${fields.entries(fieldPath.root, violating)})${fields.actorArg})")
+                body.line(2, "val result = sys.system.commit(\"${shape.name}\", mapOf(${fields.entries(fieldPath.root, violating)})${fields.partsArg}${fields.actorArg})")
                 body.line(2, "assertIs<CommitResult.Refused>(result)")
                 body.line(2, "assertEquals(before, count(\"${shape.name}\"), \"a refused act commits nothing\")")
                 recordCase(sentence)
@@ -689,7 +697,7 @@ object SpecGen {
                 val sentence = "${never.keyword} - a ${shape.name} with ${fieldPath.root} ${plain(legal)} is accepted"
                 val body = StringBuilder()
                 fields.setup.forEach { body.line(2, it) }
-                body.line(2, "val result = sys.system.commit(\"${shape.name}\", mapOf(${fields.entries(fieldPath.root, legal)})${fields.actorArg})")
+                body.line(2, "val result = sys.system.commit(\"${shape.name}\", mapOf(${fields.entries(fieldPath.root, legal)})${fields.partsArg}${fields.actorArg})")
                 body.line(2, "assertIs<CommitResult.Accepted>(result)")
                 recordCase(sentence)
                 recordNeverScenario(never, sentence, shape.name, fieldPath.root, plain(legal), relGivens,
@@ -778,7 +786,9 @@ object SpecGen {
 
         class ActFields(val setup: List<String>, private val pairs: List<Pair<String, String>>,
                         /** `, actor = idOf(x)` for an act declared `by`; empty otherwise */
-                        val actorArg: String = "") {
+                        val actorArg: String = "",
+                        /** `, parts = mapOf(...)` carrying the values that arrive nested at `one` fields named in `with`; empty otherwise */
+                        val partsArg: String = "") {
             fun entries(overrideField: String, value: BigDecimal): String =
                 pairs.joinToString(", ") { (name, expr) ->
                     if (name == overrideField) "\"$name\" to java.math.BigDecimal(\"${value.toPlainString()}\")"
@@ -798,15 +808,27 @@ object SpecGen {
                 setup.add("val ${a.name} = givens.$given()")
                 ", actor = idOf(${a.name})"
             } ?: ""
+            // a `one` field named in `with` (Reference §6; OQ63 §6.1): a given supplies the new
+            // value, and it travels as a nested part beside the fields
+            val byValue = model.closures[shape.name].orEmpty().filter { it.byValue }.map { it.prop }.toSet()
+            val parts = mutableListOf<String>()
             for (p in shape.members.filterIsInstance<StoredProp>()) {
                 if (p.initially != null) continue
                 when (val t = p.type) {
                     is RelType -> {
                         if (t.many) return null // collection-valued act fields are not synthesized
                         if (t.optional) continue
+                        val varName = p.name
+                        if (p.name in byValue) {
+                            val given = "new${t.shape}"
+                            demandGiven(given, "Provide a new '${t.shape}' value to arrive nested in '${shape.name}.${p.name}'; return it uncommitted.", "New${t.shape}")
+                            setup.add("// given: a new '${t.shape}', arriving nested in '${p.name}'")
+                            setup.add("val $varName = givens.$given()")
+                            parts.add("\"${p.name}\" to listOf($varName.asValue(sys.system))")
+                            continue
+                        }
                         val given = "some${t.shape}"
                         demandGiven(given, "Provide any committed '${t.shape}'; return it.", "${t.shape}")
-                        val varName = p.name
                         setup.add("// given: any committed '${t.shape}'")
                         setup.add("val $varName = givens.$given()")
                         pairs.add(p.name to "idOf($varName)")
@@ -831,7 +853,7 @@ object SpecGen {
                     }
                 }
             }
-            return ActFields(setup, pairs, actorArg)
+            return ActFields(setup, pairs, actorArg, if (parts.isEmpty()) "" else ", parts = mapOf(${parts.joinToString(", ")})")
         }
 
         fun opWords(op: String): String = when (op) {

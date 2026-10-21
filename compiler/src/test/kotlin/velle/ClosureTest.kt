@@ -350,4 +350,174 @@ class ClosureTest {
         assertTrue("orderLines: List<NewOrderLine> = emptyList()" in src, src)
         assertTrue("fun commit(input: NewOrder): Commit<NewOrder>" in src, src)
     }
+
+    // ── a reference supplied by value: a `one` field named in `with` (Reference §6; OQ63 §6.1) ──
+
+    private val BATCHES = """
+        act Peptide { code: text }
+        act BacteriaStrain { name: text }
+        act Vendor { name: text }
+
+        shape Fermentation { strain: one BacteriaStrain }
+        shape ExternalOrder { vendor: one Vendor, item: text }
+        shape Composition { mixedOn: Date }
+        shape Component { composition: one Composition, amountMg: decimal }
+
+        shape Origin = Fermentation or ExternalOrder or Composition {
+            peptideBatches: many PeptideBatch = (PeptideBatch where origin == this)
+        }
+
+        act PeptideBatch {
+            peptide: one Peptide
+            quantityMg: decimal
+            origin: one Origin
+        } with { origin with { components } }
+
+        never (Fermentation where peptideBatchs is empty)
+        never (PeptideBatch where count(origin.peptideBatches) > 1)
+
+        shape FermentationNote { fermentation: one Fermentation }
+        rule NoteFermentation when Fermentation { FermentationNote for this }
+    """.trimIndent()
+
+    private fun VelleSystem.strain(): Long = mustCommit("BacteriaStrain", mapOf("name" to "B. subtilis"))
+    private fun VelleSystem.peptide(): Long = mustCommit("Peptide", mapOf("code" to "PEP-7"))
+
+    @Test
+    fun `a one field named in with resolves to a by-value edge with children resolved per operand`() {
+        val model = Model(Parser.parse(BATCHES))
+        val edge = model.closures.getValue("PeptideBatch").single()
+        assertTrue(edge.byValue)
+        assertEquals("origin", edge.prop)
+        assertEquals("Origin", edge.partShape)
+        val child = edge.children.single()
+        assertEquals("components", child.prop)
+        assertEquals("Component", child.partShape)
+        assertEquals("composition", child.backRef)
+        assertEquals("Composition", child.owner)
+        assertEquals(emptyList(), edge.childrenFor("Fermentation"))
+        assertEquals(listOf(child), edge.childrenFor("Composition"))
+    }
+
+    @Test
+    fun `V22 refuses a with entry on a scalar, on a transient target, and a child no operand has`() {
+        fun diagsOf(spec: String) = Validator.validate(spec).filter { it.code == "V22" }.map { it.message }
+        val scalar = diagsOf(BATCHES.replace("with { origin with { components } }", "with quantityMg"))
+        assertTrue(scalar.any { "not a collection view or a `one` field" in it }, scalar.toString())
+        val transient = diagsOf(
+            """
+            transient act Request { note: text }
+            act Thing { request: one Request } with request
+            """.trimIndent()
+        )
+        assertTrue(transient.any { "transient act" in it }, transient.toString())
+        val orphan = diagsOf(BATCHES.replace("with { origin with { components } }", "with { origin with { nothing } }"))
+        assertTrue(orphan.any { "no operand of 'Origin' has 'nothing'" in it }, orphan.toString())
+    }
+
+    @Test
+    fun `a batch and its new origin land as one commit, the origin first`() {
+        val sys = system(BATCHES)
+        val strain = sys.strain()
+        val pep = sys.peptide()
+        val batch = sys.mustCommit(
+            "PeptideBatch",
+            mapOf("peptide" to pep, "quantityMg" to java.math.BigDecimal("100")),
+            mapOf("origin" to listOf(mapOf(VelleSystem.SHAPE_KEY to "Fermentation", "strain" to strain))),
+        )
+        val ferm = sys.instancesOf("Fermentation").single()
+        assertEquals(ferm, sys.get(batch, "origin"))
+        assertEquals(listOf(batch), sys.get(ferm, "peptideBatches"))
+        // `never (Fermentation where peptideBatchs is empty)` held at the door: both were in
+        // the rule on the nested record fired once, in the batch's transaction
+        assertEquals(ferm, sys.get(sys.instancesOf("FermentationNote").single(), "fermentation"))
+    }
+
+    @Test
+    fun `the reference may still be supplied by handle, and the books rule refuses a second claim`() {
+        val sys = system(BATCHES)
+        val strain = sys.strain()
+        val pep = sys.peptide()
+        val batch = sys.mustCommit(
+            "PeptideBatch", mapOf("peptide" to pep, "quantityMg" to java.math.BigDecimal("100")),
+            mapOf("origin" to listOf(mapOf(VelleSystem.SHAPE_KEY to "Fermentation", "strain" to strain))),
+        )
+        val ferm = sys.get(batch, "origin") as Long
+        val second = sys.commit("PeptideBatch", mapOf("peptide" to pep, "quantityMg" to java.math.BigDecimal("5"), "origin" to ferm))
+        assertIs<CommitResult.Refused>(second, "one origin, one batch")
+        assertEquals(1, sys.instancesOf("PeptideBatch").size)
+    }
+
+    @Test
+    fun `a nested value carries its own parts, resolved on the operand that declares them`() {
+        val sys = system(BATCHES)
+        val pep = sys.peptide()
+        val batch = sys.mustCommit(
+            "PeptideBatch", mapOf("peptide" to pep, "quantityMg" to java.math.BigDecimal("30")),
+            mapOf("origin" to listOf(mapOf(
+                VelleSystem.SHAPE_KEY to "Composition",
+                "mixedOn" to java.time.LocalDate.parse("2026-04-01"),
+                "components" to listOf(mapOf("amountMg" to java.math.BigDecimal("10")), mapOf("amountMg" to java.math.BigDecimal("20"))),
+            ))),
+        )
+        val comp = sys.instancesOf("Composition").single()
+        assertEquals(comp, sys.get(batch, "origin"))
+        val parts = sys.instancesOf("Component")
+        assertEquals(2, parts.size)
+        parts.forEach { assertEquals(comp, sys.get(it, "composition")) }
+    }
+
+    @Test
+    fun `type refusals - both ways at once, two values, a shape outside the union, neither way`() {
+        val sys = system(BATCHES)
+        val strain = sys.strain()
+        val pep = sys.peptide()
+        val fields = mapOf("peptide" to pep, "quantityMg" to java.math.BigDecimal("1"))
+        val ferm = mapOf(VelleSystem.SHAPE_KEY to "Fermentation", "strain" to strain)
+        val existing = sys.seed("Fermentation", mapOf("strain" to strain))
+        val both = sys.commit("PeptideBatch", fields + ("origin" to existing), mapOf("origin" to listOf(ferm)))
+        assertTrue(assertIs<CommitResult.Refused>(both).reason.contains("both"), both.toString())
+        val two = sys.commit("PeptideBatch", fields, mapOf("origin" to listOf(ferm, ferm)))
+        assertTrue(assertIs<CommitResult.Refused>(two).reason.contains("one value"), two.toString())
+        val outside = sys.commit("PeptideBatch", fields, mapOf("origin" to listOf(mapOf(VelleSystem.SHAPE_KEY to "Peptide", "code" to "x"))))
+        assertTrue(assertIs<CommitResult.Refused>(outside).reason.contains("cannot arrive"), outside.toString())
+        val neither = sys.commit("PeptideBatch", fields)
+        assertTrue(assertIs<CommitResult.Refused>(neither).reason.contains("requires"), neither.toString())
+        assertEquals(0, sys.instancesOf("PeptideBatch").size)
+        assertEquals(listOf(existing), sys.instancesOf("Fermentation"))
+    }
+
+    @Test
+    fun `a base-shape target and an optional one`() {
+        val spec = """
+            act Vendor { name: text }
+            shape Order { vendor: one Vendor, item: text }
+            act Receipt { order: one Order, memo: one Memo? } with { order, memo }
+            shape Memo { note: text }
+        """.trimIndent()
+        val sys = system(spec)
+        val vendor = sys.mustCommit("Vendor", mapOf("name" to "Bachem"))
+        val r = sys.mustCommit("Receipt", emptyMap(), mapOf("order" to listOf(mapOf("vendor" to vendor, "item" to "PO-1"))))
+        assertEquals(sys.instancesOf("Order").single(), sys.get(r, "order"))
+        assertEquals(0, sys.instancesOf("Memo").size)
+        val r2 = sys.mustCommit("Receipt", emptyMap(), mapOf(
+            "order" to listOf(mapOf("vendor" to vendor, "item" to "PO-2")),
+            "memo" to listOf(mapOf("note" to "rush")),
+        ))
+        assertEquals(sys.instancesOf("Memo").single(), sys.get(r2, "memo"))
+    }
+
+    @Test
+    fun `codegen emits the reference type, the union's New interface, and the nested value`() {
+        val src = Codegen.generate(BATCHES, "Batches")
+        assertTrue("sealed interface OriginReference {" in src, src)
+        assertTrue("data class Existing(val ref: Ref<Origin>) : OriginReference" in src, src)
+        assertTrue("data class New(val value: NewOrigin) : OriginReference" in src, src)
+        assertTrue("sealed interface NewOrigin { fun asValue(system: VelleSystem): Map<String, Any?> }" in src, src)
+        assertTrue("data class NewFermentation(" in src && ") : NewOrigin {" in src, src)
+        assertTrue("val origin: OriginReference," in src, src)
+        assertTrue("val components: List<NewComponent> = emptyList()" in src, src)
+        assertTrue("(origin as? OriginReference.Existing)?.let { put(\"origin\", system.idOf(it.ref)) }" in src, src)
+        assertTrue("(origin as? OriginReference.New)?.let { put(\"origin\", listOf(it.value.asValue(system))) }" in src, src)
+    }
 }

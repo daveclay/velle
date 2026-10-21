@@ -17,7 +17,7 @@ import velle.VelleSystem
 /**
  * The findings of the batches pass (OQ16's calibration record, B1–B6), each
  * pinned as a probe over a small spec so the record points at something that
- * runs. Every probe asserts what the compiler and runtime do *today*; where
+ * runs. B2 is retired: the probe now shows the construct that closed it. Every probe asserts what the compiler and runtime do *today*; where
  * the Reference says otherwise, the comment says so and names the work item.
  * A probe that starts failing is a finding that moved.
  */
@@ -27,7 +27,7 @@ class BatchesProbesTest {
     private fun messages(src: String) = Validator.validate(src).joinToString("\n") { "[${it.code}] ${it.message}" }
     private fun system(src: String) = VelleSystem(Model(Parser.parse(src)))
     private fun VelleSystem.accept(shape: String, vararg fields: Pair<String, Any?>, parts: Map<String, List<Map<String, Any?>>> = emptyMap()): Long =
-        assertIs<CommitResult.Accepted>(commit(shape, fields.toMap(), parts), "refused").id
+        commit(shape, fields.toMap(), parts).let { assertIs<CommitResult.Accepted>(it, "refused: $it").id }
 
     /** The spelling the example settled on, minus what each probe varies. */
     private val inverted = """
@@ -92,20 +92,30 @@ class BatchesProbesTest {
         assertEquals(emptyList(), codes(nonsense), "a predicate over a cross-base union is not name-checked: " + messages(nonsense))
     }
 
-    // ── B2: the batch and its origin cannot arrive in one commit ──
+    // ── B2, retired: the batch and its origin arrive in one commit (OQ63 §6.1) ──
 
     @Test
-    fun `B2 - forbidding an unclaimed origin refuses the origin's own commit`() {
-        // The batch points forward at its origin; a closure only creates parts
-        // pointing back at their container (Reference §6, "Closures are
-        // trees"), so the origin lands first. The books-rule spelling of "no
-        // origin without its batch" is checked at the origin's commit, when the
-        // batch cannot exist yet. OQ63.
-        val src = inverted.replace("act PeptideBatch {", "never (Fermentation where peptideBatchs is empty)\n\nact PeptideBatch {")
+    fun `B2 retired - a one field named in with lets the batch arrive with its new origin`() {
+        // The finding was that a closure only created parts pointing back at
+        // their container, so the origin landed a commit earlier and "no origin
+        // without its batch" refused the origin's own commit. Naming the `one`
+        // field in `with` lets the reference be supplied by value: the origin is
+        // created in the batch's commit, the door sees both, and the books rule
+        // holds (Reference §6, "A reference supplied by value").
+        val src = inverted
+            .replace("act PeptideBatch {", "never (Fermentation where peptideBatchs is empty)\n\nact PeptideBatch {")
+            .replace("origin: one Origin\n}", "origin: one Origin\n} with origin")
         assertEquals(emptyList(), codes(src), messages(src))
         val sys = system(src)
         val strain = sys.accept("Strain", "name" to "s")
-        assertIs<CommitResult.Refused>(sys.commit("Fermentation", mapOf("strain" to strain)), "the origin is refused before any batch can claim it")
+        val pep = sys.accept("Peptide", "code" to "P")
+        // an origin on its own is still refused: the batch cannot exist yet
+        assertIs<CommitResult.Refused>(sys.commit("Fermentation", mapOf("strain" to strain)))
+        // arriving with its batch, it is accepted, and the two land together
+        val batch = sys.accept("PeptideBatch", "peptide" to pep, "quantityMg" to BigDecimal.ONE,
+            parts = mapOf("origin" to listOf(mapOf(VelleSystem.SHAPE_KEY to "Fermentation", "strain" to strain))))
+        val ferm = sys.instancesOf("Fermentation").single()
+        assertEquals(ferm, sys.get(batch, "origin"))
     }
 
     // ── B3: the inferred inverse is pluralized with a literal `s` ──
