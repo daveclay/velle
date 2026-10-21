@@ -266,7 +266,7 @@ rule LayOutContainers when ExperimentDesign {
 
 **Recommendation.** Loop source only. The one want is creation. A collection of integers as a field would be the first stored or derived collection that is not records, and nothing here needs it.
 
-**Dave:**
+**Dave:** a range is a value (2026-10-21). It is valid wherever a collection is, not only after `in`. Consequence to work through at build time: a collection of integers is new, so each construct that takes a collection (`count`, `all`, `exists`, filters, derived `many` fields, fan-out assignment) has to say what it does with one, or reject it (QUESTIONS.md, the value-vocabulary item).
 
 ### 6.3 May a block contain another block?
 
