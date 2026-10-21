@@ -27,7 +27,7 @@ act ContainerType {
 
 act ExperimentDesign {
     containerType: one ContainerType
-    containers: integer
+    containerCount: integer
     replicates: integer
 } with conditions
 
@@ -39,7 +39,7 @@ shape Condition {
 shape Container {
     design: one ExperimentDesign
     replicate: integer
-    position: integer                -- 1 to design.containers
+    position: integer                -- 1 to design.containerCount
 }
 
 shape Well {
@@ -55,13 +55,13 @@ The conditions arrive as parts of the design's closure, so they are records and 
 
 - **A creation statement is one record.** `rule LayOut when ExperimentDesign { Sample from { ... } }` creates one `Sample`. Nothing in `ruleBody` repeats a statement, and a rule body cannot name a set to create over.
 - **A rule's multiplicity is the multiplicity of records that exist.** `rule PlaceCondition when Condition { Well for this ... }` gives one well per condition, which covers the one axis the client supplied as records. It cannot cover containers, replicates, or wells per container.
-- **An integer is not a set.** `containers: integer`, `replicates: integer`, and `containerType.wellsPerContainer` yield nothing to fire on. There is no range, no sequence generator, and `initially` is a value for one record, not a source of records (Reference §22, "`initially` generator vocabulary").
+- **An integer is not a set.** `containerCount: integer`, `replicates: integer`, and `containerType.wellsPerContainer` yield nothing to fire on. There is no range, no sequence generator, and `initially` is a value for one record, not a source of records (Reference §22, "`initially` generator vocabulary").
 - **There is no product.** With `WellPosition` as a reference table (ninety-six records, one per position on the container type), a rule can still fire on one shape only. There is no condition over pairs and no join-shaped trigger, so "one well per container per position" has no rule that fires once per pair. Fan-out assignment (`this.invoices.customer = ...`) writes once per existing member and cannot create.
 - **Cascading does not help.** A chain of rules creates one record per firing at every link, and the number of firings is bounded by the records already on the books. No chain turns a count into that many records. A rule `when Container { Well for this ... }` would give one well per container once containers exist, which is the right shape for the second level, but still one well, not ninety-six, and the containers themselves have no source.
 
 ## 3. The spellings available today, and what each gives up
 
-- **The client expands the product.** `act ExperimentDesign { ... } with { conditions, containers with { wells } }`: the client computes every container and every well and sends them as a nested closure. The containers-with-wells tree is exactly what a closure can carry. The spec can audit the counts with prohibitions over the design (`count(containers) == containers * replicates`) and over each container (`count(wells) == design.containerType.wellsPerContainer`). Costs: the layout algorithm, which is the feature, lives in the client, and every client reimplements it; the prohibitions name the symptom (a wrong count) and not the rule (one per position); and a well pointing at its condition is a part referring to a record in a sibling branch of the same closure, which Reference §6 rejects ("Parts form a tree"), so the condition must be denormalized onto the well as a value, or the conditions committed a step earlier (OQ63's window again).
+- **The client expands the product.** `act ExperimentDesign { ... } with { conditions, containers with { wells } }`: the client computes every container and every well and sends them as a nested closure. The containers-with-wells tree is exactly what a closure can carry. The spec can audit the counts with prohibitions over the design (`count(containers) == containerCount * replicates`) and over each container (`count(wells) == design.containerType.wellsPerContainer`). Costs: the layout algorithm, which is the feature, lives in the client, and every client reimplements it; the prohibitions name the symptom (a wrong count) and not the rule (one per position); and a well pointing at its condition is a part referring to a record in a sibling branch of the same closure, which Reference §6 rejects ("Parts form a tree"), so the condition must be denormalized onto the well as a value, or the conditions committed a step earlier (OQ63's window again).
 - **Reference-table positions, one rule per condition.** `WellPosition` as reference data and `rule when Condition { Well for this ... }`. Still one record per firing: it buys nothing beyond the conditions axis, and the container and position have to be chosen by the client per condition.
 - **Hand-committed, counted back.** What peptides does. `GreenhouseProtocol.plotsPerArm` is a number; the scientists commit each `GreenhousePlot` themselves; `LaidOutTrial` is the state reached when the count is met. `AssayProtocol.replicates` likewise: each `Assay` plate is its own act, and `HitExperiment` compares `completedReplicates` against the protocol. This is a faithful model of a human laying out a bench. It is the wrong model when the software does the laying out, which is the case raised here.
 
@@ -94,7 +94,7 @@ act ContainerType {
 
 act ExperimentDesign {
     containerType: one ContainerType
-    containers: integer
+    containerCount: integer
     replicates: integer
     wellsPerBlock: integer = containerType.wellsPerContainer / count(conditions)
 } with conditions
@@ -125,7 +125,7 @@ never (ExperimentDesign where containerType.wellsPerContainer mod count(conditio
 
 ```
 rule LayOut when ExperimentDesign {
-    for each replicate in 1..replicates, position in 1..containers {
+    for each replicate in 1..replicates, position in 1..containerCount {
         Container from {
             design: this
             replicate: replicate
@@ -148,7 +148,7 @@ One firing per design; the rule creates containers × replicates containers and,
 
 ```
 rule LayOutContainers when ExperimentDesign {
-    for each replicate in 1..replicates, position in 1..containers {
+    for each replicate in 1..replicates, position in 1..containerCount {
         Container from { design: this, replicate: replicate, position: position }
     }
 }

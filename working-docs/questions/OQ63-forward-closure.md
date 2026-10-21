@@ -176,7 +176,7 @@ The plate layout from OQ64 §5. A rule creates each container, then that contain
 
 ```
 rule LayOut when ExperimentDesign {
-    for each replicate in 1..replicates, position in 1..containers {
+    for each replicate in 1..replicates, position in 1..containerCount {
         Container from {
             design: this
             replicate: replicate
@@ -211,7 +211,7 @@ OQ64 §3's client-expanded closure. The design arrives with its conditions and w
 ```
 act ExperimentDesign {
     containerType: one ContainerType
-    containers: integer
+    containerCount: integer
     replicates: integer
 } with { conditions, containers with { wells } }
 
@@ -243,7 +243,7 @@ A nested value may carry a label, and a field that may point across branches acc
 ```kotlin
 ExperimentDesignInput(
     containerType = containerTypeRef,
-    containers = 1,
+    containerCount = 1,
     replicates = 1,
     conditions = listOf(
         ConditionInput(label = ConditionLabel("low"),  block = 1, value = 0.1),
@@ -293,7 +293,7 @@ The same author never types a label. The label lives in the generated Kotlin inp
 ```
 act ExperimentDesign {
     containerType: one ContainerType
-    containers: integer
+    containerCount: integer
     replicates: integer
 } with { conditions, containers with { wells } }
 
