@@ -50,7 +50,8 @@ Which fields get this type, and what `New` means on each, is fixed by the spec:
 |---|---|
 | a `one` field named in the act's `with` ([§6](Reference-06-Relationships), "A reference supplied by value") | the value is created here, nested at this field |
 | a `one` field typed by a shape that arrives elsewhere in the act's closure ([§6](Reference-06-Relationships), "A reference to a record arriving elsewhere in the same commit") | the value is one of the act's own new values, placed in a part list or at a `with`-named field |
-| any other `one` field | the field takes `Ref<T>` only, and has no reference type |
+| a `many` field typed by a shape that arrives elsewhere in the act's closure | each element is `Existing` or `New`; the list is a set |
+| any other `one` or `many` field | the field takes `Ref<T>`, or a list of them, and has no reference type |
 
 A field never has both meanings. When the target is a static union, or more than one input class creates it, the `New` case takes an interface the creating classes implement, named `New` followed by the target's name. From the batches example:
 
@@ -61,6 +62,8 @@ val batch = NewPeptideBatch(
     origin = OriginReference.New(NewFermentation(strain, run)),
 )
 ```
+
+A `many` field that may hold new values is typed `List<ConditionReference>` in the same way, and each element is `Existing` or `New`.
 
 A reference to a sibling is the sibling's own object. The engineer builds the value once, places it where it is created, and passes the same object wherever another value points at it. From the plate-layout spec in `compiler/src/test/kotlin/velle/ClosureTest.kt`:
 

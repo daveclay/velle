@@ -637,4 +637,46 @@ class ClosureTest {
         val newDesign = src.substringAfter("data class NewExperimentDesign(").substringBefore(") {")
         assertTrue("val containerType: Ref<ContainerType>," in newDesign, newDesign)
     }
+
+    // ── a `many` field whose elements are handles or new values (Reference §6) ──
+
+    private val PLATE_MANY = PLATE.replace("condition: one Condition", "conditions: many Condition")
+
+    @Test
+    fun `a many field mixes handles and the act's own new values, and stays a set`() {
+        val sys = system(PLATE_MANY)
+        val type = sys.plateType()
+        val fields = mapOf("containerType" to type, "containerCount" to 1, "replicates" to 1)
+        sys.mustCommit("ExperimentDesign", fields, mapOf("conditions" to listOf(mapOf("block" to 1, "value" to java.math.BigDecimal("0.1")))))
+        val existing = sys.instancesOf("Condition").single()
+        val design = sys.mustCommit("ExperimentDesign", fields, mapOf(
+            "containers" to listOf(mapOf("replicate" to 1, "position" to 1, "wells" to listOf(
+                mapOf("position" to 1, "conditions" to listOf(NewRef(1), existing, NewRef(2))),
+                mapOf("position" to 2, "conditions" to listOf(NewRef(2))),
+                mapOf("position" to 3, "conditions" to emptyList<Any>()),
+            ))),
+            "conditions" to listOf(
+                mapOf(VelleSystem.NEW_KEY to 1, "block" to 1, "value" to java.math.BigDecimal("0.5")),
+                mapOf(VelleSystem.NEW_KEY to 2, "block" to 2, "value" to java.math.BigDecimal("1.0"))),
+        ))
+        val mine = sys.instancesOf("Condition").filter { sys.get(it, "design") == design }.sortedBy { (sys.get(it, "block") as Number).toLong() }
+        assertEquals(2, mine.size)
+        val wells = sys.instancesOf("Well").sortedBy { (sys.get(it, "position") as Number).toLong() }
+        assertEquals(setOf(mine[0], existing, mine[1]), (sys.get(wells[0], "conditions") as List<*>).toSet())
+        assertEquals(listOf(mine[1]), sys.get(wells[1], "conditions"))
+        assertEquals(emptyList<Long>(), sys.get(wells[2], "conditions"))
+
+        val dup = sys.commit("ExperimentDesign", fields, mapOf(
+            "containers" to listOf(mapOf("replicate" to 1, "position" to 1, "wells" to listOf(mapOf("position" to 1, "conditions" to listOf(NewRef(1), NewRef(1)))))),
+            "conditions" to listOf(mapOf(VelleSystem.NEW_KEY to 1, "block" to 1, "value" to java.math.BigDecimal("0.5")))))
+        assertTrue(assertIs<CommitResult.Refused>(dup).reason.contains("duplicate"), dup.toString())
+    }
+
+    @Test
+    fun `codegen types a many sibling field as a list of references`() {
+        val src = Codegen.generate(PLATE_MANY, "Plate")
+        val newWell = src.substringAfter("data class NewWell(").substringBefore(") {")
+        assertTrue("val conditions: List<ConditionReference>," in newWell, newWell)
+        assertTrue("put(\"conditions\", conditions.map { when (it) { is ConditionReference.Existing -> system.idOf(it.ref); is ConditionReference.New -> NewRef(reg.tokenOf(it.value)) } })" in src, src)
+    }
 }

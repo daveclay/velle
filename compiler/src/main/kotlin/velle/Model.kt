@@ -407,11 +407,12 @@ class Model(val decls: List<Decl>) {
     }
 
     /**
-     * The stored `one` fields of [shape], arriving at a level of [act]'s closure
-     * declared with [edges] and pointed at by [backRef], that may reference a new
-     * record elsewhere in the same act (Reference §6, "a reference to a value in
-     * the same act"): neither a by-value edge, nor the back-reference, nor the
-     * actor, and typed by a shape some closure shape satisfies.
+     * The stored relationship fields of [shape], `one` or `many`, arriving at a
+     * level of [act]'s closure declared with [edges] and pointed at by [backRef],
+     * that may reference a new record elsewhere in the same act (Reference §6, "a
+     * reference to a value in the same act"): neither a by-value edge, nor the
+     * back-reference, nor the actor, and typed by a shape some closure shape
+     * satisfies. A `many` field's elements are each a handle or a new value.
      */
     fun siblingFields(act: String, shape: String, edges: List<ClosureEdge>, backRef: String?): List<StoredProp> {
         val decl = shapes[shape] ?: return emptyList()
@@ -420,7 +421,7 @@ class Model(val decls: List<Decl>) {
         val created = closureShapes(act) - act
         return decl.members.filterIsInstance<StoredProp>().filter { p ->
             val t = p.type as? RelType ?: return@filter false
-            !t.many && p.name !in byValue && p.name != backRef && created.any { typeAccepts(t.shape, it) }
+            p.name !in byValue && p.name != backRef && created.any { typeAccepts(t.shape, it) }
         }
     }
 

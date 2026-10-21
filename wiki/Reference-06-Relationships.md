@@ -247,6 +247,7 @@ shape Well { container: one Container, position: integer, condition: one Conditi
 - `Well.condition: one Condition` points across the branches. Because a `Condition` arrives in the same closure, the committer may supply this reference as one of the act's own new conditions, or as a condition already on the books.
 - The order of the branches in `with` does not matter. The conditions are created before the wells that point at them.
 - `Well.container` is the back-reference and is filled in by Velle. `ExperimentDesign.containerType` targets a shape the closure never creates, so it takes a reference to an existing record only.
+- A `many` field works the same way. Had the well declared `conditions: many Condition`, each element would be a condition already on the books or one of the act's own new conditions, and the set rule still holds: the same new condition twice is refused.
 
 What the compiler checks:
 

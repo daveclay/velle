@@ -23,6 +23,9 @@ sealed interface Value {
      *  commit's creation list, resolved to a VRef as creations land (Reference §6,
      *  "Inline part creation"). Never escapes applyCommit. */
     data class VPendingRef(val index: Int) : Value
+    /** A `many` field some of whose elements are records this commit creates
+     *  ([VPendingRef] among [VRef]s); resolved to a [VColl] as creations land. */
+    data class VPendingColl(val items: List<Value>, val shape: String) : Value
     data class VDuration(val amount: Long, val unit: String) : Value
     data object VNone : Value
 
@@ -683,7 +686,7 @@ class VelleSystem(
         // a `one` field pointing at a new record elsewhere in this act (OQ63 §6.2.2)
         // is resolved after every value is appended, below
         val (own, siblingRefs) = splitNewRefs(suppliedFields)
-        val supplied = convertFields(decl, own, skipRequired = byValueHere + siblingRefs.keys)
+        val supplied = convertFields(decl, own, skipRequired = byValueHere + siblingRefs.map { it.first })
             ?: return CommitResult.Refused(typeFailure(decl, own))
         val converted = if (actorProp != null) supplied + (actorProp.name to Value.VRef(actor!!)) else supplied
 
@@ -795,10 +798,23 @@ class VelleSystem(
         val refs = mutableListOf<Triple<Int, String, Int>>()
     }
 
-    /** Separate a raw value's [NewRef] fields from the rest. */
-    private fun splitNewRefs(raw: Map<String, Any?>): Pair<Map<String, Any?>, Map<String, Int>> {
-        val refs = raw.filterValues { it is NewRef }.mapValues { (it.value as NewRef).token }
-        return raw.filterKeys { it !in refs } to refs
+    /**
+     * Separate a raw value's [NewRef]s from the rest: a `one` field holding one,
+     * and the [NewRef] elements of a `many` field (the handles stay in the raw
+     * list). Returns the remaining raw fields and (field, token) pairs.
+     */
+    private fun splitNewRefs(raw: Map<String, Any?>): Pair<Map<String, Any?>, List<Pair<String, Int>>> {
+        val refs = mutableListOf<Pair<String, Int>>()
+        val rest = mutableMapOf<String, Any?>()
+        for ((k, v) in raw) when {
+            v is NewRef -> refs.add(k to v.token)
+            v is List<*> && v.any { it is NewRef } -> {
+                v.filterIsInstance<NewRef>().forEach { refs.add(k to it.token) }
+                rest[k] = v.filter { it !is NewRef }
+            }
+            else -> rest[k] = v
+        }
+        return rest to refs
     }
 
     /**
@@ -814,12 +830,29 @@ class VelleSystem(
                 ?: throw PartRefusal("type: '${m.shape}.$field' points at a new record that is not among this act's values")
             val t = fieldTypeOf(m.shape, field) as? RelType
             val targetShape = (out[target] as Mutation.Create).shape
-            if (t == null || t.many || !model.typeAccepts(t.shape, targetShape))
+            if (t == null || !model.typeAccepts(t.shape, targetShape))
                 throw PartRefusal("type: '${m.shape}.$field' takes a ${t?.shape ?: "scalar"}, not a new $targetShape")
-            out[idx] = m.copy(fields = m.fields + (field to Value.VPendingRef(target)))
+            val value: Value = if (!t.many) Value.VPendingRef(target) else {
+                // a `many` field: the handles already converted, plus this new element
+                val items = when (val cur = m.fields[field]) {
+                    is Value.VColl -> cur.ids.map { Value.VRef(it) }
+                    is Value.VPendingColl -> cur.items
+                    else -> emptyList()
+                }
+                if (items.any { it is Value.VPendingRef && it.index == target })
+                    throw PartRefusal("type: duplicate in '${m.shape}.$field' — a `many` is a set (Reference §6)")
+                Value.VPendingColl(items + Value.VPendingRef(target), t.shape)
+            }
+            out[idx] = m.copy(fields = m.fields + (field to value))
         }
         // stable topological order: the earliest record whose references are all placed
-        fun deps(i: Int): List<Int> = (out[i] as Mutation.Create).fields.values.filterIsInstance<Value.VPendingRef>().map { it.index }
+        fun deps(i: Int): List<Int> = (out[i] as Mutation.Create).fields.values.flatMap { v ->
+            when (v) {
+                is Value.VPendingRef -> listOf(v.index)
+                is Value.VPendingColl -> v.items.filterIsInstance<Value.VPendingRef>().map { it.index }
+                else -> emptyList()
+            }
+        }
         val order = mutableListOf<Int>()
         val placed = BooleanArray(out.size)
         while (order.size < out.size) {
@@ -830,9 +863,14 @@ class VelleSystem(
         }
         val remap = IntArray(out.size)
         order.forEachIndexed { newIdx, oldIdx -> remap[oldIdx] = newIdx }
+        fun remapped(v: Value): Value = when (v) {
+            is Value.VPendingRef -> Value.VPendingRef(remap[v.index])
+            is Value.VPendingColl -> Value.VPendingColl(v.items.map { remapped(it) }, v.shape)
+            else -> v
+        }
         val sorted = order.map { oldIdx ->
             val m = out[oldIdx] as Mutation.Create
-            m.copy(fields = m.fields.mapValues { (_, v) -> if (v is Value.VPendingRef) Value.VPendingRef(remap[v.index]) else v })
+            m.copy(fields = m.fields.mapValues { (_, v) -> remapped(v) })
         }
         return sorted to remap
     }
@@ -896,7 +934,7 @@ class VelleSystem(
         duplicateRefusal(decl, own)?.let { throw PartRefusal(it) }
         val nestedParts = children.associate { c -> c.prop to ((raw[c.prop] as? List<Map<String, Any?>>).orEmpty()) }
         val byValueHere = children.filter { it.byValue && nestedParts[it.prop]?.isNotEmpty() == true }.map { it.prop }.toSet()
-        val converted = convertFields(decl, own, skipRequired = skipRequired + byValueHere + siblingRefs.keys)
+        val converted = convertFields(decl, own, skipRequired = skipRequired + byValueHere + siblingRefs.map { it.first })
             ?: throw PartRefusal(typeFailure(decl, own) + " ($what)")
         val index = appendRecord(shape, converted + extra, nestedParts, children, build)
         (raw[NEW_KEY] as? Number)?.toInt()?.let { token ->
@@ -1122,11 +1160,14 @@ class VelleSystem(
                 // a closure part's back-reference lands here: pending index →
                 // the already-created container's id (Reference §6, "Inline part
                 // creation" — materialization order is topological, never observable)
+                fun landed(v: Value): Value = when (v) {
+                    is Value.VPendingRef -> Value.VRef(createdIds[v.index])
+                    is Value.VPendingColl -> Value.VColl(v.items.map { (landed(it) as Value.VRef).id }, v.shape)
+                    else -> v
+                }
                 val resolved =
-                    if (m.fields.values.any { it is Value.VPendingRef })
-                        m.copy(fields = m.fields.mapValues { (_, v) ->
-                            if (v is Value.VPendingRef) Value.VRef(createdIds[v.index]) else v
-                        })
+                    if (m.fields.values.any { it is Value.VPendingRef || it is Value.VPendingColl })
+                        m.copy(fields = m.fields.mapValues { (_, v) -> landed(v) })
                     else m
                 createdIds.add(applyCreate(resolved, t))
             }
@@ -1547,10 +1588,10 @@ class VelleSystem(
             is Value.VVals -> v.values.map { plain(it) }
             is Value.VDuration -> "${v.amount} ${v.unit}"
             Value.VEmpty -> emptyList<Any?>()
-            Value.VNone, is Value.VPendingRef -> null
+            Value.VNone, is Value.VPendingRef, is Value.VPendingColl -> null
         }
         fun snapshot(id: Long) = RecordSnapshot(refOf(id), instance(id)!!.fields
-            .filterValues { it !is Value.VPendingRef }.mapValues { (_, v) -> plain(v) })
+            .filterValues { it !is Value.VPendingRef && it !is Value.VPendingColl }.mapValues { (_, v) -> plain(v) })
         fun idsIn(v: Value): List<Long> = when (v) {
             is Value.VRef -> listOf(v.id)
             is Value.VColl -> v.ids
@@ -1771,7 +1812,7 @@ class VelleSystem(
         is Value.VVals -> v.values.map { unwrap(it) }
         Value.VEmpty -> emptyList<Any?>()
         is Value.VDuration -> v.amount to v.unit
-        is Value.VPendingRef -> throw VelleRuntimeError("pending closure reference escaped its commit")
+        is Value.VPendingRef, is Value.VPendingColl -> throw VelleRuntimeError("pending closure reference escaped its commit")
         Value.VNone -> null
     }
 }

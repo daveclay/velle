@@ -203,7 +203,10 @@ object Codegen {
             val implements = supertypesOf[name].orEmpty().let { if (it.isEmpty()) "" else " : " + it.joinToString(", ") }
             val ov = if (implements.isEmpty()) "" else "override "
             fun target(p: StoredProp) = (p.type as RelType).shape
-            fun refType(p: StoredProp) = referenceTypeName(target(p)) + if (isOptional(p.type)) "?" else ""
+            fun isMany(p: StoredProp) = (p.type as RelType).many
+            // a `many` field's elements are each a handle or a new value (Reference §6)
+            fun refType(p: StoredProp) =
+                if (isMany(p)) "List<${referenceTypeName(target(p))}>" else referenceTypeName(target(p)) + if (isOptional(p.type)) "?" else ""
             fun nestedLine(p: StoredProp) = "(${p.name} as? ${referenceTypeName(target(p))}.New)?.let { put(\"${p.name}\", listOf(it.value.asValue(system, reg))) }"
             val hasParams = required.isNotEmpty() || optional.isNotEmpty() || refFields.isNotEmpty() || parts.isNotEmpty()
             val token = "(reg.tokenOrNull(this)?.let { mapOf(\"${VelleSystem.NEW_KEY}\" to it) } ?: emptyMap())"
@@ -226,8 +229,12 @@ object Codegen {
             line("    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {")
             required.forEach { line("        put(\"${it.name}\", ${rawExpr(it.name, it.type)})") }
             optional.forEach { line("        ${it.name}?.let { put(\"${it.name}\", ${rawExpr("it", it.type)}) }") }
-            refFields.forEach { line("        (${it.name} as? ${referenceTypeName(target(it))}.Existing)?.let { put(\"${it.name}\", system.idOf(it.ref)) }") }
-            sibling.forEach { line("        (${it.name} as? ${referenceTypeName(target(it))}.New)?.let { put(\"${it.name}\", NewRef(reg.tokenOf(it.value))) }") }
+            refFields.filter { !isMany(it) }.forEach { line("        (${it.name} as? ${referenceTypeName(target(it))}.Existing)?.let { put(\"${it.name}\", system.idOf(it.ref)) }") }
+            sibling.filter { !isMany(it) }.forEach { line("        (${it.name} as? ${referenceTypeName(target(it))}.New)?.let { put(\"${it.name}\", NewRef(reg.tokenOf(it.value))) }") }
+            sibling.filter { isMany(it) }.forEach { p ->
+                val r = referenceTypeName(target(p))
+                line("        put(\"${p.name}\", ${p.name}.map { when (it) { is $r.Existing -> system.idOf(it.ref); is $r.New -> NewRef(reg.tokenOf(it.value)) } })")
+            }
             if (!partsApart) {
                 stored.filter { it.name in byValueProps }.forEach { line("        " + nestedLine(it)) }
                 parts.forEach { line("        put(\"${it.prop}\", ${it.prop}.map { it.asValue(system, reg) })") }
