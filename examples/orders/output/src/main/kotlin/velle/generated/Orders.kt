@@ -20,20 +20,42 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCustomer): Commit<NewCustomer> =
-        system.commit("Customer", input.raw(system)).carrying(input)
+    fun commit(input: NewCustomer): Commit<NewCustomer> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Customer", raw).carrying(input)
+    }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewProduct): Commit<NewProduct> =
-        system.commit("Product", input.raw(system)).carrying(input)
+    fun commit(input: NewProduct): Commit<NewProduct> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Product", raw).carrying(input)
+    }
 
     /** Queue key: [order.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewOrder): Commit<NewOrder> =
-        system.commit("Order", input.raw(system), input.parts(system)).carrying(input)
+    fun commit(input: NewOrder): Commit<NewOrder> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        val parts = input.parts(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Order", raw, parts).carrying(input)
+    }
 
     fun customers(): List<Customer> = system.instancesOf("Customer").map { materializeCustomer(it) }
     fun products(): List<Product> = system.instancesOf("Product").map { materializeProduct(it) }
@@ -224,17 +246,23 @@ never (OrderLine where quantity <= 0)
 data class NewCustomer(
     val name: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Customer") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewProduct(
     val sku: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("sku", sku)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Product") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewOrder(
@@ -242,22 +270,29 @@ data class NewOrder(
     val placedOn: LocalDate,
     val orderLines: List<NewOrderLine> = emptyList(),
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("customer", system.idOf(customer))
         put("placedOn", placedOn)
     }
-    internal fun parts(system: VelleSystem): Map<String, List<Map<String, Any?>>> = buildMap {
-        put("orderLines", orderLines.map { it.raw(system) })
+    internal fun parts(system: VelleSystem, reg: NewRegistry): Map<String, List<Map<String, Any?>>> = buildMap {
+        put("orderLines", orderLines.map { it.asValue(system, reg) })
     }
+    fun register(reg: NewRegistry) {
+        orderLines.forEach { reg.add(it); it.register(reg) }
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + parts(system, reg) + ("@shape" to "Order") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 // ── closure input values (Reference §6, "Inline part creation") ──
 data class NewCustomization(
     val note: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("note", note)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Customization") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewOrderLine(
@@ -265,11 +300,15 @@ data class NewOrderLine(
     val quantity: Int,
     val customizations: List<NewCustomization> = emptyList(),
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("product", system.idOf(product))
         put("quantity", quantity)
-        put("customizations", customizations.map { it.raw(system) })
+        put("customizations", customizations.map { it.asValue(system, reg) })
     }
+    fun register(reg: NewRegistry) {
+        customizations.forEach { reg.add(it); it.register(reg) }
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "OrderLine") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 

@@ -824,7 +824,7 @@ object SpecGen {
                             demandGiven(given, "Provide a new '${t.shape}' value to arrive nested in '${shape.name}.${p.name}'; return it uncommitted.", "New${t.shape}")
                             setup.add("// given: a new '${t.shape}', arriving nested in '${p.name}'")
                             setup.add("val $varName = givens.$given()")
-                            parts.add("\"${p.name}\" to listOf($varName.asValue(sys.system))")
+                            parts.add("\"${p.name}\" to listOf($varName.asValue(sys.system, velle.NewRegistry()))")
                             continue
                         }
                         val given = "some${t.shape}"

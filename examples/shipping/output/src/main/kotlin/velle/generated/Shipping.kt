@@ -20,22 +20,43 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewOrder): Commit<NewOrder> =
-        system.commit("Order", input.raw(system)).carrying(input)
+    fun commit(input: NewOrder): Commit<NewOrder> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Order", raw).carrying(input)
+    }
 
     /** Queue keys: [cancellation.order] — plus system-wide width below.
      *  System-wide over Shipment — reads Shipment.order with no path back to any key (unexamined (A5)).
      *  System-wide over Cancellation — consults Cancellation through 'cancellations' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCancellation): Commit<NewCancellation> =
-        system.commit("Cancellation", input.raw(system)).carrying(input)
+    fun commit(input: NewCancellation): Commit<NewCancellation> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Cancellation", raw).carrying(input)
+    }
 
     /** Queue key: [shipment.order].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewShipment): Commit<NewShipment> =
-        system.commit("Shipment", input.raw(system)).carrying(input)
+    fun commit(input: NewShipment): Commit<NewShipment> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Shipment", raw).carrying(input)
+    }
 
     fun orders(): List<Order> = system.instancesOf("Order").map { materializeOrder(it) }
     fun cancellations(): List<Cancellation> = system.instancesOf("Cancellation").map { materializeCancellation(it) }
@@ -227,29 +248,38 @@ never (Shipment where order is CancelledOrder)
 data class NewOrder(
     val reference: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("reference", reference)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Order") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewCancellation(
     val order: Ref<Order>,
     val requestedOn: LocalDate,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("order", system.idOf(order))
         put("requestedOn", requestedOn)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Cancellation") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewShipment(
     val order: Ref<Order>,
     val shippedOn: LocalDate,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("order", system.idOf(order))
         put("shippedOn", shippedOn)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Shipment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 

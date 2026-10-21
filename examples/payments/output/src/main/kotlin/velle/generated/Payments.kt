@@ -25,8 +25,15 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewContact): Commit<NewContact> =
-        system.commit("Contact", input.raw(system)).carrying(input)
+    fun commit(input: NewContact): Commit<NewContact> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Contact", raw).carrying(input)
+    }
 
     /** Queue keys: [card.billingContact] — plus system-wide width below.
      *  System-wide over Order — reads Order.customer with no path back to any key (unexamined (A5)).
@@ -74,8 +81,15 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over DunningResolution — consults DunningResolution through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCard): Commit<NewCard> =
-        system.commit("Card", input.raw(system)).carrying(input)
+    fun commit(input: NewCard): Commit<NewCard> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Card", raw).carrying(input)
+    }
 
     /** Queue keys: [customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
@@ -104,8 +118,15 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCustomer): Commit<NewCustomer> =
-        system.commit("Customer", input.raw(system)).carrying(input)
+    fun commit(input: NewCustomer): Commit<NewCustomer> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Customer", raw).carrying(input)
+    }
 
     /** Queue keys: [cardUpdate.card], [cardUpdate.customer], [cardUpdate.customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
@@ -134,8 +155,15 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCardUpdate): Commit<NewCardUpdate> =
-        system.commit("CardUpdate", input.raw(system)).carrying(input)
+    fun commit(input: NewCardUpdate): Commit<NewCardUpdate> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("CardUpdate", raw).carrying(input)
+    }
 
     /** Queue keys: [placeOrder.customer], [placeOrder.customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
@@ -164,8 +192,15 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPlaceOrder): Commit<NewPlaceOrder> =
-        system.commit("PlaceOrder", input.raw(system)).carrying(input)
+    fun commit(input: NewPlaceOrder): Commit<NewPlaceOrder> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("PlaceOrder", raw).carrying(input)
+    }
 
     /** Queue keys: [processorVerdict.attempt] — plus system-wide width below.
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
@@ -213,14 +248,28 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeAttempt — consults ChargeAttempt through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewProcessorVerdict): Commit<NewProcessorVerdict> =
-        system.commit("ProcessorVerdict", input.raw(system)).carrying(input)
+    fun commit(input: NewProcessorVerdict): Commit<NewProcessorVerdict> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("ProcessorVerdict", raw).carrying(input)
+    }
 
     /** Queue keys: [changeShippingAddress.order], [changeShippingAddress.order.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewChangeShippingAddress): Commit<NewChangeShippingAddress> =
-        system.commit("ChangeShippingAddress", input.raw(system)).carrying(input)
+    fun commit(input: NewChangeShippingAddress): Commit<NewChangeShippingAddress> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("ChangeShippingAddress", raw).carrying(input)
+    }
 
     /** Queue keys: [issueRefund.order] — plus system-wide width below.
      *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
@@ -245,8 +294,15 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewIssueRefund): Commit<NewIssueRefund> =
-        system.commit("IssueRefund", input.raw(system)).carrying(input)
+    fun commit(input: NewIssueRefund): Commit<NewIssueRefund> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("IssueRefund", raw).carrying(input)
+    }
 
     /** Queue keys: [manualCharge.order], [manualCharge.order.customer], [manualCharge.order.customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
@@ -275,14 +331,28 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewManualCharge): Commit<NewManualCharge> =
-        system.commit("ManualCharge", input.raw(system)).carrying(input)
+    fun commit(input: NewManualCharge): Commit<NewManualCharge> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("ManualCharge", raw).carrying(input)
+    }
 
     /** Queue key: [extensionRequest.order].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewExtensionRequest): Commit<NewExtensionRequest> =
-        system.commit("ExtensionRequest", input.raw(system)).carrying(input)
+    fun commit(input: NewExtensionRequest): Commit<NewExtensionRequest> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("ExtensionRequest", raw).carrying(input)
+    }
 
     fun contacts(): List<Contact> = system.instancesOf("Contact").map { materializeContact(it) }
     fun cards(): List<Card> = system.instancesOf("Card").map { materializeCard(it) }
@@ -2051,10 +2121,13 @@ data class NewContact(
     val name: String,
     val email: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("email", email)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Contact") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewCard(
@@ -2062,31 +2135,40 @@ data class NewCard(
     val expiresOn: LocalDate,
     val billingContact: Ref<Contact>? = null,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("number", number)
         put("expiresOn", expiresOn)
         billingContact?.let { put("billingContact", system.idOf(it)) }
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Card") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewCustomer(
     val name: String,
     val card: Ref<Card>? = null,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         card?.let { put("card", system.idOf(it)) }
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Customer") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewCardUpdate(
     val customer: Ref<Customer>,
     val card: Ref<Card>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("customer", system.idOf(customer))
         put("card", system.idOf(card))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CardUpdate") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewPlaceOrder(
@@ -2095,58 +2177,76 @@ data class NewPlaceOrder(
     val dueBy: LocalDate,
     val shippingAddress: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("customer", system.idOf(customer))
         put("amount", amount)
         put("dueBy", dueBy)
         put("shippingAddress", shippingAddress)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "PlaceOrder") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewProcessorVerdict(
     val attempt: Ref<ChargeAttempt>,
     val outcome: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("attempt", system.idOf(attempt))
         put("outcome", outcome)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ProcessorVerdict") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewChangeShippingAddress(
     val order: Ref<Order>,
     val newAddress: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("order", system.idOf(order))
         put("newAddress", newAddress)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ChangeShippingAddress") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewIssueRefund(
     val order: Ref<Order>,
     val amount: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("order", system.idOf(order))
         put("amount", amount)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "IssueRefund") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewManualCharge(
     val order: Ref<Order>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("order", system.idOf(order))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ManualCharge") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewExtensionRequest(
     val order: Ref<Order>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("order", system.idOf(order))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ExtensionRequest") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 

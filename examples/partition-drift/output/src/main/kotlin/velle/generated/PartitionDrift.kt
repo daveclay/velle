@@ -20,44 +20,93 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCreateNote): Commit<NewCreateNote> =
-        system.commit("CreateNote", input.raw(system)).carrying(input)
+    fun commit(input: NewCreateNote): Commit<NewCreateNote> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("CreateNote", raw).carrying(input)
+    }
 
     /** Queue key: [lockNote.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewLockNote): Commit<NewLockNote> =
-        system.commit("LockNote", input.raw(system)).carrying(input)
+    fun commit(input: NewLockNote): Commit<NewLockNote> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("LockNote", raw).carrying(input)
+    }
 
     /** Queue key: [unlockNote.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewUnlockNote): Commit<NewUnlockNote> =
-        system.commit("UnlockNote", input.raw(system)).carrying(input)
+    fun commit(input: NewUnlockNote): Commit<NewUnlockNote> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("UnlockNote", raw).carrying(input)
+    }
 
     /** Queue key: [renameText.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRenameText): Commit<NewRenameText> =
-        system.commit("RenameText", input.raw(system)).carrying(input)
+    fun commit(input: NewRenameText): Commit<NewRenameText> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("RenameText", raw).carrying(input)
+    }
 
     /** Queue key: [bareEdit.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewBareEdit): Commit<NewBareEdit> =
-        system.commit("BareEdit", input.raw(system)).carrying(input)
+    fun commit(input: NewBareEdit): Commit<NewBareEdit> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("BareEdit", raw).carrying(input)
+    }
 
     /** Queue key: [safeEdit.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSafeEdit): Commit<NewSafeEdit> =
-        system.commit("SafeEdit", input.raw(system)).carrying(input)
+    fun commit(input: NewSafeEdit): Commit<NewSafeEdit> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("SafeEdit", raw).carrying(input)
+    }
 
     /** Queue key: [transientEdit.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewTransientEdit): Commit<NewTransientEdit> =
-        system.commit("TransientEdit", input.raw(system)).carrying(input)
+    fun commit(input: NewTransientEdit): Commit<NewTransientEdit> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("TransientEdit", raw).carrying(input)
+    }
 
     fun notes(): List<Note> = system.instancesOf("Note").map { materializeNote(it) }
     fun lockNotes(): List<LockNote> = system.instancesOf("LockNote").map { materializeLockNote(it) }
@@ -583,66 +632,87 @@ data class NewCreateNote(
     val title: String,
     val body: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("title", title)
         put("body", body)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CreateNote") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewLockNote(
     val note: Ref<Note>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("note", system.idOf(note))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "LockNote") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewUnlockNote(
     val note: Ref<Note>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("note", system.idOf(note))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "UnlockNote") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewRenameText(
     val note: Ref<Note>,
     val newText: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("note", system.idOf(note))
         put("newText", newText)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "RenameText") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewBareEdit(
     val note: Ref<Note>,
     val newText: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("note", system.idOf(note))
         put("newText", newText)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "BareEdit") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewSafeEdit(
     val note: Ref<Note>,
     val newTitle: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("note", system.idOf(note))
         put("newTitle", newTitle)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "SafeEdit") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewTransientEdit(
     val note: Ref<Note>,
     val newTitle: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("note", system.idOf(note))
         put("newTitle", newTitle)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "TransientEdit") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 

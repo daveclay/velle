@@ -392,6 +392,38 @@ class Model(val decls: List<Decl>) {
         return ClosureEdge(entry.name, target, backRef = "", children = children, byValue = true, owner = scope)
     }
 
+    /**
+     * Every shape a commit of [act] may create (Reference §6; OQ63 §6.2.2): the
+     * act, its parts, the operands of its `one` fields named in `with`, recursively.
+     */
+    fun closureShapes(act: String): Set<String> {
+        val out = linkedSetOf(act)
+        fun visit(e: ClosureEdge) {
+            if (e.byValue) out.addAll(basesOf(e.partShape)) else out.add(e.partShape)
+            e.children.forEach { visit(it) }
+        }
+        closures[act].orEmpty().forEach { visit(it) }
+        return out
+    }
+
+    /**
+     * The stored `one` fields of [shape], arriving at a level of [act]'s closure
+     * declared with [edges] and pointed at by [backRef], that may reference a new
+     * record elsewhere in the same act (Reference §6, "a reference to a value in
+     * the same act"): neither a by-value edge, nor the back-reference, nor the
+     * actor, and typed by a shape some closure shape satisfies.
+     */
+    fun siblingFields(act: String, shape: String, edges: List<ClosureEdge>, backRef: String?): List<StoredProp> {
+        val decl = shapes[shape] ?: return emptyList()
+        val byValue = edges.filter { it.byValue }.map { it.prop }.toSet()
+        // the act itself is reached by a part's back-reference, never by a sibling reference
+        val created = closureShapes(act) - act
+        return decl.members.filterIsInstance<StoredProp>().filter { p ->
+            val t = p.type as? RelType ?: return@filter false
+            !t.many && p.name !in byValue && p.name != backRef && created.any { typeAccepts(t.shape, it) }
+        }
+    }
+
     /** The recognized inverse form `(P where field == this)` (Reference §6, the
      *  `Transfer` example): the view pins the language-populated back-reference. */
     private fun recognizedInverse(scope: String, d: DerivedProp): Pair<String, String>? {

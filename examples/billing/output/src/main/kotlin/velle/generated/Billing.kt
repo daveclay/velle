@@ -24,56 +24,119 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSignUp): Commit<NewSignUp> =
-        system.commit("SignUp", input.raw(system)).carrying(input)
+    fun commit(input: NewSignUp): Commit<NewSignUp> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("SignUp", raw).carrying(input)
+    }
 
     /** Queue key: [correctEmail.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCorrectEmail): Commit<NewCorrectEmail> =
-        system.commit("CorrectEmail", input.raw(system)).carrying(input)
+    fun commit(input: NewCorrectEmail): Commit<NewCorrectEmail> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("CorrectEmail", raw).carrying(input)
+    }
 
     /** Queue key: [billCustomer.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewBillCustomer): Commit<NewBillCustomer> =
-        system.commit("BillCustomer", input.raw(system)).carrying(input)
+    fun commit(input: NewBillCustomer): Commit<NewBillCustomer> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("BillCustomer", raw).carrying(input)
+    }
 
     /** Queue key: [lineItem.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewLineItem): Commit<NewLineItem> =
-        system.commit("LineItem", input.raw(system)).carrying(input)
+    fun commit(input: NewLineItem): Commit<NewLineItem> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("LineItem", raw).carrying(input)
+    }
 
     /** Queue keys: [submitPayment.invoice], [submitPayment.invoice.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSubmitPayment): Commit<NewSubmitPayment> =
-        system.commit("SubmitPayment", input.raw(system)).carrying(input)
+    fun commit(input: NewSubmitPayment): Commit<NewSubmitPayment> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("SubmitPayment", raw).carrying(input)
+    }
 
     /** Queue key: [issuance.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewIssuance): Commit<NewIssuance> =
-        system.commit("Issuance", input.raw(system)).carrying(input)
+    fun commit(input: NewIssuance): Commit<NewIssuance> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Issuance", raw).carrying(input)
+    }
 
     /** Queue keys: [changeDueDate.invoice], [changeDueDate.invoice.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewChangeDueDate): Commit<NewChangeDueDate> =
-        system.commit("ChangeDueDate", input.raw(system)).carrying(input)
+    fun commit(input: NewChangeDueDate): Commit<NewChangeDueDate> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("ChangeDueDate", raw).carrying(input)
+    }
 
     /** Queue key: [archiveRequest.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewArchiveRequest): Commit<NewArchiveRequest> =
-        system.commit("ArchiveRequest", input.raw(system)).carrying(input)
+    fun commit(input: NewArchiveRequest): Commit<NewArchiveRequest> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("ArchiveRequest", raw).carrying(input)
+    }
 
     /** Queue key: [unarchiveRequest.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewUnarchiveRequest): Commit<NewUnarchiveRequest> =
-        system.commit("UnarchiveRequest", input.raw(system)).carrying(input)
+    fun commit(input: NewUnarchiveRequest): Commit<NewUnarchiveRequest> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("UnarchiveRequest", raw).carrying(input)
+    }
 
     fun customers(): List<Customer> = system.instancesOf("Customer").map { materializeCustomer(it) }
     fun correctEmails(): List<CorrectEmail> = system.instancesOf("CorrectEmail").map { materializeCorrectEmail(it) }
@@ -775,30 +838,39 @@ data class NewSignUp(
     val name: String,
     val email: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("email", email)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "SignUp") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewCorrectEmail(
     val customer: Ref<Customer>,
     val corrected: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("customer", system.idOf(customer))
         put("corrected", corrected)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CorrectEmail") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewBillCustomer(
     val customer: Ref<Customer>,
     val due: LocalDate,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("customer", system.idOf(customer))
         put("due", due)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "BillCustomer") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewLineItem(
@@ -807,56 +879,74 @@ data class NewLineItem(
     val price: BigDecimal,
     val quantity: Int,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("invoice", system.idOf(invoice))
         put("description", description)
         put("price", price)
         put("quantity", quantity)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "LineItem") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewSubmitPayment(
     val invoice: Ref<Invoice>,
     val amount: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("invoice", system.idOf(invoice))
         put("amount", amount)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "SubmitPayment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewIssuance(
     val invoice: Ref<Invoice>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("invoice", system.idOf(invoice))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Issuance") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewChangeDueDate(
     val invoice: Ref<Invoice>,
     val newDue: LocalDate,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("invoice", system.idOf(invoice))
         put("newDue", newDue)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ChangeDueDate") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewArchiveRequest(
     val invoice: Ref<Invoice>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("invoice", system.idOf(invoice))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ArchiveRequest") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewUnarchiveRequest(
     val invoice: Ref<Invoice>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("invoice", system.idOf(invoice))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "UnarchiveRequest") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 

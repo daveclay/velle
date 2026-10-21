@@ -21,22 +21,43 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssignVendor, actor: Ref<Staff>): Commit<NewAssignVendor> =
-        system.commit("AssignVendor", input.raw(system), actor = system.idOf(actor)).carrying(input)
+    fun commit(input: NewAssignVendor, actor: Ref<Staff>): Commit<NewAssignVendor> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("AssignVendor", raw, actor = system.idOf(actor)).carrying(input)
+    }
 
     /** Queue keys: [listProduct.vendor] — plus system-wide width below.
      *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewListProduct, actor: Ref<Staff>): Commit<NewListProduct> =
-        system.commit("ListProduct", input.raw(system), actor = system.idOf(actor)).carrying(input)
+    fun commit(input: NewListProduct, actor: Ref<Staff>): Commit<NewListProduct> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("ListProduct", raw, actor = system.idOf(actor)).carrying(input)
+    }
 
     /** Queue keys: [changePrice.product], [changePrice.product.vendor] — plus system-wide width below.
      *  System-wide over VendorAssignment — consults VendorAssignment correlated through 'staff' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewChangePrice, actor: Ref<Staff>): Commit<NewChangePrice> =
-        system.commit("ChangePrice", input.raw(system), actor = system.idOf(actor)).carrying(input)
+    fun commit(input: NewChangePrice, actor: Ref<Staff>): Commit<NewChangePrice> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("ChangePrice", raw, actor = system.idOf(actor)).carrying(input)
+    }
 
     fun staffs(): List<Staff> = system.instancesOf("Staff").map { materializeStaff(it) }
     fun vendorAssignments(): List<VendorAssignment> = system.instancesOf("VendorAssignment").map { materializeVendorAssignment(it) }
@@ -404,10 +425,13 @@ data class NewAssignVendor(
     val staff: Ref<Staff>,
     val vendor: Ref<Vendor>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("staff", system.idOf(staff))
         put("vendor", system.idOf(vendor))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "AssignVendor") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewListProduct(
@@ -416,22 +440,28 @@ data class NewListProduct(
     val price: BigDecimal,
     val cost: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("vendor", system.idOf(vendor))
         put("name", name)
         put("price", price)
         put("cost", cost)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ListProduct") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewChangePrice(
     val product: Ref<Product>,
     val price: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("product", system.idOf(product))
         put("price", price)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ChangePrice") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 

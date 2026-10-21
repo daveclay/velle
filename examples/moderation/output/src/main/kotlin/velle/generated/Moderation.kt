@@ -20,38 +20,80 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSeller): Commit<NewSeller> =
-        system.commit("Seller", input.raw(system)).carrying(input)
+    fun commit(input: NewSeller): Commit<NewSeller> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Seller", raw).carrying(input)
+    }
 
     /** Queue key: [listing.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewListing): Commit<NewListing> =
-        system.commit("Listing", input.raw(system)).carrying(input)
+    fun commit(input: NewListing): Commit<NewListing> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Listing", raw).carrying(input)
+    }
 
     /** Queue keys: [publish.listing], [publish.listing.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPublish): Commit<NewPublish> =
-        system.commit("Publish", input.raw(system)).carrying(input)
+    fun commit(input: NewPublish): Commit<NewPublish> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Publish", raw).carrying(input)
+    }
 
     /** Queue key: [listingReport.listing].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewListingReport): Commit<NewListingReport> =
-        system.commit("ListingReport", input.raw(system)).carrying(input)
+    fun commit(input: NewListingReport): Commit<NewListingReport> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("ListingReport", raw).carrying(input)
+    }
 
     /** Queue keys: [discardDraft.listing], [discardDraft.listing.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewDiscardDraft): Commit<NewDiscardDraft> =
-        system.commit("DiscardDraft", input.raw(system)).carrying(input)
+    fun commit(input: NewDiscardDraft): Commit<NewDiscardDraft> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("DiscardDraft", raw).carrying(input)
+    }
 
     /** Queue key: [closeAccount.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCloseAccount): Commit<NewCloseAccount> =
-        system.commit("CloseAccount", input.raw(system)).carrying(input)
+    fun commit(input: NewCloseAccount): Commit<NewCloseAccount> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("CloseAccount", raw).carrying(input)
+    }
 
     fun sellers(): List<Seller> = system.instancesOf("Seller").map { materializeSeller(it) }
     fun listings(): List<Listing> = system.instancesOf("Listing").map { materializeListing(it) }
@@ -533,9 +575,12 @@ rule SweepOrphanedDrafts when (OrphanedListing where isDraft) {
 data class NewSeller(
     val name: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Seller") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewListing(
@@ -543,19 +588,25 @@ data class NewListing(
     val seller: Ref<Seller>,
     val isDraft: Boolean? = null,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("title", title)
         put("seller", system.idOf(seller))
         isDraft?.let { put("isDraft", it) }
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Listing") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewPublish(
     val listing: Ref<Listing>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("listing", system.idOf(listing))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Publish") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewListingReport(
@@ -563,29 +614,38 @@ data class NewListingReport(
     val listingTitle: String,
     val reason: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("listing", system.idOf(listing))
         put("listingTitle", listingTitle)
         put("reason", reason)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ListingReport") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewDiscardDraft(
     val listing: Ref<Listing>,
     val reason: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("listing", system.idOf(listing))
         put("reason", reason)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "DiscardDraft") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewCloseAccount(
     val seller: Ref<Seller>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("seller", system.idOf(seller))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CloseAccount") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 

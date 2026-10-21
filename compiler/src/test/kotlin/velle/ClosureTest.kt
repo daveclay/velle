@@ -348,7 +348,7 @@ class ClosureTest {
         // the act's input value takes the closure edge, absent by default, and
         // the commit overload takes the input value
         assertTrue("orderLines: List<NewOrderLine> = emptyList()" in src, src)
-        assertTrue("fun commit(input: NewOrder): Commit<NewOrder>" in src, src)
+        assertTrue("fun commit(input: NewOrder): Commit<NewOrder> {" in src, src)
     }
 
     // ── a reference supplied by value: a `one` field named in `with` (Reference §6; OQ63 §6.1) ──
@@ -513,11 +513,128 @@ class ClosureTest {
         assertTrue("sealed interface OriginReference {" in src, src)
         assertTrue("data class Existing(val ref: Ref<Origin>) : OriginReference" in src, src)
         assertTrue("data class New(val value: NewOrigin) : OriginReference" in src, src)
-        assertTrue("sealed interface NewOrigin { fun asValue(system: VelleSystem): Map<String, Any?> }" in src, src)
+        assertTrue("sealed interface NewOrigin {" in src, src)
         assertTrue("data class NewFermentation(" in src && ") : NewOrigin {" in src, src)
         assertTrue("val origin: OriginReference," in src, src)
         assertTrue("val components: List<NewComponent> = emptyList()" in src, src)
         assertTrue("(origin as? OriginReference.Existing)?.let { put(\"origin\", system.idOf(it.ref)) }" in src, src)
-        assertTrue("(origin as? OriginReference.New)?.let { put(\"origin\", listOf(it.value.asValue(system))) }" in src, src)
+        assertTrue("(origin as? OriginReference.New)?.let { put(\"origin\", listOf(it.value.asValue(system, reg))) }" in src, src)
+    }
+
+    // ── a reference to a new record elsewhere in the same act (Reference §6; OQ63 §6.2.2) ──
+
+    private val PLATE = """
+        act ContainerType { name: text, wellsPerContainer: integer }
+
+        act ExperimentDesign {
+            containerType: one ContainerType
+            containerCount: integer
+            replicates: integer
+        } with { containers with { wells }, conditions }
+
+        shape Condition { design: one ExperimentDesign, block: integer, value: decimal }
+        shape Container { design: one ExperimentDesign, replicate: integer, position: integer }
+        shape Well { container: one Container, position: integer, condition: one Condition }
+    """.trimIndent()
+
+    private fun VelleSystem.plateType(): Long = mustCommit("ContainerType", mapOf("name" to "96-well", "wellsPerContainer" to 96))
+
+    @Test
+    fun `the model names the fields that may point at a sibling`() {
+        val model = Model(Parser.parse(PLATE))
+        assertEquals(setOf("ExperimentDesign", "Container", "Well", "Condition"), model.closureShapes("ExperimentDesign"))
+        val edges = model.closures.getValue("ExperimentDesign")
+        val wells = edges.single { it.prop == "containers" }.children.single()
+        assertEquals(listOf("condition"), model.siblingFields("ExperimentDesign", "Well", wells.children, wells.backRef).map { it.name })
+        assertEquals(emptyList(), model.siblingFields("ExperimentDesign", "Condition", emptyList(), "design").map { it.name })
+        assertEquals(emptyList(), model.siblingFields("ExperimentDesign", "ExperimentDesign", edges, null).map { it.name })
+    }
+
+    @Test
+    fun `a well points at a condition in another branch, whatever the order of the branches`() {
+        val sys = system(PLATE)
+        val type = sys.plateType()
+        val low = mapOf(VelleSystem.NEW_KEY to 1, "block" to 1, "value" to java.math.BigDecimal("0.1"))
+        val high = mapOf(VelleSystem.NEW_KEY to 2, "block" to 2, "value" to java.math.BigDecimal("1.0"))
+        // the containers branch is declared first and references the conditions branch: a forward reference
+        val design = sys.mustCommit(
+            "ExperimentDesign", mapOf("containerType" to type, "containerCount" to 1, "replicates" to 1),
+            mapOf(
+                "containers" to listOf(mapOf("replicate" to 1, "position" to 1, "wells" to listOf(
+                    mapOf("position" to 1, "condition" to NewRef(1)),
+                    mapOf("position" to 2, "condition" to NewRef(2)),
+                    mapOf("position" to 3, "condition" to NewRef(1)),
+                ))),
+                "conditions" to listOf(low, high),
+            ),
+        )
+        val conditions = sys.instancesOf("Condition").sortedBy { (sys.get(it, "block") as Number).toLong() }
+        assertEquals(2, conditions.size)
+        val wells = sys.instancesOf("Well").sortedBy { (sys.get(it, "position") as Number).toLong() }
+        assertEquals(listOf(conditions[0], conditions[1], conditions[0]), wells.map { sys.get(it, "condition") })
+        assertEquals(design, sys.get(conditions[0], "design"))
+        assertEquals(sys.instancesOf("Container").single(), sys.get(wells[0], "container"))
+    }
+
+    @Test
+    fun `a sibling reference may also be supplied by handle`() {
+        val sys = system(PLATE)
+        val type = sys.plateType()
+        val first = sys.mustCommit("ExperimentDesign", mapOf("containerType" to type, "containerCount" to 1, "replicates" to 1),
+            mapOf("conditions" to listOf(mapOf("block" to 1, "value" to java.math.BigDecimal("0.1")))))
+        val existing = sys.instancesOf("Condition").single()
+        sys.mustCommit("ExperimentDesign", mapOf("containerType" to type, "containerCount" to 1, "replicates" to 1),
+            mapOf("containers" to listOf(mapOf("replicate" to 1, "position" to 1, "wells" to listOf(mapOf("position" to 1, "condition" to existing))))))
+        assertEquals(existing, sys.get(sys.instancesOf("Well").single(), "condition"))
+        first.hashCode()
+    }
+
+    @Test
+    fun `refusals - a reference to no value, a value created twice, a wrong shape, a cycle`() {
+        val sys = system(PLATE)
+        val type = sys.plateType()
+        val fields = mapOf("containerType" to type, "containerCount" to 1, "replicates" to 1)
+        val nowhere = sys.commit("ExperimentDesign", fields, mapOf("containers" to listOf(mapOf("replicate" to 1, "position" to 1,
+            "wells" to listOf(mapOf("position" to 1, "condition" to NewRef(7)))))))
+        assertTrue(assertIs<CommitResult.Refused>(nowhere).reason.contains("not among this act's values"), nowhere.toString())
+        val twice = sys.commit("ExperimentDesign", fields, mapOf("conditions" to listOf(
+            mapOf(VelleSystem.NEW_KEY to 1, "block" to 1, "value" to java.math.BigDecimal("0.1")),
+            mapOf(VelleSystem.NEW_KEY to 1, "block" to 2, "value" to java.math.BigDecimal("0.2")))))
+        assertTrue(assertIs<CommitResult.Refused>(twice).reason.contains("two creating positions"), twice.toString())
+        val wrong = sys.commit("ExperimentDesign", fields, mapOf(
+            "containers" to listOf(mapOf(VelleSystem.NEW_KEY to 1, "replicate" to 1, "position" to 1,
+                "wells" to listOf(mapOf("position" to 1, "condition" to NewRef(1)))))))
+        assertTrue(assertIs<CommitResult.Refused>(wrong).reason.contains("not a new Container"), wrong.toString())
+        assertEquals(0, sys.instancesOf("Well").size)
+
+        val cyclic = system("""
+            act Pairing { note: text } with { lefts, rights }
+            shape Left { pairing: one Pairing, partner: one Right? }
+            shape Right { pairing: one Pairing, partner: one Left? }
+        """.trimIndent())
+        val cycle = cyclic.commit("Pairing", mapOf("note" to "n"), mapOf(
+            "lefts" to listOf(mapOf(VelleSystem.NEW_KEY to 1, "partner" to NewRef(2))),
+            "rights" to listOf(mapOf(VelleSystem.NEW_KEY to 2, "partner" to NewRef(1)))))
+        assertTrue(assertIs<CommitResult.Refused>(cycle).reason.contains("cycle"), cycle.toString())
+        // one way round is fine
+        cyclic.mustCommit("Pairing", mapOf("note" to "n"), mapOf(
+            "lefts" to listOf(mapOf(VelleSystem.NEW_KEY to 1)),
+            "rights" to listOf(mapOf("partner" to NewRef(1)))))
+        assertEquals(cyclic.instancesOf("Left").single(), cyclic.get(cyclic.instancesOf("Right").single(), "partner"))
+    }
+
+    @Test
+    fun `codegen types a sibling field with the reference type and resolves it in the commit function`() {
+        val src = Codegen.generate(PLATE, "Plate")
+        assertTrue("sealed interface ConditionReference {" in src, src)
+        assertTrue("data class New(val value: NewCondition) : ConditionReference" in src, src)
+        val newWell = src.substringAfter("data class NewWell(").substringBefore(") {")
+        assertTrue("val condition: ConditionReference," in newWell, newWell)
+        assertTrue("(condition as? ConditionReference.New)?.let { put(\"condition\", NewRef(reg.tokenOf(it.value))) }" in src, src)
+        assertTrue("conditions.forEach { reg.add(it); it.register(reg) }" in src, src)
+        assertTrue("reg.problem()?.let { return Commit.Refused(input, it) }" in src, src)
+        // a field no closure shape satisfies keeps the plain handle
+        val newDesign = src.substringAfter("data class NewExperimentDesign(").substringBefore(") {")
+        assertTrue("val containerType: Ref<ContainerType>," in newDesign, newDesign)
     }
 }

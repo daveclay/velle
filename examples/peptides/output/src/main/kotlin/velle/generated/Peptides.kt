@@ -24,38 +24,80 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCrop): Commit<NewCrop> =
-        system.commit("Crop", input.raw(system)).carrying(input)
+    fun commit(input: NewCrop): Commit<NewCrop> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Crop", raw).carrying(input)
+    }
 
     /** Queue key: [pathogen.host].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPathogen): Commit<NewPathogen> =
-        system.commit("Pathogen", input.raw(system)).carrying(input)
+    fun commit(input: NewPathogen): Commit<NewPathogen> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Pathogen", raw).carrying(input)
+    }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPeptide): Commit<NewPeptide> =
-        system.commit("Peptide", input.raw(system)).carrying(input)
+    fun commit(input: NewPeptide): Commit<NewPeptide> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Peptide", raw).carrying(input)
+    }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssayProtocol): Commit<NewAssayProtocol> =
-        system.commit("AssayProtocol", input.raw(system)).carrying(input)
+    fun commit(input: NewAssayProtocol): Commit<NewAssayProtocol> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("AssayProtocol", raw).carrying(input)
+    }
 
     /** Queue keys: [labExperiment.pathogen], [labExperiment.peptide], [labExperiment.protocol].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewLabExperiment): Commit<NewLabExperiment> =
-        system.commit("LabExperiment", input.raw(system)).carrying(input)
+    fun commit(input: NewLabExperiment): Commit<NewLabExperiment> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("LabExperiment", raw).carrying(input)
+    }
 
     /** Queue keys: [assay.experiment], [assay.experiment.protocol].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssay): Commit<NewAssay> =
-        system.commit("Assay", input.raw(system)).carrying(input)
+    fun commit(input: NewAssay): Commit<NewAssay> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Assay", raw).carrying(input)
+    }
 
     /** Queue keys: [assayReading.assay] — plus system-wide width below.
      *  System-wide over Assay — consults Assay through 'assays' with no keyable owner (unexamined (A5)).
@@ -70,8 +112,15 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over LabHitRetraction — creates LabHitRetraction referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssayReading): Commit<NewAssayReading> =
-        system.commit("AssayReading", input.raw(system)).carrying(input)
+    fun commit(input: NewAssayReading): Commit<NewAssayReading> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("AssayReading", raw).carrying(input)
+    }
 
     /** Queue: system-wide.
      *  System-wide over ClimateReading — consults ClimateReading through 'climateReadings' with no keyable owner (unexamined (A5)).
@@ -82,8 +131,15 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Greenhouse — reads Greenhouse.minTemperature with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewGreenhouse): Commit<NewGreenhouse> =
-        system.commit("Greenhouse", input.raw(system)).carrying(input)
+    fun commit(input: NewGreenhouse): Commit<NewGreenhouse> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Greenhouse", raw).carrying(input)
+    }
 
     /** Queue keys: [climateReading.greenhouse] — plus system-wide width below.
      *  System-wide over ExcursionEnd — consults ExcursionEnd through a path the derivation cannot key (unexamined (A5)).
@@ -96,15 +152,29 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ExcursionEnd — consults ExcursionEnd through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewClimateReading): Commit<NewClimateReading> =
-        system.commit("ClimateReading", input.raw(system)).carrying(input)
+    fun commit(input: NewClimateReading): Commit<NewClimateReading> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("ClimateReading", raw).carrying(input)
+    }
 
     /** Queue: system-wide.
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewGreenhouseProtocol): Commit<NewGreenhouseProtocol> =
-        system.commit("GreenhouseProtocol", input.raw(system)).carrying(input)
+    fun commit(input: NewGreenhouseProtocol): Commit<NewGreenhouseProtocol> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("GreenhouseProtocol", raw).carrying(input)
+    }
 
     /** Queue keys: [requestGreenhouseTrial.greenhouse], [requestGreenhouseTrial.pathogen], [requestGreenhouseTrial.peptide], [requestGreenhouseTrial.protocol] — plus system-wide width below.
      *  System-wide over AssayProtocol — reads AssayProtocol.durationHours with no path back to any key (unexamined (A5)).
@@ -112,15 +182,29 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRequestGreenhouseTrial): Commit<NewRequestGreenhouseTrial> =
-        system.commit("RequestGreenhouseTrial", input.raw(system)).carrying(input)
+    fun commit(input: NewRequestGreenhouseTrial): Commit<NewRequestGreenhouseTrial> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("RequestGreenhouseTrial", raw).carrying(input)
+    }
 
     /** Queue keys: [greenhousePlot.trial], [greenhousePlot.trial.protocol] — plus system-wide width below.
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewGreenhousePlot): Commit<NewGreenhousePlot> =
-        system.commit("GreenhousePlot", input.raw(system)).carrying(input)
+    fun commit(input: NewGreenhousePlot): Commit<NewGreenhousePlot> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("GreenhousePlot", raw).carrying(input)
+    }
 
     /** Queue keys: [treatment.trial] — plus system-wide width below.
      *  System-wide over GreenhousePlot — consults GreenhousePlot correlated through 'trial' (unexamined (A5)).
@@ -135,8 +219,15 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Treatment — consults Treatment through 'treatments' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewTreatment): Commit<NewTreatment> =
-        system.commit("Treatment", input.raw(system)).carrying(input)
+    fun commit(input: NewTreatment): Commit<NewTreatment> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Treatment", raw).carrying(input)
+    }
 
     /** Queue keys: [plotObservation.plot], [plotObservation.plot.trial] — plus system-wide width below.
      *  System-wide over GreenhousePlot — consults GreenhousePlot correlated through 'trial' (unexamined (A5)).
@@ -148,14 +239,28 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ObservationCorrection — consults ObservationCorrection through 'observationCorrections' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPlotObservation): Commit<NewPlotObservation> =
-        system.commit("PlotObservation", input.raw(system)).carrying(input)
+    fun commit(input: NewPlotObservation): Commit<NewPlotObservation> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("PlotObservation", raw).carrying(input)
+    }
 
     /** Queue keys: [correctObservation.observation], [correctObservation.observation.plot], [correctObservation.observation.plot.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCorrectObservation): Commit<NewCorrectObservation> =
-        system.commit("CorrectObservation", input.raw(system)).carrying(input)
+    fun commit(input: NewCorrectObservation): Commit<NewCorrectObservation> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("CorrectObservation", raw).carrying(input)
+    }
 
     /** Queue keys: [voidObservation.observation], [voidObservation.observation.plot], [voidObservation.observation.plot.trial] — plus system-wide width below.
      *  System-wide over GreenhousePlot — consults GreenhousePlot correlated through 'trial' (unexamined (A5)).
@@ -167,27 +272,55 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ObservationCorrection — consults ObservationCorrection through 'observationCorrections' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewVoidObservation): Commit<NewVoidObservation> =
-        system.commit("VoidObservation", input.raw(system)).carrying(input)
+    fun commit(input: NewVoidObservation): Commit<NewVoidObservation> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("VoidObservation", raw).carrying(input)
+    }
 
     /** Queue keys: [movePlot.plot], [movePlot.plot.trial], [movePlot.plot.trial.protocol] — plus system-wide width below.
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewMovePlot): Commit<NewMovePlot> =
-        system.commit("MovePlot", input.raw(system)).carrying(input)
+    fun commit(input: NewMovePlot): Commit<NewMovePlot> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("MovePlot", raw).carrying(input)
+    }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewFieldSite): Commit<NewFieldSite> =
-        system.commit("FieldSite", input.raw(system)).carrying(input)
+    fun commit(input: NewFieldSite): Commit<NewFieldSite> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("FieldSite", raw).carrying(input)
+    }
 
     /** Queue keys: [permit.crop], [permit.site].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPermit): Commit<NewPermit> =
-        system.commit("Permit", input.raw(system)).carrying(input)
+    fun commit(input: NewPermit): Commit<NewPermit> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Permit", raw).carrying(input)
+    }
 
     /** Queue keys: [weatherObservation.site] — plus system-wide width below.
      *  System-wide over TreatmentApplication — reads TreatmentApplication.trial with no path back to any key (unexamined (A5)).
@@ -196,14 +329,28 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ReapplicationNotice — consults ReapplicationNotice through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewWeatherObservation): Commit<NewWeatherObservation> =
-        system.commit("WeatherObservation", input.raw(system)).carrying(input)
+    fun commit(input: NewWeatherObservation): Commit<NewWeatherObservation> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("WeatherObservation", raw).carrying(input)
+    }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewFieldProtocol): Commit<NewFieldProtocol> =
-        system.commit("FieldProtocol", input.raw(system)).carrying(input)
+    fun commit(input: NewFieldProtocol): Commit<NewFieldProtocol> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("FieldProtocol", raw).carrying(input)
+    }
 
     /** Queue keys: [requestFieldTrial.crop], [requestFieldTrial.pathogen], [requestFieldTrial.peptide], [requestFieldTrial.protocol], [requestFieldTrial.site] — plus system-wide width below.
      *  System-wide over GreenhouseResult — `GreenhouseResult` reads every GreenhouseResult and correlates to no key (unexamined (A5)).
@@ -212,38 +359,80 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over GreenhouseTrial — reads GreenhouseTrial.peptide with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRequestFieldTrial): Commit<NewRequestFieldTrial> =
-        system.commit("RequestFieldTrial", input.raw(system)).carrying(input)
+    fun commit(input: NewRequestFieldTrial): Commit<NewRequestFieldTrial> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("RequestFieldTrial", raw).carrying(input)
+    }
 
     /** Queue keys: [plantTrial.trial], [plantTrial.trial.site].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPlantTrial): Commit<NewPlantTrial> =
-        system.commit("PlantTrial", input.raw(system)).carrying(input)
+    fun commit(input: NewPlantTrial): Commit<NewPlantTrial> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("PlantTrial", raw).carrying(input)
+    }
 
     /** Queue key: [fieldPlot.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewFieldPlot): Commit<NewFieldPlot> =
-        system.commit("FieldPlot", input.raw(system)).carrying(input)
+    fun commit(input: NewFieldPlot): Commit<NewFieldPlot> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("FieldPlot", raw).carrying(input)
+    }
 
     /** Queue keys: [applyTreatment.trial], [applyTreatment.trial.site].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewApplyTreatment): Commit<NewApplyTreatment> =
-        system.commit("ApplyTreatment", input.raw(system)).carrying(input)
+    fun commit(input: NewApplyTreatment): Commit<NewApplyTreatment> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("ApplyTreatment", raw).carrying(input)
+    }
 
     /** Queue key: [scouting.plot].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewScouting): Commit<NewScouting> =
-        system.commit("Scouting", input.raw(system)).carrying(input)
+    fun commit(input: NewScouting): Commit<NewScouting> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Scouting", raw).carrying(input)
+    }
 
     /** Queue key: [harvest.plot].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewHarvest): Commit<NewHarvest> =
-        system.commit("Harvest", input.raw(system)).carrying(input)
+    fun commit(input: NewHarvest): Commit<NewHarvest> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Harvest", raw).carrying(input)
+    }
 
     /** Queue keys: [phytotoxicityReport.plot] — plus system-wide width below.
      *  System-wide over FieldPlot — consults FieldPlot through 'fieldPlots' with no keyable owner (unexamined (A5)).
@@ -251,26 +440,54 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over HaltNotice — consults HaltNotice through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPhytotoxicityReport): Commit<NewPhytotoxicityReport> =
-        system.commit("PhytotoxicityReport", input.raw(system)).carrying(input)
+    fun commit(input: NewPhytotoxicityReport): Commit<NewPhytotoxicityReport> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("PhytotoxicityReport", raw).carrying(input)
+    }
 
     /** Queue key: [collectionTask.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCollectionTask): Commit<NewCollectionTask> =
-        system.commit("CollectionTask", input.raw(system)).carrying(input)
+    fun commit(input: NewCollectionTask): Commit<NewCollectionTask> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("CollectionTask", raw).carrying(input)
+    }
 
     /** Queue keys: [rescheduleTask.task], [rescheduleTask.task.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRescheduleTask): Commit<NewRescheduleTask> =
-        system.commit("RescheduleTask", input.raw(system)).carrying(input)
+    fun commit(input: NewRescheduleTask): Commit<NewRescheduleTask> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("RescheduleTask", raw).carrying(input)
+    }
 
     /** Queue keys: [cancelTask.task], [cancelTask.task.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCancelTask): Commit<NewCancelTask> =
-        system.commit("CancelTask", input.raw(system)).carrying(input)
+    fun commit(input: NewCancelTask): Commit<NewCancelTask> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("CancelTask", raw).carrying(input)
+    }
 
     fun crops(): List<Crop> = system.instancesOf("Crop").map { materializeCrop(it) }
     fun pathogens(): List<Pathogen> = system.instancesOf("Pathogen").map { materializePathogen(it) }
@@ -3004,29 +3221,38 @@ rule RefuseCancel when RefusedCancel {
 data class NewCrop(
     val name: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Crop") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewPathogen(
     val name: String,
     val host: Ref<Crop>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("host", system.idOf(host))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Pathogen") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewPeptide(
     val code: String,
     val sequence: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("code", code)
         put("sequence", sequence)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Peptide") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewAssayProtocol(
@@ -3035,12 +3261,15 @@ data class NewAssayProtocol(
     val replicates: Int,
     val hitThreshold: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("durationHours", durationHours)
         put("replicates", replicates)
         put("hitThreshold", hitThreshold)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "AssayProtocol") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewLabExperiment(
@@ -3048,21 +3277,27 @@ data class NewLabExperiment(
     val pathogen: Ref<Pathogen>,
     val protocol: Ref<AssayProtocol>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("peptide", system.idOf(peptide))
         put("pathogen", system.idOf(pathogen))
         put("protocol", system.idOf(protocol))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "LabExperiment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewAssay(
     val experiment: Ref<LabExperiment>,
     val replicate: Int,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("experiment", system.idOf(experiment))
         put("replicate", replicate)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Assay") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewAssayReading(
@@ -3070,11 +3305,14 @@ data class NewAssayReading(
     val hoursElapsed: Int,
     val inhibitionPercent: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("assay", system.idOf(assay))
         put("hoursElapsed", hoursElapsed)
         put("inhibitionPercent", inhibitionPercent)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "AssayReading") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewGreenhouse(
@@ -3082,11 +3320,14 @@ data class NewGreenhouse(
     val minTemperature: BigDecimal,
     val maxTemperature: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("minTemperature", minTemperature)
         put("maxTemperature", maxTemperature)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Greenhouse") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewClimateReading(
@@ -3095,12 +3336,15 @@ data class NewClimateReading(
     val temperature: BigDecimal,
     val humidity: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("greenhouse", system.idOf(greenhouse))
         put("recordedAt", recordedAt)
         put("temperature", temperature)
         put("humidity", humidity)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ClimateReading") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewGreenhouseProtocol(
@@ -3109,12 +3353,15 @@ data class NewGreenhouseProtocol(
     val finalDay: Int,
     val efficacyThreshold: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("plotsPerArm", plotsPerArm)
         put("finalDay", finalDay)
         put("efficacyThreshold", efficacyThreshold)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "GreenhouseProtocol") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewRequestGreenhouseTrial(
@@ -3124,13 +3371,16 @@ data class NewRequestGreenhouseTrial(
     val greenhouse: Ref<Greenhouse>,
     val protocol: Ref<GreenhouseProtocol>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("requestKey", requestKey)
         put("peptide", system.idOf(peptide))
         put("pathogen", system.idOf(pathogen))
         put("greenhouse", system.idOf(greenhouse))
         put("protocol", system.idOf(protocol))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "RequestGreenhouseTrial") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewGreenhousePlot(
@@ -3138,21 +3388,27 @@ data class NewGreenhousePlot(
     val bench: String,
     val treatment: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("trial", system.idOf(trial))
         put("bench", bench)
         put("treatment", treatment)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "GreenhousePlot") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewTreatment(
     val trial: Ref<GreenhouseTrial>,
     val treatedAt: Instant,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("trial", system.idOf(trial))
         put("treatedAt", treatedAt)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Treatment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewPlotObservation(
@@ -3161,12 +3417,15 @@ data class NewPlotObservation(
     val recordedSeverity: BigDecimal,
     val observedOn: LocalDate,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("plot", system.idOf(plot))
         put("dayAfterTreatment", dayAfterTreatment)
         put("recordedSeverity", recordedSeverity)
         put("observedOn", observedOn)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "PlotObservation") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewCorrectObservation(
@@ -3174,41 +3433,53 @@ data class NewCorrectObservation(
     val correctedSeverity: BigDecimal,
     val reason: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("observation", system.idOf(observation))
         put("correctedSeverity", correctedSeverity)
         put("reason", reason)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CorrectObservation") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewVoidObservation(
     val observation: Ref<PlotObservation>,
     val reason: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("observation", system.idOf(observation))
         put("reason", reason)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "VoidObservation") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewMovePlot(
     val plot: Ref<GreenhousePlot>,
     val bench: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("plot", system.idOf(plot))
         put("bench", bench)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "MovePlot") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewFieldSite(
     val name: String,
     val region: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("region", region)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "FieldSite") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewPermit(
@@ -3217,12 +3488,15 @@ data class NewPermit(
     val issuedOn: LocalDate,
     val expiresOn: LocalDate,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("site", system.idOf(site))
         put("crop", system.idOf(crop))
         put("issuedOn", issuedOn)
         put("expiresOn", expiresOn)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Permit") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewWeatherObservation(
@@ -3231,22 +3505,28 @@ data class NewWeatherObservation(
     val rainfallMm: BigDecimal,
     val maxTemperature: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("site", system.idOf(site))
         put("observedOn", observedOn)
         put("rainfallMm", rainfallMm)
         put("maxTemperature", maxTemperature)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "WeatherObservation") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewFieldProtocol(
     val name: String,
     val yieldGainThreshold: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("yieldGainThreshold", yieldGainThreshold)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "FieldProtocol") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewRequestFieldTrial(
@@ -3257,7 +3537,7 @@ data class NewRequestFieldTrial(
     val site: Ref<FieldSite>,
     val protocol: Ref<FieldProtocol>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("requestKey", requestKey)
         put("peptide", system.idOf(peptide))
         put("pathogen", system.idOf(pathogen))
@@ -3265,6 +3545,9 @@ data class NewRequestFieldTrial(
         put("site", system.idOf(site))
         put("protocol", system.idOf(protocol))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "RequestFieldTrial") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewPlantTrial(
@@ -3272,11 +3555,14 @@ data class NewPlantTrial(
     val plantedOn: LocalDate,
     val seedLot: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("trial", system.idOf(trial))
         put("plantedOn", plantedOn)
         put("seedLot", seedLot)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "PlantTrial") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewFieldPlot(
@@ -3284,11 +3570,14 @@ data class NewFieldPlot(
     val block: Int,
     val treatment: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("trial", system.idOf(trial))
         put("block", block)
         put("treatment", treatment)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "FieldPlot") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewApplyTreatment(
@@ -3296,11 +3585,14 @@ data class NewApplyTreatment(
     val appliedOn: LocalDate,
     val rateGramsPerHa: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("trial", system.idOf(trial))
         put("appliedOn", appliedOn)
         put("rateGramsPerHa", rateGramsPerHa)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ApplyTreatment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewScouting(
@@ -3310,13 +3602,16 @@ data class NewScouting(
     val incidencePercent: BigDecimal,
     val severity: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("plot", system.idOf(plot))
         put("daysAfterPlanting", daysAfterPlanting)
         put("scoutedOn", scoutedOn)
         put("incidencePercent", incidencePercent)
         put("severity", severity)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Scouting") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewHarvest(
@@ -3324,11 +3619,14 @@ data class NewHarvest(
     val harvestedOn: LocalDate,
     val yieldKgPerHa: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("plot", system.idOf(plot))
         put("harvestedOn", harvestedOn)
         put("yieldKgPerHa", yieldKgPerHa)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Harvest") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewPhytotoxicityReport(
@@ -3336,11 +3634,14 @@ data class NewPhytotoxicityReport(
     val observedOn: LocalDate,
     val severity: Int,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("plot", system.idOf(plot))
         put("observedOn", observedOn)
         put("severity", severity)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "PhytotoxicityReport") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewCollectionTask(
@@ -3348,31 +3649,40 @@ data class NewCollectionTask(
     val dayMark: Int,
     val dueOn: LocalDate,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("trial", system.idOf(trial))
         put("dayMark", dayMark)
         put("dueOn", dueOn)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CollectionTask") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewRescheduleTask(
     val task: Ref<CollectionTask>,
     val dueOn: LocalDate,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("task", system.idOf(task))
         put("dueOn", dueOn)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "RescheduleTask") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewCancelTask(
     val task: Ref<CollectionTask>,
     val reason: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("task", system.idOf(task))
         put("reason", reason)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CancelTask") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 

@@ -20,51 +20,107 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAdvisor): Commit<NewAdvisor> =
-        system.commit("Advisor", input.raw(system)).carrying(input)
+    fun commit(input: NewAdvisor): Commit<NewAdvisor> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Advisor", raw).carrying(input)
+    }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCourse): Commit<NewCourse> =
-        system.commit("Course", input.raw(system)).carrying(input)
+    fun commit(input: NewCourse): Commit<NewCourse> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Course", raw).carrying(input)
+    }
 
     /** Queue key: [student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewStudent): Commit<NewStudent> =
-        system.commit("Student", input.raw(system)).carrying(input)
+    fun commit(input: NewStudent): Commit<NewStudent> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Student", raw).carrying(input)
+    }
 
     /** Queue keys: [setEnrollment.student], [setEnrollment.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSetEnrollment): Commit<NewSetEnrollment> =
-        system.commit("SetEnrollment", input.raw(system)).carrying(input)
+    fun commit(input: NewSetEnrollment): Commit<NewSetEnrollment> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("SetEnrollment", raw).carrying(input)
+    }
 
     /** Queue keys: [enroll.student], [enroll.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewEnroll): Commit<NewEnroll> =
-        system.commit("Enroll", input.raw(system)).carrying(input)
+    fun commit(input: NewEnroll): Commit<NewEnroll> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Enroll", raw).carrying(input)
+    }
 
     /** Queue keys: [drop.student], [drop.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewDrop): Commit<NewDrop> =
-        system.commit("Drop", input.raw(system)).carrying(input)
+    fun commit(input: NewDrop): Commit<NewDrop> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Drop", raw).carrying(input)
+    }
 
     /** Queue keys: [tag.student], [tag.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewTag): Commit<NewTag> =
-        system.commit("Tag", input.raw(system)).carrying(input)
+    fun commit(input: NewTag): Commit<NewTag> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Tag", raw).carrying(input)
+    }
 
     /** Queue keys: [assignAdvisor.advisor] — plus system-wide width below.
      *  System-wide over Student — writes a Student whose 'advisor' reference the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssignAdvisor): Commit<NewAssignAdvisor> =
-        system.commit("AssignAdvisor", input.raw(system)).carrying(input)
+    fun commit(input: NewAssignAdvisor): Commit<NewAssignAdvisor> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("AssignAdvisor", raw).carrying(input)
+    }
 
     fun advisors(): List<Advisor> = system.instancesOf("Advisor").map { materializeAdvisor(it) }
     fun courses(): List<Course> = system.instancesOf("Course").map { materializeCourse(it) }
@@ -274,19 +330,25 @@ never (Course where capacity < 0)
 data class NewAdvisor(
     val name: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Advisor") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewCourse(
     val title: String,
     val capacity: Int,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("title", title)
         put("capacity", capacity)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Course") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewStudent(
@@ -295,62 +357,80 @@ data class NewStudent(
     val courses: List<Ref<Course>>,
     val advisor: Ref<Advisor>? = null,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("tags", tags)
         put("courses", courses.map { system.idOf(it) })
         advisor?.let { put("advisor", system.idOf(it)) }
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Student") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewSetEnrollment(
     val student: Ref<Student>,
     val courses: List<Ref<Course>>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("student", system.idOf(student))
         put("courses", courses.map { system.idOf(it) })
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "SetEnrollment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewEnroll(
     val student: Ref<Student>,
     val course: Ref<Course>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("student", system.idOf(student))
         put("course", system.idOf(course))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Enroll") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewDrop(
     val student: Ref<Student>,
     val course: Ref<Course>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("student", system.idOf(student))
         put("course", system.idOf(course))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Drop") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewTag(
     val student: Ref<Student>,
     val tag: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("student", system.idOf(student))
         put("tag", tag)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Tag") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewAssignAdvisor(
     val advisor: Ref<Advisor>,
     val students: List<Ref<Student>>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("advisor", system.idOf(advisor))
         put("students", students.map { system.idOf(it) })
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "AssignAdvisor") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 

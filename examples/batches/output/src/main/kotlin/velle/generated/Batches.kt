@@ -20,33 +20,69 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPeptide): Commit<NewPeptide> =
-        system.commit("Peptide", input.raw(system)).carrying(input)
+    fun commit(input: NewPeptide): Commit<NewPeptide> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Peptide", raw).carrying(input)
+    }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewBacteriaStrain): Commit<NewBacteriaStrain> =
-        system.commit("BacteriaStrain", input.raw(system)).carrying(input)
+    fun commit(input: NewBacteriaStrain): Commit<NewBacteriaStrain> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("BacteriaStrain", raw).carrying(input)
+    }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewFermenterRun): Commit<NewFermenterRun> =
-        system.commit("FermenterRun", input.raw(system)).carrying(input)
+    fun commit(input: NewFermenterRun): Commit<NewFermenterRun> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("FermenterRun", raw).carrying(input)
+    }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewVendor): Commit<NewVendor> =
-        system.commit("Vendor", input.raw(system)).carrying(input)
+    fun commit(input: NewVendor): Commit<NewVendor> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Vendor", raw).carrying(input)
+    }
 
     /** Queue keys: [peptideBatch.origin], [peptideBatch.peptide] — plus system-wide width below.
      *  System-wide over PeptideBatch — reads PeptideBatch.peptide with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPeptideBatch): Commit<NewPeptideBatch> =
-        system.commit("PeptideBatch", input.raw(system), input.parts(system)).carrying(input)
+    fun commit(input: NewPeptideBatch): Commit<NewPeptideBatch> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        val parts = input.parts(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("PeptideBatch", raw, parts).carrying(input)
+    }
 
     fun peptides(): List<Peptide> = system.instancesOf("Peptide").map { materializePeptide(it) }
     fun bacteriaStrains(): List<BacteriaStrain> = system.instancesOf("BacteriaStrain").map { materializeBacteriaStrain(it) }
@@ -581,39 +617,47 @@ rule NoteDepletion when Depleted {
 data class NewPeptide(
     val code: String,
 ) {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("code", code)
     }
-    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "Peptide")
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Peptide") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewBacteriaStrain(
     val name: String,
 ) {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
     }
-    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "BacteriaStrain")
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "BacteriaStrain") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewFermenterRun(
     val vessel: String,
     val startedOn: LocalDate,
 ) {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("vessel", vessel)
         put("startedOn", startedOn)
     }
-    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "FermenterRun")
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "FermenterRun") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewVendor(
     val name: String,
 ) {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
     }
-    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "Vendor")
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Vendor") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewPeptideBatch(
@@ -621,15 +665,18 @@ data class NewPeptideBatch(
     val quantityMg: BigDecimal,
     val origin: OriginReference,
 ) {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("peptide", system.idOf(peptide))
         put("quantityMg", quantityMg)
         (origin as? OriginReference.Existing)?.let { put("origin", system.idOf(it.ref)) }
     }
-    internal fun parts(system: VelleSystem): Map<String, List<Map<String, Any?>>> = buildMap {
-        (origin as? OriginReference.New)?.let { put("origin", listOf(it.value.asValue(system))) }
+    internal fun parts(system: VelleSystem, reg: NewRegistry): Map<String, List<Map<String, Any?>>> = buildMap {
+        (origin as? OriginReference.New)?.let { put("origin", listOf(it.value.asValue(system, reg))) }
     }
-    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + parts(system) + ("@shape" to "PeptideBatch")
+    fun register(reg: NewRegistry) {
+        (origin as? OriginReference.New)?.let { reg.add(it.value); it.value.register(reg) }
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + parts(system, reg) + ("@shape" to "PeptideBatch") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 // ── closure input values (Reference §6, "Inline part creation") ──
@@ -637,54 +684,66 @@ data class NewComponent(
     val source: Ref<PeptideBatch>,
     val amountMg: BigDecimal,
 ) {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("source", system.idOf(source))
         put("amountMg", amountMg)
     }
-    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "Component")
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Component") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewComposition(
     val mixedOn: LocalDate,
     val components: List<NewComponent> = emptyList(),
 ) : NewOrigin {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("mixedOn", mixedOn)
-        put("components", components.map { it.raw(system) })
+        put("components", components.map { it.asValue(system, reg) })
     }
-    override fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "Composition")
+    override fun register(reg: NewRegistry) {
+        components.forEach { reg.add(it); it.register(reg) }
+    }
+    override fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Composition") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewExternalOrder(
     val vendor: Ref<Vendor>,
     val orderItem: String,
 ) : NewOrigin {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("vendor", system.idOf(vendor))
         put("orderItem", orderItem)
     }
-    override fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "ExternalOrder")
+    override fun register(reg: NewRegistry) {
+    }
+    override fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ExternalOrder") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewFermentation(
     val strain: Ref<BacteriaStrain>,
     val run: Ref<FermenterRun>,
 ) : NewOrigin {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("strain", system.idOf(strain))
         put("run", system.idOf(run))
     }
-    override fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "Fermentation")
+    override fun register(reg: NewRegistry) {
+    }
+    override fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Fermentation") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
-// ── references supplied by value (Reference §6): a `one` field named in `with` takes
-// `Existing(ref)`, a record already on the books, or `New(value)`, one arriving nested here ──
-/** A new Origin arriving nested: one of NewComposition, NewExternalOrder, NewFermentation. */
-sealed interface NewOrigin { fun asValue(system: VelleSystem): Map<String, Any?> }
+// ── references to new records (Reference §6): a `one` field named in `with`, or typed by a shape
+// arriving elsewhere in the act, takes `Existing(ref)`, a record on the books, or `New(value)` ──
+/** A new Origin: one of NewComposition, NewExternalOrder, NewFermentation. */
+sealed interface NewOrigin {
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?>
+    fun register(reg: NewRegistry)
+}
 sealed interface OriginReference {
     /** A Origin already on the books. */
     data class Existing(val ref: Ref<Origin>) : OriginReference
-    /** A new Origin, created in this commit, nested here. */
+    /** A new Origin, created in this commit: nested here when the field is named in `with`, else placed elsewhere in the act. */
     data class New(val value: NewOrigin) : OriginReference
 }
 

@@ -93,15 +93,20 @@ object Codegen {
          *  engineer's own type (Reference §22, "External input") */
         val actInputNames: Map<String, String> = model.exposed.associateWith { "New$it" }
 
-        /** structural signature (prop name excluded) → generated class name */
-        val closureNames = linkedMapOf<ClosureEdge, String>()
+        /** structural signature (prop name and owner excluded) plus the fields that may point at a sibling → generated class name */
+        val closureNames = linkedMapOf<Pair<ClosureEdge, List<String>>, String>()
 
-        fun closureClassName(edge: ClosureEdge): String {
-            val sig = edge.copy(prop = "")
+        /** The fields of a closure level that may point at a new record elsewhere in [act] (Reference §6; OQ63 §6.2.2). */
+        fun siblingsOf(act: String, shape: String, edges: List<ClosureEdge>, backRef: String?): List<StoredProp> =
+            model.siblingFields(act, shape, edges, backRef)
+
+        fun closureClassName(edge: ClosureEdge, act: String): String {
+            val capable = siblingsOf(act, edge.partShape, edge.children, if (edge.byValue) null else edge.backRef).map { it.name }
+            val sig = edge.copy(prop = "", owner = "") to capable
             closureNames[sig]?.let { return it }
             val taken = closureNames.values + actInputNames.values
             var name = "New${edge.partShape}"
-            if (name in taken)
+            if (name in taken && !edge.byValue)
                 name = "New${edge.partShape}Via${edge.backRef.replaceFirstChar { it.uppercase() }}"
             var n = 2
             while (name in taken) name = "New${edge.partShape}${n++}"
@@ -109,103 +114,139 @@ object Codegen {
             return name
         }
 
-        // ── references supplied by value (Reference §6; OQ63 §6.1): a `one` field named
-        // in `with` takes `<Target>Reference`, `Existing(ref)` for a record on the books
-        // or `New(value)` for one arriving nested here. A union-typed target's `New`
-        // takes `New<Union>`, the sealed interface its operands' input classes implement. ──
+        // ── references supplied by value or in the act (Reference §6; OQ63 §6): a `one`
+        // field named in `with`, or one typed by a shape that arrives elsewhere in the act,
+        // takes `<Target>Reference`: `Existing(ref)` for a record on the books, `New(value)`
+        // for a new one — nested here when the field is named in `with`, placed elsewhere in
+        // the act otherwise. A target created by more than one input class, or a union, gets
+        // a `New<Target>` interface those classes implement. ──
 
-        /** The reference type of a by-value edge: `<Target>Reference`. */
-        fun referenceTypeName(edge: ClosureEdge) = "${edge.partShape}Reference"
+        fun referenceTypeName(target: String) = "${target}Reference"
 
         /** The input class a nested value of [operand] under [edge] is: the act's own
-         *  input class when the act's closure is exactly the edge's, else a closure class. */
-        fun valueClassName(edge: ClosureEdge, operand: String): String {
+         *  input class when it would be identical, else a closure class. */
+        fun valueClassName(edge: ClosureEdge, operand: String, act: String): String {
             val children = edge.childrenFor(operand)
-            if (operand in actInputNames && model.closures[operand].orEmpty() == children)
+            val capable = siblingsOf(act, operand, children, null).map { it.name }
+            if (operand in actInputNames && model.closures[operand].orEmpty() == children &&
+                siblingsOf(operand, operand, children, null).map { it.name } == capable)
                 return actInputNames.getValue(operand)
-            return closureClassName(ClosureEdge("", operand, "", children, byValue = true, owner = operand))
+            return closureClassName(ClosureEdge("", operand, "", children, byValue = true, owner = operand), act)
         }
 
-        /** by-value target → the reference type's `New` value type and the operand classes behind it */
-        class ReferenceType(val target: String, val valueType: String, val operands: Map<String, String>)
+        /** target → the input classes that create it (anywhere) and the `New` value type its reference takes */
+        class ReferenceType(val target: String) {
+            val classes = linkedSetOf<String>()
+            var valueType: String = ""
+            /** The interface the creating classes implement, or null when the single class is the value type. */
+            var iface: String? = null
+        }
         val referenceTypes = linkedMapOf<String, ReferenceType>()
-        /** input class name → the `New<Union>` interfaces it implements */
+        /** input class name → the `New<Target>` interfaces it implements */
         val supertypesOf = mutableMapOf<String, MutableSet<String>>()
 
         /** Name every reference type up front, so act input classes know the interfaces they implement. */
         fun collectReferenceTypes() {
-            fun visit(edge: ClosureEdge) {
-                if (edge.byValue) {
-                    val operands = model.basesOf(edge.partShape).sorted().associateWith { valueClassName(edge, it) }
-                    val union = isUnion(edge.partShape)
-                    val valueType = if (union) "New${edge.partShape}" else operands.values.single()
-                    val existing = referenceTypes[referenceTypeName(edge)]
-                    if (existing != null && (existing.valueType != valueType || existing.operands != operands))
-                        error("'${edge.partShape}' arrives nested with two different closures; one shape of nesting per target is supported")
-                    referenceTypes.putIfAbsent(referenceTypeName(edge), ReferenceType(edge.partShape, valueType, operands))
-                    if (union) operands.values.forEach { supertypesOf.getOrPut(it) { linkedSetOf() }.add(valueType) }
+            // per act: the shapes its closure creates and the classes creating each
+            for (act in model.exposed) {
+                val creators = mutableMapOf<String, MutableSet<String>>()
+                val siblingTargets = linkedSetOf<String>()
+                fun level(shape: String, edges: List<ClosureEdge>, backRef: String?) {
+                    siblingsOf(act, shape, edges, backRef).forEach { siblingTargets.add((it.type as RelType).shape) }
+                    for (e in edges) {
+                        if (e.byValue) {
+                            val r = referenceTypes.getOrPut(e.partShape) { ReferenceType(e.partShape) }
+                            for (op in model.basesOf(e.partShape).sorted()) {
+                                val c = valueClassName(e, op, act)
+                                r.classes.add(c)
+                                creators.getOrPut(op) { linkedSetOf() }.add(c)
+                                level(op, e.childrenFor(op), null)
+                            }
+                        } else {
+                            val c = closureClassName(e, act)
+                            creators.getOrPut(e.partShape) { linkedSetOf() }.add(c)
+                            level(e.partShape, e.children, e.backRef)
+                        }
+                    }
                 }
-                edge.children.forEach { visit(it) }
+                level(act, model.closures[act].orEmpty(), null)
+                for (t in siblingTargets) {
+                    val r = referenceTypes.getOrPut(t) { ReferenceType(t) }
+                    model.basesOf(t).forEach { op -> creators[op]?.let { r.classes.addAll(it) } }
+                }
             }
-            model.exposed.forEach { shape -> model.closures[shape].orEmpty().forEach { visit(it) } }
+            for (r in referenceTypes.values) {
+                val single = !isUnion(r.target) && r.classes.size == 1
+                r.iface = if (single) null else if (isUnion(r.target)) "New${r.target}" else "New${r.target}Value"
+                r.valueType = r.iface ?: r.classes.single()
+                r.iface?.let { i -> r.classes.forEach { supertypesOf.getOrPut(it) { linkedSetOf() }.add(i) } }
+            }
         }
 
         /** One input value class: the stored fields the committer supplies
-         *  (required first, then optional with a `null` default), one reference
-         *  type per `one` field that may arrive by value, then one nested list per
-         *  part edge; `raw` flattens it to what the runtime takes and `asValue`
-         *  carries it as a nested value. Shared by the act inputs and the closure
-         *  part inputs. */
-        fun emitInputClass(name: String, shape: String, stored: List<StoredProp>, edges: List<ClosureEdge>, partsApart: Boolean) {
+         *  (required first, then optional with a `null` default), a reference type
+         *  for each `one` field that may take a new record, then one nested list per
+         *  part edge. `raw` flattens it to what the runtime takes, `register` puts
+         *  its new values in the act's registry, and `asValue` carries it as a
+         *  nested value. Shared by the act inputs and the closure part inputs. */
+        fun emitInputClass(name: String, act: String, shape: String, stored: List<StoredProp>, edges: List<ClosureEdge>, partsApart: Boolean, backRef: String?) {
             val byValue = edges.filter { it.byValue }
             val parts = edges.filter { !it.byValue }
-            val plain = stored.filter { p -> byValue.none { it.prop == p.name } }
+            val byValueProps = byValue.map { it.prop }.toSet()
+            val sibling = siblingsOf(act, shape, edges, backRef)
+            val refFields: List<StoredProp> = stored.filter { it.name in byValueProps } + sibling
+            val plain = stored.filter { p -> refFields.none { it.name == p.name } }
             // `? initially required` (OQ37-R10): read-optional, but the commit
             // must supply a value — a required, non-null parameter
             val required = plain.filter { it.initially == null && (!isOptional(it.type) || it.initiallyRequired) }
             val optional = plain.filter { it.initially != null || (isOptional(it.type) && !it.initiallyRequired) }
             val implements = supertypesOf[name].orEmpty().let { if (it.isEmpty()) "" else " : " + it.joinToString(", ") }
-            val hasParams = required.isNotEmpty() || optional.isNotEmpty() || edges.isNotEmpty()
-            fun refType(e: ClosureEdge): String {
-                val field = stored.single { it.name == e.prop }
-                return referenceTypeName(e) + if (isOptional(field.type)) "?" else ""
-            }
-            fun nestedLine(e: ClosureEdge) = "(${e.prop} as? ${referenceTypeName(e)}.New)?.let { put(\"${e.prop}\", listOf(it.value.asValue(system))) }"
+            val ov = if (implements.isEmpty()) "" else "override "
+            fun target(p: StoredProp) = (p.type as RelType).shape
+            fun refType(p: StoredProp) = referenceTypeName(target(p)) + if (isOptional(p.type)) "?" else ""
+            fun nestedLine(p: StoredProp) = "(${p.name} as? ${referenceTypeName(target(p))}.New)?.let { put(\"${p.name}\", listOf(it.value.asValue(system, reg))) }"
+            val hasParams = required.isNotEmpty() || optional.isNotEmpty() || refFields.isNotEmpty() || parts.isNotEmpty()
+            val token = "(reg.tokenOrNull(this)?.let { mapOf(\"${VelleSystem.NEW_KEY}\" to it) } ?: emptyMap())"
             if (!hasParams) {
                 line("class $name$implements {")
-                line("    fun raw(system: VelleSystem): Map<String, Any?> = emptyMap()")
-                line("    override fun asValue(system: VelleSystem): Map<String, Any?> = mapOf(\"${VelleSystem.SHAPE_KEY}\" to \"$shape\")"
-                    .let { if (implements.isEmpty()) it.replace("override fun", "fun") else it })
+                line("    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = emptyMap()")
+                line("    ${ov}fun register(reg: NewRegistry) {}")
+                line("    ${ov}fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = mapOf(\"${VelleSystem.SHAPE_KEY}\" to \"$shape\") + $token")
                 line("}")
                 line()
                 return
             }
             line("data class $name(")
             required.forEach { line("    val ${it.name}: ${paramType(it.type).removeSuffix("?")},") }
-            byValue.filter { !refType(it).endsWith("?") }.forEach { line("    val ${it.prop}: ${refType(it)},") }
+            refFields.filter { !isOptional(it.type) }.forEach { line("    val ${it.name}: ${refType(it)},") }
             optional.forEach { line("    val ${it.name}: ${paramType(it.type).removeSuffix("?")}? = null,") }
-            byValue.filter { refType(it).endsWith("?") }.forEach { line("    val ${it.prop}: ${refType(it)} = null,") }
-            parts.forEach { line("    val ${it.prop}: List<${closureClassName(it)}> = emptyList(),") }
+            refFields.filter { isOptional(it.type) }.forEach { line("    val ${it.name}: ${refType(it)} = null,") }
+            parts.forEach { line("    val ${it.prop}: List<${closureClassName(it, act)}> = emptyList(),") }
             line(")$implements {")
-            line("    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {")
+            line("    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {")
             required.forEach { line("        put(\"${it.name}\", ${rawExpr(it.name, it.type)})") }
             optional.forEach { line("        ${it.name}?.let { put(\"${it.name}\", ${rawExpr("it", it.type)}) }") }
-            byValue.forEach { line("        (${it.prop} as? ${referenceTypeName(it)}.Existing)?.let { put(\"${it.prop}\", system.idOf(it.ref)) }") }
+            refFields.forEach { line("        (${it.name} as? ${referenceTypeName(target(it))}.Existing)?.let { put(\"${it.name}\", system.idOf(it.ref)) }") }
+            sibling.forEach { line("        (${it.name} as? ${referenceTypeName(target(it))}.New)?.let { put(\"${it.name}\", NewRef(reg.tokenOf(it.value))) }") }
             if (!partsApart) {
-                byValue.forEach { line("        " + nestedLine(it)) }
-                parts.forEach { line("        put(\"${it.prop}\", ${it.prop}.map { it.raw(system) })") }
+                stored.filter { it.name in byValueProps }.forEach { line("        " + nestedLine(it)) }
+                parts.forEach { line("        put(\"${it.prop}\", ${it.prop}.map { it.asValue(system, reg) })") }
             }
             line("    }")
             if (partsApart && edges.isNotEmpty()) {
                 // an act's inline parts travel beside its fields (Reference §6,
                 // "Inline part creation"); a part's own nested parts ride in its map
-                line("    internal fun parts(system: VelleSystem): Map<String, List<Map<String, Any?>>> = buildMap {")
-                byValue.forEach { line("        " + nestedLine(it)) }
-                parts.forEach { line("        put(\"${it.prop}\", ${it.prop}.map { it.raw(system) })") }
+                line("    internal fun parts(system: VelleSystem, reg: NewRegistry): Map<String, List<Map<String, Any?>>> = buildMap {")
+                stored.filter { it.name in byValueProps }.forEach { line("        " + nestedLine(it)) }
+                parts.forEach { line("        put(\"${it.prop}\", ${it.prop}.map { it.asValue(system, reg) })") }
                 line("    }")
             }
-            val partsExpr = if (partsApart && edges.isNotEmpty()) " + parts(system)" else ""
-            line("    ${if (implements.isEmpty()) "" else "override "}fun asValue(system: VelleSystem): Map<String, Any?> = raw(system)$partsExpr + (\"${VelleSystem.SHAPE_KEY}\" to \"$shape\")")
+            line("    ${ov}fun register(reg: NewRegistry) {")
+            stored.filter { it.name in byValueProps }.forEach { line("        (${it.name} as? ${referenceTypeName(target(it))}.New)?.let { reg.add(it.value); it.value.register(reg) }") }
+            parts.forEach { line("        ${it.prop}.forEach { reg.add(it); it.register(reg) }") }
+            line("    }")
+            val partsExpr = if (partsApart && edges.isNotEmpty()) " + parts(system, reg)" else ""
+            line("    ${ov}fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg)$partsExpr + (\"${VelleSystem.SHAPE_KEY}\" to \"$shape\") + $token")
             line("}")
             line()
         }
@@ -216,49 +257,52 @@ object Codegen {
             line("// every stored field the committer supplies and nothing else ──")
             for (shape in model.exposed) {
                 val stored = model.shapes.getValue(shape).members.filterIsInstance<StoredProp>()
-                emitInputClass(actInputNames.getValue(shape), shape, stored, model.closures[shape].orEmpty(), partsApart = true)
+                emitInputClass(actInputNames.getValue(shape), shape, shape, stored, model.closures[shape].orEmpty(), partsApart = true, backRef = null)
             }
         }
 
-        fun emitClosureClass(name: String, edge: ClosureEdge) {
+        fun emitClosureClass(name: String, edge: ClosureEdge, act: String) {
             val decl = model.shapes.getValue(edge.partShape)
             val stored = decl.members.filterIsInstance<StoredProp>().filter { edge.byValue || it.name != edge.backRef }
-            emitInputClass(name, edge.partShape, stored, edge.children, partsApart = false)
+            emitInputClass(name, act, edge.partShape, stored, edge.children, partsApart = false, backRef = if (edge.byValue) null else edge.backRef)
         }
 
         fun closureInputTypes() {
-            val toEmit = linkedMapOf<String, ClosureEdge>()
-            fun visit(edge: ClosureEdge) {
-                edge.children.forEach { visit(it) }
+            val toEmit = linkedMapOf<String, Pair<ClosureEdge, String>>()
+            fun visit(edge: ClosureEdge, act: String) {
+                edge.children.forEach { visit(it, act) }
                 if (edge.byValue) {
                     // one class per operand that is not an act's own input class
                     for (operand in model.basesOf(edge.partShape).sorted()) {
-                        val cls = valueClassName(edge, operand)
+                        val cls = valueClassName(edge, operand, act)
                         if (cls !in actInputNames.values)
-                            toEmit.putIfAbsent(cls, ClosureEdge("", operand, "", edge.childrenFor(operand), byValue = true, owner = operand))
+                            toEmit.putIfAbsent(cls, ClosureEdge("", operand, "", edge.childrenFor(operand), byValue = true, owner = operand) to act)
                     }
-                } else toEmit.putIfAbsent(closureClassName(edge), edge)
+                } else toEmit.putIfAbsent(closureClassName(edge, act), edge to act)
             }
-            model.exposed.forEach { shape -> model.closures[shape].orEmpty().forEach { visit(it) } }
+            model.exposed.forEach { shape -> model.closures[shape].orEmpty().forEach { visit(it, shape) } }
             if (toEmit.isEmpty()) return
             line("// ── closure input values (Reference §6, \"Inline part creation\") ──")
-            for ((name, edge) in toEmit) emitClosureClass(name, edge)
+            for ((name, e) in toEmit) emitClosureClass(name, e.first, e.second)
         }
 
-        /** The `<Target>Reference` types and the `New<Union>` interfaces (Reference §6; OQ63 §6.1). */
+        /** The `<Target>Reference` types and the `New<Target>` interfaces (Reference §6; OQ63 §6). */
         fun referenceTypes() {
             if (referenceTypes.isEmpty()) return
-            line("// ── references supplied by value (Reference §6): a `one` field named in `with` takes")
-            line("// `Existing(ref)`, a record already on the books, or `New(value)`, one arriving nested here ──")
+            line("// ── references to new records (Reference §6): a `one` field named in `with`, or typed by a shape")
+            line("// arriving elsewhere in the act, takes `Existing(ref)`, a record on the books, or `New(value)` ──")
             for (r in referenceTypes.values) {
-                if (isUnion(r.target)) {
-                    line("/** A new ${r.target} arriving nested: one of ${r.operands.values.joinToString(", ")}. */")
-                    line("sealed interface ${r.valueType} { fun asValue(system: VelleSystem): Map<String, Any?> }")
+                r.iface?.let { i ->
+                    line("/** A new ${r.target}: one of ${r.classes.joinToString(", ")}. */")
+                    line("sealed interface $i {")
+                    line("    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?>")
+                    line("    fun register(reg: NewRegistry)")
+                    line("}")
                 }
                 line("sealed interface ${r.target}Reference {")
                 line("    /** A ${r.target} already on the books. */")
                 line("    data class Existing(val ref: Ref<${r.target}>) : ${r.target}Reference")
-                line("    /** A new ${r.target}, created in this commit, nested here. */")
+                line("    /** A new ${r.target}, created in this commit: nested here when the field is named in `with`, else placed elsewhere in the act. */")
                 line("    data class New(val value: ${r.valueType}) : ${r.target}Reference")
                 line("}")
                 line()
@@ -274,9 +318,16 @@ object Codegen {
             val actor = model.actorOf(shape)
             val actorParam = actor?.let { ", ${it.name}: Ref<${refBase(it.shape)}>" } ?: ""
             val actorArg = actor?.let { ", actor = system.idOf(${it.name})" } ?: ""
-            val parts = if (edges.isEmpty()) "" else ", input.parts(system)"
-            line("    fun commit(input: $input$actorParam): Commit<$input> =")
-            line("        system.commit(\"$shape\", input.raw(system)$parts$actorArg).carrying(input)")
+            line("    fun commit(input: $input$actorParam): Commit<$input> {")
+            line("        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by")
+            line("        // identity, and a field pointing at a sibling names it; refused before the runtime")
+            line("        val reg = NewRegistry()")
+            line("        input.register(reg)")
+            line("        val raw = input.raw(system, reg)")
+            if (edges.isNotEmpty()) line("        val parts = input.parts(system, reg)")
+            line("        reg.problem()?.let { return Commit.Refused(input, it) }")
+            line("        return system.commit(\"$shape\", raw${if (edges.isEmpty()) "" else ", parts"}$actorArg).carrying(input)")
+            line("    }")
             line()
         }
 

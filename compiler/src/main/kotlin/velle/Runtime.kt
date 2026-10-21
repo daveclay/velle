@@ -82,6 +82,48 @@ fun <I> CommitResult.carrying(input: I): Commit<I> = when (this) {
 }
 
 class VelleRuntimeError(message: String) : Exception(message)
+
+/**
+ * In a raw commit, a `one` field's reference to a new record arriving
+ * elsewhere in the same act (Reference §6; OQ63 §6.2.2): [token] is the
+ * number that record's raw value carries under [VelleSystem.NEW_KEY]. The
+ * boundary resolves it to the record's id before anything is written.
+ */
+data class NewRef(val token: Int)
+
+/**
+ * The boundary's registry of the new values one act carries (OQ63 §6.2.3.3):
+ * every value in a creating position (a part, or a `one` field's `New`) gets
+ * a token by object identity, and a field pointing at a sibling names that
+ * token. A value in two creating positions, or a reference to a value in
+ * none, is a type-level refusal of the whole act ([problem]).
+ */
+class NewRegistry {
+    private val tokens = java.util.IdentityHashMap<Any, Int>()
+    private val duplicates = mutableListOf<Any>()
+    private val unknown = mutableListOf<Any>()
+
+    /** Register a value in a creating position; returns its token. */
+    fun add(value: Any): Int {
+        tokens[value]?.let { duplicates.add(value); return it }
+        val t = tokens.size + 1
+        tokens[value] = t
+        return t
+    }
+
+    /** The token of a value some field points at; records it as unknown when it is in no creating position. */
+    fun tokenOf(value: Any): Int = tokens[value] ?: run { unknown.add(value); -1 }
+
+    fun tokenOrNull(value: Any): Int? = tokens[value]
+
+    /** Null when every reference resolves and no value is created twice. */
+    fun problem(): String? = when {
+        duplicates.isNotEmpty() -> "type: ${duplicates.first().javaClass.simpleName} appears in two creating positions of this act — one new value, one record"
+        unknown.isNotEmpty() -> "type: a field points at a ${unknown.first().javaClass.simpleName} that is not among this act's new values — " +
+            "put it in a part list or at a `one` field named in `with`, or pass a handle to an existing record"
+        else -> null
+    }
+}
 private class NeverViolation(val rejection: Rejection) : Exception(rejection.message)
 
 /**
@@ -638,13 +680,23 @@ class VelleSystem(
             return CommitResult.Refused("type: '$shape' declares no closure edge '$it'")
         }
         val byValueHere = edges.filter { it.byValue && parts[it.prop]?.isNotEmpty() == true }.map { it.prop }.toSet()
-        val supplied = convertFields(decl, suppliedFields, skipRequired = byValueHere)
-            ?: return CommitResult.Refused(typeFailure(decl, suppliedFields))
+        // a `one` field pointing at a new record elsewhere in this act (OQ63 §6.2.2)
+        // is resolved after every value is appended, below
+        val (own, siblingRefs) = splitNewRefs(suppliedFields)
+        val supplied = convertFields(decl, own, skipRequired = byValueHere + siblingRefs.keys)
+            ?: return CommitResult.Refused(typeFailure(decl, own))
         val converted = if (actorProp != null) supplied + (actorProp.name to Value.VRef(actor!!)) else supplied
 
-        val mutations = mutableListOf<Mutation>()
-        val rootIndex = try {
-            appendRecord(shape, converted, parts, edges, mutations)
+        val build = ClosureBuild()
+        var rootIndex = try {
+            appendRecord(shape, converted, parts, edges, build).also { idx ->
+                siblingRefs.forEach { (field, token) -> build.refs.add(Triple(idx, field, token)) }
+            }
+        } catch (e: PartRefusal) {
+            return CommitResult.Refused(e.reason)
+        }
+        val mutations = try {
+            resolveSiblings(build).also { (_, remap) -> rootIndex = remap[rootIndex] }.first
         } catch (e: PartRefusal) {
             return CommitResult.Refused(e.reason)
         }
@@ -730,6 +782,59 @@ class VelleSystem(
     companion object {
         /** The key a raw nested value carries to name its concrete shape when the field's type is a union (OQ63 §6.1). */
         const val SHAPE_KEY = "@shape"
+        /** The key a raw nested value carries with its [NewRegistry] token, so a sibling's [NewRef] can name it (OQ63 §6.2.2). */
+        const val NEW_KEY = "@new"
+    }
+
+    /** The creation list of one act under construction, with the sibling references still to resolve. */
+    private class ClosureBuild {
+        val out = mutableListOf<Mutation>()
+        /** registry token → index of the record it names */
+        val tokens = mutableMapOf<Int, Int>()
+        /** (index, field, token): a `one` field pointing at a sibling new record */
+        val refs = mutableListOf<Triple<Int, String, Int>>()
+    }
+
+    /** Separate a raw value's [NewRef] fields from the rest. */
+    private fun splitNewRefs(raw: Map<String, Any?>): Pair<Map<String, Any?>, Map<String, Int>> {
+        val refs = raw.filterValues { it is NewRef }.mapValues { (it.value as NewRef).token }
+        return raw.filterKeys { it !in refs } to refs
+    }
+
+    /**
+     * Resolve every sibling reference to a pending reference and order the
+     * creation list so each pending reference points backward (Hydration.kt,
+     * [Ref.Pending]). Returns the ordered list and the old-to-new index map.
+     */
+    private fun resolveSiblings(build: ClosureBuild): Pair<List<Mutation>, IntArray> {
+        val out = build.out
+        for ((idx, field, token) in build.refs) {
+            val m = out[idx] as Mutation.Create
+            val target = build.tokens[token]
+                ?: throw PartRefusal("type: '${m.shape}.$field' points at a new record that is not among this act's values")
+            val t = fieldTypeOf(m.shape, field) as? RelType
+            val targetShape = (out[target] as Mutation.Create).shape
+            if (t == null || t.many || !model.typeAccepts(t.shape, targetShape))
+                throw PartRefusal("type: '${m.shape}.$field' takes a ${t?.shape ?: "scalar"}, not a new $targetShape")
+            out[idx] = m.copy(fields = m.fields + (field to Value.VPendingRef(target)))
+        }
+        // stable topological order: the earliest record whose references are all placed
+        fun deps(i: Int): List<Int> = (out[i] as Mutation.Create).fields.values.filterIsInstance<Value.VPendingRef>().map { it.index }
+        val order = mutableListOf<Int>()
+        val placed = BooleanArray(out.size)
+        while (order.size < out.size) {
+            val next = out.indices.firstOrNull { i -> !placed[i] && deps(i).all { placed[it] } }
+                ?: throw PartRefusal("type: the new records of this act point at each other in a cycle; no record can be created first")
+            placed[next] = true
+            order.add(next)
+        }
+        val remap = IntArray(out.size)
+        order.forEachIndexed { newIdx, oldIdx -> remap[oldIdx] = newIdx }
+        val sorted = order.map { oldIdx ->
+            val m = out[oldIdx] as Mutation.Create
+            m.copy(fields = m.fields.mapValues { (_, v) -> if (v is Value.VPendingRef) Value.VPendingRef(remap[v.index]) else v })
+        }
+        return sorted to remap
     }
 
     /**
@@ -744,8 +849,9 @@ class VelleSystem(
         converted: Map<String, Value>,
         supplied: Map<String, List<Map<String, Any?>>>,
         edges: List<ClosureEdge>,
-        out: MutableList<Mutation>,
+        build: ClosureBuild,
     ): Int {
+        val out = build.out
         val nested = mutableMapOf<String, Value>()
         for (edge in edges.filter { it.byValue }) {
             val raws = supplied[edge.prop].orEmpty()
@@ -757,7 +863,7 @@ class VelleSystem(
             val concrete = (raw[SHAPE_KEY] as? String) ?: edge.partShape
             if (concrete !in model.shapes || !model.typeAccepts(edge.partShape, concrete))
                 throw PartRefusal("type: a value of '$concrete' cannot arrive at '$shape.${edge.prop}', which takes a ${edge.partShape}")
-            nested[edge.prop] = Value.VPendingRef(appendValue(concrete, raw, edge.childrenFor(concrete), out, "new value for '$shape.${edge.prop}'"))
+            nested[edge.prop] = Value.VPendingRef(appendValue(concrete, raw, edge.childrenFor(concrete), build, "new value for '$shape.${edge.prop}'"))
         }
         val index = out.size
         out.add(Mutation.Create(shape, converted + nested))
@@ -766,7 +872,7 @@ class VelleSystem(
                 if (edge.backRef in raw)
                     throw PartRefusal("type: '${edge.partShape}.${edge.backRef}' is language-populated — " +
                         "a back-reference cannot be claimed by the committer (Reference §6)")
-                appendValue(edge.partShape, raw, edge.childrenFor(edge.partShape), out, "inline part",
+                appendValue(edge.partShape, raw, edge.childrenFor(edge.partShape), build, "inline part",
                     extra = mapOf(edge.backRef to Value.VPendingRef(index)), skipRequired = setOf(edge.backRef))
             }
         }
@@ -779,20 +885,26 @@ class VelleSystem(
         shape: String,
         raw: Map<String, Any?>,
         children: List<ClosureEdge>,
-        out: MutableList<Mutation>,
+        build: ClosureBuild,
         what: String,
         extra: Map<String, Value> = emptyMap(),
         skipRequired: Set<String> = emptySet(),
     ): Int {
         val decl = model.shapes[shape] ?: throw PartRefusal("type: unknown shape '$shape'")
         val childKeys = children.map { it.prop }.toSet()
-        val own = raw.filterKeys { it !in childKeys && it != SHAPE_KEY }
+        val (own, siblingRefs) = splitNewRefs(raw.filterKeys { it !in childKeys && it != SHAPE_KEY && it != NEW_KEY })
         duplicateRefusal(decl, own)?.let { throw PartRefusal(it) }
         val nestedParts = children.associate { c -> c.prop to ((raw[c.prop] as? List<Map<String, Any?>>).orEmpty()) }
         val byValueHere = children.filter { it.byValue && nestedParts[it.prop]?.isNotEmpty() == true }.map { it.prop }.toSet()
-        val converted = convertFields(decl, own, skipRequired = skipRequired + byValueHere)
+        val converted = convertFields(decl, own, skipRequired = skipRequired + byValueHere + siblingRefs.keys)
             ?: throw PartRefusal(typeFailure(decl, own) + " ($what)")
-        return appendRecord(shape, converted + extra, nestedParts, children, out)
+        val index = appendRecord(shape, converted + extra, nestedParts, children, build)
+        (raw[NEW_KEY] as? Number)?.toInt()?.let { token ->
+            if (build.tokens.put(token, index) != null)
+                throw PartRefusal("type: a new $shape appears in two creating positions of this act — one new value, one record")
+        }
+        siblingRefs.forEach { (field, token) -> build.refs.add(Triple(index, field, token)) }
+        return index
     }
 
     private fun convertFields(decl: ShapeDecl, supplied: Map<String, Any?>, skipRequired: Set<String> = emptySet()): Map<String, Value>? {

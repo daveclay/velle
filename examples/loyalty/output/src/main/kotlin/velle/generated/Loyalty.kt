@@ -20,26 +20,54 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     /** Queue keys: [join.referrer], [join.referrer.referrer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewJoin): Commit<NewJoin> =
-        system.commit("Join", input.raw(system)).carrying(input)
+    fun commit(input: NewJoin): Commit<NewJoin> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Join", raw).carrying(input)
+    }
 
     /** Queue key: [duesPayment.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewDuesPayment): Commit<NewDuesPayment> =
-        system.commit("DuesPayment", input.raw(system)).carrying(input)
+    fun commit(input: NewDuesPayment): Commit<NewDuesPayment> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("DuesPayment", raw).carrying(input)
+    }
 
     /** Queue keys: [purchase.member], [purchase.member.referrer], [purchase.member.referrer.referrer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPurchase): Commit<NewPurchase> =
-        system.commit("Purchase", input.raw(system)).carrying(input)
+    fun commit(input: NewPurchase): Commit<NewPurchase> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Purchase", raw).carrying(input)
+    }
 
     /** Queue key: [enrollment.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewEnrollment): Commit<NewEnrollment> =
-        system.commit("Enrollment", input.raw(system)).carrying(input)
+    fun commit(input: NewEnrollment): Commit<NewEnrollment> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Enrollment", raw).carrying(input)
+    }
 
     fun members(): List<Member> = system.instancesOf("Member").map { materializeMember(it) }
     fun duesPayments(): List<DuesPayment> = system.instancesOf("DuesPayment").map { materializeDuesPayment(it) }
@@ -464,10 +492,13 @@ data class NewJoin(
     val name: String,
     val referrer: Ref<Member>? = null,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         referrer?.let { put("referrer", system.idOf(it)) }
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Join") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewDuesPayment(
@@ -476,30 +507,39 @@ data class NewDuesPayment(
     val dueBy: LocalDate,
     val paidOn: LocalDate,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("coveredMonth", coveredMonth)
         put("dueBy", dueBy)
         put("paidOn", paidOn)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "DuesPayment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewPurchase(
     val member: Ref<Member>,
     val amount: BigDecimal,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("amount", amount)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Purchase") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewEnrollment(
     val member: Ref<Member>,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Enrollment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 

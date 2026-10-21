@@ -22,8 +22,15 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewMember): Commit<NewMember> =
-        system.commit("Member", input.raw(system)).carrying(input)
+    fun commit(input: NewMember): Commit<NewMember> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Member", raw).carrying(input)
+    }
 
     /** Queue keys: [post.author] — plus system-wide width below.
      *  System-wide over Comment — reads Comment.target with no path back to any key (unexamined (A5)).
@@ -31,8 +38,15 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPost): Commit<NewPost> =
-        system.commit("Post", input.raw(system)).carrying(input)
+    fun commit(input: NewPost): Commit<NewPost> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Post", raw).carrying(input)
+    }
 
     /** Queue keys: [photo.author] — plus system-wide width below.
      *  System-wide over Comment — reads Comment.target with no path back to any key (unexamined (A5)).
@@ -40,8 +54,15 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPhoto): Commit<NewPhoto> =
-        system.commit("Photo", input.raw(system)).carrying(input)
+    fun commit(input: NewPhoto): Commit<NewPhoto> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Photo", raw).carrying(input)
+    }
 
     /** Queue keys: [comment.author], [comment.target] — plus system-wide width below.
      *  System-wide over CommentNotice — creates CommentNotice referencing an instance the derivation cannot key (unexamined (A5)).
@@ -51,8 +72,15 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewComment): Commit<NewComment> =
-        system.commit("Comment", input.raw(system)).carrying(input)
+    fun commit(input: NewComment): Commit<NewComment> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Comment", raw).carrying(input)
+    }
 
     fun members(): List<Member> = system.instancesOf("Member").map { materializeMember(it) }
     fun posts(): List<Post> = system.instancesOf("Post").map { materializePost(it) }
@@ -343,29 +371,38 @@ shape PhotoComment = Comment where target is Photo
 data class NewMember(
     val name: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Member") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewPost(
     val author: Ref<Member>,
     val body: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("author", system.idOf(author))
         put("body", body)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Post") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewPhoto(
     val author: Ref<Member>,
     val caption: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("author", system.idOf(author))
         put("caption", caption)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Photo") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewComment(
@@ -373,11 +410,14 @@ data class NewComment(
     val author: Ref<Member>,
     val body: String,
 ) {
-    internal fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("target", system.idOf(target))
         put("author", system.idOf(author))
         put("body", body)
     }
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Comment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 

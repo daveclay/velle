@@ -25,7 +25,7 @@ class PeptideBatchSpec : SpecSupport() {
         // given: a new 'Origin', arriving nested in 'origin'
         val origin = givens.newOrigin()
         val before = count("PeptideBatch")
-        val result = sys.system.commit("PeptideBatch", mapOf("peptide" to idOf(peptide), "quantityMg" to java.math.BigDecimal("-1")), parts = mapOf("origin" to listOf(origin.asValue(sys.system))))
+        val result = sys.system.commit("PeptideBatch", mapOf("peptide" to idOf(peptide), "quantityMg" to java.math.BigDecimal("-1")), parts = mapOf("origin" to listOf(origin.asValue(sys.system, velle.NewRegistry()))))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("PeptideBatch"), "a refused act commits nothing")
     }
@@ -36,7 +36,7 @@ class PeptideBatchSpec : SpecSupport() {
         val peptide = givens.somePeptide()
         // given: a new 'Origin', arriving nested in 'origin'
         val origin = givens.newOrigin()
-        val result = sys.system.commit("PeptideBatch", mapOf("peptide" to idOf(peptide), "quantityMg" to java.math.BigDecimal("1")), parts = mapOf("origin" to listOf(origin.asValue(sys.system))))
+        val result = sys.system.commit("PeptideBatch", mapOf("peptide" to idOf(peptide), "quantityMg" to java.math.BigDecimal("1")), parts = mapOf("origin" to listOf(origin.asValue(sys.system, velle.NewRegistry()))))
         assertIs<CommitResult.Accepted>(result)
     }
 }

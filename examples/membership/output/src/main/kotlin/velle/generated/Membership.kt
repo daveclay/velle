@@ -26,8 +26,15 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPlan): Commit<NewPlan> =
-        system.commit("Plan", input.raw(system)).carrying(input)
+    fun commit(input: NewPlan): Commit<NewPlan> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Plan", raw).carrying(input)
+    }
 
     /** Queue keys: [signUp.plan], [signUp.referredBy] — plus system-wide width below.
      *  System-wide over Member — reads Member.balance with no path back to any key (unexamined (A5)).
@@ -38,20 +45,41 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
      *  System-wide over AuditEntry — creates AuditEntry referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSignUp): Commit<NewSignUp> =
-        system.commit("SignUp", input.raw(system)).carrying(input)
+    fun commit(input: NewSignUp): Commit<NewSignUp> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("SignUp", raw).carrying(input)
+    }
 
     /** Queue key: [changeEmail.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewChangeEmail): Commit<NewChangeEmail> =
-        system.commit("ChangeEmail", input.raw(system)).carrying(input)
+    fun commit(input: NewChangeEmail): Commit<NewChangeEmail> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("ChangeEmail", raw).carrying(input)
+    }
 
     /** Queue keys: [visit.member], [visit.member.plan], [visit.member.referredBy].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewVisit): Commit<NewVisit> =
-        system.commit("Visit", input.raw(system)).carrying(input)
+    fun commit(input: NewVisit): Commit<NewVisit> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Visit", raw).carrying(input)
+    }
 
     /** Queue keys: [makeDeposit.member], [makeDeposit.member.plan], [makeDeposit.member.referredBy] — plus system-wide width below.
      *  System-wide over Member — reads Member.balance with no path back to any key (unexamined (A5)).
@@ -62,39 +90,81 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
      *  System-wide over AuditEntry — creates AuditEntry referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewMakeDeposit): Commit<NewMakeDeposit> =
-        system.commit("MakeDeposit", input.raw(system)).carrying(input)
+    fun commit(input: NewMakeDeposit): Commit<NewMakeDeposit> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("MakeDeposit", raw).carrying(input)
+    }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAgent): Commit<NewAgent> =
-        system.commit("Agent", input.raw(system)).carrying(input)
+    fun commit(input: NewAgent): Commit<NewAgent> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("Agent", raw).carrying(input)
+    }
 
     /** Queue keys: [raiseTicket.assignee], [raiseTicket.member] — plus system-wide width below.
      *  System-wide over ReopenNotice — creates ReopenNotice referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRaiseTicket): Commit<NewRaiseTicket> =
-        system.commit("RaiseTicket", input.raw(system)).carrying(input)
+    fun commit(input: NewRaiseTicket): Commit<NewRaiseTicket> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("RaiseTicket", raw).carrying(input)
+    }
 
     /** Queue keys: [closeTicket.closedBy], [closeTicket.ticket], [closeTicket.ticket.closedBy].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCloseTicket): Commit<NewCloseTicket> =
-        system.commit("CloseTicket", input.raw(system)).carrying(input)
+    fun commit(input: NewCloseTicket): Commit<NewCloseTicket> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("CloseTicket", raw).carrying(input)
+    }
 
     /** Queue keys: [reopenTicket.ticket], [reopenTicket.ticket.closedBy].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewReopenTicket): Commit<NewReopenTicket> =
-        system.commit("ReopenTicket", input.raw(system)).carrying(input)
+    fun commit(input: NewReopenTicket): Commit<NewReopenTicket> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("ReopenTicket", raw).carrying(input)
+    }
 
     /** Queue keys: [assignTicket.agent], [assignTicket.ticket], [assignTicket.ticket.assignee], [assignTicket.ticket.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssignTicket): Commit<NewAssignTicket> =
-        system.commit("AssignTicket", input.raw(system)).carrying(input)
+    fun commit(input: NewAssignTicket): Commit<NewAssignTicket> {
+        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
+        // identity, and a field pointing at a sibling names it; refused before the runtime
+        val reg = NewRegistry()
+        input.register(reg)
+        val raw = input.raw(system, reg)
+        reg.problem()?.let { return Commit.Refused(input, it) }
+        return system.commit("AssignTicket", raw).carrying(input)
+    }
 
     fun plans(): List<Plan> = system.instancesOf("Plan").map { materializePlan(it) }
     fun members(): List<Member> = system.instancesOf("Member").map { materializeMember(it) }
@@ -1527,11 +1597,13 @@ data class NewPlan(
     val name: String,
     val price: BigDecimal,
 ) {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("price", price)
     }
-    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "Plan")
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Plan") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewSignUp(
@@ -1540,57 +1612,67 @@ data class NewSignUp(
     val plan: Ref<Plan>,
     val referredBy: Ref<Member>? = null,
 ) {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("signupEmail", signupEmail)
         put("plan", system.idOf(plan))
         referredBy?.let { put("referredBy", system.idOf(it)) }
     }
-    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "SignUp")
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "SignUp") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewChangeEmail(
     val member: Ref<Member>,
     val newEmail: String,
 ) {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("newEmail", newEmail)
     }
-    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "ChangeEmail")
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ChangeEmail") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewVisit(
     val member: Ref<Member>,
     val minutes: Int,
 ) {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("minutes", minutes)
     }
-    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "Visit")
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Visit") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewMakeDeposit(
     val member: Ref<Member>,
     val amount: BigDecimal,
 ) {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("amount", amount)
     }
-    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "MakeDeposit")
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "MakeDeposit") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewAgent(
     val name: String,
     val email: String,
 ) {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("email", email)
     }
-    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "Agent")
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Agent") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewRaiseTicket(
@@ -1600,45 +1682,53 @@ data class NewRaiseTicket(
     val priority: String,
     val assignee: Ref<Agent>? = null,
 ) {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("subject", subject)
         put("due", due)
         put("priority", priority)
         assignee?.let { put("assignee", system.idOf(it)) }
     }
-    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "RaiseTicket")
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "RaiseTicket") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewCloseTicket(
     val ticket: Ref<Ticket>,
     val closedBy: Ref<Agent>,
 ) {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("ticket", system.idOf(ticket))
         put("closedBy", system.idOf(closedBy))
     }
-    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "CloseTicket")
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CloseTicket") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewReopenTicket(
     val ticket: Ref<Ticket>,
 ) {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("ticket", system.idOf(ticket))
     }
-    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "ReopenTicket")
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ReopenTicket") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewAssignTicket(
     val ticket: Ref<Ticket>,
     val agent: Ref<Agent>,
 ) {
-    fun raw(system: VelleSystem): Map<String, Any?> = buildMap {
+    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("ticket", system.idOf(ticket))
         put("agent", system.idOf(agent))
     }
-    fun asValue(system: VelleSystem): Map<String, Any?> = raw(system) + ("@shape" to "AssignTicket")
+    fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "AssignTicket") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 
