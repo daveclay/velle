@@ -1,7 +1,7 @@
-# OQ63 — A record and the record it points at, arriving in one commit
+# OQ63 — Supplying a reference: by handle, by value, or by label
 
 **Status:** open (2026-10-16) — found by the batches pass (`examples/batches/`, finding B2); no design yet. Reframed 2026-10-20: the tree rule is a limitation, not a principle (§3, "Trees"), so the question is how, not whether; and this question now owns the mechanism OQ64's nested creation needs (§5), so it is the one Dave is focusing on.
-**In plain terms:** a peptide batch points at its provenance (`origin: one Origin`), and the two are one event in the lab: the batch and where it came from are known together. Today they are two commits, origin first, because the only construct that creates several records in one commit is the act's closure, and a closure creates parts that point *back* at the act. Can a commit also create the record an act's own field points *forward* at, without giving up what the forward pointer buys?
+**In plain terms:** a peptide batch points at its provenance (`origin: one Origin`), and the two are one event in the lab: the batch and where it came from are known together. Today they are two commits, origin first, because the only construct that creates several records in one commit is the act's closure, and a closure creates parts that point *back* at the act. A `one` field on an act is a reference, and today the committer supplies it only one way: by handle, naming a record already on the books. Can the committer also supply it by value, with the pointed-at record nested inside this one, or by label, naming a new record elsewhere in the same request, without giving up what the `one` field buys?
 **See:** Reference §6 ("Inline part creation"; "Closures are trees") · Reference §4 (one commit, one statically-shaped closure) · `checks.md` V22 · `examples/batches/batches.velle` (the two-commit spelling, with `UnclaimedOrigin` as its residue) · `examples/batches/output/src/test/kotlin/velle/BatchesProbesTest.kt` (B2: the books rule that would close the gap refuses the origin's own commit)
 
 ---
@@ -46,24 +46,24 @@ The pointer is what forces two commits. The batch's input must name an origin th
 
 ## 2. The two spellings available today, and what each gives up
 
-- **Two commits, forward pointer.** What the example does. Keeps exclusivity structural. Costs: the unclaimed state exists and is observable; a caller that fails between the two commits leaves an orphan the business never meant; the batch's refusals (`never (PeptideBatch where count(origin.peptideBatches) > 1)`, the one-peptide rule) fire at the second commit, so a refused batch leaves the origin behind (`BatchesFlowTest`, "a mixture is of one peptide").
+- **Two commits, the reference supplied by handle.** What the example does. Keeps exclusivity structural. Costs: the unclaimed state exists and is observable; a caller that fails between the two commits leaves an orphan the business never meant; the batch's refusals (`never (PeptideBatch where count(origin.peptideBatches) > 1)`, the one-peptide rule) fire at the second commit, so a refused batch leaves the origin behind (`BatchesFlowTest`, "a mixture is of one peptide").
 - **One commit, pointer reversed.** `Fermentation.batch: one PeptideBatch` and `act PeptideBatch { ... } with fermentations, externalOrders, compositions`. One closure, no unclaimed state. Costs: exclusivity degrades from a `one` field to a checked `never` over three inferred inverses ("exactly one of the three collections has one member"), which is the trade Reference §6 names as the reason the one-to-many has one spelling; the input type carries three optional part collections where the domain has one required choice; and `kind`, `Fermented`, and every narrowing become reads through collections instead of through a field.
 
 Neither is the sentence the owner said: "a batch arrives with its provenance, and has exactly one."
 
 ## 3. What a construct would have to settle
 
-- **Shape of the input.** A forward edge in a closure means the act's input carries, for the field, *either* a reference to an existing record *or* an inline value creating one. For a union-typed field the inline value is one of three input types. Reference §6's "references-always" for act fields would gain a declared exception, as `with` already is for inverse edges.
-- **Trees.** Reference §6's rule that a part points only at the record it arrived under was not a design goal. Dave (2026-10-20): at the time there was no worked-out way to let a value in the input refer to another value in the same input, so the rule was stated as a limit. Do not defend it. A forward edge is still a tree edge (the pointed-at record is created once, by the one field pointing at it), so the tree property survives; what changes is the direction of the back-reference the language populates — none is needed, the field itself is the edge.
-- **Which commit the pointed-at record "is".** Today an inline part is an ordinary instance after the commit. A forward-created origin would be one too; the trigger analyses (`when Fermentation`) fire once at the closure's commit as a part does now (Reference §6, the closure's entrants).
+- **Shape of the input.** A reference supplied by value means the act's input carries, for the field, *either* a handle to an existing record *or* a nested value creating one. For a union-typed field the nested value is one of three input types. Reference §6's "a `one` field on an act means a handle" would gain a declared exception, as `with` already is for inverse edges.
+- **Trees.** Reference §6's rule that a part points only at the record it arrived under was not a design goal. Dave (2026-10-20): at the time there was no worked-out way to let a value in the input refer to another value in the same input, so the rule was stated as a limit. Do not defend it. A reference supplied by value still keeps the closure a tree (the nested record is created once, by the one field referencing it); no back-reference needs populating, the field itself is the edge.
+- **Which commit the pointed-at record "is".** Today an inline part is an ordinary instance after the commit. An origin supplied by value would be one too; the trigger analyses (`when Fermentation`) fire once at the closure's commit as a part does now (Reference §6, the closure's entrants).
 - **Prohibitions.** `never (Fermentation where peptideBatchs is empty)` becomes satisfiable at the closure's commit, since the batch lands in the same commit; the door check (Reference §21) sees both.
-- **Interaction with OQ43.** A transient act with a closure is refused today; a forward-created record under a transient act would be the materialize-then-decide pattern with the materialization inline.
+- **Interaction with OQ43.** A transient act with a closure is refused today; a record supplied by value under a transient act would be the materialize-then-decide pattern with the materialization inline.
 
 ## 4. Open
 
-- ~~Whether this is a `with` extension (a forward field named in the clause) or a property of the field's declaration.~~ Proposed as the `with` extension, §6 (2026-10-20).
+- ~~Whether this is a `with` extension (the `one` field named in the clause) or a property of the field's declaration.~~ Proposed as the `with` extension, §6 (2026-10-20).
 - ~~Whether the want is common enough to carry a construct.~~ Yes (Dave, 2026-10-20). The gap itself was never in question: a record that must point at another record cannot be committed with it, and no spelling closes the window (Dave, 2026-10-16: the pass is about gaps in Velle, not about whether a domain could live with the window).
-- ~~The act's generated Kotlin input class: a sealed type per forward field (`Existing(ref)` / `New(input)`), and how the boundary's type-level refusal reads when the inline value is of a shape outside the union.~~ Proposed in §6.
+- ~~The act's generated Kotlin input class: a sealed type per `one` field named in `with` (`ByHandle(ref)` / `ByValue(input)`), and how the boundary's type-level refusal reads when the nested value is of a shape outside the union.~~ Proposed in §6.
 
 ## 5. The same mechanism inside a rule
 
@@ -80,9 +80,9 @@ Today no rule can do even the two-statement case: a creation statement cannot be
 
 Two constructs, settled in this order. The first closes this question's own example and needs no name. The second is what OQ64's Candidate A waits on.
 
-### 6.1 The forward edge is declared in `with`
+### 6.1 A reference supplied by value: the `one` field is named in `with`
 
-Today `with` names inverse collections: parts that point back at the act. Let it also name a `one` field, meaning the field's value may arrive inline:
+Today `with` names inverse collections: parts that point back at the act. Let it also name a `one` field, meaning the reference may be supplied by value, with the pointed-at record nested inside this one:
 
 ```
 act PeptideBatch {
@@ -92,34 +92,34 @@ act PeptideBatch {
 } with origin
 ```
 
-It reads as the business sentence: "a batch arrives with its origin." The compiler tells the two cases apart by what the name resolves to on the act. An inverse collection (or a recognized-form view) means parts, as today. A `one` field means a forward edge.
+It reads as the business sentence: "a batch arrives with its origin." The compiler tells the two cases apart by what the name resolves to on the act. An inverse collection (or a recognized-form view) means parts, as today. A `one` field means a reference that may be supplied by value.
 
 - The pointed-at record is created once, by the one field pointing at it, so the closure is still a tree and V22's reading of the closure from the declaration is unchanged.
 - The batch and its origin land or are refused as one. `never (Fermentation where peptideBatchs is empty)` becomes satisfiable at the closure's commit, since the door check sees both (Reference §21). `UnclaimedOrigin` has no members on this route.
-- The forward value is an ordinary instance after the commit, and `when Fermentation` fires once for it in the batch's transaction, as a part's rule does (Reference §6, the closure's entrants).
-- A forward field whose type is a base shape works the same way with one input type instead of a choice among operands.
-- Nesting composes: the forward value's own `with` clause applies to it (`with { origin with { components } }` if a composition arrives with its components), read against the value's shape as nested parts are today.
+- The record supplied by value is an ordinary instance after the commit, and `when Fermentation` fires once for it in the batch's transaction, as a part's rule does (Reference §6, the closure's entrants).
+- A `one` field whose type is a base shape works the same way with one input type instead of a choice among operands.
+- Nesting composes: the nested record's own `with` clause applies to it (`with { origin with { components } }` if a composition arrives with its components), read against the value's shape as nested parts are today.
 
-**The Kotlin input class the compiler generates for the act.** This is the class the engineer's transport code fills and hands to the act's commit function (Reference §22, "External input"); below, "the input class". For a forward field the input class carries a choice, a handle to an existing record or a value to create. For a union-typed field the value is one of the union's input types.
+**The Kotlin input class the compiler generates for the act.** This is the class the engineer's transport code fills and hands to the act's commit function (Reference §22, "External input"); below, "the input class". For a `one` field named in `with`, the input class carries a choice: the reference supplied by handle, naming an existing record, or by value, creating one. For a union-typed field the value is one of the union's input types.
 
 ```kotlin
-origin: OriginArrival
+origin: OriginReference
 
-sealed interface OriginArrival {
-    data class Existing(val ref: OriginRef) : OriginArrival
-    data class New(val value: OriginInput) : OriginArrival   // FermentationInput | ExternalOrderInput | CompositionInput
+sealed interface OriginReference {
+    data class ByHandle(val ref: OriginRef) : OriginReference
+    data class ByValue(val value: OriginInput) : OriginReference   // FermentationInput | ExternalOrderInput | CompositionInput
 }
 ```
 
 A value of a shape outside the union has no type here, so the client cannot write it and the boundary never sees it. The refusal is the compiler's, in the client's language, not a runtime rejection.
 
-**Checks.** V22 gains the forward case: a `with` entry that resolves to a `one` field on the enclosing level. An entry that resolves to anything else keeps today's error. A `transient act` keeps today's refusal of `with` (OQ43). The one-writer analysis (V1) treats the forward value as an entrant, as it treats a part.
+**Checks.** V22 gains the by-value case: a `with` entry that resolves to a `one` field on the enclosing level. An entry that resolves to anything else keeps today's error. A `transient act` keeps today's refusal of `with` (OQ43). The one-writer analysis (V1) treats the record supplied by value as an entrant, as it treats a part.
 
 **What this does not need.** No name mechanism. The origin value sits inside the batch's input at the field, so nothing refers to it. The batches case is closed by 6.1 alone.
 
 ### 6.2 A name for a record that has no `id` yet
 
-A record gets its `id` when its commit lands. Until then nothing can point at it, because a reference is an `id`. That blocks two things 6.1 does not cover: a rule cannot create a record and then a second record that points at the first, and a client cannot send a request in which one new record points at another new record that is not its container. Both need the same thing: a local name that stands for a record before it exists, accepted wherever a reference is. Settle 6.2 after 6.1 is built.
+A record gets its `id` when its commit lands. Until then nothing can point at it, because a reference is an `id`. That blocks two things 6.1 does not cover: a rule cannot create a record and then a second record that points at the first, and a client cannot send a request in which one new record references another new record that is neither nested inside it nor its container. Both need the same thing: a local name that stands for a record before it exists, accepted wherever a reference is. Settle 6.2 after 6.1 is built.
 
 ### 6.2.1 In a rule: `as <name>` on a creation statement
 
@@ -251,15 +251,15 @@ ExperimentDesignInput(
     ),
     containers = listOf(
         ContainerInput(replicate = 1, position = 1, wells = listOf(
-            WellInput(position = 1, condition = ConditionArrival.Labelled(ConditionLabel("low"))),
-            WellInput(position = 2, condition = ConditionArrival.Labelled(ConditionLabel("high"))),
+            WellInput(position = 1, condition = ConditionReference.ByLabel(ConditionLabel("low"))),
+            WellInput(position = 2, condition = ConditionReference.ByLabel(ConditionLabel("high"))),
         )),
     ),
 )
 ```
 
 - `label` is an optional field on every part input whose shape some field in the closure can point at. A part without a label is as today.
-- `condition` is a choice, as a forward field is in OQ63 §6.1: `Existing(ref)` for a record already on the books, `Labelled(label)` for one arriving in this request.
+- `condition` is a choice, as in 6.1: the reference supplied `ByHandle(ref)` for a record already on the books, or `ByLabel(label)` for one arriving elsewhere in this request.
 - The label is typed per shape (`ConditionLabel`), so a well cannot name a container where a condition is wanted; that refusal is the client compiler's.
 - The boundary reads the whole request, assigns ids, resolves every label, and refuses the request if a label is unknown or declared twice. Order inside the request does not matter: the request is one value, and resolution happens after all of it is read.
 
@@ -313,9 +313,9 @@ shape Well {
 
 **Dave:**
 
-#### 6.2.3.2 May a forward field (6.1) also take a label, so a record can name a sibling instead of nesting it?
+#### 6.2.3.2 May a `one` field named in `with` (6.1) also be supplied by label, so a record can name a sibling instead of nesting it?
 
-**Decision:** whether `origin: OriginArrival`, the field's type in the Kotlin input class the compiler generates for the act, has a third case, `Labelled`, beside `Existing` and `New`.
+**Decision:** whether `origin: OriginReference`, the field's type in the Kotlin input class the compiler generates for the act, has a third case, `ByLabel`, beside `ByHandle` and `ByValue`.
 
 **Context.** With 6.1 the origin nests inside the batch, one origin inside one batch:
 
@@ -327,7 +327,7 @@ act PeptideBatch {
 } with origin
 ```
 
-A label on the forward field would let two new records in one request point at one new sibling without nesting. The batches spec forbids that case (`never (PeptideBatch where count(origin.peptideBatches) > 1)`), so the example below is a variant of it, not the shipped spec.
+Supplying that reference by label would let two new records in one request point at one new sibling without nesting. The batches spec forbids that case (`never (PeptideBatch where count(origin.peptideBatches) > 1)`), so the example below is a variant of it, not the shipped spec.
 
 The business: a fermenter run finishes and the lab splits its product into two containers at once. Each container is a batch, both batches came from the one fermentation, and the lab records the whole thing as one request: the split, the fermentation it came from, and the two batches. The records, with the shipped batches spec's reference data and the one-origin-one-batch rule dropped:
 
@@ -342,7 +342,7 @@ shape Origin = Fermentation {
     peptideBatches: many PeptideBatch = (PeptideBatch where origin == this)
 }
 
--- The request: a split. It points forward at the fermentation it splits,
+-- The request: a split. It references the fermentation it splits,
 -- and the batches it produces arrive as its parts.
 act SplitFermentation {
     fermentation: one Fermentation
@@ -360,15 +360,15 @@ shape PeptideBatch {
 
 In order:
 
-- `SplitFermentation.fermentation: one Fermentation` is a forward field, and `with { fermentation, ... }` says the fermentation may arrive inline (6.1).
+- `SplitFermentation.fermentation: one Fermentation` is a reference, and `with { fermentation, ... }` says it may be supplied by value, the fermentation nested inside the split (6.1).
 - `PeptideBatch.split: one SplitFermentation?` gives the split an inferred inverse, `batches`, and `with { ..., batches }` says the batches arrive as the split's parts (Reference §6).
-- `PeptideBatch.origin: one Origin` is the pointer every batch has. In this request each batch's origin is the fermentation that arrived as the split's forward field.
+- `PeptideBatch.origin: one Origin` is the pointer every batch has. In this request each batch's origin is the fermentation nested inside the split.
 
-The fermentation and the batches are sibling branches of the split's closure. Each batch's `origin` must point at the fermentation in the other branch. In the split's generated Kotlin input class, `origin` is, under 6.1, `Existing(ref)` or `New(value)`; neither names a sibling. Without a label on `origin`, the batches cannot point at the new fermentation, and the lab is back to two commits: the fermentation first, the split with its batches second.
+The fermentation and the batches are sibling branches of the split's closure. Each batch's `origin` must point at the fermentation in the other branch. In the batch's generated Kotlin input class, `origin` is, under 6.1, `ByHandle(ref)` or `ByValue(value)`; neither names a sibling. Without `ByLabel` on `origin`, the batches cannot point at the new fermentation, and the lab is back to two commits: the fermentation first, the split with its batches second.
 
 **Options.**
 
-- *No label on forward fields.* Nesting is for one-to-one arrival; a shared new target arrives as a part of a common container, and the pointers at it carry labels as in 6.2.2. The split example is then respelled so the fermentation is a part of the split rather than its forward field:
+- *By value and by label never on one field.* A reference supplied by value is for one-to-one arrival; a shared new target arrives as a part of a common container, and the references to it are supplied by label as in 6.2.2. The split example is then respelled so the fermentation is a part of the split rather than nested at its `one` field:
 
   ```
   act SplitFermentation {
@@ -382,10 +382,10 @@ The fermentation and the batches are sibling branches of the split's closure. Ea
   }
   ```
 
-  The fermentation and the batches are both parts, the batches' `origin` points across branches with a label (6.2.2), and the forward field is not used for the shared case at all. Cost: a `many` (`fermentations`) stands where the business has exactly one, and "a split is of one fermentation" becomes a `never` over the count instead of a `one` field.
-- *Labels everywhere.* Any field that targets a shape arriving anywhere in the closure, forward or part, accepts a label. Cost: in the generated Kotlin input class, the choice type gains a case on every forward field whether or not the spec needs it, and the boundary must check that a labelled forward target is not also nested somewhere (two creators for one record).
+  The fermentation and the batches are both parts, the batches' `origin` points across branches with a label (6.2.2), and supplying by value is not used for the shared case at all. Cost: a `many` (`fermentations`) stands where the business has exactly one, and "a split is of one fermentation" becomes a `never` over the count instead of a `one` field.
+- *By label everywhere.* Any field that targets a shape arriving anywhere in the closure, nested or part, may be supplied by label. Cost: in the generated Kotlin input class, the choice type gains a case on every `one` field named in `with` whether or not the spec needs it, and the boundary must check that a record referenced by label is not also supplied by value somewhere (two creators for one record).
 
-**Recommendation:** no label on forward fields. One rule for the reader: a record that one new record points at nests inside it; a record that several new records point at arrives as a part of their common container, and they name it.
+**Recommendation:** by value and by label never on one field. One rule for the reader: a record that one new record points at nests inside it; a record that several new records point at arrives as a part of their common container, and they name it.
 
 **Dave:**
 
@@ -397,7 +397,7 @@ The fermentation and the batches are sibling branches of the split's closure. Ea
 
 **Options.**
 
-- *Boundary.* The generated commit function walks the request, gives every labelled value a session handle, rewrites every `Labelled(label)` to that handle, and refuses an unknown or duplicate label with a type-level `Refused` before the runtime is entered. The runtime, the door check, and the rules see handles only. Cost: the boundary gains a pass over the request; the refusal carries no `Rejection` data (there is no `never`), which matches a type-level refusal today.
+- *Boundary.* The generated commit function walks the request, gives every labelled value a session handle, rewrites every `ByLabel(label)` to that handle, and refuses an unknown or duplicate label with a type-level `Refused` before the runtime is entered. The runtime, the door check, and the rules see handles only. Cost: the boundary gains a pass over the request; the refusal carries no `Rejection` data (there is no `never`), which matches a type-level refusal today.
 - *Runtime.* `Mutation.Create` carries an optional label and label references; `applyCreate` records the id under the label and later creates look it up. Cost: every store binding and the runtime's mutation model learn a notion that exists only to be erased; a rule body's `as` name would then be the same mechanism, which is tidy, but the rule-side name is already resolved by the compiler when it orders statements, so nothing is gained.
 
 **Recommendation:** boundary. Labels are a serialization affordance and never reach the runtime; `as` is a compile-time binding and never reaches it either.
