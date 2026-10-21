@@ -119,9 +119,4 @@ A value of a shape outside the union has no type here, so the client cannot writ
 
 ### 6.2 A name for a record that has no `id` yet
 
-Needed in two places, and it is one construct:
-
-- **In a rule**, a creation statement that a later statement points at (§5): `as <name>` on the creation, the alias keyword Velle already has; the name is a value of the created shape, usable wherever a reference is, within the rule body.
-- **In a client closure**, a value in one branch that points at a value in another branch (OQ64 §3, a well pointing at a condition when both arrive under the design). The client puts a label on a nested value and uses the label in place of a handle elsewhere in the same input; the boundary resolves labels to ids after the commit assigns them, and refuses an unknown or duplicate label.
-
-Settle 6.2 after 6.1. Its open points: the input-side label's type in the generated Kotlin (a typed local token per labelled shape, so a well cannot name a container where a condition is wanted); whether a label may be used before the value that declares it appears in the input's order; and whether the rule-side name may be read by a `then`-ordered later statement only, or by any sibling statement.
+Split out as OQ65 (2026-10-20): `as <name>` on a creation statement in a rule, and a label on a nested value in a client request, with an example of each. Settle it after 6.1 is built.
