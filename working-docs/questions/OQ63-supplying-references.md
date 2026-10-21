@@ -63,7 +63,7 @@ Neither is the sentence the owner said: "a batch arrives with its provenance, an
 
 - ~~Whether this is a `with` extension (the `one` field named in the clause) or a property of the field's declaration.~~ Proposed as the `with` extension, §6 (2026-10-20).
 - ~~Whether the want is common enough to carry a construct.~~ Yes (Dave, 2026-10-20). The gap itself was never in question: a record that must point at another record cannot be committed with it, and no spelling closes the window (Dave, 2026-10-16: the pass is about gaps in Velle, not about whether a domain could live with the window).
-- ~~The act's generated Kotlin input class: a sealed type per `one` field named in `with` (`ByHandle(ref)` / `ByValue(input)`), and how the boundary's type-level refusal reads when the nested value is of a shape outside the union.~~ Proposed in §6.
+- ~~The act's generated Kotlin input class: a sealed type per `one` field named in `with` (`ByHandle(ref)` / `ByValue(value)`), and how the boundary's type-level refusal reads when the nested value is of a shape outside the union.~~ Proposed in §6.
 
 ## 5. The same mechanism inside a rule
 
@@ -103,12 +103,14 @@ It reads as the business sentence: "a batch arrives with its origin." The compil
 **The Kotlin input class the compiler generates for the act.** This is the class the engineer's transport code fills and hands to the act's commit function (Reference §22, "External input"); below, "the input class". For a `one` field named in `with`, the input class carries a choice: the reference supplied by handle, naming an existing record, or by value, creating one. For a union-typed field the value is one of the union's input types.
 
 ```kotlin
-origin: OriginReference
+// in NewPeptideBatch, the act's input class as the generator names it today
+val origin: OriginReference
 
 sealed interface OriginReference {
-    data class ByHandle(val ref: OriginRef) : OriginReference
-    data class ByValue(val value: OriginInput) : OriginReference   // FermentationInput | ExternalOrderInput | CompositionInput
+    data class ByHandle(val ref: Ref<Origin>) : OriginReference
+    data class ByValue(val value: NewOrigin) : OriginReference
 }
+sealed interface NewOrigin   // NewFermentation, NewExternalOrder, NewComposition implement it
 ```
 
 A value of a shape outside the union has no type here, so the client cannot write it and the boundary never sees it. The refusal is the compiler's, in the client's language, not a runtime rejection.
@@ -241,18 +243,18 @@ Nothing new is written in Velle. The compiler can see from the `with` tree that 
 A nested value may carry a label, and a field that may point across branches accepts a label in place of a handle:
 
 ```kotlin
-ExperimentDesignInput(
+NewExperimentDesign(
     containerType = containerTypeRef,
     containerCount = 1,
     replicates = 1,
     conditions = listOf(
-        ConditionInput(label = ConditionLabel("low"),  block = 1, value = 0.1),
-        ConditionInput(label = ConditionLabel("high"), block = 2, value = 1.0),
+        NewCondition(label = ConditionLabel("low"),  block = 1, value = 0.1),
+        NewCondition(label = ConditionLabel("high"), block = 2, value = 1.0),
     ),
     containers = listOf(
-        ContainerInput(replicate = 1, position = 1, wells = listOf(
-            WellInput(position = 1, condition = ConditionReference.ByLabel(ConditionLabel("low"))),
-            WellInput(position = 2, condition = ConditionReference.ByLabel(ConditionLabel("high"))),
+        NewContainer(replicate = 1, position = 1, wells = listOf(
+            NewWell(position = 1, condition = ConditionReference.ByLabel(ConditionLabel("low"))),
+            NewWell(position = 2, condition = ConditionReference.ByLabel(ConditionLabel("high"))),
         )),
     ),
 )
