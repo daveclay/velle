@@ -315,23 +315,13 @@ shape Well {
 
 **Dave (2026-10-21):** two separate concepts. The Velle language is primary: `as` is a language construct and goes in the Language Reference (§14). `New` is not Velle; it belongs to the documentation of the binding API, the generated Kotlin the engineer's code calls. There is no binding API page in the wiki yet (what the generated input carries is a paragraph in Reference §6 and the "External input" item in §22), so promoting 6.2 means starting that page and moving those paragraphs into it.
 
-#### 6.2.3.2 May a `one` field named in `with` (6.1) also be supplied in the act, so a record can name a sibling instead of nesting it?
+#### 6.2.3.2 Velle: may other records in the act point at a record that arrives nested at a `with`-named `one` field?
 
-**Question:** whether `origin: OriginReference`, the field's type in the Kotlin input class the compiler generates for the act, lets `New(value)` mean "a sibling arriving elsewhere in this act" as well as "nested here".
+**Question:** whether a record that arrives by value, nested at a `one` field named in `with`, counts as "a record arriving in the same closure" for 6.2.2's rule, so that a part in another branch may point at it. Or whether only parts, the members of inverse collections named in `with`, can be pointed at across branches.
 
-**Context.** With 6.1 the origin nests inside the batch, one origin inside one batch:
+**Context.** The batches spec forbids two batches on one origin (`never (PeptideBatch where count(origin.peptideBatches) > 1)`), so the example is a variant of it, not the shipped spec.
 
-```
-act PeptideBatch {
-    peptide: one Peptide
-    quantityMg: decimal
-    origin: one Origin
-} with origin
-```
-
-Supplying that reference in the act would let two new records in one act point at one new sibling without nesting. The batches spec forbids that case (`never (PeptideBatch where count(origin.peptideBatches) > 1)`), so the example below is a variant of it, not the shipped spec.
-
-The business: a fermenter run finishes and the lab splits its product into two containers at once. Each container is a batch, both batches came from the one fermentation, and the lab records the whole thing as one act: the split, the fermentation it came from, and the two batches. The records, with the shipped batches spec's reference data and the one-origin-one-batch rule dropped:
+The business: a fermenter run finishes and the lab splits its product into two containers at once. Each container is a batch, both batches came from the one fermentation, and the lab records the whole thing as one act: the split, the fermentation it came from, and the two batches. The records, with the shipped spec's reference data and the one-origin-one-batch rule dropped:
 
 ```
 act Peptide { code: text }
@@ -344,7 +334,7 @@ shape Origin = Fermentation {
     peptideBatches: many PeptideBatch = (PeptideBatch where origin == this)
 }
 
--- The act: a split. It references the fermentation it splits,
+-- The act: a split. The fermentation it splits arrives nested at `fermentation`,
 -- and the batches it produces arrive as its parts.
 act SplitFermentation {
     fermentation: one Fermentation
@@ -362,15 +352,16 @@ shape PeptideBatch {
 
 In order:
 
-- `SplitFermentation.fermentation: one Fermentation` is a reference, and `with { fermentation, ... }` says it may be supplied by value, the fermentation nested inside the split (6.1).
+- `SplitFermentation.fermentation: one Fermentation` is named in `with`, so the fermentation arrives by value, nested inside the split (6.1).
 - `PeptideBatch.split: one SplitFermentation?` gives the split an inferred inverse, `batches`, and `with { ..., batches }` says the batches arrive as the split's parts (Reference §6).
-- `PeptideBatch.origin: one Origin` is the pointer every batch has. In this act each batch's origin is the fermentation nested inside the split.
+- `PeptideBatch.origin: one Origin` is not named in any `with`. Each batch's origin is the fermentation that arrived nested at the split's `fermentation` field, which is a sibling branch of the batches.
 
-The fermentation and the batches are sibling branches of the split's closure. Each batch's `origin` must point at the fermentation in the other branch. In the batch's generated Kotlin input class, `origin` is, under 6.1, `Existing(ref)` or `New(value)`, and `New` on a field named in `with` creates the value there. Unless `New` on `origin` may also point at a sibling, the batches cannot point at the new fermentation, and the lab is back to two commits: the fermentation first, the split with its batches second.
+So the question is whether `Well.condition` in 6.2.2 (pointing at a part) and `PeptideBatch.origin` here (pointing at a nested by-value record) are the same case.
 
 **Options.**
 
-- *By value and in the act never on one field.* A reference supplied by value is for one-to-one arrival; a shared new target arrives as a part of a common container, and the references to it are supplied in the act as in 6.2.2. The split example is then respelled so the fermentation is a part of the split rather than nested at its `one` field:
+- *Yes, any record arriving in the act.* A record is in the closure whether it arrived as a part or nested at a `with`-named field, and any other record in the closure may point at it where the field's type matches. The split works as written. The compiler reads both kinds of arrival from the `with` tree, which it already walks (6.2.2.3). Cost: none found; the tree rule was the only thing in the way and it was a limitation (§3).
+- *No, only parts.* A by-value record is private to the field it nests under. The split is respelled so the fermentation is a part:
 
   ```
   act SplitFermentation {
@@ -384,10 +375,9 @@ The fermentation and the batches are sibling branches of the split's closure. Ea
   }
   ```
 
-  The fermentation and the batches are both parts, the batches' `origin` points across branches with `New` (6.2.2), and supplying by value is not used for the shared case at all. Cost: a `many` (`fermentations`) stands where the business has exactly one, and "a split is of one fermentation" becomes a `never` over the count instead of a `one` field.
-- *In the act everywhere.* Any field that targets a shape arriving anywhere in the closure, nested or part, may be supplied in the act. Cost: `New(value)` on a field named in `with` then means two different things, create here or point at a sibling, decided by whether the same object appears elsewhere; the boundary must check that an object is not created twice (two creating positions), and the Kotlin author loses the one-field-one-meaning reading.
+  Cost: a `many` (`fermentations`) stands where the business has exactly one, and "a split is of one fermentation" becomes a `never` over the count instead of a `one` field. That is the trade Reference §6 names as the reason the one-to-many has one spelling, paid for no reason.
 
-**Recommendation:** by value and in the act never on one field. One rule for the reader: a record that one new record points at nests inside it; a record that several new records point at arrives as a part of their common container, and they reference it. It also keeps the Kotlin author's reading simple: on any given field, `New(value)` means one thing, fixed by the spec, and the author never has to know which.
+**Recommendation:** yes. One rule for the reader: every record arriving in an act, nested or part, may be pointed at by any other record in the act.
 
 **Dave:**
 
@@ -405,3 +395,33 @@ The fermentation and the batches are sibling branches of the split's closure. Ea
 **Recommendation:** boundary. The `New` reference is a serialization affordance and never reaches the runtime; `as` is a compile-time binding and never reaches it either.
 
 **Dave (2026-10-21):** boundary.
+
+#### 6.2.3.4 Kotlin: on a field named in `with`, may `New(value)` also mean "the sibling arriving elsewhere in this act"?
+
+**Question:** whether `New(value)` on a `with`-named field always creates the value there, or may instead point at the same object placed in a creating position elsewhere in the act. This is the Kotlin side of 6.2.3.2 and is independent of its answer.
+
+**Context.** Under 6.1, `NewSplitFermentation.fermentation` is `FermentationReference`, with `Existing(Ref<Fermentation>)` and `New(NewFermentation)`. Under 6.2.2, `NewPeptideBatch.origin` is `OriginReference`, with `Existing(Ref<Origin>)` and `New(NewOrigin)`. The split's input, if 6.2.3.2 is answered yes:
+
+```kotlin
+val ferment = NewFermentation(strain = strainRef, run = runRef)
+
+NewSplitFermentation(
+    fermentation = FermentationReference.New(ferment),      // creates it here: the field is named in `with`
+    splitOn = today,
+    batches = listOf(
+        NewPeptideBatch(peptide = peptideRef, quantityMg = 40.toBigDecimal(), origin = OriginReference.New(ferment)),   // points at it
+        NewPeptideBatch(peptide = peptideRef, quantityMg = 60.toBigDecimal(), origin = OriginReference.New(ferment)),
+    ),
+)
+```
+
+`New(ferment)` appears three times and means two things: on `fermentation` it creates, on `origin` it points. The boundary tells them apart by the spec: `fermentation` is named in `with`, `origin` is not. The question is whether `fermentation` could *also* take a `New(ferment)` that points, when `ferment` was created somewhere else in the act.
+
+**Options.**
+
+- *One meaning per field.* On a field named in `with`, `New` creates; on any other field, `New` points at an object in a creating position elsewhere. A `New` object in two creating positions is refused (6.2.2.3). Cost: a record wanted both nested at a `with`-named field and created elsewhere has no spelling, which is the case 6.2.3.2's "only parts" option covers by making it a part. No example wants it.
+- *Both on a `with`-named field.* `New(value)` there creates unless the same object is in a creating position elsewhere, in which case it points. Cost: the meaning of one line depends on another line, which is what the Kotlin author cannot see at the call site; the boundary gains a two-pass check; and nothing in 6.2.3.2 needs it.
+
+**Recommendation:** one meaning per field. The Kotlin author reads `New` on a field as whatever the spec fixed for that field, and never has to know which.
+
+**Dave:**
