@@ -313,7 +313,7 @@ shape Well {
 
 **Recommendation:** two constructs. The reader of each page gets what they type.
 
-**Dave:**
+**Dave (2026-10-21):** two separate concepts. The Velle language is primary: `as` is a language construct and goes in the Language Reference (§14). `New` is not Velle; it belongs to the documentation of the binding API, the generated Kotlin the engineer's code calls. There is no binding API page in the wiki yet (what the generated input carries is a paragraph in Reference §6 and the "External input" item in §22), so promoting 6.2 means starting that page and moving those paragraphs into it.
 
 #### 6.2.3.2 May a `one` field named in `with` (6.1) also be supplied in the act, so a record can name a sibling instead of nesting it?
 
