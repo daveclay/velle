@@ -271,6 +271,99 @@ ExperimentDesignInput(
 
 ### 6.2.3 Open points for 6.2
 
-- Whether the rule-side name and the client-side label are documented as one idea (Reference §6 and §14 both saying "a record may be named before it exists") or as two constructs that happen to share a purpose.
-- Whether a label may also be used on the forward field of OQ63 §6.1, so a batch can name an origin that arrived as a sibling instead of nesting it. Probably not needed: nesting is the common case.
-- The runtime: ids are assigned at the boundary today; confirm the label resolution can run before any row is written, so a refused label costs no store write.
+Each is one decision. The decision is stated first, the context and the costs after, and a line for the answer.
+
+#### 6.2.3.1 Are the rule-side name and the request-side label documented as one idea or two?
+
+**Decision:** whether the wiki presents "a record may be named before it exists" once, with `as` and the label as its two faces, or presents `as` on Reference §14 and the label on Reference §6 as unrelated constructs that mention each other.
+
+**Context.** A Velle author types `as review` in a rule body:
+
+```
+rule OpenAccountReview
+    when (ChronicDelinquent where not exists (AccountReview where member == this))
+    on commit, Daily {
+    AccountReview from { member: this, openedOn: now } as review
+    AuditEntry from { member: this, review: review, note: "account review opened", loggedOn: now }
+}
+```
+
+The same author never types a label. The label lives in the generated Kotlin input, and the Velle source for the plate design is unchanged by it:
+
+```
+act ExperimentDesign {
+    containerType: one ContainerType
+    containers: integer
+    replicates: integer
+} with { conditions, containers with { wells } }
+
+shape Well {
+    container: one Container
+    position: integer
+    condition: one Condition        -- points across branches; the client supplies a label
+}
+```
+
+**Options.**
+
+- *One idea.* A GLOSSARY entry and one paragraph, linked from §6 and §14. Cost: the wiki rules say every sentence must help the reader write Velle today, and the label is not Velle; a reader of §14 is told about Kotlin they will not type.
+- *Two constructs.* §14 documents `as`; §6 documents, under "Inline part creation", that a part may point at a part in another branch and that the generated input carries a label for it. Each page has one sentence pointing at the other. Cost: the shared reason (no `id` yet) is said twice.
+
+**Recommendation:** two constructs. The reader of each page gets what they type.
+
+**Dave:**
+
+#### 6.2.3.2 May a forward field (6.1) also take a label, so a record can name a sibling instead of nesting it?
+
+**Decision:** whether `origin: OriginArrival` in the generated input has a third case, `Labelled`, beside `Existing` and `New`.
+
+**Context.** With 6.1 the origin nests inside the batch:
+
+```
+act PeptideBatch {
+    peptide: one Peptide
+    quantityMg: decimal
+    origin: one Origin
+} with origin
+```
+
+A label on the forward field would let two new records in one request point at one new sibling without nesting. The batches spec forbids that case (`never (PeptideBatch where count(origin.peptideBatches) > 1)`), so it needs an example from elsewhere. Suppose a lab splits one fermentation into two batches at once:
+
+```
+act SplitFermentation {
+    fermentation: one Fermentation
+} with { fermentation, batches }    -- the fermentation arrives as a forward field; the batches as parts
+
+shape PeptideBatch {
+    peptide: one Peptide
+    quantityMg: decimal
+    origin: one Origin
+    split: one SplitFermentation?
+}
+```
+
+Here each batch's `origin` must point at the fermentation that arrived as the split's forward field, which is a sibling branch of the batches. Without a label on `origin`, the batches cannot name it, and the lab is back to two commits.
+
+**Options.**
+
+- *No label on forward fields.* Nesting is for one-to-one arrival; a shared new target arrives as a part of a common container, and the pointers at it carry labels as in 6.2.2. Cost: the split example has no spelling unless the fermentation is declared a part (an inverse collection on the split) instead of a forward field, which it can be: `Fermentation.split: one SplitFermentation?` and `with { fermentations, batches }`. The forward field is then not used for the shared case at all.
+- *Labels everywhere.* Any field that targets a shape arriving anywhere in the closure, forward or part, accepts a label. Cost: the input's choice type gains a case on every forward field whether or not the spec needs it, and the boundary must check that a labelled forward target is not also nested somewhere (two creators for one record).
+
+**Recommendation:** no label on forward fields. One rule for the reader: a record that one new record points at nests inside it; a record that several new records point at arrives as a part of their common container, and they name it.
+
+**Dave:**
+
+#### 6.2.3.3 Where are labels resolved: in the generated boundary before the runtime sees the request, or inside the runtime's transaction?
+
+**Decision:** whether the label is a boundary-only notion, translated to session handles before any `Mutation.Create` is built, or a runtime notion that `applyCreate` resolves as it assigns ids.
+
+**Context.** The runtime assigns a session-local id in memory at `applyCreate` (`compiler/src/main/kotlin/velle/Runtime.kt`, `nextId++`), and the store is written at transaction close; a refused transaction is rolled back before any row exists. So either placement resolves labels before a store write. The difference is who knows about labels.
+
+**Options.**
+
+- *Boundary.* The generated commit function walks the request, gives every labelled value a session handle, rewrites every `Labelled(label)` to that handle, and refuses an unknown or duplicate label with a type-level `Refused` before the runtime is entered. The runtime, the door check, and the rules see handles only. Cost: the boundary gains a pass over the request; the refusal carries no `Rejection` data (there is no `never`), which matches a type-level refusal today.
+- *Runtime.* `Mutation.Create` carries an optional label and label references; `applyCreate` records the id under the label and later creates look it up. Cost: every store binding and the runtime's mutation model learn a notion that exists only to be erased; a rule body's `as` name would then be the same mechanism, which is tidy, but the rule-side name is already resolved by the compiler when it orders statements, so nothing is gained.
+
+**Recommendation:** boundary. Labels are a serialization affordance and never reach the runtime; `as` is a compile-time binding and never reaches it either.
+
+**Dave:**
