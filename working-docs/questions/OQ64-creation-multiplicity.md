@@ -225,7 +225,7 @@ never (Container where count(wells) != design.containerType.wellsPerContainer)
 
 **Recommendation.** Build it. The layout is the feature, and a feature that every client reimplements is the thing Velle exists to take out of clients. Counting back names the symptom, not the rule.
 
-**Dave:**
+**Dave:** yes, build the construct (2026-10-21).
 
 ### 6.2 Where may a number become a set?
 
