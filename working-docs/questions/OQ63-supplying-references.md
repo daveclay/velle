@@ -63,7 +63,7 @@ Neither is the sentence the owner said: "a batch arrives with its provenance, an
 
 - ~~Whether this is a `with` extension (the `one` field named in the clause) or a property of the field's declaration.~~ Proposed as the `with` extension, §6 (2026-10-20).
 - ~~Whether the want is common enough to carry a construct.~~ Yes (Dave, 2026-10-20). The gap itself was never in question: a record that must point at another record cannot be committed with it, and no spelling closes the window (Dave, 2026-10-16: the pass is about gaps in Velle, not about whether a domain could live with the window).
-- ~~The act's generated Kotlin input class: a sealed type per `one` field named in `with` (`ByHandle(ref)` / `ByValue(value)`), and how the boundary's type-level refusal reads when the nested value is of a shape outside the union.~~ Proposed in §6.
+- ~~The act's generated Kotlin input class: a sealed type per `one` field named in `with` (`Existing(ref)` / `New(value)`), and how the boundary's type-level refusal reads when the nested value is of a shape outside the union.~~ Proposed in §6.
 
 ## 5. The same mechanism inside a rule
 
@@ -107,13 +107,13 @@ It reads as the business sentence: "a batch arrives with its origin." The compil
 val origin: OriginReference
 
 sealed interface OriginReference {
-    data class ByHandle(val ref: Ref<Origin>) : OriginReference
-    data class ByValue(val value: NewOrigin) : OriginReference
+    data class Existing(val ref: Ref<Origin>) : OriginReference
+    data class New(val value: NewOrigin) : OriginReference
 }
 sealed interface NewOrigin   // NewFermentation, NewExternalOrder, NewComposition implement it
 ```
 
-A value of a shape outside the union has no type here, so the client cannot write it and the boundary never sees it. The refusal is the compiler's, in the client's language, not a runtime rejection.
+The case names say what the author has in hand, not what Velle does with it: `Existing` for a record loaded from the store, `New` for one built for this act. The generated field carries a one-line comment to the same effect ("an origin already on the books, or a new one arriving with this batch"), which the IDE shows at the call site. A value of a shape outside the union has no type here, so the client cannot write it and the boundary never sees it. The refusal is the compiler's, in the client's language, not a runtime rejection.
 
 **Checks.** V22 gains the by-value case: a `with` entry that resolves to a `one` field on the enclosing level. An entry that resolves to anything else keeps today's error. A `transient act` keeps today's refusal of `with` (OQ43). The one-writer analysis (V1) treats the record supplied by value as an entrant, as it treats a part.
 
@@ -253,31 +253,31 @@ NewExperimentDesign(
     conditions = listOf(low, high),
     containers = listOf(
         NewContainer(replicate = 1, position = 1, wells = listOf(
-            NewWell(position = 1, condition = ConditionReference.InAct(low)),
-            NewWell(position = 2, condition = ConditionReference.InAct(high)),
+            NewWell(position = 1, condition = ConditionReference.New(low)),
+            NewWell(position = 2, condition = ConditionReference.New(high)),
         )),
     ),
 )
 ```
 
-- `condition` is a choice, as in 6.1: `ByHandle(Ref<Condition>)` for a record already on the books, or `InAct(NewCondition)` for one arriving elsewhere in this act.
-- `InAct` takes a `NewCondition`, so a well cannot hand it a `NewContainer`; that refusal is the client compiler's.
-- The boundary reads the whole act, assigns each part its id, and resolves every `InAct` by object identity: the same `NewCondition` instance must appear among the act's parts, and its id is substituted. Order inside the act does not matter, because resolution happens after all of it is read.
+- `condition` is a choice, as in 6.1: `Existing(Ref<Condition>)` for a record already on the books, or `New(NewCondition)` for one arriving elsewhere in this act. The author's choice is forced by what they hold: a loaded record is a `Ref`, a record built for this act is a `NewCondition`, and the wrapper types refuse the other one at compile time. The generated field carries a one-line comment ("a condition already on the books, or one of this act's `conditions`").
+- `New` takes a `NewCondition`, so a well cannot hand it a `NewContainer`; that refusal is the client compiler's.
+- The boundary reads the whole act, assigns each part its id, and resolves every `New` on a field not named in `with` by object identity: the same `NewCondition` instance must appear among the act's parts, and its id is substituted. Order inside the act does not matter, because resolution happens after all of it is read.
 - Nothing is declared on the part. There is no label to invent, spell twice, or mistype.
 
 #### 6.2.2.3 What the compiler checks
 
-- A field's input gains the `InAct` case only when its type is a shape that arrives in the same closure, read from the `with` tree. Any other `one` field keeps today's handle-only input.
-- The generated boundary refuses an `InAct` object that is not among the act's parts, and a part object that appears in two creating positions (one record claimed twice), as a type-level refusal of the whole act before the door check (Reference §21), since the act has no meaning until every reference resolves.
+- A field not named in `with` gains the `New` case only when its type is a shape that arrives in the same closure, read from the `with` tree. Any other `one` field keeps today's handle-only input.
+- The generated boundary refuses a `New` object, on a field not named in `with`, that is not among the act's parts, and a part object that appears in two creating positions (one record claimed twice), as a type-level refusal of the whole act before the door check (Reference §21), since the act has no meaning until every reference resolves.
 - Cycles are not possible: a part points at a part, and both are created in the one commit, so no order of creation is implied. (The closure is no longer a tree, but it is still one commit; the tree rule was a limitation, §3.)
 
 ### 6.2.3 Open points for 6.2
 
 Each is one decision. The decision is stated first, the context and the costs after, and a line for the answer.
 
-#### 6.2.3.1 Are the rule-side name and the act-side `InAct` documented as one idea or two?
+#### 6.2.3.1 Are the rule-side name and the act-side `New` reference documented as one idea or two?
 
-**Decision:** whether the wiki presents "a record may be referenced before it exists" once, with `as` and `InAct` as its two faces, or presents `as` on Reference §14 and `InAct` on Reference §6 as unrelated constructs that mention each other.
+**Decision:** whether the wiki presents "a record may be referenced before it exists" once, with `as` and the `New` reference as its two faces, or presents `as` on Reference §14 and the `New` reference on Reference §6 as unrelated constructs that mention each other.
 
 **Context.** A Velle author types `as review` in a rule body:
 
@@ -290,7 +290,7 @@ rule OpenAccountReview
 }
 ```
 
-The same author never types `InAct`. It lives in the generated Kotlin input class, and the Velle source for the plate design is unchanged by it:
+The same author never types `New(low)`. It lives in the generated Kotlin input class, and the Velle source for the plate design is unchanged by it:
 
 ```
 act ExperimentDesign {
@@ -308,7 +308,7 @@ shape Well {
 
 **Options.**
 
-- *One idea.* A GLOSSARY entry and one paragraph, linked from §6 and §14. Cost: the wiki rules say every sentence must help the reader write Velle today, and `InAct` is not Velle; a reader of §14 is told about Kotlin they will not type.
+- *One idea.* A GLOSSARY entry and one paragraph, linked from §6 and §14. Cost: the wiki rules say every sentence must help the reader write Velle today, and the `New` reference is not Velle; a reader of §14 is told about Kotlin they will not type.
 - *Two constructs.* §14 documents `as`; §6 documents, under "Inline part creation", that a part may point at a part in another branch and that the act's generated Kotlin input class takes the object for it. Each page has one sentence pointing at the other. Cost: the shared reason (no `id` yet) is said twice.
 
 **Recommendation:** two constructs. The reader of each page gets what they type.
@@ -317,7 +317,7 @@ shape Well {
 
 #### 6.2.3.2 May a `one` field named in `with` (6.1) also be supplied in the act, so a record can name a sibling instead of nesting it?
 
-**Decision:** whether `origin: OriginReference`, the field's type in the Kotlin input class the compiler generates for the act, has a third case, `InAct`, beside `ByHandle` and `ByValue`.
+**Decision:** whether `origin: OriginReference`, the field's type in the Kotlin input class the compiler generates for the act, lets `New(value)` mean "a sibling arriving elsewhere in this act" as well as "nested here".
 
 **Context.** With 6.1 the origin nests inside the batch, one origin inside one batch:
 
@@ -366,7 +366,7 @@ In order:
 - `PeptideBatch.split: one SplitFermentation?` gives the split an inferred inverse, `batches`, and `with { ..., batches }` says the batches arrive as the split's parts (Reference §6).
 - `PeptideBatch.origin: one Origin` is the pointer every batch has. In this act each batch's origin is the fermentation nested inside the split.
 
-The fermentation and the batches are sibling branches of the split's closure. Each batch's `origin` must point at the fermentation in the other branch. In the batch's generated Kotlin input class, `origin` is, under 6.1, `ByHandle(ref)` or `ByValue(value)`; neither names a sibling. Without `InAct` on `origin`, the batches cannot point at the new fermentation, and the lab is back to two commits: the fermentation first, the split with its batches second.
+The fermentation and the batches are sibling branches of the split's closure. Each batch's `origin` must point at the fermentation in the other branch. In the batch's generated Kotlin input class, `origin` is, under 6.1, `Existing(ref)` or `New(value)`, and `New` on a field named in `with` creates the value there. Unless `New` on `origin` may also point at a sibling, the batches cannot point at the new fermentation, and the lab is back to two commits: the fermentation first, the split with its batches second.
 
 **Options.**
 
@@ -384,24 +384,24 @@ The fermentation and the batches are sibling branches of the split's closure. Ea
   }
   ```
 
-  The fermentation and the batches are both parts, the batches' `origin` points across branches with `InAct` (6.2.2), and supplying by value is not used for the shared case at all. Cost: a `many` (`fermentations`) stands where the business has exactly one, and "a split is of one fermentation" becomes a `never` over the count instead of a `one` field.
-- *In the act everywhere.* Any field that targets a shape arriving anywhere in the closure, nested or part, may be supplied in the act. Cost: in the generated Kotlin input class, the choice type gains a case on every `one` field named in `with` whether or not the spec needs it, and the boundary must check that an object referenced with `InAct` is not also supplied by value somewhere (two creators for one record).
+  The fermentation and the batches are both parts, the batches' `origin` points across branches with `New` (6.2.2), and supplying by value is not used for the shared case at all. Cost: a `many` (`fermentations`) stands where the business has exactly one, and "a split is of one fermentation" becomes a `never` over the count instead of a `one` field.
+- *In the act everywhere.* Any field that targets a shape arriving anywhere in the closure, nested or part, may be supplied in the act. Cost: `New(value)` on a field named in `with` then means two different things, create here or point at a sibling, decided by whether the same object appears elsewhere; the boundary must check that an object is not created twice (two creating positions), and the Kotlin author loses the one-field-one-meaning reading.
 
-**Recommendation:** by value and in the act never on one field. One rule for the reader: a record that one new record points at nests inside it; a record that several new records point at arrives as a part of their common container, and they reference it.
+**Recommendation:** by value and in the act never on one field. One rule for the reader: a record that one new record points at nests inside it; a record that several new records point at arrives as a part of their common container, and they reference it. It also keeps the Kotlin author's reading simple: on any given field, `New(value)` means one thing, fixed by the spec, and the author never has to know which.
 
 **Dave:**
 
 #### 6.2.3.3 Where are in-act references resolved: in the generated boundary before the runtime sees the act, or inside the runtime's transaction?
 
-**Decision:** whether `InAct` is a boundary-only notion, translated to session handles before any `Mutation.Create` is built, or a runtime notion that `applyCreate` resolves as it assigns ids.
+**Decision:** whether a `New` reference to a sibling is a boundary-only notion, translated to session handles before any `Mutation.Create` is built, or a runtime notion that `applyCreate` resolves as it assigns ids.
 
 **Context.** The runtime assigns a session-local id in memory at `applyCreate` (`compiler/src/main/kotlin/velle/Runtime.kt`, `nextId++`), and the store is written at transaction close; a refused transaction is rolled back before any row exists. So either placement resolves in-act references before a store write. The difference is who knows about them.
 
 **Options.**
 
-- *Boundary.* The generated commit function walks the act, gives every part object a session handle, rewrites every `InAct(object)` to the handle of that same object, and refuses an object not among the parts, or a part in two creating positions, with a type-level `Refused` before the runtime is entered. The runtime, the door check, and the rules see handles only. Cost: the boundary gains a pass over the act; the refusal carries no `Rejection` data (there is no `never`), which matches a type-level refusal today.
+- *Boundary.* The generated commit function walks the act, gives every part object a session handle, rewrites every sibling `New(object)` to the handle of that same object, and refuses an object not among the parts, or a part in two creating positions, with a type-level `Refused` before the runtime is entered. The runtime, the door check, and the rules see handles only. Cost: the boundary gains a pass over the act; the refusal carries no `Rejection` data (there is no `never`), which matches a type-level refusal today.
 - *Runtime.* `Mutation.Create` carries object identities and in-act references; `applyCreate` records the id under the identity and later creates look it up. Cost: every store binding and the runtime's mutation model learn a notion that exists only to be erased; a rule body's `as` name would then be the same mechanism, which is tidy, but the rule-side name is already resolved by the compiler when it orders statements, so nothing is gained.
 
-**Recommendation:** boundary. `InAct` is a serialization affordance and never reaches the runtime; `as` is a compile-time binding and never reaches it either.
+**Recommendation:** boundary. The `New` reference is a serialization affordance and never reaches the runtime; `as` is a compile-time binding and never reaches it either.
 
 **Dave:**
