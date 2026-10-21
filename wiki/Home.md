@@ -55,6 +55,7 @@ Cited by bare name (`checks.md`, `evaluation.md`) throughout the Reference and t
 Walkthroughs that gather what the Reference and the normative documents settle, in the order an author meets it.
 
 - [[Authorization|Authorization]] — who may commit an act and who may see a record: the actor, role gates, data-driven constraints, visibility, the generated surface, and how it compares with role-based access control
+- [[Binding API|Binding-API]] — the generated Kotlin an engineer's code calls to commit an act: the input class, nested parts, references to records on the books and to new ones, the commit function and what it refuses
 
 ## Working notes
 

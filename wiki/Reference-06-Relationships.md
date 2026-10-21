@@ -176,15 +176,81 @@ Each nested `with` is read against the part's shape the same way. Where no inver
 
 ### Rules the compiler enforces for parts
 
-- A `with` entry must name an inferred inverse, or a derived view of the exact form `(P where field == this)`. Any other view is rejected: a part collection must be the inverse of a declared `one` field ([checks.md, V22](checks#v22--closure-declaration-legality)).
-- Parts form a tree. A part can point only at the record it arrived under. A part that refers to another record created in the same commit is rejected. Commit that record first and refer to it in a later act, or restructure.
+- A `with` entry must name an inferred inverse, a derived view of the exact form `(P where field == this)`, or a `one` field of the enclosing record (see "A reference supplied by value", below). Any other member is rejected ([checks.md, V22](checks#v22--closure-declaration-legality)).
+- A part may point at any record arriving in the same commit, nested or part, through a `one` field (see "A reference to a record arriving elsewhere in the same commit", below). Two new records may not point at each other: no record could then be created first, and the commit is refused.
 - Inline parts are not de-duplicated. Two identical line values create two distinct lines, each with its own `id`. The duplicate refusal above applies to references only.
 - `with` creates records. It never updates existing ones. To change a record that exists, commit a reference to it and let a rule assign the field ([§12](Reference-12-Assignment)).
 - A rule on a part may not write a field of the record it arrived under. Several lines writing one field of one order is a write conflict, and the compiler rejects it ([checks.md, V1](checks#v1--one-writer-disjointness)). Derive the aggregate on the order instead, as `examples/orders/orders.velle` does with `total: integer = sum(orderLines, quantity)`, or write a rule on the order.
 - Once committed, the order and its lines are ordinary records. They are updated, frozen, exited, and referenced like any other.
 - A `transient act` may not have a `with` clause.
 
-The generated input for any act is the shape minus what the committer may not claim: no `id`, no `timestamp` fields, no derived properties, and no back-references on parts ([§22](Reference-22-Open-unresolved), "External input"). A reference to a record outside the commit is a typed handle. A part is a nested value. To require at least one line, write a `never` or a gate refinement over the committed order ([§21](Reference-21-never)). An empty part list is allowed and means no parts.
+To require at least one line, write a `never` or a gate refinement over the committed order ([§21](Reference-21-never)). An empty part list is allowed and means no parts. What the generated Kotlin carries for an act, its parts, and the references below is on the [Binding API](Binding-API) page.
+
+## A reference supplied by value (`with` naming a `one` field)
+
+A `one` field on an act is a reference, and the committer normally supplies it by naming a record already on the books. Naming the field in `with` lets the committer supply it by value instead: a new record, nested inside the act's input, created in the same commit. Use it when the record and the one it points at are one event in the business.
+
+"A batch of peptide arrives, and where it came from is known with it," from `examples/batches/batches.velle`:
+
+```
+shape Fermentation {
+    strain: one BacteriaStrain
+    run: one FermenterRun
+}
+
+shape Composition {
+    mixedOn: Date
+    drawnMg: decimal = sum(components, amountMg)
+}
+
+shape Origin = Fermentation or ExternalOrder or Composition {
+    peptideBatches: many PeptideBatch = (PeptideBatch where origin == this)
+}
+
+act PeptideBatch {
+    peptide: one Peptide
+    quantityMg: decimal
+    origin: one Origin
+} with { origin with { components } }
+```
+
+- `origin: one Origin` is an ordinary `one` field. A batch has exactly one origin because a `one` field holds one value.
+- `with { origin ... }` names the field. The committer may now supply a new fermentation, order, or composition nested at `origin`, or still name an existing one.
+- `origin with { components }` says a composition arriving this way brings its components as parts, in the same commit. The record under `origin` may be any of the three kinds, and `components` applies when it is a composition.
+- The nested record is created first, then the batch pointing at it, in one transaction. A rule `when Fermentation` fires once, in the batch's transaction, and a `never` over either record sees both.
+- `Fermentation` and the other origins are shapes, not acts. The only way one comes to exist is nested in a batch, so there is never an origin on the books without its batch, and no rule has to say so.
+
+What the compiler checks:
+
+- The compiler rejects a `with` entry naming a `one` field whose target is a transient act, or is not a shape or a static union of shapes ([checks.md, V22](checks#v22--closure-declaration-legality)).
+- The compiler rejects a commit that supplies the field both as a reference and as a value, or supplies more than one value, or a value of a shape outside the field's type. These are type-level refusals at the boundary ([Binding API](Binding-API)).
+
+## A reference to a record arriving elsewhere in the same commit
+
+A part's `one` field may point at another new record in the same commit, in another branch of the act's closure. Nothing is written in Velle for it: the compiler reads from the `with` clause which fields can, and the committer names the other value in the act's input.
+
+"A plate design arrives with its conditions and its containers of wells, and every well names its condition," from the plate-layout spec in `compiler/src/test/kotlin/velle/ClosureTest.kt`:
+
+```
+act ExperimentDesign {
+    containerType: one ContainerType
+    containerCount: integer
+    replicates: integer
+} with { containers with { wells }, conditions }
+
+shape Condition { design: one ExperimentDesign, block: integer, value: decimal }
+shape Container { design: one ExperimentDesign, replicate: integer, position: integer }
+shape Well { container: one Container, position: integer, condition: one Condition }
+```
+
+- `conditions` and `containers` are two branches of the design's closure, and `wells` are parts of a container.
+- `Well.condition: one Condition` points across the branches. Because a `Condition` arrives in the same closure, the committer may supply this reference as one of the act's own new conditions, or as a condition already on the books.
+- The order of the branches in `with` does not matter. The conditions are created before the wells that point at them.
+- `Well.container` is the back-reference and is filled in by Velle. `ExperimentDesign.containerType` targets a shape the closure never creates, so it takes a reference to an existing record only.
+
+What the compiler checks:
+
+- The compiler rejects, at the boundary, a reference to a new value that is not among the act's values, one value placed in two places where it would be created, and two new records pointing at each other ([checks.md, V22](checks#v22--closure-declaration-legality); [Binding API](Binding-API)).
 
 ## Related pages
 
@@ -193,4 +259,5 @@ The generated input for any act is the shape minus what the committer may not cl
 - [§7 Derived properties](Reference-07-Derived-properties), for the `=` form a renamed collection uses.
 - [§9 Composing refinements](Reference-09-Composing-refinements), for static unions.
 - [§12 Assignment](Reference-12-Assignment), for the one-writer rule and deletion.
-- [§22 Open / unresolved](Reference-22-Open-unresolved), "External input", for what the generated input carries.
+- [Binding API](Binding-API), for what the generated Kotlin input carries.
+- [§14 for](Reference-14-for), "Naming the record a statement creates", for a rule creating two linked records.

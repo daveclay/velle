@@ -39,6 +39,7 @@
 **Guides**
 
 - [[Authorization|Authorization]]
+- [[Binding API|Binding-API]]
 
 **Notes**
 

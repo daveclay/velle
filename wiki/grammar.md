@@ -136,8 +136,10 @@ deletion      := "delete" path
                  -- existence-dependency, the `undeletable` gate, stranding — is the validator's
                  -- (checks catalog, V23–V28), not grammar
 
-creation      := ShapeName "from" "{" fieldInit* "}"
-              | ShapeName "for" valueExpr (fieldInit)*     -- the compact form: Receipt for invoice sentOn: now
+creation      := ShapeName "from" "{" fieldInit* "}" ("as" Identifier)?
+              | ShapeName "for" valueExpr (fieldInit)* ("as" Identifier)?
+                 -- the compact form: Receipt for invoice sentOn: now; `as` names the created
+                 -- record for the body's other statements (Reference §14; checks V33)
 fieldInit     := Identifier ":" valueExpr                  -- newline- or comma-separated inside "from { }"
 ```
 
@@ -175,7 +177,8 @@ ruleByClause  := "by" ShapeName "?"? ("as" Identifier)?       -- a rule's actor,
 
 withClause    := "with" withEntry ("," withEntry)*
               | "with" "{" withEntry ((","|newline) withEntry)* "}"
-withEntry     := Identifier withClause?    -- an inverse edge (or recognized-form view) of the enclosing level
+withEntry     := Identifier withClause?    -- an inverse edge (or recognized-form view) of the enclosing level,
+                                           -- or a `one` field whose reference may be supplied by value (Reference §6)
 ```
 
 An act is a base shape whose instances are externally committable — transpilation generates a function taking that shape as input, the thing the engineer's own transport code calls to submit a mutation; a `shape` enters state only as a rule's effect ([Reference §22](Reference-22-Open-unresolved), "External input"). The body is `shapeDecl`'s member block; a refinement (`=`) cannot be declared `act`. An act is declared in exactly one place, where its fields are — there is no second statement that opens a shape declared elsewhere (OQ50, settled 2026-10-12). The language names no mechanism: transport, persistence, and serialization are the engineer's code, outside the spec ([Reference §22](Reference-22-Open-unresolved), "External input"). `transient` marks the act as an input to the state rather than a member of it — the instance exists only within its own commit's transaction ([Reference §4, "Transient acts"](Reference-04-State-and-commits#transient-acts-transient-act); semantics in [`evaluation.md`](evaluation); the isolation and totality obligations are checks [V17](checks#v17--transient-isolation)–[V18](checks#v18--transient-totality-every-request-gets-a-response-coarse)). A `withClause` declares the act's **closure**: each named edge's parts arrive inline with the act as created values rather than references ([Reference §6, "Inline part creation"](Reference-06-Relationships#inline-part-creation-with)), and a nested `withClause` resolves against the part shape the same way. An entry must name an inferred inverse of the enclosing level's shape, or a declared view of exactly the recognized-inverse form — legality, the tree restriction, and the transient-container refusal are validator territory (checks [V22](checks#v22--closure-declaration-legality)). A `byClause` names who commits the act ([Reference §22](Reference-22-Open-unresolved), "The actor"): a shape, a static union, or a refinement — the last being the role gate in the header, desugared to `Act requires actor to be Refinement`; `as` binds the actor under the author's name. `act` and `transient` join the keyword list; `with` is contextual, not reserved — it reads as the closure keyword only in the position this production gives it, and everywhere else it is an ordinary identifier.
