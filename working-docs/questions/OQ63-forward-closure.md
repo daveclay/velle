@@ -63,7 +63,7 @@ Neither is the sentence the owner said: "a batch arrives with its provenance, an
 
 - ~~Whether this is a `with` extension (a forward field named in the clause) or a property of the field's declaration.~~ Proposed as the `with` extension, §6 (2026-10-20).
 - ~~Whether the want is common enough to carry a construct.~~ Yes (Dave, 2026-10-20). The gap itself was never in question: a record that must point at another record cannot be committed with it, and no spelling closes the window (Dave, 2026-10-16: the pass is about gaps in Velle, not about whether a domain could live with the window).
-- ~~The generated input: a Kotlin sealed type per forward field (`Existing(ref)` / `New(input)`), and how the boundary's type-level refusal reads when the inline value is of a shape outside the union.~~ Proposed in §6.
+- ~~The act's generated Kotlin input class: a sealed type per forward field (`Existing(ref)` / `New(input)`), and how the boundary's type-level refusal reads when the inline value is of a shape outside the union.~~ Proposed in §6.
 
 ## 5. The same mechanism inside a rule
 
@@ -100,7 +100,7 @@ It reads as the business sentence: "a batch arrives with its origin." The compil
 - A forward field whose type is a base shape works the same way with one input type instead of a choice among operands.
 - Nesting composes: the forward value's own `with` clause applies to it (`with { origin with { components } }` if a composition arrives with its components), read against the value's shape as nested parts are today.
 
-**The generated input.** For a forward field the input carries a choice, a handle to an existing record or a value to create. For a union-typed field the value is one of the union's input types.
+**The Kotlin input class the compiler generates for the act.** This is the class the engineer's transport code fills and hands to the act's commit function (Reference §22, "External input"); below, "the input class". For a forward field the input class carries a choice, a handle to an existing record or a value to create. For a union-typed field the value is one of the union's input types.
 
 ```kotlin
 origin: OriginArrival
@@ -236,7 +236,7 @@ shape Well {
 
 Nothing new is written in Velle. The compiler can see from the `with` tree that `Well.condition` targets a shape that arrives elsewhere in the same closure, and that is what makes the field label-able.
 
-#### 6.2.2.2 The generated input
+#### 6.2.2.2 The Kotlin input class the compiler generates for the act
 
 A nested value may carry a label, and a field that may point across branches accepts a label in place of a handle:
 
@@ -307,7 +307,7 @@ shape Well {
 **Options.**
 
 - *One idea.* A GLOSSARY entry and one paragraph, linked from §6 and §14. Cost: the wiki rules say every sentence must help the reader write Velle today, and the label is not Velle; a reader of §14 is told about Kotlin they will not type.
-- *Two constructs.* §14 documents `as`; §6 documents, under "Inline part creation", that a part may point at a part in another branch and that the generated input carries a label for it. Each page has one sentence pointing at the other. Cost: the shared reason (no `id` yet) is said twice.
+- *Two constructs.* §14 documents `as`; §6 documents, under "Inline part creation", that a part may point at a part in another branch and that the act's generated Kotlin input class carries a label for it. Each page has one sentence pointing at the other. Cost: the shared reason (no `id` yet) is said twice.
 
 **Recommendation:** two constructs. The reader of each page gets what they type.
 
@@ -315,7 +315,7 @@ shape Well {
 
 #### 6.2.3.2 May a forward field (6.1) also take a label, so a record can name a sibling instead of nesting it?
 
-**Decision:** whether `origin: OriginArrival` in the generated input has a third case, `Labelled`, beside `Existing` and `New`.
+**Decision:** whether `origin: OriginArrival`, the field's type in the Kotlin input class the compiler generates for the act, has a third case, `Labelled`, beside `Existing` and `New`.
 
 **Context.** With 6.1 the origin nests inside the batch, one origin inside one batch:
 
@@ -364,7 +364,7 @@ In order:
 - `PeptideBatch.split: one SplitFermentation?` gives the split an inferred inverse, `batches`, and `with { ..., batches }` says the batches arrive as the split's parts (Reference §6).
 - `PeptideBatch.origin: one Origin` is the pointer every batch has. In this request each batch's origin is the fermentation that arrived as the split's forward field.
 
-The fermentation and the batches are sibling branches of the split's closure. Each batch's `origin` must point at the fermentation in the other branch. The generated input for `origin` is, under 6.1, `Existing(ref)` or `New(value)`; neither names a sibling. Without a label on `origin`, the batches cannot point at the new fermentation, and the lab is back to two commits: the fermentation first, the split with its batches second.
+The fermentation and the batches are sibling branches of the split's closure. Each batch's `origin` must point at the fermentation in the other branch. In the split's generated Kotlin input class, `origin` is, under 6.1, `Existing(ref)` or `New(value)`; neither names a sibling. Without a label on `origin`, the batches cannot point at the new fermentation, and the lab is back to two commits: the fermentation first, the split with its batches second.
 
 **Options.**
 
@@ -383,7 +383,7 @@ The fermentation and the batches are sibling branches of the split's closure. Ea
   ```
 
   The fermentation and the batches are both parts, the batches' `origin` points across branches with a label (6.2.2), and the forward field is not used for the shared case at all. Cost: a `many` (`fermentations`) stands where the business has exactly one, and "a split is of one fermentation" becomes a `never` over the count instead of a `one` field.
-- *Labels everywhere.* Any field that targets a shape arriving anywhere in the closure, forward or part, accepts a label. Cost: the input's choice type gains a case on every forward field whether or not the spec needs it, and the boundary must check that a labelled forward target is not also nested somewhere (two creators for one record).
+- *Labels everywhere.* Any field that targets a shape arriving anywhere in the closure, forward or part, accepts a label. Cost: in the generated Kotlin input class, the choice type gains a case on every forward field whether or not the spec needs it, and the boundary must check that a labelled forward target is not also nested somewhere (two creators for one record).
 
 **Recommendation:** no label on forward fields. One rule for the reader: a record that one new record points at nests inside it; a record that several new records point at arrives as a part of their common container, and they name it.
 
