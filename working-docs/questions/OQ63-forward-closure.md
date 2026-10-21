@@ -317,7 +317,7 @@ shape Well {
 
 **Decision:** whether `origin: OriginArrival` in the generated input has a third case, `Labelled`, beside `Existing` and `New`.
 
-**Context.** With 6.1 the origin nests inside the batch:
+**Context.** With 6.1 the origin nests inside the batch, one origin inside one batch:
 
 ```
 act PeptideBatch {
@@ -327,13 +327,29 @@ act PeptideBatch {
 } with origin
 ```
 
-A label on the forward field would let two new records in one request point at one new sibling without nesting. The batches spec forbids that case (`never (PeptideBatch where count(origin.peptideBatches) > 1)`), so it needs an example from elsewhere. Suppose a lab splits one fermentation into two batches at once:
+A label on the forward field would let two new records in one request point at one new sibling without nesting. The batches spec forbids that case (`never (PeptideBatch where count(origin.peptideBatches) > 1)`), so the example below is a variant of it, not the shipped spec.
+
+The business: a fermenter run finishes and the lab splits its product into two containers at once. Each container is a batch, both batches came from the one fermentation, and the lab records the whole thing as one request: the split, the fermentation it came from, and the two batches. The records, with the shipped batches spec's reference data and the one-origin-one-batch rule dropped:
 
 ```
+act Peptide { code: text }
+act BacteriaStrain { name: text }
+act FermenterRun { vessel: text, startedOn: Date }
+
+-- One kind of origin is enough for the example.
+act Fermentation { strain: one BacteriaStrain, run: one FermenterRun }
+shape Origin = Fermentation {
+    peptideBatches: many PeptideBatch = (PeptideBatch where origin == this)
+}
+
+-- The request: a split. It points forward at the fermentation it splits,
+-- and the batches it produces arrive as its parts.
 act SplitFermentation {
     fermentation: one Fermentation
-} with { fermentation, batches }    -- the fermentation arrives as a forward field; the batches as parts
+    splitOn: Date
+} with { fermentation, batches }
 
+-- A batch. It points at its origin, and at the split that produced it, if any.
 shape PeptideBatch {
     peptide: one Peptide
     quantityMg: decimal
@@ -342,11 +358,31 @@ shape PeptideBatch {
 }
 ```
 
-Here each batch's `origin` must point at the fermentation that arrived as the split's forward field, which is a sibling branch of the batches. Without a label on `origin`, the batches cannot name it, and the lab is back to two commits.
+In order:
+
+- `SplitFermentation.fermentation: one Fermentation` is a forward field, and `with { fermentation, ... }` says the fermentation may arrive inline (6.1).
+- `PeptideBatch.split: one SplitFermentation?` gives the split an inferred inverse, `batches`, and `with { ..., batches }` says the batches arrive as the split's parts (Reference §6).
+- `PeptideBatch.origin: one Origin` is the pointer every batch has. In this request each batch's origin is the fermentation that arrived as the split's forward field.
+
+The fermentation and the batches are sibling branches of the split's closure. Each batch's `origin` must point at the fermentation in the other branch. The generated input for `origin` is, under 6.1, `Existing(ref)` or `New(value)`; neither names a sibling. Without a label on `origin`, the batches cannot point at the new fermentation, and the lab is back to two commits: the fermentation first, the split with its batches second.
 
 **Options.**
 
-- *No label on forward fields.* Nesting is for one-to-one arrival; a shared new target arrives as a part of a common container, and the pointers at it carry labels as in 6.2.2. Cost: the split example has no spelling unless the fermentation is declared a part (an inverse collection on the split) instead of a forward field, which it can be: `Fermentation.split: one SplitFermentation?` and `with { fermentations, batches }`. The forward field is then not used for the shared case at all.
+- *No label on forward fields.* Nesting is for one-to-one arrival; a shared new target arrives as a part of a common container, and the pointers at it carry labels as in 6.2.2. The split example is then respelled so the fermentation is a part of the split rather than its forward field:
+
+  ```
+  act SplitFermentation {
+      splitOn: Date
+  } with { fermentations, batches }
+
+  act Fermentation {
+      strain: one BacteriaStrain
+      run: one FermenterRun
+      split: one SplitFermentation?       -- gives the split its inferred `fermentations`
+  }
+  ```
+
+  The fermentation and the batches are both parts, the batches' `origin` points across branches with a label (6.2.2), and the forward field is not used for the shared case at all. Cost: a `many` (`fermentations`) stands where the business has exactly one, and "a split is of one fermentation" becomes a `never` over the count instead of a `one` field.
 - *Labels everywhere.* Any field that targets a shape arriving anywhere in the closure, forward or part, accepts a label. Cost: the input's choice type gains a case on every forward field whether or not the spec needs it, and the boundary must check that a labelled forward target is not also nested somewhere (two creators for one record).
 
 **Recommendation:** no label on forward fields. One rule for the reader: a record that one new record points at nests inside it; a record that several new records point at arrives as a part of their common container, and they name it.
