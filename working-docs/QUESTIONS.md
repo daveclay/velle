@@ -119,7 +119,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 
 ## Larger language questions
 
-- **[OQ64](questions/OQ64-creation-multiplicity.md)** — many records from one request: a creation statement creates one record and a rule fires once per record, so a request carrying counts, or a product of two sets, or a tree of created records, cannot be laid out by the spec; the client computes it and the spec can only count it back · opened 2026-10-20 from a science system Dave worked on (containers × wells per container × replicates, with conditions spread across the wells); no design yet
+- **[OQ64](questions/OQ64-creation-multiplicity.md)** — many records from one request: a creation statement creates one record and a rule fires once per record, so a request carrying counts, or a product of two sets, cannot be laid out by the spec; the client computes it and the spec can only count it back · opened 2026-10-20 from a science system Dave worked on (containers × wells per container × replicates, with conditions spread across the wells) · narrowed 2026-10-21: the tree of created records and its references were OQ63's part, settled; loops and counts remain, no design yet
   - [ ] Write `examples/platelayout/`: the three spellings available today (client-expanded closure, reference-table wells, hand-committed and counted back) with what each refuses.
 - **[OQ28](questions/OQ28-bootstrap-backfill.md)** — bootstrap/backfill: a new rule against pre-existing state · not designed
 - **[OQ59](questions/OQ59-escape-hatch.md)** — the escape hatch: open codegen · deferred, post-v0; the demands from the project's earliest notes, kept when those notes were retired
