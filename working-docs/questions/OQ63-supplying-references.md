@@ -379,7 +379,7 @@ So the question is whether `Well.condition` in 6.2.2 (pointing at a part) and `P
 
 **Recommendation:** yes. One rule for the reader: every record arriving in an act, nested or part, may be pointed at by any other record in the act.
 
-**Dave:**
+**Dave (2026-10-21):** yes.
 
 #### 6.2.3.3 Where are in-act references resolved: in the generated boundary before the runtime sees the act, or inside the runtime's transaction?
 
