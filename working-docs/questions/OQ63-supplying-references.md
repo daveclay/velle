@@ -424,4 +424,4 @@ NewSplitFermentation(
 
 **Recommendation:** one meaning per field. The Kotlin author reads `New` on a field as whatever the spec fixed for that field, and never has to know which.
 
-**Dave:**
+**Dave (2026-10-21):** one meaning per field. Velle never has to distinguish which `New(ferment)` creates: with object identity they are one object and so one record, and the spec already fixed the creating position by naming the field in `with`. The boundary confirms the object sits in exactly one creating position and hands every occurrence the same id. Two creating positions is a refusal; none, only plain fields, is a refusal too, since nothing in the spec said this act creates a fermentation. That last case is why the other option is wrong, not merely unnecessary: a `New` that could create on first sight would make the `with` declaration say nothing about which records an act brings into existence.
