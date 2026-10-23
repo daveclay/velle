@@ -1,6 +1,6 @@
 # OQ64 — Many records from one request: a count, and a product of sets
 
-**Status:** open (2026-10-20) — raised by Dave from a prior system (a science system: the user enters condition values, a container type, how many containers, and a number of replicates, and the software creates every container and every well: containers × wells per container × replicates wells, with the conditions spread across them). Narrowed 2026-10-21: the references between created records were OQ63's part and are settled (`as` on a creation, a part pointing at any record in the same commit, a reference supplied by value). What remains here is the count and the product: no design yet.
+**Status:** open (2026-10-20) — raised by Dave from a prior system (a science system: the user enters condition values, a container type, how many containers, and a number of replicates, and the software creates every container and every well: containers × wells per container × replicates wells, with the conditions spread across them). Narrowed 2026-10-21: the references between created records were OQ63's part and are settled (`as` on a creation, a part pointing at any record in the same commit, a reference supplied by value). What remains here is the count and the product. All six questions in §6 answered 2026-10-23; ready to build.
 **In plain terms:** a creation statement creates exactly one record, and a rule fires once per record that newly meets its condition. So the only sources of "many" are the records a client commits in one closure and the records already on the books. A request that should produce N records, where N is a number carried by the request, or a product of numbers, or one record per pair drawn from two sets, has no spelling. The client has to compute the layout and commit every record; the spec can check the count afterwards but cannot produce it. The feature the product owner asked for lives outside Velle. The tree part of the want (a created well points at a created container, a well in one branch points at a condition in another) is no longer the obstacle: `as` names the record a statement creates (Reference §14) and a part may point at any record arriving in the same commit (Reference §6).
 **See:** `grammar.md` (`creation`, `ruleBody`) · Reference §11 (a rule fires once per record) · Reference §14 (`for`, `from`, `as`) · Reference §6 ("Inline part creation": the closure is the one construct that creates several records in one commit; "A reference to a record arriving elsewhere in the same commit") · Reference §12 (fan-out assignment: one write per existing member; assignment never creates) · Reference §22 ("`initially` generator vocabulary": sequence-flavored generators deferred) · `checks.md` V33 (the `as` name's scope) · `examples/peptides/peptides.velle` (`GreenhouseProtocol.plotsPerArm`, `AssayProtocol.replicates`, `LaidOutTrial`, `CompletedAssay`: counts the spec checks against, never produces) · `examples/membership/membership.velle` (`OpenAccountReview`: a rule creating two linked records with `as`)
 
@@ -455,7 +455,7 @@ rule LayOut when ExperimentDesign {
 
 **Recommendation.** Nothing. A bound invents a number Velle has no basis for, and an advisory fires on the one case the construct exists for.
 
-**Dave:**
+**Dave:** nothing (2026-10-23). Any bound or warning is arbitrary to the business domain.
 
 ## 7. Work left
 
