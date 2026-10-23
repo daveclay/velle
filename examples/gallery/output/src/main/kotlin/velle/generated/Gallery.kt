@@ -22,14 +22,14 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewMember): Commit<NewMember> {
+    fun commit(input: NewMember): Commit<NewMember, Ref<Member>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Member", raw).carrying(input)
+        return system.commit("Member", raw).carrying(input, "Member")
     }
 
     /** Queue keys: [post.author] — plus system-wide width below.
@@ -38,14 +38,14 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPost): Commit<NewPost> {
+    fun commit(input: NewPost): Commit<NewPost, Ref<Post>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Post", raw).carrying(input)
+        return system.commit("Post", raw).carrying(input, "Post")
     }
 
     /** Queue keys: [photo.author] — plus system-wide width below.
@@ -54,14 +54,14 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPhoto): Commit<NewPhoto> {
+    fun commit(input: NewPhoto): Commit<NewPhoto, Ref<Photo>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Photo", raw).carrying(input)
+        return system.commit("Photo", raw).carrying(input, "Photo")
     }
 
     /** Queue keys: [comment.author], [comment.target] — plus system-wide width below.
@@ -72,14 +72,14 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewComment): Commit<NewComment> {
+    fun commit(input: NewComment): Commit<NewComment, Ref<Comment>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Comment", raw).carrying(input)
+        return system.commit("Comment", raw).carrying(input, "Comment")
     }
 
     fun members(): List<Member> = system.instancesOf("Member").map { materializeMember(it) }
@@ -103,7 +103,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             return materialize(id)
         }
@@ -197,7 +197,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Member" -> materializeMember(id)
         "Post" -> materializePost(id)
         "Photo" -> materializePhoto(id)
@@ -207,7 +207,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    fun materializeMember(id: Long): Member = Member(
+    @PublishedApi internal fun materializeMember(id: Long): Member = Member(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         posts = (system.get(id, "posts") as List<*>).map { system.refFor(it as Long) },
@@ -216,7 +216,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         commentNotices = (system.get(id, "commentNotices") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializePost(id: Long): Post = Post(
+    @PublishedApi internal fun materializePost(id: Long): Post = Post(
         key = system.refFor(id).key,
         author = system.refFor(system.get(id, "author") as Long),
         body = system.get(id, "body") as String,
@@ -226,7 +226,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isPopular = system.isMember(id, "Popular"),
     )
 
-    fun materializePhoto(id: Long): Photo = Photo(
+    @PublishedApi internal fun materializePhoto(id: Long): Photo = Photo(
         key = system.refFor(id).key,
         author = system.refFor(system.get(id, "author") as Long),
         caption = system.get(id, "caption") as String,
@@ -236,7 +236,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isPopular = system.isMember(id, "Popular"),
     )
 
-    fun materializeComment(id: Long): Comment = Comment(
+    @PublishedApi internal fun materializeComment(id: Long): Comment = Comment(
         key = system.refFor(id).key,
         target = system.refFor(system.get(id, "target") as Long),
         author = system.refFor(system.get(id, "author") as Long),
@@ -246,29 +246,29 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isPhotoComment = system.isMember(id, "PhotoComment"),
     )
 
-    fun materializePopularityNotice(id: Long): PopularityNotice = PopularityNotice(
+    @PublishedApi internal fun materializePopularityNotice(id: Long): PopularityNotice = PopularityNotice(
         key = system.refFor(id).key,
         content = system.refFor(system.get(id, "content") as Long),
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    fun materializeCommentNotice(id: Long): CommentNotice = CommentNotice(
+    @PublishedApi internal fun materializeCommentNotice(id: Long): CommentNotice = CommentNotice(
         key = system.refFor(id).key,
         recipient = system.refFor(system.get(id, "recipient") as Long),
         comment = system.refFor(system.get(id, "comment") as Long),
         excerpt = system.get(id, "excerpt") as String,
     )
 
-    fun materializeContent(id: Long): Content = materialize(id) as Content
+    @PublishedApi internal fun materializeContent(id: Long): Content = materialize(id) as Content
 
-    fun materializePopular(id: Long): Popular = Popular(
+    @PublishedApi internal fun materializePopular(id: Long): Popular = Popular(
         key = system.refFor(id).key,
         comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
         popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
         commentCount = (system.get(id, "commentCount") as BigDecimal).intValueExact(),
     )
 
-    fun materializePostComment(id: Long): PostComment = PostComment(
+    @PublishedApi internal fun materializePostComment(id: Long): PostComment = PostComment(
         key = system.refFor(id).key,
         target = system.refFor(system.get(id, "target") as Long),
         author = system.refFor(system.get(id, "author") as Long),
@@ -277,7 +277,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isPhotoComment = system.isMember(id, "PhotoComment"),
     )
 
-    fun materializePhotoComment(id: Long): PhotoComment = PhotoComment(
+    @PublishedApi internal fun materializePhotoComment(id: Long): PhotoComment = PhotoComment(
         key = system.refFor(id).key,
         target = system.refFor(system.get(id, "target") as Long),
         author = system.refFor(system.get(id, "author") as Long),

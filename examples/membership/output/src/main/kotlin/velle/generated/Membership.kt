@@ -26,14 +26,14 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPlan): Commit<NewPlan> {
+    fun commit(input: NewPlan): Commit<NewPlan, Ref<Plan>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Plan", raw).carrying(input)
+        return system.commit("Plan", raw).carrying(input, "Plan")
     }
 
     /** Queue keys: [signUp.plan], [signUp.referredBy] — plus system-wide width below.
@@ -45,40 +45,40 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
      *  System-wide over AuditEntry — creates AuditEntry referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSignUp): Commit<NewSignUp> {
+    fun commit(input: NewSignUp): Commit<NewSignUp, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("SignUp", raw).carrying(input)
+        return system.commit("SignUp", raw).carryingNoRecord(input)
     }
 
     /** Queue key: [changeEmail.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewChangeEmail): Commit<NewChangeEmail> {
+    fun commit(input: NewChangeEmail): Commit<NewChangeEmail, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ChangeEmail", raw).carrying(input)
+        return system.commit("ChangeEmail", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [visit.member], [visit.member.plan], [visit.member.referredBy].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewVisit): Commit<NewVisit> {
+    fun commit(input: NewVisit): Commit<NewVisit, Ref<Visit>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Visit", raw).carrying(input)
+        return system.commit("Visit", raw).carrying(input, "Visit")
     }
 
     /** Queue keys: [makeDeposit.member], [makeDeposit.member.plan], [makeDeposit.member.referredBy] — plus system-wide width below.
@@ -90,80 +90,80 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
      *  System-wide over AuditEntry — creates AuditEntry referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewMakeDeposit): Commit<NewMakeDeposit> {
+    fun commit(input: NewMakeDeposit): Commit<NewMakeDeposit, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("MakeDeposit", raw).carrying(input)
+        return system.commit("MakeDeposit", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAgent): Commit<NewAgent> {
+    fun commit(input: NewAgent): Commit<NewAgent, Ref<Agent>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Agent", raw).carrying(input)
+        return system.commit("Agent", raw).carrying(input, "Agent")
     }
 
     /** Queue keys: [raiseTicket.assignee], [raiseTicket.member] — plus system-wide width below.
      *  System-wide over ReopenNotice — creates ReopenNotice referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRaiseTicket): Commit<NewRaiseTicket> {
+    fun commit(input: NewRaiseTicket): Commit<NewRaiseTicket, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("RaiseTicket", raw).carrying(input)
+        return system.commit("RaiseTicket", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [closeTicket.closedBy], [closeTicket.ticket], [closeTicket.ticket.closedBy].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCloseTicket): Commit<NewCloseTicket> {
+    fun commit(input: NewCloseTicket): Commit<NewCloseTicket, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CloseTicket", raw).carrying(input)
+        return system.commit("CloseTicket", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [reopenTicket.ticket], [reopenTicket.ticket.closedBy].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewReopenTicket): Commit<NewReopenTicket> {
+    fun commit(input: NewReopenTicket): Commit<NewReopenTicket, Ref<ReopenTicket>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ReopenTicket", raw).carrying(input)
+        return system.commit("ReopenTicket", raw).carrying(input, "ReopenTicket")
     }
 
     /** Queue keys: [assignTicket.agent], [assignTicket.ticket], [assignTicket.ticket.assignee], [assignTicket.ticket.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssignTicket): Commit<NewAssignTicket> {
+    fun commit(input: NewAssignTicket): Commit<NewAssignTicket, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AssignTicket", raw).carrying(input)
+        return system.commit("AssignTicket", raw).carryingNoRecord(input)
     }
 
     fun plans(): List<Plan> = system.instancesOf("Plan").map { materializePlan(it) }
@@ -213,7 +213,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             return materialize(id)
         }
@@ -544,7 +544,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Plan" -> materializePlan(id)
         "Member" -> materializeMember(id)
         "WelcomeNote" -> materializeWelcomeNote(id)
@@ -567,14 +567,14 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    fun materializePlan(id: Long): Plan = Plan(
+    @PublishedApi internal fun materializePlan(id: Long): Plan = Plan(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         price = system.get(id, "price") as BigDecimal,
         members = (system.get(id, "members") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeMember(id: Long): Member = Member(
+    @PublishedApi internal fun materializeMember(id: Long): Member = Member(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
@@ -608,33 +608,33 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
-    fun materializeWelcomeNote(id: Long): WelcomeNote = WelcomeNote(
+    @PublishedApi internal fun materializeWelcomeNote(id: Long): WelcomeNote = WelcomeNote(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         sentOn = system.get(id, "sentOn") as Instant,
     )
 
-    fun materializeEmailChange(id: Long): EmailChange = EmailChange(
+    @PublishedApi internal fun materializeEmailChange(id: Long): EmailChange = EmailChange(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         newEmail = system.get(id, "newEmail") as String,
         changedOn = system.get(id, "changedOn") as Instant,
     )
 
-    fun materializeVisit(id: Long): Visit = Visit(
+    @PublishedApi internal fun materializeVisit(id: Long): Visit = Visit(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         minutes = (system.get(id, "minutes") as BigDecimal).intValueExact(),
         analyticsPings = (system.get(id, "analyticsPings") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeAnalyticsPing(id: Long): AnalyticsPing = AnalyticsPing(
+    @PublishedApi internal fun materializeAnalyticsPing(id: Long): AnalyticsPing = AnalyticsPing(
         key = system.refFor(id).key,
         visit = system.refFor(system.get(id, "visit") as Long),
         pingedOn = system.get(id, "pingedOn") as Instant,
     )
 
-    fun materializeDeposit(id: Long): Deposit = Deposit(
+    @PublishedApi internal fun materializeDeposit(id: Long): Deposit = Deposit(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -642,7 +642,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUnappliedDeposit = system.isMember(id, "UnappliedDeposit"),
     )
 
-    fun materializeCharge(id: Long): Charge = Charge(
+    @PublishedApi internal fun materializeCharge(id: Long): Charge = Charge(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -652,13 +652,13 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUnappliedCharge = system.isMember(id, "UnappliedCharge"),
     )
 
-    fun materializeChargeApplication(id: Long): ChargeApplication = ChargeApplication(
+    @PublishedApi internal fun materializeChargeApplication(id: Long): ChargeApplication = ChargeApplication(
         key = system.refFor(id).key,
         charge = system.refFor(system.get(id, "charge") as Long),
         appliedOn = system.get(id, "appliedOn") as Instant,
     )
 
-    fun materializeDelinquencyFlag(id: Long): DelinquencyFlag = DelinquencyFlag(
+    @PublishedApi internal fun materializeDelinquencyFlag(id: Long): DelinquencyFlag = DelinquencyFlag(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         flaggedOn = system.get(id, "flaggedOn") as LocalDate,
@@ -666,13 +666,13 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isOpenDelinquencyFlag = system.isMember(id, "OpenDelinquencyFlag"),
     )
 
-    fun materializeDelinquencyResolution(id: Long): DelinquencyResolution = DelinquencyResolution(
+    @PublishedApi internal fun materializeDelinquencyResolution(id: Long): DelinquencyResolution = DelinquencyResolution(
         key = system.refFor(id).key,
         flag = system.refFor(system.get(id, "flag") as Long),
         resolvedOn = system.get(id, "resolvedOn") as LocalDate,
     )
 
-    fun materializeAuditEntry(id: Long): AuditEntry = AuditEntry(
+    @PublishedApi internal fun materializeAuditEntry(id: Long): AuditEntry = AuditEntry(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         review = (system.get(id, "review") as Long?)?.let { system.refFor(it) },
@@ -680,14 +680,14 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         loggedOn = system.get(id, "loggedOn") as Instant,
     )
 
-    fun materializeAccountReview(id: Long): AccountReview = AccountReview(
+    @PublishedApi internal fun materializeAccountReview(id: Long): AccountReview = AccountReview(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         openedOn = system.get(id, "openedOn") as Instant,
         auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeAgent(id: Long): Agent = Agent(
+    @PublishedApi internal fun materializeAgent(id: Long): Agent = Agent(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         email = system.get(id, "email") as String,
@@ -696,7 +696,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeTicket(id: Long): Ticket = Ticket(
+    @PublishedApi internal fun materializeTicket(id: Long): Ticket = Ticket(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
@@ -719,32 +719,32 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
-    fun materializeTicketClosure(id: Long): TicketClosure = TicketClosure(
+    @PublishedApi internal fun materializeTicketClosure(id: Long): TicketClosure = TicketClosure(
         key = system.refFor(id).key,
         ticket = system.refFor(system.get(id, "ticket") as Long),
         closedBy = system.refFor(system.get(id, "closedBy") as Long),
         closedOn = system.get(id, "closedOn") as Instant,
     )
 
-    fun materializeReopenTicket(id: Long): ReopenTicket = ReopenTicket(
+    @PublishedApi internal fun materializeReopenTicket(id: Long): ReopenTicket = ReopenTicket(
         key = system.refFor(id).key,
         ticket = system.refFor(system.get(id, "ticket") as Long),
     )
 
-    fun materializeReopenNotice(id: Long): ReopenNotice = ReopenNotice(
+    @PublishedApi internal fun materializeReopenNotice(id: Long): ReopenNotice = ReopenNotice(
         key = system.refFor(id).key,
         ticket = system.refFor(system.get(id, "ticket") as Long),
         reassignTo = system.refFor(system.get(id, "reassignTo") as Long),
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    fun materializeEscalation(id: Long): Escalation = Escalation(
+    @PublishedApi internal fun materializeEscalation(id: Long): Escalation = Escalation(
         key = system.refFor(id).key,
         ticket = system.refFor(system.get(id, "ticket") as Long),
         raisedOn = system.get(id, "raisedOn") as LocalDate,
     )
 
-    fun materializeSelfReferral(id: Long): SelfReferral = SelfReferral(
+    @PublishedApi internal fun materializeSelfReferral(id: Long): SelfReferral = SelfReferral(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
@@ -777,14 +777,14 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
-    fun materializeUnappliedDeposit(id: Long): UnappliedDeposit = UnappliedDeposit(
+    @PublishedApi internal fun materializeUnappliedDeposit(id: Long): UnappliedDeposit = UnappliedDeposit(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
         applied = system.get(id, "applied") as Boolean,
     )
 
-    fun materializeActiveMember(id: Long): ActiveMember = ActiveMember(
+    @PublishedApi internal fun materializeActiveMember(id: Long): ActiveMember = ActiveMember(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
@@ -817,7 +817,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
-    fun materializeUnappliedCharge(id: Long): UnappliedCharge = UnappliedCharge(
+    @PublishedApi internal fun materializeUnappliedCharge(id: Long): UnappliedCharge = UnappliedCharge(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -826,7 +826,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         chargeApplications = (system.get(id, "chargeApplications") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeDelinquent(id: Long): Delinquent = Delinquent(
+    @PublishedApi internal fun materializeDelinquent(id: Long): Delinquent = Delinquent(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
@@ -859,7 +859,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
-    fun materializeDeepDelinquent(id: Long): DeepDelinquent = DeepDelinquent(
+    @PublishedApi internal fun materializeDeepDelinquent(id: Long): DeepDelinquent = DeepDelinquent(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
@@ -892,14 +892,14 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
-    fun materializeOpenDelinquencyFlag(id: Long): OpenDelinquencyFlag = OpenDelinquencyFlag(
+    @PublishedApi internal fun materializeOpenDelinquencyFlag(id: Long): OpenDelinquencyFlag = OpenDelinquencyFlag(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         flaggedOn = system.get(id, "flaggedOn") as LocalDate,
         delinquencyResolutions = (system.get(id, "delinquencyResolutions") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeChronicDelinquent(id: Long): ChronicDelinquent = ChronicDelinquent(
+    @PublishedApi internal fun materializeChronicDelinquent(id: Long): ChronicDelinquent = ChronicDelinquent(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
@@ -932,7 +932,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
-    fun materializeClosedTicket(id: Long): ClosedTicket = ClosedTicket(
+    @PublishedApi internal fun materializeClosedTicket(id: Long): ClosedTicket = ClosedTicket(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
@@ -956,7 +956,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
-    fun materializeOpenTicket(id: Long): OpenTicket = OpenTicket(
+    @PublishedApi internal fun materializeOpenTicket(id: Long): OpenTicket = OpenTicket(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
@@ -978,7 +978,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
-    fun materializeOverdueTicket(id: Long): OverdueTicket = OverdueTicket(
+    @PublishedApi internal fun materializeOverdueTicket(id: Long): OverdueTicket = OverdueTicket(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
@@ -1000,7 +1000,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
-    fun materializeHighPriority(id: Long): HighPriority = HighPriority(
+    @PublishedApi internal fun materializeHighPriority(id: Long): HighPriority = HighPriority(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
@@ -1022,7 +1022,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
-    fun materializeUnassigned(id: Long): Unassigned = Unassigned(
+    @PublishedApi internal fun materializeUnassigned(id: Long): Unassigned = Unassigned(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
@@ -1044,7 +1044,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
-    fun materializeNeedsAttention(id: Long): NeedsAttention = NeedsAttention(
+    @PublishedApi internal fun materializeNeedsAttention(id: Long): NeedsAttention = NeedsAttention(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
@@ -1066,7 +1066,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
-    fun materializeUrgentQueue(id: Long): UrgentQueue = UrgentQueue(
+    @PublishedApi internal fun materializeUrgentQueue(id: Long): UrgentQueue = UrgentQueue(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
@@ -1088,7 +1088,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isNeedsAttention = system.isMember(id, "NeedsAttention"),
     )
 
-    fun materializeMemberWithDisputedCharge(id: Long): MemberWithDisputedCharge = MemberWithDisputedCharge(
+    @PublishedApi internal fun materializeMemberWithDisputedCharge(id: Long): MemberWithDisputedCharge = MemberWithDisputedCharge(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
@@ -1121,7 +1121,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
-    fun materializeLateEscalatedMember(id: Long): LateEscalatedMember = LateEscalatedMember(
+    @PublishedApi internal fun materializeLateEscalatedMember(id: Long): LateEscalatedMember = LateEscalatedMember(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,

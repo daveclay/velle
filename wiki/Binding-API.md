@@ -89,14 +89,16 @@ Identity is what matters, not equality. Two separately built `NewCondition` obje
 
 ## The commit function
 
-Each act gets one overload of `commit`, taking the input and, for an act declared `by`, the actor ([Authorization](Authorization)). It returns a `Commit` value carrying the input: `Accepted` with the record's handle, or `Refused` with a reason, and with the `never` that refused it as data when there was one ([§21](Reference-21-never)).
+Each act gets one overload of `commit`, taking the input and, for an act declared `by`, the actor ([Authorization](Authorization)). It returns a `Commit` value carrying the input: `Accepted` with a reference to the record the act became, or `Refused` with a reason, and with the `never` that refused it as data when there was one ([§21](Reference-21-never)). For `act PeptideBatch` the overload is declared as `commit(input: NewPeptideBatch): Commit<NewPeptideBatch, Ref<PeptideBatch>>`.
 
 ```kotlin
 when (val r = sys.commit(batch)) {
-    is Commit.Accepted -> r.ref
+    is Commit.Accepted -> r.ref          // a Ref<PeptideBatch>: keep it, or sys.read(r.ref)
     is Commit.Refused -> r.reason
 }
 ```
+
+A transient act ([§4](Reference-04-State-and-commits), "Transient acts") leaves no record, so its overload returns `Commit<NewSignUp, Nothing?>` and `r.ref` is null. What the act's rules made is found through the queries, as `sys.customers().last()` in `examples/billing/output/src/main/kotlin/velle/app/BillingApp.kt`.
 
 Before the runtime is entered, the function walks the input once. Every value in a creating position, a part or a `with`-named field's `New`, gets a token by its identity, and every reference to a sibling is resolved to that token. Three things are refused here, as a `Refused` whose reason begins with `type:` and carries no `never`:
 
@@ -106,9 +108,34 @@ Before the runtime is entered, the function walks the input once. Every value in
 
 The runtime then creates every record in an order where each reference points at a record already created, as one transaction, and the door check and the rules see all of them at once ([evaluation](evaluation), "Closure commits").
 
+## Reading a record
+
+A reference is the durable name of one record: its shape and the key your database gave the row. Every `Ref<T>` carries both as `shape` and `key`, and so does every model object, since a model object is a reference to its own record. The pair is what you store, log, or put on the wire. Nothing else the generated code hands you survives a restart.
+
+The engineer's transport code receives "show me order 42" and has to turn the number into an `Order`. Later it receives a comment's `target`, which is a `Ref<Content>`, and has to find out whether that is a post or a photo. From `examples/orders/orders.velle` and `examples/gallery/gallery.velle`:
+
+```kotlin
+val order: Order = sys.read.order(42)          // by the store's key, when the shape is known
+val again: Order = sys.read(order.customer)    // by a reference held from an earlier read
+
+val comment: Comment = sys.read.comment(7)
+comment.target.shape                            // "Post" or "Photo", with no read
+when (val c = sys.read(comment.target)) {       // the model object of the concrete shape
+    is Post -> c.body
+    is Photo -> c.caption
+}
+```
+
+- `read.order(key)` exists once per shape and takes the key as your database holds it, either a `StoreKey` or a `Long`. It throws when no such row exists.
+- `read(ref)` takes any `Ref<T>` and returns the `T`. It throws when the record has been deleted since the reference was taken.
+- A reference typed by a union ([§9](Reference-09-Composing-refinements)) always names one operand in `shape`, never the union. Reading it returns the operand's model object, so a `when` over the operands' classes covers every case.
+- Two references are equal when their shape and key are equal, whichever class carries them. Whether two reads of one record returned the same fields is a comparison you make yourself.
+
+A generated system also holds a numeric handle for every record it has touched. The handle is private to one running system and never reaches the engineer: it is not the store's key, two running copies of the same system give one row different handles, and a restart forgets them all. If a `Long` shows up in the generated code, it is one of these, and nothing on the surface takes or returns it.
+
 ## The raw surface
 
-The runtime's own `commit(shape, fields, parts)` takes maps instead of classes, and the generated specs use it. A nested value is a map carrying `"@shape"` when the field's type is a union; a value others point at carries `"@new"` with a number, and the pointing field holds `NewRef(number)`. The generated classes produce these maps, so hand-written code rarely needs them.
+The runtime's own `commit(shape, fields, parts)` takes maps instead of classes, and the generated specs use it. The generated `fetch` and `materialize` functions that build model objects from handles are internal to the generated module; `read` is the only way to get a model object. A nested value is a map carrying `"@shape"` when the field's type is a union; a value others point at carries `"@new"` with a number, and the pointing field holds `NewRef(number)`. The generated classes produce these maps, so hand-written code rarely needs them.
 
 ## Related pages
 

@@ -25,7 +25,7 @@ import velle.generated.PharmacySystem
  */
 class Scenario(val sys: PharmacySystem) {
 
-    fun accept(r: Commit<*>) { check(r is Commit.Accepted<*>) { "refused: $r" } }
+    fun accept(r: Commit<*, *>) { check(r is Commit.Accepted<*, *>) { "refused: $r" } }
 
     val now: Instant get() = sys.system.now
     val today: LocalDate get() = LocalDate.ofInstant(sys.system.now, ZoneOffset.UTC)

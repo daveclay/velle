@@ -19,12 +19,12 @@ open class EnrollmentFlowTest {
     protected val sys: EnrollmentSystem by lazy { newSystem() }
 
     private fun student(name: String = "Ada"): Student {
-        assertIs<Commit.Accepted<*>>(sys.commit(NewStudent(name, tags = emptyList(), courses = emptyList())))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewStudent(name, tags = emptyList(), courses = emptyList())))
         return sys.students().last()
     }
 
     private fun course(title: String): Course {
-        assertIs<Commit.Accepted<*>>(sys.commit(NewCourse(title, 30)))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewCourse(title, 30)))
         return sys.courses().last()
     }
 
@@ -36,17 +36,17 @@ open class EnrollmentFlowTest {
         val proofs = course("Proofs")
 
         // whole-set replacement: the edge set becomes exactly the committed set
-        assertIs<Commit.Accepted<*>>(sys.commit(NewSetEnrollment(ada, listOf(logic, sets))))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewSetEnrollment(ada, listOf(logic, sets))))
         assertEquals(listOf(logic, sets), sys.read(ada).courses)
 
         // union is idempotent; removal is quiet on an absent member
-        assertIs<Commit.Accepted<*>>(sys.commit(NewEnroll(ada, proofs)))
-        assertIs<Commit.Accepted<*>>(sys.commit(NewEnroll(ada, proofs)))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewEnroll(ada, proofs)))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewEnroll(ada, proofs)))
         assertEquals(setOf(logic, sets, proofs), sys.read(ada).courses.toSet())
         assertTrue(sys.overloadeds().any { it.key == ada.key }, "count(courses) > 2")
 
-        assertIs<Commit.Accepted<*>>(sys.commit(NewDrop(ada, logic)))
-        assertIs<Commit.Accepted<*>>(sys.commit(NewDrop(ada, logic)))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewDrop(ada, logic)))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewDrop(ada, logic)))
         assertEquals(setOf(sets, proofs), sys.read(ada).courses.toSet())
 
         // the inferred inverse follows the declared side
@@ -59,20 +59,20 @@ open class EnrollmentFlowTest {
         val ada = student()
         val logic = course("Logic")
         val refused = sys.commit(NewSetEnrollment(ada, listOf(logic, logic)))
-        val r = assertIs<Commit.Refused<*>>(refused)
+        val r = assertIs<Commit.Refused<*, *>>(refused)
         assertTrue("duplicate" in r.reason, r.reason)
         assertEquals(emptyList(), sys.read(ada).courses, "a refused act commits nothing")
     }
 
     @Test
     fun `fan-out assignment and the two views over the declared side`() {
-        assertIs<Commit.Accepted<*>>(sys.commit(NewAdvisor("Turing")))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewAdvisor("Turing")))
         val advisor = sys.advisors().last()
         val ada = student("Ada")
         val grace = student("Grace")
         val edsger = student("Edsger")
 
-        assertIs<Commit.Accepted<*>>(sys.commit(NewAssignAdvisor(advisor, listOf(ada, grace))))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewAssignAdvisor(advisor, listOf(ada, grace))))
         assertEquals(advisor, sys.read(ada).advisor)
         assertEquals(advisor, sys.read(grace).advisor)
         assertEquals(null, sys.read(edsger).advisor, "only the named children were written")
@@ -88,9 +88,9 @@ open class EnrollmentFlowTest {
         assertEquals(emptyList(), sys.read(ada).tags)
         assertTrue(sys.untaggeds().any { it.key == ada.key })
 
-        assertIs<Commit.Accepted<*>>(sys.commit(NewTag(ada, "honors")))
-        assertIs<Commit.Accepted<*>>(sys.commit(NewTag(ada, "honors")))
-        assertIs<Commit.Accepted<*>>(sys.commit(NewTag(ada, "stem")))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewTag(ada, "honors")))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewTag(ada, "honors")))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewTag(ada, "stem")))
         assertEquals(listOf("honors", "stem"), sys.read(ada).tags)
         assertTrue(sys.untaggeds().none { it.key == ada.key })
     }

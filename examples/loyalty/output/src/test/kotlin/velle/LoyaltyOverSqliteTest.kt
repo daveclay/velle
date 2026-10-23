@@ -52,7 +52,7 @@ class LoyaltyPersistenceTest {
 
     private fun process(): LoyaltySystem = LoyaltySystem().also { SqliteStore.attach(it.system, conn) }
 
-    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
+    private fun accept(r: Commit<*, *>) = assertIs<Commit.Accepted<*, *>>(r, "refused: $r")
 
     private fun dues(sys: LoyaltySystem, m: Member, month: String, dueBy: LocalDate, paidOn: LocalDate) =
         accept(sys.commit(NewDuesPayment(m, month, dueBy, paidOn)))

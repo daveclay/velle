@@ -17,14 +17,20 @@ import kotlin.test.assertTrue
  */
 open class OrdersFlowTest {
 
+    /** The acceptance, typed by the act it carries, so `.ref` is the record's own `Ref<T>`. */
+    private fun <I, R> accept(r: Commit<I, R>): Commit.Accepted<I, R> {
+        if (r !is Commit.Accepted) throw AssertionError("refused: $r")
+        return r
+    }
+
     /** The system under test; the storage-backed variants override this. */
     protected open fun newSystem(): OrdersSystem = OrdersSystem()
 
     @Test
     fun `an order lands with its lines and their customizations in one commit`() {
         val sys = newSystem()
-        val ada = sys.read<Customer>(sys.system.refFor(assertIs<Commit.Accepted<*>>(sys.commit(NewCustomer("Ada"))).id))
-        val prod = sys.read<Product>(sys.system.refFor(assertIs<Commit.Accepted<*>>(sys.commit(NewProduct("SKU-1"))).id))
+        val ada = sys.read(accept(sys.commit(NewCustomer("Ada"))).ref)
+        val prod = sys.read(accept(sys.commit(NewProduct("SKU-1"))).ref)
 
         val r = sys.commit(NewOrder(
             customer = ada,
@@ -37,7 +43,7 @@ open class OrdersFlowTest {
                 NewOrderLine(product = prod, quantity = 3),
             ),
         ))
-        val order = sys.read<Order>(sys.system.refFor(assertIs<Commit.Accepted<*>>(r).id))
+        val order = sys.read(accept(r).ref)
 
         // the parts landed, back-references populated by the language
         assertEquals(2, sys.orderLines().size)
@@ -59,8 +65,8 @@ open class OrdersFlowTest {
     @Test
     fun `identical inline part values are a bag - two distinct lines`() {
         val sys = newSystem()
-        val ada = sys.read<Customer>(sys.system.refFor(assertIs<Commit.Accepted<*>>(sys.commit(NewCustomer("Ada"))).id))
-        val prod = sys.read<Product>(sys.system.refFor(assertIs<Commit.Accepted<*>>(sys.commit(NewProduct("SKU-1"))).id))
+        val ada = sys.read(accept(sys.commit(NewCustomer("Ada"))).ref)
+        val prod = sys.read(accept(sys.commit(NewProduct("SKU-1"))).ref)
 
         val r = sys.commit(NewOrder(
             customer = ada,
@@ -70,16 +76,16 @@ open class OrdersFlowTest {
                 NewOrderLine(product = prod, quantity = 1), // 1 twice ≠ 2 once
             ),
         ))
-        assertIs<Commit.Accepted<*>>(r)
+        assertIs<Commit.Accepted<*, *>>(r)
         assertEquals(2, sys.orderLines().size)
-        assertEquals(2, sys.read<Order>(sys.system.refFor(assertIs<Commit.Accepted<*>>(r).id)).total)
+        assertEquals(2, sys.read(accept(r).ref).total)
     }
 
     @Test
     fun `a never over a part refuses the whole closure - nothing lands`() {
         val sys = newSystem()
-        val ada = sys.read<Customer>(sys.system.refFor(assertIs<Commit.Accepted<*>>(sys.commit(NewCustomer("Ada"))).id))
-        val prod = sys.read<Product>(sys.system.refFor(assertIs<Commit.Accepted<*>>(sys.commit(NewProduct("SKU-1"))).id))
+        val ada = sys.read(accept(sys.commit(NewCustomer("Ada"))).ref)
+        val prod = sys.read(accept(sys.commit(NewProduct("SKU-1"))).ref)
 
         val r = sys.commit(NewOrder(
             customer = ada,
@@ -89,7 +95,7 @@ open class OrdersFlowTest {
                 NewOrderLine(product = prod, quantity = 0), // violates the never
             ),
         ))
-        assertIs<Commit.Refused<*>>(r)
+        assertIs<Commit.Refused<*, *>>(r)
         assertTrue(sys.orders().isEmpty())
         assertTrue(sys.orderLines().isEmpty())
         assertTrue(sys.reservations().isEmpty())
@@ -98,9 +104,9 @@ open class OrdersFlowTest {
     @Test
     fun `the empty part collection is the absence`() {
         val sys = newSystem()
-        val ada = sys.read<Customer>(sys.system.refFor(assertIs<Commit.Accepted<*>>(sys.commit(NewCustomer("Ada"))).id))
+        val ada = sys.read(accept(sys.commit(NewCustomer("Ada"))).ref)
         val r = sys.commit(NewOrder(customer = ada, placedOn = LocalDate.parse("2026-08-21")))
-        val order = sys.read<Order>(sys.system.refFor(assertIs<Commit.Accepted<*>>(r).id))
+        val order = sys.read(accept(r).ref)
         assertTrue(sys.read(order).orderLines.isEmpty())
         assertEquals(0, sys.read(order).total)
     }

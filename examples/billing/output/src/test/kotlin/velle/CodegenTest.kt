@@ -59,12 +59,12 @@ open class GeneratedApiTest {
     @Test
     fun `the typed surface drives the payment cascade`() {
         val sys = newSystem()
-        assertIs<Commit.Accepted<*>>(sys.commit(NewSignUp("Ada", "a@x.com")))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewSignUp("Ada", "a@x.com")))
         val ada = sys.customers().single()
 
-        assertIs<Commit.Accepted<*>>(sys.commit(NewBillCustomer(ada, LocalDate.of(2026, 2, 1))))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewBillCustomer(ada, LocalDate.of(2026, 2, 1))))
         val invoice = sys.invoices().single()
-        assertIs<Commit.Accepted<*>>(
+        assertIs<Commit.Accepted<*, *>>(
             sys.commit(NewLineItem(invoice, "widgets", BigDecimal("100"), 2)))
 
         assertEquals(0, sys.read(invoice).total.compareTo(BigDecimal("200")))
@@ -72,7 +72,7 @@ open class GeneratedApiTest {
         assertEquals(2, sys.read(sys.read(invoice).lineItems.single()).quantity)
         assertEquals("Ada", sys.read(sys.read(invoice).customer).name)
 
-        assertIs<Commit.Accepted<*>>(sys.commit(NewSubmitPayment(invoice, BigDecimal("200"))))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewSubmitPayment(invoice, BigDecimal("200"))))
         with(sys) { assertTrue(sys.read(invoice).isPaidInvoice) }
         assertEquals("paid", sys.read(invoice).status)
         assertEquals(1, sys.receipts().size)
@@ -87,12 +87,12 @@ open class GeneratedApiTest {
         sys.commit(NewSignUp("Ada", "a@x.com"))
         sys.commit(NewBillCustomer(sys.customers().single(), LocalDate.of(2026, 2, 1)))
         val input = NewSubmitPayment(sys.invoices().single(), BigDecimal.ZERO)
-        val refused = assertIs<Commit.Refused<NewSubmitPayment>>(sys.commit(input))
+        val refused = assertIs<Commit.Refused<NewSubmitPayment, *>>(sys.commit(input))
         // the verdict carries what was refused as the engineer's own type, not a map
         assertEquals(input, refused.input)
         assertEquals(0, refused.input.amount.compareTo(BigDecimal.ZERO))
         assertEquals(0, sys.payments().size)
-        val accepted = assertIs<Commit.Accepted<NewSubmitPayment>>(
+        val accepted = assertIs<Commit.Accepted<NewSubmitPayment, *>>(
             sys.commit(NewSubmitPayment(sys.invoices().single(), BigDecimal("5"))))
         assertEquals(0, accepted.input.amount.compareTo(BigDecimal("5")))
     }

@@ -69,7 +69,7 @@ class TypedStoreTest {
         }
     }
 
-    private fun accept(r: Commit<*>): Long = assertIs<Commit.Accepted<*>>(r, "refused: $r").id
+    private fun accept(r: Commit<*, *>) { assertIs<Commit.Accepted<*, *>>(r, "refused: $r") }
 
     @Test
     fun `generic defaults serve everything, the one override serves its question`() {

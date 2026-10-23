@@ -32,8 +32,8 @@ open class PharmacyFlowTest {
     protected val sys: PharmacySystem by lazy { newSystem() }
     private val s: Scenario by lazy { Scenario(sys) }
 
-    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
-    private fun refuse(r: Commit<*>) = assertTrue(r !is Commit.Accepted<*>, "expected a refusal, got: $r")
+    private fun accept(r: Commit<*, *>) = assertIs<Commit.Accepted<*, *>>(r, "refused: $r")
+    private fun refuse(r: Commit<*, *>) = assertTrue(r !is Commit.Accepted<*, *>, "expected a refusal, got: $r")
     private fun Keyed.isA(refinement: String) = sys.system.isMember(sys.system.idOf(this), refinement)
     private fun dec(s: String) = BigDecimal(s)
     private fun BigDecimal.plain() = stripTrailingZeros().toPlainString()

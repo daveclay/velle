@@ -27,7 +27,7 @@ import velle.generated.PeptidesSystem
  */
 class Scenario(val sys: PeptidesSystem) {
 
-    fun accept(r: Commit<*>) { check(r is Commit.Accepted<*>) { "refused: $r" } }
+    fun accept(r: Commit<*, *>) { check(r is Commit.Accepted<*, *>) { "refused: $r" } }
 
     val now: Instant get() = sys.system.now
     val today: LocalDate get() = LocalDate.ofInstant(sys.system.now, ZoneOffset.UTC)

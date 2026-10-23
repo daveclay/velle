@@ -20,33 +20,33 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCustomer): Commit<NewCustomer> {
+    fun commit(input: NewCustomer): Commit<NewCustomer, Ref<Customer>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Customer", raw).carrying(input)
+        return system.commit("Customer", raw).carrying(input, "Customer")
     }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewProduct): Commit<NewProduct> {
+    fun commit(input: NewProduct): Commit<NewProduct, Ref<Product>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Product", raw).carrying(input)
+        return system.commit("Product", raw).carrying(input, "Product")
     }
 
     /** Queue key: [order.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewOrder): Commit<NewOrder> {
+    fun commit(input: NewOrder): Commit<NewOrder, Ref<Order>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
@@ -54,7 +54,7 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
         val raw = input.raw(system, reg)
         val parts = input.parts(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Order", raw, parts).carrying(input)
+        return system.commit("Order", raw, parts).carrying(input, "Order")
     }
 
     fun customers(): List<Customer> = system.instancesOf("Customer").map { materializeCustomer(it) }
@@ -74,7 +74,7 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             return materialize(id)
         }
@@ -135,7 +135,7 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Customer" -> materializeCustomer(id)
         "Product" -> materializeProduct(id)
         "Order" -> materializeOrder(id)
@@ -145,19 +145,19 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    fun materializeCustomer(id: Long): Customer = Customer(
+    @PublishedApi internal fun materializeCustomer(id: Long): Customer = Customer(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         orders = (system.get(id, "orders") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeProduct(id: Long): Product = Product(
+    @PublishedApi internal fun materializeProduct(id: Long): Product = Product(
         key = system.refFor(id).key,
         sku = system.get(id, "sku") as String,
         orderLines = (system.get(id, "orderLines") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeOrder(id: Long): Order = Order(
+    @PublishedApi internal fun materializeOrder(id: Long): Order = Order(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         placedOn = system.get(id, "placedOn") as LocalDate,
@@ -165,7 +165,7 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
         orderLines = (system.get(id, "orderLines") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeOrderLine(id: Long): OrderLine = OrderLine(
+    @PublishedApi internal fun materializeOrderLine(id: Long): OrderLine = OrderLine(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         product = system.refFor(system.get(id, "product") as Long),
@@ -174,13 +174,13 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
         reservations = (system.get(id, "reservations") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeCustomization(id: Long): Customization = Customization(
+    @PublishedApi internal fun materializeCustomization(id: Long): Customization = Customization(
         key = system.refFor(id).key,
         line = system.refFor(system.get(id, "line") as Long),
         note = system.get(id, "note") as String,
     )
 
-    fun materializeReservation(id: Long): Reservation = Reservation(
+    @PublishedApi internal fun materializeReservation(id: Long): Reservation = Reservation(
         key = system.refFor(id).key,
         line = system.refFor(system.get(id, "line") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),

@@ -20,14 +20,14 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewOrder): Commit<NewOrder> {
+    fun commit(input: NewOrder): Commit<NewOrder, Ref<Order>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Order", raw).carrying(input)
+        return system.commit("Order", raw).carrying(input, "Order")
     }
 
     /** Queue keys: [cancellation.order] — plus system-wide width below.
@@ -35,27 +35,27 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Cancellation — consults Cancellation through 'cancellations' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCancellation): Commit<NewCancellation> {
+    fun commit(input: NewCancellation): Commit<NewCancellation, Ref<Cancellation>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Cancellation", raw).carrying(input)
+        return system.commit("Cancellation", raw).carrying(input, "Cancellation")
     }
 
     /** Queue key: [shipment.order].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewShipment): Commit<NewShipment> {
+    fun commit(input: NewShipment): Commit<NewShipment, Ref<Shipment>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Shipment", raw).carrying(input)
+        return system.commit("Shipment", raw).carrying(input, "Shipment")
     }
 
     fun orders(): List<Order> = system.instancesOf("Order").map { materializeOrder(it) }
@@ -74,7 +74,7 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             return materialize(id)
         }
@@ -126,14 +126,14 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Order" -> materializeOrder(id)
         "Cancellation" -> materializeCancellation(id)
         "Shipment" -> materializeShipment(id)
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    fun materializeOrder(id: Long): Order = Order(
+    @PublishedApi internal fun materializeOrder(id: Long): Order = Order(
         key = system.refFor(id).key,
         reference = system.get(id, "reference") as String,
         cancellations = (system.get(id, "cancellations") as List<*>).map { system.refFor(it as Long) },
@@ -142,19 +142,19 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isShippedOrder = system.isMember(id, "ShippedOrder"),
     )
 
-    fun materializeCancellation(id: Long): Cancellation = Cancellation(
+    @PublishedApi internal fun materializeCancellation(id: Long): Cancellation = Cancellation(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         requestedOn = system.get(id, "requestedOn") as LocalDate,
     )
 
-    fun materializeShipment(id: Long): Shipment = Shipment(
+    @PublishedApi internal fun materializeShipment(id: Long): Shipment = Shipment(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         shippedOn = system.get(id, "shippedOn") as LocalDate,
     )
 
-    fun materializeCancelledOrder(id: Long): CancelledOrder = CancelledOrder(
+    @PublishedApi internal fun materializeCancelledOrder(id: Long): CancelledOrder = CancelledOrder(
         key = system.refFor(id).key,
         reference = system.get(id, "reference") as String,
         cancellations = (system.get(id, "cancellations") as List<*>).map { system.refFor(it as Long) },
@@ -162,7 +162,7 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isShippedOrder = system.isMember(id, "ShippedOrder"),
     )
 
-    fun materializeShippedOrder(id: Long): ShippedOrder = ShippedOrder(
+    @PublishedApi internal fun materializeShippedOrder(id: Long): ShippedOrder = ShippedOrder(
         key = system.refFor(id).key,
         reference = system.get(id, "reference") as String,
         cancellations = (system.get(id, "cancellations") as List<*>).map { system.refFor(it as Long) },

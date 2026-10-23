@@ -36,9 +36,9 @@ class ShippingRejectionsTest {
 
     private val sys = ShippingSystem()
 
-    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
-    private fun rejection(r: Commit<*>): Rejection =
-        assertNotNull(assertIs<Commit.Refused<*>>(r, "accepted: $r").rejection, "a never refusal carries its rejection")
+    private fun accept(r: Commit<*, *>) = assertIs<Commit.Accepted<*, *>>(r, "refused: $r")
+    private fun rejection(r: Commit<*, *>): Rejection =
+        assertNotNull(assertIs<Commit.Refused<*, *>>(r, "accepted: $r").rejection, "a never refusal carries its rejection")
 
     private val sixth = LocalDate.of(2026, 10, 6)
     private val seventh = LocalDate.of(2026, 10, 7)

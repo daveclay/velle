@@ -49,7 +49,7 @@ class DriftPersistenceTest {
 
     private fun process(): PartitionDriftSystem = PartitionDriftSystem().also { SqliteStore.attach(it.system, conn) }
 
-    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
+    private fun accept(r: Commit<*, *>) = assertIs<Commit.Accepted<*, *>>(r, "refused: $r")
 
     @Test
     fun `handled-once acts stay handled in a later process`() {

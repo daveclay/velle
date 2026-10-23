@@ -24,22 +24,22 @@ open class GalleryFlowTest {
     protected val sys: GallerySystem by lazy { newSystem() }
 
     private fun member(name: String): Member {
-        assertIs<Commit.Accepted<*>>(sys.commit(NewMember(name)))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewMember(name)))
         return sys.members().last()
     }
 
     private fun post(author: Member, body: String): Post {
-        assertIs<Commit.Accepted<*>>(sys.commit(NewPost(author, body)))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewPost(author, body)))
         return sys.posts().last()
     }
 
     private fun photo(author: Member, caption: String): Photo {
-        assertIs<Commit.Accepted<*>>(sys.commit(NewPhoto(author, caption)))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewPhoto(author, caption)))
         return sys.photos().last()
     }
 
     private fun comment(target: Ref<Content>, author: Member, body: String): Comment {
-        assertIs<Commit.Accepted<*>>(sys.commit(NewComment(target, author, body)))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewComment(target, author, body)))
         return sys.comments().last()
     }
 
@@ -130,10 +130,10 @@ open class GalleryFlowTest {
         val ph = photo(ada, "sunset")
 
         val refused = sys.commit(NewComment(p, ada, "me again"))
-        assertIs<Commit.Refused<*>>(refused)
+        assertIs<Commit.Refused<*, *>>(refused)
         assertEquals(0, sys.read(p).comments.size, "a refused act commits nothing")
 
-        assertIs<Commit.Accepted<*>>(sys.commit(NewComment(ph, ada, "my own photo")))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewComment(ph, ada, "my own photo")))
     }
 
     @Test

@@ -25,7 +25,7 @@ open class BatchesFlowTest {
     protected open fun newSystem(): BatchesSystem = BatchesSystem()
     protected val sys: BatchesSystem by lazy { newSystem() }
 
-    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
+    private fun accept(r: Commit<*, *>) = assertIs<Commit.Accepted<*, *>>(r, "refused: $r")
 
     private fun peptide(code: String): Peptide {
         accept(sys.commit(NewPeptide(code)))
@@ -95,7 +95,7 @@ open class BatchesFlowTest {
 
         // a second batch naming that fermentation by handle is refused at the door
         val refused = sys.commit(NewPeptideBatch(pep, BigDecimal("5"), OriginReference.Existing(ferm.ref)))
-        assertIs<Commit.Refused<*>>(refused, "a fermentation yields one container")
+        assertIs<Commit.Refused<*, *>>(refused, "a fermentation yields one container")
         assertEquals(1, sys.peptideBatchs().size)
     }
 
@@ -107,8 +107,8 @@ open class BatchesFlowTest {
         val b = batch(pep9, "100", fermentation(strain = "E. coli BL21", vessel = "F-2"))
         val mix = composition(a to "10", b to "10")
 
-        assertIs<Commit.Refused<*>>(sys.commit(NewPeptideBatch(pep7, BigDecimal("20"), mix)), "one component is PEP-9")
-        assertIs<Commit.Refused<*>>(sys.commit(NewPeptideBatch(pep9, BigDecimal("20"), mix)), "one component is PEP-7")
+        assertIs<Commit.Refused<*, *>>(sys.commit(NewPeptideBatch(pep7, BigDecimal("20"), mix)), "one component is PEP-9")
+        assertIs<Commit.Refused<*, *>>(sys.commit(NewPeptideBatch(pep9, BigDecimal("20"), mix)), "one component is PEP-7")
         assertEquals(2, sys.peptideBatchs().size)
         // the mixture arrived with the batch, so the refusal leaves nothing behind
         assertEquals(emptyList(), sys.compositions())
@@ -137,7 +137,7 @@ open class BatchesFlowTest {
         // mixture's components are one closure, refused whole
         val over = sys.commit(NewPeptideBatch(pep, BigDecimal("1"),
             OriginReference.New(NewComposition(LocalDate.of(2026, 4, 2), listOf(NewComponent(source, BigDecimal("1")))))))
-        assertIs<Commit.Refused<*>>(over)
+        assertIs<Commit.Refused<*, *>>(over)
         assertEquals(2, sys.compositions().size)
         assertEquals(BigDecimal("0"), sys.read(source).remainingMg)
         assertEquals(1, sys.depletionNotices().size, "depletion was noticed once")

@@ -20,7 +20,7 @@ open class PlateLayoutFlowTest {
     protected open fun newSystem(): PlateLayoutSystem = PlateLayoutSystem()
     protected val sys: PlateLayoutSystem by lazy { newSystem() }
 
-    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
+    private fun accept(r: Commit<*, *>) = assertIs<Commit.Accepted<*, *>>(r, "refused: $r")
 
     private fun plate(wells: Int = 96): ContainerType {
         accept(sys.commit(NewContainerType("$wells-well", wells)))
@@ -67,7 +67,7 @@ open class PlateLayoutFlowTest {
     fun `a layout whose blocks do not fill the plate is refused whole`() {
         val type = plate(96)
         // five blocks of twenty-four is one hundred and twenty wells on a ninety-six-well plate
-        assertIs<Commit.Refused<*>>(sys.commit(NewExperimentDesign(type, 1, 1, 24, conditions(5))))
+        assertIs<Commit.Refused<*, *>>(sys.commit(NewExperimentDesign(type, 1, 1, 24, conditions(5))))
         assertEquals(emptyList(), sys.experimentDesigns())
         assertEquals(emptyList(), sys.conditions(), "the conditions arrived with the design and left with it")
         assertEquals(emptyList(), sys.containers())
@@ -77,10 +77,10 @@ open class PlateLayoutFlowTest {
     @Test
     fun `a design with nothing to test, nothing to lay out, or a block the plate has not, is refused`() {
         val type = plate(96)
-        assertIs<Commit.Refused<*>>(sys.commit(NewExperimentDesign(type, 1, 1, 96, emptyList())), "no conditions")
-        assertIs<Commit.Refused<*>>(sys.commit(NewExperimentDesign(type, 1, 0, 96, conditions(1))), "no replicates")
-        assertIs<Commit.Refused<*>>(sys.commit(NewExperimentDesign(type, 0, 1, 96, conditions(1))), "no containers")
-        assertIs<Commit.Refused<*>>(sys.commit(NewExperimentDesign(type, 1, 1, 48,
+        assertIs<Commit.Refused<*, *>>(sys.commit(NewExperimentDesign(type, 1, 1, 96, emptyList())), "no conditions")
+        assertIs<Commit.Refused<*, *>>(sys.commit(NewExperimentDesign(type, 1, 0, 96, conditions(1))), "no replicates")
+        assertIs<Commit.Refused<*, *>>(sys.commit(NewExperimentDesign(type, 0, 1, 96, conditions(1))), "no containers")
+        assertIs<Commit.Refused<*, *>>(sys.commit(NewExperimentDesign(type, 1, 1, 48,
             listOf(NewCondition(block = 1, value = BigDecimal.ONE), NewCondition(block = 5, value = BigDecimal.TEN)))), "block 5 of 2")
         assertEquals(emptyList(), sys.containers())
         assertEquals(emptyList(), sys.wells())

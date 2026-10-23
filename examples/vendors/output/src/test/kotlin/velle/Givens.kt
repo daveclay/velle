@@ -7,7 +7,7 @@ import velle.generated.*
 /** The givens the generated specs demand, in the catalogue's own words (Reference §22, "The actor"). */
 class Givens(private val sys: VendorsSystem) : RequiredGivens {
 
-    private fun accept(r: Commit<*>) { check(r is Commit.Accepted<*>) { "refused: $r" } }
+    private fun accept(r: Commit<*, *>) { check(r is Commit.Accepted<*, *>) { "refused: $r" } }
 
     /** Fixtures: seeded outside the trust boundary, before any case counts records. */
     private val ada: Staff = run { sys.system.seed("Staff", mapOf("name" to "Ada", "role" to "admin")); sys.staffs().last() }

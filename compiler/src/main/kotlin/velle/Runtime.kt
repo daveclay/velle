@@ -64,23 +64,33 @@ sealed interface CommitResult {
  * surface commits one typed input value per act and hands back the same
  * value with the verdict, so a refusal holds what was refused as the
  * engineer's own type — never a map — and an acceptance holds what was
- * accepted beside its receipt. The runtime stays generic in [I]: it never
+ * accepted beside the reference to the record it made. [R] is that
+ * reference's type: `Ref<Shape>` for a durable act, `Nothing?` for a
+ * transient act (Reference §4), which leaves no record to refer to. The
+ * runtime's session handle never appears here: the engineer holds a
+ * reference (Hydration.kt, Ref), which is the store's identity, and reads
+ * it back with `read(ref)`. The runtime stays generic in [I]: it never
  * depends on generated code.
  */
-sealed interface Commit<out I> {
+sealed interface Commit<out I, out R> {
     /** The input value the caller committed, exactly as it was handed in. */
     val input: I
-    /** [id] is the session-local handle; [storeKey] is the store-assigned row
-     *  key when a store is connected and the act persisted. */
-    data class Accepted<out I>(override val input: I, val id: Long, val storeKey: Any? = null) : Commit<I>
+    /** [ref] names the record the act became: a `Ref<Shape>` for a durable act, null for a transient one. */
+    data class Accepted<out I, out R>(override val input: I, val ref: R) : Commit<I, R>
     /** [reason] is the rendered message; [rejection] is the same as data when a
      *  `never` refused the act (Reference §21), null for a type-level refusal. */
-    data class Refused<out I>(override val input: I, val reason: String, val rejection: Rejection? = null) : Commit<I>
+    data class Refused<out I, out R>(override val input: I, val reason: String, val rejection: Rejection? = null) : Commit<I, R>
 }
 
-/** Attach the typed input to the runtime's untyped verdict. */
-fun <I> CommitResult.carrying(input: I): Commit<I> = when (this) {
-    is CommitResult.Accepted -> Commit.Accepted(input, id, storeKey)
+/** Attach the typed input to the runtime's untyped verdict, with the reference to the durable record of [shape]. */
+fun <I, T> CommitResult.carrying(input: I, shape: String): Commit<I, Ref<T>> = when (this) {
+    is CommitResult.Accepted -> Commit.Accepted(input, Ref.Persisted(shape, StoreKey(storeKey ?: id)))
+    is CommitResult.Refused -> Commit.Refused(input, reason, rejection)
+}
+
+/** Attach the typed input to the runtime's untyped verdict for a transient act, which leaves no record to refer to. */
+fun <I> CommitResult.carryingNoRecord(input: I): Commit<I, Nothing?> = when (this) {
+    is CommitResult.Accepted -> Commit.Accepted(input, null)
     is CommitResult.Refused -> Commit.Refused(input, reason, rejection)
 }
 

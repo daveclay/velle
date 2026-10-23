@@ -24,8 +24,8 @@ open class MembershipApiTest {
     @Test
     fun `the ledger derives the current email`() {
         val sys = newSystem()
-        assertIs<Commit.Accepted<*>>(sys.commit(NewPlan("Standard", BigDecimal("20"))))
-        assertIs<Commit.Accepted<*>>(sys.commit(NewSignUp("Ada", "Ada@Example.com", sys.plans().single())))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewPlan("Standard", BigDecimal("20"))))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewSignUp("Ada", "Ada@Example.com", sys.plans().single())))
         val ada = sys.members().single()
 
         assertEquals("ada@example.com", sys.read(ada).email, "no changes: lowercased signup email")
@@ -61,7 +61,7 @@ open class MembershipApiTest {
         // nothing is kept — no act, no refusal record, no change
         sys.commit(NewCloseTicket(ticket, grace))
         val refused = sys.commit(NewAssignTicket(ticket, grace))
-        assertIs<Commit.Refused<*>>(refused)
+        assertIs<Commit.Refused<*, *>>(refused)
         assertEquals("grace@velle.example", sys.read(ticket).assigneeEmail, "the settled world is untouched")
     }
 

@@ -8,6 +8,7 @@ import java.time.LocalDate
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -235,9 +236,9 @@ open class QueryApiTest {
         assertEquals(after.key, sys.read.paidInvoice(inv)?.key)
         assertNull(sys.read.overdueInvoice(inv))
 
-        // by store key: only meaningful over a store; in memory the handle is the identity
-        val key = (sys.commit(NewBillCustomer(ada, d2)) as Commit.Accepted<*>).storeKey
-        if (key != null) assertEquals(d2, sys.read.invoice(StoreKey(key)).due)
+        // by store key: the key every reference carries; in memory it is the runtime's own identity
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewBillCustomer(ada, d2)))
+        assertEquals(d2, sys.read.invoice(sys.invoices().last().key).due)
     }
 
     @Test

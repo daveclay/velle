@@ -348,7 +348,7 @@ class ClosureTest {
         // the act's input value takes the closure edge, absent by default, and
         // the commit overload takes the input value
         assertTrue("orderLines: List<NewOrderLine> = emptyList()" in src, src)
-        assertTrue("fun commit(input: NewOrder): Commit<NewOrder> {" in src, src)
+        assertTrue("fun commit(input: NewOrder): Commit<NewOrder, Ref<Order>> {" in src, src)
     }
 
     // ── a reference supplied by value: a `one` field named in `with` (Reference §6; OQ63 §6.1) ──

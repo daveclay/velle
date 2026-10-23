@@ -21,42 +21,42 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssignVendor, actor: Ref<Staff>): Commit<NewAssignVendor> {
+    fun commit(input: NewAssignVendor, actor: Ref<Staff>): Commit<NewAssignVendor, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AssignVendor", raw, actor = system.idOf(actor)).carrying(input)
+        return system.commit("AssignVendor", raw, actor = system.idOf(actor)).carryingNoRecord(input)
     }
 
     /** Queue keys: [listProduct.vendor] — plus system-wide width below.
      *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewListProduct, actor: Ref<Staff>): Commit<NewListProduct> {
+    fun commit(input: NewListProduct, actor: Ref<Staff>): Commit<NewListProduct, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ListProduct", raw, actor = system.idOf(actor)).carrying(input)
+        return system.commit("ListProduct", raw, actor = system.idOf(actor)).carryingNoRecord(input)
     }
 
     /** Queue keys: [changePrice.product], [changePrice.product.vendor] — plus system-wide width below.
      *  System-wide over VendorAssignment — consults VendorAssignment correlated through 'staff' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewChangePrice, actor: Ref<Staff>): Commit<NewChangePrice> {
+    fun commit(input: NewChangePrice, actor: Ref<Staff>): Commit<NewChangePrice, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ChangePrice", raw, actor = system.idOf(actor)).carrying(input)
+        return system.commit("ChangePrice", raw, actor = system.idOf(actor)).carryingNoRecord(input)
     }
 
     fun staffs(): List<Staff> = system.instancesOf("Staff").map { materializeStaff(it) }
@@ -77,7 +77,7 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             return materialize(id)
         }
@@ -147,7 +147,7 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Staff" -> materializeStaff(id)
         "VendorAssignment" -> materializeVendorAssignment(id)
         "Vendor" -> materializeVendor(id)
@@ -156,7 +156,7 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    fun materializeStaff(id: Long): Staff = Staff(
+    @PublishedApi internal fun materializeStaff(id: Long): Staff = Staff(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         role = system.get(id, "role") as String,
@@ -164,20 +164,20 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isAdministrator = system.isMember(id, "Administrator"),
     )
 
-    fun materializeVendorAssignment(id: Long): VendorAssignment = VendorAssignment(
+    @PublishedApi internal fun materializeVendorAssignment(id: Long): VendorAssignment = VendorAssignment(
         key = system.refFor(id).key,
         staff = system.refFor(system.get(id, "staff") as Long),
         vendor = system.refFor(system.get(id, "vendor") as Long),
     )
 
-    fun materializeVendor(id: Long): Vendor = Vendor(
+    @PublishedApi internal fun materializeVendor(id: Long): Vendor = Vendor(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         vendorAssignments = (system.get(id, "vendorAssignments") as List<*>).map { system.refFor(it as Long) },
         products = (system.get(id, "products") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeProduct(id: Long): Product = Product(
+    @PublishedApi internal fun materializeProduct(id: Long): Product = Product(
         key = system.refFor(id).key,
         vendor = system.refFor(system.get(id, "vendor") as Long),
         name = system.get(id, "name") as String,
@@ -188,20 +188,20 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isThinMargin = system.isMember(id, "ThinMargin"),
     )
 
-    fun materializeMarginAlert(id: Long): MarginAlert = MarginAlert(
+    @PublishedApi internal fun materializeMarginAlert(id: Long): MarginAlert = MarginAlert(
         key = system.refFor(id).key,
         product = system.refFor(system.get(id, "product") as Long),
         raisedOn = system.get(id, "raisedOn") as Instant,
     )
 
-    fun materializeAdministrator(id: Long): Administrator = Administrator(
+    @PublishedApi internal fun materializeAdministrator(id: Long): Administrator = Administrator(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         role = system.get(id, "role") as String,
         vendorAssignments = (system.get(id, "vendorAssignments") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeThinMargin(id: Long): ThinMargin = ThinMargin(
+    @PublishedApi internal fun materializeThinMargin(id: Long): ThinMargin = ThinMargin(
         key = system.refFor(id).key,
         vendor = system.refFor(system.get(id, "vendor") as Long),
         name = system.get(id, "name") as String,
@@ -263,7 +263,7 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun with(q: Query) = ThinMarginQueryForStaff(q)
     }
 
-    fun materializeProductForStaff(viewer: Long, id: Long): ProductForStaff {
+    @PublishedApi internal fun materializeProductForStaff(viewer: Long, id: Long): ProductForStaff {
         val hidden = system.hiddenFields(viewer, id, "Product")
         return Product(
             key = system.refFor(id).key,
@@ -277,7 +277,7 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         )
     }
 
-    fun materializeThinMarginForStaff(viewer: Long, id: Long): ThinMarginForStaff {
+    @PublishedApi internal fun materializeThinMarginForStaff(viewer: Long, id: Long): ThinMarginForStaff {
         val hidden = system.hiddenFields(viewer, id, "ThinMargin")
         return ThinMargin(
             key = system.refFor(id).key,

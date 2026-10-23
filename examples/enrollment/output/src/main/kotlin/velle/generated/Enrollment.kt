@@ -20,106 +20,106 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAdvisor): Commit<NewAdvisor> {
+    fun commit(input: NewAdvisor): Commit<NewAdvisor, Ref<Advisor>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Advisor", raw).carrying(input)
+        return system.commit("Advisor", raw).carrying(input, "Advisor")
     }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCourse): Commit<NewCourse> {
+    fun commit(input: NewCourse): Commit<NewCourse, Ref<Course>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Course", raw).carrying(input)
+        return system.commit("Course", raw).carrying(input, "Course")
     }
 
     /** Queue key: [student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewStudent): Commit<NewStudent> {
+    fun commit(input: NewStudent): Commit<NewStudent, Ref<Student>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Student", raw).carrying(input)
+        return system.commit("Student", raw).carrying(input, "Student")
     }
 
     /** Queue keys: [setEnrollment.student], [setEnrollment.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSetEnrollment): Commit<NewSetEnrollment> {
+    fun commit(input: NewSetEnrollment): Commit<NewSetEnrollment, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("SetEnrollment", raw).carrying(input)
+        return system.commit("SetEnrollment", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [enroll.student], [enroll.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewEnroll): Commit<NewEnroll> {
+    fun commit(input: NewEnroll): Commit<NewEnroll, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Enroll", raw).carrying(input)
+        return system.commit("Enroll", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [drop.student], [drop.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewDrop): Commit<NewDrop> {
+    fun commit(input: NewDrop): Commit<NewDrop, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Drop", raw).carrying(input)
+        return system.commit("Drop", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [tag.student], [tag.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewTag): Commit<NewTag> {
+    fun commit(input: NewTag): Commit<NewTag, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Tag", raw).carrying(input)
+        return system.commit("Tag", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [assignAdvisor.advisor] — plus system-wide width below.
      *  System-wide over Student — writes a Student whose 'advisor' reference the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssignAdvisor): Commit<NewAssignAdvisor> {
+    fun commit(input: NewAssignAdvisor): Commit<NewAssignAdvisor, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AssignAdvisor", raw).carrying(input)
+        return system.commit("AssignAdvisor", raw).carryingNoRecord(input)
     }
 
     fun advisors(): List<Advisor> = system.instancesOf("Advisor").map { materializeAdvisor(it) }
@@ -138,7 +138,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             return materialize(id)
         }
@@ -190,28 +190,28 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Advisor" -> materializeAdvisor(id)
         "Course" -> materializeCourse(id)
         "Student" -> materializeStudent(id)
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    fun materializeAdvisor(id: Long): Advisor = Advisor(
+    @PublishedApi internal fun materializeAdvisor(id: Long): Advisor = Advisor(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         advisees = (system.get(id, "advisees") as List<*>).map { system.refFor(it as Long) },
         students = (system.get(id, "students") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeCourse(id: Long): Course = Course(
+    @PublishedApi internal fun materializeCourse(id: Long): Course = Course(
         key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         capacity = (system.get(id, "capacity") as BigDecimal).intValueExact(),
         students = (system.get(id, "students") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeStudent(id: Long): Student = Student(
+    @PublishedApi internal fun materializeStudent(id: Long): Student = Student(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         advisor = (system.get(id, "advisor") as Long?)?.let { system.refFor(it) },
@@ -221,7 +221,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUntagged = system.isMember(id, "Untagged"),
     )
 
-    fun materializeOverloaded(id: Long): Overloaded = Overloaded(
+    @PublishedApi internal fun materializeOverloaded(id: Long): Overloaded = Overloaded(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         advisor = (system.get(id, "advisor") as Long?)?.let { system.refFor(it) },
@@ -230,7 +230,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUntagged = system.isMember(id, "Untagged"),
     )
 
-    fun materializeUntagged(id: Long): Untagged = Untagged(
+    @PublishedApi internal fun materializeUntagged(id: Long): Untagged = Untagged(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         advisor = (system.get(id, "advisor") as Long?)?.let { system.refFor(it) },

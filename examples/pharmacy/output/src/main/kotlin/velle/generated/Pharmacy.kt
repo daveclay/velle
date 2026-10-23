@@ -34,28 +34,28 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewHireStaff, actor: Ref<Staff>): Commit<NewHireStaff> {
+    fun commit(input: NewHireStaff, actor: Ref<Staff>): Commit<NewHireStaff, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("HireStaff", raw, actor = system.idOf(actor)).carrying(input)
+        return system.commit("HireStaff", raw, actor = system.idOf(actor)).carryingNoRecord(input)
     }
 
     /** Queue keys: [licenceRenewal.pharmacist] — plus system-wide width below.
      *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewLicenceRenewal, actor: Ref<Staff>): Commit<NewLicenceRenewal> {
+    fun commit(input: NewLicenceRenewal, actor: Ref<Staff>): Commit<NewLicenceRenewal, Ref<LicenceRenewal>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("LicenceRenewal", raw, actor = system.idOf(actor)).carrying(input)
+        return system.commit("LicenceRenewal", raw, actor = system.idOf(actor)).carrying(input, "LicenceRenewal")
     }
 
     /** Queue: system-wide.
@@ -82,14 +82,14 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewIngredient): Commit<NewIngredient> {
+    fun commit(input: NewIngredient): Commit<NewIngredient, Ref<Ingredient>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Ingredient", raw).carrying(input)
+        return system.commit("Ingredient", raw).carrying(input, "Ingredient")
     }
 
     /** Queue: system-wide.
@@ -119,14 +119,14 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Interaction — `Interaction` reads every Interaction and correlates to no key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewDrug): Commit<NewDrug> {
+    fun commit(input: NewDrug): Commit<NewDrug, Ref<Drug>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Drug", raw).carrying(input)
+        return system.commit("Drug", raw).carrying(input, "Drug")
     }
 
     /** Queue: system-wide.
@@ -145,68 +145,68 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewInteraction): Commit<NewInteraction> {
+    fun commit(input: NewInteraction): Commit<NewInteraction, Ref<Interaction>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Interaction", raw).carrying(input)
+        return system.commit("Interaction", raw).carrying(input, "Interaction")
     }
 
     /** Queue key: [priceChange.drug].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPriceChange): Commit<NewPriceChange> {
+    fun commit(input: NewPriceChange): Commit<NewPriceChange, Ref<PriceChange>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PriceChange", raw).carrying(input)
+        return system.commit("PriceChange", raw).carrying(input, "PriceChange")
     }
 
     /** Queue keys: [withdrawPriceChange.priceChange], [withdrawPriceChange.priceChange.drug] — plus system-wide width below.
      *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewWithdrawPriceChange, actor: Ref<Staff>): Commit<NewWithdrawPriceChange> {
+    fun commit(input: NewWithdrawPriceChange, actor: Ref<Staff>): Commit<NewWithdrawPriceChange, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("WithdrawPriceChange", raw, actor = system.idOf(actor)).carrying(input)
+        return system.commit("WithdrawPriceChange", raw, actor = system.idOf(actor)).carryingNoRecord(input)
     }
 
     /** Queue keys: [setReorderPoint.drug] — plus system-wide width below.
      *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSetReorderPoint, actor: Ref<Staff>): Commit<NewSetReorderPoint> {
+    fun commit(input: NewSetReorderPoint, actor: Ref<Staff>): Commit<NewSetReorderPoint, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("SetReorderPoint", raw, actor = system.idOf(actor)).carrying(input)
+        return system.commit("SetReorderPoint", raw, actor = system.idOf(actor)).carryingNoRecord(input)
     }
 
     /** Queue keys: [stockLot.drug], [stockLot.purchaseOrder].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewStockLot): Commit<NewStockLot> {
+    fun commit(input: NewStockLot): Commit<NewStockLot, Ref<StockLot>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("StockLot", raw).carrying(input)
+        return system.commit("StockLot", raw).carrying(input, "StockLot")
     }
 
     /** Queue keys: [countLot.lot] — plus system-wide width below.
@@ -215,14 +215,14 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCountLot, actor: Ref<Staff>): Commit<NewCountLot> {
+    fun commit(input: NewCountLot, actor: Ref<Staff>): Commit<NewCountLot, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CountLot", raw, actor = system.idOf(actor)).carrying(input)
+        return system.commit("CountLot", raw, actor = system.idOf(actor)).carryingNoRecord(input)
     }
 
     /** Queue keys: [recall.lot] — plus system-wide width below.
@@ -235,27 +235,27 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PrescriberOrder — reads PrescriberOrder.patient with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRecall): Commit<NewRecall> {
+    fun commit(input: NewRecall): Commit<NewRecall, Ref<Recall>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Recall", raw).carrying(input)
+        return system.commit("Recall", raw).carrying(input, "Recall")
     }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewInsurancePlan): Commit<NewInsurancePlan> {
+    fun commit(input: NewInsurancePlan): Commit<NewInsurancePlan, Ref<InsurancePlan>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("InsurancePlan", raw).carrying(input)
+        return system.commit("InsurancePlan", raw).carrying(input, "InsurancePlan")
     }
 
     /** Queue keys: [patient.plan] — plus system-wide width below.
@@ -288,27 +288,27 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPatient): Commit<NewPatient> {
+    fun commit(input: NewPatient): Commit<NewPatient, Ref<Patient>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Patient", raw).carrying(input)
+        return system.commit("Patient", raw).carrying(input, "Patient")
     }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPrescriber): Commit<NewPrescriber> {
+    fun commit(input: NewPrescriber): Commit<NewPrescriber, Ref<Prescriber>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Prescriber", raw).carrying(input)
+        return system.commit("Prescriber", raw).carrying(input, "Prescriber")
     }
 
     /** Queue keys: [setAllergies.patient], [setAllergies.patient.plan] — plus system-wide width below.
@@ -335,14 +335,14 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSetAllergies): Commit<NewSetAllergies> {
+    fun commit(input: NewSetAllergies): Commit<NewSetAllergies, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("SetAllergies", raw).carrying(input)
+        return system.commit("SetAllergies", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [addAllergy.patient], [addAllergy.patient.plan] — plus system-wide width below.
@@ -369,14 +369,14 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAddAllergy): Commit<NewAddAllergy> {
+    fun commit(input: NewAddAllergy): Commit<NewAddAllergy, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AddAllergy", raw).carrying(input)
+        return system.commit("AddAllergy", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [prescriberOrder.patient], [prescriberOrder.prescriber] — plus system-wide width below.
@@ -404,7 +404,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PrescriberOrder — reads PrescriberOrder.prescriber with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPrescriberOrder, enteredBy: Ref<Staff>): Commit<NewPrescriberOrder> {
+    fun commit(input: NewPrescriberOrder, enteredBy: Ref<Staff>): Commit<NewPrescriberOrder, Ref<PrescriberOrder>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
@@ -412,7 +412,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         val raw = input.raw(system, reg)
         val parts = input.parts(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PrescriberOrder", raw, parts, actor = system.idOf(enteredBy)).carrying(input)
+        return system.commit("PrescriberOrder", raw, parts, actor = system.idOf(enteredBy)).carrying(input, "PrescriberOrder")
     }
 
     /** Queue keys: [discontinuation.prescriber], [discontinuation.prescription], [discontinuation.prescription.order] — plus system-wide width below.
@@ -431,14 +431,14 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewDiscontinuation): Commit<NewDiscontinuation> {
+    fun commit(input: NewDiscontinuation): Commit<NewDiscontinuation, Ref<Discontinuation>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Discontinuation", raw).carrying(input)
+        return system.commit("Discontinuation", raw).carrying(input, "Discontinuation")
     }
 
     /** Queue keys: [correctEntry.prescription], [correctEntry.prescription.drug], [correctEntry.prescription.order], [correctEntry.prescription.order.patient] — plus system-wide width below.
@@ -448,14 +448,14 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCorrectEntry, actor: Ref<Staff>): Commit<NewCorrectEntry> {
+    fun commit(input: NewCorrectEntry, actor: Ref<Staff>): Commit<NewCorrectEntry, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CorrectEntry", raw, actor = system.idOf(actor)).carrying(input)
+        return system.commit("CorrectEntry", raw, actor = system.idOf(actor)).carryingNoRecord(input)
     }
 
     /** Queue keys: [voidEntry.prescription] — plus system-wide width below.
@@ -476,28 +476,28 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewVoidEntry, actor: Ref<Staff>): Commit<NewVoidEntry> {
+    fun commit(input: NewVoidEntry, actor: Ref<Staff>): Commit<NewVoidEntry, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("VoidEntry", raw, actor = system.idOf(actor)).carrying(input)
+        return system.commit("VoidEntry", raw, actor = system.idOf(actor)).carryingNoRecord(input)
     }
 
     /** Queue keys: [conflictOverride.prescription] — plus system-wide width below.
      *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewConflictOverride, actor: Ref<Staff>): Commit<NewConflictOverride> {
+    fun commit(input: NewConflictOverride, actor: Ref<Staff>): Commit<NewConflictOverride, Ref<ConflictOverride>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ConflictOverride", raw, actor = system.idOf(actor)).carrying(input)
+        return system.commit("ConflictOverride", raw, actor = system.idOf(actor)).carrying(input, "ConflictOverride")
     }
 
     /** Queue keys: [fillPrescription.lot], [fillPrescription.lot.drug], [fillPrescription.prescription], [fillPrescription.prescription.drug], [fillPrescription.prescription.order], [fillPrescription.prescription.order.patient] — plus system-wide width below.
@@ -528,28 +528,28 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewFillPrescription, filledBy: Ref<Staff>): Commit<NewFillPrescription> {
+    fun commit(input: NewFillPrescription, filledBy: Ref<Staff>): Commit<NewFillPrescription, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("FillPrescription", raw, actor = system.idOf(filledBy)).carrying(input)
+        return system.commit("FillPrescription", raw, actor = system.idOf(filledBy)).carryingNoRecord(input)
     }
 
     /** Queue keys: [monitoringCheck.prescription] — plus system-wide width below.
      *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewMonitoringCheck, actor: Ref<Staff>): Commit<NewMonitoringCheck> {
+    fun commit(input: NewMonitoringCheck, actor: Ref<Staff>): Commit<NewMonitoringCheck, Ref<MonitoringCheck>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("MonitoringCheck", raw, actor = system.idOf(actor)).carrying(input)
+        return system.commit("MonitoringCheck", raw, actor = system.idOf(actor)).carrying(input, "MonitoringCheck")
     }
 
     /** Queue keys: [verifyFill.fill], [verifyFill.fill.insurer], [verifyFill.fill.lot], [verifyFill.fill.lot.drug], [verifyFill.fill.prescription], [verifyFill.fill.prescription.drug], [verifyFill.fill.prescription.order], [verifyFill.fill.prescription.order.patient] — plus system-wide width below.
@@ -572,42 +572,42 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PharmacistAlert — consults PharmacistAlert correlated through 'prescription' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewVerifyFill, actor: Ref<Staff>): Commit<NewVerifyFill> {
+    fun commit(input: NewVerifyFill, actor: Ref<Staff>): Commit<NewVerifyFill, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("VerifyFill", raw, actor = system.idOf(actor)).carrying(input)
+        return system.commit("VerifyFill", raw, actor = system.idOf(actor)).carryingNoRecord(input)
     }
 
     /** Queue keys: [counselling.fill] — plus system-wide width below.
      *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCounselling, actor: Ref<Staff>): Commit<NewCounselling> {
+    fun commit(input: NewCounselling, actor: Ref<Staff>): Commit<NewCounselling, Ref<Counselling>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Counselling", raw, actor = system.idOf(actor)).carrying(input)
+        return system.commit("Counselling", raw, actor = system.idOf(actor)).carrying(input, "Counselling")
     }
 
     /** Queue keys: [pickUp.fill], [pickUp.fill.lot], [pickUp.fill.lot.drug], [pickUp.fill.prescription], [pickUp.fill.prescription.drug], [pickUp.fill.prescription.order], [pickUp.fill.prescription.order.patient] — plus system-wide width below.
      *  System-wide over Ingredient — 'order' cannot be resolved on 'Ingredient' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPickUp): Commit<NewPickUp> {
+    fun commit(input: NewPickUp): Commit<NewPickUp, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PickUp", raw).carrying(input)
+        return system.commit("PickUp", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [requestRefill.prescription], [requestRefill.prescription.drug], [requestRefill.prescription.order], [requestRefill.prescription.order.prescriber] — plus system-wide width below.
@@ -618,53 +618,53 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Notice — creates Notice referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRequestRefill): Commit<NewRequestRefill> {
+    fun commit(input: NewRequestRefill): Commit<NewRequestRefill, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("RequestRefill", raw).carrying(input)
+        return system.commit("RequestRefill", raw).carryingNoRecord(input)
     }
 
     /** Queue key: [autoRefillEnrolment.prescription].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAutoRefillEnrolment): Commit<NewAutoRefillEnrolment> {
+    fun commit(input: NewAutoRefillEnrolment): Commit<NewAutoRefillEnrolment, Ref<AutoRefillEnrolment>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AutoRefillEnrolment", raw).carrying(input)
+        return system.commit("AutoRefillEnrolment", raw).carrying(input, "AutoRefillEnrolment")
     }
 
     /** Queue key: [autoRefillCancellation.prescription].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAutoRefillCancellation): Commit<NewAutoRefillCancellation> {
+    fun commit(input: NewAutoRefillCancellation): Commit<NewAutoRefillCancellation, Ref<AutoRefillCancellation>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AutoRefillCancellation", raw).carrying(input)
+        return system.commit("AutoRefillCancellation", raw).carrying(input, "AutoRefillCancellation")
     }
 
     /** Queue key: [adjudication.claim].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAdjudication): Commit<NewAdjudication> {
+    fun commit(input: NewAdjudication): Commit<NewAdjudication, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Adjudication", raw).carrying(input)
+        return system.commit("Adjudication", raw).carryingNoRecord(input)
     }
 
     fun staffs(): List<Staff> = system.instancesOf("Staff").map { materializeStaff(it) }
@@ -768,7 +768,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             return materialize(id)
         }
@@ -1582,7 +1582,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Staff" -> materializeStaff(id)
         "LicenceRenewal" -> materializeLicenceRenewal(id)
         "LicenceReminder" -> materializeLicenceReminder(id)
@@ -1634,7 +1634,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    fun materializeStaff(id: Long): Staff = Staff(
+    @PublishedApi internal fun materializeStaff(id: Long): Staff = Staff(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         role = system.get(id, "role") as String,
@@ -1652,7 +1652,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLicenceExpiringSoon = system.isMember(id, "LicenceExpiringSoon"),
     )
 
-    fun materializeLicenceRenewal(id: Long): LicenceRenewal = LicenceRenewal(
+    @PublishedApi internal fun materializeLicenceRenewal(id: Long): LicenceRenewal = LicenceRenewal(
         key = system.refFor(id).key,
         actor = system.refFor(system.get(id, "actor") as Long),
         pharmacist = system.refFor(system.get(id, "pharmacist") as Long),
@@ -1660,20 +1660,20 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         expiresOn = system.get(id, "expiresOn") as LocalDate,
     )
 
-    fun materializeLicenceReminder(id: Long): LicenceReminder = LicenceReminder(
+    @PublishedApi internal fun materializeLicenceReminder(id: Long): LicenceReminder = LicenceReminder(
         key = system.refFor(id).key,
         pharmacist = system.refFor(system.get(id, "pharmacist") as Long),
         sentOn = system.get(id, "sentOn") as LocalDate,
     )
 
-    fun materializeIngredient(id: Long): Ingredient = Ingredient(
+    @PublishedApi internal fun materializeIngredient(id: Long): Ingredient = Ingredient(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         drugs = (system.get(id, "drugs") as List<*>).map { system.refFor(it as Long) },
         patients = (system.get(id, "patients") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeDrug(id: Long): Drug = Drug(
+    @PublishedApi internal fun materializeDrug(id: Long): Drug = Drug(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         strength = system.get(id, "strength") as String,
@@ -1697,14 +1697,14 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLowStock = system.isMember(id, "LowStock"),
     )
 
-    fun materializeInteraction(id: Long): Interaction = Interaction(
+    @PublishedApi internal fun materializeInteraction(id: Long): Interaction = Interaction(
         key = system.refFor(id).key,
         drugA = system.refFor(system.get(id, "drugA") as Long),
         drugB = system.refFor(system.get(id, "drugB") as Long),
         severity = system.get(id, "severity") as String,
     )
 
-    fun materializePriceChange(id: Long): PriceChange = PriceChange(
+    @PublishedApi internal fun materializePriceChange(id: Long): PriceChange = PriceChange(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         effectiveOn = system.get(id, "effectiveOn") as LocalDate,
@@ -1713,7 +1713,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isEffectivePrice = system.isMember(id, "EffectivePrice"),
     )
 
-    fun materializePriceWithdrawal(id: Long): PriceWithdrawal = PriceWithdrawal(
+    @PublishedApi internal fun materializePriceWithdrawal(id: Long): PriceWithdrawal = PriceWithdrawal(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         effectiveOn = system.get(id, "effectiveOn") as LocalDate,
@@ -1722,14 +1722,14 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         withdrawnOn = system.get(id, "withdrawnOn") as Instant,
     )
 
-    fun materializePriceWithdrawalRefusal(id: Long): PriceWithdrawalRefusal = PriceWithdrawalRefusal(
+    @PublishedApi internal fun materializePriceWithdrawalRefusal(id: Long): PriceWithdrawalRefusal = PriceWithdrawalRefusal(
         key = system.refFor(id).key,
         priceChange = (system.get(id, "priceChange") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeStockLot(id: Long): StockLot = StockLot(
+    @PublishedApi internal fun materializeStockLot(id: Long): StockLot = StockLot(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         lotNumber = system.get(id, "lotNumber") as String,
@@ -1748,7 +1748,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isUsableLot = system.isMember(id, "UsableLot"),
     )
 
-    fun materializeStockAdjustment(id: Long): StockAdjustment = StockAdjustment(
+    @PublishedApi internal fun materializeStockAdjustment(id: Long): StockAdjustment = StockAdjustment(
         key = system.refFor(id).key,
         lot = system.refFor(system.get(id, "lot") as Long),
         delta = (system.get(id, "delta") as BigDecimal).intValueExact(),
@@ -1756,7 +1756,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         countedOn = system.get(id, "countedOn") as Instant,
     )
 
-    fun materializeCountConfirmation(id: Long): CountConfirmation = CountConfirmation(
+    @PublishedApi internal fun materializeCountConfirmation(id: Long): CountConfirmation = CountConfirmation(
         key = system.refFor(id).key,
         lot = system.refFor(system.get(id, "lot") as Long),
         counted = (system.get(id, "counted") as BigDecimal).intValueExact(),
@@ -1764,21 +1764,21 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         countedOn = system.get(id, "countedOn") as Instant,
     )
 
-    fun materializeQuarantine(id: Long): Quarantine = Quarantine(
+    @PublishedApi internal fun materializeQuarantine(id: Long): Quarantine = Quarantine(
         key = system.refFor(id).key,
         lot = system.refFor(system.get(id, "lot") as Long),
         reason = system.get(id, "reason") as String,
         quarantinedOn = system.get(id, "quarantinedOn") as Instant,
     )
 
-    fun materializeRecall(id: Long): Recall = Recall(
+    @PublishedApi internal fun materializeRecall(id: Long): Recall = Recall(
         key = system.refFor(id).key,
         lot = system.refFor(system.get(id, "lot") as Long),
         reference = system.get(id, "reference") as String,
         issuedOn = system.get(id, "issuedOn") as LocalDate,
     )
 
-    fun materializeRecallNotice(id: Long): RecallNotice = RecallNotice(
+    @PublishedApi internal fun materializeRecallNotice(id: Long): RecallNotice = RecallNotice(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         patient = system.refFor(system.get(id, "patient") as Long),
@@ -1786,7 +1786,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    fun materializePurchaseOrder(id: Long): PurchaseOrder = PurchaseOrder(
+    @PublishedApi internal fun materializePurchaseOrder(id: Long): PurchaseOrder = PurchaseOrder(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
@@ -1796,7 +1796,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isReceivedPurchaseOrder = system.isMember(id, "ReceivedPurchaseOrder"),
     )
 
-    fun materializeInsurancePlan(id: Long): InsurancePlan = InsurancePlan(
+    @PublishedApi internal fun materializeInsurancePlan(id: Long): InsurancePlan = InsurancePlan(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         coversControlled = system.get(id, "coversControlled") as Boolean,
@@ -1804,7 +1804,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         claims = (system.get(id, "claims") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializePatient(id: Long): Patient = Patient(
+    @PublishedApi internal fun materializePatient(id: Long): Patient = Patient(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         birthDate = system.get(id, "birthDate") as LocalDate,
@@ -1818,7 +1818,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isMultiplePrescribers = system.isMember(id, "MultiplePrescribers"),
     )
 
-    fun materializePrescriber(id: Long): Prescriber = Prescriber(
+    @PublishedApi internal fun materializePrescriber(id: Long): Prescriber = Prescriber(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         deaNumber = system.get(id, "deaNumber") as String,
@@ -1828,7 +1828,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         discontinuations = (system.get(id, "discontinuations") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeNotice(id: Long): Notice = Notice(
+    @PublishedApi internal fun materializeNotice(id: Long): Notice = Notice(
         key = system.refFor(id).key,
         recipient = system.refFor(system.get(id, "recipient") as Long),
         subject = system.get(id, "subject") as String,
@@ -1836,7 +1836,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         contact = system.get(id, "contact") as String,
     )
 
-    fun materializePrescriberOrder(id: Long): PrescriberOrder = PrescriberOrder(
+    @PublishedApi internal fun materializePrescriberOrder(id: Long): PrescriberOrder = PrescriberOrder(
         key = system.refFor(id).key,
         enteredBy = system.refFor(system.get(id, "enteredBy") as Long),
         prescriber = system.refFor(system.get(id, "prescriber") as Long),
@@ -1845,7 +1845,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         prescriptions = (system.get(id, "prescriptions") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializePrescription(id: Long): Prescription = Prescription(
+    @PublishedApi internal fun materializePrescription(id: Long): Prescription = Prescription(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -1886,21 +1886,21 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    fun materializeDiscontinuation(id: Long): Discontinuation = Discontinuation(
+    @PublishedApi internal fun materializeDiscontinuation(id: Long): Discontinuation = Discontinuation(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         prescriber = system.refFor(system.get(id, "prescriber") as Long),
         reason = system.get(id, "reason") as String,
     )
 
-    fun materializeCorrectionRefusal(id: Long): CorrectionRefusal = CorrectionRefusal(
+    @PublishedApi internal fun materializeCorrectionRefusal(id: Long): CorrectionRefusal = CorrectionRefusal(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeEntryVoid(id: Long): EntryVoid = EntryVoid(
+    @PublishedApi internal fun materializeEntryVoid(id: Long): EntryVoid = EntryVoid(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         pharmacist = system.refFor(system.get(id, "pharmacist") as Long),
@@ -1908,28 +1908,28 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         voidedOn = system.get(id, "voidedOn") as Instant,
     )
 
-    fun materializeVoidRefusal(id: Long): VoidRefusal = VoidRefusal(
+    @PublishedApi internal fun materializeVoidRefusal(id: Long): VoidRefusal = VoidRefusal(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeConflictOverride(id: Long): ConflictOverride = ConflictOverride(
+    @PublishedApi internal fun materializeConflictOverride(id: Long): ConflictOverride = ConflictOverride(
         key = system.refFor(id).key,
         actor = system.refFor(system.get(id, "actor") as Long),
         prescription = system.refFor(system.get(id, "prescription") as Long),
         justification = system.get(id, "justification") as String,
     )
 
-    fun materializePharmacistAlert(id: Long): PharmacistAlert = PharmacistAlert(
+    @PublishedApi internal fun materializePharmacistAlert(id: Long): PharmacistAlert = PharmacistAlert(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         kind = system.get(id, "kind") as String,
         raisedOn = system.get(id, "raisedOn") as Instant,
     )
 
-    fun materializeMonitoringCheck(id: Long): MonitoringCheck = MonitoringCheck(
+    @PublishedApi internal fun materializeMonitoringCheck(id: Long): MonitoringCheck = MonitoringCheck(
         key = system.refFor(id).key,
         actor = system.refFor(system.get(id, "actor") as Long),
         prescription = system.refFor(system.get(id, "prescription") as Long),
@@ -1937,7 +1937,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         cleared = system.get(id, "cleared") as Boolean,
     )
 
-    fun materializeFill(id: Long): Fill = Fill(
+    @PublishedApi internal fun materializeFill(id: Long): Fill = Fill(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         lot = system.refFor(system.get(id, "lot") as Long),
@@ -1967,7 +1967,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInsuredFill = system.isMember(id, "InsuredFill"),
     )
 
-    fun materializeFillRefusal(id: Long): FillRefusal = FillRefusal(
+    @PublishedApi internal fun materializeFillRefusal(id: Long): FillRefusal = FillRefusal(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         prescription = system.refFor(system.get(id, "prescription") as Long),
@@ -1975,7 +1975,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeControlledLogEntry(id: Long): ControlledLogEntry = ControlledLogEntry(
+    @PublishedApi internal fun materializeControlledLogEntry(id: Long): ControlledLogEntry = ControlledLogEntry(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -1984,7 +1984,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         loggedAt = system.get(id, "loggedAt") as Instant,
     )
 
-    fun materializeVerification(id: Long): Verification = Verification(
+    @PublishedApi internal fun materializeVerification(id: Long): Verification = Verification(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         pharmacist = system.refFor(system.get(id, "pharmacist") as Long),
@@ -1993,27 +1993,27 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         verifiedAt = system.get(id, "verifiedAt") as Instant,
     )
 
-    fun materializeCounselling(id: Long): Counselling = Counselling(
+    @PublishedApi internal fun materializeCounselling(id: Long): Counselling = Counselling(
         key = system.refFor(id).key,
         actor = system.refFor(system.get(id, "actor") as Long),
         fill = system.refFor(system.get(id, "fill") as Long),
         notes = system.get(id, "notes") as String,
     )
 
-    fun materializeReturnToStock(id: Long): ReturnToStock = ReturnToStock(
+    @PublishedApi internal fun materializeReturnToStock(id: Long): ReturnToStock = ReturnToStock(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         returnedOn = system.get(id, "returnedOn") as LocalDate,
     )
 
-    fun materializeCounterExit(id: Long): CounterExit = CounterExit(
+    @PublishedApi internal fun materializeCounterExit(id: Long): CounterExit = CounterExit(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         readyOn = system.get(id, "readyOn") as LocalDate,
         leftOn = system.get(id, "leftOn") as LocalDate,
     )
 
-    fun materializePickup(id: Long): Pickup = Pickup(
+    @PublishedApi internal fun materializePickup(id: Long): Pickup = Pickup(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         collectedBy = system.get(id, "collectedBy") as String,
@@ -2021,13 +2021,13 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         pickedUpAt = system.get(id, "pickedUpAt") as Instant,
     )
 
-    fun materializeCounterAlert(id: Long): CounterAlert = CounterAlert(
+    @PublishedApi internal fun materializeCounterAlert(id: Long): CounterAlert = CounterAlert(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         raisedOn = system.get(id, "raisedOn") as Instant,
     )
 
-    fun materializeRefillTask(id: Long): RefillTask = RefillTask(
+    @PublishedApi internal fun materializeRefillTask(id: Long): RefillTask = RefillTask(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         requestKey = system.get(id, "requestKey") as String?,
@@ -2038,7 +2038,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOverdueRefillTask = system.isMember(id, "OverdueRefillTask"),
     )
 
-    fun materializeRefillRefusal(id: Long): RefillRefusal = RefillRefusal(
+    @PublishedApi internal fun materializeRefillRefusal(id: Long): RefillRefusal = RefillRefusal(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         prescription = system.refFor(system.get(id, "prescription") as Long),
@@ -2046,29 +2046,29 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeAuthorisationRequest(id: Long): AuthorisationRequest = AuthorisationRequest(
+    @PublishedApi internal fun materializeAuthorisationRequest(id: Long): AuthorisationRequest = AuthorisationRequest(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         requestedOn = system.get(id, "requestedOn") as Instant,
     )
 
-    fun materializeTaskNag(id: Long): TaskNag = TaskNag(
+    @PublishedApi internal fun materializeTaskNag(id: Long): TaskNag = TaskNag(
         key = system.refFor(id).key,
         task = system.refFor(system.get(id, "task") as Long),
         sentOn = system.get(id, "sentOn") as LocalDate,
     )
 
-    fun materializeAutoRefillEnrolment(id: Long): AutoRefillEnrolment = AutoRefillEnrolment(
+    @PublishedApi internal fun materializeAutoRefillEnrolment(id: Long): AutoRefillEnrolment = AutoRefillEnrolment(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
     )
 
-    fun materializeAutoRefillCancellation(id: Long): AutoRefillCancellation = AutoRefillCancellation(
+    @PublishedApi internal fun materializeAutoRefillCancellation(id: Long): AutoRefillCancellation = AutoRefillCancellation(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
     )
 
-    fun materializeClaim(id: Long): Claim = Claim(
+    @PublishedApi internal fun materializeClaim(id: Long): Claim = Claim(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         plan = system.refFor(system.get(id, "plan") as Long),
@@ -2084,7 +2084,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStaleClaim = system.isMember(id, "StaleClaim"),
     )
 
-    fun materializeClaimResponse(id: Long): ClaimResponse = ClaimResponse(
+    @PublishedApi internal fun materializeClaimResponse(id: Long): ClaimResponse = ClaimResponse(
         key = system.refFor(id).key,
         claim = system.refFor(system.get(id, "claim") as Long),
         outcome = system.get(id, "outcome") as String,
@@ -2093,20 +2093,20 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         respondedAt = system.get(id, "respondedAt") as Instant,
     )
 
-    fun materializeClaimFollowUp(id: Long): ClaimFollowUp = ClaimFollowUp(
+    @PublishedApi internal fun materializeClaimFollowUp(id: Long): ClaimFollowUp = ClaimFollowUp(
         key = system.refFor(id).key,
         claim = system.refFor(system.get(id, "claim") as Long),
         followedUpAt = system.get(id, "followedUpAt") as Instant,
     )
 
-    fun materializeControlledInventorySnapshot(id: Long): ControlledInventorySnapshot = ControlledInventorySnapshot(
+    @PublishedApi internal fun materializeControlledInventorySnapshot(id: Long): ControlledInventorySnapshot = ControlledInventorySnapshot(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         onHand = (system.get(id, "onHand") as BigDecimal).intValueExact(),
         takenOn = system.get(id, "takenOn") as LocalDate,
     )
 
-    fun materializePharmacist(id: Long): Pharmacist = Pharmacist(
+    @PublishedApi internal fun materializePharmacist(id: Long): Pharmacist = Pharmacist(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         role = system.get(id, "role") as String,
@@ -2123,7 +2123,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLicenceExpiringSoon = system.isMember(id, "LicenceExpiringSoon"),
     )
 
-    fun materializeTechnician(id: Long): Technician = Technician(
+    @PublishedApi internal fun materializeTechnician(id: Long): Technician = Technician(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         role = system.get(id, "role") as String,
@@ -2140,7 +2140,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLicenceExpiringSoon = system.isMember(id, "LicenceExpiringSoon"),
     )
 
-    fun materializeAdministrator(id: Long): Administrator = Administrator(
+    @PublishedApi internal fun materializeAdministrator(id: Long): Administrator = Administrator(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         role = system.get(id, "role") as String,
@@ -2157,7 +2157,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLicenceExpiringSoon = system.isMember(id, "LicenceExpiringSoon"),
     )
 
-    fun materializeLicensedPharmacist(id: Long): LicensedPharmacist = LicensedPharmacist(
+    @PublishedApi internal fun materializeLicensedPharmacist(id: Long): LicensedPharmacist = LicensedPharmacist(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         role = system.get(id, "role") as String,
@@ -2174,7 +2174,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLicenceExpiringSoon = system.isMember(id, "LicenceExpiringSoon"),
     )
 
-    fun materializeLicenceExpiringSoon(id: Long): LicenceExpiringSoon = LicenceExpiringSoon(
+    @PublishedApi internal fun materializeLicenceExpiringSoon(id: Long): LicenceExpiringSoon = LicenceExpiringSoon(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         role = system.get(id, "role") as String,
@@ -2191,7 +2191,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLicensedPharmacist = system.isMember(id, "LicensedPharmacist"),
     )
 
-    fun materializeControlled(id: Long): Controlled = Controlled(
+    @PublishedApi internal fun materializeControlled(id: Long): Controlled = Controlled(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         strength = system.get(id, "strength") as String,
@@ -2214,7 +2214,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLowStock = system.isMember(id, "LowStock"),
     )
 
-    fun materializeScheduleTwo(id: Long): ScheduleTwo = ScheduleTwo(
+    @PublishedApi internal fun materializeScheduleTwo(id: Long): ScheduleTwo = ScheduleTwo(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         strength = system.get(id, "strength") as String,
@@ -2237,7 +2237,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLowStock = system.isMember(id, "LowStock"),
     )
 
-    fun materializeLowStock(id: Long): LowStock = LowStock(
+    @PublishedApi internal fun materializeLowStock(id: Long): LowStock = LowStock(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         strength = system.get(id, "strength") as String,
@@ -2260,7 +2260,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isScheduleTwo = system.isMember(id, "ScheduleTwo"),
     )
 
-    fun materializeEffectivePrice(id: Long): EffectivePrice = EffectivePrice(
+    @PublishedApi internal fun materializeEffectivePrice(id: Long): EffectivePrice = EffectivePrice(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         effectiveOn = system.get(id, "effectiveOn") as LocalDate,
@@ -2268,7 +2268,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         priceWithdrawalRefusals = (system.get(id, "priceWithdrawalRefusals") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeExpiredLot(id: Long): ExpiredLot = ExpiredLot(
+    @PublishedApi internal fun materializeExpiredLot(id: Long): ExpiredLot = ExpiredLot(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         lotNumber = system.get(id, "lotNumber") as String,
@@ -2286,7 +2286,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isUsableLot = system.isMember(id, "UsableLot"),
     )
 
-    fun materializeQuarantinedLot(id: Long): QuarantinedLot = QuarantinedLot(
+    @PublishedApi internal fun materializeQuarantinedLot(id: Long): QuarantinedLot = QuarantinedLot(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         lotNumber = system.get(id, "lotNumber") as String,
@@ -2304,7 +2304,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isUsableLot = system.isMember(id, "UsableLot"),
     )
 
-    fun materializeRecalledLot(id: Long): RecalledLot = RecalledLot(
+    @PublishedApi internal fun materializeRecalledLot(id: Long): RecalledLot = RecalledLot(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         lotNumber = system.get(id, "lotNumber") as String,
@@ -2322,7 +2322,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isUsableLot = system.isMember(id, "UsableLot"),
     )
 
-    fun materializeUsableLot(id: Long): UsableLot = UsableLot(
+    @PublishedApi internal fun materializeUsableLot(id: Long): UsableLot = UsableLot(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         lotNumber = system.get(id, "lotNumber") as String,
@@ -2340,7 +2340,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isRecalledLot = system.isMember(id, "RecalledLot"),
     )
 
-    fun materializeOpenPurchaseOrder(id: Long): OpenPurchaseOrder = OpenPurchaseOrder(
+    @PublishedApi internal fun materializeOpenPurchaseOrder(id: Long): OpenPurchaseOrder = OpenPurchaseOrder(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
@@ -2349,7 +2349,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isReceivedPurchaseOrder = system.isMember(id, "ReceivedPurchaseOrder"),
     )
 
-    fun materializeReceivedPurchaseOrder(id: Long): ReceivedPurchaseOrder = ReceivedPurchaseOrder(
+    @PublishedApi internal fun materializeReceivedPurchaseOrder(id: Long): ReceivedPurchaseOrder = ReceivedPurchaseOrder(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
@@ -2358,9 +2358,9 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOpenPurchaseOrder = system.isMember(id, "OpenPurchaseOrder"),
     )
 
-    fun materializeRecipient(id: Long): Recipient = materialize(id) as Recipient
+    @PublishedApi internal fun materializeRecipient(id: Long): Recipient = materialize(id) as Recipient
 
-    fun materializeDiscontinued(id: Long): Discontinued = Discontinued(
+    @PublishedApi internal fun materializeDiscontinued(id: Long): Discontinued = Discontinued(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2400,7 +2400,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    fun materializeExpired(id: Long): Expired = Expired(
+    @PublishedApi internal fun materializeExpired(id: Long): Expired = Expired(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2440,7 +2440,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    fun materializeExhausted(id: Long): Exhausted = Exhausted(
+    @PublishedApi internal fun materializeExhausted(id: Long): Exhausted = Exhausted(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2480,7 +2480,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    fun materializeCurrent(id: Long): Current = Current(
+    @PublishedApi internal fun materializeCurrent(id: Long): Current = Current(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2520,7 +2520,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    fun materializeActivePrescription(id: Long): ActivePrescription = ActivePrescription(
+    @PublishedApi internal fun materializeActivePrescription(id: Long): ActivePrescription = ActivePrescription(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2560,7 +2560,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    fun materializeFilledPrescription(id: Long): FilledPrescription = FilledPrescription(
+    @PublishedApi internal fun materializeFilledPrescription(id: Long): FilledPrescription = FilledPrescription(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2600,7 +2600,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    fun materializeVoided(id: Long): Voided = Voided(
+    @PublishedApi internal fun materializeVoided(id: Long): Voided = Voided(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2640,7 +2640,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    fun materializeAllergyConflict(id: Long): AllergyConflict = AllergyConflict(
+    @PublishedApi internal fun materializeAllergyConflict(id: Long): AllergyConflict = AllergyConflict(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2680,7 +2680,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    fun materializeInteractionConflict(id: Long): InteractionConflict = InteractionConflict(
+    @PublishedApi internal fun materializeInteractionConflict(id: Long): InteractionConflict = InteractionConflict(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2720,7 +2720,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    fun materializeCleared(id: Long): Cleared = Cleared(
+    @PublishedApi internal fun materializeCleared(id: Long): Cleared = Cleared(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2760,7 +2760,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    fun materializeFillable(id: Long): Fillable = Fillable(
+    @PublishedApi internal fun materializeFillable(id: Long): Fillable = Fillable(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2800,7 +2800,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    fun materializeMultiplePrescribers(id: Long): MultiplePrescribers = MultiplePrescribers(
+    @PublishedApi internal fun materializeMultiplePrescribers(id: Long): MultiplePrescribers = MultiplePrescribers(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         birthDate = system.get(id, "birthDate") as LocalDate,
@@ -2813,7 +2813,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeVerifiedFill(id: Long): VerifiedFill = VerifiedFill(
+    @PublishedApi internal fun materializeVerifiedFill(id: Long): VerifiedFill = VerifiedFill(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         lot = system.refFor(system.get(id, "lot") as Long),
@@ -2842,7 +2842,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInsuredFill = system.isMember(id, "InsuredFill"),
     )
 
-    fun materializeRejectedFill(id: Long): RejectedFill = RejectedFill(
+    @PublishedApi internal fun materializeRejectedFill(id: Long): RejectedFill = RejectedFill(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         lot = system.refFor(system.get(id, "lot") as Long),
@@ -2871,7 +2871,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInsuredFill = system.isMember(id, "InsuredFill"),
     )
 
-    fun materializeConsumingFill(id: Long): ConsumingFill = ConsumingFill(
+    @PublishedApi internal fun materializeConsumingFill(id: Long): ConsumingFill = ConsumingFill(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         lot = system.refFor(system.get(id, "lot") as Long),
@@ -2900,7 +2900,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInsuredFill = system.isMember(id, "InsuredFill"),
     )
 
-    fun materializeCounsellingDue(id: Long): CounsellingDue = CounsellingDue(
+    @PublishedApi internal fun materializeCounsellingDue(id: Long): CounsellingDue = CounsellingDue(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         lot = system.refFor(system.get(id, "lot") as Long),
@@ -2929,7 +2929,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInsuredFill = system.isMember(id, "InsuredFill"),
     )
 
-    fun materializeReadyForPickup(id: Long): ReadyForPickup = ReadyForPickup(
+    @PublishedApi internal fun materializeReadyForPickup(id: Long): ReadyForPickup = ReadyForPickup(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         lot = system.refFor(system.get(id, "lot") as Long),
@@ -2959,7 +2959,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInsuredFill = system.isMember(id, "InsuredFill"),
     )
 
-    fun materializeUncollected(id: Long): Uncollected = Uncollected(
+    @PublishedApi internal fun materializeUncollected(id: Long): Uncollected = Uncollected(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         lot = system.refFor(system.get(id, "lot") as Long),
@@ -2989,7 +2989,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInsuredFill = system.isMember(id, "InsuredFill"),
     )
 
-    fun materializeOpenRefillTask(id: Long): OpenRefillTask = OpenRefillTask(
+    @PublishedApi internal fun materializeOpenRefillTask(id: Long): OpenRefillTask = OpenRefillTask(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         requestKey = system.get(id, "requestKey") as String?,
@@ -2999,7 +2999,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOverdueRefillTask = system.isMember(id, "OverdueRefillTask"),
     )
 
-    fun materializeOverdueRefillTask(id: Long): OverdueRefillTask = OverdueRefillTask(
+    @PublishedApi internal fun materializeOverdueRefillTask(id: Long): OverdueRefillTask = OverdueRefillTask(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         requestKey = system.get(id, "requestKey") as String?,
@@ -3009,7 +3009,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOpenRefillTask = system.isMember(id, "OpenRefillTask"),
     )
 
-    fun materializeAutoRefill(id: Long): AutoRefill = AutoRefill(
+    @PublishedApi internal fun materializeAutoRefill(id: Long): AutoRefill = AutoRefill(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -3049,7 +3049,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isFillable = system.isMember(id, "Fillable"),
     )
 
-    fun materializeInsuredFill(id: Long): InsuredFill = InsuredFill(
+    @PublishedApi internal fun materializeInsuredFill(id: Long): InsuredFill = InsuredFill(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         lot = system.refFor(system.get(id, "lot") as Long),
@@ -3079,7 +3079,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isUncollected = system.isMember(id, "Uncollected"),
     )
 
-    fun materializePendingClaim(id: Long): PendingClaim = PendingClaim(
+    @PublishedApi internal fun materializePendingClaim(id: Long): PendingClaim = PendingClaim(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         plan = system.refFor(system.get(id, "plan") as Long),
@@ -3094,7 +3094,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStaleClaim = system.isMember(id, "StaleClaim"),
     )
 
-    fun materializePaidClaim(id: Long): PaidClaim = PaidClaim(
+    @PublishedApi internal fun materializePaidClaim(id: Long): PaidClaim = PaidClaim(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         plan = system.refFor(system.get(id, "plan") as Long),
@@ -3109,7 +3109,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStaleClaim = system.isMember(id, "StaleClaim"),
     )
 
-    fun materializeRejectedClaim(id: Long): RejectedClaim = RejectedClaim(
+    @PublishedApi internal fun materializeRejectedClaim(id: Long): RejectedClaim = RejectedClaim(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         plan = system.refFor(system.get(id, "plan") as Long),
@@ -3124,7 +3124,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStaleClaim = system.isMember(id, "StaleClaim"),
     )
 
-    fun materializeStaleClaim(id: Long): StaleClaim = StaleClaim(
+    @PublishedApi internal fun materializeStaleClaim(id: Long): StaleClaim = StaleClaim(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         plan = system.refFor(system.get(id, "plan") as Long),

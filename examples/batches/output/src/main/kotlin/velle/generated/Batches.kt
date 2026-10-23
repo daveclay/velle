@@ -20,60 +20,60 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPeptide): Commit<NewPeptide> {
+    fun commit(input: NewPeptide): Commit<NewPeptide, Ref<Peptide>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Peptide", raw).carrying(input)
+        return system.commit("Peptide", raw).carrying(input, "Peptide")
     }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewBacteriaStrain): Commit<NewBacteriaStrain> {
+    fun commit(input: NewBacteriaStrain): Commit<NewBacteriaStrain, Ref<BacteriaStrain>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("BacteriaStrain", raw).carrying(input)
+        return system.commit("BacteriaStrain", raw).carrying(input, "BacteriaStrain")
     }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewFermenterRun): Commit<NewFermenterRun> {
+    fun commit(input: NewFermenterRun): Commit<NewFermenterRun, Ref<FermenterRun>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("FermenterRun", raw).carrying(input)
+        return system.commit("FermenterRun", raw).carrying(input, "FermenterRun")
     }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewVendor): Commit<NewVendor> {
+    fun commit(input: NewVendor): Commit<NewVendor, Ref<Vendor>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Vendor", raw).carrying(input)
+        return system.commit("Vendor", raw).carrying(input, "Vendor")
     }
 
     /** Queue keys: [peptideBatch.origin], [peptideBatch.peptide] — plus system-wide width below.
      *  System-wide over PeptideBatch — reads PeptideBatch.peptide with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPeptideBatch): Commit<NewPeptideBatch> {
+    fun commit(input: NewPeptideBatch): Commit<NewPeptideBatch, Ref<PeptideBatch>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
@@ -81,7 +81,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         val raw = input.raw(system, reg)
         val parts = input.parts(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PeptideBatch", raw, parts).carrying(input)
+        return system.commit("PeptideBatch", raw, parts).carrying(input, "PeptideBatch")
     }
 
     fun peptides(): List<Peptide> = system.instancesOf("Peptide").map { materializePeptide(it) }
@@ -110,7 +110,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             return materialize(id)
         }
@@ -249,7 +249,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Peptide" -> materializePeptide(id)
         "BacteriaStrain" -> materializeBacteriaStrain(id)
         "FermenterRun" -> materializeFermenterRun(id)
@@ -263,32 +263,32 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    fun materializePeptide(id: Long): Peptide = Peptide(
+    @PublishedApi internal fun materializePeptide(id: Long): Peptide = Peptide(
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         peptideBatchs = (system.get(id, "peptideBatchs") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeBacteriaStrain(id: Long): BacteriaStrain = BacteriaStrain(
+    @PublishedApi internal fun materializeBacteriaStrain(id: Long): BacteriaStrain = BacteriaStrain(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         fermentations = (system.get(id, "fermentations") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeFermenterRun(id: Long): FermenterRun = FermenterRun(
+    @PublishedApi internal fun materializeFermenterRun(id: Long): FermenterRun = FermenterRun(
         key = system.refFor(id).key,
         vessel = system.get(id, "vessel") as String,
         startedOn = system.get(id, "startedOn") as LocalDate,
         fermentations = (system.get(id, "fermentations") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeVendor(id: Long): Vendor = Vendor(
+    @PublishedApi internal fun materializeVendor(id: Long): Vendor = Vendor(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         externalOrders = (system.get(id, "externalOrders") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeFermentation(id: Long): Fermentation = Fermentation(
+    @PublishedApi internal fun materializeFermentation(id: Long): Fermentation = Fermentation(
         key = system.refFor(id).key,
         strain = system.refFor(system.get(id, "strain") as Long),
         run = system.refFor(system.get(id, "run") as Long),
@@ -296,7 +296,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         peptideBatches = (system.getAs(id, "Origin", "peptideBatches") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeExternalOrder(id: Long): ExternalOrder = ExternalOrder(
+    @PublishedApi internal fun materializeExternalOrder(id: Long): ExternalOrder = ExternalOrder(
         key = system.refFor(id).key,
         vendor = system.refFor(system.get(id, "vendor") as Long),
         orderItem = system.get(id, "orderItem") as String,
@@ -304,7 +304,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         peptideBatches = (system.getAs(id, "Origin", "peptideBatches") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeComposition(id: Long): Composition = Composition(
+    @PublishedApi internal fun materializeComposition(id: Long): Composition = Composition(
         key = system.refFor(id).key,
         mixedOn = system.get(id, "mixedOn") as LocalDate,
         drawnMg = system.get(id, "drawnMg") as BigDecimal,
@@ -313,14 +313,14 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         peptideBatches = (system.getAs(id, "Origin", "peptideBatches") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeComponent(id: Long): Component = Component(
+    @PublishedApi internal fun materializeComponent(id: Long): Component = Component(
         key = system.refFor(id).key,
         composition = system.refFor(system.get(id, "composition") as Long),
         source = system.refFor(system.get(id, "source") as Long),
         amountMg = system.get(id, "amountMg") as BigDecimal,
     )
 
-    fun materializePeptideBatch(id: Long): PeptideBatch = PeptideBatch(
+    @PublishedApi internal fun materializePeptideBatch(id: Long): PeptideBatch = PeptideBatch(
         key = system.refFor(id).key,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         quantityMg = system.get(id, "quantityMg") as BigDecimal,
@@ -336,16 +336,16 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isDepleted = system.isMember(id, "Depleted"),
     )
 
-    fun materializeDepletionNotice(id: Long): DepletionNotice = DepletionNotice(
+    @PublishedApi internal fun materializeDepletionNotice(id: Long): DepletionNotice = DepletionNotice(
         key = system.refFor(id).key,
         batch = system.refFor(system.get(id, "batch") as Long),
         kind = system.get(id, "kind") as String,
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    fun materializeOrigin(id: Long): Origin = materialize(id) as Origin
+    @PublishedApi internal fun materializeOrigin(id: Long): Origin = materialize(id) as Origin
 
-    fun materializeFermented(id: Long): Fermented = Fermented(
+    @PublishedApi internal fun materializeFermented(id: Long): Fermented = Fermented(
         key = system.refFor(id).key,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         quantityMg = system.get(id, "quantityMg") as BigDecimal,
@@ -360,7 +360,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isDepleted = system.isMember(id, "Depleted"),
     )
 
-    fun materializeOrdered(id: Long): Ordered = Ordered(
+    @PublishedApi internal fun materializeOrdered(id: Long): Ordered = Ordered(
         key = system.refFor(id).key,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         quantityMg = system.get(id, "quantityMg") as BigDecimal,
@@ -375,7 +375,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isDepleted = system.isMember(id, "Depleted"),
     )
 
-    fun materializeComposite(id: Long): Composite = Composite(
+    @PublishedApi internal fun materializeComposite(id: Long): Composite = Composite(
         key = system.refFor(id).key,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         quantityMg = system.get(id, "quantityMg") as BigDecimal,
@@ -390,7 +390,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isDepleted = system.isMember(id, "Depleted"),
     )
 
-    fun materializeDepleted(id: Long): Depleted = Depleted(
+    @PublishedApi internal fun materializeDepleted(id: Long): Depleted = Depleted(
         key = system.refFor(id).key,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         quantityMg = system.get(id, "quantityMg") as BigDecimal,

@@ -22,8 +22,8 @@ open class VendorsFlowTest {
     protected open fun newSystem(): VendorsSystem = VendorsSystem()
     protected val sys: VendorsSystem by lazy { newSystem() }
 
-    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
-    private fun refuse(r: Commit<*>) = assertTrue(r !is Commit.Accepted<*>, "expected a refusal, got: $r")
+    private fun accept(r: Commit<*, *>) = assertIs<Commit.Accepted<*, *>>(r, "refused: $r")
+    private fun refuse(r: Commit<*, *>) = assertTrue(r !is Commit.Accepted<*, *>, "expected a refusal, got: $r")
     private fun dec(s: String) = BigDecimal(s)
 
     /** Staff and vendors are fixtures, seeded outside the trust boundary; products and assignments arrive through acts. */
@@ -80,7 +80,7 @@ open class VendorsFlowTest {
         refuse(sys.commit(NewChangePrice(widget, dec("5.00")), w.olu)) // not assigned
 
         val r = sys.commit(NewChangePrice(widget, dec("3.00")), w.sam)
-        val rej = assertIs<Commit.Refused<*>>(r).rejection!!
+        val rej = assertIs<Commit.Refused<*, *>>(r).rejection!!
         val seenProduct = (rej.pivots + rej.witnesses).single { it.shape == "Product" }
         assertTrue("cost" !in seenProduct.fields, "projected for the actor: $rej")
         assertTrue("price" in seenProduct.fields)
@@ -88,7 +88,7 @@ open class VendorsFlowTest {
 
         accept(sys.commit(NewAssignVendor(w.ada, w.acme), w.ada))
         val r2 = sys.commit(NewChangePrice(widget, dec("3.00")), w.ada)
-        val rej2 = assertIs<Commit.Refused<*>>(r2).rejection!!
+        val rej2 = assertIs<Commit.Refused<*, *>>(r2).rejection!!
         assertTrue("cost" in (rej2.pivots + rej2.witnesses).single { it.shape == "Product" }.fields, "an administrator sees the cost in the same refusal")
     }
 

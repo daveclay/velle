@@ -54,7 +54,7 @@ class PaymentsPersistenceTest {
     private fun process(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")): PaymentsSystem =
         PaymentsSystem(startTime).also { SqliteStore.attach(it.system, conn) }
 
-    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
+    private fun accept(r: Commit<*, *>) = assertIs<Commit.Accepted<*, *>>(r, "refused: $r")
 
     private fun PaymentsSystem.placeOrder() {
         accept(commit(NewContact("Grace", "grace@velle.example")))

@@ -99,9 +99,9 @@ fun main() {
 
 private fun today(): LocalDate = LocalDate.now(ZoneOffset.UTC) // the system's declared zone (UTC)
 
-private fun accept(r: Commit<*>): Commit.Accepted<*> = when (r) {
-    is Commit.Accepted<*> -> r
-    is Commit.Refused<*> -> error("refused: ${r.reason}")
+private fun accept(r: Commit<*, *>): Commit.Accepted<*, *> = when (r) {
+    is Commit.Accepted<*, *> -> r
+    is Commit.Refused<*, *> -> error("refused: ${r.reason}")
 }
 
 private fun count(conn: Connection, table: String): Long =

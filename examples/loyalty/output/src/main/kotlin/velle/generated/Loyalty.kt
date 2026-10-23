@@ -20,53 +20,53 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     /** Queue keys: [join.referrer], [join.referrer.referrer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewJoin): Commit<NewJoin> {
+    fun commit(input: NewJoin): Commit<NewJoin, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Join", raw).carrying(input)
+        return system.commit("Join", raw).carryingNoRecord(input)
     }
 
     /** Queue key: [duesPayment.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewDuesPayment): Commit<NewDuesPayment> {
+    fun commit(input: NewDuesPayment): Commit<NewDuesPayment, Ref<DuesPayment>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("DuesPayment", raw).carrying(input)
+        return system.commit("DuesPayment", raw).carrying(input, "DuesPayment")
     }
 
     /** Queue keys: [purchase.member], [purchase.member.referrer], [purchase.member.referrer.referrer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPurchase): Commit<NewPurchase> {
+    fun commit(input: NewPurchase): Commit<NewPurchase, Ref<Purchase>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Purchase", raw).carrying(input)
+        return system.commit("Purchase", raw).carrying(input, "Purchase")
     }
 
     /** Queue key: [enrollment.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewEnrollment): Commit<NewEnrollment> {
+    fun commit(input: NewEnrollment): Commit<NewEnrollment, Ref<Enrollment>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Enrollment", raw).carrying(input)
+        return system.commit("Enrollment", raw).carrying(input, "Enrollment")
     }
 
     fun members(): List<Member> = system.instancesOf("Member").map { materializeMember(it) }
@@ -91,7 +91,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             return materialize(id)
         }
@@ -197,7 +197,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Member" -> materializeMember(id)
         "DuesPayment" -> materializeDuesPayment(id)
         "Purchase" -> materializePurchase(id)
@@ -209,7 +209,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    fun materializeMember(id: Long): Member = Member(
+    @PublishedApi internal fun materializeMember(id: Long): Member = Member(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         referrer = (system.get(id, "referrer") as Long?)?.let { system.refFor(it) },
@@ -226,7 +226,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isCertifiedMember = system.isMember(id, "CertifiedMember"),
     )
 
-    fun materializeDuesPayment(id: Long): DuesPayment = DuesPayment(
+    @PublishedApi internal fun materializeDuesPayment(id: Long): DuesPayment = DuesPayment(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         coveredMonth = system.get(id, "coveredMonth") as String,
@@ -237,7 +237,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         streakAfter = (system.get(id, "streakAfter") as BigDecimal).intValueExact(),
     )
 
-    fun materializePurchase(id: Long): Purchase = Purchase(
+    @PublishedApi internal fun materializePurchase(id: Long): Purchase = Purchase(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -246,32 +246,32 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isVipPurchase = system.isMember(id, "VipPurchase"),
     )
 
-    fun materializeThankYouNote(id: Long): ThankYouNote = ThankYouNote(
+    @PublishedApi internal fun materializeThankYouNote(id: Long): ThankYouNote = ThankYouNote(
         key = system.refFor(id).key,
         purchase = system.refFor(system.get(id, "purchase") as Long),
     )
 
-    fun materializeEnrollment(id: Long): Enrollment = Enrollment(
+    @PublishedApi internal fun materializeEnrollment(id: Long): Enrollment = Enrollment(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
     )
 
-    fun materializeSafetyWaiver(id: Long): SafetyWaiver = SafetyWaiver(
+    @PublishedApi internal fun materializeSafetyWaiver(id: Long): SafetyWaiver = SafetyWaiver(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
     )
 
-    fun materializeOrientationRecord(id: Long): OrientationRecord = OrientationRecord(
+    @PublishedApi internal fun materializeOrientationRecord(id: Long): OrientationRecord = OrientationRecord(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
     )
 
-    fun materializeKeycard(id: Long): Keycard = Keycard(
+    @PublishedApi internal fun materializeKeycard(id: Long): Keycard = Keycard(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
     )
 
-    fun materializeQualifiedPurchase(id: Long): QualifiedPurchase = QualifiedPurchase(
+    @PublishedApi internal fun materializeQualifiedPurchase(id: Long): QualifiedPurchase = QualifiedPurchase(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -279,7 +279,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isVipPurchase = system.isMember(id, "VipPurchase"),
     )
 
-    fun materializeVipPurchase(id: Long): VipPurchase = VipPurchase(
+    @PublishedApi internal fun materializeVipPurchase(id: Long): VipPurchase = VipPurchase(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -287,7 +287,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isQualifiedPurchase = system.isMember(id, "QualifiedPurchase"),
     )
 
-    fun materializeCertifiedMember(id: Long): CertifiedMember = CertifiedMember(
+    @PublishedApi internal fun materializeCertifiedMember(id: Long): CertifiedMember = CertifiedMember(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         referrer = (system.get(id, "referrer") as Long?)?.let { system.refFor(it) },

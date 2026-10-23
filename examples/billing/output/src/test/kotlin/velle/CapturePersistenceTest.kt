@@ -34,8 +34,7 @@ class CapturePersistenceTest {
         return billing
     }
 
-    private fun accept(r: Commit<*>): Long =
-        assertIs<Commit.Accepted<*>>(r, "refused: $r").id
+    private fun accept(r: Commit<*, *>) { assertIs<Commit.Accepted<*, *>>(r, "refused: $r") }
 
     private fun scalar(sql: String, bind: Long? = null): Any? =
         conn.prepareStatement(sql).use { ps ->

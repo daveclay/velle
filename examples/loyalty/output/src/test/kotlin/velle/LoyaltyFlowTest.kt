@@ -30,12 +30,12 @@ open class LoyaltyFlowTest {
         name: String,
         referrer: Member? = null,
     ): Member {
-        assertIs<Commit.Accepted<*>>(sys.commit(NewJoin(name, referrer = referrer)))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewJoin(name, referrer = referrer)))
         return sys.members().last()
     }
 
     private fun dues(m: Member, month: String, dueBy: LocalDate, paidOn: LocalDate) {
-        assertIs<Commit.Accepted<*>>(sys.commit(NewDuesPayment(m, month, dueBy, paidOn)))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewDuesPayment(m, month, dueBy, paidOn)))
     }
 
     @Test
@@ -87,7 +87,7 @@ open class LoyaltyFlowTest {
     fun `a qualified purchase promotes the buyer and the referrer - two different members`() {
         val recruiter = member("Recruiter")
         val buyer = member("Buyer", referrer = recruiter)
-        assertIs<Commit.Accepted<*>>(sys.commit(NewPurchase(buyer, BigDecimal("150"))))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewPurchase(buyer, BigDecimal("150"))))
         assertEquals("gold", sys.read(buyer).tier)
         assertEquals("advocate", sys.read(recruiter).tier)
     }
@@ -98,23 +98,23 @@ open class LoyaltyFlowTest {
         // the qualifying purchase is not a gold member's purchase at its own
         // commit; the promotion's commit is where it becomes one, and the
         // note lands there — exactly once
-        assertIs<Commit.Accepted<*>>(sys.commit(NewPurchase(buyer, BigDecimal("150"))))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewPurchase(buyer, BigDecimal("150"))))
         assertEquals(1, sys.thankYouNotes().size)
         // a later purchase by the now-gold member is thanked at its own commit
-        assertIs<Commit.Accepted<*>>(sys.commit(NewPurchase(buyer, BigDecimal("20"))))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewPurchase(buyer, BigDecimal("20"))))
         assertEquals(2, sys.thankYouNotes().size)
     }
 
     @Test
     fun `one enrollment certifies and issues exactly one keycard`() {
         val climber = member("Climber")
-        assertIs<Commit.Accepted<*>>(sys.commit(NewEnrollment(climber)))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewEnrollment(climber)))
         assertEquals(1, sys.safetyWaivers().size)
         assertEquals(1, sys.orientationRecords().size)
         assertEquals(1, sys.keycards().size)
         // a second enrollment re-files the paperwork; certification already
         // held, and the keycard guard keeps it to one
-        assertIs<Commit.Accepted<*>>(sys.commit(NewEnrollment(climber)))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewEnrollment(climber)))
         assertEquals(1, sys.keycards().size)
     }
 }

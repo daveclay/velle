@@ -24,118 +24,118 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSignUp): Commit<NewSignUp> {
+    fun commit(input: NewSignUp): Commit<NewSignUp, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("SignUp", raw).carrying(input)
+        return system.commit("SignUp", raw).carryingNoRecord(input)
     }
 
     /** Queue key: [correctEmail.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCorrectEmail): Commit<NewCorrectEmail> {
+    fun commit(input: NewCorrectEmail): Commit<NewCorrectEmail, Ref<CorrectEmail>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CorrectEmail", raw).carrying(input)
+        return system.commit("CorrectEmail", raw).carrying(input, "CorrectEmail")
     }
 
     /** Queue key: [billCustomer.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewBillCustomer): Commit<NewBillCustomer> {
+    fun commit(input: NewBillCustomer): Commit<NewBillCustomer, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("BillCustomer", raw).carrying(input)
+        return system.commit("BillCustomer", raw).carryingNoRecord(input)
     }
 
     /** Queue key: [lineItem.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewLineItem): Commit<NewLineItem> {
+    fun commit(input: NewLineItem): Commit<NewLineItem, Ref<LineItem>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("LineItem", raw).carrying(input)
+        return system.commit("LineItem", raw).carrying(input, "LineItem")
     }
 
     /** Queue keys: [submitPayment.invoice], [submitPayment.invoice.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSubmitPayment): Commit<NewSubmitPayment> {
+    fun commit(input: NewSubmitPayment): Commit<NewSubmitPayment, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("SubmitPayment", raw).carrying(input)
+        return system.commit("SubmitPayment", raw).carryingNoRecord(input)
     }
 
     /** Queue key: [issuance.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewIssuance): Commit<NewIssuance> {
+    fun commit(input: NewIssuance): Commit<NewIssuance, Ref<Issuance>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Issuance", raw).carrying(input)
+        return system.commit("Issuance", raw).carrying(input, "Issuance")
     }
 
     /** Queue keys: [changeDueDate.invoice], [changeDueDate.invoice.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewChangeDueDate): Commit<NewChangeDueDate> {
+    fun commit(input: NewChangeDueDate): Commit<NewChangeDueDate, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ChangeDueDate", raw).carrying(input)
+        return system.commit("ChangeDueDate", raw).carryingNoRecord(input)
     }
 
     /** Queue key: [archiveRequest.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewArchiveRequest): Commit<NewArchiveRequest> {
+    fun commit(input: NewArchiveRequest): Commit<NewArchiveRequest, Ref<ArchiveRequest>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ArchiveRequest", raw).carrying(input)
+        return system.commit("ArchiveRequest", raw).carrying(input, "ArchiveRequest")
     }
 
     /** Queue key: [unarchiveRequest.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewUnarchiveRequest): Commit<NewUnarchiveRequest> {
+    fun commit(input: NewUnarchiveRequest): Commit<NewUnarchiveRequest, Ref<UnarchiveRequest>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("UnarchiveRequest", raw).carrying(input)
+        return system.commit("UnarchiveRequest", raw).carrying(input, "UnarchiveRequest")
     }
 
     fun customers(): List<Customer> = system.instancesOf("Customer").map { materializeCustomer(it) }
@@ -168,7 +168,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             return materialize(id)
         }
@@ -346,7 +346,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Customer" -> materializeCustomer(id)
         "CorrectEmail" -> materializeCorrectEmail(id)
         "Invoice" -> materializeInvoice(id)
@@ -363,7 +363,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    fun materializeCustomer(id: Long): Customer = Customer(
+    @PublishedApi internal fun materializeCustomer(id: Long): Customer = Customer(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         email = system.get(id, "email") as String,
@@ -373,13 +373,13 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         invoices = (system.get(id, "invoices") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeCorrectEmail(id: Long): CorrectEmail = CorrectEmail(
+    @PublishedApi internal fun materializeCorrectEmail(id: Long): CorrectEmail = CorrectEmail(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         corrected = system.get(id, "corrected") as String,
     )
 
-    fun materializeInvoice(id: Long): Invoice = Invoice(
+    @PublishedApi internal fun materializeInvoice(id: Long): Invoice = Invoice(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,
@@ -404,7 +404,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isArchivedInvoice = system.isMember(id, "ArchivedInvoice"),
     )
 
-    fun materializeLineItem(id: Long): LineItem = LineItem(
+    @PublishedApi internal fun materializeLineItem(id: Long): LineItem = LineItem(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
         description = system.get(id, "description") as String,
@@ -413,14 +413,14 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         amount = system.get(id, "amount") as BigDecimal,
     )
 
-    fun materializePayment(id: Long): Payment = Payment(
+    @PublishedApi internal fun materializePayment(id: Long): Payment = Payment(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
         amount = system.get(id, "amount") as BigDecimal,
         receivedOn = system.get(id, "receivedOn") as Instant,
     )
 
-    fun materializeReceipt(id: Long): Receipt = Receipt(
+    @PublishedApi internal fun materializeReceipt(id: Long): Receipt = Receipt(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
         sentOn = system.get(id, "sentOn") as Instant,
@@ -428,24 +428,24 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isUnemailedReceipt = system.isMember(id, "UnemailedReceipt"),
     )
 
-    fun materializeReceiptEmail(id: Long): ReceiptEmail = ReceiptEmail(
+    @PublishedApi internal fun materializeReceiptEmail(id: Long): ReceiptEmail = ReceiptEmail(
         key = system.refFor(id).key,
         receipt = system.refFor(system.get(id, "receipt") as Long),
         queuedOn = system.get(id, "queuedOn") as Instant,
     )
 
-    fun materializeReminder(id: Long): Reminder = Reminder(
+    @PublishedApi internal fun materializeReminder(id: Long): Reminder = Reminder(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
         sentOn = system.get(id, "sentOn") as LocalDate,
     )
 
-    fun materializeIssuance(id: Long): Issuance = Issuance(
+    @PublishedApi internal fun materializeIssuance(id: Long): Issuance = Issuance(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
     )
 
-    fun materializeDueChangeRefusal(id: Long): DueChangeRefusal = DueChangeRefusal(
+    @PublishedApi internal fun materializeDueChangeRefusal(id: Long): DueChangeRefusal = DueChangeRefusal(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
         requestedDue = system.get(id, "requestedDue") as LocalDate,
@@ -453,24 +453,24 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeArchiveRequest(id: Long): ArchiveRequest = ArchiveRequest(
+    @PublishedApi internal fun materializeArchiveRequest(id: Long): ArchiveRequest = ArchiveRequest(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
     )
 
-    fun materializeUnarchiveRequest(id: Long): UnarchiveRequest = UnarchiveRequest(
+    @PublishedApi internal fun materializeUnarchiveRequest(id: Long): UnarchiveRequest = UnarchiveRequest(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
     )
 
-    fun materializeUnarchiveNotice(id: Long): UnarchiveNotice = UnarchiveNotice(
+    @PublishedApi internal fun materializeUnarchiveNotice(id: Long): UnarchiveNotice = UnarchiveNotice(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
         wasArchivedOn = system.get(id, "wasArchivedOn") as LocalDate,
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    fun materializePaidInvoice(id: Long): PaidInvoice = PaidInvoice(
+    @PublishedApi internal fun materializePaidInvoice(id: Long): PaidInvoice = PaidInvoice(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,
@@ -494,14 +494,14 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isArchivedInvoice = system.isMember(id, "ArchivedInvoice"),
     )
 
-    fun materializeUnemailedReceipt(id: Long): UnemailedReceipt = UnemailedReceipt(
+    @PublishedApi internal fun materializeUnemailedReceipt(id: Long): UnemailedReceipt = UnemailedReceipt(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
         sentOn = system.get(id, "sentOn") as Instant,
         receiptEmails = (system.get(id, "receiptEmails") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeOverdueInvoice(id: Long): OverdueInvoice = OverdueInvoice(
+    @PublishedApi internal fun materializeOverdueInvoice(id: Long): OverdueInvoice = OverdueInvoice(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,
@@ -525,7 +525,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isArchivedInvoice = system.isMember(id, "ArchivedInvoice"),
     )
 
-    fun materializeActionableOverdue(id: Long): ActionableOverdue = ActionableOverdue(
+    @PublishedApi internal fun materializeActionableOverdue(id: Long): ActionableOverdue = ActionableOverdue(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,
@@ -550,7 +550,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isArchivedInvoice = system.isMember(id, "ArchivedInvoice"),
     )
 
-    fun materializeIssuedInvoice(id: Long): IssuedInvoice = IssuedInvoice(
+    @PublishedApi internal fun materializeIssuedInvoice(id: Long): IssuedInvoice = IssuedInvoice(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,
@@ -574,7 +574,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isArchivedInvoice = system.isMember(id, "ArchivedInvoice"),
     )
 
-    fun materializeArchivedInvoice(id: Long): ArchivedInvoice = ArchivedInvoice(
+    @PublishedApi internal fun materializeArchivedInvoice(id: Long): ArchivedInvoice = ArchivedInvoice(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,

@@ -25,14 +25,14 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewContact): Commit<NewContact> {
+    fun commit(input: NewContact): Commit<NewContact, Ref<Contact>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Contact", raw).carrying(input)
+        return system.commit("Contact", raw).carrying(input, "Contact")
     }
 
     /** Queue keys: [card.billingContact] — plus system-wide width below.
@@ -81,14 +81,14 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over DunningResolution — consults DunningResolution through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCard): Commit<NewCard> {
+    fun commit(input: NewCard): Commit<NewCard, Ref<Card>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Card", raw).carrying(input)
+        return system.commit("Card", raw).carrying(input, "Card")
     }
 
     /** Queue keys: [customer.card] — plus system-wide width below.
@@ -118,14 +118,14 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCustomer): Commit<NewCustomer> {
+    fun commit(input: NewCustomer): Commit<NewCustomer, Ref<Customer>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Customer", raw).carrying(input)
+        return system.commit("Customer", raw).carrying(input, "Customer")
     }
 
     /** Queue keys: [cardUpdate.card], [cardUpdate.customer], [cardUpdate.customer.card] — plus system-wide width below.
@@ -155,14 +155,14 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCardUpdate): Commit<NewCardUpdate> {
+    fun commit(input: NewCardUpdate): Commit<NewCardUpdate, Ref<CardUpdate>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CardUpdate", raw).carrying(input)
+        return system.commit("CardUpdate", raw).carrying(input, "CardUpdate")
     }
 
     /** Queue keys: [placeOrder.customer], [placeOrder.customer.card] — plus system-wide width below.
@@ -192,14 +192,14 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPlaceOrder): Commit<NewPlaceOrder> {
+    fun commit(input: NewPlaceOrder): Commit<NewPlaceOrder, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PlaceOrder", raw).carrying(input)
+        return system.commit("PlaceOrder", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [processorVerdict.attempt] — plus system-wide width below.
@@ -248,27 +248,27 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeAttempt — consults ChargeAttempt through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewProcessorVerdict): Commit<NewProcessorVerdict> {
+    fun commit(input: NewProcessorVerdict): Commit<NewProcessorVerdict, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ProcessorVerdict", raw).carrying(input)
+        return system.commit("ProcessorVerdict", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [changeShippingAddress.order], [changeShippingAddress.order.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewChangeShippingAddress): Commit<NewChangeShippingAddress> {
+    fun commit(input: NewChangeShippingAddress): Commit<NewChangeShippingAddress, Ref<ChangeShippingAddress>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ChangeShippingAddress", raw).carrying(input)
+        return system.commit("ChangeShippingAddress", raw).carrying(input, "ChangeShippingAddress")
     }
 
     /** Queue keys: [issueRefund.order] — plus system-wide width below.
@@ -294,14 +294,14 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewIssueRefund): Commit<NewIssueRefund> {
+    fun commit(input: NewIssueRefund): Commit<NewIssueRefund, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("IssueRefund", raw).carrying(input)
+        return system.commit("IssueRefund", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [manualCharge.order], [manualCharge.order.customer], [manualCharge.order.customer.card] — plus system-wide width below.
@@ -331,27 +331,27 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewManualCharge): Commit<NewManualCharge> {
+    fun commit(input: NewManualCharge): Commit<NewManualCharge, Ref<ManualCharge>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ManualCharge", raw).carrying(input)
+        return system.commit("ManualCharge", raw).carrying(input, "ManualCharge")
     }
 
     /** Queue key: [extensionRequest.order].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewExtensionRequest): Commit<NewExtensionRequest> {
+    fun commit(input: NewExtensionRequest): Commit<NewExtensionRequest, Ref<ExtensionRequest>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ExtensionRequest", raw).carrying(input)
+        return system.commit("ExtensionRequest", raw).carrying(input, "ExtensionRequest")
     }
 
     fun contacts(): List<Contact> = system.instancesOf("Contact").map { materializeContact(it) }
@@ -413,7 +413,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             return materialize(id)
         }
@@ -852,7 +852,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Contact" -> materializeContact(id)
         "Card" -> materializeCard(id)
         "Customer" -> materializeCustomer(id)
@@ -879,14 +879,14 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    fun materializeContact(id: Long): Contact = Contact(
+    @PublishedApi internal fun materializeContact(id: Long): Contact = Contact(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         email = system.get(id, "email") as String,
         cards = (system.get(id, "cards") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeCard(id: Long): Card = Card(
+    @PublishedApi internal fun materializeCard(id: Long): Card = Card(
         key = system.refFor(id).key,
         number = system.get(id, "number") as String,
         expiresOn = system.get(id, "expiresOn") as LocalDate,
@@ -895,7 +895,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         cardUpdates = (system.get(id, "cardUpdates") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeCustomer(id: Long): Customer = Customer(
+    @PublishedApi internal fun materializeCustomer(id: Long): Customer = Customer(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         card = (system.get(id, "card") as Long?)?.let { system.refFor(it) },
@@ -903,13 +903,13 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         orders = (system.get(id, "orders") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeCardUpdate(id: Long): CardUpdate = CardUpdate(
+    @PublishedApi internal fun materializeCardUpdate(id: Long): CardUpdate = CardUpdate(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         card = system.refFor(system.get(id, "card") as Long),
     )
 
-    fun materializeOrder(id: Long): Order = Order(
+    @PublishedApi internal fun materializeOrder(id: Long): Order = Order(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -945,7 +945,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    fun materializeChargeAttempt(id: Long): ChargeAttempt = ChargeAttempt(
+    @PublishedApi internal fun materializeChargeAttempt(id: Long): ChargeAttempt = ChargeAttempt(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -962,20 +962,20 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStalePendingAttempt = system.isMember(id, "StalePendingAttempt"),
     )
 
-    fun materializeChargeResponse(id: Long): ChargeResponse = ChargeResponse(
+    @PublishedApi internal fun materializeChargeResponse(id: Long): ChargeResponse = ChargeResponse(
         key = system.refFor(id).key,
         attempt = system.refFor(system.get(id, "attempt") as Long),
         outcome = system.get(id, "outcome") as String,
         respondedOn = system.get(id, "respondedOn") as Instant,
     )
 
-    fun materializeAttemptTimeout(id: Long): AttemptTimeout = AttemptTimeout(
+    @PublishedApi internal fun materializeAttemptTimeout(id: Long): AttemptTimeout = AttemptTimeout(
         key = system.refFor(id).key,
         attempt = system.refFor(system.get(id, "attempt") as Long),
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    fun materializeStockReservation(id: Long): StockReservation = StockReservation(
+    @PublishedApi internal fun materializeStockReservation(id: Long): StockReservation = StockReservation(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         reservedOn = system.get(id, "reservedOn") as Instant,
@@ -983,25 +983,25 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isActiveReservation = system.isMember(id, "ActiveReservation"),
     )
 
-    fun materializeReservationRelease(id: Long): ReservationRelease = ReservationRelease(
+    @PublishedApi internal fun materializeReservationRelease(id: Long): ReservationRelease = ReservationRelease(
         key = system.refFor(id).key,
         reservation = system.refFor(system.get(id, "reservation") as Long),
         releasedOn = system.get(id, "releasedOn") as Instant,
     )
 
-    fun materializeReceipt(id: Long): Receipt = Receipt(
+    @PublishedApi internal fun materializeReceipt(id: Long): Receipt = Receipt(
         key = system.refFor(id).key,
         attempt = system.refFor(system.get(id, "attempt") as Long),
         sentOn = system.get(id, "sentOn") as Instant,
     )
 
-    fun materializeShipment(id: Long): Shipment = Shipment(
+    @PublishedApi internal fun materializeShipment(id: Long): Shipment = Shipment(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         shippedOn = system.get(id, "shippedOn") as Instant,
     )
 
-    fun materializeChangeShippingAddress(id: Long): ChangeShippingAddress = ChangeShippingAddress(
+    @PublishedApi internal fun materializeChangeShippingAddress(id: Long): ChangeShippingAddress = ChangeShippingAddress(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         newAddress = system.get(id, "newAddress") as String,
@@ -1012,55 +1012,55 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isRefusedAddressChange = system.isMember(id, "RefusedAddressChange"),
     )
 
-    fun materializeAddressChangeApplication(id: Long): AddressChangeApplication = AddressChangeApplication(
+    @PublishedApi internal fun materializeAddressChangeApplication(id: Long): AddressChangeApplication = AddressChangeApplication(
         key = system.refFor(id).key,
         change = system.refFor(system.get(id, "change") as Long),
         appliedOn = system.get(id, "appliedOn") as Instant,
     )
 
-    fun materializeAddressChangeRefusal(id: Long): AddressChangeRefusal = AddressChangeRefusal(
+    @PublishedApi internal fun materializeAddressChangeRefusal(id: Long): AddressChangeRefusal = AddressChangeRefusal(
         key = system.refFor(id).key,
         change = system.refFor(system.get(id, "change") as Long),
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeRefund(id: Long): Refund = Refund(
+    @PublishedApi internal fun materializeRefund(id: Long): Refund = Refund(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
         refundedOn = system.get(id, "refundedOn") as Instant,
     )
 
-    fun materializeSettlementReversal(id: Long): SettlementReversal = SettlementReversal(
+    @PublishedApi internal fun materializeSettlementReversal(id: Long): SettlementReversal = SettlementReversal(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    fun materializeManualCharge(id: Long): ManualCharge = ManualCharge(
+    @PublishedApi internal fun materializeManualCharge(id: Long): ManualCharge = ManualCharge(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
     )
 
-    fun materializeExtensionRequest(id: Long): ExtensionRequest = ExtensionRequest(
+    @PublishedApi internal fun materializeExtensionRequest(id: Long): ExtensionRequest = ExtensionRequest(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
     )
 
-    fun materializePaymentExtension(id: Long): PaymentExtension = PaymentExtension(
+    @PublishedApi internal fun materializePaymentExtension(id: Long): PaymentExtension = PaymentExtension(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         endsOn = system.get(id, "endsOn") as LocalDate,
     )
 
-    fun materializePaymentReminder(id: Long): PaymentReminder = PaymentReminder(
+    @PublishedApi internal fun materializePaymentReminder(id: Long): PaymentReminder = PaymentReminder(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         sentOn = system.get(id, "sentOn") as LocalDate,
     )
 
-    fun materializeDunningFlag(id: Long): DunningFlag = DunningFlag(
+    @PublishedApi internal fun materializeDunningFlag(id: Long): DunningFlag = DunningFlag(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         openedOn = system.get(id, "openedOn") as LocalDate,
@@ -1069,13 +1069,13 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isClosableDunningFlag = system.isMember(id, "ClosableDunningFlag"),
     )
 
-    fun materializeDunningResolution(id: Long): DunningResolution = DunningResolution(
+    @PublishedApi internal fun materializeDunningResolution(id: Long): DunningResolution = DunningResolution(
         key = system.refFor(id).key,
         flag = system.refFor(system.get(id, "flag") as Long),
         resolvedOn = system.get(id, "resolvedOn") as LocalDate,
     )
 
-    fun materializeSettledOrder(id: Long): SettledOrder = SettledOrder(
+    @PublishedApi internal fun materializeSettledOrder(id: Long): SettledOrder = SettledOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1111,7 +1111,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    fun materializeNeverCharged(id: Long): NeverCharged = NeverCharged(
+    @PublishedApi internal fun materializeNeverCharged(id: Long): NeverCharged = NeverCharged(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1146,7 +1146,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    fun materializeUnpaidOrder(id: Long): UnpaidOrder = UnpaidOrder(
+    @PublishedApi internal fun materializeUnpaidOrder(id: Long): UnpaidOrder = UnpaidOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1181,7 +1181,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    fun materializeRefundedOrder(id: Long): RefundedOrder = RefundedOrder(
+    @PublishedApi internal fun materializeRefundedOrder(id: Long): RefundedOrder = RefundedOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1216,7 +1216,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    fun materializeChargeableOrder(id: Long): ChargeableOrder = ChargeableOrder(
+    @PublishedApi internal fun materializeChargeableOrder(id: Long): ChargeableOrder = ChargeableOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1251,7 +1251,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    fun materializePendingAttempt(id: Long): PendingAttempt = PendingAttempt(
+    @PublishedApi internal fun materializePendingAttempt(id: Long): PendingAttempt = PendingAttempt(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1267,7 +1267,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStalePendingAttempt = system.isMember(id, "StalePendingAttempt"),
     )
 
-    fun materializeCompletedAttempt(id: Long): CompletedAttempt = CompletedAttempt(
+    @PublishedApi internal fun materializeCompletedAttempt(id: Long): CompletedAttempt = CompletedAttempt(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1284,7 +1284,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStalePendingAttempt = system.isMember(id, "StalePendingAttempt"),
     )
 
-    fun materializeSuccessfulCharge(id: Long): SuccessfulCharge = SuccessfulCharge(
+    @PublishedApi internal fun materializeSuccessfulCharge(id: Long): SuccessfulCharge = SuccessfulCharge(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1301,7 +1301,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStalePendingAttempt = system.isMember(id, "StalePendingAttempt"),
     )
 
-    fun materializeFailedCharge(id: Long): FailedCharge = FailedCharge(
+    @PublishedApi internal fun materializeFailedCharge(id: Long): FailedCharge = FailedCharge(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1318,7 +1318,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStalePendingAttempt = system.isMember(id, "StalePendingAttempt"),
     )
 
-    fun materializeTimedOutAttempt(id: Long): TimedOutAttempt = TimedOutAttempt(
+    @PublishedApi internal fun materializeTimedOutAttempt(id: Long): TimedOutAttempt = TimedOutAttempt(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1334,14 +1334,14 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStalePendingAttempt = system.isMember(id, "StalePendingAttempt"),
     )
 
-    fun materializeActiveReservation(id: Long): ActiveReservation = ActiveReservation(
+    @PublishedApi internal fun materializeActiveReservation(id: Long): ActiveReservation = ActiveReservation(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         reservedOn = system.get(id, "reservedOn") as Instant,
         reservationReleases = (system.get(id, "reservationReleases") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeRetryableOrder(id: Long): RetryableOrder = RetryableOrder(
+    @PublishedApi internal fun materializeRetryableOrder(id: Long): RetryableOrder = RetryableOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1376,7 +1376,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    fun materializeStalePendingAttempt(id: Long): StalePendingAttempt = StalePendingAttempt(
+    @PublishedApi internal fun materializeStalePendingAttempt(id: Long): StalePendingAttempt = StalePendingAttempt(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1392,7 +1392,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isTimedOutAttempt = system.isMember(id, "TimedOutAttempt"),
     )
 
-    fun materializeExhaustedOrder(id: Long): ExhaustedOrder = ExhaustedOrder(
+    @PublishedApi internal fun materializeExhaustedOrder(id: Long): ExhaustedOrder = ExhaustedOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1427,7 +1427,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    fun materializeReservedOrder(id: Long): ReservedOrder = ReservedOrder(
+    @PublishedApi internal fun materializeReservedOrder(id: Long): ReservedOrder = ReservedOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1462,7 +1462,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    fun materializeUnshippedOrder(id: Long): UnshippedOrder = UnshippedOrder(
+    @PublishedApi internal fun materializeUnshippedOrder(id: Long): UnshippedOrder = UnshippedOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1497,7 +1497,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    fun materializeReadyToShip(id: Long): ReadyToShip = ReadyToShip(
+    @PublishedApi internal fun materializeReadyToShip(id: Long): ReadyToShip = ReadyToShip(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1534,7 +1534,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    fun materializeUnhandledAddressChange(id: Long): UnhandledAddressChange = UnhandledAddressChange(
+    @PublishedApi internal fun materializeUnhandledAddressChange(id: Long): UnhandledAddressChange = UnhandledAddressChange(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         newAddress = system.get(id, "newAddress") as String,
@@ -1544,7 +1544,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isRefusedAddressChange = system.isMember(id, "RefusedAddressChange"),
     )
 
-    fun materializeApplicableAddressChange(id: Long): ApplicableAddressChange = ApplicableAddressChange(
+    @PublishedApi internal fun materializeApplicableAddressChange(id: Long): ApplicableAddressChange = ApplicableAddressChange(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         newAddress = system.get(id, "newAddress") as String,
@@ -1554,7 +1554,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isRefusedAddressChange = system.isMember(id, "RefusedAddressChange"),
     )
 
-    fun materializeRefusedAddressChange(id: Long): RefusedAddressChange = RefusedAddressChange(
+    @PublishedApi internal fun materializeRefusedAddressChange(id: Long): RefusedAddressChange = RefusedAddressChange(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         newAddress = system.get(id, "newAddress") as String,
@@ -1564,7 +1564,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isApplicableAddressChange = system.isMember(id, "ApplicableAddressChange"),
     )
 
-    fun materializeRefundAfterFailure(id: Long): RefundAfterFailure = RefundAfterFailure(
+    @PublishedApi internal fun materializeRefundAfterFailure(id: Long): RefundAfterFailure = RefundAfterFailure(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1599,7 +1599,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    fun materializeOverdueOrder(id: Long): OverdueOrder = OverdueOrder(
+    @PublishedApi internal fun materializeOverdueOrder(id: Long): OverdueOrder = OverdueOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1634,7 +1634,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    fun materializeInGracePeriod(id: Long): InGracePeriod = InGracePeriod(
+    @PublishedApi internal fun materializeInGracePeriod(id: Long): InGracePeriod = InGracePeriod(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1669,7 +1669,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOverdueOrder = system.isMember(id, "OverdueOrder"),
     )
 
-    fun materializeOpenDunningFlag(id: Long): OpenDunningFlag = OpenDunningFlag(
+    @PublishedApi internal fun materializeOpenDunningFlag(id: Long): OpenDunningFlag = OpenDunningFlag(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         openedOn = system.get(id, "openedOn") as LocalDate,
@@ -1677,7 +1677,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isClosableDunningFlag = system.isMember(id, "ClosableDunningFlag"),
     )
 
-    fun materializeClosableDunningFlag(id: Long): ClosableDunningFlag = ClosableDunningFlag(
+    @PublishedApi internal fun materializeClosableDunningFlag(id: Long): ClosableDunningFlag = ClosableDunningFlag(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         openedOn = system.get(id, "openedOn") as LocalDate,

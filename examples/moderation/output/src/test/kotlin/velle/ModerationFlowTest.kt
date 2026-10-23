@@ -22,7 +22,7 @@ open class ModerationFlowTest {
     protected open fun newSystem(): ModerationSystem = ModerationSystem()
     protected val sys: ModerationSystem by lazy { newSystem() }
 
-    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
+    private fun accept(r: Commit<*, *>) = assertIs<Commit.Accepted<*, *>>(r, "refused: $r")
 
     private fun seller(name: String): Seller {
         accept(sys.commit(NewSeller(name)))

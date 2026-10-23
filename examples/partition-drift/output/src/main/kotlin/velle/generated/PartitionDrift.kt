@@ -20,92 +20,92 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCreateNote): Commit<NewCreateNote> {
+    fun commit(input: NewCreateNote): Commit<NewCreateNote, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CreateNote", raw).carrying(input)
+        return system.commit("CreateNote", raw).carryingNoRecord(input)
     }
 
     /** Queue key: [lockNote.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewLockNote): Commit<NewLockNote> {
+    fun commit(input: NewLockNote): Commit<NewLockNote, Ref<LockNote>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("LockNote", raw).carrying(input)
+        return system.commit("LockNote", raw).carrying(input, "LockNote")
     }
 
     /** Queue key: [unlockNote.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewUnlockNote): Commit<NewUnlockNote> {
+    fun commit(input: NewUnlockNote): Commit<NewUnlockNote, Ref<UnlockNote>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("UnlockNote", raw).carrying(input)
+        return system.commit("UnlockNote", raw).carrying(input, "UnlockNote")
     }
 
     /** Queue key: [renameText.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRenameText): Commit<NewRenameText> {
+    fun commit(input: NewRenameText): Commit<NewRenameText, Ref<RenameText>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("RenameText", raw).carrying(input)
+        return system.commit("RenameText", raw).carrying(input, "RenameText")
     }
 
     /** Queue key: [bareEdit.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewBareEdit): Commit<NewBareEdit> {
+    fun commit(input: NewBareEdit): Commit<NewBareEdit, Ref<BareEdit>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("BareEdit", raw).carrying(input)
+        return system.commit("BareEdit", raw).carrying(input, "BareEdit")
     }
 
     /** Queue key: [safeEdit.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSafeEdit): Commit<NewSafeEdit> {
+    fun commit(input: NewSafeEdit): Commit<NewSafeEdit, Ref<SafeEdit>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("SafeEdit", raw).carrying(input)
+        return system.commit("SafeEdit", raw).carrying(input, "SafeEdit")
     }
 
     /** Queue key: [transientEdit.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewTransientEdit): Commit<NewTransientEdit> {
+    fun commit(input: NewTransientEdit): Commit<NewTransientEdit, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("TransientEdit", raw).carrying(input)
+        return system.commit("TransientEdit", raw).carryingNoRecord(input)
     }
 
     fun notes(): List<Note> = system.instancesOf("Note").map { materializeNote(it) }
@@ -135,7 +135,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             return materialize(id)
         }
@@ -286,7 +286,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Note" -> materializeNote(id)
         "LockNote" -> materializeLockNote(id)
         "UnlockNote" -> materializeUnlockNote(id)
@@ -300,7 +300,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    fun materializeNote(id: Long): Note = Note(
+    @PublishedApi internal fun materializeNote(id: Long): Note = Note(
         key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         body = system.get(id, "body") as String,
@@ -314,23 +314,23 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         isLockedNote = system.isMember(id, "LockedNote"),
     )
 
-    fun materializeLockNote(id: Long): LockNote = LockNote(
+    @PublishedApi internal fun materializeLockNote(id: Long): LockNote = LockNote(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
     )
 
-    fun materializeUnlockNote(id: Long): UnlockNote = UnlockNote(
+    @PublishedApi internal fun materializeUnlockNote(id: Long): UnlockNote = UnlockNote(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
     )
 
-    fun materializeRenameText(id: Long): RenameText = RenameText(
+    @PublishedApi internal fun materializeRenameText(id: Long): RenameText = RenameText(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         newText = system.get(id, "newText") as String,
     )
 
-    fun materializeBareEdit(id: Long): BareEdit = BareEdit(
+    @PublishedApi internal fun materializeBareEdit(id: Long): BareEdit = BareEdit(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         newText = system.get(id, "newText") as String,
@@ -339,13 +339,13 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         isRefusedBareEdit = system.isMember(id, "RefusedBareEdit"),
     )
 
-    fun materializeBareEditRefusal(id: Long): BareEditRefusal = BareEditRefusal(
+    @PublishedApi internal fun materializeBareEditRefusal(id: Long): BareEditRefusal = BareEditRefusal(
         key = system.refFor(id).key,
         edit = system.refFor(system.get(id, "edit") as Long),
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeSafeEdit(id: Long): SafeEdit = SafeEdit(
+    @PublishedApi internal fun materializeSafeEdit(id: Long): SafeEdit = SafeEdit(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         newTitle = system.get(id, "newTitle") as String,
@@ -356,20 +356,20 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         isRefusedSafeEdit = system.isMember(id, "RefusedSafeEdit"),
     )
 
-    fun materializeEditApplication(id: Long): EditApplication = EditApplication(
+    @PublishedApi internal fun materializeEditApplication(id: Long): EditApplication = EditApplication(
         key = system.refFor(id).key,
         edit = system.refFor(system.get(id, "edit") as Long),
         appliedOn = system.get(id, "appliedOn") as Instant,
     )
 
-    fun materializeEditRefusal(id: Long): EditRefusal = EditRefusal(
+    @PublishedApi internal fun materializeEditRefusal(id: Long): EditRefusal = EditRefusal(
         key = system.refFor(id).key,
         edit = system.refFor(system.get(id, "edit") as Long),
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeTransientEditRefusal(id: Long): TransientEditRefusal = TransientEditRefusal(
+    @PublishedApi internal fun materializeTransientEditRefusal(id: Long): TransientEditRefusal = TransientEditRefusal(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         requestedTitle = system.get(id, "requestedTitle") as String,
@@ -377,7 +377,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeLockedNote(id: Long): LockedNote = LockedNote(
+    @PublishedApi internal fun materializeLockedNote(id: Long): LockedNote = LockedNote(
         key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         body = system.get(id, "body") as String,
@@ -390,7 +390,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         transientEditRefusals = (system.get(id, "transientEditRefusals") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeApplicableBareEdit(id: Long): ApplicableBareEdit = ApplicableBareEdit(
+    @PublishedApi internal fun materializeApplicableBareEdit(id: Long): ApplicableBareEdit = ApplicableBareEdit(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         newText = system.get(id, "newText") as String,
@@ -398,7 +398,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         isRefusedBareEdit = system.isMember(id, "RefusedBareEdit"),
     )
 
-    fun materializeRefusedBareEdit(id: Long): RefusedBareEdit = RefusedBareEdit(
+    @PublishedApi internal fun materializeRefusedBareEdit(id: Long): RefusedBareEdit = RefusedBareEdit(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         newText = system.get(id, "newText") as String,
@@ -406,7 +406,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         isApplicableBareEdit = system.isMember(id, "ApplicableBareEdit"),
     )
 
-    fun materializeUnhandledSafeEdit(id: Long): UnhandledSafeEdit = UnhandledSafeEdit(
+    @PublishedApi internal fun materializeUnhandledSafeEdit(id: Long): UnhandledSafeEdit = UnhandledSafeEdit(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         newTitle = system.get(id, "newTitle") as String,
@@ -416,7 +416,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         isRefusedSafeEdit = system.isMember(id, "RefusedSafeEdit"),
     )
 
-    fun materializeApplicableSafeEdit(id: Long): ApplicableSafeEdit = ApplicableSafeEdit(
+    @PublishedApi internal fun materializeApplicableSafeEdit(id: Long): ApplicableSafeEdit = ApplicableSafeEdit(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         newTitle = system.get(id, "newTitle") as String,
@@ -426,7 +426,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         isRefusedSafeEdit = system.isMember(id, "RefusedSafeEdit"),
     )
 
-    fun materializeRefusedSafeEdit(id: Long): RefusedSafeEdit = RefusedSafeEdit(
+    @PublishedApi internal fun materializeRefusedSafeEdit(id: Long): RefusedSafeEdit = RefusedSafeEdit(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         newTitle = system.get(id, "newTitle") as String,

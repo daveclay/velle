@@ -20,20 +20,20 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewContainerType): Commit<NewContainerType> {
+    fun commit(input: NewContainerType): Commit<NewContainerType, Ref<ContainerType>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ContainerType", raw).carrying(input)
+        return system.commit("ContainerType", raw).carrying(input, "ContainerType")
     }
 
     /** Queue key: [experimentDesign.containerType].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewExperimentDesign): Commit<NewExperimentDesign> {
+    fun commit(input: NewExperimentDesign): Commit<NewExperimentDesign, Ref<ExperimentDesign>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
@@ -41,7 +41,7 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
         val raw = input.raw(system, reg)
         val parts = input.parts(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ExperimentDesign", raw, parts).carrying(input)
+        return system.commit("ExperimentDesign", raw, parts).carrying(input, "ExperimentDesign")
     }
 
     fun containerTypes(): List<ContainerType> = system.instancesOf("ContainerType").map { materializeContainerType(it) }
@@ -60,7 +60,7 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             return materialize(id)
         }
@@ -112,7 +112,7 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "ContainerType" -> materializeContainerType(id)
         "ExperimentDesign" -> materializeExperimentDesign(id)
         "Condition" -> materializeCondition(id)
@@ -121,14 +121,14 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    fun materializeContainerType(id: Long): ContainerType = ContainerType(
+    @PublishedApi internal fun materializeContainerType(id: Long): ContainerType = ContainerType(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         wellsPerContainer = (system.get(id, "wellsPerContainer") as BigDecimal).intValueExact(),
         experimentDesigns = (system.get(id, "experimentDesigns") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeExperimentDesign(id: Long): ExperimentDesign = ExperimentDesign(
+    @PublishedApi internal fun materializeExperimentDesign(id: Long): ExperimentDesign = ExperimentDesign(
         key = system.refFor(id).key,
         containerType = system.refFor(system.get(id, "containerType") as Long),
         containerCount = (system.get(id, "containerCount") as BigDecimal).intValueExact(),
@@ -140,7 +140,7 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
         containers = (system.get(id, "containers") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeCondition(id: Long): Condition = Condition(
+    @PublishedApi internal fun materializeCondition(id: Long): Condition = Condition(
         key = system.refFor(id).key,
         design = system.refFor(system.get(id, "design") as Long),
         block = (system.get(id, "block") as BigDecimal).intValueExact(),
@@ -148,7 +148,7 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
         wells = (system.get(id, "wells") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeContainer(id: Long): Container = Container(
+    @PublishedApi internal fun materializeContainer(id: Long): Container = Container(
         key = system.refFor(id).key,
         design = system.refFor(system.get(id, "design") as Long),
         replicate = (system.get(id, "replicate") as BigDecimal).intValueExact(),
@@ -157,7 +157,7 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
         wells = (system.get(id, "wells") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeWell(id: Long): Well = Well(
+    @PublishedApi internal fun materializeWell(id: Long): Well = Well(
         key = system.refFor(id).key,
         container = system.refFor(system.get(id, "container") as Long),
         position = (system.get(id, "position") as BigDecimal).intValueExact(),

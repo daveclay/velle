@@ -55,7 +55,7 @@ class BatchesPersistenceTest {
 
     private fun process(): BatchesSystem = BatchesSystem().also { SqliteStore.attach(it.system, conn) }
 
-    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
+    private fun accept(r: Commit<*, *>) = assertIs<Commit.Accepted<*, *>>(r, "refused: $r")
 
     private fun rows(sql: String): List<List<Any?>> =
         conn.createStatement().use { st ->
@@ -107,7 +107,7 @@ class BatchesPersistenceTest {
         assertEquals(1, second.read(second.read.fermentation(1L)).peptideBatches.size)
 
         // the one-origin-one-batch refusal is decided against stored rows
-        assertIs<Commit.Refused<*>>(second.commit(NewPeptideBatch(second.read.peptide(1L), BigDecimal("1"), OriginReference.Existing(second.read.fermentation(1L).ref))))
+        assertIs<Commit.Refused<*, *>>(second.commit(NewPeptideBatch(second.read.peptide(1L), BigDecimal("1"), OriginReference.Existing(second.read.fermentation(1L).ref))))
         assertEquals(listOf(listOf(3L)), rows("""SELECT COUNT(*) FROM PeptideBatch"""))
     }
 }

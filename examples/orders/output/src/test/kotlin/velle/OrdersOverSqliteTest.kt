@@ -51,7 +51,7 @@ class OrdersPersistenceTest {
 
     private fun process(): OrdersSystem = OrdersSystem().also { SqliteStore.attach(it.system, conn) }
 
-    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
+    private fun accept(r: Commit<*, *>) = assertIs<Commit.Accepted<*, *>>(r, "refused: $r")
 
     private fun rows(sql: String): List<List<Any?>> =
         conn.createStatement().use { st ->
@@ -112,7 +112,7 @@ class OrdersPersistenceTest {
                 NewOrderLine(product = prod, quantity = 0),
             ),
         ))
-        assertIs<Commit.Refused<*>>(r)
+        assertIs<Commit.Refused<*, *>>(r)
         for (table in listOf("Order", "OrderLine", "Customization", "Reservation"))
             assertEquals(listOf(listOf(0L)), rows("""SELECT COUNT(*) FROM "$table""""), "$table rows after a refused closure")
         assertNull(rows("""SELECT MAX(id) FROM "Order"""").single().single(), "no key was minted")

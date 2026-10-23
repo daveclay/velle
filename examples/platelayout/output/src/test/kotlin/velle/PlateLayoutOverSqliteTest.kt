@@ -56,8 +56,8 @@ class PlateLayoutPersistenceTest {
     @Test
     fun `the layout is stored with the design and read back in a second process`() {
         val first = process()
-        assertIs<Commit.Accepted<*>>(first.commit(NewContainerType("96-well", 96)))
-        assertIs<Commit.Accepted<*>>(first.commit(NewExperimentDesign(
+        assertIs<Commit.Accepted<*, *>>(first.commit(NewContainerType("96-well", 96)))
+        assertIs<Commit.Accepted<*, *>>(first.commit(NewExperimentDesign(
             first.containerTypes().last(), 3, 2, 24, (1..4).map { NewCondition(it, BigDecimal(it)) })))
         assertEquals(6L, count("Container"))
         assertEquals(576L, count("Well"))

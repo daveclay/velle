@@ -24,79 +24,79 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCrop): Commit<NewCrop> {
+    fun commit(input: NewCrop): Commit<NewCrop, Ref<Crop>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Crop", raw).carrying(input)
+        return system.commit("Crop", raw).carrying(input, "Crop")
     }
 
     /** Queue key: [pathogen.host].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPathogen): Commit<NewPathogen> {
+    fun commit(input: NewPathogen): Commit<NewPathogen, Ref<Pathogen>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Pathogen", raw).carrying(input)
+        return system.commit("Pathogen", raw).carrying(input, "Pathogen")
     }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPeptide): Commit<NewPeptide> {
+    fun commit(input: NewPeptide): Commit<NewPeptide, Ref<Peptide>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Peptide", raw).carrying(input)
+        return system.commit("Peptide", raw).carrying(input, "Peptide")
     }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssayProtocol): Commit<NewAssayProtocol> {
+    fun commit(input: NewAssayProtocol): Commit<NewAssayProtocol, Ref<AssayProtocol>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AssayProtocol", raw).carrying(input)
+        return system.commit("AssayProtocol", raw).carrying(input, "AssayProtocol")
     }
 
     /** Queue keys: [labExperiment.pathogen], [labExperiment.peptide], [labExperiment.protocol].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewLabExperiment): Commit<NewLabExperiment> {
+    fun commit(input: NewLabExperiment): Commit<NewLabExperiment, Ref<LabExperiment>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("LabExperiment", raw).carrying(input)
+        return system.commit("LabExperiment", raw).carrying(input, "LabExperiment")
     }
 
     /** Queue keys: [assay.experiment], [assay.experiment.protocol].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssay): Commit<NewAssay> {
+    fun commit(input: NewAssay): Commit<NewAssay, Ref<Assay>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Assay", raw).carrying(input)
+        return system.commit("Assay", raw).carrying(input, "Assay")
     }
 
     /** Queue keys: [assayReading.assay] — plus system-wide width below.
@@ -112,14 +112,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over LabHitRetraction — creates LabHitRetraction referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssayReading): Commit<NewAssayReading> {
+    fun commit(input: NewAssayReading): Commit<NewAssayReading, Ref<AssayReading>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AssayReading", raw).carrying(input)
+        return system.commit("AssayReading", raw).carrying(input, "AssayReading")
     }
 
     /** Queue: system-wide.
@@ -131,14 +131,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Greenhouse — reads Greenhouse.minTemperature with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewGreenhouse): Commit<NewGreenhouse> {
+    fun commit(input: NewGreenhouse): Commit<NewGreenhouse, Ref<Greenhouse>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Greenhouse", raw).carrying(input)
+        return system.commit("Greenhouse", raw).carrying(input, "Greenhouse")
     }
 
     /** Queue keys: [climateReading.greenhouse] — plus system-wide width below.
@@ -152,28 +152,28 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ExcursionEnd — consults ExcursionEnd through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewClimateReading): Commit<NewClimateReading> {
+    fun commit(input: NewClimateReading): Commit<NewClimateReading, Ref<ClimateReading>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ClimateReading", raw).carrying(input)
+        return system.commit("ClimateReading", raw).carrying(input, "ClimateReading")
     }
 
     /** Queue: system-wide.
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewGreenhouseProtocol): Commit<NewGreenhouseProtocol> {
+    fun commit(input: NewGreenhouseProtocol): Commit<NewGreenhouseProtocol, Ref<GreenhouseProtocol>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("GreenhouseProtocol", raw).carrying(input)
+        return system.commit("GreenhouseProtocol", raw).carrying(input, "GreenhouseProtocol")
     }
 
     /** Queue keys: [requestGreenhouseTrial.greenhouse], [requestGreenhouseTrial.pathogen], [requestGreenhouseTrial.peptide], [requestGreenhouseTrial.protocol] — plus system-wide width below.
@@ -182,28 +182,28 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRequestGreenhouseTrial): Commit<NewRequestGreenhouseTrial> {
+    fun commit(input: NewRequestGreenhouseTrial): Commit<NewRequestGreenhouseTrial, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("RequestGreenhouseTrial", raw).carrying(input)
+        return system.commit("RequestGreenhouseTrial", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [greenhousePlot.trial], [greenhousePlot.trial.protocol] — plus system-wide width below.
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewGreenhousePlot): Commit<NewGreenhousePlot> {
+    fun commit(input: NewGreenhousePlot): Commit<NewGreenhousePlot, Ref<GreenhousePlot>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("GreenhousePlot", raw).carrying(input)
+        return system.commit("GreenhousePlot", raw).carrying(input, "GreenhousePlot")
     }
 
     /** Queue keys: [treatment.trial] — plus system-wide width below.
@@ -219,14 +219,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Treatment — consults Treatment through 'treatments' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewTreatment): Commit<NewTreatment> {
+    fun commit(input: NewTreatment): Commit<NewTreatment, Ref<Treatment>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Treatment", raw).carrying(input)
+        return system.commit("Treatment", raw).carrying(input, "Treatment")
     }
 
     /** Queue keys: [plotObservation.plot], [plotObservation.plot.trial] — plus system-wide width below.
@@ -239,27 +239,27 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ObservationCorrection — consults ObservationCorrection through 'observationCorrections' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPlotObservation): Commit<NewPlotObservation> {
+    fun commit(input: NewPlotObservation): Commit<NewPlotObservation, Ref<PlotObservation>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PlotObservation", raw).carrying(input)
+        return system.commit("PlotObservation", raw).carrying(input, "PlotObservation")
     }
 
     /** Queue keys: [correctObservation.observation], [correctObservation.observation.plot], [correctObservation.observation.plot.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCorrectObservation): Commit<NewCorrectObservation> {
+    fun commit(input: NewCorrectObservation): Commit<NewCorrectObservation, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CorrectObservation", raw).carrying(input)
+        return system.commit("CorrectObservation", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [voidObservation.observation], [voidObservation.observation.plot], [voidObservation.observation.plot.trial] — plus system-wide width below.
@@ -272,54 +272,54 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ObservationCorrection — consults ObservationCorrection through 'observationCorrections' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewVoidObservation): Commit<NewVoidObservation> {
+    fun commit(input: NewVoidObservation): Commit<NewVoidObservation, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("VoidObservation", raw).carrying(input)
+        return system.commit("VoidObservation", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [movePlot.plot], [movePlot.plot.trial], [movePlot.plot.trial.protocol] — plus system-wide width below.
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewMovePlot): Commit<NewMovePlot> {
+    fun commit(input: NewMovePlot): Commit<NewMovePlot, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("MovePlot", raw).carrying(input)
+        return system.commit("MovePlot", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewFieldSite): Commit<NewFieldSite> {
+    fun commit(input: NewFieldSite): Commit<NewFieldSite, Ref<FieldSite>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("FieldSite", raw).carrying(input)
+        return system.commit("FieldSite", raw).carrying(input, "FieldSite")
     }
 
     /** Queue keys: [permit.crop], [permit.site].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPermit): Commit<NewPermit> {
+    fun commit(input: NewPermit): Commit<NewPermit, Ref<Permit>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Permit", raw).carrying(input)
+        return system.commit("Permit", raw).carrying(input, "Permit")
     }
 
     /** Queue keys: [weatherObservation.site] — plus system-wide width below.
@@ -329,27 +329,27 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ReapplicationNotice — consults ReapplicationNotice through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewWeatherObservation): Commit<NewWeatherObservation> {
+    fun commit(input: NewWeatherObservation): Commit<NewWeatherObservation, Ref<WeatherObservation>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("WeatherObservation", raw).carrying(input)
+        return system.commit("WeatherObservation", raw).carrying(input, "WeatherObservation")
     }
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewFieldProtocol): Commit<NewFieldProtocol> {
+    fun commit(input: NewFieldProtocol): Commit<NewFieldProtocol, Ref<FieldProtocol>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("FieldProtocol", raw).carrying(input)
+        return system.commit("FieldProtocol", raw).carrying(input, "FieldProtocol")
     }
 
     /** Queue keys: [requestFieldTrial.crop], [requestFieldTrial.pathogen], [requestFieldTrial.peptide], [requestFieldTrial.protocol], [requestFieldTrial.site] — plus system-wide width below.
@@ -359,79 +359,79 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over GreenhouseTrial — reads GreenhouseTrial.peptide with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRequestFieldTrial): Commit<NewRequestFieldTrial> {
+    fun commit(input: NewRequestFieldTrial): Commit<NewRequestFieldTrial, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("RequestFieldTrial", raw).carrying(input)
+        return system.commit("RequestFieldTrial", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [plantTrial.trial], [plantTrial.trial.site].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPlantTrial): Commit<NewPlantTrial> {
+    fun commit(input: NewPlantTrial): Commit<NewPlantTrial, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PlantTrial", raw).carrying(input)
+        return system.commit("PlantTrial", raw).carryingNoRecord(input)
     }
 
     /** Queue key: [fieldPlot.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewFieldPlot): Commit<NewFieldPlot> {
+    fun commit(input: NewFieldPlot): Commit<NewFieldPlot, Ref<FieldPlot>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("FieldPlot", raw).carrying(input)
+        return system.commit("FieldPlot", raw).carrying(input, "FieldPlot")
     }
 
     /** Queue keys: [applyTreatment.trial], [applyTreatment.trial.site].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewApplyTreatment): Commit<NewApplyTreatment> {
+    fun commit(input: NewApplyTreatment): Commit<NewApplyTreatment, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ApplyTreatment", raw).carrying(input)
+        return system.commit("ApplyTreatment", raw).carryingNoRecord(input)
     }
 
     /** Queue key: [scouting.plot].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewScouting): Commit<NewScouting> {
+    fun commit(input: NewScouting): Commit<NewScouting, Ref<Scouting>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Scouting", raw).carrying(input)
+        return system.commit("Scouting", raw).carrying(input, "Scouting")
     }
 
     /** Queue key: [harvest.plot].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewHarvest): Commit<NewHarvest> {
+    fun commit(input: NewHarvest): Commit<NewHarvest, Ref<Harvest>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Harvest", raw).carrying(input)
+        return system.commit("Harvest", raw).carrying(input, "Harvest")
     }
 
     /** Queue keys: [phytotoxicityReport.plot] — plus system-wide width below.
@@ -440,53 +440,53 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over HaltNotice — consults HaltNotice through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPhytotoxicityReport): Commit<NewPhytotoxicityReport> {
+    fun commit(input: NewPhytotoxicityReport): Commit<NewPhytotoxicityReport, Ref<PhytotoxicityReport>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PhytotoxicityReport", raw).carrying(input)
+        return system.commit("PhytotoxicityReport", raw).carrying(input, "PhytotoxicityReport")
     }
 
     /** Queue key: [collectionTask.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCollectionTask): Commit<NewCollectionTask> {
+    fun commit(input: NewCollectionTask): Commit<NewCollectionTask, Ref<CollectionTask>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CollectionTask", raw).carrying(input)
+        return system.commit("CollectionTask", raw).carrying(input, "CollectionTask")
     }
 
     /** Queue keys: [rescheduleTask.task], [rescheduleTask.task.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRescheduleTask): Commit<NewRescheduleTask> {
+    fun commit(input: NewRescheduleTask): Commit<NewRescheduleTask, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("RescheduleTask", raw).carrying(input)
+        return system.commit("RescheduleTask", raw).carryingNoRecord(input)
     }
 
     /** Queue keys: [cancelTask.task], [cancelTask.task.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCancelTask): Commit<NewCancelTask> {
+    fun commit(input: NewCancelTask): Commit<NewCancelTask, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CancelTask", raw).carrying(input)
+        return system.commit("CancelTask", raw).carryingNoRecord(input)
     }
 
     fun crops(): List<Crop> = system.instancesOf("Crop").map { materializeCrop(it) }
@@ -576,7 +576,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             return materialize(id)
         }
@@ -1264,7 +1264,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Crop" -> materializeCrop(id)
         "Pathogen" -> materializePathogen(id)
         "Peptide" -> materializePeptide(id)
@@ -1313,7 +1313,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    fun materializeCrop(id: Long): Crop = Crop(
+    @PublishedApi internal fun materializeCrop(id: Long): Crop = Crop(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         pathogens = (system.get(id, "pathogens") as List<*>).map { system.refFor(it as Long) },
@@ -1321,7 +1321,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializePathogen(id: Long): Pathogen = Pathogen(
+    @PublishedApi internal fun materializePathogen(id: Long): Pathogen = Pathogen(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         host = system.refFor(system.get(id, "host") as Long),
@@ -1330,7 +1330,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializePeptide(id: Long): Peptide = Peptide(
+    @PublishedApi internal fun materializePeptide(id: Long): Peptide = Peptide(
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
@@ -1344,7 +1344,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isFieldValidated = system.isMember(id, "FieldValidated"),
     )
 
-    fun materializeAssayProtocol(id: Long): AssayProtocol = AssayProtocol(
+    @PublishedApi internal fun materializeAssayProtocol(id: Long): AssayProtocol = AssayProtocol(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         durationHours = (system.get(id, "durationHours") as BigDecimal).intValueExact(),
@@ -1353,7 +1353,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeLabExperiment(id: Long): LabExperiment = LabExperiment(
+    @PublishedApi internal fun materializeLabExperiment(id: Long): LabExperiment = LabExperiment(
         key = system.refFor(id).key,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
@@ -1366,7 +1366,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isHitExperiment = system.isMember(id, "HitExperiment"),
     )
 
-    fun materializeAssay(id: Long): Assay = Assay(
+    @PublishedApi internal fun materializeAssay(id: Long): Assay = Assay(
         key = system.refFor(id).key,
         experiment = system.refFor(system.get(id, "experiment") as Long),
         replicate = (system.get(id, "replicate") as BigDecimal).intValueExact(),
@@ -1375,7 +1375,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompletedAssay = system.isMember(id, "CompletedAssay"),
     )
 
-    fun materializeAssayReading(id: Long): AssayReading = AssayReading(
+    @PublishedApi internal fun materializeAssayReading(id: Long): AssayReading = AssayReading(
         key = system.refFor(id).key,
         assay = system.refFor(system.get(id, "assay") as Long),
         hoursElapsed = (system.get(id, "hoursElapsed") as BigDecimal).intValueExact(),
@@ -1384,20 +1384,20 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         runningPeak = system.get(id, "runningPeak") as BigDecimal,
     )
 
-    fun materializeLabHit(id: Long): LabHit = LabHit(
+    @PublishedApi internal fun materializeLabHit(id: Long): LabHit = LabHit(
         key = system.refFor(id).key,
         experiment = system.refFor(system.get(id, "experiment") as Long),
         meanPeakInhibition = system.get(id, "meanPeakInhibition") as BigDecimal,
         recordedOn = system.get(id, "recordedOn") as Instant,
     )
 
-    fun materializeLabHitRetraction(id: Long): LabHitRetraction = LabHitRetraction(
+    @PublishedApi internal fun materializeLabHitRetraction(id: Long): LabHitRetraction = LabHitRetraction(
         key = system.refFor(id).key,
         experiment = system.refFor(system.get(id, "experiment") as Long),
         retractedOn = system.get(id, "retractedOn") as Instant,
     )
 
-    fun materializeGreenhouse(id: Long): Greenhouse = Greenhouse(
+    @PublishedApi internal fun materializeGreenhouse(id: Long): Greenhouse = Greenhouse(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         minTemperature = system.get(id, "minTemperature") as BigDecimal,
@@ -1410,7 +1410,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isSilentGreenhouse = system.isMember(id, "SilentGreenhouse"),
     )
 
-    fun materializeClimateReading(id: Long): ClimateReading = ClimateReading(
+    @PublishedApi internal fun materializeClimateReading(id: Long): ClimateReading = ClimateReading(
         key = system.refFor(id).key,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         recordedAt = system.get(id, "recordedAt") as Instant,
@@ -1418,7 +1418,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         humidity = system.get(id, "humidity") as BigDecimal,
     )
 
-    fun materializeGreenhouseProtocol(id: Long): GreenhouseProtocol = GreenhouseProtocol(
+    @PublishedApi internal fun materializeGreenhouseProtocol(id: Long): GreenhouseProtocol = GreenhouseProtocol(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         plotsPerArm = (system.get(id, "plotsPerArm") as BigDecimal).intValueExact(),
@@ -1427,7 +1427,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeGreenhouseTrial(id: Long): GreenhouseTrial = GreenhouseTrial(
+    @PublishedApi internal fun materializeGreenhouseTrial(id: Long): GreenhouseTrial = GreenhouseTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -1455,14 +1455,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
-    fun materializeGreenhouseRefusal(id: Long): GreenhouseRefusal = GreenhouseRefusal(
+    @PublishedApi internal fun materializeGreenhouseRefusal(id: Long): GreenhouseRefusal = GreenhouseRefusal(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeGreenhousePlot(id: Long): GreenhousePlot = GreenhousePlot(
+    @PublishedApi internal fun materializeGreenhousePlot(id: Long): GreenhousePlot = GreenhousePlot(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         bench = system.get(id, "bench") as String,
@@ -1474,13 +1474,13 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isTreatedPlot = system.isMember(id, "TreatedPlot"),
     )
 
-    fun materializeTreatment(id: Long): Treatment = Treatment(
+    @PublishedApi internal fun materializeTreatment(id: Long): Treatment = Treatment(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         treatedAt = system.get(id, "treatedAt") as Instant,
     )
 
-    fun materializePlotObservation(id: Long): PlotObservation = PlotObservation(
+    @PublishedApi internal fun materializePlotObservation(id: Long): PlotObservation = PlotObservation(
         key = system.refFor(id).key,
         plot = system.refFor(system.get(id, "plot") as Long),
         dayAfterTreatment = (system.get(id, "dayAfterTreatment") as BigDecimal).intValueExact(),
@@ -1495,7 +1495,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLockedObservation = system.isMember(id, "LockedObservation"),
     )
 
-    fun materializeGreenhouseResult(id: Long): GreenhouseResult = GreenhouseResult(
+    @PublishedApi internal fun materializeGreenhouseResult(id: Long): GreenhouseResult = GreenhouseResult(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         efficacy = system.get(id, "efficacy") as BigDecimal,
@@ -1503,7 +1503,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         recordedOn = system.get(id, "recordedOn") as Instant,
     )
 
-    fun materializeObservationCorrection(id: Long): ObservationCorrection = ObservationCorrection(
+    @PublishedApi internal fun materializeObservationCorrection(id: Long): ObservationCorrection = ObservationCorrection(
         key = system.refFor(id).key,
         observation = (system.get(id, "observation") as Long?)?.let { system.refFor(it) },
         previousSeverity = system.get(id, "previousSeverity") as BigDecimal,
@@ -1512,14 +1512,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         correctedOn = system.get(id, "correctedOn") as Instant,
     )
 
-    fun materializeCorrectionRefusal(id: Long): CorrectionRefusal = CorrectionRefusal(
+    @PublishedApi internal fun materializeCorrectionRefusal(id: Long): CorrectionRefusal = CorrectionRefusal(
         key = system.refFor(id).key,
         observation = (system.get(id, "observation") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeVoidRecord(id: Long): VoidRecord = VoidRecord(
+    @PublishedApi internal fun materializeVoidRecord(id: Long): VoidRecord = VoidRecord(
         key = system.refFor(id).key,
         bench = system.get(id, "bench") as String,
         dayAfterTreatment = (system.get(id, "dayAfterTreatment") as BigDecimal).intValueExact(),
@@ -1528,21 +1528,21 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         voidedOn = system.get(id, "voidedOn") as Instant,
     )
 
-    fun materializeVoidRefusal(id: Long): VoidRefusal = VoidRefusal(
+    @PublishedApi internal fun materializeVoidRefusal(id: Long): VoidRefusal = VoidRefusal(
         key = system.refFor(id).key,
         observation = (system.get(id, "observation") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeMoveRefusal(id: Long): MoveRefusal = MoveRefusal(
+    @PublishedApi internal fun materializeMoveRefusal(id: Long): MoveRefusal = MoveRefusal(
         key = system.refFor(id).key,
         plot = system.refFor(system.get(id, "plot") as Long),
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeClimateExcursion(id: Long): ClimateExcursion = ClimateExcursion(
+    @PublishedApi internal fun materializeClimateExcursion(id: Long): ClimateExcursion = ClimateExcursion(
         key = system.refFor(id).key,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         startedAt = system.get(id, "startedAt") as Instant,
@@ -1552,19 +1552,19 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isClosableExcursion = system.isMember(id, "ClosableExcursion"),
     )
 
-    fun materializeExcursionEnd(id: Long): ExcursionEnd = ExcursionEnd(
+    @PublishedApi internal fun materializeExcursionEnd(id: Long): ExcursionEnd = ExcursionEnd(
         key = system.refFor(id).key,
         excursion = system.refFor(system.get(id, "excursion") as Long),
         endedAt = system.get(id, "endedAt") as Instant,
     )
 
-    fun materializeSensorAlert(id: Long): SensorAlert = SensorAlert(
+    @PublishedApi internal fun materializeSensorAlert(id: Long): SensorAlert = SensorAlert(
         key = system.refFor(id).key,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         raisedAt = system.get(id, "raisedAt") as Instant,
     )
 
-    fun materializeFieldSite(id: Long): FieldSite = FieldSite(
+    @PublishedApi internal fun materializeFieldSite(id: Long): FieldSite = FieldSite(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         region = system.get(id, "region") as String,
@@ -1573,7 +1573,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializePermit(id: Long): Permit = Permit(
+    @PublishedApi internal fun materializePermit(id: Long): Permit = Permit(
         key = system.refFor(id).key,
         site = system.refFor(system.get(id, "site") as Long),
         crop = system.refFor(system.get(id, "crop") as Long),
@@ -1581,7 +1581,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         expiresOn = system.get(id, "expiresOn") as LocalDate,
     )
 
-    fun materializeWeatherObservation(id: Long): WeatherObservation = WeatherObservation(
+    @PublishedApi internal fun materializeWeatherObservation(id: Long): WeatherObservation = WeatherObservation(
         key = system.refFor(id).key,
         site = system.refFor(system.get(id, "site") as Long),
         observedOn = system.get(id, "observedOn") as LocalDate,
@@ -1589,14 +1589,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         maxTemperature = system.get(id, "maxTemperature") as BigDecimal,
     )
 
-    fun materializeFieldProtocol(id: Long): FieldProtocol = FieldProtocol(
+    @PublishedApi internal fun materializeFieldProtocol(id: Long): FieldProtocol = FieldProtocol(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         yieldGainThreshold = system.get(id, "yieldGainThreshold") as BigDecimal,
         fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeFieldTrial(id: Long): FieldTrial = FieldTrial(
+    @PublishedApi internal fun materializeFieldTrial(id: Long): FieldTrial = FieldTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -1623,14 +1623,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
-    fun materializeFieldRefusal(id: Long): FieldRefusal = FieldRefusal(
+    @PublishedApi internal fun materializeFieldRefusal(id: Long): FieldRefusal = FieldRefusal(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializePlanting(id: Long): Planting = Planting(
+    @PublishedApi internal fun materializePlanting(id: Long): Planting = Planting(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         plantedOn = system.get(id, "plantedOn") as LocalDate,
@@ -1638,7 +1638,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         recordedOn = system.get(id, "recordedOn") as Instant,
     )
 
-    fun materializeFieldPlot(id: Long): FieldPlot = FieldPlot(
+    @PublishedApi internal fun materializeFieldPlot(id: Long): FieldPlot = FieldPlot(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         block = (system.get(id, "block") as BigDecimal).intValueExact(),
@@ -1649,7 +1649,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         phytotoxicityReports = (system.get(id, "phytotoxicityReports") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeTreatmentApplication(id: Long): TreatmentApplication = TreatmentApplication(
+    @PublishedApi internal fun materializeTreatmentApplication(id: Long): TreatmentApplication = TreatmentApplication(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         appliedOn = system.get(id, "appliedOn") as LocalDate,
@@ -1659,13 +1659,13 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isWashedOffApplication = system.isMember(id, "WashedOffApplication"),
     )
 
-    fun materializeReapplicationNotice(id: Long): ReapplicationNotice = ReapplicationNotice(
+    @PublishedApi internal fun materializeReapplicationNotice(id: Long): ReapplicationNotice = ReapplicationNotice(
         key = system.refFor(id).key,
         application = system.refFor(system.get(id, "application") as Long),
         noticedOn = system.get(id, "noticedOn") as LocalDate,
     )
 
-    fun materializeScouting(id: Long): Scouting = Scouting(
+    @PublishedApi internal fun materializeScouting(id: Long): Scouting = Scouting(
         key = system.refFor(id).key,
         plot = system.refFor(system.get(id, "plot") as Long),
         daysAfterPlanting = (system.get(id, "daysAfterPlanting") as BigDecimal).intValueExact(),
@@ -1676,27 +1676,27 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         audpcSoFar = system.get(id, "audpcSoFar") as BigDecimal,
     )
 
-    fun materializeHarvest(id: Long): Harvest = Harvest(
+    @PublishedApi internal fun materializeHarvest(id: Long): Harvest = Harvest(
         key = system.refFor(id).key,
         plot = system.refFor(system.get(id, "plot") as Long),
         harvestedOn = system.get(id, "harvestedOn") as LocalDate,
         yieldKgPerHa = system.get(id, "yieldKgPerHa") as BigDecimal,
     )
 
-    fun materializePhytotoxicityReport(id: Long): PhytotoxicityReport = PhytotoxicityReport(
+    @PublishedApi internal fun materializePhytotoxicityReport(id: Long): PhytotoxicityReport = PhytotoxicityReport(
         key = system.refFor(id).key,
         plot = system.refFor(system.get(id, "plot") as Long),
         observedOn = system.get(id, "observedOn") as LocalDate,
         severity = (system.get(id, "severity") as BigDecimal).intValueExact(),
     )
 
-    fun materializeHaltNotice(id: Long): HaltNotice = HaltNotice(
+    @PublishedApi internal fun materializeHaltNotice(id: Long): HaltNotice = HaltNotice(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    fun materializeCollectionTask(id: Long): CollectionTask = CollectionTask(
+    @PublishedApi internal fun materializeCollectionTask(id: Long): CollectionTask = CollectionTask(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
@@ -1710,20 +1710,20 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOverdueTask = system.isMember(id, "OverdueTask"),
     )
 
-    fun materializeTaskReminder(id: Long): TaskReminder = TaskReminder(
+    @PublishedApi internal fun materializeTaskReminder(id: Long): TaskReminder = TaskReminder(
         key = system.refFor(id).key,
         task = (system.get(id, "task") as Long?)?.let { system.refFor(it) },
         sentOn = system.get(id, "sentOn") as LocalDate,
     )
 
-    fun materializeRescheduleRefusal(id: Long): RescheduleRefusal = RescheduleRefusal(
+    @PublishedApi internal fun materializeRescheduleRefusal(id: Long): RescheduleRefusal = RescheduleRefusal(
         key = system.refFor(id).key,
         task = (system.get(id, "task") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeTaskCancellation(id: Long): TaskCancellation = TaskCancellation(
+    @PublishedApi internal fun materializeTaskCancellation(id: Long): TaskCancellation = TaskCancellation(
         key = system.refFor(id).key,
         dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
         dueOn = system.get(id, "dueOn") as LocalDate,
@@ -1731,14 +1731,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         cancelledOn = system.get(id, "cancelledOn") as Instant,
     )
 
-    fun materializeCancelRefusal(id: Long): CancelRefusal = CancelRefusal(
+    @PublishedApi internal fun materializeCancelRefusal(id: Long): CancelRefusal = CancelRefusal(
         key = system.refFor(id).key,
         task = (system.get(id, "task") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeCompletedAssay(id: Long): CompletedAssay = CompletedAssay(
+    @PublishedApi internal fun materializeCompletedAssay(id: Long): CompletedAssay = CompletedAssay(
         key = system.refFor(id).key,
         experiment = system.refFor(system.get(id, "experiment") as Long),
         replicate = (system.get(id, "replicate") as BigDecimal).intValueExact(),
@@ -1746,7 +1746,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         assayReadings = (system.get(id, "assayReadings") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeHitExperiment(id: Long): HitExperiment = HitExperiment(
+    @PublishedApi internal fun materializeHitExperiment(id: Long): HitExperiment = HitExperiment(
         key = system.refFor(id).key,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
@@ -1758,7 +1758,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         labHitRetractions = (system.get(id, "labHitRetractions") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeLabValidated(id: Long): LabValidated = LabValidated(
+    @PublishedApi internal fun materializeLabValidated(id: Long): LabValidated = LabValidated(
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
@@ -1771,7 +1771,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isFieldValidated = system.isMember(id, "FieldValidated"),
     )
 
-    fun materializeTreatedTrial(id: Long): TreatedTrial = TreatedTrial(
+    @PublishedApi internal fun materializeTreatedTrial(id: Long): TreatedTrial = TreatedTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -1798,7 +1798,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
-    fun materializeLaidOutTrial(id: Long): LaidOutTrial = LaidOutTrial(
+    @PublishedApi internal fun materializeLaidOutTrial(id: Long): LaidOutTrial = LaidOutTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -1825,7 +1825,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
-    fun materializeObservedToEnd(id: Long): ObservedToEnd = ObservedToEnd(
+    @PublishedApi internal fun materializeObservedToEnd(id: Long): ObservedToEnd = ObservedToEnd(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -1852,7 +1852,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
-    fun materializeCompleteTrial(id: Long): CompleteTrial = CompleteTrial(
+    @PublishedApi internal fun materializeCompleteTrial(id: Long): CompleteTrial = CompleteTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -1879,7 +1879,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
-    fun materializeEffectiveTrial(id: Long): EffectiveTrial = EffectiveTrial(
+    @PublishedApi internal fun materializeEffectiveTrial(id: Long): EffectiveTrial = EffectiveTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -1906,7 +1906,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
-    fun materializeEvaluatedTrial(id: Long): EvaluatedTrial = EvaluatedTrial(
+    @PublishedApi internal fun materializeEvaluatedTrial(id: Long): EvaluatedTrial = EvaluatedTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -1933,7 +1933,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
-    fun materializeGreenhouseValidated(id: Long): GreenhouseValidated = GreenhouseValidated(
+    @PublishedApi internal fun materializeGreenhouseValidated(id: Long): GreenhouseValidated = GreenhouseValidated(
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
@@ -1946,7 +1946,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isFieldValidated = system.isMember(id, "FieldValidated"),
     )
 
-    fun materializeDeprioritized(id: Long): Deprioritized = Deprioritized(
+    @PublishedApi internal fun materializeDeprioritized(id: Long): Deprioritized = Deprioritized(
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
@@ -1959,7 +1959,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isFieldValidated = system.isMember(id, "FieldValidated"),
     )
 
-    fun materializeLockedObservation(id: Long): LockedObservation = LockedObservation(
+    @PublishedApi internal fun materializeLockedObservation(id: Long): LockedObservation = LockedObservation(
         key = system.refFor(id).key,
         plot = system.refFor(system.get(id, "plot") as Long),
         dayAfterTreatment = (system.get(id, "dayAfterTreatment") as BigDecimal).intValueExact(),
@@ -1973,7 +1973,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeTreatedPlot(id: Long): TreatedPlot = TreatedPlot(
+    @PublishedApi internal fun materializeTreatedPlot(id: Long): TreatedPlot = TreatedPlot(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         bench = system.get(id, "bench") as String,
@@ -1984,7 +1984,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         moveRefusals = (system.get(id, "moveRefusals") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeActiveTrial(id: Long): ActiveTrial = ActiveTrial(
+    @PublishedApi internal fun materializeActiveTrial(id: Long): ActiveTrial = ActiveTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -2011,7 +2011,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
-    fun materializeOutOfBand(id: Long): OutOfBand = OutOfBand(
+    @PublishedApi internal fun materializeOutOfBand(id: Long): OutOfBand = OutOfBand(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         minTemperature = system.get(id, "minTemperature") as BigDecimal,
@@ -2023,7 +2023,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isSilentGreenhouse = system.isMember(id, "SilentGreenhouse"),
     )
 
-    fun materializeOpenExcursion(id: Long): OpenExcursion = OpenExcursion(
+    @PublishedApi internal fun materializeOpenExcursion(id: Long): OpenExcursion = OpenExcursion(
         key = system.refFor(id).key,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         startedAt = system.get(id, "startedAt") as Instant,
@@ -2032,7 +2032,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isClosableExcursion = system.isMember(id, "ClosableExcursion"),
     )
 
-    fun materializeClosableExcursion(id: Long): ClosableExcursion = ClosableExcursion(
+    @PublishedApi internal fun materializeClosableExcursion(id: Long): ClosableExcursion = ClosableExcursion(
         key = system.refFor(id).key,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         startedAt = system.get(id, "startedAt") as Instant,
@@ -2041,7 +2041,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOpenExcursion = system.isMember(id, "OpenExcursion"),
     )
 
-    fun materializeCompromisedTrial(id: Long): CompromisedTrial = CompromisedTrial(
+    @PublishedApi internal fun materializeCompromisedTrial(id: Long): CompromisedTrial = CompromisedTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -2068,7 +2068,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isActiveTrial = system.isMember(id, "ActiveTrial"),
     )
 
-    fun materializeSilentGreenhouse(id: Long): SilentGreenhouse = SilentGreenhouse(
+    @PublishedApi internal fun materializeSilentGreenhouse(id: Long): SilentGreenhouse = SilentGreenhouse(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         minTemperature = system.get(id, "minTemperature") as BigDecimal,
@@ -2080,7 +2080,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOutOfBand = system.isMember(id, "OutOfBand"),
     )
 
-    fun materializePermittedTrial(id: Long): PermittedTrial = PermittedTrial(
+    @PublishedApi internal fun materializePermittedTrial(id: Long): PermittedTrial = PermittedTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -2106,7 +2106,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
-    fun materializePlantedTrial(id: Long): PlantedTrial = PlantedTrial(
+    @PublishedApi internal fun materializePlantedTrial(id: Long): PlantedTrial = PlantedTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -2132,7 +2132,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
-    fun materializeWashedOffApplication(id: Long): WashedOffApplication = WashedOffApplication(
+    @PublishedApi internal fun materializeWashedOffApplication(id: Long): WashedOffApplication = WashedOffApplication(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         appliedOn = system.get(id, "appliedOn") as LocalDate,
@@ -2141,7 +2141,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         reapplicationNotices = (system.get(id, "reapplicationNotices") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeNeverScouted(id: Long): NeverScouted = NeverScouted(
+    @PublishedApi internal fun materializeNeverScouted(id: Long): NeverScouted = NeverScouted(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -2167,7 +2167,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
-    fun materializeHarvestedTrial(id: Long): HarvestedTrial = HarvestedTrial(
+    @PublishedApi internal fun materializeHarvestedTrial(id: Long): HarvestedTrial = HarvestedTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -2193,7 +2193,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
-    fun materializeSuccessfulFieldTrial(id: Long): SuccessfulFieldTrial = SuccessfulFieldTrial(
+    @PublishedApi internal fun materializeSuccessfulFieldTrial(id: Long): SuccessfulFieldTrial = SuccessfulFieldTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -2219,7 +2219,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
-    fun materializeFieldValidated(id: Long): FieldValidated = FieldValidated(
+    @PublishedApi internal fun materializeFieldValidated(id: Long): FieldValidated = FieldValidated(
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
@@ -2232,7 +2232,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isDeprioritized = system.isMember(id, "Deprioritized"),
     )
 
-    fun materializeHaltedTrial(id: Long): HaltedTrial = HaltedTrial(
+    @PublishedApi internal fun materializeHaltedTrial(id: Long): HaltedTrial = HaltedTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -2258,9 +2258,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isSuccessfulFieldTrial = system.isMember(id, "SuccessfulFieldTrial"),
     )
 
-    fun materializeTrial(id: Long): Trial = materialize(id) as Trial
+    @PublishedApi internal fun materializeTrial(id: Long): Trial = materialize(id) as Trial
 
-    fun materializeDoneTask(id: Long): DoneTask = DoneTask(
+    @PublishedApi internal fun materializeDoneTask(id: Long): DoneTask = DoneTask(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
@@ -2273,7 +2273,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOverdueTask = system.isMember(id, "OverdueTask"),
     )
 
-    fun materializeOpenTask(id: Long): OpenTask = OpenTask(
+    @PublishedApi internal fun materializeOpenTask(id: Long): OpenTask = OpenTask(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
@@ -2286,7 +2286,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOverdueTask = system.isMember(id, "OverdueTask"),
     )
 
-    fun materializeOverdueTask(id: Long): OverdueTask = OverdueTask(
+    @PublishedApi internal fun materializeOverdueTask(id: Long): OverdueTask = OverdueTask(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),

@@ -59,7 +59,7 @@ class GalleryPersistenceTest {
     /** A fresh process over the same database: handles are session-local, rows are not. */
     private fun process(): GallerySystem = GallerySystem().also { SqliteStore.attach(it.system, conn) }
 
-    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
+    private fun accept(r: Commit<*, *>) = assertIs<Commit.Accepted<*, *>>(r, "refused: $r")
 
     private fun rows(sql: String): List<List<Any?>> =
         conn.createStatement().use { st ->
@@ -127,7 +127,7 @@ class GalleryPersistenceTest {
         val post = second.read.post(1L)
         val photo = second.read.photo(1L)
         val refused = second.commit(NewComment(post, ada, "me again"))
-        assertIs<Commit.Refused<*>>(refused)
+        assertIs<Commit.Refused<*, *>>(refused)
         assertEquals(listOf(listOf(0L)), rows("""SELECT COUNT(*) FROM Comment"""), "a refused act reaches no row")
         accept(second.commit(NewComment(photo, ada, "my own photo")))
         assertEquals(listOf(listOf(1L)), rows("""SELECT COUNT(*) FROM Comment"""))

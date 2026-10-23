@@ -53,8 +53,7 @@ class HydrationCandidatesTest {
         return billing to counting
     }
 
-    private fun accept(r: Commit<*>): Long =
-        assertIs<Commit.Accepted<*>>(r, "refused: $r").id
+    private fun accept(r: Commit<*, *>) { assertIs<Commit.Accepted<*, *>>(r, "refused: $r") }
 
     private fun today(): LocalDate = LocalDate.of(2026, 1, 1)
 

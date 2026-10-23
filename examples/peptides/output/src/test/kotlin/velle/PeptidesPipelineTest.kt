@@ -33,8 +33,8 @@ open class PeptidesPipelineTest {
     protected val sys: PeptidesSystem by lazy { newSystem() }
     private val s: Scenario by lazy { Scenario(sys) }
 
-    private fun accept(r: Commit<*>) = assertIs<Commit.Accepted<*>>(r, "refused: $r")
-    private fun refuse(r: Commit<*>) = assertTrue(r !is Commit.Accepted<*>, "expected a refusal, got: $r")
+    private fun accept(r: Commit<*, *>) = assertIs<Commit.Accepted<*, *>>(r, "refused: $r")
+    private fun refuse(r: Commit<*, *>) = assertTrue(r !is Commit.Accepted<*, *>, "expected a refusal, got: $r")
     private fun Keyed.isA(refinement: String) = sys.system.isMember(sys.system.idOf(this), refinement)
     private fun BigDecimal.at(scale: Int) = setScale(scale, RoundingMode.HALF_UP)
     private fun dec(s: String) = BigDecimal(s)
@@ -61,7 +61,7 @@ open class PeptidesPipelineTest {
         // selector's tie error from the rules that read the series through
         // `latest ... by hoursElapsed`, and nothing lands
         val duplicate = sys.commit(NewAssayReading(plate, 24, dec("81")))
-        val refused = assertIs<Commit.Refused<*>>(duplicate, "expected a refusal, got: $duplicate")
+        val refused = assertIs<Commit.Refused<*, *>>(duplicate, "expected a refusal, got: $duplicate")
         assertTrue(refused.reason.startsWith("AssayReading refused: "), refused.reason)
         assertTrue("this AssayReading would be an AssayReading where count(assay.assayReadings where hoursElapsed == this.hoursElapsed) > 1" in refused.reason, refused.reason)
         assertEquals(3, sys.read(plate).assayReadings.size, "nothing landed")

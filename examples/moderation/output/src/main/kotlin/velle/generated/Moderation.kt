@@ -20,79 +20,79 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSeller): Commit<NewSeller> {
+    fun commit(input: NewSeller): Commit<NewSeller, Ref<Seller>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Seller", raw).carrying(input)
+        return system.commit("Seller", raw).carrying(input, "Seller")
     }
 
     /** Queue key: [listing.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewListing): Commit<NewListing> {
+    fun commit(input: NewListing): Commit<NewListing, Ref<Listing>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Listing", raw).carrying(input)
+        return system.commit("Listing", raw).carrying(input, "Listing")
     }
 
     /** Queue keys: [publish.listing], [publish.listing.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPublish): Commit<NewPublish> {
+    fun commit(input: NewPublish): Commit<NewPublish, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Publish", raw).carrying(input)
+        return system.commit("Publish", raw).carryingNoRecord(input)
     }
 
     /** Queue key: [listingReport.listing].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewListingReport): Commit<NewListingReport> {
+    fun commit(input: NewListingReport): Commit<NewListingReport, Ref<ListingReport>> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ListingReport", raw).carrying(input)
+        return system.commit("ListingReport", raw).carrying(input, "ListingReport")
     }
 
     /** Queue keys: [discardDraft.listing], [discardDraft.listing.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewDiscardDraft): Commit<NewDiscardDraft> {
+    fun commit(input: NewDiscardDraft): Commit<NewDiscardDraft, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("DiscardDraft", raw).carrying(input)
+        return system.commit("DiscardDraft", raw).carryingNoRecord(input)
     }
 
     /** Queue key: [closeAccount.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCloseAccount): Commit<NewCloseAccount> {
+    fun commit(input: NewCloseAccount): Commit<NewCloseAccount, Nothing?> {
         // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
         // identity, and a field pointing at a sibling names it; refused before the runtime
         val reg = NewRegistry()
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CloseAccount", raw).carrying(input)
+        return system.commit("CloseAccount", raw).carryingNoRecord(input)
     }
 
     fun sellers(): List<Seller> = system.instancesOf("Seller").map { materializeSeller(it) }
@@ -119,7 +119,7 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             return materialize(id)
         }
@@ -243,7 +243,7 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Seller" -> materializeSeller(id)
         "Listing" -> materializeListing(id)
         "PublicationNotice" -> materializePublicationNotice(id)
@@ -256,14 +256,14 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    fun materializeSeller(id: Long): Seller = Seller(
+    @PublishedApi internal fun materializeSeller(id: Long): Seller = Seller(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         listings = (system.get(id, "listings") as List<*>).map { system.refFor(it as Long) },
         sellerNotices = (system.get(id, "sellerNotices") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeListing(id: Long): Listing = Listing(
+    @PublishedApi internal fun materializeListing(id: Long): Listing = Listing(
         key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         seller = (system.get(id, "seller") as Long?)?.let { system.refFor(it) },
@@ -273,26 +273,26 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isOrphanedListing = system.isMember(id, "OrphanedListing"),
     )
 
-    fun materializePublicationNotice(id: Long): PublicationNotice = PublicationNotice(
+    @PublishedApi internal fun materializePublicationNotice(id: Long): PublicationNotice = PublicationNotice(
         key = system.refFor(id).key,
         listingTitle = system.get(id, "listingTitle") as String,
         publishedOn = system.get(id, "publishedOn") as Instant,
     )
 
-    fun materializeSellerNotice(id: Long): SellerNotice = SellerNotice(
+    @PublishedApi internal fun materializeSellerNotice(id: Long): SellerNotice = SellerNotice(
         key = system.refFor(id).key,
         seller = (system.get(id, "seller") as Long?)?.let { system.refFor(it) },
         listingTitle = system.get(id, "listingTitle") as String,
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    fun materializeDraftClosure(id: Long): DraftClosure = DraftClosure(
+    @PublishedApi internal fun materializeDraftClosure(id: Long): DraftClosure = DraftClosure(
         key = system.refFor(id).key,
         listingTitle = system.get(id, "listingTitle") as String,
         closedOn = system.get(id, "closedOn") as Instant,
     )
 
-    fun materializeListingReport(id: Long): ListingReport = ListingReport(
+    @PublishedApi internal fun materializeListingReport(id: Long): ListingReport = ListingReport(
         key = system.refFor(id).key,
         listing = (system.get(id, "listing") as Long?)?.let { system.refFor(it) },
         listingTitle = system.get(id, "listingTitle") as String,
@@ -302,28 +302,28 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isOrphanReport = system.isMember(id, "OrphanReport"),
     )
 
-    fun materializeReporterNotice(id: Long): ReporterNotice = ReporterNotice(
+    @PublishedApi internal fun materializeReporterNotice(id: Long): ReporterNotice = ReporterNotice(
         key = system.refFor(id).key,
         report = system.refFor(system.get(id, "report") as Long),
         listingTitle = system.get(id, "listingTitle") as String,
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    fun materializeDiscardRecord(id: Long): DiscardRecord = DiscardRecord(
+    @PublishedApi internal fun materializeDiscardRecord(id: Long): DiscardRecord = DiscardRecord(
         key = system.refFor(id).key,
         listingTitle = system.get(id, "listingTitle") as String,
         reason = system.get(id, "reason") as String,
         discardedOn = system.get(id, "discardedOn") as Instant,
     )
 
-    fun materializeDiscardRefusal(id: Long): DiscardRefusal = DiscardRefusal(
+    @PublishedApi internal fun materializeDiscardRefusal(id: Long): DiscardRefusal = DiscardRefusal(
         key = system.refFor(id).key,
         listingTitle = system.get(id, "listingTitle") as String,
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    fun materializeDraft(id: Long): Draft = Draft(
+    @PublishedApi internal fun materializeDraft(id: Long): Draft = Draft(
         key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         seller = (system.get(id, "seller") as Long?)?.let { system.refFor(it) },
@@ -333,7 +333,7 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isOrphanedListing = system.isMember(id, "OrphanedListing"),
     )
 
-    fun materializePublishedListing(id: Long): PublishedListing = PublishedListing(
+    @PublishedApi internal fun materializePublishedListing(id: Long): PublishedListing = PublishedListing(
         key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         seller = (system.get(id, "seller") as Long?)?.let { system.refFor(it) },
@@ -342,7 +342,7 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isOrphanedListing = system.isMember(id, "OrphanedListing"),
     )
 
-    fun materializeOrphanReport(id: Long): OrphanReport = OrphanReport(
+    @PublishedApi internal fun materializeOrphanReport(id: Long): OrphanReport = OrphanReport(
         key = system.refFor(id).key,
         listing = (system.get(id, "listing") as Long?)?.let { system.refFor(it) },
         listingTitle = system.get(id, "listingTitle") as String,
@@ -351,7 +351,7 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         reporterNotices = (system.get(id, "reporterNotices") as List<*>).map { system.refFor(it as Long) },
     )
 
-    fun materializeOrphanedListing(id: Long): OrphanedListing = OrphanedListing(
+    @PublishedApi internal fun materializeOrphanedListing(id: Long): OrphanedListing = OrphanedListing(
         key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         seller = (system.get(id, "seller") as Long?)?.let { system.refFor(it) },
