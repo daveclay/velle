@@ -127,7 +127,7 @@ when (val c = sys.read(comment.target)) {       // the model object of the concr
 ```
 
 - `read.order(key)` exists once per shape and takes the key as your database holds it, either a `StoreKey` or a `Long`. It throws when no such row exists.
-- `read(ref)` takes any `Ref<T>` and returns the `T`. It throws when the record has been deleted since the reference was taken.
+- `read(ref)` takes a `Ref<T>` the system handed you, such as a model object or one of its fields, and returns the `T`. It throws when the record has been deleted since the reference was taken. A reference built by hand from a shape name and a key does not compile here; a key goes through `read.order(key)`.
 - A reference typed by a union ([§9](Reference-09-Composing-refinements)) always names one operand in `shape`, never the union. Reading it returns the operand's model object, so a `when` over the operands' classes covers every case.
 - Two references are equal when their shape and key are equal, whichever class carries them. Whether two reads of one record returned the same fields is a comparison you make yourself.
 
@@ -135,7 +135,7 @@ A generated system also holds a numeric handle for every record it has touched. 
 
 ## The raw surface
 
-The runtime's own `commit(shape, fields, parts)` takes maps instead of classes, and the generated specs use it. The generated `fetch` and `materialize` functions that build model objects from handles are internal to the generated module; `read` is the only way to get a model object. A nested value is a map carrying `"@shape"` when the field's type is a union; a value others point at carries `"@new"` with a number, and the pointing field holds `NewRef(number)`. The generated classes produce these maps, so hand-written code rarely needs them.
+The runtime's own `commit(shape, fields, parts)` takes maps instead of classes, and the generated specs use it. The generated functions that build model objects from handles are private to the generated class; `read` is the only way to get a model object. A nested value is a map carrying `"@shape"` when the field's type is a union; a value others point at carries `"@new"` with a number, and the pointing field holds `NewRef(number)`. The generated classes produce these maps, so hand-written code rarely needs them.
 
 ## Related pages
 

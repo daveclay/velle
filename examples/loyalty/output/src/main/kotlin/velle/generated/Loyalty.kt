@@ -90,50 +90,55 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
-        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
+        @Suppress("UNCHECKED_CAST")
+        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
+        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
+        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
+        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
+        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
+            val id = system.idOf(ref)
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             materialize(id)
         }
 
         val members: MemberQuery get() = MemberQuery(Query("Member"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun member(key: StoreKey): Member = this(Ref.Persisted("Member", key))
+        fun member(key: StoreKey): Member = invoke<Member>(Ref.Persisted("Member", key))
         fun member(key: Long): Member = member(StoreKey(key))
 
         val duesPayments: DuesPaymentQuery get() = DuesPaymentQuery(Query("DuesPayment"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun duesPayment(key: StoreKey): DuesPayment = this(Ref.Persisted("DuesPayment", key))
+        fun duesPayment(key: StoreKey): DuesPayment = invoke<DuesPayment>(Ref.Persisted("DuesPayment", key))
         fun duesPayment(key: Long): DuesPayment = duesPayment(StoreKey(key))
 
         val purchases: PurchaseQuery get() = PurchaseQuery(Query("Purchase"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun purchase(key: StoreKey): Purchase = this(Ref.Persisted("Purchase", key))
+        fun purchase(key: StoreKey): Purchase = invoke<Purchase>(Ref.Persisted("Purchase", key))
         fun purchase(key: Long): Purchase = purchase(StoreKey(key))
 
         val thankYouNotes: ThankYouNoteQuery get() = ThankYouNoteQuery(Query("ThankYouNote"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun thankYouNote(key: StoreKey): ThankYouNote = this(Ref.Persisted("ThankYouNote", key))
+        fun thankYouNote(key: StoreKey): ThankYouNote = invoke<ThankYouNote>(Ref.Persisted("ThankYouNote", key))
         fun thankYouNote(key: Long): ThankYouNote = thankYouNote(StoreKey(key))
 
         val enrollments: EnrollmentQuery get() = EnrollmentQuery(Query("Enrollment"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun enrollment(key: StoreKey): Enrollment = this(Ref.Persisted("Enrollment", key))
+        fun enrollment(key: StoreKey): Enrollment = invoke<Enrollment>(Ref.Persisted("Enrollment", key))
         fun enrollment(key: Long): Enrollment = enrollment(StoreKey(key))
 
         val safetyWaivers: SafetyWaiverQuery get() = SafetyWaiverQuery(Query("SafetyWaiver"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun safetyWaiver(key: StoreKey): SafetyWaiver = this(Ref.Persisted("SafetyWaiver", key))
+        fun safetyWaiver(key: StoreKey): SafetyWaiver = invoke<SafetyWaiver>(Ref.Persisted("SafetyWaiver", key))
         fun safetyWaiver(key: Long): SafetyWaiver = safetyWaiver(StoreKey(key))
 
         val orientationRecords: OrientationRecordQuery get() = OrientationRecordQuery(Query("OrientationRecord"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun orientationRecord(key: StoreKey): OrientationRecord = this(Ref.Persisted("OrientationRecord", key))
+        fun orientationRecord(key: StoreKey): OrientationRecord = invoke<OrientationRecord>(Ref.Persisted("OrientationRecord", key))
         fun orientationRecord(key: Long): OrientationRecord = orientationRecord(StoreKey(key))
 
         val keycards: KeycardQuery get() = KeycardQuery(Query("Keycard"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun keycard(key: StoreKey): Keycard = this(Ref.Persisted("Keycard", key))
+        fun keycard(key: StoreKey): Keycard = invoke<Keycard>(Ref.Persisted("Keycard", key))
         fun keycard(key: Long): Keycard = keycard(StoreKey(key))
 
         val qualifiedPurchases: QualifiedPurchaseQuery get() = QualifiedPurchaseQuery(Query("QualifiedPurchase"))
@@ -197,7 +202,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Member" -> materializeMember(id)
         "DuesPayment" -> materializeDuesPayment(id)
         "Purchase" -> materializePurchase(id)
@@ -209,7 +214,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    @PublishedApi internal fun materializeMember(id: Long): Member = Member(
+    private fun materializeMember(id: Long): Member = Member(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         referrer = (system.get(id, "referrer") as Long?)?.let { system.refFor(it) },
@@ -226,7 +231,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isCertifiedMember = system.isMember(id, "CertifiedMember"),
     )
 
-    @PublishedApi internal fun materializeDuesPayment(id: Long): DuesPayment = DuesPayment(
+    private fun materializeDuesPayment(id: Long): DuesPayment = DuesPayment(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         coveredMonth = system.get(id, "coveredMonth") as String,
@@ -237,7 +242,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         streakAfter = (system.get(id, "streakAfter") as BigDecimal).intValueExact(),
     )
 
-    @PublishedApi internal fun materializePurchase(id: Long): Purchase = Purchase(
+    private fun materializePurchase(id: Long): Purchase = Purchase(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -246,32 +251,32 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isVipPurchase = system.isMember(id, "VipPurchase"),
     )
 
-    @PublishedApi internal fun materializeThankYouNote(id: Long): ThankYouNote = ThankYouNote(
+    private fun materializeThankYouNote(id: Long): ThankYouNote = ThankYouNote(
         key = system.refFor(id).key,
         purchase = system.refFor(system.get(id, "purchase") as Long),
     )
 
-    @PublishedApi internal fun materializeEnrollment(id: Long): Enrollment = Enrollment(
+    private fun materializeEnrollment(id: Long): Enrollment = Enrollment(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
     )
 
-    @PublishedApi internal fun materializeSafetyWaiver(id: Long): SafetyWaiver = SafetyWaiver(
+    private fun materializeSafetyWaiver(id: Long): SafetyWaiver = SafetyWaiver(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
     )
 
-    @PublishedApi internal fun materializeOrientationRecord(id: Long): OrientationRecord = OrientationRecord(
+    private fun materializeOrientationRecord(id: Long): OrientationRecord = OrientationRecord(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
     )
 
-    @PublishedApi internal fun materializeKeycard(id: Long): Keycard = Keycard(
+    private fun materializeKeycard(id: Long): Keycard = Keycard(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
     )
 
-    @PublishedApi internal fun materializeQualifiedPurchase(id: Long): QualifiedPurchase = QualifiedPurchase(
+    private fun materializeQualifiedPurchase(id: Long): QualifiedPurchase = QualifiedPurchase(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -279,7 +284,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isVipPurchase = system.isMember(id, "VipPurchase"),
     )
 
-    @PublishedApi internal fun materializeVipPurchase(id: Long): VipPurchase = VipPurchase(
+    private fun materializeVipPurchase(id: Long): VipPurchase = VipPurchase(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -287,7 +292,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isQualifiedPurchase = system.isMember(id, "QualifiedPurchase"),
     )
 
-    @PublishedApi internal fun materializeCertifiedMember(id: Long): CertifiedMember = CertifiedMember(
+    private fun materializeCertifiedMember(id: Long): CertifiedMember = CertifiedMember(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         referrer = (system.get(id, "referrer") as Long?)?.let { system.refFor(it) },

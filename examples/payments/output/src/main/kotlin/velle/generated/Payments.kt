@@ -412,125 +412,130 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
-        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
+        @Suppress("UNCHECKED_CAST")
+        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
+        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
+        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
+        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
+        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
+            val id = system.idOf(ref)
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             materialize(id)
         }
 
         val contacts: ContactQuery get() = ContactQuery(Query("Contact"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun contact(key: StoreKey): Contact = this(Ref.Persisted("Contact", key))
+        fun contact(key: StoreKey): Contact = invoke<Contact>(Ref.Persisted("Contact", key))
         fun contact(key: Long): Contact = contact(StoreKey(key))
 
         val cards: CardQuery get() = CardQuery(Query("Card"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun card(key: StoreKey): Card = this(Ref.Persisted("Card", key))
+        fun card(key: StoreKey): Card = invoke<Card>(Ref.Persisted("Card", key))
         fun card(key: Long): Card = card(StoreKey(key))
 
         val customers: CustomerQuery get() = CustomerQuery(Query("Customer"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun customer(key: StoreKey): Customer = this(Ref.Persisted("Customer", key))
+        fun customer(key: StoreKey): Customer = invoke<Customer>(Ref.Persisted("Customer", key))
         fun customer(key: Long): Customer = customer(StoreKey(key))
 
         val cardUpdates: CardUpdateQuery get() = CardUpdateQuery(Query("CardUpdate"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun cardUpdate(key: StoreKey): CardUpdate = this(Ref.Persisted("CardUpdate", key))
+        fun cardUpdate(key: StoreKey): CardUpdate = invoke<CardUpdate>(Ref.Persisted("CardUpdate", key))
         fun cardUpdate(key: Long): CardUpdate = cardUpdate(StoreKey(key))
 
         val orders: OrderQuery get() = OrderQuery(Query("Order"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun order(key: StoreKey): Order = this(Ref.Persisted("Order", key))
+        fun order(key: StoreKey): Order = invoke<Order>(Ref.Persisted("Order", key))
         fun order(key: Long): Order = order(StoreKey(key))
 
         val chargeAttempts: ChargeAttemptQuery get() = ChargeAttemptQuery(Query("ChargeAttempt"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun chargeAttempt(key: StoreKey): ChargeAttempt = this(Ref.Persisted("ChargeAttempt", key))
+        fun chargeAttempt(key: StoreKey): ChargeAttempt = invoke<ChargeAttempt>(Ref.Persisted("ChargeAttempt", key))
         fun chargeAttempt(key: Long): ChargeAttempt = chargeAttempt(StoreKey(key))
 
         val chargeResponses: ChargeResponseQuery get() = ChargeResponseQuery(Query("ChargeResponse"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun chargeResponse(key: StoreKey): ChargeResponse = this(Ref.Persisted("ChargeResponse", key))
+        fun chargeResponse(key: StoreKey): ChargeResponse = invoke<ChargeResponse>(Ref.Persisted("ChargeResponse", key))
         fun chargeResponse(key: Long): ChargeResponse = chargeResponse(StoreKey(key))
 
         val attemptTimeouts: AttemptTimeoutQuery get() = AttemptTimeoutQuery(Query("AttemptTimeout"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun attemptTimeout(key: StoreKey): AttemptTimeout = this(Ref.Persisted("AttemptTimeout", key))
+        fun attemptTimeout(key: StoreKey): AttemptTimeout = invoke<AttemptTimeout>(Ref.Persisted("AttemptTimeout", key))
         fun attemptTimeout(key: Long): AttemptTimeout = attemptTimeout(StoreKey(key))
 
         val stockReservations: StockReservationQuery get() = StockReservationQuery(Query("StockReservation"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun stockReservation(key: StoreKey): StockReservation = this(Ref.Persisted("StockReservation", key))
+        fun stockReservation(key: StoreKey): StockReservation = invoke<StockReservation>(Ref.Persisted("StockReservation", key))
         fun stockReservation(key: Long): StockReservation = stockReservation(StoreKey(key))
 
         val reservationReleases: ReservationReleaseQuery get() = ReservationReleaseQuery(Query("ReservationRelease"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun reservationRelease(key: StoreKey): ReservationRelease = this(Ref.Persisted("ReservationRelease", key))
+        fun reservationRelease(key: StoreKey): ReservationRelease = invoke<ReservationRelease>(Ref.Persisted("ReservationRelease", key))
         fun reservationRelease(key: Long): ReservationRelease = reservationRelease(StoreKey(key))
 
         val receipts: ReceiptQuery get() = ReceiptQuery(Query("Receipt"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun receipt(key: StoreKey): Receipt = this(Ref.Persisted("Receipt", key))
+        fun receipt(key: StoreKey): Receipt = invoke<Receipt>(Ref.Persisted("Receipt", key))
         fun receipt(key: Long): Receipt = receipt(StoreKey(key))
 
         val shipments: ShipmentQuery get() = ShipmentQuery(Query("Shipment"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun shipment(key: StoreKey): Shipment = this(Ref.Persisted("Shipment", key))
+        fun shipment(key: StoreKey): Shipment = invoke<Shipment>(Ref.Persisted("Shipment", key))
         fun shipment(key: Long): Shipment = shipment(StoreKey(key))
 
         val changeShippingAddresss: ChangeShippingAddressQuery get() = ChangeShippingAddressQuery(Query("ChangeShippingAddress"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun changeShippingAddress(key: StoreKey): ChangeShippingAddress = this(Ref.Persisted("ChangeShippingAddress", key))
+        fun changeShippingAddress(key: StoreKey): ChangeShippingAddress = invoke<ChangeShippingAddress>(Ref.Persisted("ChangeShippingAddress", key))
         fun changeShippingAddress(key: Long): ChangeShippingAddress = changeShippingAddress(StoreKey(key))
 
         val addressChangeApplications: AddressChangeApplicationQuery get() = AddressChangeApplicationQuery(Query("AddressChangeApplication"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun addressChangeApplication(key: StoreKey): AddressChangeApplication = this(Ref.Persisted("AddressChangeApplication", key))
+        fun addressChangeApplication(key: StoreKey): AddressChangeApplication = invoke<AddressChangeApplication>(Ref.Persisted("AddressChangeApplication", key))
         fun addressChangeApplication(key: Long): AddressChangeApplication = addressChangeApplication(StoreKey(key))
 
         val addressChangeRefusals: AddressChangeRefusalQuery get() = AddressChangeRefusalQuery(Query("AddressChangeRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun addressChangeRefusal(key: StoreKey): AddressChangeRefusal = this(Ref.Persisted("AddressChangeRefusal", key))
+        fun addressChangeRefusal(key: StoreKey): AddressChangeRefusal = invoke<AddressChangeRefusal>(Ref.Persisted("AddressChangeRefusal", key))
         fun addressChangeRefusal(key: Long): AddressChangeRefusal = addressChangeRefusal(StoreKey(key))
 
         val refunds: RefundQuery get() = RefundQuery(Query("Refund"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun refund(key: StoreKey): Refund = this(Ref.Persisted("Refund", key))
+        fun refund(key: StoreKey): Refund = invoke<Refund>(Ref.Persisted("Refund", key))
         fun refund(key: Long): Refund = refund(StoreKey(key))
 
         val settlementReversals: SettlementReversalQuery get() = SettlementReversalQuery(Query("SettlementReversal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun settlementReversal(key: StoreKey): SettlementReversal = this(Ref.Persisted("SettlementReversal", key))
+        fun settlementReversal(key: StoreKey): SettlementReversal = invoke<SettlementReversal>(Ref.Persisted("SettlementReversal", key))
         fun settlementReversal(key: Long): SettlementReversal = settlementReversal(StoreKey(key))
 
         val manualCharges: ManualChargeQuery get() = ManualChargeQuery(Query("ManualCharge"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun manualCharge(key: StoreKey): ManualCharge = this(Ref.Persisted("ManualCharge", key))
+        fun manualCharge(key: StoreKey): ManualCharge = invoke<ManualCharge>(Ref.Persisted("ManualCharge", key))
         fun manualCharge(key: Long): ManualCharge = manualCharge(StoreKey(key))
 
         val extensionRequests: ExtensionRequestQuery get() = ExtensionRequestQuery(Query("ExtensionRequest"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun extensionRequest(key: StoreKey): ExtensionRequest = this(Ref.Persisted("ExtensionRequest", key))
+        fun extensionRequest(key: StoreKey): ExtensionRequest = invoke<ExtensionRequest>(Ref.Persisted("ExtensionRequest", key))
         fun extensionRequest(key: Long): ExtensionRequest = extensionRequest(StoreKey(key))
 
         val paymentExtensions: PaymentExtensionQuery get() = PaymentExtensionQuery(Query("PaymentExtension"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun paymentExtension(key: StoreKey): PaymentExtension = this(Ref.Persisted("PaymentExtension", key))
+        fun paymentExtension(key: StoreKey): PaymentExtension = invoke<PaymentExtension>(Ref.Persisted("PaymentExtension", key))
         fun paymentExtension(key: Long): PaymentExtension = paymentExtension(StoreKey(key))
 
         val paymentReminders: PaymentReminderQuery get() = PaymentReminderQuery(Query("PaymentReminder"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun paymentReminder(key: StoreKey): PaymentReminder = this(Ref.Persisted("PaymentReminder", key))
+        fun paymentReminder(key: StoreKey): PaymentReminder = invoke<PaymentReminder>(Ref.Persisted("PaymentReminder", key))
         fun paymentReminder(key: Long): PaymentReminder = paymentReminder(StoreKey(key))
 
         val dunningFlags: DunningFlagQuery get() = DunningFlagQuery(Query("DunningFlag"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun dunningFlag(key: StoreKey): DunningFlag = this(Ref.Persisted("DunningFlag", key))
+        fun dunningFlag(key: StoreKey): DunningFlag = invoke<DunningFlag>(Ref.Persisted("DunningFlag", key))
         fun dunningFlag(key: Long): DunningFlag = dunningFlag(StoreKey(key))
 
         val dunningResolutions: DunningResolutionQuery get() = DunningResolutionQuery(Query("DunningResolution"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun dunningResolution(key: StoreKey): DunningResolution = this(Ref.Persisted("DunningResolution", key))
+        fun dunningResolution(key: StoreKey): DunningResolution = invoke<DunningResolution>(Ref.Persisted("DunningResolution", key))
         fun dunningResolution(key: Long): DunningResolution = dunningResolution(StoreKey(key))
 
         val settledOrders: SettledOrderQuery get() = SettledOrderQuery(Query("SettledOrder"))
@@ -852,7 +857,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Contact" -> materializeContact(id)
         "Card" -> materializeCard(id)
         "Customer" -> materializeCustomer(id)
@@ -879,14 +884,14 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    @PublishedApi internal fun materializeContact(id: Long): Contact = Contact(
+    private fun materializeContact(id: Long): Contact = Contact(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         email = system.get(id, "email") as String,
         cards = (system.get(id, "cards") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeCard(id: Long): Card = Card(
+    private fun materializeCard(id: Long): Card = Card(
         key = system.refFor(id).key,
         number = system.get(id, "number") as String,
         expiresOn = system.get(id, "expiresOn") as LocalDate,
@@ -895,7 +900,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         cardUpdates = (system.get(id, "cardUpdates") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeCustomer(id: Long): Customer = Customer(
+    private fun materializeCustomer(id: Long): Customer = Customer(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         card = (system.get(id, "card") as Long?)?.let { system.refFor(it) },
@@ -903,13 +908,13 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         orders = (system.get(id, "orders") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeCardUpdate(id: Long): CardUpdate = CardUpdate(
+    private fun materializeCardUpdate(id: Long): CardUpdate = CardUpdate(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         card = system.refFor(system.get(id, "card") as Long),
     )
 
-    @PublishedApi internal fun materializeOrder(id: Long): Order = Order(
+    private fun materializeOrder(id: Long): Order = Order(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -945,7 +950,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    @PublishedApi internal fun materializeChargeAttempt(id: Long): ChargeAttempt = ChargeAttempt(
+    private fun materializeChargeAttempt(id: Long): ChargeAttempt = ChargeAttempt(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -962,20 +967,20 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStalePendingAttempt = system.isMember(id, "StalePendingAttempt"),
     )
 
-    @PublishedApi internal fun materializeChargeResponse(id: Long): ChargeResponse = ChargeResponse(
+    private fun materializeChargeResponse(id: Long): ChargeResponse = ChargeResponse(
         key = system.refFor(id).key,
         attempt = system.refFor(system.get(id, "attempt") as Long),
         outcome = system.get(id, "outcome") as String,
         respondedOn = system.get(id, "respondedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeAttemptTimeout(id: Long): AttemptTimeout = AttemptTimeout(
+    private fun materializeAttemptTimeout(id: Long): AttemptTimeout = AttemptTimeout(
         key = system.refFor(id).key,
         attempt = system.refFor(system.get(id, "attempt") as Long),
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeStockReservation(id: Long): StockReservation = StockReservation(
+    private fun materializeStockReservation(id: Long): StockReservation = StockReservation(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         reservedOn = system.get(id, "reservedOn") as Instant,
@@ -983,25 +988,25 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isActiveReservation = system.isMember(id, "ActiveReservation"),
     )
 
-    @PublishedApi internal fun materializeReservationRelease(id: Long): ReservationRelease = ReservationRelease(
+    private fun materializeReservationRelease(id: Long): ReservationRelease = ReservationRelease(
         key = system.refFor(id).key,
         reservation = system.refFor(system.get(id, "reservation") as Long),
         releasedOn = system.get(id, "releasedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeReceipt(id: Long): Receipt = Receipt(
+    private fun materializeReceipt(id: Long): Receipt = Receipt(
         key = system.refFor(id).key,
         attempt = system.refFor(system.get(id, "attempt") as Long),
         sentOn = system.get(id, "sentOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeShipment(id: Long): Shipment = Shipment(
+    private fun materializeShipment(id: Long): Shipment = Shipment(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         shippedOn = system.get(id, "shippedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeChangeShippingAddress(id: Long): ChangeShippingAddress = ChangeShippingAddress(
+    private fun materializeChangeShippingAddress(id: Long): ChangeShippingAddress = ChangeShippingAddress(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         newAddress = system.get(id, "newAddress") as String,
@@ -1012,55 +1017,55 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isRefusedAddressChange = system.isMember(id, "RefusedAddressChange"),
     )
 
-    @PublishedApi internal fun materializeAddressChangeApplication(id: Long): AddressChangeApplication = AddressChangeApplication(
+    private fun materializeAddressChangeApplication(id: Long): AddressChangeApplication = AddressChangeApplication(
         key = system.refFor(id).key,
         change = system.refFor(system.get(id, "change") as Long),
         appliedOn = system.get(id, "appliedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeAddressChangeRefusal(id: Long): AddressChangeRefusal = AddressChangeRefusal(
+    private fun materializeAddressChangeRefusal(id: Long): AddressChangeRefusal = AddressChangeRefusal(
         key = system.refFor(id).key,
         change = system.refFor(system.get(id, "change") as Long),
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeRefund(id: Long): Refund = Refund(
+    private fun materializeRefund(id: Long): Refund = Refund(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
         refundedOn = system.get(id, "refundedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeSettlementReversal(id: Long): SettlementReversal = SettlementReversal(
+    private fun materializeSettlementReversal(id: Long): SettlementReversal = SettlementReversal(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeManualCharge(id: Long): ManualCharge = ManualCharge(
+    private fun materializeManualCharge(id: Long): ManualCharge = ManualCharge(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
     )
 
-    @PublishedApi internal fun materializeExtensionRequest(id: Long): ExtensionRequest = ExtensionRequest(
+    private fun materializeExtensionRequest(id: Long): ExtensionRequest = ExtensionRequest(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
     )
 
-    @PublishedApi internal fun materializePaymentExtension(id: Long): PaymentExtension = PaymentExtension(
+    private fun materializePaymentExtension(id: Long): PaymentExtension = PaymentExtension(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         endsOn = system.get(id, "endsOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializePaymentReminder(id: Long): PaymentReminder = PaymentReminder(
+    private fun materializePaymentReminder(id: Long): PaymentReminder = PaymentReminder(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         sentOn = system.get(id, "sentOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializeDunningFlag(id: Long): DunningFlag = DunningFlag(
+    private fun materializeDunningFlag(id: Long): DunningFlag = DunningFlag(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         openedOn = system.get(id, "openedOn") as LocalDate,
@@ -1069,13 +1074,13 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isClosableDunningFlag = system.isMember(id, "ClosableDunningFlag"),
     )
 
-    @PublishedApi internal fun materializeDunningResolution(id: Long): DunningResolution = DunningResolution(
+    private fun materializeDunningResolution(id: Long): DunningResolution = DunningResolution(
         key = system.refFor(id).key,
         flag = system.refFor(system.get(id, "flag") as Long),
         resolvedOn = system.get(id, "resolvedOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializeSettledOrder(id: Long): SettledOrder = SettledOrder(
+    private fun materializeSettledOrder(id: Long): SettledOrder = SettledOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1111,7 +1116,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    @PublishedApi internal fun materializeNeverCharged(id: Long): NeverCharged = NeverCharged(
+    private fun materializeNeverCharged(id: Long): NeverCharged = NeverCharged(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1146,7 +1151,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    @PublishedApi internal fun materializeUnpaidOrder(id: Long): UnpaidOrder = UnpaidOrder(
+    private fun materializeUnpaidOrder(id: Long): UnpaidOrder = UnpaidOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1181,7 +1186,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    @PublishedApi internal fun materializeRefundedOrder(id: Long): RefundedOrder = RefundedOrder(
+    private fun materializeRefundedOrder(id: Long): RefundedOrder = RefundedOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1216,7 +1221,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    @PublishedApi internal fun materializeChargeableOrder(id: Long): ChargeableOrder = ChargeableOrder(
+    private fun materializeChargeableOrder(id: Long): ChargeableOrder = ChargeableOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1251,7 +1256,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    @PublishedApi internal fun materializePendingAttempt(id: Long): PendingAttempt = PendingAttempt(
+    private fun materializePendingAttempt(id: Long): PendingAttempt = PendingAttempt(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1267,7 +1272,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStalePendingAttempt = system.isMember(id, "StalePendingAttempt"),
     )
 
-    @PublishedApi internal fun materializeCompletedAttempt(id: Long): CompletedAttempt = CompletedAttempt(
+    private fun materializeCompletedAttempt(id: Long): CompletedAttempt = CompletedAttempt(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1284,7 +1289,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStalePendingAttempt = system.isMember(id, "StalePendingAttempt"),
     )
 
-    @PublishedApi internal fun materializeSuccessfulCharge(id: Long): SuccessfulCharge = SuccessfulCharge(
+    private fun materializeSuccessfulCharge(id: Long): SuccessfulCharge = SuccessfulCharge(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1301,7 +1306,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStalePendingAttempt = system.isMember(id, "StalePendingAttempt"),
     )
 
-    @PublishedApi internal fun materializeFailedCharge(id: Long): FailedCharge = FailedCharge(
+    private fun materializeFailedCharge(id: Long): FailedCharge = FailedCharge(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1318,7 +1323,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStalePendingAttempt = system.isMember(id, "StalePendingAttempt"),
     )
 
-    @PublishedApi internal fun materializeTimedOutAttempt(id: Long): TimedOutAttempt = TimedOutAttempt(
+    private fun materializeTimedOutAttempt(id: Long): TimedOutAttempt = TimedOutAttempt(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1334,14 +1339,14 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStalePendingAttempt = system.isMember(id, "StalePendingAttempt"),
     )
 
-    @PublishedApi internal fun materializeActiveReservation(id: Long): ActiveReservation = ActiveReservation(
+    private fun materializeActiveReservation(id: Long): ActiveReservation = ActiveReservation(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         reservedOn = system.get(id, "reservedOn") as Instant,
         reservationReleases = (system.get(id, "reservationReleases") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeRetryableOrder(id: Long): RetryableOrder = RetryableOrder(
+    private fun materializeRetryableOrder(id: Long): RetryableOrder = RetryableOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1376,7 +1381,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    @PublishedApi internal fun materializeStalePendingAttempt(id: Long): StalePendingAttempt = StalePendingAttempt(
+    private fun materializeStalePendingAttempt(id: Long): StalePendingAttempt = StalePendingAttempt(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1392,7 +1397,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isTimedOutAttempt = system.isMember(id, "TimedOutAttempt"),
     )
 
-    @PublishedApi internal fun materializeExhaustedOrder(id: Long): ExhaustedOrder = ExhaustedOrder(
+    private fun materializeExhaustedOrder(id: Long): ExhaustedOrder = ExhaustedOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1427,7 +1432,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    @PublishedApi internal fun materializeReservedOrder(id: Long): ReservedOrder = ReservedOrder(
+    private fun materializeReservedOrder(id: Long): ReservedOrder = ReservedOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1462,7 +1467,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    @PublishedApi internal fun materializeUnshippedOrder(id: Long): UnshippedOrder = UnshippedOrder(
+    private fun materializeUnshippedOrder(id: Long): UnshippedOrder = UnshippedOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1497,7 +1502,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    @PublishedApi internal fun materializeReadyToShip(id: Long): ReadyToShip = ReadyToShip(
+    private fun materializeReadyToShip(id: Long): ReadyToShip = ReadyToShip(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1534,7 +1539,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    @PublishedApi internal fun materializeUnhandledAddressChange(id: Long): UnhandledAddressChange = UnhandledAddressChange(
+    private fun materializeUnhandledAddressChange(id: Long): UnhandledAddressChange = UnhandledAddressChange(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         newAddress = system.get(id, "newAddress") as String,
@@ -1544,7 +1549,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isRefusedAddressChange = system.isMember(id, "RefusedAddressChange"),
     )
 
-    @PublishedApi internal fun materializeApplicableAddressChange(id: Long): ApplicableAddressChange = ApplicableAddressChange(
+    private fun materializeApplicableAddressChange(id: Long): ApplicableAddressChange = ApplicableAddressChange(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         newAddress = system.get(id, "newAddress") as String,
@@ -1554,7 +1559,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isRefusedAddressChange = system.isMember(id, "RefusedAddressChange"),
     )
 
-    @PublishedApi internal fun materializeRefusedAddressChange(id: Long): RefusedAddressChange = RefusedAddressChange(
+    private fun materializeRefusedAddressChange(id: Long): RefusedAddressChange = RefusedAddressChange(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         newAddress = system.get(id, "newAddress") as String,
@@ -1564,7 +1569,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isApplicableAddressChange = system.isMember(id, "ApplicableAddressChange"),
     )
 
-    @PublishedApi internal fun materializeRefundAfterFailure(id: Long): RefundAfterFailure = RefundAfterFailure(
+    private fun materializeRefundAfterFailure(id: Long): RefundAfterFailure = RefundAfterFailure(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1599,7 +1604,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    @PublishedApi internal fun materializeOverdueOrder(id: Long): OverdueOrder = OverdueOrder(
+    private fun materializeOverdueOrder(id: Long): OverdueOrder = OverdueOrder(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1634,7 +1639,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInGracePeriod = system.isMember(id, "InGracePeriod"),
     )
 
-    @PublishedApi internal fun materializeInGracePeriod(id: Long): InGracePeriod = InGracePeriod(
+    private fun materializeInGracePeriod(id: Long): InGracePeriod = InGracePeriod(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -1669,7 +1674,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOverdueOrder = system.isMember(id, "OverdueOrder"),
     )
 
-    @PublishedApi internal fun materializeOpenDunningFlag(id: Long): OpenDunningFlag = OpenDunningFlag(
+    private fun materializeOpenDunningFlag(id: Long): OpenDunningFlag = OpenDunningFlag(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         openedOn = system.get(id, "openedOn") as LocalDate,
@@ -1677,7 +1682,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isClosableDunningFlag = system.isMember(id, "ClosableDunningFlag"),
     )
 
-    @PublishedApi internal fun materializeClosableDunningFlag(id: Long): ClosableDunningFlag = ClosableDunningFlag(
+    private fun materializeClosableDunningFlag(id: Long): ClosableDunningFlag = ClosableDunningFlag(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         openedOn = system.get(id, "openedOn") as LocalDate,

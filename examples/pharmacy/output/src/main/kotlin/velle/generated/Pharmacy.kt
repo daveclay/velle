@@ -767,250 +767,255 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
-        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
+        @Suppress("UNCHECKED_CAST")
+        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
+        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
+        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
+        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
+        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
+            val id = system.idOf(ref)
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             materialize(id)
         }
 
         val staffs: StaffQuery get() = StaffQuery(Query("Staff"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun staff(key: StoreKey): Staff = this(Ref.Persisted("Staff", key))
+        fun staff(key: StoreKey): Staff = invoke<Staff>(Ref.Persisted("Staff", key))
         fun staff(key: Long): Staff = staff(StoreKey(key))
 
         val licenceRenewals: LicenceRenewalQuery get() = LicenceRenewalQuery(Query("LicenceRenewal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun licenceRenewal(key: StoreKey): LicenceRenewal = this(Ref.Persisted("LicenceRenewal", key))
+        fun licenceRenewal(key: StoreKey): LicenceRenewal = invoke<LicenceRenewal>(Ref.Persisted("LicenceRenewal", key))
         fun licenceRenewal(key: Long): LicenceRenewal = licenceRenewal(StoreKey(key))
 
         val licenceReminders: LicenceReminderQuery get() = LicenceReminderQuery(Query("LicenceReminder"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun licenceReminder(key: StoreKey): LicenceReminder = this(Ref.Persisted("LicenceReminder", key))
+        fun licenceReminder(key: StoreKey): LicenceReminder = invoke<LicenceReminder>(Ref.Persisted("LicenceReminder", key))
         fun licenceReminder(key: Long): LicenceReminder = licenceReminder(StoreKey(key))
 
         val ingredients: IngredientQuery get() = IngredientQuery(Query("Ingredient"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun ingredient(key: StoreKey): Ingredient = this(Ref.Persisted("Ingredient", key))
+        fun ingredient(key: StoreKey): Ingredient = invoke<Ingredient>(Ref.Persisted("Ingredient", key))
         fun ingredient(key: Long): Ingredient = ingredient(StoreKey(key))
 
         val drugs: DrugQuery get() = DrugQuery(Query("Drug"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun drug(key: StoreKey): Drug = this(Ref.Persisted("Drug", key))
+        fun drug(key: StoreKey): Drug = invoke<Drug>(Ref.Persisted("Drug", key))
         fun drug(key: Long): Drug = drug(StoreKey(key))
 
         val interactions: InteractionQuery get() = InteractionQuery(Query("Interaction"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun interaction(key: StoreKey): Interaction = this(Ref.Persisted("Interaction", key))
+        fun interaction(key: StoreKey): Interaction = invoke<Interaction>(Ref.Persisted("Interaction", key))
         fun interaction(key: Long): Interaction = interaction(StoreKey(key))
 
         val priceChanges: PriceChangeQuery get() = PriceChangeQuery(Query("PriceChange"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun priceChange(key: StoreKey): PriceChange = this(Ref.Persisted("PriceChange", key))
+        fun priceChange(key: StoreKey): PriceChange = invoke<PriceChange>(Ref.Persisted("PriceChange", key))
         fun priceChange(key: Long): PriceChange = priceChange(StoreKey(key))
 
         val priceWithdrawals: PriceWithdrawalQuery get() = PriceWithdrawalQuery(Query("PriceWithdrawal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun priceWithdrawal(key: StoreKey): PriceWithdrawal = this(Ref.Persisted("PriceWithdrawal", key))
+        fun priceWithdrawal(key: StoreKey): PriceWithdrawal = invoke<PriceWithdrawal>(Ref.Persisted("PriceWithdrawal", key))
         fun priceWithdrawal(key: Long): PriceWithdrawal = priceWithdrawal(StoreKey(key))
 
         val priceWithdrawalRefusals: PriceWithdrawalRefusalQuery get() = PriceWithdrawalRefusalQuery(Query("PriceWithdrawalRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun priceWithdrawalRefusal(key: StoreKey): PriceWithdrawalRefusal = this(Ref.Persisted("PriceWithdrawalRefusal", key))
+        fun priceWithdrawalRefusal(key: StoreKey): PriceWithdrawalRefusal = invoke<PriceWithdrawalRefusal>(Ref.Persisted("PriceWithdrawalRefusal", key))
         fun priceWithdrawalRefusal(key: Long): PriceWithdrawalRefusal = priceWithdrawalRefusal(StoreKey(key))
 
         val stockLots: StockLotQuery get() = StockLotQuery(Query("StockLot"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun stockLot(key: StoreKey): StockLot = this(Ref.Persisted("StockLot", key))
+        fun stockLot(key: StoreKey): StockLot = invoke<StockLot>(Ref.Persisted("StockLot", key))
         fun stockLot(key: Long): StockLot = stockLot(StoreKey(key))
 
         val stockAdjustments: StockAdjustmentQuery get() = StockAdjustmentQuery(Query("StockAdjustment"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun stockAdjustment(key: StoreKey): StockAdjustment = this(Ref.Persisted("StockAdjustment", key))
+        fun stockAdjustment(key: StoreKey): StockAdjustment = invoke<StockAdjustment>(Ref.Persisted("StockAdjustment", key))
         fun stockAdjustment(key: Long): StockAdjustment = stockAdjustment(StoreKey(key))
 
         val countConfirmations: CountConfirmationQuery get() = CountConfirmationQuery(Query("CountConfirmation"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun countConfirmation(key: StoreKey): CountConfirmation = this(Ref.Persisted("CountConfirmation", key))
+        fun countConfirmation(key: StoreKey): CountConfirmation = invoke<CountConfirmation>(Ref.Persisted("CountConfirmation", key))
         fun countConfirmation(key: Long): CountConfirmation = countConfirmation(StoreKey(key))
 
         val quarantines: QuarantineQuery get() = QuarantineQuery(Query("Quarantine"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun quarantine(key: StoreKey): Quarantine = this(Ref.Persisted("Quarantine", key))
+        fun quarantine(key: StoreKey): Quarantine = invoke<Quarantine>(Ref.Persisted("Quarantine", key))
         fun quarantine(key: Long): Quarantine = quarantine(StoreKey(key))
 
         val recalls: RecallQuery get() = RecallQuery(Query("Recall"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun recall(key: StoreKey): Recall = this(Ref.Persisted("Recall", key))
+        fun recall(key: StoreKey): Recall = invoke<Recall>(Ref.Persisted("Recall", key))
         fun recall(key: Long): Recall = recall(StoreKey(key))
 
         val recallNotices: RecallNoticeQuery get() = RecallNoticeQuery(Query("RecallNotice"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun recallNotice(key: StoreKey): RecallNotice = this(Ref.Persisted("RecallNotice", key))
+        fun recallNotice(key: StoreKey): RecallNotice = invoke<RecallNotice>(Ref.Persisted("RecallNotice", key))
         fun recallNotice(key: Long): RecallNotice = recallNotice(StoreKey(key))
 
         val purchaseOrders: PurchaseOrderQuery get() = PurchaseOrderQuery(Query("PurchaseOrder"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun purchaseOrder(key: StoreKey): PurchaseOrder = this(Ref.Persisted("PurchaseOrder", key))
+        fun purchaseOrder(key: StoreKey): PurchaseOrder = invoke<PurchaseOrder>(Ref.Persisted("PurchaseOrder", key))
         fun purchaseOrder(key: Long): PurchaseOrder = purchaseOrder(StoreKey(key))
 
         val insurancePlans: InsurancePlanQuery get() = InsurancePlanQuery(Query("InsurancePlan"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun insurancePlan(key: StoreKey): InsurancePlan = this(Ref.Persisted("InsurancePlan", key))
+        fun insurancePlan(key: StoreKey): InsurancePlan = invoke<InsurancePlan>(Ref.Persisted("InsurancePlan", key))
         fun insurancePlan(key: Long): InsurancePlan = insurancePlan(StoreKey(key))
 
         val patients: PatientQuery get() = PatientQuery(Query("Patient"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun patient(key: StoreKey): Patient = this(Ref.Persisted("Patient", key))
+        fun patient(key: StoreKey): Patient = invoke<Patient>(Ref.Persisted("Patient", key))
         fun patient(key: Long): Patient = patient(StoreKey(key))
 
         val prescribers: PrescriberQuery get() = PrescriberQuery(Query("Prescriber"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun prescriber(key: StoreKey): Prescriber = this(Ref.Persisted("Prescriber", key))
+        fun prescriber(key: StoreKey): Prescriber = invoke<Prescriber>(Ref.Persisted("Prescriber", key))
         fun prescriber(key: Long): Prescriber = prescriber(StoreKey(key))
 
         val notices: NoticeQuery get() = NoticeQuery(Query("Notice"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun notice(key: StoreKey): Notice = this(Ref.Persisted("Notice", key))
+        fun notice(key: StoreKey): Notice = invoke<Notice>(Ref.Persisted("Notice", key))
         fun notice(key: Long): Notice = notice(StoreKey(key))
 
         val prescriberOrders: PrescriberOrderQuery get() = PrescriberOrderQuery(Query("PrescriberOrder"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun prescriberOrder(key: StoreKey): PrescriberOrder = this(Ref.Persisted("PrescriberOrder", key))
+        fun prescriberOrder(key: StoreKey): PrescriberOrder = invoke<PrescriberOrder>(Ref.Persisted("PrescriberOrder", key))
         fun prescriberOrder(key: Long): PrescriberOrder = prescriberOrder(StoreKey(key))
 
         val prescriptions: PrescriptionQuery get() = PrescriptionQuery(Query("Prescription"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun prescription(key: StoreKey): Prescription = this(Ref.Persisted("Prescription", key))
+        fun prescription(key: StoreKey): Prescription = invoke<Prescription>(Ref.Persisted("Prescription", key))
         fun prescription(key: Long): Prescription = prescription(StoreKey(key))
 
         val discontinuations: DiscontinuationQuery get() = DiscontinuationQuery(Query("Discontinuation"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun discontinuation(key: StoreKey): Discontinuation = this(Ref.Persisted("Discontinuation", key))
+        fun discontinuation(key: StoreKey): Discontinuation = invoke<Discontinuation>(Ref.Persisted("Discontinuation", key))
         fun discontinuation(key: Long): Discontinuation = discontinuation(StoreKey(key))
 
         val correctionRefusals: CorrectionRefusalQuery get() = CorrectionRefusalQuery(Query("CorrectionRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun correctionRefusal(key: StoreKey): CorrectionRefusal = this(Ref.Persisted("CorrectionRefusal", key))
+        fun correctionRefusal(key: StoreKey): CorrectionRefusal = invoke<CorrectionRefusal>(Ref.Persisted("CorrectionRefusal", key))
         fun correctionRefusal(key: Long): CorrectionRefusal = correctionRefusal(StoreKey(key))
 
         val entryVoids: EntryVoidQuery get() = EntryVoidQuery(Query("EntryVoid"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun entryVoid(key: StoreKey): EntryVoid = this(Ref.Persisted("EntryVoid", key))
+        fun entryVoid(key: StoreKey): EntryVoid = invoke<EntryVoid>(Ref.Persisted("EntryVoid", key))
         fun entryVoid(key: Long): EntryVoid = entryVoid(StoreKey(key))
 
         val voidRefusals: VoidRefusalQuery get() = VoidRefusalQuery(Query("VoidRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun voidRefusal(key: StoreKey): VoidRefusal = this(Ref.Persisted("VoidRefusal", key))
+        fun voidRefusal(key: StoreKey): VoidRefusal = invoke<VoidRefusal>(Ref.Persisted("VoidRefusal", key))
         fun voidRefusal(key: Long): VoidRefusal = voidRefusal(StoreKey(key))
 
         val conflictOverrides: ConflictOverrideQuery get() = ConflictOverrideQuery(Query("ConflictOverride"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun conflictOverride(key: StoreKey): ConflictOverride = this(Ref.Persisted("ConflictOverride", key))
+        fun conflictOverride(key: StoreKey): ConflictOverride = invoke<ConflictOverride>(Ref.Persisted("ConflictOverride", key))
         fun conflictOverride(key: Long): ConflictOverride = conflictOverride(StoreKey(key))
 
         val pharmacistAlerts: PharmacistAlertQuery get() = PharmacistAlertQuery(Query("PharmacistAlert"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun pharmacistAlert(key: StoreKey): PharmacistAlert = this(Ref.Persisted("PharmacistAlert", key))
+        fun pharmacistAlert(key: StoreKey): PharmacistAlert = invoke<PharmacistAlert>(Ref.Persisted("PharmacistAlert", key))
         fun pharmacistAlert(key: Long): PharmacistAlert = pharmacistAlert(StoreKey(key))
 
         val monitoringChecks: MonitoringCheckQuery get() = MonitoringCheckQuery(Query("MonitoringCheck"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun monitoringCheck(key: StoreKey): MonitoringCheck = this(Ref.Persisted("MonitoringCheck", key))
+        fun monitoringCheck(key: StoreKey): MonitoringCheck = invoke<MonitoringCheck>(Ref.Persisted("MonitoringCheck", key))
         fun monitoringCheck(key: Long): MonitoringCheck = monitoringCheck(StoreKey(key))
 
         val fills: FillQuery get() = FillQuery(Query("Fill"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun fill(key: StoreKey): Fill = this(Ref.Persisted("Fill", key))
+        fun fill(key: StoreKey): Fill = invoke<Fill>(Ref.Persisted("Fill", key))
         fun fill(key: Long): Fill = fill(StoreKey(key))
 
         val fillRefusals: FillRefusalQuery get() = FillRefusalQuery(Query("FillRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun fillRefusal(key: StoreKey): FillRefusal = this(Ref.Persisted("FillRefusal", key))
+        fun fillRefusal(key: StoreKey): FillRefusal = invoke<FillRefusal>(Ref.Persisted("FillRefusal", key))
         fun fillRefusal(key: Long): FillRefusal = fillRefusal(StoreKey(key))
 
         val controlledLogEntrys: ControlledLogEntryQuery get() = ControlledLogEntryQuery(Query("ControlledLogEntry"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun controlledLogEntry(key: StoreKey): ControlledLogEntry = this(Ref.Persisted("ControlledLogEntry", key))
+        fun controlledLogEntry(key: StoreKey): ControlledLogEntry = invoke<ControlledLogEntry>(Ref.Persisted("ControlledLogEntry", key))
         fun controlledLogEntry(key: Long): ControlledLogEntry = controlledLogEntry(StoreKey(key))
 
         val verifications: VerificationQuery get() = VerificationQuery(Query("Verification"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun verification(key: StoreKey): Verification = this(Ref.Persisted("Verification", key))
+        fun verification(key: StoreKey): Verification = invoke<Verification>(Ref.Persisted("Verification", key))
         fun verification(key: Long): Verification = verification(StoreKey(key))
 
         val counsellings: CounsellingQuery get() = CounsellingQuery(Query("Counselling"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun counselling(key: StoreKey): Counselling = this(Ref.Persisted("Counselling", key))
+        fun counselling(key: StoreKey): Counselling = invoke<Counselling>(Ref.Persisted("Counselling", key))
         fun counselling(key: Long): Counselling = counselling(StoreKey(key))
 
         val returnToStocks: ReturnToStockQuery get() = ReturnToStockQuery(Query("ReturnToStock"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun returnToStock(key: StoreKey): ReturnToStock = this(Ref.Persisted("ReturnToStock", key))
+        fun returnToStock(key: StoreKey): ReturnToStock = invoke<ReturnToStock>(Ref.Persisted("ReturnToStock", key))
         fun returnToStock(key: Long): ReturnToStock = returnToStock(StoreKey(key))
 
         val counterExits: CounterExitQuery get() = CounterExitQuery(Query("CounterExit"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun counterExit(key: StoreKey): CounterExit = this(Ref.Persisted("CounterExit", key))
+        fun counterExit(key: StoreKey): CounterExit = invoke<CounterExit>(Ref.Persisted("CounterExit", key))
         fun counterExit(key: Long): CounterExit = counterExit(StoreKey(key))
 
         val pickups: PickupQuery get() = PickupQuery(Query("Pickup"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun pickup(key: StoreKey): Pickup = this(Ref.Persisted("Pickup", key))
+        fun pickup(key: StoreKey): Pickup = invoke<Pickup>(Ref.Persisted("Pickup", key))
         fun pickup(key: Long): Pickup = pickup(StoreKey(key))
 
         val counterAlerts: CounterAlertQuery get() = CounterAlertQuery(Query("CounterAlert"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun counterAlert(key: StoreKey): CounterAlert = this(Ref.Persisted("CounterAlert", key))
+        fun counterAlert(key: StoreKey): CounterAlert = invoke<CounterAlert>(Ref.Persisted("CounterAlert", key))
         fun counterAlert(key: Long): CounterAlert = counterAlert(StoreKey(key))
 
         val refillTasks: RefillTaskQuery get() = RefillTaskQuery(Query("RefillTask"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun refillTask(key: StoreKey): RefillTask = this(Ref.Persisted("RefillTask", key))
+        fun refillTask(key: StoreKey): RefillTask = invoke<RefillTask>(Ref.Persisted("RefillTask", key))
         fun refillTask(key: Long): RefillTask = refillTask(StoreKey(key))
 
         val refillRefusals: RefillRefusalQuery get() = RefillRefusalQuery(Query("RefillRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun refillRefusal(key: StoreKey): RefillRefusal = this(Ref.Persisted("RefillRefusal", key))
+        fun refillRefusal(key: StoreKey): RefillRefusal = invoke<RefillRefusal>(Ref.Persisted("RefillRefusal", key))
         fun refillRefusal(key: Long): RefillRefusal = refillRefusal(StoreKey(key))
 
         val authorisationRequests: AuthorisationRequestQuery get() = AuthorisationRequestQuery(Query("AuthorisationRequest"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun authorisationRequest(key: StoreKey): AuthorisationRequest = this(Ref.Persisted("AuthorisationRequest", key))
+        fun authorisationRequest(key: StoreKey): AuthorisationRequest = invoke<AuthorisationRequest>(Ref.Persisted("AuthorisationRequest", key))
         fun authorisationRequest(key: Long): AuthorisationRequest = authorisationRequest(StoreKey(key))
 
         val taskNags: TaskNagQuery get() = TaskNagQuery(Query("TaskNag"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun taskNag(key: StoreKey): TaskNag = this(Ref.Persisted("TaskNag", key))
+        fun taskNag(key: StoreKey): TaskNag = invoke<TaskNag>(Ref.Persisted("TaskNag", key))
         fun taskNag(key: Long): TaskNag = taskNag(StoreKey(key))
 
         val autoRefillEnrolments: AutoRefillEnrolmentQuery get() = AutoRefillEnrolmentQuery(Query("AutoRefillEnrolment"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun autoRefillEnrolment(key: StoreKey): AutoRefillEnrolment = this(Ref.Persisted("AutoRefillEnrolment", key))
+        fun autoRefillEnrolment(key: StoreKey): AutoRefillEnrolment = invoke<AutoRefillEnrolment>(Ref.Persisted("AutoRefillEnrolment", key))
         fun autoRefillEnrolment(key: Long): AutoRefillEnrolment = autoRefillEnrolment(StoreKey(key))
 
         val autoRefillCancellations: AutoRefillCancellationQuery get() = AutoRefillCancellationQuery(Query("AutoRefillCancellation"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun autoRefillCancellation(key: StoreKey): AutoRefillCancellation = this(Ref.Persisted("AutoRefillCancellation", key))
+        fun autoRefillCancellation(key: StoreKey): AutoRefillCancellation = invoke<AutoRefillCancellation>(Ref.Persisted("AutoRefillCancellation", key))
         fun autoRefillCancellation(key: Long): AutoRefillCancellation = autoRefillCancellation(StoreKey(key))
 
         val claims: ClaimQuery get() = ClaimQuery(Query("Claim"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun claim(key: StoreKey): Claim = this(Ref.Persisted("Claim", key))
+        fun claim(key: StoreKey): Claim = invoke<Claim>(Ref.Persisted("Claim", key))
         fun claim(key: Long): Claim = claim(StoreKey(key))
 
         val claimResponses: ClaimResponseQuery get() = ClaimResponseQuery(Query("ClaimResponse"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun claimResponse(key: StoreKey): ClaimResponse = this(Ref.Persisted("ClaimResponse", key))
+        fun claimResponse(key: StoreKey): ClaimResponse = invoke<ClaimResponse>(Ref.Persisted("ClaimResponse", key))
         fun claimResponse(key: Long): ClaimResponse = claimResponse(StoreKey(key))
 
         val claimFollowUps: ClaimFollowUpQuery get() = ClaimFollowUpQuery(Query("ClaimFollowUp"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun claimFollowUp(key: StoreKey): ClaimFollowUp = this(Ref.Persisted("ClaimFollowUp", key))
+        fun claimFollowUp(key: StoreKey): ClaimFollowUp = invoke<ClaimFollowUp>(Ref.Persisted("ClaimFollowUp", key))
         fun claimFollowUp(key: Long): ClaimFollowUp = claimFollowUp(StoreKey(key))
 
         val controlledInventorySnapshots: ControlledInventorySnapshotQuery get() = ControlledInventorySnapshotQuery(Query("ControlledInventorySnapshot"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun controlledInventorySnapshot(key: StoreKey): ControlledInventorySnapshot = this(Ref.Persisted("ControlledInventorySnapshot", key))
+        fun controlledInventorySnapshot(key: StoreKey): ControlledInventorySnapshot = invoke<ControlledInventorySnapshot>(Ref.Persisted("ControlledInventorySnapshot", key))
         fun controlledInventorySnapshot(key: Long): ControlledInventorySnapshot = controlledInventorySnapshot(StoreKey(key))
 
         val pharmacists: PharmacistQuery get() = PharmacistQuery(Query("Pharmacist"))
@@ -1582,7 +1587,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Staff" -> materializeStaff(id)
         "LicenceRenewal" -> materializeLicenceRenewal(id)
         "LicenceReminder" -> materializeLicenceReminder(id)
@@ -1634,7 +1639,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    @PublishedApi internal fun materializeStaff(id: Long): Staff = Staff(
+    private fun materializeStaff(id: Long): Staff = Staff(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         role = system.get(id, "role") as String,
@@ -1652,7 +1657,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLicenceExpiringSoon = system.isMember(id, "LicenceExpiringSoon"),
     )
 
-    @PublishedApi internal fun materializeLicenceRenewal(id: Long): LicenceRenewal = LicenceRenewal(
+    private fun materializeLicenceRenewal(id: Long): LicenceRenewal = LicenceRenewal(
         key = system.refFor(id).key,
         actor = system.refFor(system.get(id, "actor") as Long),
         pharmacist = system.refFor(system.get(id, "pharmacist") as Long),
@@ -1660,20 +1665,20 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         expiresOn = system.get(id, "expiresOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializeLicenceReminder(id: Long): LicenceReminder = LicenceReminder(
+    private fun materializeLicenceReminder(id: Long): LicenceReminder = LicenceReminder(
         key = system.refFor(id).key,
         pharmacist = system.refFor(system.get(id, "pharmacist") as Long),
         sentOn = system.get(id, "sentOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializeIngredient(id: Long): Ingredient = Ingredient(
+    private fun materializeIngredient(id: Long): Ingredient = Ingredient(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         drugs = (system.get(id, "drugs") as List<*>).map { system.refFor(it as Long) },
         patients = (system.get(id, "patients") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeDrug(id: Long): Drug = Drug(
+    private fun materializeDrug(id: Long): Drug = Drug(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         strength = system.get(id, "strength") as String,
@@ -1697,14 +1702,14 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLowStock = system.isMember(id, "LowStock"),
     )
 
-    @PublishedApi internal fun materializeInteraction(id: Long): Interaction = Interaction(
+    private fun materializeInteraction(id: Long): Interaction = Interaction(
         key = system.refFor(id).key,
         drugA = system.refFor(system.get(id, "drugA") as Long),
         drugB = system.refFor(system.get(id, "drugB") as Long),
         severity = system.get(id, "severity") as String,
     )
 
-    @PublishedApi internal fun materializePriceChange(id: Long): PriceChange = PriceChange(
+    private fun materializePriceChange(id: Long): PriceChange = PriceChange(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         effectiveOn = system.get(id, "effectiveOn") as LocalDate,
@@ -1713,7 +1718,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isEffectivePrice = system.isMember(id, "EffectivePrice"),
     )
 
-    @PublishedApi internal fun materializePriceWithdrawal(id: Long): PriceWithdrawal = PriceWithdrawal(
+    private fun materializePriceWithdrawal(id: Long): PriceWithdrawal = PriceWithdrawal(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         effectiveOn = system.get(id, "effectiveOn") as LocalDate,
@@ -1722,14 +1727,14 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         withdrawnOn = system.get(id, "withdrawnOn") as Instant,
     )
 
-    @PublishedApi internal fun materializePriceWithdrawalRefusal(id: Long): PriceWithdrawalRefusal = PriceWithdrawalRefusal(
+    private fun materializePriceWithdrawalRefusal(id: Long): PriceWithdrawalRefusal = PriceWithdrawalRefusal(
         key = system.refFor(id).key,
         priceChange = (system.get(id, "priceChange") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeStockLot(id: Long): StockLot = StockLot(
+    private fun materializeStockLot(id: Long): StockLot = StockLot(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         lotNumber = system.get(id, "lotNumber") as String,
@@ -1748,7 +1753,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isUsableLot = system.isMember(id, "UsableLot"),
     )
 
-    @PublishedApi internal fun materializeStockAdjustment(id: Long): StockAdjustment = StockAdjustment(
+    private fun materializeStockAdjustment(id: Long): StockAdjustment = StockAdjustment(
         key = system.refFor(id).key,
         lot = system.refFor(system.get(id, "lot") as Long),
         delta = (system.get(id, "delta") as BigDecimal).intValueExact(),
@@ -1756,7 +1761,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         countedOn = system.get(id, "countedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeCountConfirmation(id: Long): CountConfirmation = CountConfirmation(
+    private fun materializeCountConfirmation(id: Long): CountConfirmation = CountConfirmation(
         key = system.refFor(id).key,
         lot = system.refFor(system.get(id, "lot") as Long),
         counted = (system.get(id, "counted") as BigDecimal).intValueExact(),
@@ -1764,21 +1769,21 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         countedOn = system.get(id, "countedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeQuarantine(id: Long): Quarantine = Quarantine(
+    private fun materializeQuarantine(id: Long): Quarantine = Quarantine(
         key = system.refFor(id).key,
         lot = system.refFor(system.get(id, "lot") as Long),
         reason = system.get(id, "reason") as String,
         quarantinedOn = system.get(id, "quarantinedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeRecall(id: Long): Recall = Recall(
+    private fun materializeRecall(id: Long): Recall = Recall(
         key = system.refFor(id).key,
         lot = system.refFor(system.get(id, "lot") as Long),
         reference = system.get(id, "reference") as String,
         issuedOn = system.get(id, "issuedOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializeRecallNotice(id: Long): RecallNotice = RecallNotice(
+    private fun materializeRecallNotice(id: Long): RecallNotice = RecallNotice(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         patient = system.refFor(system.get(id, "patient") as Long),
@@ -1786,7 +1791,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializePurchaseOrder(id: Long): PurchaseOrder = PurchaseOrder(
+    private fun materializePurchaseOrder(id: Long): PurchaseOrder = PurchaseOrder(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
@@ -1796,7 +1801,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isReceivedPurchaseOrder = system.isMember(id, "ReceivedPurchaseOrder"),
     )
 
-    @PublishedApi internal fun materializeInsurancePlan(id: Long): InsurancePlan = InsurancePlan(
+    private fun materializeInsurancePlan(id: Long): InsurancePlan = InsurancePlan(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         coversControlled = system.get(id, "coversControlled") as Boolean,
@@ -1804,7 +1809,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         claims = (system.get(id, "claims") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializePatient(id: Long): Patient = Patient(
+    private fun materializePatient(id: Long): Patient = Patient(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         birthDate = system.get(id, "birthDate") as LocalDate,
@@ -1818,7 +1823,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isMultiplePrescribers = system.isMember(id, "MultiplePrescribers"),
     )
 
-    @PublishedApi internal fun materializePrescriber(id: Long): Prescriber = Prescriber(
+    private fun materializePrescriber(id: Long): Prescriber = Prescriber(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         deaNumber = system.get(id, "deaNumber") as String,
@@ -1828,7 +1833,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         discontinuations = (system.get(id, "discontinuations") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeNotice(id: Long): Notice = Notice(
+    private fun materializeNotice(id: Long): Notice = Notice(
         key = system.refFor(id).key,
         recipient = system.refFor(system.get(id, "recipient") as Long),
         subject = system.get(id, "subject") as String,
@@ -1836,7 +1841,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         contact = system.get(id, "contact") as String,
     )
 
-    @PublishedApi internal fun materializePrescriberOrder(id: Long): PrescriberOrder = PrescriberOrder(
+    private fun materializePrescriberOrder(id: Long): PrescriberOrder = PrescriberOrder(
         key = system.refFor(id).key,
         enteredBy = system.refFor(system.get(id, "enteredBy") as Long),
         prescriber = system.refFor(system.get(id, "prescriber") as Long),
@@ -1845,7 +1850,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         prescriptions = (system.get(id, "prescriptions") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializePrescription(id: Long): Prescription = Prescription(
+    private fun materializePrescription(id: Long): Prescription = Prescription(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -1886,21 +1891,21 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    @PublishedApi internal fun materializeDiscontinuation(id: Long): Discontinuation = Discontinuation(
+    private fun materializeDiscontinuation(id: Long): Discontinuation = Discontinuation(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         prescriber = system.refFor(system.get(id, "prescriber") as Long),
         reason = system.get(id, "reason") as String,
     )
 
-    @PublishedApi internal fun materializeCorrectionRefusal(id: Long): CorrectionRefusal = CorrectionRefusal(
+    private fun materializeCorrectionRefusal(id: Long): CorrectionRefusal = CorrectionRefusal(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeEntryVoid(id: Long): EntryVoid = EntryVoid(
+    private fun materializeEntryVoid(id: Long): EntryVoid = EntryVoid(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         pharmacist = system.refFor(system.get(id, "pharmacist") as Long),
@@ -1908,28 +1913,28 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         voidedOn = system.get(id, "voidedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeVoidRefusal(id: Long): VoidRefusal = VoidRefusal(
+    private fun materializeVoidRefusal(id: Long): VoidRefusal = VoidRefusal(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeConflictOverride(id: Long): ConflictOverride = ConflictOverride(
+    private fun materializeConflictOverride(id: Long): ConflictOverride = ConflictOverride(
         key = system.refFor(id).key,
         actor = system.refFor(system.get(id, "actor") as Long),
         prescription = system.refFor(system.get(id, "prescription") as Long),
         justification = system.get(id, "justification") as String,
     )
 
-    @PublishedApi internal fun materializePharmacistAlert(id: Long): PharmacistAlert = PharmacistAlert(
+    private fun materializePharmacistAlert(id: Long): PharmacistAlert = PharmacistAlert(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         kind = system.get(id, "kind") as String,
         raisedOn = system.get(id, "raisedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeMonitoringCheck(id: Long): MonitoringCheck = MonitoringCheck(
+    private fun materializeMonitoringCheck(id: Long): MonitoringCheck = MonitoringCheck(
         key = system.refFor(id).key,
         actor = system.refFor(system.get(id, "actor") as Long),
         prescription = system.refFor(system.get(id, "prescription") as Long),
@@ -1937,7 +1942,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         cleared = system.get(id, "cleared") as Boolean,
     )
 
-    @PublishedApi internal fun materializeFill(id: Long): Fill = Fill(
+    private fun materializeFill(id: Long): Fill = Fill(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         lot = system.refFor(system.get(id, "lot") as Long),
@@ -1967,7 +1972,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInsuredFill = system.isMember(id, "InsuredFill"),
     )
 
-    @PublishedApi internal fun materializeFillRefusal(id: Long): FillRefusal = FillRefusal(
+    private fun materializeFillRefusal(id: Long): FillRefusal = FillRefusal(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         prescription = system.refFor(system.get(id, "prescription") as Long),
@@ -1975,7 +1980,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeControlledLogEntry(id: Long): ControlledLogEntry = ControlledLogEntry(
+    private fun materializeControlledLogEntry(id: Long): ControlledLogEntry = ControlledLogEntry(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -1984,7 +1989,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         loggedAt = system.get(id, "loggedAt") as Instant,
     )
 
-    @PublishedApi internal fun materializeVerification(id: Long): Verification = Verification(
+    private fun materializeVerification(id: Long): Verification = Verification(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         pharmacist = system.refFor(system.get(id, "pharmacist") as Long),
@@ -1993,27 +1998,27 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         verifiedAt = system.get(id, "verifiedAt") as Instant,
     )
 
-    @PublishedApi internal fun materializeCounselling(id: Long): Counselling = Counselling(
+    private fun materializeCounselling(id: Long): Counselling = Counselling(
         key = system.refFor(id).key,
         actor = system.refFor(system.get(id, "actor") as Long),
         fill = system.refFor(system.get(id, "fill") as Long),
         notes = system.get(id, "notes") as String,
     )
 
-    @PublishedApi internal fun materializeReturnToStock(id: Long): ReturnToStock = ReturnToStock(
+    private fun materializeReturnToStock(id: Long): ReturnToStock = ReturnToStock(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         returnedOn = system.get(id, "returnedOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializeCounterExit(id: Long): CounterExit = CounterExit(
+    private fun materializeCounterExit(id: Long): CounterExit = CounterExit(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         readyOn = system.get(id, "readyOn") as LocalDate,
         leftOn = system.get(id, "leftOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializePickup(id: Long): Pickup = Pickup(
+    private fun materializePickup(id: Long): Pickup = Pickup(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         collectedBy = system.get(id, "collectedBy") as String,
@@ -2021,13 +2026,13 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         pickedUpAt = system.get(id, "pickedUpAt") as Instant,
     )
 
-    @PublishedApi internal fun materializeCounterAlert(id: Long): CounterAlert = CounterAlert(
+    private fun materializeCounterAlert(id: Long): CounterAlert = CounterAlert(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         raisedOn = system.get(id, "raisedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeRefillTask(id: Long): RefillTask = RefillTask(
+    private fun materializeRefillTask(id: Long): RefillTask = RefillTask(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         requestKey = system.get(id, "requestKey") as String?,
@@ -2038,7 +2043,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOverdueRefillTask = system.isMember(id, "OverdueRefillTask"),
     )
 
-    @PublishedApi internal fun materializeRefillRefusal(id: Long): RefillRefusal = RefillRefusal(
+    private fun materializeRefillRefusal(id: Long): RefillRefusal = RefillRefusal(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         prescription = system.refFor(system.get(id, "prescription") as Long),
@@ -2046,29 +2051,29 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeAuthorisationRequest(id: Long): AuthorisationRequest = AuthorisationRequest(
+    private fun materializeAuthorisationRequest(id: Long): AuthorisationRequest = AuthorisationRequest(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         requestedOn = system.get(id, "requestedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeTaskNag(id: Long): TaskNag = TaskNag(
+    private fun materializeTaskNag(id: Long): TaskNag = TaskNag(
         key = system.refFor(id).key,
         task = system.refFor(system.get(id, "task") as Long),
         sentOn = system.get(id, "sentOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializeAutoRefillEnrolment(id: Long): AutoRefillEnrolment = AutoRefillEnrolment(
+    private fun materializeAutoRefillEnrolment(id: Long): AutoRefillEnrolment = AutoRefillEnrolment(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
     )
 
-    @PublishedApi internal fun materializeAutoRefillCancellation(id: Long): AutoRefillCancellation = AutoRefillCancellation(
+    private fun materializeAutoRefillCancellation(id: Long): AutoRefillCancellation = AutoRefillCancellation(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
     )
 
-    @PublishedApi internal fun materializeClaim(id: Long): Claim = Claim(
+    private fun materializeClaim(id: Long): Claim = Claim(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         plan = system.refFor(system.get(id, "plan") as Long),
@@ -2084,7 +2089,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStaleClaim = system.isMember(id, "StaleClaim"),
     )
 
-    @PublishedApi internal fun materializeClaimResponse(id: Long): ClaimResponse = ClaimResponse(
+    private fun materializeClaimResponse(id: Long): ClaimResponse = ClaimResponse(
         key = system.refFor(id).key,
         claim = system.refFor(system.get(id, "claim") as Long),
         outcome = system.get(id, "outcome") as String,
@@ -2093,20 +2098,20 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         respondedAt = system.get(id, "respondedAt") as Instant,
     )
 
-    @PublishedApi internal fun materializeClaimFollowUp(id: Long): ClaimFollowUp = ClaimFollowUp(
+    private fun materializeClaimFollowUp(id: Long): ClaimFollowUp = ClaimFollowUp(
         key = system.refFor(id).key,
         claim = system.refFor(system.get(id, "claim") as Long),
         followedUpAt = system.get(id, "followedUpAt") as Instant,
     )
 
-    @PublishedApi internal fun materializeControlledInventorySnapshot(id: Long): ControlledInventorySnapshot = ControlledInventorySnapshot(
+    private fun materializeControlledInventorySnapshot(id: Long): ControlledInventorySnapshot = ControlledInventorySnapshot(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         onHand = (system.get(id, "onHand") as BigDecimal).intValueExact(),
         takenOn = system.get(id, "takenOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializePharmacist(id: Long): Pharmacist = Pharmacist(
+    private fun materializePharmacist(id: Long): Pharmacist = Pharmacist(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         role = system.get(id, "role") as String,
@@ -2123,7 +2128,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLicenceExpiringSoon = system.isMember(id, "LicenceExpiringSoon"),
     )
 
-    @PublishedApi internal fun materializeTechnician(id: Long): Technician = Technician(
+    private fun materializeTechnician(id: Long): Technician = Technician(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         role = system.get(id, "role") as String,
@@ -2140,7 +2145,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLicenceExpiringSoon = system.isMember(id, "LicenceExpiringSoon"),
     )
 
-    @PublishedApi internal fun materializeAdministrator(id: Long): Administrator = Administrator(
+    private fun materializeAdministrator(id: Long): Administrator = Administrator(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         role = system.get(id, "role") as String,
@@ -2157,7 +2162,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLicenceExpiringSoon = system.isMember(id, "LicenceExpiringSoon"),
     )
 
-    @PublishedApi internal fun materializeLicensedPharmacist(id: Long): LicensedPharmacist = LicensedPharmacist(
+    private fun materializeLicensedPharmacist(id: Long): LicensedPharmacist = LicensedPharmacist(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         role = system.get(id, "role") as String,
@@ -2174,7 +2179,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLicenceExpiringSoon = system.isMember(id, "LicenceExpiringSoon"),
     )
 
-    @PublishedApi internal fun materializeLicenceExpiringSoon(id: Long): LicenceExpiringSoon = LicenceExpiringSoon(
+    private fun materializeLicenceExpiringSoon(id: Long): LicenceExpiringSoon = LicenceExpiringSoon(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         role = system.get(id, "role") as String,
@@ -2191,7 +2196,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLicensedPharmacist = system.isMember(id, "LicensedPharmacist"),
     )
 
-    @PublishedApi internal fun materializeControlled(id: Long): Controlled = Controlled(
+    private fun materializeControlled(id: Long): Controlled = Controlled(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         strength = system.get(id, "strength") as String,
@@ -2214,7 +2219,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLowStock = system.isMember(id, "LowStock"),
     )
 
-    @PublishedApi internal fun materializeScheduleTwo(id: Long): ScheduleTwo = ScheduleTwo(
+    private fun materializeScheduleTwo(id: Long): ScheduleTwo = ScheduleTwo(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         strength = system.get(id, "strength") as String,
@@ -2237,7 +2242,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLowStock = system.isMember(id, "LowStock"),
     )
 
-    @PublishedApi internal fun materializeLowStock(id: Long): LowStock = LowStock(
+    private fun materializeLowStock(id: Long): LowStock = LowStock(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         strength = system.get(id, "strength") as String,
@@ -2260,7 +2265,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isScheduleTwo = system.isMember(id, "ScheduleTwo"),
     )
 
-    @PublishedApi internal fun materializeEffectivePrice(id: Long): EffectivePrice = EffectivePrice(
+    private fun materializeEffectivePrice(id: Long): EffectivePrice = EffectivePrice(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         effectiveOn = system.get(id, "effectiveOn") as LocalDate,
@@ -2268,7 +2273,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         priceWithdrawalRefusals = (system.get(id, "priceWithdrawalRefusals") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeExpiredLot(id: Long): ExpiredLot = ExpiredLot(
+    private fun materializeExpiredLot(id: Long): ExpiredLot = ExpiredLot(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         lotNumber = system.get(id, "lotNumber") as String,
@@ -2286,7 +2291,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isUsableLot = system.isMember(id, "UsableLot"),
     )
 
-    @PublishedApi internal fun materializeQuarantinedLot(id: Long): QuarantinedLot = QuarantinedLot(
+    private fun materializeQuarantinedLot(id: Long): QuarantinedLot = QuarantinedLot(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         lotNumber = system.get(id, "lotNumber") as String,
@@ -2304,7 +2309,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isUsableLot = system.isMember(id, "UsableLot"),
     )
 
-    @PublishedApi internal fun materializeRecalledLot(id: Long): RecalledLot = RecalledLot(
+    private fun materializeRecalledLot(id: Long): RecalledLot = RecalledLot(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         lotNumber = system.get(id, "lotNumber") as String,
@@ -2322,7 +2327,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isUsableLot = system.isMember(id, "UsableLot"),
     )
 
-    @PublishedApi internal fun materializeUsableLot(id: Long): UsableLot = UsableLot(
+    private fun materializeUsableLot(id: Long): UsableLot = UsableLot(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         lotNumber = system.get(id, "lotNumber") as String,
@@ -2340,7 +2345,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isRecalledLot = system.isMember(id, "RecalledLot"),
     )
 
-    @PublishedApi internal fun materializeOpenPurchaseOrder(id: Long): OpenPurchaseOrder = OpenPurchaseOrder(
+    private fun materializeOpenPurchaseOrder(id: Long): OpenPurchaseOrder = OpenPurchaseOrder(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
@@ -2349,7 +2354,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isReceivedPurchaseOrder = system.isMember(id, "ReceivedPurchaseOrder"),
     )
 
-    @PublishedApi internal fun materializeReceivedPurchaseOrder(id: Long): ReceivedPurchaseOrder = ReceivedPurchaseOrder(
+    private fun materializeReceivedPurchaseOrder(id: Long): ReceivedPurchaseOrder = ReceivedPurchaseOrder(
         key = system.refFor(id).key,
         drug = system.refFor(system.get(id, "drug") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
@@ -2358,9 +2363,9 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOpenPurchaseOrder = system.isMember(id, "OpenPurchaseOrder"),
     )
 
-    @PublishedApi internal fun materializeRecipient(id: Long): Recipient = materialize(id) as Recipient
+    private fun materializeRecipient(id: Long): Recipient = materialize(id) as Recipient
 
-    @PublishedApi internal fun materializeDiscontinued(id: Long): Discontinued = Discontinued(
+    private fun materializeDiscontinued(id: Long): Discontinued = Discontinued(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2400,7 +2405,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    @PublishedApi internal fun materializeExpired(id: Long): Expired = Expired(
+    private fun materializeExpired(id: Long): Expired = Expired(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2440,7 +2445,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    @PublishedApi internal fun materializeExhausted(id: Long): Exhausted = Exhausted(
+    private fun materializeExhausted(id: Long): Exhausted = Exhausted(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2480,7 +2485,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    @PublishedApi internal fun materializeCurrent(id: Long): Current = Current(
+    private fun materializeCurrent(id: Long): Current = Current(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2520,7 +2525,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    @PublishedApi internal fun materializeActivePrescription(id: Long): ActivePrescription = ActivePrescription(
+    private fun materializeActivePrescription(id: Long): ActivePrescription = ActivePrescription(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2560,7 +2565,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    @PublishedApi internal fun materializeFilledPrescription(id: Long): FilledPrescription = FilledPrescription(
+    private fun materializeFilledPrescription(id: Long): FilledPrescription = FilledPrescription(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2600,7 +2605,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    @PublishedApi internal fun materializeVoided(id: Long): Voided = Voided(
+    private fun materializeVoided(id: Long): Voided = Voided(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2640,7 +2645,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    @PublishedApi internal fun materializeAllergyConflict(id: Long): AllergyConflict = AllergyConflict(
+    private fun materializeAllergyConflict(id: Long): AllergyConflict = AllergyConflict(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2680,7 +2685,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    @PublishedApi internal fun materializeInteractionConflict(id: Long): InteractionConflict = InteractionConflict(
+    private fun materializeInteractionConflict(id: Long): InteractionConflict = InteractionConflict(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2720,7 +2725,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    @PublishedApi internal fun materializeCleared(id: Long): Cleared = Cleared(
+    private fun materializeCleared(id: Long): Cleared = Cleared(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2760,7 +2765,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    @PublishedApi internal fun materializeFillable(id: Long): Fillable = Fillable(
+    private fun materializeFillable(id: Long): Fillable = Fillable(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -2800,7 +2805,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isAutoRefill = system.isMember(id, "AutoRefill"),
     )
 
-    @PublishedApi internal fun materializeMultiplePrescribers(id: Long): MultiplePrescribers = MultiplePrescribers(
+    private fun materializeMultiplePrescribers(id: Long): MultiplePrescribers = MultiplePrescribers(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         birthDate = system.get(id, "birthDate") as LocalDate,
@@ -2813,7 +2818,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         prescriberOrders = (system.get(id, "prescriberOrders") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeVerifiedFill(id: Long): VerifiedFill = VerifiedFill(
+    private fun materializeVerifiedFill(id: Long): VerifiedFill = VerifiedFill(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         lot = system.refFor(system.get(id, "lot") as Long),
@@ -2842,7 +2847,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInsuredFill = system.isMember(id, "InsuredFill"),
     )
 
-    @PublishedApi internal fun materializeRejectedFill(id: Long): RejectedFill = RejectedFill(
+    private fun materializeRejectedFill(id: Long): RejectedFill = RejectedFill(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         lot = system.refFor(system.get(id, "lot") as Long),
@@ -2871,7 +2876,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInsuredFill = system.isMember(id, "InsuredFill"),
     )
 
-    @PublishedApi internal fun materializeConsumingFill(id: Long): ConsumingFill = ConsumingFill(
+    private fun materializeConsumingFill(id: Long): ConsumingFill = ConsumingFill(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         lot = system.refFor(system.get(id, "lot") as Long),
@@ -2900,7 +2905,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInsuredFill = system.isMember(id, "InsuredFill"),
     )
 
-    @PublishedApi internal fun materializeCounsellingDue(id: Long): CounsellingDue = CounsellingDue(
+    private fun materializeCounsellingDue(id: Long): CounsellingDue = CounsellingDue(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         lot = system.refFor(system.get(id, "lot") as Long),
@@ -2929,7 +2934,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInsuredFill = system.isMember(id, "InsuredFill"),
     )
 
-    @PublishedApi internal fun materializeReadyForPickup(id: Long): ReadyForPickup = ReadyForPickup(
+    private fun materializeReadyForPickup(id: Long): ReadyForPickup = ReadyForPickup(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         lot = system.refFor(system.get(id, "lot") as Long),
@@ -2959,7 +2964,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInsuredFill = system.isMember(id, "InsuredFill"),
     )
 
-    @PublishedApi internal fun materializeUncollected(id: Long): Uncollected = Uncollected(
+    private fun materializeUncollected(id: Long): Uncollected = Uncollected(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         lot = system.refFor(system.get(id, "lot") as Long),
@@ -2989,7 +2994,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isInsuredFill = system.isMember(id, "InsuredFill"),
     )
 
-    @PublishedApi internal fun materializeOpenRefillTask(id: Long): OpenRefillTask = OpenRefillTask(
+    private fun materializeOpenRefillTask(id: Long): OpenRefillTask = OpenRefillTask(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         requestKey = system.get(id, "requestKey") as String?,
@@ -2999,7 +3004,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOverdueRefillTask = system.isMember(id, "OverdueRefillTask"),
     )
 
-    @PublishedApi internal fun materializeOverdueRefillTask(id: Long): OverdueRefillTask = OverdueRefillTask(
+    private fun materializeOverdueRefillTask(id: Long): OverdueRefillTask = OverdueRefillTask(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         requestKey = system.get(id, "requestKey") as String?,
@@ -3009,7 +3014,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOpenRefillTask = system.isMember(id, "OpenRefillTask"),
     )
 
-    @PublishedApi internal fun materializeAutoRefill(id: Long): AutoRefill = AutoRefill(
+    private fun materializeAutoRefill(id: Long): AutoRefill = AutoRefill(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         drug = system.refFor(system.get(id, "drug") as Long),
@@ -3049,7 +3054,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isFillable = system.isMember(id, "Fillable"),
     )
 
-    @PublishedApi internal fun materializeInsuredFill(id: Long): InsuredFill = InsuredFill(
+    private fun materializeInsuredFill(id: Long): InsuredFill = InsuredFill(
         key = system.refFor(id).key,
         prescription = system.refFor(system.get(id, "prescription") as Long),
         lot = system.refFor(system.get(id, "lot") as Long),
@@ -3079,7 +3084,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isUncollected = system.isMember(id, "Uncollected"),
     )
 
-    @PublishedApi internal fun materializePendingClaim(id: Long): PendingClaim = PendingClaim(
+    private fun materializePendingClaim(id: Long): PendingClaim = PendingClaim(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         plan = system.refFor(system.get(id, "plan") as Long),
@@ -3094,7 +3099,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStaleClaim = system.isMember(id, "StaleClaim"),
     )
 
-    @PublishedApi internal fun materializePaidClaim(id: Long): PaidClaim = PaidClaim(
+    private fun materializePaidClaim(id: Long): PaidClaim = PaidClaim(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         plan = system.refFor(system.get(id, "plan") as Long),
@@ -3109,7 +3114,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStaleClaim = system.isMember(id, "StaleClaim"),
     )
 
-    @PublishedApi internal fun materializeRejectedClaim(id: Long): RejectedClaim = RejectedClaim(
+    private fun materializeRejectedClaim(id: Long): RejectedClaim = RejectedClaim(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         plan = system.refFor(system.get(id, "plan") as Long),
@@ -3124,7 +3129,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isStaleClaim = system.isMember(id, "StaleClaim"),
     )
 
-    @PublishedApi internal fun materializeStaleClaim(id: Long): StaleClaim = StaleClaim(
+    private fun materializeStaleClaim(id: Long): StaleClaim = StaleClaim(
         key = system.refFor(id).key,
         fill = system.refFor(system.get(id, "fill") as Long),
         plan = system.refFor(system.get(id, "plan") as Long),

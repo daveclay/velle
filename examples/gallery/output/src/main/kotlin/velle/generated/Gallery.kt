@@ -102,40 +102,45 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
-        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
+        @Suppress("UNCHECKED_CAST")
+        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
+        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
+        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
+        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
+        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
+            val id = system.idOf(ref)
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             materialize(id)
         }
 
         val members: MemberQuery get() = MemberQuery(Query("Member"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun member(key: StoreKey): Member = this(Ref.Persisted("Member", key))
+        fun member(key: StoreKey): Member = invoke<Member>(Ref.Persisted("Member", key))
         fun member(key: Long): Member = member(StoreKey(key))
 
         val posts: PostQuery get() = PostQuery(Query("Post"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun post(key: StoreKey): Post = this(Ref.Persisted("Post", key))
+        fun post(key: StoreKey): Post = invoke<Post>(Ref.Persisted("Post", key))
         fun post(key: Long): Post = post(StoreKey(key))
 
         val photos: PhotoQuery get() = PhotoQuery(Query("Photo"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun photo(key: StoreKey): Photo = this(Ref.Persisted("Photo", key))
+        fun photo(key: StoreKey): Photo = invoke<Photo>(Ref.Persisted("Photo", key))
         fun photo(key: Long): Photo = photo(StoreKey(key))
 
         val comments: CommentQuery get() = CommentQuery(Query("Comment"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun comment(key: StoreKey): Comment = this(Ref.Persisted("Comment", key))
+        fun comment(key: StoreKey): Comment = invoke<Comment>(Ref.Persisted("Comment", key))
         fun comment(key: Long): Comment = comment(StoreKey(key))
 
         val popularityNotices: PopularityNoticeQuery get() = PopularityNoticeQuery(Query("PopularityNotice"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun popularityNotice(key: StoreKey): PopularityNotice = this(Ref.Persisted("PopularityNotice", key))
+        fun popularityNotice(key: StoreKey): PopularityNotice = invoke<PopularityNotice>(Ref.Persisted("PopularityNotice", key))
         fun popularityNotice(key: Long): PopularityNotice = popularityNotice(StoreKey(key))
 
         val commentNotices: CommentNoticeQuery get() = CommentNoticeQuery(Query("CommentNotice"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun commentNotice(key: StoreKey): CommentNotice = this(Ref.Persisted("CommentNotice", key))
+        fun commentNotice(key: StoreKey): CommentNotice = invoke<CommentNotice>(Ref.Persisted("CommentNotice", key))
         fun commentNotice(key: Long): CommentNotice = commentNotice(StoreKey(key))
 
         val contents: ContentQuery get() = ContentQuery(Query("Content"))
@@ -197,7 +202,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Member" -> materializeMember(id)
         "Post" -> materializePost(id)
         "Photo" -> materializePhoto(id)
@@ -207,7 +212,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    @PublishedApi internal fun materializeMember(id: Long): Member = Member(
+    private fun materializeMember(id: Long): Member = Member(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         posts = (system.get(id, "posts") as List<*>).map { system.refFor(it as Long) },
@@ -216,7 +221,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         commentNotices = (system.get(id, "commentNotices") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializePost(id: Long): Post = Post(
+    private fun materializePost(id: Long): Post = Post(
         key = system.refFor(id).key,
         author = system.refFor(system.get(id, "author") as Long),
         body = system.get(id, "body") as String,
@@ -226,7 +231,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isPopular = system.isMember(id, "Popular"),
     )
 
-    @PublishedApi internal fun materializePhoto(id: Long): Photo = Photo(
+    private fun materializePhoto(id: Long): Photo = Photo(
         key = system.refFor(id).key,
         author = system.refFor(system.get(id, "author") as Long),
         caption = system.get(id, "caption") as String,
@@ -236,7 +241,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isPopular = system.isMember(id, "Popular"),
     )
 
-    @PublishedApi internal fun materializeComment(id: Long): Comment = Comment(
+    private fun materializeComment(id: Long): Comment = Comment(
         key = system.refFor(id).key,
         target = system.refFor(system.get(id, "target") as Long),
         author = system.refFor(system.get(id, "author") as Long),
@@ -246,29 +251,29 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isPhotoComment = system.isMember(id, "PhotoComment"),
     )
 
-    @PublishedApi internal fun materializePopularityNotice(id: Long): PopularityNotice = PopularityNotice(
+    private fun materializePopularityNotice(id: Long): PopularityNotice = PopularityNotice(
         key = system.refFor(id).key,
         content = system.refFor(system.get(id, "content") as Long),
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeCommentNotice(id: Long): CommentNotice = CommentNotice(
+    private fun materializeCommentNotice(id: Long): CommentNotice = CommentNotice(
         key = system.refFor(id).key,
         recipient = system.refFor(system.get(id, "recipient") as Long),
         comment = system.refFor(system.get(id, "comment") as Long),
         excerpt = system.get(id, "excerpt") as String,
     )
 
-    @PublishedApi internal fun materializeContent(id: Long): Content = materialize(id) as Content
+    private fun materializeContent(id: Long): Content = materialize(id) as Content
 
-    @PublishedApi internal fun materializePopular(id: Long): Popular = Popular(
+    private fun materializePopular(id: Long): Popular = Popular(
         key = system.refFor(id).key,
         comments = (system.get(id, "comments") as List<*>).map { system.refFor(it as Long) },
         popularityNotices = (system.get(id, "popularityNotices") as List<*>).map { system.refFor(it as Long) },
         commentCount = (system.get(id, "commentCount") as BigDecimal).intValueExact(),
     )
 
-    @PublishedApi internal fun materializePostComment(id: Long): PostComment = PostComment(
+    private fun materializePostComment(id: Long): PostComment = PostComment(
         key = system.refFor(id).key,
         target = system.refFor(system.get(id, "target") as Long),
         author = system.refFor(system.get(id, "author") as Long),
@@ -277,7 +282,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isPhotoComment = system.isMember(id, "PhotoComment"),
     )
 
-    @PublishedApi internal fun materializePhotoComment(id: Long): PhotoComment = PhotoComment(
+    private fun materializePhotoComment(id: Long): PhotoComment = PhotoComment(
         key = system.refFor(id).key,
         target = system.refFor(system.get(id, "target") as Long),
         author = system.refFor(system.get(id, "author") as Long),

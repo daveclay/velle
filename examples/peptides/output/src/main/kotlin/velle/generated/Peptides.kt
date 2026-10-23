@@ -575,235 +575,240 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
-        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
+        @Suppress("UNCHECKED_CAST")
+        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
+        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
+        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
+        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
+        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
+            val id = system.idOf(ref)
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             materialize(id)
         }
 
         val crops: CropQuery get() = CropQuery(Query("Crop"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun crop(key: StoreKey): Crop = this(Ref.Persisted("Crop", key))
+        fun crop(key: StoreKey): Crop = invoke<Crop>(Ref.Persisted("Crop", key))
         fun crop(key: Long): Crop = crop(StoreKey(key))
 
         val pathogens: PathogenQuery get() = PathogenQuery(Query("Pathogen"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun pathogen(key: StoreKey): Pathogen = this(Ref.Persisted("Pathogen", key))
+        fun pathogen(key: StoreKey): Pathogen = invoke<Pathogen>(Ref.Persisted("Pathogen", key))
         fun pathogen(key: Long): Pathogen = pathogen(StoreKey(key))
 
         val peptides: PeptideQuery get() = PeptideQuery(Query("Peptide"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun peptide(key: StoreKey): Peptide = this(Ref.Persisted("Peptide", key))
+        fun peptide(key: StoreKey): Peptide = invoke<Peptide>(Ref.Persisted("Peptide", key))
         fun peptide(key: Long): Peptide = peptide(StoreKey(key))
 
         val assayProtocols: AssayProtocolQuery get() = AssayProtocolQuery(Query("AssayProtocol"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun assayProtocol(key: StoreKey): AssayProtocol = this(Ref.Persisted("AssayProtocol", key))
+        fun assayProtocol(key: StoreKey): AssayProtocol = invoke<AssayProtocol>(Ref.Persisted("AssayProtocol", key))
         fun assayProtocol(key: Long): AssayProtocol = assayProtocol(StoreKey(key))
 
         val labExperiments: LabExperimentQuery get() = LabExperimentQuery(Query("LabExperiment"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun labExperiment(key: StoreKey): LabExperiment = this(Ref.Persisted("LabExperiment", key))
+        fun labExperiment(key: StoreKey): LabExperiment = invoke<LabExperiment>(Ref.Persisted("LabExperiment", key))
         fun labExperiment(key: Long): LabExperiment = labExperiment(StoreKey(key))
 
         val assays: AssayQuery get() = AssayQuery(Query("Assay"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun assay(key: StoreKey): Assay = this(Ref.Persisted("Assay", key))
+        fun assay(key: StoreKey): Assay = invoke<Assay>(Ref.Persisted("Assay", key))
         fun assay(key: Long): Assay = assay(StoreKey(key))
 
         val assayReadings: AssayReadingQuery get() = AssayReadingQuery(Query("AssayReading"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun assayReading(key: StoreKey): AssayReading = this(Ref.Persisted("AssayReading", key))
+        fun assayReading(key: StoreKey): AssayReading = invoke<AssayReading>(Ref.Persisted("AssayReading", key))
         fun assayReading(key: Long): AssayReading = assayReading(StoreKey(key))
 
         val labHits: LabHitQuery get() = LabHitQuery(Query("LabHit"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun labHit(key: StoreKey): LabHit = this(Ref.Persisted("LabHit", key))
+        fun labHit(key: StoreKey): LabHit = invoke<LabHit>(Ref.Persisted("LabHit", key))
         fun labHit(key: Long): LabHit = labHit(StoreKey(key))
 
         val labHitRetractions: LabHitRetractionQuery get() = LabHitRetractionQuery(Query("LabHitRetraction"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun labHitRetraction(key: StoreKey): LabHitRetraction = this(Ref.Persisted("LabHitRetraction", key))
+        fun labHitRetraction(key: StoreKey): LabHitRetraction = invoke<LabHitRetraction>(Ref.Persisted("LabHitRetraction", key))
         fun labHitRetraction(key: Long): LabHitRetraction = labHitRetraction(StoreKey(key))
 
         val greenhouses: GreenhouseQuery get() = GreenhouseQuery(Query("Greenhouse"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun greenhouse(key: StoreKey): Greenhouse = this(Ref.Persisted("Greenhouse", key))
+        fun greenhouse(key: StoreKey): Greenhouse = invoke<Greenhouse>(Ref.Persisted("Greenhouse", key))
         fun greenhouse(key: Long): Greenhouse = greenhouse(StoreKey(key))
 
         val climateReadings: ClimateReadingQuery get() = ClimateReadingQuery(Query("ClimateReading"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun climateReading(key: StoreKey): ClimateReading = this(Ref.Persisted("ClimateReading", key))
+        fun climateReading(key: StoreKey): ClimateReading = invoke<ClimateReading>(Ref.Persisted("ClimateReading", key))
         fun climateReading(key: Long): ClimateReading = climateReading(StoreKey(key))
 
         val greenhouseProtocols: GreenhouseProtocolQuery get() = GreenhouseProtocolQuery(Query("GreenhouseProtocol"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun greenhouseProtocol(key: StoreKey): GreenhouseProtocol = this(Ref.Persisted("GreenhouseProtocol", key))
+        fun greenhouseProtocol(key: StoreKey): GreenhouseProtocol = invoke<GreenhouseProtocol>(Ref.Persisted("GreenhouseProtocol", key))
         fun greenhouseProtocol(key: Long): GreenhouseProtocol = greenhouseProtocol(StoreKey(key))
 
         val greenhouseTrials: GreenhouseTrialQuery get() = GreenhouseTrialQuery(Query("GreenhouseTrial"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun greenhouseTrial(key: StoreKey): GreenhouseTrial = this(Ref.Persisted("GreenhouseTrial", key))
+        fun greenhouseTrial(key: StoreKey): GreenhouseTrial = invoke<GreenhouseTrial>(Ref.Persisted("GreenhouseTrial", key))
         fun greenhouseTrial(key: Long): GreenhouseTrial = greenhouseTrial(StoreKey(key))
 
         val greenhouseRefusals: GreenhouseRefusalQuery get() = GreenhouseRefusalQuery(Query("GreenhouseRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun greenhouseRefusal(key: StoreKey): GreenhouseRefusal = this(Ref.Persisted("GreenhouseRefusal", key))
+        fun greenhouseRefusal(key: StoreKey): GreenhouseRefusal = invoke<GreenhouseRefusal>(Ref.Persisted("GreenhouseRefusal", key))
         fun greenhouseRefusal(key: Long): GreenhouseRefusal = greenhouseRefusal(StoreKey(key))
 
         val greenhousePlots: GreenhousePlotQuery get() = GreenhousePlotQuery(Query("GreenhousePlot"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun greenhousePlot(key: StoreKey): GreenhousePlot = this(Ref.Persisted("GreenhousePlot", key))
+        fun greenhousePlot(key: StoreKey): GreenhousePlot = invoke<GreenhousePlot>(Ref.Persisted("GreenhousePlot", key))
         fun greenhousePlot(key: Long): GreenhousePlot = greenhousePlot(StoreKey(key))
 
         val treatments: TreatmentQuery get() = TreatmentQuery(Query("Treatment"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun treatment(key: StoreKey): Treatment = this(Ref.Persisted("Treatment", key))
+        fun treatment(key: StoreKey): Treatment = invoke<Treatment>(Ref.Persisted("Treatment", key))
         fun treatment(key: Long): Treatment = treatment(StoreKey(key))
 
         val plotObservations: PlotObservationQuery get() = PlotObservationQuery(Query("PlotObservation"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun plotObservation(key: StoreKey): PlotObservation = this(Ref.Persisted("PlotObservation", key))
+        fun plotObservation(key: StoreKey): PlotObservation = invoke<PlotObservation>(Ref.Persisted("PlotObservation", key))
         fun plotObservation(key: Long): PlotObservation = plotObservation(StoreKey(key))
 
         val greenhouseResults: GreenhouseResultQuery get() = GreenhouseResultQuery(Query("GreenhouseResult"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun greenhouseResult(key: StoreKey): GreenhouseResult = this(Ref.Persisted("GreenhouseResult", key))
+        fun greenhouseResult(key: StoreKey): GreenhouseResult = invoke<GreenhouseResult>(Ref.Persisted("GreenhouseResult", key))
         fun greenhouseResult(key: Long): GreenhouseResult = greenhouseResult(StoreKey(key))
 
         val observationCorrections: ObservationCorrectionQuery get() = ObservationCorrectionQuery(Query("ObservationCorrection"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun observationCorrection(key: StoreKey): ObservationCorrection = this(Ref.Persisted("ObservationCorrection", key))
+        fun observationCorrection(key: StoreKey): ObservationCorrection = invoke<ObservationCorrection>(Ref.Persisted("ObservationCorrection", key))
         fun observationCorrection(key: Long): ObservationCorrection = observationCorrection(StoreKey(key))
 
         val correctionRefusals: CorrectionRefusalQuery get() = CorrectionRefusalQuery(Query("CorrectionRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun correctionRefusal(key: StoreKey): CorrectionRefusal = this(Ref.Persisted("CorrectionRefusal", key))
+        fun correctionRefusal(key: StoreKey): CorrectionRefusal = invoke<CorrectionRefusal>(Ref.Persisted("CorrectionRefusal", key))
         fun correctionRefusal(key: Long): CorrectionRefusal = correctionRefusal(StoreKey(key))
 
         val voidRecords: VoidRecordQuery get() = VoidRecordQuery(Query("VoidRecord"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun voidRecord(key: StoreKey): VoidRecord = this(Ref.Persisted("VoidRecord", key))
+        fun voidRecord(key: StoreKey): VoidRecord = invoke<VoidRecord>(Ref.Persisted("VoidRecord", key))
         fun voidRecord(key: Long): VoidRecord = voidRecord(StoreKey(key))
 
         val voidRefusals: VoidRefusalQuery get() = VoidRefusalQuery(Query("VoidRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun voidRefusal(key: StoreKey): VoidRefusal = this(Ref.Persisted("VoidRefusal", key))
+        fun voidRefusal(key: StoreKey): VoidRefusal = invoke<VoidRefusal>(Ref.Persisted("VoidRefusal", key))
         fun voidRefusal(key: Long): VoidRefusal = voidRefusal(StoreKey(key))
 
         val moveRefusals: MoveRefusalQuery get() = MoveRefusalQuery(Query("MoveRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun moveRefusal(key: StoreKey): MoveRefusal = this(Ref.Persisted("MoveRefusal", key))
+        fun moveRefusal(key: StoreKey): MoveRefusal = invoke<MoveRefusal>(Ref.Persisted("MoveRefusal", key))
         fun moveRefusal(key: Long): MoveRefusal = moveRefusal(StoreKey(key))
 
         val climateExcursions: ClimateExcursionQuery get() = ClimateExcursionQuery(Query("ClimateExcursion"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun climateExcursion(key: StoreKey): ClimateExcursion = this(Ref.Persisted("ClimateExcursion", key))
+        fun climateExcursion(key: StoreKey): ClimateExcursion = invoke<ClimateExcursion>(Ref.Persisted("ClimateExcursion", key))
         fun climateExcursion(key: Long): ClimateExcursion = climateExcursion(StoreKey(key))
 
         val excursionEnds: ExcursionEndQuery get() = ExcursionEndQuery(Query("ExcursionEnd"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun excursionEnd(key: StoreKey): ExcursionEnd = this(Ref.Persisted("ExcursionEnd", key))
+        fun excursionEnd(key: StoreKey): ExcursionEnd = invoke<ExcursionEnd>(Ref.Persisted("ExcursionEnd", key))
         fun excursionEnd(key: Long): ExcursionEnd = excursionEnd(StoreKey(key))
 
         val sensorAlerts: SensorAlertQuery get() = SensorAlertQuery(Query("SensorAlert"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun sensorAlert(key: StoreKey): SensorAlert = this(Ref.Persisted("SensorAlert", key))
+        fun sensorAlert(key: StoreKey): SensorAlert = invoke<SensorAlert>(Ref.Persisted("SensorAlert", key))
         fun sensorAlert(key: Long): SensorAlert = sensorAlert(StoreKey(key))
 
         val fieldSites: FieldSiteQuery get() = FieldSiteQuery(Query("FieldSite"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun fieldSite(key: StoreKey): FieldSite = this(Ref.Persisted("FieldSite", key))
+        fun fieldSite(key: StoreKey): FieldSite = invoke<FieldSite>(Ref.Persisted("FieldSite", key))
         fun fieldSite(key: Long): FieldSite = fieldSite(StoreKey(key))
 
         val permits: PermitQuery get() = PermitQuery(Query("Permit"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun permit(key: StoreKey): Permit = this(Ref.Persisted("Permit", key))
+        fun permit(key: StoreKey): Permit = invoke<Permit>(Ref.Persisted("Permit", key))
         fun permit(key: Long): Permit = permit(StoreKey(key))
 
         val weatherObservations: WeatherObservationQuery get() = WeatherObservationQuery(Query("WeatherObservation"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun weatherObservation(key: StoreKey): WeatherObservation = this(Ref.Persisted("WeatherObservation", key))
+        fun weatherObservation(key: StoreKey): WeatherObservation = invoke<WeatherObservation>(Ref.Persisted("WeatherObservation", key))
         fun weatherObservation(key: Long): WeatherObservation = weatherObservation(StoreKey(key))
 
         val fieldProtocols: FieldProtocolQuery get() = FieldProtocolQuery(Query("FieldProtocol"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun fieldProtocol(key: StoreKey): FieldProtocol = this(Ref.Persisted("FieldProtocol", key))
+        fun fieldProtocol(key: StoreKey): FieldProtocol = invoke<FieldProtocol>(Ref.Persisted("FieldProtocol", key))
         fun fieldProtocol(key: Long): FieldProtocol = fieldProtocol(StoreKey(key))
 
         val fieldTrials: FieldTrialQuery get() = FieldTrialQuery(Query("FieldTrial"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun fieldTrial(key: StoreKey): FieldTrial = this(Ref.Persisted("FieldTrial", key))
+        fun fieldTrial(key: StoreKey): FieldTrial = invoke<FieldTrial>(Ref.Persisted("FieldTrial", key))
         fun fieldTrial(key: Long): FieldTrial = fieldTrial(StoreKey(key))
 
         val fieldRefusals: FieldRefusalQuery get() = FieldRefusalQuery(Query("FieldRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun fieldRefusal(key: StoreKey): FieldRefusal = this(Ref.Persisted("FieldRefusal", key))
+        fun fieldRefusal(key: StoreKey): FieldRefusal = invoke<FieldRefusal>(Ref.Persisted("FieldRefusal", key))
         fun fieldRefusal(key: Long): FieldRefusal = fieldRefusal(StoreKey(key))
 
         val plantings: PlantingQuery get() = PlantingQuery(Query("Planting"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun planting(key: StoreKey): Planting = this(Ref.Persisted("Planting", key))
+        fun planting(key: StoreKey): Planting = invoke<Planting>(Ref.Persisted("Planting", key))
         fun planting(key: Long): Planting = planting(StoreKey(key))
 
         val fieldPlots: FieldPlotQuery get() = FieldPlotQuery(Query("FieldPlot"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun fieldPlot(key: StoreKey): FieldPlot = this(Ref.Persisted("FieldPlot", key))
+        fun fieldPlot(key: StoreKey): FieldPlot = invoke<FieldPlot>(Ref.Persisted("FieldPlot", key))
         fun fieldPlot(key: Long): FieldPlot = fieldPlot(StoreKey(key))
 
         val treatmentApplications: TreatmentApplicationQuery get() = TreatmentApplicationQuery(Query("TreatmentApplication"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun treatmentApplication(key: StoreKey): TreatmentApplication = this(Ref.Persisted("TreatmentApplication", key))
+        fun treatmentApplication(key: StoreKey): TreatmentApplication = invoke<TreatmentApplication>(Ref.Persisted("TreatmentApplication", key))
         fun treatmentApplication(key: Long): TreatmentApplication = treatmentApplication(StoreKey(key))
 
         val reapplicationNotices: ReapplicationNoticeQuery get() = ReapplicationNoticeQuery(Query("ReapplicationNotice"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun reapplicationNotice(key: StoreKey): ReapplicationNotice = this(Ref.Persisted("ReapplicationNotice", key))
+        fun reapplicationNotice(key: StoreKey): ReapplicationNotice = invoke<ReapplicationNotice>(Ref.Persisted("ReapplicationNotice", key))
         fun reapplicationNotice(key: Long): ReapplicationNotice = reapplicationNotice(StoreKey(key))
 
         val scoutings: ScoutingQuery get() = ScoutingQuery(Query("Scouting"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun scouting(key: StoreKey): Scouting = this(Ref.Persisted("Scouting", key))
+        fun scouting(key: StoreKey): Scouting = invoke<Scouting>(Ref.Persisted("Scouting", key))
         fun scouting(key: Long): Scouting = scouting(StoreKey(key))
 
         val harvests: HarvestQuery get() = HarvestQuery(Query("Harvest"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun harvest(key: StoreKey): Harvest = this(Ref.Persisted("Harvest", key))
+        fun harvest(key: StoreKey): Harvest = invoke<Harvest>(Ref.Persisted("Harvest", key))
         fun harvest(key: Long): Harvest = harvest(StoreKey(key))
 
         val phytotoxicityReports: PhytotoxicityReportQuery get() = PhytotoxicityReportQuery(Query("PhytotoxicityReport"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun phytotoxicityReport(key: StoreKey): PhytotoxicityReport = this(Ref.Persisted("PhytotoxicityReport", key))
+        fun phytotoxicityReport(key: StoreKey): PhytotoxicityReport = invoke<PhytotoxicityReport>(Ref.Persisted("PhytotoxicityReport", key))
         fun phytotoxicityReport(key: Long): PhytotoxicityReport = phytotoxicityReport(StoreKey(key))
 
         val haltNotices: HaltNoticeQuery get() = HaltNoticeQuery(Query("HaltNotice"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun haltNotice(key: StoreKey): HaltNotice = this(Ref.Persisted("HaltNotice", key))
+        fun haltNotice(key: StoreKey): HaltNotice = invoke<HaltNotice>(Ref.Persisted("HaltNotice", key))
         fun haltNotice(key: Long): HaltNotice = haltNotice(StoreKey(key))
 
         val collectionTasks: CollectionTaskQuery get() = CollectionTaskQuery(Query("CollectionTask"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun collectionTask(key: StoreKey): CollectionTask = this(Ref.Persisted("CollectionTask", key))
+        fun collectionTask(key: StoreKey): CollectionTask = invoke<CollectionTask>(Ref.Persisted("CollectionTask", key))
         fun collectionTask(key: Long): CollectionTask = collectionTask(StoreKey(key))
 
         val taskReminders: TaskReminderQuery get() = TaskReminderQuery(Query("TaskReminder"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun taskReminder(key: StoreKey): TaskReminder = this(Ref.Persisted("TaskReminder", key))
+        fun taskReminder(key: StoreKey): TaskReminder = invoke<TaskReminder>(Ref.Persisted("TaskReminder", key))
         fun taskReminder(key: Long): TaskReminder = taskReminder(StoreKey(key))
 
         val rescheduleRefusals: RescheduleRefusalQuery get() = RescheduleRefusalQuery(Query("RescheduleRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun rescheduleRefusal(key: StoreKey): RescheduleRefusal = this(Ref.Persisted("RescheduleRefusal", key))
+        fun rescheduleRefusal(key: StoreKey): RescheduleRefusal = invoke<RescheduleRefusal>(Ref.Persisted("RescheduleRefusal", key))
         fun rescheduleRefusal(key: Long): RescheduleRefusal = rescheduleRefusal(StoreKey(key))
 
         val taskCancellations: TaskCancellationQuery get() = TaskCancellationQuery(Query("TaskCancellation"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun taskCancellation(key: StoreKey): TaskCancellation = this(Ref.Persisted("TaskCancellation", key))
+        fun taskCancellation(key: StoreKey): TaskCancellation = invoke<TaskCancellation>(Ref.Persisted("TaskCancellation", key))
         fun taskCancellation(key: Long): TaskCancellation = taskCancellation(StoreKey(key))
 
         val cancelRefusals: CancelRefusalQuery get() = CancelRefusalQuery(Query("CancelRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun cancelRefusal(key: StoreKey): CancelRefusal = this(Ref.Persisted("CancelRefusal", key))
+        fun cancelRefusal(key: StoreKey): CancelRefusal = invoke<CancelRefusal>(Ref.Persisted("CancelRefusal", key))
         fun cancelRefusal(key: Long): CancelRefusal = cancelRefusal(StoreKey(key))
 
         val completedAssays: CompletedAssayQuery get() = CompletedAssayQuery(Query("CompletedAssay"))
@@ -1264,7 +1269,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Crop" -> materializeCrop(id)
         "Pathogen" -> materializePathogen(id)
         "Peptide" -> materializePeptide(id)
@@ -1313,7 +1318,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    @PublishedApi internal fun materializeCrop(id: Long): Crop = Crop(
+    private fun materializeCrop(id: Long): Crop = Crop(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         pathogens = (system.get(id, "pathogens") as List<*>).map { system.refFor(it as Long) },
@@ -1321,7 +1326,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializePathogen(id: Long): Pathogen = Pathogen(
+    private fun materializePathogen(id: Long): Pathogen = Pathogen(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         host = system.refFor(system.get(id, "host") as Long),
@@ -1330,7 +1335,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializePeptide(id: Long): Peptide = Peptide(
+    private fun materializePeptide(id: Long): Peptide = Peptide(
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
@@ -1344,7 +1349,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isFieldValidated = system.isMember(id, "FieldValidated"),
     )
 
-    @PublishedApi internal fun materializeAssayProtocol(id: Long): AssayProtocol = AssayProtocol(
+    private fun materializeAssayProtocol(id: Long): AssayProtocol = AssayProtocol(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         durationHours = (system.get(id, "durationHours") as BigDecimal).intValueExact(),
@@ -1353,7 +1358,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         labExperiments = (system.get(id, "labExperiments") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeLabExperiment(id: Long): LabExperiment = LabExperiment(
+    private fun materializeLabExperiment(id: Long): LabExperiment = LabExperiment(
         key = system.refFor(id).key,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
@@ -1366,7 +1371,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isHitExperiment = system.isMember(id, "HitExperiment"),
     )
 
-    @PublishedApi internal fun materializeAssay(id: Long): Assay = Assay(
+    private fun materializeAssay(id: Long): Assay = Assay(
         key = system.refFor(id).key,
         experiment = system.refFor(system.get(id, "experiment") as Long),
         replicate = (system.get(id, "replicate") as BigDecimal).intValueExact(),
@@ -1375,7 +1380,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompletedAssay = system.isMember(id, "CompletedAssay"),
     )
 
-    @PublishedApi internal fun materializeAssayReading(id: Long): AssayReading = AssayReading(
+    private fun materializeAssayReading(id: Long): AssayReading = AssayReading(
         key = system.refFor(id).key,
         assay = system.refFor(system.get(id, "assay") as Long),
         hoursElapsed = (system.get(id, "hoursElapsed") as BigDecimal).intValueExact(),
@@ -1384,20 +1389,20 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         runningPeak = system.get(id, "runningPeak") as BigDecimal,
     )
 
-    @PublishedApi internal fun materializeLabHit(id: Long): LabHit = LabHit(
+    private fun materializeLabHit(id: Long): LabHit = LabHit(
         key = system.refFor(id).key,
         experiment = system.refFor(system.get(id, "experiment") as Long),
         meanPeakInhibition = system.get(id, "meanPeakInhibition") as BigDecimal,
         recordedOn = system.get(id, "recordedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeLabHitRetraction(id: Long): LabHitRetraction = LabHitRetraction(
+    private fun materializeLabHitRetraction(id: Long): LabHitRetraction = LabHitRetraction(
         key = system.refFor(id).key,
         experiment = system.refFor(system.get(id, "experiment") as Long),
         retractedOn = system.get(id, "retractedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeGreenhouse(id: Long): Greenhouse = Greenhouse(
+    private fun materializeGreenhouse(id: Long): Greenhouse = Greenhouse(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         minTemperature = system.get(id, "minTemperature") as BigDecimal,
@@ -1410,7 +1415,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isSilentGreenhouse = system.isMember(id, "SilentGreenhouse"),
     )
 
-    @PublishedApi internal fun materializeClimateReading(id: Long): ClimateReading = ClimateReading(
+    private fun materializeClimateReading(id: Long): ClimateReading = ClimateReading(
         key = system.refFor(id).key,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         recordedAt = system.get(id, "recordedAt") as Instant,
@@ -1418,7 +1423,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         humidity = system.get(id, "humidity") as BigDecimal,
     )
 
-    @PublishedApi internal fun materializeGreenhouseProtocol(id: Long): GreenhouseProtocol = GreenhouseProtocol(
+    private fun materializeGreenhouseProtocol(id: Long): GreenhouseProtocol = GreenhouseProtocol(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         plotsPerArm = (system.get(id, "plotsPerArm") as BigDecimal).intValueExact(),
@@ -1427,7 +1432,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         greenhouseTrials = (system.get(id, "greenhouseTrials") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeGreenhouseTrial(id: Long): GreenhouseTrial = GreenhouseTrial(
+    private fun materializeGreenhouseTrial(id: Long): GreenhouseTrial = GreenhouseTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -1455,14 +1460,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
-    @PublishedApi internal fun materializeGreenhouseRefusal(id: Long): GreenhouseRefusal = GreenhouseRefusal(
+    private fun materializeGreenhouseRefusal(id: Long): GreenhouseRefusal = GreenhouseRefusal(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeGreenhousePlot(id: Long): GreenhousePlot = GreenhousePlot(
+    private fun materializeGreenhousePlot(id: Long): GreenhousePlot = GreenhousePlot(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         bench = system.get(id, "bench") as String,
@@ -1474,13 +1479,13 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isTreatedPlot = system.isMember(id, "TreatedPlot"),
     )
 
-    @PublishedApi internal fun materializeTreatment(id: Long): Treatment = Treatment(
+    private fun materializeTreatment(id: Long): Treatment = Treatment(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         treatedAt = system.get(id, "treatedAt") as Instant,
     )
 
-    @PublishedApi internal fun materializePlotObservation(id: Long): PlotObservation = PlotObservation(
+    private fun materializePlotObservation(id: Long): PlotObservation = PlotObservation(
         key = system.refFor(id).key,
         plot = system.refFor(system.get(id, "plot") as Long),
         dayAfterTreatment = (system.get(id, "dayAfterTreatment") as BigDecimal).intValueExact(),
@@ -1495,7 +1500,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isLockedObservation = system.isMember(id, "LockedObservation"),
     )
 
-    @PublishedApi internal fun materializeGreenhouseResult(id: Long): GreenhouseResult = GreenhouseResult(
+    private fun materializeGreenhouseResult(id: Long): GreenhouseResult = GreenhouseResult(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         efficacy = system.get(id, "efficacy") as BigDecimal,
@@ -1503,7 +1508,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         recordedOn = system.get(id, "recordedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeObservationCorrection(id: Long): ObservationCorrection = ObservationCorrection(
+    private fun materializeObservationCorrection(id: Long): ObservationCorrection = ObservationCorrection(
         key = system.refFor(id).key,
         observation = (system.get(id, "observation") as Long?)?.let { system.refFor(it) },
         previousSeverity = system.get(id, "previousSeverity") as BigDecimal,
@@ -1512,14 +1517,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         correctedOn = system.get(id, "correctedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeCorrectionRefusal(id: Long): CorrectionRefusal = CorrectionRefusal(
+    private fun materializeCorrectionRefusal(id: Long): CorrectionRefusal = CorrectionRefusal(
         key = system.refFor(id).key,
         observation = (system.get(id, "observation") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeVoidRecord(id: Long): VoidRecord = VoidRecord(
+    private fun materializeVoidRecord(id: Long): VoidRecord = VoidRecord(
         key = system.refFor(id).key,
         bench = system.get(id, "bench") as String,
         dayAfterTreatment = (system.get(id, "dayAfterTreatment") as BigDecimal).intValueExact(),
@@ -1528,21 +1533,21 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         voidedOn = system.get(id, "voidedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeVoidRefusal(id: Long): VoidRefusal = VoidRefusal(
+    private fun materializeVoidRefusal(id: Long): VoidRefusal = VoidRefusal(
         key = system.refFor(id).key,
         observation = (system.get(id, "observation") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeMoveRefusal(id: Long): MoveRefusal = MoveRefusal(
+    private fun materializeMoveRefusal(id: Long): MoveRefusal = MoveRefusal(
         key = system.refFor(id).key,
         plot = system.refFor(system.get(id, "plot") as Long),
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeClimateExcursion(id: Long): ClimateExcursion = ClimateExcursion(
+    private fun materializeClimateExcursion(id: Long): ClimateExcursion = ClimateExcursion(
         key = system.refFor(id).key,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         startedAt = system.get(id, "startedAt") as Instant,
@@ -1552,19 +1557,19 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isClosableExcursion = system.isMember(id, "ClosableExcursion"),
     )
 
-    @PublishedApi internal fun materializeExcursionEnd(id: Long): ExcursionEnd = ExcursionEnd(
+    private fun materializeExcursionEnd(id: Long): ExcursionEnd = ExcursionEnd(
         key = system.refFor(id).key,
         excursion = system.refFor(system.get(id, "excursion") as Long),
         endedAt = system.get(id, "endedAt") as Instant,
     )
 
-    @PublishedApi internal fun materializeSensorAlert(id: Long): SensorAlert = SensorAlert(
+    private fun materializeSensorAlert(id: Long): SensorAlert = SensorAlert(
         key = system.refFor(id).key,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         raisedAt = system.get(id, "raisedAt") as Instant,
     )
 
-    @PublishedApi internal fun materializeFieldSite(id: Long): FieldSite = FieldSite(
+    private fun materializeFieldSite(id: Long): FieldSite = FieldSite(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         region = system.get(id, "region") as String,
@@ -1573,7 +1578,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializePermit(id: Long): Permit = Permit(
+    private fun materializePermit(id: Long): Permit = Permit(
         key = system.refFor(id).key,
         site = system.refFor(system.get(id, "site") as Long),
         crop = system.refFor(system.get(id, "crop") as Long),
@@ -1581,7 +1586,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         expiresOn = system.get(id, "expiresOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializeWeatherObservation(id: Long): WeatherObservation = WeatherObservation(
+    private fun materializeWeatherObservation(id: Long): WeatherObservation = WeatherObservation(
         key = system.refFor(id).key,
         site = system.refFor(system.get(id, "site") as Long),
         observedOn = system.get(id, "observedOn") as LocalDate,
@@ -1589,14 +1594,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         maxTemperature = system.get(id, "maxTemperature") as BigDecimal,
     )
 
-    @PublishedApi internal fun materializeFieldProtocol(id: Long): FieldProtocol = FieldProtocol(
+    private fun materializeFieldProtocol(id: Long): FieldProtocol = FieldProtocol(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         yieldGainThreshold = system.get(id, "yieldGainThreshold") as BigDecimal,
         fieldTrials = (system.get(id, "fieldTrials") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeFieldTrial(id: Long): FieldTrial = FieldTrial(
+    private fun materializeFieldTrial(id: Long): FieldTrial = FieldTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -1623,14 +1628,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
-    @PublishedApi internal fun materializeFieldRefusal(id: Long): FieldRefusal = FieldRefusal(
+    private fun materializeFieldRefusal(id: Long): FieldRefusal = FieldRefusal(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializePlanting(id: Long): Planting = Planting(
+    private fun materializePlanting(id: Long): Planting = Planting(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         plantedOn = system.get(id, "plantedOn") as LocalDate,
@@ -1638,7 +1643,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         recordedOn = system.get(id, "recordedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeFieldPlot(id: Long): FieldPlot = FieldPlot(
+    private fun materializeFieldPlot(id: Long): FieldPlot = FieldPlot(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         block = (system.get(id, "block") as BigDecimal).intValueExact(),
@@ -1649,7 +1654,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         phytotoxicityReports = (system.get(id, "phytotoxicityReports") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeTreatmentApplication(id: Long): TreatmentApplication = TreatmentApplication(
+    private fun materializeTreatmentApplication(id: Long): TreatmentApplication = TreatmentApplication(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         appliedOn = system.get(id, "appliedOn") as LocalDate,
@@ -1659,13 +1664,13 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isWashedOffApplication = system.isMember(id, "WashedOffApplication"),
     )
 
-    @PublishedApi internal fun materializeReapplicationNotice(id: Long): ReapplicationNotice = ReapplicationNotice(
+    private fun materializeReapplicationNotice(id: Long): ReapplicationNotice = ReapplicationNotice(
         key = system.refFor(id).key,
         application = system.refFor(system.get(id, "application") as Long),
         noticedOn = system.get(id, "noticedOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializeScouting(id: Long): Scouting = Scouting(
+    private fun materializeScouting(id: Long): Scouting = Scouting(
         key = system.refFor(id).key,
         plot = system.refFor(system.get(id, "plot") as Long),
         daysAfterPlanting = (system.get(id, "daysAfterPlanting") as BigDecimal).intValueExact(),
@@ -1676,27 +1681,27 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         audpcSoFar = system.get(id, "audpcSoFar") as BigDecimal,
     )
 
-    @PublishedApi internal fun materializeHarvest(id: Long): Harvest = Harvest(
+    private fun materializeHarvest(id: Long): Harvest = Harvest(
         key = system.refFor(id).key,
         plot = system.refFor(system.get(id, "plot") as Long),
         harvestedOn = system.get(id, "harvestedOn") as LocalDate,
         yieldKgPerHa = system.get(id, "yieldKgPerHa") as BigDecimal,
     )
 
-    @PublishedApi internal fun materializePhytotoxicityReport(id: Long): PhytotoxicityReport = PhytotoxicityReport(
+    private fun materializePhytotoxicityReport(id: Long): PhytotoxicityReport = PhytotoxicityReport(
         key = system.refFor(id).key,
         plot = system.refFor(system.get(id, "plot") as Long),
         observedOn = system.get(id, "observedOn") as LocalDate,
         severity = (system.get(id, "severity") as BigDecimal).intValueExact(),
     )
 
-    @PublishedApi internal fun materializeHaltNotice(id: Long): HaltNotice = HaltNotice(
+    private fun materializeHaltNotice(id: Long): HaltNotice = HaltNotice(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeCollectionTask(id: Long): CollectionTask = CollectionTask(
+    private fun materializeCollectionTask(id: Long): CollectionTask = CollectionTask(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
@@ -1710,20 +1715,20 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOverdueTask = system.isMember(id, "OverdueTask"),
     )
 
-    @PublishedApi internal fun materializeTaskReminder(id: Long): TaskReminder = TaskReminder(
+    private fun materializeTaskReminder(id: Long): TaskReminder = TaskReminder(
         key = system.refFor(id).key,
         task = (system.get(id, "task") as Long?)?.let { system.refFor(it) },
         sentOn = system.get(id, "sentOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializeRescheduleRefusal(id: Long): RescheduleRefusal = RescheduleRefusal(
+    private fun materializeRescheduleRefusal(id: Long): RescheduleRefusal = RescheduleRefusal(
         key = system.refFor(id).key,
         task = (system.get(id, "task") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeTaskCancellation(id: Long): TaskCancellation = TaskCancellation(
+    private fun materializeTaskCancellation(id: Long): TaskCancellation = TaskCancellation(
         key = system.refFor(id).key,
         dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
         dueOn = system.get(id, "dueOn") as LocalDate,
@@ -1731,14 +1736,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         cancelledOn = system.get(id, "cancelledOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeCancelRefusal(id: Long): CancelRefusal = CancelRefusal(
+    private fun materializeCancelRefusal(id: Long): CancelRefusal = CancelRefusal(
         key = system.refFor(id).key,
         task = (system.get(id, "task") as Long?)?.let { system.refFor(it) },
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeCompletedAssay(id: Long): CompletedAssay = CompletedAssay(
+    private fun materializeCompletedAssay(id: Long): CompletedAssay = CompletedAssay(
         key = system.refFor(id).key,
         experiment = system.refFor(system.get(id, "experiment") as Long),
         replicate = (system.get(id, "replicate") as BigDecimal).intValueExact(),
@@ -1746,7 +1751,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         assayReadings = (system.get(id, "assayReadings") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeHitExperiment(id: Long): HitExperiment = HitExperiment(
+    private fun materializeHitExperiment(id: Long): HitExperiment = HitExperiment(
         key = system.refFor(id).key,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         pathogen = system.refFor(system.get(id, "pathogen") as Long),
@@ -1758,7 +1763,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         labHitRetractions = (system.get(id, "labHitRetractions") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeLabValidated(id: Long): LabValidated = LabValidated(
+    private fun materializeLabValidated(id: Long): LabValidated = LabValidated(
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
@@ -1771,7 +1776,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isFieldValidated = system.isMember(id, "FieldValidated"),
     )
 
-    @PublishedApi internal fun materializeTreatedTrial(id: Long): TreatedTrial = TreatedTrial(
+    private fun materializeTreatedTrial(id: Long): TreatedTrial = TreatedTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -1798,7 +1803,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
-    @PublishedApi internal fun materializeLaidOutTrial(id: Long): LaidOutTrial = LaidOutTrial(
+    private fun materializeLaidOutTrial(id: Long): LaidOutTrial = LaidOutTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -1825,7 +1830,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
-    @PublishedApi internal fun materializeObservedToEnd(id: Long): ObservedToEnd = ObservedToEnd(
+    private fun materializeObservedToEnd(id: Long): ObservedToEnd = ObservedToEnd(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -1852,7 +1857,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
-    @PublishedApi internal fun materializeCompleteTrial(id: Long): CompleteTrial = CompleteTrial(
+    private fun materializeCompleteTrial(id: Long): CompleteTrial = CompleteTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -1879,7 +1884,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
-    @PublishedApi internal fun materializeEffectiveTrial(id: Long): EffectiveTrial = EffectiveTrial(
+    private fun materializeEffectiveTrial(id: Long): EffectiveTrial = EffectiveTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -1906,7 +1911,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
-    @PublishedApi internal fun materializeEvaluatedTrial(id: Long): EvaluatedTrial = EvaluatedTrial(
+    private fun materializeEvaluatedTrial(id: Long): EvaluatedTrial = EvaluatedTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -1933,7 +1938,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
-    @PublishedApi internal fun materializeGreenhouseValidated(id: Long): GreenhouseValidated = GreenhouseValidated(
+    private fun materializeGreenhouseValidated(id: Long): GreenhouseValidated = GreenhouseValidated(
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
@@ -1946,7 +1951,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isFieldValidated = system.isMember(id, "FieldValidated"),
     )
 
-    @PublishedApi internal fun materializeDeprioritized(id: Long): Deprioritized = Deprioritized(
+    private fun materializeDeprioritized(id: Long): Deprioritized = Deprioritized(
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
@@ -1959,7 +1964,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isFieldValidated = system.isMember(id, "FieldValidated"),
     )
 
-    @PublishedApi internal fun materializeLockedObservation(id: Long): LockedObservation = LockedObservation(
+    private fun materializeLockedObservation(id: Long): LockedObservation = LockedObservation(
         key = system.refFor(id).key,
         plot = system.refFor(system.get(id, "plot") as Long),
         dayAfterTreatment = (system.get(id, "dayAfterTreatment") as BigDecimal).intValueExact(),
@@ -1973,7 +1978,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         voidRefusals = (system.get(id, "voidRefusals") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeTreatedPlot(id: Long): TreatedPlot = TreatedPlot(
+    private fun materializeTreatedPlot(id: Long): TreatedPlot = TreatedPlot(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         bench = system.get(id, "bench") as String,
@@ -1984,7 +1989,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         moveRefusals = (system.get(id, "moveRefusals") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeActiveTrial(id: Long): ActiveTrial = ActiveTrial(
+    private fun materializeActiveTrial(id: Long): ActiveTrial = ActiveTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -2011,7 +2016,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isCompromisedTrial = system.isMember(id, "CompromisedTrial"),
     )
 
-    @PublishedApi internal fun materializeOutOfBand(id: Long): OutOfBand = OutOfBand(
+    private fun materializeOutOfBand(id: Long): OutOfBand = OutOfBand(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         minTemperature = system.get(id, "minTemperature") as BigDecimal,
@@ -2023,7 +2028,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isSilentGreenhouse = system.isMember(id, "SilentGreenhouse"),
     )
 
-    @PublishedApi internal fun materializeOpenExcursion(id: Long): OpenExcursion = OpenExcursion(
+    private fun materializeOpenExcursion(id: Long): OpenExcursion = OpenExcursion(
         key = system.refFor(id).key,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         startedAt = system.get(id, "startedAt") as Instant,
@@ -2032,7 +2037,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isClosableExcursion = system.isMember(id, "ClosableExcursion"),
     )
 
-    @PublishedApi internal fun materializeClosableExcursion(id: Long): ClosableExcursion = ClosableExcursion(
+    private fun materializeClosableExcursion(id: Long): ClosableExcursion = ClosableExcursion(
         key = system.refFor(id).key,
         greenhouse = system.refFor(system.get(id, "greenhouse") as Long),
         startedAt = system.get(id, "startedAt") as Instant,
@@ -2041,7 +2046,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOpenExcursion = system.isMember(id, "OpenExcursion"),
     )
 
-    @PublishedApi internal fun materializeCompromisedTrial(id: Long): CompromisedTrial = CompromisedTrial(
+    private fun materializeCompromisedTrial(id: Long): CompromisedTrial = CompromisedTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -2068,7 +2073,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isActiveTrial = system.isMember(id, "ActiveTrial"),
     )
 
-    @PublishedApi internal fun materializeSilentGreenhouse(id: Long): SilentGreenhouse = SilentGreenhouse(
+    private fun materializeSilentGreenhouse(id: Long): SilentGreenhouse = SilentGreenhouse(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         minTemperature = system.get(id, "minTemperature") as BigDecimal,
@@ -2080,7 +2085,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOutOfBand = system.isMember(id, "OutOfBand"),
     )
 
-    @PublishedApi internal fun materializePermittedTrial(id: Long): PermittedTrial = PermittedTrial(
+    private fun materializePermittedTrial(id: Long): PermittedTrial = PermittedTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -2106,7 +2111,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
-    @PublishedApi internal fun materializePlantedTrial(id: Long): PlantedTrial = PlantedTrial(
+    private fun materializePlantedTrial(id: Long): PlantedTrial = PlantedTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -2132,7 +2137,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
-    @PublishedApi internal fun materializeWashedOffApplication(id: Long): WashedOffApplication = WashedOffApplication(
+    private fun materializeWashedOffApplication(id: Long): WashedOffApplication = WashedOffApplication(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         appliedOn = system.get(id, "appliedOn") as LocalDate,
@@ -2141,7 +2146,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         reapplicationNotices = (system.get(id, "reapplicationNotices") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeNeverScouted(id: Long): NeverScouted = NeverScouted(
+    private fun materializeNeverScouted(id: Long): NeverScouted = NeverScouted(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -2167,7 +2172,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
-    @PublishedApi internal fun materializeHarvestedTrial(id: Long): HarvestedTrial = HarvestedTrial(
+    private fun materializeHarvestedTrial(id: Long): HarvestedTrial = HarvestedTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -2193,7 +2198,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
-    @PublishedApi internal fun materializeSuccessfulFieldTrial(id: Long): SuccessfulFieldTrial = SuccessfulFieldTrial(
+    private fun materializeSuccessfulFieldTrial(id: Long): SuccessfulFieldTrial = SuccessfulFieldTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -2219,7 +2224,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isHaltedTrial = system.isMember(id, "HaltedTrial"),
     )
 
-    @PublishedApi internal fun materializeFieldValidated(id: Long): FieldValidated = FieldValidated(
+    private fun materializeFieldValidated(id: Long): FieldValidated = FieldValidated(
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         sequence = system.get(id, "sequence") as String,
@@ -2232,7 +2237,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isDeprioritized = system.isMember(id, "Deprioritized"),
     )
 
-    @PublishedApi internal fun materializeHaltedTrial(id: Long): HaltedTrial = HaltedTrial(
+    private fun materializeHaltedTrial(id: Long): HaltedTrial = HaltedTrial(
         key = system.refFor(id).key,
         requestKey = system.get(id, "requestKey") as String,
         peptide = system.refFor(system.get(id, "peptide") as Long),
@@ -2258,9 +2263,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isSuccessfulFieldTrial = system.isMember(id, "SuccessfulFieldTrial"),
     )
 
-    @PublishedApi internal fun materializeTrial(id: Long): Trial = materialize(id) as Trial
+    private fun materializeTrial(id: Long): Trial = materialize(id) as Trial
 
-    @PublishedApi internal fun materializeDoneTask(id: Long): DoneTask = DoneTask(
+    private fun materializeDoneTask(id: Long): DoneTask = DoneTask(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
@@ -2273,7 +2278,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOverdueTask = system.isMember(id, "OverdueTask"),
     )
 
-    @PublishedApi internal fun materializeOpenTask(id: Long): OpenTask = OpenTask(
+    private fun materializeOpenTask(id: Long): OpenTask = OpenTask(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),
@@ -2286,7 +2291,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isOverdueTask = system.isMember(id, "OverdueTask"),
     )
 
-    @PublishedApi internal fun materializeOverdueTask(id: Long): OverdueTask = OverdueTask(
+    private fun materializeOverdueTask(id: Long): OverdueTask = OverdueTask(
         key = system.refFor(id).key,
         trial = system.refFor(system.get(id, "trial") as Long),
         dayMark = (system.get(id, "dayMark") as BigDecimal).intValueExact(),

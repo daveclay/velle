@@ -59,35 +59,40 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
-        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
+        @Suppress("UNCHECKED_CAST")
+        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
+        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
+        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
+        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
+        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
+            val id = system.idOf(ref)
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             materialize(id)
         }
 
         val containerTypes: ContainerTypeQuery get() = ContainerTypeQuery(Query("ContainerType"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun containerType(key: StoreKey): ContainerType = this(Ref.Persisted("ContainerType", key))
+        fun containerType(key: StoreKey): ContainerType = invoke<ContainerType>(Ref.Persisted("ContainerType", key))
         fun containerType(key: Long): ContainerType = containerType(StoreKey(key))
 
         val experimentDesigns: ExperimentDesignQuery get() = ExperimentDesignQuery(Query("ExperimentDesign"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun experimentDesign(key: StoreKey): ExperimentDesign = this(Ref.Persisted("ExperimentDesign", key))
+        fun experimentDesign(key: StoreKey): ExperimentDesign = invoke<ExperimentDesign>(Ref.Persisted("ExperimentDesign", key))
         fun experimentDesign(key: Long): ExperimentDesign = experimentDesign(StoreKey(key))
 
         val conditions: ConditionQuery get() = ConditionQuery(Query("Condition"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun condition(key: StoreKey): Condition = this(Ref.Persisted("Condition", key))
+        fun condition(key: StoreKey): Condition = invoke<Condition>(Ref.Persisted("Condition", key))
         fun condition(key: Long): Condition = condition(StoreKey(key))
 
         val containers: ContainerQuery get() = ContainerQuery(Query("Container"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun container(key: StoreKey): Container = this(Ref.Persisted("Container", key))
+        fun container(key: StoreKey): Container = invoke<Container>(Ref.Persisted("Container", key))
         fun container(key: Long): Container = container(StoreKey(key))
 
         val wells: WellQuery get() = WellQuery(Query("Well"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun well(key: StoreKey): Well = this(Ref.Persisted("Well", key))
+        fun well(key: StoreKey): Well = invoke<Well>(Ref.Persisted("Well", key))
         fun well(key: Long): Well = well(StoreKey(key))
     }
 
@@ -112,7 +117,7 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "ContainerType" -> materializeContainerType(id)
         "ExperimentDesign" -> materializeExperimentDesign(id)
         "Condition" -> materializeCondition(id)
@@ -121,14 +126,14 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    @PublishedApi internal fun materializeContainerType(id: Long): ContainerType = ContainerType(
+    private fun materializeContainerType(id: Long): ContainerType = ContainerType(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         wellsPerContainer = (system.get(id, "wellsPerContainer") as BigDecimal).intValueExact(),
         experimentDesigns = (system.get(id, "experimentDesigns") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeExperimentDesign(id: Long): ExperimentDesign = ExperimentDesign(
+    private fun materializeExperimentDesign(id: Long): ExperimentDesign = ExperimentDesign(
         key = system.refFor(id).key,
         containerType = system.refFor(system.get(id, "containerType") as Long),
         containerCount = (system.get(id, "containerCount") as BigDecimal).intValueExact(),
@@ -140,7 +145,7 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
         containers = (system.get(id, "containers") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeCondition(id: Long): Condition = Condition(
+    private fun materializeCondition(id: Long): Condition = Condition(
         key = system.refFor(id).key,
         design = system.refFor(system.get(id, "design") as Long),
         block = (system.get(id, "block") as BigDecimal).intValueExact(),
@@ -148,7 +153,7 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
         wells = (system.get(id, "wells") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeContainer(id: Long): Container = Container(
+    private fun materializeContainer(id: Long): Container = Container(
         key = system.refFor(id).key,
         design = system.refFor(system.get(id, "design") as Long),
         replicate = (system.get(id, "replicate") as BigDecimal).intValueExact(),
@@ -157,7 +162,7 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
         wells = (system.get(id, "wells") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeWell(id: Long): Well = Well(
+    private fun materializeWell(id: Long): Well = Well(
         key = system.refFor(id).key,
         container = system.refFor(system.get(id, "container") as Long),
         position = (system.get(id, "position") as BigDecimal).intValueExact(),

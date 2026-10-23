@@ -109,60 +109,65 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
-        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
+        @Suppress("UNCHECKED_CAST")
+        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
+        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
+        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
+        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
+        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
+            val id = system.idOf(ref)
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             materialize(id)
         }
 
         val peptides: PeptideQuery get() = PeptideQuery(Query("Peptide"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun peptide(key: StoreKey): Peptide = this(Ref.Persisted("Peptide", key))
+        fun peptide(key: StoreKey): Peptide = invoke<Peptide>(Ref.Persisted("Peptide", key))
         fun peptide(key: Long): Peptide = peptide(StoreKey(key))
 
         val bacteriaStrains: BacteriaStrainQuery get() = BacteriaStrainQuery(Query("BacteriaStrain"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun bacteriaStrain(key: StoreKey): BacteriaStrain = this(Ref.Persisted("BacteriaStrain", key))
+        fun bacteriaStrain(key: StoreKey): BacteriaStrain = invoke<BacteriaStrain>(Ref.Persisted("BacteriaStrain", key))
         fun bacteriaStrain(key: Long): BacteriaStrain = bacteriaStrain(StoreKey(key))
 
         val fermenterRuns: FermenterRunQuery get() = FermenterRunQuery(Query("FermenterRun"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun fermenterRun(key: StoreKey): FermenterRun = this(Ref.Persisted("FermenterRun", key))
+        fun fermenterRun(key: StoreKey): FermenterRun = invoke<FermenterRun>(Ref.Persisted("FermenterRun", key))
         fun fermenterRun(key: Long): FermenterRun = fermenterRun(StoreKey(key))
 
         val vendors: VendorQuery get() = VendorQuery(Query("Vendor"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun vendor(key: StoreKey): Vendor = this(Ref.Persisted("Vendor", key))
+        fun vendor(key: StoreKey): Vendor = invoke<Vendor>(Ref.Persisted("Vendor", key))
         fun vendor(key: Long): Vendor = vendor(StoreKey(key))
 
         val fermentations: FermentationQuery get() = FermentationQuery(Query("Fermentation"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun fermentation(key: StoreKey): Fermentation = this(Ref.Persisted("Fermentation", key))
+        fun fermentation(key: StoreKey): Fermentation = invoke<Fermentation>(Ref.Persisted("Fermentation", key))
         fun fermentation(key: Long): Fermentation = fermentation(StoreKey(key))
 
         val externalOrders: ExternalOrderQuery get() = ExternalOrderQuery(Query("ExternalOrder"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun externalOrder(key: StoreKey): ExternalOrder = this(Ref.Persisted("ExternalOrder", key))
+        fun externalOrder(key: StoreKey): ExternalOrder = invoke<ExternalOrder>(Ref.Persisted("ExternalOrder", key))
         fun externalOrder(key: Long): ExternalOrder = externalOrder(StoreKey(key))
 
         val compositions: CompositionQuery get() = CompositionQuery(Query("Composition"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun composition(key: StoreKey): Composition = this(Ref.Persisted("Composition", key))
+        fun composition(key: StoreKey): Composition = invoke<Composition>(Ref.Persisted("Composition", key))
         fun composition(key: Long): Composition = composition(StoreKey(key))
 
         val components: ComponentQuery get() = ComponentQuery(Query("Component"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun component(key: StoreKey): Component = this(Ref.Persisted("Component", key))
+        fun component(key: StoreKey): Component = invoke<Component>(Ref.Persisted("Component", key))
         fun component(key: Long): Component = component(StoreKey(key))
 
         val peptideBatchs: PeptideBatchQuery get() = PeptideBatchQuery(Query("PeptideBatch"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun peptideBatch(key: StoreKey): PeptideBatch = this(Ref.Persisted("PeptideBatch", key))
+        fun peptideBatch(key: StoreKey): PeptideBatch = invoke<PeptideBatch>(Ref.Persisted("PeptideBatch", key))
         fun peptideBatch(key: Long): PeptideBatch = peptideBatch(StoreKey(key))
 
         val depletionNotices: DepletionNoticeQuery get() = DepletionNoticeQuery(Query("DepletionNotice"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun depletionNotice(key: StoreKey): DepletionNotice = this(Ref.Persisted("DepletionNotice", key))
+        fun depletionNotice(key: StoreKey): DepletionNotice = invoke<DepletionNotice>(Ref.Persisted("DepletionNotice", key))
         fun depletionNotice(key: Long): DepletionNotice = depletionNotice(StoreKey(key))
 
         val origins: OriginQuery get() = OriginQuery(Query("Origin"))
@@ -249,7 +254,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Peptide" -> materializePeptide(id)
         "BacteriaStrain" -> materializeBacteriaStrain(id)
         "FermenterRun" -> materializeFermenterRun(id)
@@ -263,32 +268,32 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    @PublishedApi internal fun materializePeptide(id: Long): Peptide = Peptide(
+    private fun materializePeptide(id: Long): Peptide = Peptide(
         key = system.refFor(id).key,
         code = system.get(id, "code") as String,
         peptideBatchs = (system.get(id, "peptideBatchs") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeBacteriaStrain(id: Long): BacteriaStrain = BacteriaStrain(
+    private fun materializeBacteriaStrain(id: Long): BacteriaStrain = BacteriaStrain(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         fermentations = (system.get(id, "fermentations") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeFermenterRun(id: Long): FermenterRun = FermenterRun(
+    private fun materializeFermenterRun(id: Long): FermenterRun = FermenterRun(
         key = system.refFor(id).key,
         vessel = system.get(id, "vessel") as String,
         startedOn = system.get(id, "startedOn") as LocalDate,
         fermentations = (system.get(id, "fermentations") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeVendor(id: Long): Vendor = Vendor(
+    private fun materializeVendor(id: Long): Vendor = Vendor(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         externalOrders = (system.get(id, "externalOrders") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeFermentation(id: Long): Fermentation = Fermentation(
+    private fun materializeFermentation(id: Long): Fermentation = Fermentation(
         key = system.refFor(id).key,
         strain = system.refFor(system.get(id, "strain") as Long),
         run = system.refFor(system.get(id, "run") as Long),
@@ -296,7 +301,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         peptideBatches = (system.getAs(id, "Origin", "peptideBatches") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeExternalOrder(id: Long): ExternalOrder = ExternalOrder(
+    private fun materializeExternalOrder(id: Long): ExternalOrder = ExternalOrder(
         key = system.refFor(id).key,
         vendor = system.refFor(system.get(id, "vendor") as Long),
         orderItem = system.get(id, "orderItem") as String,
@@ -304,7 +309,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         peptideBatches = (system.getAs(id, "Origin", "peptideBatches") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeComposition(id: Long): Composition = Composition(
+    private fun materializeComposition(id: Long): Composition = Composition(
         key = system.refFor(id).key,
         mixedOn = system.get(id, "mixedOn") as LocalDate,
         drawnMg = system.get(id, "drawnMg") as BigDecimal,
@@ -313,14 +318,14 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         peptideBatches = (system.getAs(id, "Origin", "peptideBatches") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeComponent(id: Long): Component = Component(
+    private fun materializeComponent(id: Long): Component = Component(
         key = system.refFor(id).key,
         composition = system.refFor(system.get(id, "composition") as Long),
         source = system.refFor(system.get(id, "source") as Long),
         amountMg = system.get(id, "amountMg") as BigDecimal,
     )
 
-    @PublishedApi internal fun materializePeptideBatch(id: Long): PeptideBatch = PeptideBatch(
+    private fun materializePeptideBatch(id: Long): PeptideBatch = PeptideBatch(
         key = system.refFor(id).key,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         quantityMg = system.get(id, "quantityMg") as BigDecimal,
@@ -336,16 +341,16 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isDepleted = system.isMember(id, "Depleted"),
     )
 
-    @PublishedApi internal fun materializeDepletionNotice(id: Long): DepletionNotice = DepletionNotice(
+    private fun materializeDepletionNotice(id: Long): DepletionNotice = DepletionNotice(
         key = system.refFor(id).key,
         batch = system.refFor(system.get(id, "batch") as Long),
         kind = system.get(id, "kind") as String,
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeOrigin(id: Long): Origin = materialize(id) as Origin
+    private fun materializeOrigin(id: Long): Origin = materialize(id) as Origin
 
-    @PublishedApi internal fun materializeFermented(id: Long): Fermented = Fermented(
+    private fun materializeFermented(id: Long): Fermented = Fermented(
         key = system.refFor(id).key,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         quantityMg = system.get(id, "quantityMg") as BigDecimal,
@@ -360,7 +365,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isDepleted = system.isMember(id, "Depleted"),
     )
 
-    @PublishedApi internal fun materializeOrdered(id: Long): Ordered = Ordered(
+    private fun materializeOrdered(id: Long): Ordered = Ordered(
         key = system.refFor(id).key,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         quantityMg = system.get(id, "quantityMg") as BigDecimal,
@@ -375,7 +380,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isDepleted = system.isMember(id, "Depleted"),
     )
 
-    @PublishedApi internal fun materializeComposite(id: Long): Composite = Composite(
+    private fun materializeComposite(id: Long): Composite = Composite(
         key = system.refFor(id).key,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         quantityMg = system.get(id, "quantityMg") as BigDecimal,
@@ -390,7 +395,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isDepleted = system.isMember(id, "Depleted"),
     )
 
-    @PublishedApi internal fun materializeDepleted(id: Long): Depleted = Depleted(
+    private fun materializeDepleted(id: Long): Depleted = Depleted(
         key = system.refFor(id).key,
         peptide = system.refFor(system.get(id, "peptide") as Long),
         quantityMg = system.get(id, "quantityMg") as BigDecimal,

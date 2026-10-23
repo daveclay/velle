@@ -118,55 +118,60 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
-        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
+        @Suppress("UNCHECKED_CAST")
+        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
+        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
+        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
+        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
+        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
+            val id = system.idOf(ref)
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             materialize(id)
         }
 
         val sellers: SellerQuery get() = SellerQuery(Query("Seller"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun seller(key: StoreKey): Seller = this(Ref.Persisted("Seller", key))
+        fun seller(key: StoreKey): Seller = invoke<Seller>(Ref.Persisted("Seller", key))
         fun seller(key: Long): Seller = seller(StoreKey(key))
 
         val listings: ListingQuery get() = ListingQuery(Query("Listing"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun listing(key: StoreKey): Listing = this(Ref.Persisted("Listing", key))
+        fun listing(key: StoreKey): Listing = invoke<Listing>(Ref.Persisted("Listing", key))
         fun listing(key: Long): Listing = listing(StoreKey(key))
 
         val publicationNotices: PublicationNoticeQuery get() = PublicationNoticeQuery(Query("PublicationNotice"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun publicationNotice(key: StoreKey): PublicationNotice = this(Ref.Persisted("PublicationNotice", key))
+        fun publicationNotice(key: StoreKey): PublicationNotice = invoke<PublicationNotice>(Ref.Persisted("PublicationNotice", key))
         fun publicationNotice(key: Long): PublicationNotice = publicationNotice(StoreKey(key))
 
         val sellerNotices: SellerNoticeQuery get() = SellerNoticeQuery(Query("SellerNotice"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun sellerNotice(key: StoreKey): SellerNotice = this(Ref.Persisted("SellerNotice", key))
+        fun sellerNotice(key: StoreKey): SellerNotice = invoke<SellerNotice>(Ref.Persisted("SellerNotice", key))
         fun sellerNotice(key: Long): SellerNotice = sellerNotice(StoreKey(key))
 
         val draftClosures: DraftClosureQuery get() = DraftClosureQuery(Query("DraftClosure"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun draftClosure(key: StoreKey): DraftClosure = this(Ref.Persisted("DraftClosure", key))
+        fun draftClosure(key: StoreKey): DraftClosure = invoke<DraftClosure>(Ref.Persisted("DraftClosure", key))
         fun draftClosure(key: Long): DraftClosure = draftClosure(StoreKey(key))
 
         val listingReports: ListingReportQuery get() = ListingReportQuery(Query("ListingReport"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun listingReport(key: StoreKey): ListingReport = this(Ref.Persisted("ListingReport", key))
+        fun listingReport(key: StoreKey): ListingReport = invoke<ListingReport>(Ref.Persisted("ListingReport", key))
         fun listingReport(key: Long): ListingReport = listingReport(StoreKey(key))
 
         val reporterNotices: ReporterNoticeQuery get() = ReporterNoticeQuery(Query("ReporterNotice"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun reporterNotice(key: StoreKey): ReporterNotice = this(Ref.Persisted("ReporterNotice", key))
+        fun reporterNotice(key: StoreKey): ReporterNotice = invoke<ReporterNotice>(Ref.Persisted("ReporterNotice", key))
         fun reporterNotice(key: Long): ReporterNotice = reporterNotice(StoreKey(key))
 
         val discardRecords: DiscardRecordQuery get() = DiscardRecordQuery(Query("DiscardRecord"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun discardRecord(key: StoreKey): DiscardRecord = this(Ref.Persisted("DiscardRecord", key))
+        fun discardRecord(key: StoreKey): DiscardRecord = invoke<DiscardRecord>(Ref.Persisted("DiscardRecord", key))
         fun discardRecord(key: Long): DiscardRecord = discardRecord(StoreKey(key))
 
         val discardRefusals: DiscardRefusalQuery get() = DiscardRefusalQuery(Query("DiscardRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun discardRefusal(key: StoreKey): DiscardRefusal = this(Ref.Persisted("DiscardRefusal", key))
+        fun discardRefusal(key: StoreKey): DiscardRefusal = invoke<DiscardRefusal>(Ref.Persisted("DiscardRefusal", key))
         fun discardRefusal(key: Long): DiscardRefusal = discardRefusal(StoreKey(key))
 
         val drafts: DraftQuery get() = DraftQuery(Query("Draft"))
@@ -243,7 +248,7 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Seller" -> materializeSeller(id)
         "Listing" -> materializeListing(id)
         "PublicationNotice" -> materializePublicationNotice(id)
@@ -256,14 +261,14 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    @PublishedApi internal fun materializeSeller(id: Long): Seller = Seller(
+    private fun materializeSeller(id: Long): Seller = Seller(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         listings = (system.get(id, "listings") as List<*>).map { system.refFor(it as Long) },
         sellerNotices = (system.get(id, "sellerNotices") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeListing(id: Long): Listing = Listing(
+    private fun materializeListing(id: Long): Listing = Listing(
         key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         seller = (system.get(id, "seller") as Long?)?.let { system.refFor(it) },
@@ -273,26 +278,26 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isOrphanedListing = system.isMember(id, "OrphanedListing"),
     )
 
-    @PublishedApi internal fun materializePublicationNotice(id: Long): PublicationNotice = PublicationNotice(
+    private fun materializePublicationNotice(id: Long): PublicationNotice = PublicationNotice(
         key = system.refFor(id).key,
         listingTitle = system.get(id, "listingTitle") as String,
         publishedOn = system.get(id, "publishedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeSellerNotice(id: Long): SellerNotice = SellerNotice(
+    private fun materializeSellerNotice(id: Long): SellerNotice = SellerNotice(
         key = system.refFor(id).key,
         seller = (system.get(id, "seller") as Long?)?.let { system.refFor(it) },
         listingTitle = system.get(id, "listingTitle") as String,
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeDraftClosure(id: Long): DraftClosure = DraftClosure(
+    private fun materializeDraftClosure(id: Long): DraftClosure = DraftClosure(
         key = system.refFor(id).key,
         listingTitle = system.get(id, "listingTitle") as String,
         closedOn = system.get(id, "closedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeListingReport(id: Long): ListingReport = ListingReport(
+    private fun materializeListingReport(id: Long): ListingReport = ListingReport(
         key = system.refFor(id).key,
         listing = (system.get(id, "listing") as Long?)?.let { system.refFor(it) },
         listingTitle = system.get(id, "listingTitle") as String,
@@ -302,28 +307,28 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isOrphanReport = system.isMember(id, "OrphanReport"),
     )
 
-    @PublishedApi internal fun materializeReporterNotice(id: Long): ReporterNotice = ReporterNotice(
+    private fun materializeReporterNotice(id: Long): ReporterNotice = ReporterNotice(
         key = system.refFor(id).key,
         report = system.refFor(system.get(id, "report") as Long),
         listingTitle = system.get(id, "listingTitle") as String,
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeDiscardRecord(id: Long): DiscardRecord = DiscardRecord(
+    private fun materializeDiscardRecord(id: Long): DiscardRecord = DiscardRecord(
         key = system.refFor(id).key,
         listingTitle = system.get(id, "listingTitle") as String,
         reason = system.get(id, "reason") as String,
         discardedOn = system.get(id, "discardedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeDiscardRefusal(id: Long): DiscardRefusal = DiscardRefusal(
+    private fun materializeDiscardRefusal(id: Long): DiscardRefusal = DiscardRefusal(
         key = system.refFor(id).key,
         listingTitle = system.get(id, "listingTitle") as String,
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeDraft(id: Long): Draft = Draft(
+    private fun materializeDraft(id: Long): Draft = Draft(
         key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         seller = (system.get(id, "seller") as Long?)?.let { system.refFor(it) },
@@ -333,7 +338,7 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isOrphanedListing = system.isMember(id, "OrphanedListing"),
     )
 
-    @PublishedApi internal fun materializePublishedListing(id: Long): PublishedListing = PublishedListing(
+    private fun materializePublishedListing(id: Long): PublishedListing = PublishedListing(
         key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         seller = (system.get(id, "seller") as Long?)?.let { system.refFor(it) },
@@ -342,7 +347,7 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isOrphanedListing = system.isMember(id, "OrphanedListing"),
     )
 
-    @PublishedApi internal fun materializeOrphanReport(id: Long): OrphanReport = OrphanReport(
+    private fun materializeOrphanReport(id: Long): OrphanReport = OrphanReport(
         key = system.refFor(id).key,
         listing = (system.get(id, "listing") as Long?)?.let { system.refFor(it) },
         listingTitle = system.get(id, "listingTitle") as String,
@@ -351,7 +356,7 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         reporterNotices = (system.get(id, "reporterNotices") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeOrphanedListing(id: Long): OrphanedListing = OrphanedListing(
+    private fun materializeOrphanedListing(id: Long): OrphanedListing = OrphanedListing(
         key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         seller = (system.get(id, "seller") as Long?)?.let { system.refFor(it) },

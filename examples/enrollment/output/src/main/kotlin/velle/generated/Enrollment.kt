@@ -137,25 +137,30 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
-        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
+        @Suppress("UNCHECKED_CAST")
+        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
+        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
+        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
+        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
+        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
+            val id = system.idOf(ref)
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             materialize(id)
         }
 
         val advisors: AdvisorQuery get() = AdvisorQuery(Query("Advisor"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun advisor(key: StoreKey): Advisor = this(Ref.Persisted("Advisor", key))
+        fun advisor(key: StoreKey): Advisor = invoke<Advisor>(Ref.Persisted("Advisor", key))
         fun advisor(key: Long): Advisor = advisor(StoreKey(key))
 
         val courses: CourseQuery get() = CourseQuery(Query("Course"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun course(key: StoreKey): Course = this(Ref.Persisted("Course", key))
+        fun course(key: StoreKey): Course = invoke<Course>(Ref.Persisted("Course", key))
         fun course(key: Long): Course = course(StoreKey(key))
 
         val students: StudentQuery get() = StudentQuery(Query("Student"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun student(key: StoreKey): Student = this(Ref.Persisted("Student", key))
+        fun student(key: StoreKey): Student = invoke<Student>(Ref.Persisted("Student", key))
         fun student(key: Long): Student = student(StoreKey(key))
 
         val overloadeds: OverloadedQuery get() = OverloadedQuery(Query("Overloaded"))
@@ -190,28 +195,28 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Advisor" -> materializeAdvisor(id)
         "Course" -> materializeCourse(id)
         "Student" -> materializeStudent(id)
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    @PublishedApi internal fun materializeAdvisor(id: Long): Advisor = Advisor(
+    private fun materializeAdvisor(id: Long): Advisor = Advisor(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         advisees = (system.get(id, "advisees") as List<*>).map { system.refFor(it as Long) },
         students = (system.get(id, "students") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeCourse(id: Long): Course = Course(
+    private fun materializeCourse(id: Long): Course = Course(
         key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         capacity = (system.get(id, "capacity") as BigDecimal).intValueExact(),
         students = (system.get(id, "students") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeStudent(id: Long): Student = Student(
+    private fun materializeStudent(id: Long): Student = Student(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         advisor = (system.get(id, "advisor") as Long?)?.let { system.refFor(it) },
@@ -221,7 +226,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUntagged = system.isMember(id, "Untagged"),
     )
 
-    @PublishedApi internal fun materializeOverloaded(id: Long): Overloaded = Overloaded(
+    private fun materializeOverloaded(id: Long): Overloaded = Overloaded(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         advisor = (system.get(id, "advisor") as Long?)?.let { system.refFor(it) },
@@ -230,7 +235,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUntagged = system.isMember(id, "Untagged"),
     )
 
-    @PublishedApi internal fun materializeUntagged(id: Long): Untagged = Untagged(
+    private fun materializeUntagged(id: Long): Untagged = Untagged(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         advisor = (system.get(id, "advisor") as Long?)?.let { system.refFor(it) },

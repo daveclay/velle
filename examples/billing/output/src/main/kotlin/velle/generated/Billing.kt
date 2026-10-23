@@ -167,75 +167,80 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
-        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
+        @Suppress("UNCHECKED_CAST")
+        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
+        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
+        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
+        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
+        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
+            val id = system.idOf(ref)
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             materialize(id)
         }
 
         val customers: CustomerQuery get() = CustomerQuery(Query("Customer"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun customer(key: StoreKey): Customer = this(Ref.Persisted("Customer", key))
+        fun customer(key: StoreKey): Customer = invoke<Customer>(Ref.Persisted("Customer", key))
         fun customer(key: Long): Customer = customer(StoreKey(key))
 
         val correctEmails: CorrectEmailQuery get() = CorrectEmailQuery(Query("CorrectEmail"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun correctEmail(key: StoreKey): CorrectEmail = this(Ref.Persisted("CorrectEmail", key))
+        fun correctEmail(key: StoreKey): CorrectEmail = invoke<CorrectEmail>(Ref.Persisted("CorrectEmail", key))
         fun correctEmail(key: Long): CorrectEmail = correctEmail(StoreKey(key))
 
         val invoices: InvoiceQuery get() = InvoiceQuery(Query("Invoice"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun invoice(key: StoreKey): Invoice = this(Ref.Persisted("Invoice", key))
+        fun invoice(key: StoreKey): Invoice = invoke<Invoice>(Ref.Persisted("Invoice", key))
         fun invoice(key: Long): Invoice = invoice(StoreKey(key))
 
         val lineItems: LineItemQuery get() = LineItemQuery(Query("LineItem"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun lineItem(key: StoreKey): LineItem = this(Ref.Persisted("LineItem", key))
+        fun lineItem(key: StoreKey): LineItem = invoke<LineItem>(Ref.Persisted("LineItem", key))
         fun lineItem(key: Long): LineItem = lineItem(StoreKey(key))
 
         val payments: PaymentQuery get() = PaymentQuery(Query("Payment"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun payment(key: StoreKey): Payment = this(Ref.Persisted("Payment", key))
+        fun payment(key: StoreKey): Payment = invoke<Payment>(Ref.Persisted("Payment", key))
         fun payment(key: Long): Payment = payment(StoreKey(key))
 
         val receipts: ReceiptQuery get() = ReceiptQuery(Query("Receipt"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun receipt(key: StoreKey): Receipt = this(Ref.Persisted("Receipt", key))
+        fun receipt(key: StoreKey): Receipt = invoke<Receipt>(Ref.Persisted("Receipt", key))
         fun receipt(key: Long): Receipt = receipt(StoreKey(key))
 
         val receiptEmails: ReceiptEmailQuery get() = ReceiptEmailQuery(Query("ReceiptEmail"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun receiptEmail(key: StoreKey): ReceiptEmail = this(Ref.Persisted("ReceiptEmail", key))
+        fun receiptEmail(key: StoreKey): ReceiptEmail = invoke<ReceiptEmail>(Ref.Persisted("ReceiptEmail", key))
         fun receiptEmail(key: Long): ReceiptEmail = receiptEmail(StoreKey(key))
 
         val reminders: ReminderQuery get() = ReminderQuery(Query("Reminder"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun reminder(key: StoreKey): Reminder = this(Ref.Persisted("Reminder", key))
+        fun reminder(key: StoreKey): Reminder = invoke<Reminder>(Ref.Persisted("Reminder", key))
         fun reminder(key: Long): Reminder = reminder(StoreKey(key))
 
         val issuances: IssuanceQuery get() = IssuanceQuery(Query("Issuance"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun issuance(key: StoreKey): Issuance = this(Ref.Persisted("Issuance", key))
+        fun issuance(key: StoreKey): Issuance = invoke<Issuance>(Ref.Persisted("Issuance", key))
         fun issuance(key: Long): Issuance = issuance(StoreKey(key))
 
         val dueChangeRefusals: DueChangeRefusalQuery get() = DueChangeRefusalQuery(Query("DueChangeRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun dueChangeRefusal(key: StoreKey): DueChangeRefusal = this(Ref.Persisted("DueChangeRefusal", key))
+        fun dueChangeRefusal(key: StoreKey): DueChangeRefusal = invoke<DueChangeRefusal>(Ref.Persisted("DueChangeRefusal", key))
         fun dueChangeRefusal(key: Long): DueChangeRefusal = dueChangeRefusal(StoreKey(key))
 
         val archiveRequests: ArchiveRequestQuery get() = ArchiveRequestQuery(Query("ArchiveRequest"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun archiveRequest(key: StoreKey): ArchiveRequest = this(Ref.Persisted("ArchiveRequest", key))
+        fun archiveRequest(key: StoreKey): ArchiveRequest = invoke<ArchiveRequest>(Ref.Persisted("ArchiveRequest", key))
         fun archiveRequest(key: Long): ArchiveRequest = archiveRequest(StoreKey(key))
 
         val unarchiveRequests: UnarchiveRequestQuery get() = UnarchiveRequestQuery(Query("UnarchiveRequest"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun unarchiveRequest(key: StoreKey): UnarchiveRequest = this(Ref.Persisted("UnarchiveRequest", key))
+        fun unarchiveRequest(key: StoreKey): UnarchiveRequest = invoke<UnarchiveRequest>(Ref.Persisted("UnarchiveRequest", key))
         fun unarchiveRequest(key: Long): UnarchiveRequest = unarchiveRequest(StoreKey(key))
 
         val unarchiveNotices: UnarchiveNoticeQuery get() = UnarchiveNoticeQuery(Query("UnarchiveNotice"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun unarchiveNotice(key: StoreKey): UnarchiveNotice = this(Ref.Persisted("UnarchiveNotice", key))
+        fun unarchiveNotice(key: StoreKey): UnarchiveNotice = invoke<UnarchiveNotice>(Ref.Persisted("UnarchiveNotice", key))
         fun unarchiveNotice(key: Long): UnarchiveNotice = unarchiveNotice(StoreKey(key))
 
         val paidInvoices: PaidInvoiceQuery get() = PaidInvoiceQuery(Query("PaidInvoice"))
@@ -346,7 +351,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Customer" -> materializeCustomer(id)
         "CorrectEmail" -> materializeCorrectEmail(id)
         "Invoice" -> materializeInvoice(id)
@@ -363,7 +368,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    @PublishedApi internal fun materializeCustomer(id: Long): Customer = Customer(
+    private fun materializeCustomer(id: Long): Customer = Customer(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         email = system.get(id, "email") as String,
@@ -373,13 +378,13 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         invoices = (system.get(id, "invoices") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeCorrectEmail(id: Long): CorrectEmail = CorrectEmail(
+    private fun materializeCorrectEmail(id: Long): CorrectEmail = CorrectEmail(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         corrected = system.get(id, "corrected") as String,
     )
 
-    @PublishedApi internal fun materializeInvoice(id: Long): Invoice = Invoice(
+    private fun materializeInvoice(id: Long): Invoice = Invoice(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,
@@ -404,7 +409,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isArchivedInvoice = system.isMember(id, "ArchivedInvoice"),
     )
 
-    @PublishedApi internal fun materializeLineItem(id: Long): LineItem = LineItem(
+    private fun materializeLineItem(id: Long): LineItem = LineItem(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
         description = system.get(id, "description") as String,
@@ -413,14 +418,14 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         amount = system.get(id, "amount") as BigDecimal,
     )
 
-    @PublishedApi internal fun materializePayment(id: Long): Payment = Payment(
+    private fun materializePayment(id: Long): Payment = Payment(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
         amount = system.get(id, "amount") as BigDecimal,
         receivedOn = system.get(id, "receivedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeReceipt(id: Long): Receipt = Receipt(
+    private fun materializeReceipt(id: Long): Receipt = Receipt(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
         sentOn = system.get(id, "sentOn") as Instant,
@@ -428,24 +433,24 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isUnemailedReceipt = system.isMember(id, "UnemailedReceipt"),
     )
 
-    @PublishedApi internal fun materializeReceiptEmail(id: Long): ReceiptEmail = ReceiptEmail(
+    private fun materializeReceiptEmail(id: Long): ReceiptEmail = ReceiptEmail(
         key = system.refFor(id).key,
         receipt = system.refFor(system.get(id, "receipt") as Long),
         queuedOn = system.get(id, "queuedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeReminder(id: Long): Reminder = Reminder(
+    private fun materializeReminder(id: Long): Reminder = Reminder(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
         sentOn = system.get(id, "sentOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializeIssuance(id: Long): Issuance = Issuance(
+    private fun materializeIssuance(id: Long): Issuance = Issuance(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
     )
 
-    @PublishedApi internal fun materializeDueChangeRefusal(id: Long): DueChangeRefusal = DueChangeRefusal(
+    private fun materializeDueChangeRefusal(id: Long): DueChangeRefusal = DueChangeRefusal(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
         requestedDue = system.get(id, "requestedDue") as LocalDate,
@@ -453,24 +458,24 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeArchiveRequest(id: Long): ArchiveRequest = ArchiveRequest(
+    private fun materializeArchiveRequest(id: Long): ArchiveRequest = ArchiveRequest(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
     )
 
-    @PublishedApi internal fun materializeUnarchiveRequest(id: Long): UnarchiveRequest = UnarchiveRequest(
+    private fun materializeUnarchiveRequest(id: Long): UnarchiveRequest = UnarchiveRequest(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
     )
 
-    @PublishedApi internal fun materializeUnarchiveNotice(id: Long): UnarchiveNotice = UnarchiveNotice(
+    private fun materializeUnarchiveNotice(id: Long): UnarchiveNotice = UnarchiveNotice(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
         wasArchivedOn = system.get(id, "wasArchivedOn") as LocalDate,
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializePaidInvoice(id: Long): PaidInvoice = PaidInvoice(
+    private fun materializePaidInvoice(id: Long): PaidInvoice = PaidInvoice(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,
@@ -494,14 +499,14 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isArchivedInvoice = system.isMember(id, "ArchivedInvoice"),
     )
 
-    @PublishedApi internal fun materializeUnemailedReceipt(id: Long): UnemailedReceipt = UnemailedReceipt(
+    private fun materializeUnemailedReceipt(id: Long): UnemailedReceipt = UnemailedReceipt(
         key = system.refFor(id).key,
         invoice = system.refFor(system.get(id, "invoice") as Long),
         sentOn = system.get(id, "sentOn") as Instant,
         receiptEmails = (system.get(id, "receiptEmails") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeOverdueInvoice(id: Long): OverdueInvoice = OverdueInvoice(
+    private fun materializeOverdueInvoice(id: Long): OverdueInvoice = OverdueInvoice(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,
@@ -525,7 +530,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isArchivedInvoice = system.isMember(id, "ArchivedInvoice"),
     )
 
-    @PublishedApi internal fun materializeActionableOverdue(id: Long): ActionableOverdue = ActionableOverdue(
+    private fun materializeActionableOverdue(id: Long): ActionableOverdue = ActionableOverdue(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,
@@ -550,7 +555,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isArchivedInvoice = system.isMember(id, "ArchivedInvoice"),
     )
 
-    @PublishedApi internal fun materializeIssuedInvoice(id: Long): IssuedInvoice = IssuedInvoice(
+    private fun materializeIssuedInvoice(id: Long): IssuedInvoice = IssuedInvoice(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,
@@ -574,7 +579,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isArchivedInvoice = system.isMember(id, "ArchivedInvoice"),
     )
 
-    @PublishedApi internal fun materializeArchivedInvoice(id: Long): ArchivedInvoice = ArchivedInvoice(
+    private fun materializeArchivedInvoice(id: Long): ArchivedInvoice = ArchivedInvoice(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         due = system.get(id, "due") as LocalDate,

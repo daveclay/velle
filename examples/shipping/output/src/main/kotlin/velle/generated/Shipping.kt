@@ -73,25 +73,30 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
-        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
+        @Suppress("UNCHECKED_CAST")
+        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
+        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
+        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
+        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
+        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
+            val id = system.idOf(ref)
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             materialize(id)
         }
 
         val orders: OrderQuery get() = OrderQuery(Query("Order"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun order(key: StoreKey): Order = this(Ref.Persisted("Order", key))
+        fun order(key: StoreKey): Order = invoke<Order>(Ref.Persisted("Order", key))
         fun order(key: Long): Order = order(StoreKey(key))
 
         val cancellations: CancellationQuery get() = CancellationQuery(Query("Cancellation"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun cancellation(key: StoreKey): Cancellation = this(Ref.Persisted("Cancellation", key))
+        fun cancellation(key: StoreKey): Cancellation = invoke<Cancellation>(Ref.Persisted("Cancellation", key))
         fun cancellation(key: Long): Cancellation = cancellation(StoreKey(key))
 
         val shipments: ShipmentQuery get() = ShipmentQuery(Query("Shipment"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun shipment(key: StoreKey): Shipment = this(Ref.Persisted("Shipment", key))
+        fun shipment(key: StoreKey): Shipment = invoke<Shipment>(Ref.Persisted("Shipment", key))
         fun shipment(key: Long): Shipment = shipment(StoreKey(key))
 
         val cancelledOrders: CancelledOrderQuery get() = CancelledOrderQuery(Query("CancelledOrder"))
@@ -126,14 +131,14 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Order" -> materializeOrder(id)
         "Cancellation" -> materializeCancellation(id)
         "Shipment" -> materializeShipment(id)
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    @PublishedApi internal fun materializeOrder(id: Long): Order = Order(
+    private fun materializeOrder(id: Long): Order = Order(
         key = system.refFor(id).key,
         reference = system.get(id, "reference") as String,
         cancellations = (system.get(id, "cancellations") as List<*>).map { system.refFor(it as Long) },
@@ -142,19 +147,19 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isShippedOrder = system.isMember(id, "ShippedOrder"),
     )
 
-    @PublishedApi internal fun materializeCancellation(id: Long): Cancellation = Cancellation(
+    private fun materializeCancellation(id: Long): Cancellation = Cancellation(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         requestedOn = system.get(id, "requestedOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializeShipment(id: Long): Shipment = Shipment(
+    private fun materializeShipment(id: Long): Shipment = Shipment(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         shippedOn = system.get(id, "shippedOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializeCancelledOrder(id: Long): CancelledOrder = CancelledOrder(
+    private fun materializeCancelledOrder(id: Long): CancelledOrder = CancelledOrder(
         key = system.refFor(id).key,
         reference = system.get(id, "reference") as String,
         cancellations = (system.get(id, "cancellations") as List<*>).map { system.refFor(it as Long) },
@@ -162,7 +167,7 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         isShippedOrder = system.isMember(id, "ShippedOrder"),
     )
 
-    @PublishedApi internal fun materializeShippedOrder(id: Long): ShippedOrder = ShippedOrder(
+    private fun materializeShippedOrder(id: Long): ShippedOrder = ShippedOrder(
         key = system.refFor(id).key,
         reference = system.get(id, "reference") as String,
         cancellations = (system.get(id, "cancellations") as List<*>).map { system.refFor(it as Long) },

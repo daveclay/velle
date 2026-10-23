@@ -73,40 +73,45 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
-        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
+        @Suppress("UNCHECKED_CAST")
+        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
+        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
+        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
+        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
+        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
+            val id = system.idOf(ref)
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             materialize(id)
         }
 
         val customers: CustomerQuery get() = CustomerQuery(Query("Customer"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun customer(key: StoreKey): Customer = this(Ref.Persisted("Customer", key))
+        fun customer(key: StoreKey): Customer = invoke<Customer>(Ref.Persisted("Customer", key))
         fun customer(key: Long): Customer = customer(StoreKey(key))
 
         val products: ProductQuery get() = ProductQuery(Query("Product"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun product(key: StoreKey): Product = this(Ref.Persisted("Product", key))
+        fun product(key: StoreKey): Product = invoke<Product>(Ref.Persisted("Product", key))
         fun product(key: Long): Product = product(StoreKey(key))
 
         val orders: OrderQuery get() = OrderQuery(Query("Order"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun order(key: StoreKey): Order = this(Ref.Persisted("Order", key))
+        fun order(key: StoreKey): Order = invoke<Order>(Ref.Persisted("Order", key))
         fun order(key: Long): Order = order(StoreKey(key))
 
         val orderLines: OrderLineQuery get() = OrderLineQuery(Query("OrderLine"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun orderLine(key: StoreKey): OrderLine = this(Ref.Persisted("OrderLine", key))
+        fun orderLine(key: StoreKey): OrderLine = invoke<OrderLine>(Ref.Persisted("OrderLine", key))
         fun orderLine(key: Long): OrderLine = orderLine(StoreKey(key))
 
         val customizations: CustomizationQuery get() = CustomizationQuery(Query("Customization"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun customization(key: StoreKey): Customization = this(Ref.Persisted("Customization", key))
+        fun customization(key: StoreKey): Customization = invoke<Customization>(Ref.Persisted("Customization", key))
         fun customization(key: Long): Customization = customization(StoreKey(key))
 
         val reservations: ReservationQuery get() = ReservationQuery(Query("Reservation"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun reservation(key: StoreKey): Reservation = this(Ref.Persisted("Reservation", key))
+        fun reservation(key: StoreKey): Reservation = invoke<Reservation>(Ref.Persisted("Reservation", key))
         fun reservation(key: Long): Reservation = reservation(StoreKey(key))
     }
 
@@ -135,7 +140,7 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Customer" -> materializeCustomer(id)
         "Product" -> materializeProduct(id)
         "Order" -> materializeOrder(id)
@@ -145,19 +150,19 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    @PublishedApi internal fun materializeCustomer(id: Long): Customer = Customer(
+    private fun materializeCustomer(id: Long): Customer = Customer(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         orders = (system.get(id, "orders") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeProduct(id: Long): Product = Product(
+    private fun materializeProduct(id: Long): Product = Product(
         key = system.refFor(id).key,
         sku = system.get(id, "sku") as String,
         orderLines = (system.get(id, "orderLines") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeOrder(id: Long): Order = Order(
+    private fun materializeOrder(id: Long): Order = Order(
         key = system.refFor(id).key,
         customer = system.refFor(system.get(id, "customer") as Long),
         placedOn = system.get(id, "placedOn") as LocalDate,
@@ -165,7 +170,7 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
         orderLines = (system.get(id, "orderLines") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeOrderLine(id: Long): OrderLine = OrderLine(
+    private fun materializeOrderLine(id: Long): OrderLine = OrderLine(
         key = system.refFor(id).key,
         order = system.refFor(system.get(id, "order") as Long),
         product = system.refFor(system.get(id, "product") as Long),
@@ -174,13 +179,13 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
         reservations = (system.get(id, "reservations") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeCustomization(id: Long): Customization = Customization(
+    private fun materializeCustomization(id: Long): Customization = Customization(
         key = system.refFor(id).key,
         line = system.refFor(system.get(id, "line") as Long),
         note = system.get(id, "note") as String,
     )
 
-    @PublishedApi internal fun materializeReservation(id: Long): Reservation = Reservation(
+    private fun materializeReservation(id: Long): Reservation = Reservation(
         key = system.refFor(id).key,
         line = system.refFor(system.get(id, "line") as Long),
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),

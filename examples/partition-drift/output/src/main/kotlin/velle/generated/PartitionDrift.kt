@@ -134,60 +134,65 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
-        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
+        @Suppress("UNCHECKED_CAST")
+        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
+        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
+        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
+        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
+        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
+            val id = system.idOf(ref)
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             materialize(id)
         }
 
         val notes: NoteQuery get() = NoteQuery(Query("Note"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun note(key: StoreKey): Note = this(Ref.Persisted("Note", key))
+        fun note(key: StoreKey): Note = invoke<Note>(Ref.Persisted("Note", key))
         fun note(key: Long): Note = note(StoreKey(key))
 
         val lockNotes: LockNoteQuery get() = LockNoteQuery(Query("LockNote"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun lockNote(key: StoreKey): LockNote = this(Ref.Persisted("LockNote", key))
+        fun lockNote(key: StoreKey): LockNote = invoke<LockNote>(Ref.Persisted("LockNote", key))
         fun lockNote(key: Long): LockNote = lockNote(StoreKey(key))
 
         val unlockNotes: UnlockNoteQuery get() = UnlockNoteQuery(Query("UnlockNote"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun unlockNote(key: StoreKey): UnlockNote = this(Ref.Persisted("UnlockNote", key))
+        fun unlockNote(key: StoreKey): UnlockNote = invoke<UnlockNote>(Ref.Persisted("UnlockNote", key))
         fun unlockNote(key: Long): UnlockNote = unlockNote(StoreKey(key))
 
         val renameTexts: RenameTextQuery get() = RenameTextQuery(Query("RenameText"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun renameText(key: StoreKey): RenameText = this(Ref.Persisted("RenameText", key))
+        fun renameText(key: StoreKey): RenameText = invoke<RenameText>(Ref.Persisted("RenameText", key))
         fun renameText(key: Long): RenameText = renameText(StoreKey(key))
 
         val bareEdits: BareEditQuery get() = BareEditQuery(Query("BareEdit"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun bareEdit(key: StoreKey): BareEdit = this(Ref.Persisted("BareEdit", key))
+        fun bareEdit(key: StoreKey): BareEdit = invoke<BareEdit>(Ref.Persisted("BareEdit", key))
         fun bareEdit(key: Long): BareEdit = bareEdit(StoreKey(key))
 
         val bareEditRefusals: BareEditRefusalQuery get() = BareEditRefusalQuery(Query("BareEditRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun bareEditRefusal(key: StoreKey): BareEditRefusal = this(Ref.Persisted("BareEditRefusal", key))
+        fun bareEditRefusal(key: StoreKey): BareEditRefusal = invoke<BareEditRefusal>(Ref.Persisted("BareEditRefusal", key))
         fun bareEditRefusal(key: Long): BareEditRefusal = bareEditRefusal(StoreKey(key))
 
         val safeEdits: SafeEditQuery get() = SafeEditQuery(Query("SafeEdit"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun safeEdit(key: StoreKey): SafeEdit = this(Ref.Persisted("SafeEdit", key))
+        fun safeEdit(key: StoreKey): SafeEdit = invoke<SafeEdit>(Ref.Persisted("SafeEdit", key))
         fun safeEdit(key: Long): SafeEdit = safeEdit(StoreKey(key))
 
         val editApplications: EditApplicationQuery get() = EditApplicationQuery(Query("EditApplication"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun editApplication(key: StoreKey): EditApplication = this(Ref.Persisted("EditApplication", key))
+        fun editApplication(key: StoreKey): EditApplication = invoke<EditApplication>(Ref.Persisted("EditApplication", key))
         fun editApplication(key: Long): EditApplication = editApplication(StoreKey(key))
 
         val editRefusals: EditRefusalQuery get() = EditRefusalQuery(Query("EditRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun editRefusal(key: StoreKey): EditRefusal = this(Ref.Persisted("EditRefusal", key))
+        fun editRefusal(key: StoreKey): EditRefusal = invoke<EditRefusal>(Ref.Persisted("EditRefusal", key))
         fun editRefusal(key: Long): EditRefusal = editRefusal(StoreKey(key))
 
         val transientEditRefusals: TransientEditRefusalQuery get() = TransientEditRefusalQuery(Query("TransientEditRefusal"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun transientEditRefusal(key: StoreKey): TransientEditRefusal = this(Ref.Persisted("TransientEditRefusal", key))
+        fun transientEditRefusal(key: StoreKey): TransientEditRefusal = invoke<TransientEditRefusal>(Ref.Persisted("TransientEditRefusal", key))
         fun transientEditRefusal(key: Long): TransientEditRefusal = transientEditRefusal(StoreKey(key))
 
         val lockedNotes: LockedNoteQuery get() = LockedNoteQuery(Query("LockedNote"))
@@ -286,7 +291,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Note" -> materializeNote(id)
         "LockNote" -> materializeLockNote(id)
         "UnlockNote" -> materializeUnlockNote(id)
@@ -300,7 +305,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    @PublishedApi internal fun materializeNote(id: Long): Note = Note(
+    private fun materializeNote(id: Long): Note = Note(
         key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         body = system.get(id, "body") as String,
@@ -314,23 +319,23 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         isLockedNote = system.isMember(id, "LockedNote"),
     )
 
-    @PublishedApi internal fun materializeLockNote(id: Long): LockNote = LockNote(
+    private fun materializeLockNote(id: Long): LockNote = LockNote(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
     )
 
-    @PublishedApi internal fun materializeUnlockNote(id: Long): UnlockNote = UnlockNote(
+    private fun materializeUnlockNote(id: Long): UnlockNote = UnlockNote(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
     )
 
-    @PublishedApi internal fun materializeRenameText(id: Long): RenameText = RenameText(
+    private fun materializeRenameText(id: Long): RenameText = RenameText(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         newText = system.get(id, "newText") as String,
     )
 
-    @PublishedApi internal fun materializeBareEdit(id: Long): BareEdit = BareEdit(
+    private fun materializeBareEdit(id: Long): BareEdit = BareEdit(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         newText = system.get(id, "newText") as String,
@@ -339,13 +344,13 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         isRefusedBareEdit = system.isMember(id, "RefusedBareEdit"),
     )
 
-    @PublishedApi internal fun materializeBareEditRefusal(id: Long): BareEditRefusal = BareEditRefusal(
+    private fun materializeBareEditRefusal(id: Long): BareEditRefusal = BareEditRefusal(
         key = system.refFor(id).key,
         edit = system.refFor(system.get(id, "edit") as Long),
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeSafeEdit(id: Long): SafeEdit = SafeEdit(
+    private fun materializeSafeEdit(id: Long): SafeEdit = SafeEdit(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         newTitle = system.get(id, "newTitle") as String,
@@ -356,20 +361,20 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         isRefusedSafeEdit = system.isMember(id, "RefusedSafeEdit"),
     )
 
-    @PublishedApi internal fun materializeEditApplication(id: Long): EditApplication = EditApplication(
+    private fun materializeEditApplication(id: Long): EditApplication = EditApplication(
         key = system.refFor(id).key,
         edit = system.refFor(system.get(id, "edit") as Long),
         appliedOn = system.get(id, "appliedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeEditRefusal(id: Long): EditRefusal = EditRefusal(
+    private fun materializeEditRefusal(id: Long): EditRefusal = EditRefusal(
         key = system.refFor(id).key,
         edit = system.refFor(system.get(id, "edit") as Long),
         reason = system.get(id, "reason") as String,
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeTransientEditRefusal(id: Long): TransientEditRefusal = TransientEditRefusal(
+    private fun materializeTransientEditRefusal(id: Long): TransientEditRefusal = TransientEditRefusal(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         requestedTitle = system.get(id, "requestedTitle") as String,
@@ -377,7 +382,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         refusedOn = system.get(id, "refusedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeLockedNote(id: Long): LockedNote = LockedNote(
+    private fun materializeLockedNote(id: Long): LockedNote = LockedNote(
         key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         body = system.get(id, "body") as String,
@@ -390,7 +395,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         transientEditRefusals = (system.get(id, "transientEditRefusals") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeApplicableBareEdit(id: Long): ApplicableBareEdit = ApplicableBareEdit(
+    private fun materializeApplicableBareEdit(id: Long): ApplicableBareEdit = ApplicableBareEdit(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         newText = system.get(id, "newText") as String,
@@ -398,7 +403,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         isRefusedBareEdit = system.isMember(id, "RefusedBareEdit"),
     )
 
-    @PublishedApi internal fun materializeRefusedBareEdit(id: Long): RefusedBareEdit = RefusedBareEdit(
+    private fun materializeRefusedBareEdit(id: Long): RefusedBareEdit = RefusedBareEdit(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         newText = system.get(id, "newText") as String,
@@ -406,7 +411,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         isApplicableBareEdit = system.isMember(id, "ApplicableBareEdit"),
     )
 
-    @PublishedApi internal fun materializeUnhandledSafeEdit(id: Long): UnhandledSafeEdit = UnhandledSafeEdit(
+    private fun materializeUnhandledSafeEdit(id: Long): UnhandledSafeEdit = UnhandledSafeEdit(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         newTitle = system.get(id, "newTitle") as String,
@@ -416,7 +421,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         isRefusedSafeEdit = system.isMember(id, "RefusedSafeEdit"),
     )
 
-    @PublishedApi internal fun materializeApplicableSafeEdit(id: Long): ApplicableSafeEdit = ApplicableSafeEdit(
+    private fun materializeApplicableSafeEdit(id: Long): ApplicableSafeEdit = ApplicableSafeEdit(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         newTitle = system.get(id, "newTitle") as String,
@@ -426,7 +431,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         isRefusedSafeEdit = system.isMember(id, "RefusedSafeEdit"),
     )
 
-    @PublishedApi internal fun materializeRefusedSafeEdit(id: Long): RefusedSafeEdit = RefusedSafeEdit(
+    private fun materializeRefusedSafeEdit(id: Long): RefusedSafeEdit = RefusedSafeEdit(
         key = system.refFor(id).key,
         note = system.refFor(system.get(id, "note") as Long),
         newTitle = system.get(id, "newTitle") as String,

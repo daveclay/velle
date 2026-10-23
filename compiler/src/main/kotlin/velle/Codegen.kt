@@ -460,8 +460,13 @@ object Codegen {
             line("        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())")
             line()
             line("        /** The model object behind a reference, read now; throws when the record no longer exists. */")
-            line("        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T")
-            line("        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {")
+            line("        @Suppress(\"UNCHECKED_CAST\")")
+            line("        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T")
+            line("        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */")
+            line("        @Deprecated(\"read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you\", level = DeprecationLevel.ERROR)")
+            line("        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()")
+            line("        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {")
+            line("            val id = system.idOf(ref)")
             line("            system.currentShapeOf(id) ?: throw NoSuchElementException(\"no current record for \${system.refFor(id)}\")")
             line("            materialize(id)")
             line("        }")
@@ -471,7 +476,7 @@ object Codegen {
                 when {
                     root in model.shapes -> {
                         line("        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */")
-                        line("        fun ${decap(root)}(key: StoreKey): $root = this(Ref.Persisted(\"$root\", key))")
+                        line("        fun ${decap(root)}(key: StoreKey): $root = invoke<$root>(Ref.Persisted(\"$root\", key))")
                         line("        fun ${decap(root)}(key: Long): $root = ${decap(root)}(StoreKey(key))")
                     }
                     !isUnion(root) -> {
@@ -490,7 +495,7 @@ object Codegen {
             }
             line()
             line("    /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */")
-            line("    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {")
+            line("    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {")
             model.shapes.keys.filterNot { it in model.transients }.forEach { line("        \"$it\" -> materialize$it(id)") }
             line("        else -> throw IllegalStateException(\"no model object for '\$shape'\")")
             line("    }")
@@ -545,7 +550,7 @@ object Codegen {
         fun viewerMaterializer(root: String, v: String) {
             val own = model.refinements[root]?.members?.filterIsInstance<DerivedProp>()?.map { it.name }?.toSet().orEmpty()
             line()
-            line("    @PublishedApi internal fun materialize${root}For$v(viewer: Long, id: Long): ${root}For$v {")
+            line("    private fun materialize${root}For$v(viewer: Long, id: Long): ${root}For$v {")
             line("        val hidden = system.hiddenFields(viewer, id, \"$root\")")
             line("        return $root(")
             line("            key = system.refFor(id).key,")
@@ -586,11 +591,11 @@ object Codegen {
         fun materializer(root: String) {
             line()
             if (isUnion(root)) {
-                line("    @PublishedApi internal fun materialize$root(id: Long): $root = materialize(id) as $root")
+                line("    private fun materialize$root(id: Long): $root = materialize(id) as $root")
                 return
             }
             val own = model.refinements[root]?.members?.filterIsInstance<DerivedProp>()?.map { it.name }?.toSet().orEmpty()
-            line("    @PublishedApi internal fun materialize$root(id: Long): $root = $root(")
+            line("    private fun materialize$root(id: Long): $root = $root(")
             line("        key = system.refFor(id).key,")
             for ((name, m) in dataMembers(root)) {
                 val call = if (name in own) "system.getAs(id, \"$root\", \"$name\")" else "system.get(id, \"$name\")"

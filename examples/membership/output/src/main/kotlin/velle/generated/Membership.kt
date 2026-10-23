@@ -212,105 +212,110 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
-        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
+        @Suppress("UNCHECKED_CAST")
+        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
+        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
+        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
+        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
+        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
+            val id = system.idOf(ref)
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             materialize(id)
         }
 
         val plans: PlanQuery get() = PlanQuery(Query("Plan"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun plan(key: StoreKey): Plan = this(Ref.Persisted("Plan", key))
+        fun plan(key: StoreKey): Plan = invoke<Plan>(Ref.Persisted("Plan", key))
         fun plan(key: Long): Plan = plan(StoreKey(key))
 
         val members: MemberQuery get() = MemberQuery(Query("Member"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun member(key: StoreKey): Member = this(Ref.Persisted("Member", key))
+        fun member(key: StoreKey): Member = invoke<Member>(Ref.Persisted("Member", key))
         fun member(key: Long): Member = member(StoreKey(key))
 
         val welcomeNotes: WelcomeNoteQuery get() = WelcomeNoteQuery(Query("WelcomeNote"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun welcomeNote(key: StoreKey): WelcomeNote = this(Ref.Persisted("WelcomeNote", key))
+        fun welcomeNote(key: StoreKey): WelcomeNote = invoke<WelcomeNote>(Ref.Persisted("WelcomeNote", key))
         fun welcomeNote(key: Long): WelcomeNote = welcomeNote(StoreKey(key))
 
         val emailChanges: EmailChangeQuery get() = EmailChangeQuery(Query("EmailChange"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun emailChange(key: StoreKey): EmailChange = this(Ref.Persisted("EmailChange", key))
+        fun emailChange(key: StoreKey): EmailChange = invoke<EmailChange>(Ref.Persisted("EmailChange", key))
         fun emailChange(key: Long): EmailChange = emailChange(StoreKey(key))
 
         val visits: VisitQuery get() = VisitQuery(Query("Visit"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun visit(key: StoreKey): Visit = this(Ref.Persisted("Visit", key))
+        fun visit(key: StoreKey): Visit = invoke<Visit>(Ref.Persisted("Visit", key))
         fun visit(key: Long): Visit = visit(StoreKey(key))
 
         val analyticsPings: AnalyticsPingQuery get() = AnalyticsPingQuery(Query("AnalyticsPing"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun analyticsPing(key: StoreKey): AnalyticsPing = this(Ref.Persisted("AnalyticsPing", key))
+        fun analyticsPing(key: StoreKey): AnalyticsPing = invoke<AnalyticsPing>(Ref.Persisted("AnalyticsPing", key))
         fun analyticsPing(key: Long): AnalyticsPing = analyticsPing(StoreKey(key))
 
         val deposits: DepositQuery get() = DepositQuery(Query("Deposit"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun deposit(key: StoreKey): Deposit = this(Ref.Persisted("Deposit", key))
+        fun deposit(key: StoreKey): Deposit = invoke<Deposit>(Ref.Persisted("Deposit", key))
         fun deposit(key: Long): Deposit = deposit(StoreKey(key))
 
         val charges: ChargeQuery get() = ChargeQuery(Query("Charge"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun charge(key: StoreKey): Charge = this(Ref.Persisted("Charge", key))
+        fun charge(key: StoreKey): Charge = invoke<Charge>(Ref.Persisted("Charge", key))
         fun charge(key: Long): Charge = charge(StoreKey(key))
 
         val chargeApplications: ChargeApplicationQuery get() = ChargeApplicationQuery(Query("ChargeApplication"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun chargeApplication(key: StoreKey): ChargeApplication = this(Ref.Persisted("ChargeApplication", key))
+        fun chargeApplication(key: StoreKey): ChargeApplication = invoke<ChargeApplication>(Ref.Persisted("ChargeApplication", key))
         fun chargeApplication(key: Long): ChargeApplication = chargeApplication(StoreKey(key))
 
         val delinquencyFlags: DelinquencyFlagQuery get() = DelinquencyFlagQuery(Query("DelinquencyFlag"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun delinquencyFlag(key: StoreKey): DelinquencyFlag = this(Ref.Persisted("DelinquencyFlag", key))
+        fun delinquencyFlag(key: StoreKey): DelinquencyFlag = invoke<DelinquencyFlag>(Ref.Persisted("DelinquencyFlag", key))
         fun delinquencyFlag(key: Long): DelinquencyFlag = delinquencyFlag(StoreKey(key))
 
         val delinquencyResolutions: DelinquencyResolutionQuery get() = DelinquencyResolutionQuery(Query("DelinquencyResolution"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun delinquencyResolution(key: StoreKey): DelinquencyResolution = this(Ref.Persisted("DelinquencyResolution", key))
+        fun delinquencyResolution(key: StoreKey): DelinquencyResolution = invoke<DelinquencyResolution>(Ref.Persisted("DelinquencyResolution", key))
         fun delinquencyResolution(key: Long): DelinquencyResolution = delinquencyResolution(StoreKey(key))
 
         val auditEntrys: AuditEntryQuery get() = AuditEntryQuery(Query("AuditEntry"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun auditEntry(key: StoreKey): AuditEntry = this(Ref.Persisted("AuditEntry", key))
+        fun auditEntry(key: StoreKey): AuditEntry = invoke<AuditEntry>(Ref.Persisted("AuditEntry", key))
         fun auditEntry(key: Long): AuditEntry = auditEntry(StoreKey(key))
 
         val accountReviews: AccountReviewQuery get() = AccountReviewQuery(Query("AccountReview"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun accountReview(key: StoreKey): AccountReview = this(Ref.Persisted("AccountReview", key))
+        fun accountReview(key: StoreKey): AccountReview = invoke<AccountReview>(Ref.Persisted("AccountReview", key))
         fun accountReview(key: Long): AccountReview = accountReview(StoreKey(key))
 
         val agents: AgentQuery get() = AgentQuery(Query("Agent"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun agent(key: StoreKey): Agent = this(Ref.Persisted("Agent", key))
+        fun agent(key: StoreKey): Agent = invoke<Agent>(Ref.Persisted("Agent", key))
         fun agent(key: Long): Agent = agent(StoreKey(key))
 
         val tickets: TicketQuery get() = TicketQuery(Query("Ticket"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun ticket(key: StoreKey): Ticket = this(Ref.Persisted("Ticket", key))
+        fun ticket(key: StoreKey): Ticket = invoke<Ticket>(Ref.Persisted("Ticket", key))
         fun ticket(key: Long): Ticket = ticket(StoreKey(key))
 
         val ticketClosures: TicketClosureQuery get() = TicketClosureQuery(Query("TicketClosure"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun ticketClosure(key: StoreKey): TicketClosure = this(Ref.Persisted("TicketClosure", key))
+        fun ticketClosure(key: StoreKey): TicketClosure = invoke<TicketClosure>(Ref.Persisted("TicketClosure", key))
         fun ticketClosure(key: Long): TicketClosure = ticketClosure(StoreKey(key))
 
         val reopenTickets: ReopenTicketQuery get() = ReopenTicketQuery(Query("ReopenTicket"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun reopenTicket(key: StoreKey): ReopenTicket = this(Ref.Persisted("ReopenTicket", key))
+        fun reopenTicket(key: StoreKey): ReopenTicket = invoke<ReopenTicket>(Ref.Persisted("ReopenTicket", key))
         fun reopenTicket(key: Long): ReopenTicket = reopenTicket(StoreKey(key))
 
         val reopenNotices: ReopenNoticeQuery get() = ReopenNoticeQuery(Query("ReopenNotice"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun reopenNotice(key: StoreKey): ReopenNotice = this(Ref.Persisted("ReopenNotice", key))
+        fun reopenNotice(key: StoreKey): ReopenNotice = invoke<ReopenNotice>(Ref.Persisted("ReopenNotice", key))
         fun reopenNotice(key: Long): ReopenNotice = reopenNotice(StoreKey(key))
 
         val escalations: EscalationQuery get() = EscalationQuery(Query("Escalation"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun escalation(key: StoreKey): Escalation = this(Ref.Persisted("Escalation", key))
+        fun escalation(key: StoreKey): Escalation = invoke<Escalation>(Ref.Persisted("Escalation", key))
         fun escalation(key: Long): Escalation = escalation(StoreKey(key))
 
         val selfReferrals: SelfReferralQuery get() = SelfReferralQuery(Query("SelfReferral"))
@@ -544,7 +549,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Plan" -> materializePlan(id)
         "Member" -> materializeMember(id)
         "WelcomeNote" -> materializeWelcomeNote(id)
@@ -567,14 +572,14 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    @PublishedApi internal fun materializePlan(id: Long): Plan = Plan(
+    private fun materializePlan(id: Long): Plan = Plan(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         price = system.get(id, "price") as BigDecimal,
         members = (system.get(id, "members") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeMember(id: Long): Member = Member(
+    private fun materializeMember(id: Long): Member = Member(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
@@ -608,33 +613,33 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
-    @PublishedApi internal fun materializeWelcomeNote(id: Long): WelcomeNote = WelcomeNote(
+    private fun materializeWelcomeNote(id: Long): WelcomeNote = WelcomeNote(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         sentOn = system.get(id, "sentOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeEmailChange(id: Long): EmailChange = EmailChange(
+    private fun materializeEmailChange(id: Long): EmailChange = EmailChange(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         newEmail = system.get(id, "newEmail") as String,
         changedOn = system.get(id, "changedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeVisit(id: Long): Visit = Visit(
+    private fun materializeVisit(id: Long): Visit = Visit(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         minutes = (system.get(id, "minutes") as BigDecimal).intValueExact(),
         analyticsPings = (system.get(id, "analyticsPings") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeAnalyticsPing(id: Long): AnalyticsPing = AnalyticsPing(
+    private fun materializeAnalyticsPing(id: Long): AnalyticsPing = AnalyticsPing(
         key = system.refFor(id).key,
         visit = system.refFor(system.get(id, "visit") as Long),
         pingedOn = system.get(id, "pingedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeDeposit(id: Long): Deposit = Deposit(
+    private fun materializeDeposit(id: Long): Deposit = Deposit(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -642,7 +647,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUnappliedDeposit = system.isMember(id, "UnappliedDeposit"),
     )
 
-    @PublishedApi internal fun materializeCharge(id: Long): Charge = Charge(
+    private fun materializeCharge(id: Long): Charge = Charge(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -652,13 +657,13 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUnappliedCharge = system.isMember(id, "UnappliedCharge"),
     )
 
-    @PublishedApi internal fun materializeChargeApplication(id: Long): ChargeApplication = ChargeApplication(
+    private fun materializeChargeApplication(id: Long): ChargeApplication = ChargeApplication(
         key = system.refFor(id).key,
         charge = system.refFor(system.get(id, "charge") as Long),
         appliedOn = system.get(id, "appliedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeDelinquencyFlag(id: Long): DelinquencyFlag = DelinquencyFlag(
+    private fun materializeDelinquencyFlag(id: Long): DelinquencyFlag = DelinquencyFlag(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         flaggedOn = system.get(id, "flaggedOn") as LocalDate,
@@ -666,13 +671,13 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isOpenDelinquencyFlag = system.isMember(id, "OpenDelinquencyFlag"),
     )
 
-    @PublishedApi internal fun materializeDelinquencyResolution(id: Long): DelinquencyResolution = DelinquencyResolution(
+    private fun materializeDelinquencyResolution(id: Long): DelinquencyResolution = DelinquencyResolution(
         key = system.refFor(id).key,
         flag = system.refFor(system.get(id, "flag") as Long),
         resolvedOn = system.get(id, "resolvedOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializeAuditEntry(id: Long): AuditEntry = AuditEntry(
+    private fun materializeAuditEntry(id: Long): AuditEntry = AuditEntry(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         review = (system.get(id, "review") as Long?)?.let { system.refFor(it) },
@@ -680,14 +685,14 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         loggedOn = system.get(id, "loggedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeAccountReview(id: Long): AccountReview = AccountReview(
+    private fun materializeAccountReview(id: Long): AccountReview = AccountReview(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         openedOn = system.get(id, "openedOn") as Instant,
         auditEntrys = (system.get(id, "auditEntrys") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeAgent(id: Long): Agent = Agent(
+    private fun materializeAgent(id: Long): Agent = Agent(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         email = system.get(id, "email") as String,
@@ -696,7 +701,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         reopenNotices = (system.get(id, "reopenNotices") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeTicket(id: Long): Ticket = Ticket(
+    private fun materializeTicket(id: Long): Ticket = Ticket(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
@@ -719,32 +724,32 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
-    @PublishedApi internal fun materializeTicketClosure(id: Long): TicketClosure = TicketClosure(
+    private fun materializeTicketClosure(id: Long): TicketClosure = TicketClosure(
         key = system.refFor(id).key,
         ticket = system.refFor(system.get(id, "ticket") as Long),
         closedBy = system.refFor(system.get(id, "closedBy") as Long),
         closedOn = system.get(id, "closedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeReopenTicket(id: Long): ReopenTicket = ReopenTicket(
+    private fun materializeReopenTicket(id: Long): ReopenTicket = ReopenTicket(
         key = system.refFor(id).key,
         ticket = system.refFor(system.get(id, "ticket") as Long),
     )
 
-    @PublishedApi internal fun materializeReopenNotice(id: Long): ReopenNotice = ReopenNotice(
+    private fun materializeReopenNotice(id: Long): ReopenNotice = ReopenNotice(
         key = system.refFor(id).key,
         ticket = system.refFor(system.get(id, "ticket") as Long),
         reassignTo = system.refFor(system.get(id, "reassignTo") as Long),
         noticedOn = system.get(id, "noticedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeEscalation(id: Long): Escalation = Escalation(
+    private fun materializeEscalation(id: Long): Escalation = Escalation(
         key = system.refFor(id).key,
         ticket = system.refFor(system.get(id, "ticket") as Long),
         raisedOn = system.get(id, "raisedOn") as LocalDate,
     )
 
-    @PublishedApi internal fun materializeSelfReferral(id: Long): SelfReferral = SelfReferral(
+    private fun materializeSelfReferral(id: Long): SelfReferral = SelfReferral(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
@@ -777,14 +782,14 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
-    @PublishedApi internal fun materializeUnappliedDeposit(id: Long): UnappliedDeposit = UnappliedDeposit(
+    private fun materializeUnappliedDeposit(id: Long): UnappliedDeposit = UnappliedDeposit(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
         applied = system.get(id, "applied") as Boolean,
     )
 
-    @PublishedApi internal fun materializeActiveMember(id: Long): ActiveMember = ActiveMember(
+    private fun materializeActiveMember(id: Long): ActiveMember = ActiveMember(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
@@ -817,7 +822,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
-    @PublishedApi internal fun materializeUnappliedCharge(id: Long): UnappliedCharge = UnappliedCharge(
+    private fun materializeUnappliedCharge(id: Long): UnappliedCharge = UnappliedCharge(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         amount = system.get(id, "amount") as BigDecimal,
@@ -826,7 +831,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         chargeApplications = (system.get(id, "chargeApplications") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeDelinquent(id: Long): Delinquent = Delinquent(
+    private fun materializeDelinquent(id: Long): Delinquent = Delinquent(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
@@ -859,7 +864,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
-    @PublishedApi internal fun materializeDeepDelinquent(id: Long): DeepDelinquent = DeepDelinquent(
+    private fun materializeDeepDelinquent(id: Long): DeepDelinquent = DeepDelinquent(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
@@ -892,14 +897,14 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
-    @PublishedApi internal fun materializeOpenDelinquencyFlag(id: Long): OpenDelinquencyFlag = OpenDelinquencyFlag(
+    private fun materializeOpenDelinquencyFlag(id: Long): OpenDelinquencyFlag = OpenDelinquencyFlag(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         flaggedOn = system.get(id, "flaggedOn") as LocalDate,
         delinquencyResolutions = (system.get(id, "delinquencyResolutions") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeChronicDelinquent(id: Long): ChronicDelinquent = ChronicDelinquent(
+    private fun materializeChronicDelinquent(id: Long): ChronicDelinquent = ChronicDelinquent(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
@@ -932,7 +937,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
-    @PublishedApi internal fun materializeClosedTicket(id: Long): ClosedTicket = ClosedTicket(
+    private fun materializeClosedTicket(id: Long): ClosedTicket = ClosedTicket(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
@@ -956,7 +961,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
-    @PublishedApi internal fun materializeOpenTicket(id: Long): OpenTicket = OpenTicket(
+    private fun materializeOpenTicket(id: Long): OpenTicket = OpenTicket(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
@@ -978,7 +983,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
-    @PublishedApi internal fun materializeOverdueTicket(id: Long): OverdueTicket = OverdueTicket(
+    private fun materializeOverdueTicket(id: Long): OverdueTicket = OverdueTicket(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
@@ -1000,7 +1005,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
-    @PublishedApi internal fun materializeHighPriority(id: Long): HighPriority = HighPriority(
+    private fun materializeHighPriority(id: Long): HighPriority = HighPriority(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
@@ -1022,7 +1027,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
-    @PublishedApi internal fun materializeUnassigned(id: Long): Unassigned = Unassigned(
+    private fun materializeUnassigned(id: Long): Unassigned = Unassigned(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
@@ -1044,7 +1049,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
-    @PublishedApi internal fun materializeNeedsAttention(id: Long): NeedsAttention = NeedsAttention(
+    private fun materializeNeedsAttention(id: Long): NeedsAttention = NeedsAttention(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
@@ -1066,7 +1071,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isUrgentQueue = system.isMember(id, "UrgentQueue"),
     )
 
-    @PublishedApi internal fun materializeUrgentQueue(id: Long): UrgentQueue = UrgentQueue(
+    private fun materializeUrgentQueue(id: Long): UrgentQueue = UrgentQueue(
         key = system.refFor(id).key,
         member = system.refFor(system.get(id, "member") as Long),
         subject = system.get(id, "subject") as String,
@@ -1088,7 +1093,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isNeedsAttention = system.isMember(id, "NeedsAttention"),
     )
 
-    @PublishedApi internal fun materializeMemberWithDisputedCharge(id: Long): MemberWithDisputedCharge = MemberWithDisputedCharge(
+    private fun materializeMemberWithDisputedCharge(id: Long): MemberWithDisputedCharge = MemberWithDisputedCharge(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,
@@ -1121,7 +1126,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         isLateEscalatedMember = system.isMember(id, "LateEscalatedMember"),
     )
 
-    @PublishedApi internal fun materializeLateEscalatedMember(id: Long): LateEscalatedMember = LateEscalatedMember(
+    private fun materializeLateEscalatedMember(id: Long): LateEscalatedMember = LateEscalatedMember(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         signupEmail = system.get(id, "signupEmail") as String,

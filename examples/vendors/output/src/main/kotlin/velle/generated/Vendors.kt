@@ -76,35 +76,40 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
-        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
+        @Suppress("UNCHECKED_CAST")
+        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
+        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
+        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
+        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
+        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
+            val id = system.idOf(ref)
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
             materialize(id)
         }
 
         val staffs: StaffQuery get() = StaffQuery(Query("Staff"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun staff(key: StoreKey): Staff = this(Ref.Persisted("Staff", key))
+        fun staff(key: StoreKey): Staff = invoke<Staff>(Ref.Persisted("Staff", key))
         fun staff(key: Long): Staff = staff(StoreKey(key))
 
         val vendorAssignments: VendorAssignmentQuery get() = VendorAssignmentQuery(Query("VendorAssignment"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun vendorAssignment(key: StoreKey): VendorAssignment = this(Ref.Persisted("VendorAssignment", key))
+        fun vendorAssignment(key: StoreKey): VendorAssignment = invoke<VendorAssignment>(Ref.Persisted("VendorAssignment", key))
         fun vendorAssignment(key: Long): VendorAssignment = vendorAssignment(StoreKey(key))
 
         val vendors: VendorQuery get() = VendorQuery(Query("Vendor"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun vendor(key: StoreKey): Vendor = this(Ref.Persisted("Vendor", key))
+        fun vendor(key: StoreKey): Vendor = invoke<Vendor>(Ref.Persisted("Vendor", key))
         fun vendor(key: Long): Vendor = vendor(StoreKey(key))
 
         val products: ProductQuery get() = ProductQuery(Query("Product"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun product(key: StoreKey): Product = this(Ref.Persisted("Product", key))
+        fun product(key: StoreKey): Product = invoke<Product>(Ref.Persisted("Product", key))
         fun product(key: Long): Product = product(StoreKey(key))
 
         val marginAlerts: MarginAlertQuery get() = MarginAlertQuery(Query("MarginAlert"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun marginAlert(key: StoreKey): MarginAlert = this(Ref.Persisted("MarginAlert", key))
+        fun marginAlert(key: StoreKey): MarginAlert = invoke<MarginAlert>(Ref.Persisted("MarginAlert", key))
         fun marginAlert(key: Long): MarginAlert = marginAlert(StoreKey(key))
 
         val administrators: AdministratorQuery get() = AdministratorQuery(Query("Administrator"))
@@ -147,7 +152,7 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    @PublishedApi internal fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
         "Staff" -> materializeStaff(id)
         "VendorAssignment" -> materializeVendorAssignment(id)
         "Vendor" -> materializeVendor(id)
@@ -156,7 +161,7 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         else -> throw IllegalStateException("no model object for '$shape'")
     }
 
-    @PublishedApi internal fun materializeStaff(id: Long): Staff = Staff(
+    private fun materializeStaff(id: Long): Staff = Staff(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         role = system.get(id, "role") as String,
@@ -164,20 +169,20 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isAdministrator = system.isMember(id, "Administrator"),
     )
 
-    @PublishedApi internal fun materializeVendorAssignment(id: Long): VendorAssignment = VendorAssignment(
+    private fun materializeVendorAssignment(id: Long): VendorAssignment = VendorAssignment(
         key = system.refFor(id).key,
         staff = system.refFor(system.get(id, "staff") as Long),
         vendor = system.refFor(system.get(id, "vendor") as Long),
     )
 
-    @PublishedApi internal fun materializeVendor(id: Long): Vendor = Vendor(
+    private fun materializeVendor(id: Long): Vendor = Vendor(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         vendorAssignments = (system.get(id, "vendorAssignments") as List<*>).map { system.refFor(it as Long) },
         products = (system.get(id, "products") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeProduct(id: Long): Product = Product(
+    private fun materializeProduct(id: Long): Product = Product(
         key = system.refFor(id).key,
         vendor = system.refFor(system.get(id, "vendor") as Long),
         name = system.get(id, "name") as String,
@@ -188,20 +193,20 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         isThinMargin = system.isMember(id, "ThinMargin"),
     )
 
-    @PublishedApi internal fun materializeMarginAlert(id: Long): MarginAlert = MarginAlert(
+    private fun materializeMarginAlert(id: Long): MarginAlert = MarginAlert(
         key = system.refFor(id).key,
         product = system.refFor(system.get(id, "product") as Long),
         raisedOn = system.get(id, "raisedOn") as Instant,
     )
 
-    @PublishedApi internal fun materializeAdministrator(id: Long): Administrator = Administrator(
+    private fun materializeAdministrator(id: Long): Administrator = Administrator(
         key = system.refFor(id).key,
         name = system.get(id, "name") as String,
         role = system.get(id, "role") as String,
         vendorAssignments = (system.get(id, "vendorAssignments") as List<*>).map { system.refFor(it as Long) },
     )
 
-    @PublishedApi internal fun materializeThinMargin(id: Long): ThinMargin = ThinMargin(
+    private fun materializeThinMargin(id: Long): ThinMargin = ThinMargin(
         key = system.refFor(id).key,
         vendor = system.refFor(system.get(id, "vendor") as Long),
         name = system.get(id, "name") as String,
@@ -264,7 +269,7 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         override fun with(q: Query) = ThinMarginQueryForStaff(q)
     }
 
-    @PublishedApi internal fun materializeProductForStaff(viewer: Long, id: Long): ProductForStaff {
+    private fun materializeProductForStaff(viewer: Long, id: Long): ProductForStaff {
         val hidden = system.hiddenFields(viewer, id, "Product")
         return Product(
             key = system.refFor(id).key,
@@ -278,7 +283,7 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         )
     }
 
-    @PublishedApi internal fun materializeThinMarginForStaff(viewer: Long, id: Long): ThinMarginForStaff {
+    private fun materializeThinMarginForStaff(viewer: Long, id: Long): ThinMarginForStaff {
         val hidden = system.hiddenFields(viewer, id, "ThinMargin")
         return ThinMargin(
             key = system.refFor(id).key,
