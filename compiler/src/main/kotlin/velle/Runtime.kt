@@ -50,10 +50,11 @@ class Instance(
 )
 
 sealed interface CommitResult {
-    /** [id] is the session-local handle; [storeKey] is
-     *  the store-assigned row key when a store is connected and the act
-     *  persisted — what the application's own queries key on. */
-    data class Accepted(val id: Long, val storeKey: Any? = null) : CommitResult
+    /** [ref] names the record the act became, null for a transient act, which
+     *  leaves none. [id] is the runtime's handle for it: in memory, with no
+     *  store, that is the identity the raw surface works in; over a store it
+     *  is dead once the commit returns (see [VelleSystem.scope]), so hold [ref]. */
+    data class Accepted(val id: Long, val ref: Ref.Persisted?) : CommitResult
     /** [reason] is the rendered message; [rejection] is the same as data when a
      *  `never` refused the act (Reference §21), null for a type-level refusal. */
     data class Refused(val reason: String, val rejection: Rejection? = null) : CommitResult
@@ -82,9 +83,9 @@ sealed interface Commit<out I, out R> {
     data class Refused<out I, out R>(override val input: I, val reason: String, val rejection: Rejection? = null) : Commit<I, R>
 }
 
-/** Attach the typed input to the runtime's untyped verdict, with the reference to the durable record of [shape]. */
-fun <I, T> CommitResult.carrying(input: I, shape: String): Commit<I, Ref<T>> = when (this) {
-    is CommitResult.Accepted -> Commit.Accepted(input, Ref.Persisted(shape, StoreKey(storeKey ?: id)))
+/** Attach the typed input to the runtime's untyped verdict, with the reference to the durable record it made. */
+fun <I, T> CommitResult.carrying(input: I): Commit<I, Ref<T>> = when (this) {
+    is CommitResult.Accepted -> Commit.Accepted(input, ref ?: throw VelleRuntimeError("a durable act's acceptance carries no reference"))
     is CommitResult.Refused -> Commit.Refused(input, reason, rejection)
 }
 
@@ -224,6 +225,38 @@ class VelleSystem(
     fun connect(resolver: StateResolver, onCommit: CommitCallback) {
         this.resolver = resolver
         this.onCommit = onCommit
+    }
+
+    private var scopeDepth = 0
+
+    /**
+     * One entry into the runtime from outside: a commit with its after-commit
+     * drain, a tick, a read. Handles minted inside it, or in the gap before it
+     * (the generated input converts its references with [idOf] before calling
+     * [commit]), are valid until the outermost scope exits; then, over a store,
+     * the handle maps and the hydrated working set are dropped, so memory is
+     * bounded by one unit of work and nothing outside ever holds a handle.
+     * [commit], [tick], and [seed] open one themselves; the generated read
+     * surface and [TypedQuery] open one around each read. In memory, with no
+     * store, the handles are the state and nothing is dropped. [nextId] is
+     * never reset: a handle that leaks past its scope fails as "no instance"
+     * instead of silently naming a stranger.
+     */
+    /** Diagnostic: how many handles the runtime currently holds. Zero between units of work over a store. */
+    val liveHandles: Int get() = keyOf.size
+
+    fun <T> scope(body: () -> T): T {
+        scopeDepth++
+        try {
+            return body()
+        } finally {
+            if (--scopeDepth == 0 && resolver != null && txn == null) {
+                beginSnapshot()
+                idShape.clear()
+                keyOf.clear()
+                handleOf.clear()
+            }
+        }
     }
 
     /** The session-local handle for a store row — how an application enters
@@ -662,6 +695,13 @@ class VelleSystem(
         suppliedFields: Map<String, Any?>,
         parts: Map<String, List<Map<String, Any?>>> = emptyMap(),
         actor: Long? = null,
+    ): CommitResult = scope { commitInScope(shape, suppliedFields, parts, actor) }
+
+    private fun commitInScope(
+        shape: String,
+        suppliedFields: Map<String, Any?>,
+        parts: Map<String, List<Map<String, Any?>>>,
+        actor: Long?,
     ): CommitResult {
         val decl = model.shapes[shape]
             ?: return CommitResult.Refused("type: unknown shape '$shape'")
@@ -728,7 +768,7 @@ class VelleSystem(
                     byShape[shape]?.remove(id)
                     captures.keys.removeIf { it.first == id }
                 }
-                CommitResult.Accepted(id, keyOf[id]?.value)
+                CommitResult.Accepted(id, if (shape in model.transients) null else refFor(id))
             },
             onFailure = { e ->
                 if (e is NeverViolation) CommitResult.Refused(e.rejection.message, e.rejection) else throw e
@@ -746,7 +786,9 @@ class VelleSystem(
      * administrator arrives this way. Any shape, exposed or not; never a
      * transient act, which is not a record.
      */
-    fun seed(shape: String, fields: Map<String, Any?>): Long {
+    fun seed(shape: String, fields: Map<String, Any?>): Ref.Persisted = scope { refFor(seedInScope(shape, fields)) }
+
+    private fun seedInScope(shape: String, fields: Map<String, Any?>): Long {
         val decl = model.shapes[shape] ?: throw VelleRuntimeError("seed: unknown shape '$shape'")
         if (shape in model.transients) throw VelleRuntimeError("seed: '$shape' is a transient act, not a record")
         duplicateRefusal(decl, fields)?.let { throw VelleRuntimeError("seed: $it") }
@@ -1512,7 +1554,9 @@ class VelleSystem(
      * function returns in [CommitResult.Refused] (`evaluation.md`, "Ticks"). The other firings
      * stand; the next tick retries the rejected ones.
      */
-    fun tick(schedule: String) {
+    fun tick(schedule: String) = scope { tickInScope(schedule) }
+
+    private fun tickInScope(schedule: String) {
         // a tick is a new evaluation moment: select subjects against settled
         // storage, not the previous envelope's leftover working set
         beginSnapshot()
@@ -1621,7 +1665,8 @@ class VelleSystem(
         evaluator.trace = steps
         try { for (id in violating) evaluator.memberOfRefExpr(id, n.target) } finally { evaluator.trace = null }
 
-        fun refOf(id: Long) = RecordRef(shapeOf(id), id)
+        val handleOfRef = HashMap<RecordRef, Long>() // the rejection names records by key; the visibility filter below needs the handle back
+        fun refOf(id: Long) = refFor(id).let { RecordRef(it.shape, it.key) }.also { handleOfRef[it] = id }
         fun plain(v: Value): Any? = when (v) {
             is Value.VNum -> v.v
             is Value.VText -> v.v
@@ -1681,8 +1726,8 @@ class VelleSystem(
         }
         val shownEvaluation = if (actor == null) evaluation else evaluation.filter { step ->
             when (step) {
-                is EvalStep.Read -> step.record.id == actId || (visible(step.record.id) && step.member !in hiddenFields(actor, step.record.id))
-                is EvalStep.Membership -> step.record.id == actId || visible(step.record.id)
+                is EvalStep.Read -> handleOfRef.getValue(step.record).let { it == actId || (visible(it) && step.member !in hiddenFields(actor, it)) }
+                is EvalStep.Membership -> handleOfRef.getValue(step.record).let { it == actId || visible(it) }
             }
         }
 

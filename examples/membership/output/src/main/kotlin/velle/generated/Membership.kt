@@ -33,7 +33,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Plan", raw).carrying(input, "Plan")
+        return system.commit("Plan", raw).carrying(input)
     }
 
     /** Queue keys: [signUp.plan], [signUp.referredBy] — plus system-wide width below.
@@ -78,7 +78,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Visit", raw).carrying(input, "Visit")
+        return system.commit("Visit", raw).carrying(input)
     }
 
     /** Queue keys: [makeDeposit.member], [makeDeposit.member.plan], [makeDeposit.member.referredBy] — plus system-wide width below.
@@ -110,7 +110,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Agent", raw).carrying(input, "Agent")
+        return system.commit("Agent", raw).carrying(input)
     }
 
     /** Queue keys: [raiseTicket.assignee], [raiseTicket.member] — plus system-wide width below.
@@ -150,7 +150,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ReopenTicket", raw).carrying(input, "ReopenTicket")
+        return system.commit("ReopenTicket", raw).carrying(input)
     }
 
     /** Queue keys: [assignTicket.agent], [assignTicket.ticket], [assignTicket.ticket.assignee], [assignTicket.ticket.member].
@@ -166,42 +166,42 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         return system.commit("AssignTicket", raw).carryingNoRecord(input)
     }
 
-    fun plans(): List<Plan> = system.instancesOf("Plan").map { materializePlan(it) }
-    fun members(): List<Member> = system.instancesOf("Member").map { materializeMember(it) }
-    fun welcomeNotes(): List<WelcomeNote> = system.instancesOf("WelcomeNote").map { materializeWelcomeNote(it) }
-    fun emailChanges(): List<EmailChange> = system.instancesOf("EmailChange").map { materializeEmailChange(it) }
-    fun visits(): List<Visit> = system.instancesOf("Visit").map { materializeVisit(it) }
-    fun analyticsPings(): List<AnalyticsPing> = system.instancesOf("AnalyticsPing").map { materializeAnalyticsPing(it) }
-    fun deposits(): List<Deposit> = system.instancesOf("Deposit").map { materializeDeposit(it) }
-    fun charges(): List<Charge> = system.instancesOf("Charge").map { materializeCharge(it) }
-    fun chargeApplications(): List<ChargeApplication> = system.instancesOf("ChargeApplication").map { materializeChargeApplication(it) }
-    fun delinquencyFlags(): List<DelinquencyFlag> = system.instancesOf("DelinquencyFlag").map { materializeDelinquencyFlag(it) }
-    fun delinquencyResolutions(): List<DelinquencyResolution> = system.instancesOf("DelinquencyResolution").map { materializeDelinquencyResolution(it) }
-    fun auditEntrys(): List<AuditEntry> = system.instancesOf("AuditEntry").map { materializeAuditEntry(it) }
-    fun accountReviews(): List<AccountReview> = system.instancesOf("AccountReview").map { materializeAccountReview(it) }
-    fun agents(): List<Agent> = system.instancesOf("Agent").map { materializeAgent(it) }
-    fun tickets(): List<Ticket> = system.instancesOf("Ticket").map { materializeTicket(it) }
-    fun ticketClosures(): List<TicketClosure> = system.instancesOf("TicketClosure").map { materializeTicketClosure(it) }
-    fun reopenTickets(): List<ReopenTicket> = system.instancesOf("ReopenTicket").map { materializeReopenTicket(it) }
-    fun reopenNotices(): List<ReopenNotice> = system.instancesOf("ReopenNotice").map { materializeReopenNotice(it) }
-    fun escalations(): List<Escalation> = system.instancesOf("Escalation").map { materializeEscalation(it) }
-    fun selfReferrals(): List<SelfReferral> = system.instancesOf("SelfReferral").map { materializeSelfReferral(it) }
-    fun unappliedDeposits(): List<UnappliedDeposit> = system.instancesOf("UnappliedDeposit").map { materializeUnappliedDeposit(it) }
-    fun activeMembers(): List<ActiveMember> = system.instancesOf("ActiveMember").map { materializeActiveMember(it) }
-    fun unappliedCharges(): List<UnappliedCharge> = system.instancesOf("UnappliedCharge").map { materializeUnappliedCharge(it) }
-    fun delinquents(): List<Delinquent> = system.instancesOf("Delinquent").map { materializeDelinquent(it) }
-    fun deepDelinquents(): List<DeepDelinquent> = system.instancesOf("DeepDelinquent").map { materializeDeepDelinquent(it) }
-    fun openDelinquencyFlags(): List<OpenDelinquencyFlag> = system.instancesOf("OpenDelinquencyFlag").map { materializeOpenDelinquencyFlag(it) }
-    fun chronicDelinquents(): List<ChronicDelinquent> = system.instancesOf("ChronicDelinquent").map { materializeChronicDelinquent(it) }
-    fun closedTickets(): List<ClosedTicket> = system.instancesOf("ClosedTicket").map { materializeClosedTicket(it) }
-    fun openTickets(): List<OpenTicket> = system.instancesOf("OpenTicket").map { materializeOpenTicket(it) }
-    fun overdueTickets(): List<OverdueTicket> = system.instancesOf("OverdueTicket").map { materializeOverdueTicket(it) }
-    fun highPrioritys(): List<HighPriority> = system.instancesOf("HighPriority").map { materializeHighPriority(it) }
-    fun unassigneds(): List<Unassigned> = system.instancesOf("Unassigned").map { materializeUnassigned(it) }
-    fun needsAttentions(): List<NeedsAttention> = system.instancesOf("NeedsAttention").map { materializeNeedsAttention(it) }
-    fun urgentQueues(): List<UrgentQueue> = system.instancesOf("UrgentQueue").map { materializeUrgentQueue(it) }
-    fun memberWithDisputedCharges(): List<MemberWithDisputedCharge> = system.instancesOf("MemberWithDisputedCharge").map { materializeMemberWithDisputedCharge(it) }
-    fun lateEscalatedMembers(): List<LateEscalatedMember> = system.instancesOf("LateEscalatedMember").map { materializeLateEscalatedMember(it) }
+    fun plans(): List<Plan> = system.scope { system.instancesOf("Plan").map { materializePlan(it) } }
+    fun members(): List<Member> = system.scope { system.instancesOf("Member").map { materializeMember(it) } }
+    fun welcomeNotes(): List<WelcomeNote> = system.scope { system.instancesOf("WelcomeNote").map { materializeWelcomeNote(it) } }
+    fun emailChanges(): List<EmailChange> = system.scope { system.instancesOf("EmailChange").map { materializeEmailChange(it) } }
+    fun visits(): List<Visit> = system.scope { system.instancesOf("Visit").map { materializeVisit(it) } }
+    fun analyticsPings(): List<AnalyticsPing> = system.scope { system.instancesOf("AnalyticsPing").map { materializeAnalyticsPing(it) } }
+    fun deposits(): List<Deposit> = system.scope { system.instancesOf("Deposit").map { materializeDeposit(it) } }
+    fun charges(): List<Charge> = system.scope { system.instancesOf("Charge").map { materializeCharge(it) } }
+    fun chargeApplications(): List<ChargeApplication> = system.scope { system.instancesOf("ChargeApplication").map { materializeChargeApplication(it) } }
+    fun delinquencyFlags(): List<DelinquencyFlag> = system.scope { system.instancesOf("DelinquencyFlag").map { materializeDelinquencyFlag(it) } }
+    fun delinquencyResolutions(): List<DelinquencyResolution> = system.scope { system.instancesOf("DelinquencyResolution").map { materializeDelinquencyResolution(it) } }
+    fun auditEntrys(): List<AuditEntry> = system.scope { system.instancesOf("AuditEntry").map { materializeAuditEntry(it) } }
+    fun accountReviews(): List<AccountReview> = system.scope { system.instancesOf("AccountReview").map { materializeAccountReview(it) } }
+    fun agents(): List<Agent> = system.scope { system.instancesOf("Agent").map { materializeAgent(it) } }
+    fun tickets(): List<Ticket> = system.scope { system.instancesOf("Ticket").map { materializeTicket(it) } }
+    fun ticketClosures(): List<TicketClosure> = system.scope { system.instancesOf("TicketClosure").map { materializeTicketClosure(it) } }
+    fun reopenTickets(): List<ReopenTicket> = system.scope { system.instancesOf("ReopenTicket").map { materializeReopenTicket(it) } }
+    fun reopenNotices(): List<ReopenNotice> = system.scope { system.instancesOf("ReopenNotice").map { materializeReopenNotice(it) } }
+    fun escalations(): List<Escalation> = system.scope { system.instancesOf("Escalation").map { materializeEscalation(it) } }
+    fun selfReferrals(): List<SelfReferral> = system.scope { system.instancesOf("SelfReferral").map { materializeSelfReferral(it) } }
+    fun unappliedDeposits(): List<UnappliedDeposit> = system.scope { system.instancesOf("UnappliedDeposit").map { materializeUnappliedDeposit(it) } }
+    fun activeMembers(): List<ActiveMember> = system.scope { system.instancesOf("ActiveMember").map { materializeActiveMember(it) } }
+    fun unappliedCharges(): List<UnappliedCharge> = system.scope { system.instancesOf("UnappliedCharge").map { materializeUnappliedCharge(it) } }
+    fun delinquents(): List<Delinquent> = system.scope { system.instancesOf("Delinquent").map { materializeDelinquent(it) } }
+    fun deepDelinquents(): List<DeepDelinquent> = system.scope { system.instancesOf("DeepDelinquent").map { materializeDeepDelinquent(it) } }
+    fun openDelinquencyFlags(): List<OpenDelinquencyFlag> = system.scope { system.instancesOf("OpenDelinquencyFlag").map { materializeOpenDelinquencyFlag(it) } }
+    fun chronicDelinquents(): List<ChronicDelinquent> = system.scope { system.instancesOf("ChronicDelinquent").map { materializeChronicDelinquent(it) } }
+    fun closedTickets(): List<ClosedTicket> = system.scope { system.instancesOf("ClosedTicket").map { materializeClosedTicket(it) } }
+    fun openTickets(): List<OpenTicket> = system.scope { system.instancesOf("OpenTicket").map { materializeOpenTicket(it) } }
+    fun overdueTickets(): List<OverdueTicket> = system.scope { system.instancesOf("OverdueTicket").map { materializeOverdueTicket(it) } }
+    fun highPrioritys(): List<HighPriority> = system.scope { system.instancesOf("HighPriority").map { materializeHighPriority(it) } }
+    fun unassigneds(): List<Unassigned> = system.scope { system.instancesOf("Unassigned").map { materializeUnassigned(it) } }
+    fun needsAttentions(): List<NeedsAttention> = system.scope { system.instancesOf("NeedsAttention").map { materializeNeedsAttention(it) } }
+    fun urgentQueues(): List<UrgentQueue> = system.scope { system.instancesOf("UrgentQueue").map { materializeUrgentQueue(it) } }
+    fun memberWithDisputedCharges(): List<MemberWithDisputedCharge> = system.scope { system.instancesOf("MemberWithDisputedCharge").map { materializeMemberWithDisputedCharge(it) } }
+    fun lateEscalatedMembers(): List<LateEscalatedMember> = system.scope { system.instancesOf("LateEscalatedMember").map { materializeLateEscalatedMember(it) } }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -213,9 +213,9 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            return materialize(id)
+            materialize(id)
         }
 
         val plans: PlanQuery get() = PlanQuery(Query("Plan"))
@@ -316,87 +316,87 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         val selfReferrals: SelfReferralQuery get() = SelfReferralQuery(Query("SelfReferral"))
         /** The record behind [ref] as a member of SelfReferral, or null when it is not one. */
         fun selfReferral(ref: Ref<Member>): SelfReferral? =
-            system.idOf(ref).let { if (system.exists("SelfReferral", it)) materializeSelfReferral(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("SelfReferral", it)) materializeSelfReferral(it) else null } }
 
         val unappliedDeposits: UnappliedDepositQuery get() = UnappliedDepositQuery(Query("UnappliedDeposit"))
         /** The record behind [ref] as a member of UnappliedDeposit, or null when it is not one. */
         fun unappliedDeposit(ref: Ref<Deposit>): UnappliedDeposit? =
-            system.idOf(ref).let { if (system.exists("UnappliedDeposit", it)) materializeUnappliedDeposit(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("UnappliedDeposit", it)) materializeUnappliedDeposit(it) else null } }
 
         val activeMembers: ActiveMemberQuery get() = ActiveMemberQuery(Query("ActiveMember"))
         /** The record behind [ref] as a member of ActiveMember, or null when it is not one. */
         fun activeMember(ref: Ref<Member>): ActiveMember? =
-            system.idOf(ref).let { if (system.exists("ActiveMember", it)) materializeActiveMember(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ActiveMember", it)) materializeActiveMember(it) else null } }
 
         val unappliedCharges: UnappliedChargeQuery get() = UnappliedChargeQuery(Query("UnappliedCharge"))
         /** The record behind [ref] as a member of UnappliedCharge, or null when it is not one. */
         fun unappliedCharge(ref: Ref<Charge>): UnappliedCharge? =
-            system.idOf(ref).let { if (system.exists("UnappliedCharge", it)) materializeUnappliedCharge(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("UnappliedCharge", it)) materializeUnappliedCharge(it) else null } }
 
         val delinquents: DelinquentQuery get() = DelinquentQuery(Query("Delinquent"))
         /** The record behind [ref] as a member of Delinquent, or null when it is not one. */
         fun delinquent(ref: Ref<Member>): Delinquent? =
-            system.idOf(ref).let { if (system.exists("Delinquent", it)) materializeDelinquent(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Delinquent", it)) materializeDelinquent(it) else null } }
 
         val deepDelinquents: DeepDelinquentQuery get() = DeepDelinquentQuery(Query("DeepDelinquent"))
         /** The record behind [ref] as a member of DeepDelinquent, or null when it is not one. */
         fun deepDelinquent(ref: Ref<Member>): DeepDelinquent? =
-            system.idOf(ref).let { if (system.exists("DeepDelinquent", it)) materializeDeepDelinquent(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("DeepDelinquent", it)) materializeDeepDelinquent(it) else null } }
 
         val openDelinquencyFlags: OpenDelinquencyFlagQuery get() = OpenDelinquencyFlagQuery(Query("OpenDelinquencyFlag"))
         /** The record behind [ref] as a member of OpenDelinquencyFlag, or null when it is not one. */
         fun openDelinquencyFlag(ref: Ref<DelinquencyFlag>): OpenDelinquencyFlag? =
-            system.idOf(ref).let { if (system.exists("OpenDelinquencyFlag", it)) materializeOpenDelinquencyFlag(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("OpenDelinquencyFlag", it)) materializeOpenDelinquencyFlag(it) else null } }
 
         val chronicDelinquents: ChronicDelinquentQuery get() = ChronicDelinquentQuery(Query("ChronicDelinquent"))
         /** The record behind [ref] as a member of ChronicDelinquent, or null when it is not one. */
         fun chronicDelinquent(ref: Ref<Member>): ChronicDelinquent? =
-            system.idOf(ref).let { if (system.exists("ChronicDelinquent", it)) materializeChronicDelinquent(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ChronicDelinquent", it)) materializeChronicDelinquent(it) else null } }
 
         val closedTickets: ClosedTicketQuery get() = ClosedTicketQuery(Query("ClosedTicket"))
         /** The record behind [ref] as a member of ClosedTicket, or null when it is not one. */
         fun closedTicket(ref: Ref<Ticket>): ClosedTicket? =
-            system.idOf(ref).let { if (system.exists("ClosedTicket", it)) materializeClosedTicket(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ClosedTicket", it)) materializeClosedTicket(it) else null } }
 
         val openTickets: OpenTicketQuery get() = OpenTicketQuery(Query("OpenTicket"))
         /** The record behind [ref] as a member of OpenTicket, or null when it is not one. */
         fun openTicket(ref: Ref<Ticket>): OpenTicket? =
-            system.idOf(ref).let { if (system.exists("OpenTicket", it)) materializeOpenTicket(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("OpenTicket", it)) materializeOpenTicket(it) else null } }
 
         val overdueTickets: OverdueTicketQuery get() = OverdueTicketQuery(Query("OverdueTicket"))
         /** The record behind [ref] as a member of OverdueTicket, or null when it is not one. */
         fun overdueTicket(ref: Ref<Ticket>): OverdueTicket? =
-            system.idOf(ref).let { if (system.exists("OverdueTicket", it)) materializeOverdueTicket(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("OverdueTicket", it)) materializeOverdueTicket(it) else null } }
 
         val highPrioritys: HighPriorityQuery get() = HighPriorityQuery(Query("HighPriority"))
         /** The record behind [ref] as a member of HighPriority, or null when it is not one. */
         fun highPriority(ref: Ref<Ticket>): HighPriority? =
-            system.idOf(ref).let { if (system.exists("HighPriority", it)) materializeHighPriority(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("HighPriority", it)) materializeHighPriority(it) else null } }
 
         val unassigneds: UnassignedQuery get() = UnassignedQuery(Query("Unassigned"))
         /** The record behind [ref] as a member of Unassigned, or null when it is not one. */
         fun unassigned(ref: Ref<Ticket>): Unassigned? =
-            system.idOf(ref).let { if (system.exists("Unassigned", it)) materializeUnassigned(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Unassigned", it)) materializeUnassigned(it) else null } }
 
         val needsAttentions: NeedsAttentionQuery get() = NeedsAttentionQuery(Query("NeedsAttention"))
         /** The record behind [ref] as a member of NeedsAttention, or null when it is not one. */
         fun needsAttention(ref: Ref<Ticket>): NeedsAttention? =
-            system.idOf(ref).let { if (system.exists("NeedsAttention", it)) materializeNeedsAttention(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("NeedsAttention", it)) materializeNeedsAttention(it) else null } }
 
         val urgentQueues: UrgentQueueQuery get() = UrgentQueueQuery(Query("UrgentQueue"))
         /** The record behind [ref] as a member of UrgentQueue, or null when it is not one. */
         fun urgentQueue(ref: Ref<Ticket>): UrgentQueue? =
-            system.idOf(ref).let { if (system.exists("UrgentQueue", it)) materializeUrgentQueue(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("UrgentQueue", it)) materializeUrgentQueue(it) else null } }
 
         val memberWithDisputedCharges: MemberWithDisputedChargeQuery get() = MemberWithDisputedChargeQuery(Query("MemberWithDisputedCharge"))
         /** The record behind [ref] as a member of MemberWithDisputedCharge, or null when it is not one. */
         fun memberWithDisputedCharge(ref: Ref<Member>): MemberWithDisputedCharge? =
-            system.idOf(ref).let { if (system.exists("MemberWithDisputedCharge", it)) materializeMemberWithDisputedCharge(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("MemberWithDisputedCharge", it)) materializeMemberWithDisputedCharge(it) else null } }
 
         val lateEscalatedMembers: LateEscalatedMemberQuery get() = LateEscalatedMemberQuery(Query("LateEscalatedMember"))
         /** The record behind [ref] as a member of LateEscalatedMember, or null when it is not one. */
         fun lateEscalatedMember(ref: Ref<Member>): LateEscalatedMember? =
-            system.idOf(ref).let { if (system.exists("LateEscalatedMember", it)) materializeLateEscalatedMember(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("LateEscalatedMember", it)) materializeLateEscalatedMember(it) else null } }
     }
 
     inner class PlanQuery(q: Query) : TypedQuery<PlanFields, Plan>(system, q, PlanFields(), { materializePlan(it) }) {

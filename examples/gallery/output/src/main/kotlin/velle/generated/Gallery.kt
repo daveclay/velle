@@ -29,7 +29,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Member", raw).carrying(input, "Member")
+        return system.commit("Member", raw).carrying(input)
     }
 
     /** Queue keys: [post.author] — plus system-wide width below.
@@ -45,7 +45,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Post", raw).carrying(input, "Post")
+        return system.commit("Post", raw).carrying(input)
     }
 
     /** Queue keys: [photo.author] — plus system-wide width below.
@@ -61,7 +61,7 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Photo", raw).carrying(input, "Photo")
+        return system.commit("Photo", raw).carrying(input)
     }
 
     /** Queue keys: [comment.author], [comment.target] — plus system-wide width below.
@@ -79,19 +79,19 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Comment", raw).carrying(input, "Comment")
+        return system.commit("Comment", raw).carrying(input)
     }
 
-    fun members(): List<Member> = system.instancesOf("Member").map { materializeMember(it) }
-    fun posts(): List<Post> = system.instancesOf("Post").map { materializePost(it) }
-    fun photos(): List<Photo> = system.instancesOf("Photo").map { materializePhoto(it) }
-    fun comments(): List<Comment> = system.instancesOf("Comment").map { materializeComment(it) }
-    fun popularityNotices(): List<PopularityNotice> = system.instancesOf("PopularityNotice").map { materializePopularityNotice(it) }
-    fun commentNotices(): List<CommentNotice> = system.instancesOf("CommentNotice").map { materializeCommentNotice(it) }
-    fun contents(): List<Content> = system.instancesOf("Content").map { materializeContent(it) }
-    fun populars(): List<Popular> = system.instancesOf("Popular").map { materializePopular(it) }
-    fun postComments(): List<PostComment> = system.instancesOf("PostComment").map { materializePostComment(it) }
-    fun photoComments(): List<PhotoComment> = system.instancesOf("PhotoComment").map { materializePhotoComment(it) }
+    fun members(): List<Member> = system.scope { system.instancesOf("Member").map { materializeMember(it) } }
+    fun posts(): List<Post> = system.scope { system.instancesOf("Post").map { materializePost(it) } }
+    fun photos(): List<Photo> = system.scope { system.instancesOf("Photo").map { materializePhoto(it) } }
+    fun comments(): List<Comment> = system.scope { system.instancesOf("Comment").map { materializeComment(it) } }
+    fun popularityNotices(): List<PopularityNotice> = system.scope { system.instancesOf("PopularityNotice").map { materializePopularityNotice(it) } }
+    fun commentNotices(): List<CommentNotice> = system.scope { system.instancesOf("CommentNotice").map { materializeCommentNotice(it) } }
+    fun contents(): List<Content> = system.scope { system.instancesOf("Content").map { materializeContent(it) } }
+    fun populars(): List<Popular> = system.scope { system.instancesOf("Popular").map { materializePopular(it) } }
+    fun postComments(): List<PostComment> = system.scope { system.instancesOf("PostComment").map { materializePostComment(it) } }
+    fun photoComments(): List<PhotoComment> = system.scope { system.instancesOf("PhotoComment").map { materializePhotoComment(it) } }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -103,9 +103,9 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            return materialize(id)
+            materialize(id)
         }
 
         val members: MemberQuery get() = MemberQuery(Query("Member"))
@@ -143,17 +143,17 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         val populars: PopularQuery get() = PopularQuery(Query("Popular"))
         /** The record behind [ref] as a member of Popular, or null when it is not one. */
         fun popular(ref: Ref<Content>): Popular? =
-            system.idOf(ref).let { if (system.exists("Popular", it)) materializePopular(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Popular", it)) materializePopular(it) else null } }
 
         val postComments: PostCommentQuery get() = PostCommentQuery(Query("PostComment"))
         /** The record behind [ref] as a member of PostComment, or null when it is not one. */
         fun postComment(ref: Ref<Comment>): PostComment? =
-            system.idOf(ref).let { if (system.exists("PostComment", it)) materializePostComment(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("PostComment", it)) materializePostComment(it) else null } }
 
         val photoComments: PhotoCommentQuery get() = PhotoCommentQuery(Query("PhotoComment"))
         /** The record behind [ref] as a member of PhotoComment, or null when it is not one. */
         fun photoComment(ref: Ref<Comment>): PhotoComment? =
-            system.idOf(ref).let { if (system.exists("PhotoComment", it)) materializePhotoComment(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("PhotoComment", it)) materializePhotoComment(it) else null } }
     }
 
     inner class MemberQuery(q: Query) : TypedQuery<MemberFields, Member>(system, q, MemberFields(), { materializeMember(it) }) {

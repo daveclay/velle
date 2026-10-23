@@ -55,11 +55,11 @@ class VisibilityTest {
     }
 
     private class World(val sys: VelleSystem) {
-        val admin = sys.seed("Staff", mapOf("name" to "Ada", "role" to "admin"))
-        val assigned = sys.seed("Staff", mapOf("name" to "Sam", "role" to "staff"))
-        val other = sys.seed("Staff", mapOf("name" to "Olu", "role" to "staff"))
-        val acme = sys.seed("Vendor", mapOf("name" to "Acme"))
-        val widget = sys.seed("Product", mapOf("vendor" to acme, "name" to "widget", "price" to BigDecimal("10"), "cost" to BigDecimal("4")))
+        val admin = sys.idOf(sys.seed("Staff", mapOf("name" to "Ada", "role" to "admin")))
+        val assigned = sys.idOf(sys.seed("Staff", mapOf("name" to "Sam", "role" to "staff")))
+        val other = sys.idOf(sys.seed("Staff", mapOf("name" to "Olu", "role" to "staff")))
+        val acme = sys.idOf(sys.seed("Vendor", mapOf("name" to "Acme")))
+        val widget = sys.idOf(sys.seed("Product", mapOf("vendor" to acme, "name" to "widget", "price" to BigDecimal("10"), "cost" to BigDecimal("4"))))
         init { assertIs<CommitResult.Accepted>(sys.commit("AssignVendor", mapOf("staff" to assigned, "vendor" to acme), actor = admin)) }
     }
 
@@ -110,7 +110,7 @@ class VisibilityTest {
     @Test
     fun `the read surface admits what the clauses admit, and the engineer's view sees everything`() {
         val sys = newSystem(); val w = World(sys)
-        fun products(viewer: Long?) = sys.query(Query("Product", orderBy = listOf(OrderDatum("name")), viewer = viewer)).ids
+        fun products(viewer: Long?) = sys.query(Query("Product", orderBy = listOf(OrderDatum("name")), viewer = viewer?.let { sys.refFor(it) })).ids
         assertEquals(listOf(w.widget), products(null))
         assertEquals(listOf(w.widget), products(w.assigned), "assigned to Acme: sees Acme's product")
         assertEquals(emptyList(), products(w.other), "not assigned: sees nothing")

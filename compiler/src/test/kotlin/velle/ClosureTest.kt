@@ -474,7 +474,7 @@ class ClosureTest {
         val pep = sys.peptide()
         val fields = mapOf("peptide" to pep, "quantityMg" to java.math.BigDecimal("1"))
         val ferm = mapOf(VelleSystem.SHAPE_KEY to "Fermentation", "strain" to strain)
-        val existing = sys.seed("Fermentation", mapOf("strain" to strain))
+        val existing = sys.idOf(sys.seed("Fermentation", mapOf("strain" to strain)))
         val both = sys.commit("PeptideBatch", fields + ("origin" to existing), mapOf("origin" to listOf(ferm)))
         assertTrue(assertIs<CommitResult.Refused>(both).reason.contains("both"), both.toString())
         val two = sys.commit("PeptideBatch", fields, mapOf("origin" to listOf(ferm, ferm)))

@@ -28,7 +28,7 @@ data class Query(
     val where: Expr? = null,
     val orderBy: List<OrderDatum> = emptyList(),
     val page: Page? = null,
-    val viewer: Long? = null,
+    val viewer: Ref<*>? = null,
 )
 
 /** One order datum: a member of the root and a direction. */
@@ -94,17 +94,18 @@ internal class QueryEngine(private val system: VelleSystem) {
     /** Every handle the filter admits, in no particular order, from a fresh snapshot. */
     private fun matching(q: Query): List<Long> {
         system.openReadSnapshot()
+        val viewer = q.viewer?.let(system::idOf) // a reference, so a query object outlives the scope that runs it
         val cond = RefName(q.root, q.where)
         // a cross-base union (Reference §9) has no one table: every operand's instances, then the predicate
         val base = model.baseOf(q.root)
             ?: return model.basesOf(q.root).flatMap { system.idsOf(it) }
-                .filter { system.evaluator.memberOfRefExpr(it, cond) && system.visibleTo(q.viewer, it) }
+                .filter { system.evaluator.memberOfRefExpr(it, cond) && system.visibleTo(viewer, it) }
         val filter = system.queryCompiler().filterFor(cond)
         // a viewer's query admits only the records the shape's visibility clauses admit
         // (Reference §22, "The actor"): the authoritative check, in memory, after the
         // pre-filter's superset
         return system.idsOfCandidates(base, filter)
-            .filter { system.evaluator.memberOfRefExpr(it, cond) && system.visibleTo(q.viewer, it) }
+            .filter { system.evaluator.memberOfRefExpr(it, cond) && system.visibleTo(viewer, it) }
     }
 
     private class Keyed(val id: Long, val datums: List<Value>, val key: Comparable<Any>)
@@ -278,14 +279,14 @@ abstract class TypedQuery<F : Fields, T>(
     fun check(): List<Diagnostic> = system.check(query)
 
     /** Every matching instance, in order, as data classes. */
-    fun list(): List<T> = system.query(query).ids.map(materialize)
+    fun list(): List<T> = system.scope { system.query(query).ids.map(materialize) }
 
     /** The page the query names (or everything, with no next cursor, when it names none). */
-    fun fetch(): QueryPage<T> = system.query(query).let { QueryPage(it.ids.map(materialize), it.next) }
+    fun fetch(): QueryPage<T> = system.scope { system.query(query).let { QueryPage(it.ids.map(materialize), it.next) } }
 
-    fun count(): Int = system.count(query)
+    fun count(): Int = system.scope { system.count(query) }
 
-    fun sum(member: F.() -> NumField): BigDecimal = system.sum(query, fields.member().fieldPath.single())
+    fun sum(member: F.() -> NumField): BigDecimal = system.scope { system.sum(query, fields.member().fieldPath.single()) }
 }
 
 /**

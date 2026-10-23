@@ -27,7 +27,7 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Order", raw).carrying(input, "Order")
+        return system.commit("Order", raw).carrying(input)
     }
 
     /** Queue keys: [cancellation.order] — plus system-wide width below.
@@ -42,7 +42,7 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Cancellation", raw).carrying(input, "Cancellation")
+        return system.commit("Cancellation", raw).carrying(input)
     }
 
     /** Queue key: [shipment.order].
@@ -55,14 +55,14 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Shipment", raw).carrying(input, "Shipment")
+        return system.commit("Shipment", raw).carrying(input)
     }
 
-    fun orders(): List<Order> = system.instancesOf("Order").map { materializeOrder(it) }
-    fun cancellations(): List<Cancellation> = system.instancesOf("Cancellation").map { materializeCancellation(it) }
-    fun shipments(): List<Shipment> = system.instancesOf("Shipment").map { materializeShipment(it) }
-    fun cancelledOrders(): List<CancelledOrder> = system.instancesOf("CancelledOrder").map { materializeCancelledOrder(it) }
-    fun shippedOrders(): List<ShippedOrder> = system.instancesOf("ShippedOrder").map { materializeShippedOrder(it) }
+    fun orders(): List<Order> = system.scope { system.instancesOf("Order").map { materializeOrder(it) } }
+    fun cancellations(): List<Cancellation> = system.scope { system.instancesOf("Cancellation").map { materializeCancellation(it) } }
+    fun shipments(): List<Shipment> = system.scope { system.instancesOf("Shipment").map { materializeShipment(it) } }
+    fun cancelledOrders(): List<CancelledOrder> = system.scope { system.instancesOf("CancelledOrder").map { materializeCancelledOrder(it) } }
+    fun shippedOrders(): List<ShippedOrder> = system.scope { system.instancesOf("ShippedOrder").map { materializeShippedOrder(it) } }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -74,9 +74,9 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            return materialize(id)
+            materialize(id)
         }
 
         val orders: OrderQuery get() = OrderQuery(Query("Order"))
@@ -97,12 +97,12 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         val cancelledOrders: CancelledOrderQuery get() = CancelledOrderQuery(Query("CancelledOrder"))
         /** The record behind [ref] as a member of CancelledOrder, or null when it is not one. */
         fun cancelledOrder(ref: Ref<Order>): CancelledOrder? =
-            system.idOf(ref).let { if (system.exists("CancelledOrder", it)) materializeCancelledOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("CancelledOrder", it)) materializeCancelledOrder(it) else null } }
 
         val shippedOrders: ShippedOrderQuery get() = ShippedOrderQuery(Query("ShippedOrder"))
         /** The record behind [ref] as a member of ShippedOrder, or null when it is not one. */
         fun shippedOrder(ref: Ref<Order>): ShippedOrder? =
-            system.idOf(ref).let { if (system.exists("ShippedOrder", it)) materializeShippedOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ShippedOrder", it)) materializeShippedOrder(it) else null } }
     }
 
     inner class OrderQuery(q: Query) : TypedQuery<OrderFields, Order>(system, q, OrderFields(), { materializeOrder(it) }) {

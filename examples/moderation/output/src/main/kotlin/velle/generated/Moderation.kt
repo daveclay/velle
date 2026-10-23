@@ -27,7 +27,7 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Seller", raw).carrying(input, "Seller")
+        return system.commit("Seller", raw).carrying(input)
     }
 
     /** Queue key: [listing.seller].
@@ -40,7 +40,7 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Listing", raw).carrying(input, "Listing")
+        return system.commit("Listing", raw).carrying(input)
     }
 
     /** Queue keys: [publish.listing], [publish.listing.seller].
@@ -66,7 +66,7 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ListingReport", raw).carrying(input, "ListingReport")
+        return system.commit("ListingReport", raw).carrying(input)
     }
 
     /** Queue keys: [discardDraft.listing], [discardDraft.listing.seller].
@@ -95,19 +95,19 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         return system.commit("CloseAccount", raw).carryingNoRecord(input)
     }
 
-    fun sellers(): List<Seller> = system.instancesOf("Seller").map { materializeSeller(it) }
-    fun listings(): List<Listing> = system.instancesOf("Listing").map { materializeListing(it) }
-    fun publicationNotices(): List<PublicationNotice> = system.instancesOf("PublicationNotice").map { materializePublicationNotice(it) }
-    fun sellerNotices(): List<SellerNotice> = system.instancesOf("SellerNotice").map { materializeSellerNotice(it) }
-    fun draftClosures(): List<DraftClosure> = system.instancesOf("DraftClosure").map { materializeDraftClosure(it) }
-    fun listingReports(): List<ListingReport> = system.instancesOf("ListingReport").map { materializeListingReport(it) }
-    fun reporterNotices(): List<ReporterNotice> = system.instancesOf("ReporterNotice").map { materializeReporterNotice(it) }
-    fun discardRecords(): List<DiscardRecord> = system.instancesOf("DiscardRecord").map { materializeDiscardRecord(it) }
-    fun discardRefusals(): List<DiscardRefusal> = system.instancesOf("DiscardRefusal").map { materializeDiscardRefusal(it) }
-    fun drafts(): List<Draft> = system.instancesOf("Draft").map { materializeDraft(it) }
-    fun publishedListings(): List<PublishedListing> = system.instancesOf("PublishedListing").map { materializePublishedListing(it) }
-    fun orphanReports(): List<OrphanReport> = system.instancesOf("OrphanReport").map { materializeOrphanReport(it) }
-    fun orphanedListings(): List<OrphanedListing> = system.instancesOf("OrphanedListing").map { materializeOrphanedListing(it) }
+    fun sellers(): List<Seller> = system.scope { system.instancesOf("Seller").map { materializeSeller(it) } }
+    fun listings(): List<Listing> = system.scope { system.instancesOf("Listing").map { materializeListing(it) } }
+    fun publicationNotices(): List<PublicationNotice> = system.scope { system.instancesOf("PublicationNotice").map { materializePublicationNotice(it) } }
+    fun sellerNotices(): List<SellerNotice> = system.scope { system.instancesOf("SellerNotice").map { materializeSellerNotice(it) } }
+    fun draftClosures(): List<DraftClosure> = system.scope { system.instancesOf("DraftClosure").map { materializeDraftClosure(it) } }
+    fun listingReports(): List<ListingReport> = system.scope { system.instancesOf("ListingReport").map { materializeListingReport(it) } }
+    fun reporterNotices(): List<ReporterNotice> = system.scope { system.instancesOf("ReporterNotice").map { materializeReporterNotice(it) } }
+    fun discardRecords(): List<DiscardRecord> = system.scope { system.instancesOf("DiscardRecord").map { materializeDiscardRecord(it) } }
+    fun discardRefusals(): List<DiscardRefusal> = system.scope { system.instancesOf("DiscardRefusal").map { materializeDiscardRefusal(it) } }
+    fun drafts(): List<Draft> = system.scope { system.instancesOf("Draft").map { materializeDraft(it) } }
+    fun publishedListings(): List<PublishedListing> = system.scope { system.instancesOf("PublishedListing").map { materializePublishedListing(it) } }
+    fun orphanReports(): List<OrphanReport> = system.scope { system.instancesOf("OrphanReport").map { materializeOrphanReport(it) } }
+    fun orphanedListings(): List<OrphanedListing> = system.scope { system.instancesOf("OrphanedListing").map { materializeOrphanedListing(it) } }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -119,9 +119,9 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            return materialize(id)
+            materialize(id)
         }
 
         val sellers: SellerQuery get() = SellerQuery(Query("Seller"))
@@ -172,22 +172,22 @@ class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         val drafts: DraftQuery get() = DraftQuery(Query("Draft"))
         /** The record behind [ref] as a member of Draft, or null when it is not one. */
         fun draft(ref: Ref<Listing>): Draft? =
-            system.idOf(ref).let { if (system.exists("Draft", it)) materializeDraft(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Draft", it)) materializeDraft(it) else null } }
 
         val publishedListings: PublishedListingQuery get() = PublishedListingQuery(Query("PublishedListing"))
         /** The record behind [ref] as a member of PublishedListing, or null when it is not one. */
         fun publishedListing(ref: Ref<Listing>): PublishedListing? =
-            system.idOf(ref).let { if (system.exists("PublishedListing", it)) materializePublishedListing(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("PublishedListing", it)) materializePublishedListing(it) else null } }
 
         val orphanReports: OrphanReportQuery get() = OrphanReportQuery(Query("OrphanReport"))
         /** The record behind [ref] as a member of OrphanReport, or null when it is not one. */
         fun orphanReport(ref: Ref<ListingReport>): OrphanReport? =
-            system.idOf(ref).let { if (system.exists("OrphanReport", it)) materializeOrphanReport(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("OrphanReport", it)) materializeOrphanReport(it) else null } }
 
         val orphanedListings: OrphanedListingQuery get() = OrphanedListingQuery(Query("OrphanedListing"))
         /** The record behind [ref] as a member of OrphanedListing, or null when it is not one. */
         fun orphanedListing(ref: Ref<Listing>): OrphanedListing? =
-            system.idOf(ref).let { if (system.exists("OrphanedListing", it)) materializeOrphanedListing(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("OrphanedListing", it)) materializeOrphanedListing(it) else null } }
     }
 
     inner class SellerQuery(q: Query) : TypedQuery<SellerFields, Seller>(system, q, SellerFields(), { materializeSeller(it) }) {

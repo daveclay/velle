@@ -55,7 +55,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("LicenceRenewal", raw, actor = system.idOf(actor)).carrying(input, "LicenceRenewal")
+        return system.commit("LicenceRenewal", raw, actor = system.idOf(actor)).carrying(input)
     }
 
     /** Queue: system-wide.
@@ -89,7 +89,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Ingredient", raw).carrying(input, "Ingredient")
+        return system.commit("Ingredient", raw).carrying(input)
     }
 
     /** Queue: system-wide.
@@ -126,7 +126,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Drug", raw).carrying(input, "Drug")
+        return system.commit("Drug", raw).carrying(input)
     }
 
     /** Queue: system-wide.
@@ -152,7 +152,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Interaction", raw).carrying(input, "Interaction")
+        return system.commit("Interaction", raw).carrying(input)
     }
 
     /** Queue key: [priceChange.drug].
@@ -165,7 +165,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PriceChange", raw).carrying(input, "PriceChange")
+        return system.commit("PriceChange", raw).carrying(input)
     }
 
     /** Queue keys: [withdrawPriceChange.priceChange], [withdrawPriceChange.priceChange.drug] — plus system-wide width below.
@@ -206,7 +206,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("StockLot", raw).carrying(input, "StockLot")
+        return system.commit("StockLot", raw).carrying(input)
     }
 
     /** Queue keys: [countLot.lot] — plus system-wide width below.
@@ -242,7 +242,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Recall", raw).carrying(input, "Recall")
+        return system.commit("Recall", raw).carrying(input)
     }
 
     /** Queue keys: none — this commit contends with no other work.
@@ -255,7 +255,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("InsurancePlan", raw).carrying(input, "InsurancePlan")
+        return system.commit("InsurancePlan", raw).carrying(input)
     }
 
     /** Queue keys: [patient.plan] — plus system-wide width below.
@@ -295,7 +295,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Patient", raw).carrying(input, "Patient")
+        return system.commit("Patient", raw).carrying(input)
     }
 
     /** Queue keys: none — this commit contends with no other work.
@@ -308,7 +308,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Prescriber", raw).carrying(input, "Prescriber")
+        return system.commit("Prescriber", raw).carrying(input)
     }
 
     /** Queue keys: [setAllergies.patient], [setAllergies.patient.plan] — plus system-wide width below.
@@ -412,7 +412,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         val raw = input.raw(system, reg)
         val parts = input.parts(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PrescriberOrder", raw, parts, actor = system.idOf(enteredBy)).carrying(input, "PrescriberOrder")
+        return system.commit("PrescriberOrder", raw, parts, actor = system.idOf(enteredBy)).carrying(input)
     }
 
     /** Queue keys: [discontinuation.prescriber], [discontinuation.prescription], [discontinuation.prescription.order] — plus system-wide width below.
@@ -438,7 +438,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Discontinuation", raw).carrying(input, "Discontinuation")
+        return system.commit("Discontinuation", raw).carrying(input)
     }
 
     /** Queue keys: [correctEntry.prescription], [correctEntry.prescription.drug], [correctEntry.prescription.order], [correctEntry.prescription.order.patient] — plus system-wide width below.
@@ -497,7 +497,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ConflictOverride", raw, actor = system.idOf(actor)).carrying(input, "ConflictOverride")
+        return system.commit("ConflictOverride", raw, actor = system.idOf(actor)).carrying(input)
     }
 
     /** Queue keys: [fillPrescription.lot], [fillPrescription.lot.drug], [fillPrescription.prescription], [fillPrescription.prescription.drug], [fillPrescription.prescription.order], [fillPrescription.prescription.order.patient] — plus system-wide width below.
@@ -549,7 +549,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("MonitoringCheck", raw, actor = system.idOf(actor)).carrying(input, "MonitoringCheck")
+        return system.commit("MonitoringCheck", raw, actor = system.idOf(actor)).carrying(input)
     }
 
     /** Queue keys: [verifyFill.fill], [verifyFill.fill.insurer], [verifyFill.fill.lot], [verifyFill.fill.lot.drug], [verifyFill.fill.prescription], [verifyFill.fill.prescription.drug], [verifyFill.fill.prescription.order], [verifyFill.fill.prescription.order.patient] — plus system-wide width below.
@@ -593,7 +593,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Counselling", raw, actor = system.idOf(actor)).carrying(input, "Counselling")
+        return system.commit("Counselling", raw, actor = system.idOf(actor)).carrying(input)
     }
 
     /** Queue keys: [pickUp.fill], [pickUp.fill.lot], [pickUp.fill.lot.drug], [pickUp.fill.prescription], [pickUp.fill.prescription.drug], [pickUp.fill.prescription.order], [pickUp.fill.prescription.order.patient] — plus system-wide width below.
@@ -638,7 +638,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AutoRefillEnrolment", raw).carrying(input, "AutoRefillEnrolment")
+        return system.commit("AutoRefillEnrolment", raw).carrying(input)
     }
 
     /** Queue key: [autoRefillCancellation.prescription].
@@ -651,7 +651,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AutoRefillCancellation", raw).carrying(input, "AutoRefillCancellation")
+        return system.commit("AutoRefillCancellation", raw).carrying(input)
     }
 
     /** Queue key: [adjudication.claim].
@@ -667,96 +667,96 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         return system.commit("Adjudication", raw).carryingNoRecord(input)
     }
 
-    fun staffs(): List<Staff> = system.instancesOf("Staff").map { materializeStaff(it) }
-    fun licenceRenewals(): List<LicenceRenewal> = system.instancesOf("LicenceRenewal").map { materializeLicenceRenewal(it) }
-    fun licenceReminders(): List<LicenceReminder> = system.instancesOf("LicenceReminder").map { materializeLicenceReminder(it) }
-    fun ingredients(): List<Ingredient> = system.instancesOf("Ingredient").map { materializeIngredient(it) }
-    fun drugs(): List<Drug> = system.instancesOf("Drug").map { materializeDrug(it) }
-    fun interactions(): List<Interaction> = system.instancesOf("Interaction").map { materializeInteraction(it) }
-    fun priceChanges(): List<PriceChange> = system.instancesOf("PriceChange").map { materializePriceChange(it) }
-    fun priceWithdrawals(): List<PriceWithdrawal> = system.instancesOf("PriceWithdrawal").map { materializePriceWithdrawal(it) }
-    fun priceWithdrawalRefusals(): List<PriceWithdrawalRefusal> = system.instancesOf("PriceWithdrawalRefusal").map { materializePriceWithdrawalRefusal(it) }
-    fun stockLots(): List<StockLot> = system.instancesOf("StockLot").map { materializeStockLot(it) }
-    fun stockAdjustments(): List<StockAdjustment> = system.instancesOf("StockAdjustment").map { materializeStockAdjustment(it) }
-    fun countConfirmations(): List<CountConfirmation> = system.instancesOf("CountConfirmation").map { materializeCountConfirmation(it) }
-    fun quarantines(): List<Quarantine> = system.instancesOf("Quarantine").map { materializeQuarantine(it) }
-    fun recalls(): List<Recall> = system.instancesOf("Recall").map { materializeRecall(it) }
-    fun recallNotices(): List<RecallNotice> = system.instancesOf("RecallNotice").map { materializeRecallNotice(it) }
-    fun purchaseOrders(): List<PurchaseOrder> = system.instancesOf("PurchaseOrder").map { materializePurchaseOrder(it) }
-    fun insurancePlans(): List<InsurancePlan> = system.instancesOf("InsurancePlan").map { materializeInsurancePlan(it) }
-    fun patients(): List<Patient> = system.instancesOf("Patient").map { materializePatient(it) }
-    fun prescribers(): List<Prescriber> = system.instancesOf("Prescriber").map { materializePrescriber(it) }
-    fun notices(): List<Notice> = system.instancesOf("Notice").map { materializeNotice(it) }
-    fun prescriberOrders(): List<PrescriberOrder> = system.instancesOf("PrescriberOrder").map { materializePrescriberOrder(it) }
-    fun prescriptions(): List<Prescription> = system.instancesOf("Prescription").map { materializePrescription(it) }
-    fun discontinuations(): List<Discontinuation> = system.instancesOf("Discontinuation").map { materializeDiscontinuation(it) }
-    fun correctionRefusals(): List<CorrectionRefusal> = system.instancesOf("CorrectionRefusal").map { materializeCorrectionRefusal(it) }
-    fun entryVoids(): List<EntryVoid> = system.instancesOf("EntryVoid").map { materializeEntryVoid(it) }
-    fun voidRefusals(): List<VoidRefusal> = system.instancesOf("VoidRefusal").map { materializeVoidRefusal(it) }
-    fun conflictOverrides(): List<ConflictOverride> = system.instancesOf("ConflictOverride").map { materializeConflictOverride(it) }
-    fun pharmacistAlerts(): List<PharmacistAlert> = system.instancesOf("PharmacistAlert").map { materializePharmacistAlert(it) }
-    fun monitoringChecks(): List<MonitoringCheck> = system.instancesOf("MonitoringCheck").map { materializeMonitoringCheck(it) }
-    fun fills(): List<Fill> = system.instancesOf("Fill").map { materializeFill(it) }
-    fun fillRefusals(): List<FillRefusal> = system.instancesOf("FillRefusal").map { materializeFillRefusal(it) }
-    fun controlledLogEntrys(): List<ControlledLogEntry> = system.instancesOf("ControlledLogEntry").map { materializeControlledLogEntry(it) }
-    fun verifications(): List<Verification> = system.instancesOf("Verification").map { materializeVerification(it) }
-    fun counsellings(): List<Counselling> = system.instancesOf("Counselling").map { materializeCounselling(it) }
-    fun returnToStocks(): List<ReturnToStock> = system.instancesOf("ReturnToStock").map { materializeReturnToStock(it) }
-    fun counterExits(): List<CounterExit> = system.instancesOf("CounterExit").map { materializeCounterExit(it) }
-    fun pickups(): List<Pickup> = system.instancesOf("Pickup").map { materializePickup(it) }
-    fun counterAlerts(): List<CounterAlert> = system.instancesOf("CounterAlert").map { materializeCounterAlert(it) }
-    fun refillTasks(): List<RefillTask> = system.instancesOf("RefillTask").map { materializeRefillTask(it) }
-    fun refillRefusals(): List<RefillRefusal> = system.instancesOf("RefillRefusal").map { materializeRefillRefusal(it) }
-    fun authorisationRequests(): List<AuthorisationRequest> = system.instancesOf("AuthorisationRequest").map { materializeAuthorisationRequest(it) }
-    fun taskNags(): List<TaskNag> = system.instancesOf("TaskNag").map { materializeTaskNag(it) }
-    fun autoRefillEnrolments(): List<AutoRefillEnrolment> = system.instancesOf("AutoRefillEnrolment").map { materializeAutoRefillEnrolment(it) }
-    fun autoRefillCancellations(): List<AutoRefillCancellation> = system.instancesOf("AutoRefillCancellation").map { materializeAutoRefillCancellation(it) }
-    fun claims(): List<Claim> = system.instancesOf("Claim").map { materializeClaim(it) }
-    fun claimResponses(): List<ClaimResponse> = system.instancesOf("ClaimResponse").map { materializeClaimResponse(it) }
-    fun claimFollowUps(): List<ClaimFollowUp> = system.instancesOf("ClaimFollowUp").map { materializeClaimFollowUp(it) }
-    fun controlledInventorySnapshots(): List<ControlledInventorySnapshot> = system.instancesOf("ControlledInventorySnapshot").map { materializeControlledInventorySnapshot(it) }
-    fun pharmacists(): List<Pharmacist> = system.instancesOf("Pharmacist").map { materializePharmacist(it) }
-    fun technicians(): List<Technician> = system.instancesOf("Technician").map { materializeTechnician(it) }
-    fun administrators(): List<Administrator> = system.instancesOf("Administrator").map { materializeAdministrator(it) }
-    fun licensedPharmacists(): List<LicensedPharmacist> = system.instancesOf("LicensedPharmacist").map { materializeLicensedPharmacist(it) }
-    fun licenceExpiringSoons(): List<LicenceExpiringSoon> = system.instancesOf("LicenceExpiringSoon").map { materializeLicenceExpiringSoon(it) }
-    fun controlleds(): List<Controlled> = system.instancesOf("Controlled").map { materializeControlled(it) }
-    fun scheduleTwos(): List<ScheduleTwo> = system.instancesOf("ScheduleTwo").map { materializeScheduleTwo(it) }
-    fun lowStocks(): List<LowStock> = system.instancesOf("LowStock").map { materializeLowStock(it) }
-    fun effectivePrices(): List<EffectivePrice> = system.instancesOf("EffectivePrice").map { materializeEffectivePrice(it) }
-    fun expiredLots(): List<ExpiredLot> = system.instancesOf("ExpiredLot").map { materializeExpiredLot(it) }
-    fun quarantinedLots(): List<QuarantinedLot> = system.instancesOf("QuarantinedLot").map { materializeQuarantinedLot(it) }
-    fun recalledLots(): List<RecalledLot> = system.instancesOf("RecalledLot").map { materializeRecalledLot(it) }
-    fun usableLots(): List<UsableLot> = system.instancesOf("UsableLot").map { materializeUsableLot(it) }
-    fun openPurchaseOrders(): List<OpenPurchaseOrder> = system.instancesOf("OpenPurchaseOrder").map { materializeOpenPurchaseOrder(it) }
-    fun receivedPurchaseOrders(): List<ReceivedPurchaseOrder> = system.instancesOf("ReceivedPurchaseOrder").map { materializeReceivedPurchaseOrder(it) }
-    fun recipients(): List<Recipient> = system.instancesOf("Recipient").map { materializeRecipient(it) }
-    fun discontinueds(): List<Discontinued> = system.instancesOf("Discontinued").map { materializeDiscontinued(it) }
-    fun expireds(): List<Expired> = system.instancesOf("Expired").map { materializeExpired(it) }
-    fun exhausteds(): List<Exhausted> = system.instancesOf("Exhausted").map { materializeExhausted(it) }
-    fun currents(): List<Current> = system.instancesOf("Current").map { materializeCurrent(it) }
-    fun activePrescriptions(): List<ActivePrescription> = system.instancesOf("ActivePrescription").map { materializeActivePrescription(it) }
-    fun filledPrescriptions(): List<FilledPrescription> = system.instancesOf("FilledPrescription").map { materializeFilledPrescription(it) }
-    fun voideds(): List<Voided> = system.instancesOf("Voided").map { materializeVoided(it) }
-    fun allergyConflicts(): List<AllergyConflict> = system.instancesOf("AllergyConflict").map { materializeAllergyConflict(it) }
-    fun interactionConflicts(): List<InteractionConflict> = system.instancesOf("InteractionConflict").map { materializeInteractionConflict(it) }
-    fun cleareds(): List<Cleared> = system.instancesOf("Cleared").map { materializeCleared(it) }
-    fun fillables(): List<Fillable> = system.instancesOf("Fillable").map { materializeFillable(it) }
-    fun multiplePrescriberss(): List<MultiplePrescribers> = system.instancesOf("MultiplePrescribers").map { materializeMultiplePrescribers(it) }
-    fun verifiedFills(): List<VerifiedFill> = system.instancesOf("VerifiedFill").map { materializeVerifiedFill(it) }
-    fun rejectedFills(): List<RejectedFill> = system.instancesOf("RejectedFill").map { materializeRejectedFill(it) }
-    fun consumingFills(): List<ConsumingFill> = system.instancesOf("ConsumingFill").map { materializeConsumingFill(it) }
-    fun counsellingDues(): List<CounsellingDue> = system.instancesOf("CounsellingDue").map { materializeCounsellingDue(it) }
-    fun readyForPickups(): List<ReadyForPickup> = system.instancesOf("ReadyForPickup").map { materializeReadyForPickup(it) }
-    fun uncollecteds(): List<Uncollected> = system.instancesOf("Uncollected").map { materializeUncollected(it) }
-    fun openRefillTasks(): List<OpenRefillTask> = system.instancesOf("OpenRefillTask").map { materializeOpenRefillTask(it) }
-    fun overdueRefillTasks(): List<OverdueRefillTask> = system.instancesOf("OverdueRefillTask").map { materializeOverdueRefillTask(it) }
-    fun autoRefills(): List<AutoRefill> = system.instancesOf("AutoRefill").map { materializeAutoRefill(it) }
-    fun insuredFills(): List<InsuredFill> = system.instancesOf("InsuredFill").map { materializeInsuredFill(it) }
-    fun pendingClaims(): List<PendingClaim> = system.instancesOf("PendingClaim").map { materializePendingClaim(it) }
-    fun paidClaims(): List<PaidClaim> = system.instancesOf("PaidClaim").map { materializePaidClaim(it) }
-    fun rejectedClaims(): List<RejectedClaim> = system.instancesOf("RejectedClaim").map { materializeRejectedClaim(it) }
-    fun staleClaims(): List<StaleClaim> = system.instancesOf("StaleClaim").map { materializeStaleClaim(it) }
+    fun staffs(): List<Staff> = system.scope { system.instancesOf("Staff").map { materializeStaff(it) } }
+    fun licenceRenewals(): List<LicenceRenewal> = system.scope { system.instancesOf("LicenceRenewal").map { materializeLicenceRenewal(it) } }
+    fun licenceReminders(): List<LicenceReminder> = system.scope { system.instancesOf("LicenceReminder").map { materializeLicenceReminder(it) } }
+    fun ingredients(): List<Ingredient> = system.scope { system.instancesOf("Ingredient").map { materializeIngredient(it) } }
+    fun drugs(): List<Drug> = system.scope { system.instancesOf("Drug").map { materializeDrug(it) } }
+    fun interactions(): List<Interaction> = system.scope { system.instancesOf("Interaction").map { materializeInteraction(it) } }
+    fun priceChanges(): List<PriceChange> = system.scope { system.instancesOf("PriceChange").map { materializePriceChange(it) } }
+    fun priceWithdrawals(): List<PriceWithdrawal> = system.scope { system.instancesOf("PriceWithdrawal").map { materializePriceWithdrawal(it) } }
+    fun priceWithdrawalRefusals(): List<PriceWithdrawalRefusal> = system.scope { system.instancesOf("PriceWithdrawalRefusal").map { materializePriceWithdrawalRefusal(it) } }
+    fun stockLots(): List<StockLot> = system.scope { system.instancesOf("StockLot").map { materializeStockLot(it) } }
+    fun stockAdjustments(): List<StockAdjustment> = system.scope { system.instancesOf("StockAdjustment").map { materializeStockAdjustment(it) } }
+    fun countConfirmations(): List<CountConfirmation> = system.scope { system.instancesOf("CountConfirmation").map { materializeCountConfirmation(it) } }
+    fun quarantines(): List<Quarantine> = system.scope { system.instancesOf("Quarantine").map { materializeQuarantine(it) } }
+    fun recalls(): List<Recall> = system.scope { system.instancesOf("Recall").map { materializeRecall(it) } }
+    fun recallNotices(): List<RecallNotice> = system.scope { system.instancesOf("RecallNotice").map { materializeRecallNotice(it) } }
+    fun purchaseOrders(): List<PurchaseOrder> = system.scope { system.instancesOf("PurchaseOrder").map { materializePurchaseOrder(it) } }
+    fun insurancePlans(): List<InsurancePlan> = system.scope { system.instancesOf("InsurancePlan").map { materializeInsurancePlan(it) } }
+    fun patients(): List<Patient> = system.scope { system.instancesOf("Patient").map { materializePatient(it) } }
+    fun prescribers(): List<Prescriber> = system.scope { system.instancesOf("Prescriber").map { materializePrescriber(it) } }
+    fun notices(): List<Notice> = system.scope { system.instancesOf("Notice").map { materializeNotice(it) } }
+    fun prescriberOrders(): List<PrescriberOrder> = system.scope { system.instancesOf("PrescriberOrder").map { materializePrescriberOrder(it) } }
+    fun prescriptions(): List<Prescription> = system.scope { system.instancesOf("Prescription").map { materializePrescription(it) } }
+    fun discontinuations(): List<Discontinuation> = system.scope { system.instancesOf("Discontinuation").map { materializeDiscontinuation(it) } }
+    fun correctionRefusals(): List<CorrectionRefusal> = system.scope { system.instancesOf("CorrectionRefusal").map { materializeCorrectionRefusal(it) } }
+    fun entryVoids(): List<EntryVoid> = system.scope { system.instancesOf("EntryVoid").map { materializeEntryVoid(it) } }
+    fun voidRefusals(): List<VoidRefusal> = system.scope { system.instancesOf("VoidRefusal").map { materializeVoidRefusal(it) } }
+    fun conflictOverrides(): List<ConflictOverride> = system.scope { system.instancesOf("ConflictOverride").map { materializeConflictOverride(it) } }
+    fun pharmacistAlerts(): List<PharmacistAlert> = system.scope { system.instancesOf("PharmacistAlert").map { materializePharmacistAlert(it) } }
+    fun monitoringChecks(): List<MonitoringCheck> = system.scope { system.instancesOf("MonitoringCheck").map { materializeMonitoringCheck(it) } }
+    fun fills(): List<Fill> = system.scope { system.instancesOf("Fill").map { materializeFill(it) } }
+    fun fillRefusals(): List<FillRefusal> = system.scope { system.instancesOf("FillRefusal").map { materializeFillRefusal(it) } }
+    fun controlledLogEntrys(): List<ControlledLogEntry> = system.scope { system.instancesOf("ControlledLogEntry").map { materializeControlledLogEntry(it) } }
+    fun verifications(): List<Verification> = system.scope { system.instancesOf("Verification").map { materializeVerification(it) } }
+    fun counsellings(): List<Counselling> = system.scope { system.instancesOf("Counselling").map { materializeCounselling(it) } }
+    fun returnToStocks(): List<ReturnToStock> = system.scope { system.instancesOf("ReturnToStock").map { materializeReturnToStock(it) } }
+    fun counterExits(): List<CounterExit> = system.scope { system.instancesOf("CounterExit").map { materializeCounterExit(it) } }
+    fun pickups(): List<Pickup> = system.scope { system.instancesOf("Pickup").map { materializePickup(it) } }
+    fun counterAlerts(): List<CounterAlert> = system.scope { system.instancesOf("CounterAlert").map { materializeCounterAlert(it) } }
+    fun refillTasks(): List<RefillTask> = system.scope { system.instancesOf("RefillTask").map { materializeRefillTask(it) } }
+    fun refillRefusals(): List<RefillRefusal> = system.scope { system.instancesOf("RefillRefusal").map { materializeRefillRefusal(it) } }
+    fun authorisationRequests(): List<AuthorisationRequest> = system.scope { system.instancesOf("AuthorisationRequest").map { materializeAuthorisationRequest(it) } }
+    fun taskNags(): List<TaskNag> = system.scope { system.instancesOf("TaskNag").map { materializeTaskNag(it) } }
+    fun autoRefillEnrolments(): List<AutoRefillEnrolment> = system.scope { system.instancesOf("AutoRefillEnrolment").map { materializeAutoRefillEnrolment(it) } }
+    fun autoRefillCancellations(): List<AutoRefillCancellation> = system.scope { system.instancesOf("AutoRefillCancellation").map { materializeAutoRefillCancellation(it) } }
+    fun claims(): List<Claim> = system.scope { system.instancesOf("Claim").map { materializeClaim(it) } }
+    fun claimResponses(): List<ClaimResponse> = system.scope { system.instancesOf("ClaimResponse").map { materializeClaimResponse(it) } }
+    fun claimFollowUps(): List<ClaimFollowUp> = system.scope { system.instancesOf("ClaimFollowUp").map { materializeClaimFollowUp(it) } }
+    fun controlledInventorySnapshots(): List<ControlledInventorySnapshot> = system.scope { system.instancesOf("ControlledInventorySnapshot").map { materializeControlledInventorySnapshot(it) } }
+    fun pharmacists(): List<Pharmacist> = system.scope { system.instancesOf("Pharmacist").map { materializePharmacist(it) } }
+    fun technicians(): List<Technician> = system.scope { system.instancesOf("Technician").map { materializeTechnician(it) } }
+    fun administrators(): List<Administrator> = system.scope { system.instancesOf("Administrator").map { materializeAdministrator(it) } }
+    fun licensedPharmacists(): List<LicensedPharmacist> = system.scope { system.instancesOf("LicensedPharmacist").map { materializeLicensedPharmacist(it) } }
+    fun licenceExpiringSoons(): List<LicenceExpiringSoon> = system.scope { system.instancesOf("LicenceExpiringSoon").map { materializeLicenceExpiringSoon(it) } }
+    fun controlleds(): List<Controlled> = system.scope { system.instancesOf("Controlled").map { materializeControlled(it) } }
+    fun scheduleTwos(): List<ScheduleTwo> = system.scope { system.instancesOf("ScheduleTwo").map { materializeScheduleTwo(it) } }
+    fun lowStocks(): List<LowStock> = system.scope { system.instancesOf("LowStock").map { materializeLowStock(it) } }
+    fun effectivePrices(): List<EffectivePrice> = system.scope { system.instancesOf("EffectivePrice").map { materializeEffectivePrice(it) } }
+    fun expiredLots(): List<ExpiredLot> = system.scope { system.instancesOf("ExpiredLot").map { materializeExpiredLot(it) } }
+    fun quarantinedLots(): List<QuarantinedLot> = system.scope { system.instancesOf("QuarantinedLot").map { materializeQuarantinedLot(it) } }
+    fun recalledLots(): List<RecalledLot> = system.scope { system.instancesOf("RecalledLot").map { materializeRecalledLot(it) } }
+    fun usableLots(): List<UsableLot> = system.scope { system.instancesOf("UsableLot").map { materializeUsableLot(it) } }
+    fun openPurchaseOrders(): List<OpenPurchaseOrder> = system.scope { system.instancesOf("OpenPurchaseOrder").map { materializeOpenPurchaseOrder(it) } }
+    fun receivedPurchaseOrders(): List<ReceivedPurchaseOrder> = system.scope { system.instancesOf("ReceivedPurchaseOrder").map { materializeReceivedPurchaseOrder(it) } }
+    fun recipients(): List<Recipient> = system.scope { system.instancesOf("Recipient").map { materializeRecipient(it) } }
+    fun discontinueds(): List<Discontinued> = system.scope { system.instancesOf("Discontinued").map { materializeDiscontinued(it) } }
+    fun expireds(): List<Expired> = system.scope { system.instancesOf("Expired").map { materializeExpired(it) } }
+    fun exhausteds(): List<Exhausted> = system.scope { system.instancesOf("Exhausted").map { materializeExhausted(it) } }
+    fun currents(): List<Current> = system.scope { system.instancesOf("Current").map { materializeCurrent(it) } }
+    fun activePrescriptions(): List<ActivePrescription> = system.scope { system.instancesOf("ActivePrescription").map { materializeActivePrescription(it) } }
+    fun filledPrescriptions(): List<FilledPrescription> = system.scope { system.instancesOf("FilledPrescription").map { materializeFilledPrescription(it) } }
+    fun voideds(): List<Voided> = system.scope { system.instancesOf("Voided").map { materializeVoided(it) } }
+    fun allergyConflicts(): List<AllergyConflict> = system.scope { system.instancesOf("AllergyConflict").map { materializeAllergyConflict(it) } }
+    fun interactionConflicts(): List<InteractionConflict> = system.scope { system.instancesOf("InteractionConflict").map { materializeInteractionConflict(it) } }
+    fun cleareds(): List<Cleared> = system.scope { system.instancesOf("Cleared").map { materializeCleared(it) } }
+    fun fillables(): List<Fillable> = system.scope { system.instancesOf("Fillable").map { materializeFillable(it) } }
+    fun multiplePrescriberss(): List<MultiplePrescribers> = system.scope { system.instancesOf("MultiplePrescribers").map { materializeMultiplePrescribers(it) } }
+    fun verifiedFills(): List<VerifiedFill> = system.scope { system.instancesOf("VerifiedFill").map { materializeVerifiedFill(it) } }
+    fun rejectedFills(): List<RejectedFill> = system.scope { system.instancesOf("RejectedFill").map { materializeRejectedFill(it) } }
+    fun consumingFills(): List<ConsumingFill> = system.scope { system.instancesOf("ConsumingFill").map { materializeConsumingFill(it) } }
+    fun counsellingDues(): List<CounsellingDue> = system.scope { system.instancesOf("CounsellingDue").map { materializeCounsellingDue(it) } }
+    fun readyForPickups(): List<ReadyForPickup> = system.scope { system.instancesOf("ReadyForPickup").map { materializeReadyForPickup(it) } }
+    fun uncollecteds(): List<Uncollected> = system.scope { system.instancesOf("Uncollected").map { materializeUncollected(it) } }
+    fun openRefillTasks(): List<OpenRefillTask> = system.scope { system.instancesOf("OpenRefillTask").map { materializeOpenRefillTask(it) } }
+    fun overdueRefillTasks(): List<OverdueRefillTask> = system.scope { system.instancesOf("OverdueRefillTask").map { materializeOverdueRefillTask(it) } }
+    fun autoRefills(): List<AutoRefill> = system.scope { system.instancesOf("AutoRefill").map { materializeAutoRefill(it) } }
+    fun insuredFills(): List<InsuredFill> = system.scope { system.instancesOf("InsuredFill").map { materializeInsuredFill(it) } }
+    fun pendingClaims(): List<PendingClaim> = system.scope { system.instancesOf("PendingClaim").map { materializePendingClaim(it) } }
+    fun paidClaims(): List<PaidClaim> = system.scope { system.instancesOf("PaidClaim").map { materializePaidClaim(it) } }
+    fun rejectedClaims(): List<RejectedClaim> = system.scope { system.instancesOf("RejectedClaim").map { materializeRejectedClaim(it) } }
+    fun staleClaims(): List<StaleClaim> = system.scope { system.instancesOf("StaleClaim").map { materializeStaleClaim(it) } }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -768,9 +768,9 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            return materialize(id)
+            materialize(id)
         }
 
         val staffs: StaffQuery get() = StaffQuery(Query("Staff"))
@@ -1016,209 +1016,209 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         val pharmacists: PharmacistQuery get() = PharmacistQuery(Query("Pharmacist"))
         /** The record behind [ref] as a member of Pharmacist, or null when it is not one. */
         fun pharmacist(ref: Ref<Staff>): Pharmacist? =
-            system.idOf(ref).let { if (system.exists("Pharmacist", it)) materializePharmacist(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Pharmacist", it)) materializePharmacist(it) else null } }
 
         val technicians: TechnicianQuery get() = TechnicianQuery(Query("Technician"))
         /** The record behind [ref] as a member of Technician, or null when it is not one. */
         fun technician(ref: Ref<Staff>): Technician? =
-            system.idOf(ref).let { if (system.exists("Technician", it)) materializeTechnician(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Technician", it)) materializeTechnician(it) else null } }
 
         val administrators: AdministratorQuery get() = AdministratorQuery(Query("Administrator"))
         /** The record behind [ref] as a member of Administrator, or null when it is not one. */
         fun administrator(ref: Ref<Staff>): Administrator? =
-            system.idOf(ref).let { if (system.exists("Administrator", it)) materializeAdministrator(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Administrator", it)) materializeAdministrator(it) else null } }
 
         val licensedPharmacists: LicensedPharmacistQuery get() = LicensedPharmacistQuery(Query("LicensedPharmacist"))
         /** The record behind [ref] as a member of LicensedPharmacist, or null when it is not one. */
         fun licensedPharmacist(ref: Ref<Staff>): LicensedPharmacist? =
-            system.idOf(ref).let { if (system.exists("LicensedPharmacist", it)) materializeLicensedPharmacist(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("LicensedPharmacist", it)) materializeLicensedPharmacist(it) else null } }
 
         val licenceExpiringSoons: LicenceExpiringSoonQuery get() = LicenceExpiringSoonQuery(Query("LicenceExpiringSoon"))
         /** The record behind [ref] as a member of LicenceExpiringSoon, or null when it is not one. */
         fun licenceExpiringSoon(ref: Ref<Staff>): LicenceExpiringSoon? =
-            system.idOf(ref).let { if (system.exists("LicenceExpiringSoon", it)) materializeLicenceExpiringSoon(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("LicenceExpiringSoon", it)) materializeLicenceExpiringSoon(it) else null } }
 
         val controlleds: ControlledQuery get() = ControlledQuery(Query("Controlled"))
         /** The record behind [ref] as a member of Controlled, or null when it is not one. */
         fun controlled(ref: Ref<Drug>): Controlled? =
-            system.idOf(ref).let { if (system.exists("Controlled", it)) materializeControlled(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Controlled", it)) materializeControlled(it) else null } }
 
         val scheduleTwos: ScheduleTwoQuery get() = ScheduleTwoQuery(Query("ScheduleTwo"))
         /** The record behind [ref] as a member of ScheduleTwo, or null when it is not one. */
         fun scheduleTwo(ref: Ref<Drug>): ScheduleTwo? =
-            system.idOf(ref).let { if (system.exists("ScheduleTwo", it)) materializeScheduleTwo(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ScheduleTwo", it)) materializeScheduleTwo(it) else null } }
 
         val lowStocks: LowStockQuery get() = LowStockQuery(Query("LowStock"))
         /** The record behind [ref] as a member of LowStock, or null when it is not one. */
         fun lowStock(ref: Ref<Drug>): LowStock? =
-            system.idOf(ref).let { if (system.exists("LowStock", it)) materializeLowStock(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("LowStock", it)) materializeLowStock(it) else null } }
 
         val effectivePrices: EffectivePriceQuery get() = EffectivePriceQuery(Query("EffectivePrice"))
         /** The record behind [ref] as a member of EffectivePrice, or null when it is not one. */
         fun effectivePrice(ref: Ref<PriceChange>): EffectivePrice? =
-            system.idOf(ref).let { if (system.exists("EffectivePrice", it)) materializeEffectivePrice(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("EffectivePrice", it)) materializeEffectivePrice(it) else null } }
 
         val expiredLots: ExpiredLotQuery get() = ExpiredLotQuery(Query("ExpiredLot"))
         /** The record behind [ref] as a member of ExpiredLot, or null when it is not one. */
         fun expiredLot(ref: Ref<StockLot>): ExpiredLot? =
-            system.idOf(ref).let { if (system.exists("ExpiredLot", it)) materializeExpiredLot(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ExpiredLot", it)) materializeExpiredLot(it) else null } }
 
         val quarantinedLots: QuarantinedLotQuery get() = QuarantinedLotQuery(Query("QuarantinedLot"))
         /** The record behind [ref] as a member of QuarantinedLot, or null when it is not one. */
         fun quarantinedLot(ref: Ref<StockLot>): QuarantinedLot? =
-            system.idOf(ref).let { if (system.exists("QuarantinedLot", it)) materializeQuarantinedLot(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("QuarantinedLot", it)) materializeQuarantinedLot(it) else null } }
 
         val recalledLots: RecalledLotQuery get() = RecalledLotQuery(Query("RecalledLot"))
         /** The record behind [ref] as a member of RecalledLot, or null when it is not one. */
         fun recalledLot(ref: Ref<StockLot>): RecalledLot? =
-            system.idOf(ref).let { if (system.exists("RecalledLot", it)) materializeRecalledLot(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("RecalledLot", it)) materializeRecalledLot(it) else null } }
 
         val usableLots: UsableLotQuery get() = UsableLotQuery(Query("UsableLot"))
         /** The record behind [ref] as a member of UsableLot, or null when it is not one. */
         fun usableLot(ref: Ref<StockLot>): UsableLot? =
-            system.idOf(ref).let { if (system.exists("UsableLot", it)) materializeUsableLot(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("UsableLot", it)) materializeUsableLot(it) else null } }
 
         val openPurchaseOrders: OpenPurchaseOrderQuery get() = OpenPurchaseOrderQuery(Query("OpenPurchaseOrder"))
         /** The record behind [ref] as a member of OpenPurchaseOrder, or null when it is not one. */
         fun openPurchaseOrder(ref: Ref<PurchaseOrder>): OpenPurchaseOrder? =
-            system.idOf(ref).let { if (system.exists("OpenPurchaseOrder", it)) materializeOpenPurchaseOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("OpenPurchaseOrder", it)) materializeOpenPurchaseOrder(it) else null } }
 
         val receivedPurchaseOrders: ReceivedPurchaseOrderQuery get() = ReceivedPurchaseOrderQuery(Query("ReceivedPurchaseOrder"))
         /** The record behind [ref] as a member of ReceivedPurchaseOrder, or null when it is not one. */
         fun receivedPurchaseOrder(ref: Ref<PurchaseOrder>): ReceivedPurchaseOrder? =
-            system.idOf(ref).let { if (system.exists("ReceivedPurchaseOrder", it)) materializeReceivedPurchaseOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ReceivedPurchaseOrder", it)) materializeReceivedPurchaseOrder(it) else null } }
 
         val recipients: RecipientQuery get() = RecipientQuery(Query("Recipient"))
 
         val discontinueds: DiscontinuedQuery get() = DiscontinuedQuery(Query("Discontinued"))
         /** The record behind [ref] as a member of Discontinued, or null when it is not one. */
         fun discontinued(ref: Ref<Prescription>): Discontinued? =
-            system.idOf(ref).let { if (system.exists("Discontinued", it)) materializeDiscontinued(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Discontinued", it)) materializeDiscontinued(it) else null } }
 
         val expireds: ExpiredQuery get() = ExpiredQuery(Query("Expired"))
         /** The record behind [ref] as a member of Expired, or null when it is not one. */
         fun expired(ref: Ref<Prescription>): Expired? =
-            system.idOf(ref).let { if (system.exists("Expired", it)) materializeExpired(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Expired", it)) materializeExpired(it) else null } }
 
         val exhausteds: ExhaustedQuery get() = ExhaustedQuery(Query("Exhausted"))
         /** The record behind [ref] as a member of Exhausted, or null when it is not one. */
         fun exhausted(ref: Ref<Prescription>): Exhausted? =
-            system.idOf(ref).let { if (system.exists("Exhausted", it)) materializeExhausted(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Exhausted", it)) materializeExhausted(it) else null } }
 
         val currents: CurrentQuery get() = CurrentQuery(Query("Current"))
         /** The record behind [ref] as a member of Current, or null when it is not one. */
         fun current(ref: Ref<Prescription>): Current? =
-            system.idOf(ref).let { if (system.exists("Current", it)) materializeCurrent(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Current", it)) materializeCurrent(it) else null } }
 
         val activePrescriptions: ActivePrescriptionQuery get() = ActivePrescriptionQuery(Query("ActivePrescription"))
         /** The record behind [ref] as a member of ActivePrescription, or null when it is not one. */
         fun activePrescription(ref: Ref<Prescription>): ActivePrescription? =
-            system.idOf(ref).let { if (system.exists("ActivePrescription", it)) materializeActivePrescription(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ActivePrescription", it)) materializeActivePrescription(it) else null } }
 
         val filledPrescriptions: FilledPrescriptionQuery get() = FilledPrescriptionQuery(Query("FilledPrescription"))
         /** The record behind [ref] as a member of FilledPrescription, or null when it is not one. */
         fun filledPrescription(ref: Ref<Prescription>): FilledPrescription? =
-            system.idOf(ref).let { if (system.exists("FilledPrescription", it)) materializeFilledPrescription(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("FilledPrescription", it)) materializeFilledPrescription(it) else null } }
 
         val voideds: VoidedQuery get() = VoidedQuery(Query("Voided"))
         /** The record behind [ref] as a member of Voided, or null when it is not one. */
         fun voided(ref: Ref<Prescription>): Voided? =
-            system.idOf(ref).let { if (system.exists("Voided", it)) materializeVoided(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Voided", it)) materializeVoided(it) else null } }
 
         val allergyConflicts: AllergyConflictQuery get() = AllergyConflictQuery(Query("AllergyConflict"))
         /** The record behind [ref] as a member of AllergyConflict, or null when it is not one. */
         fun allergyConflict(ref: Ref<Prescription>): AllergyConflict? =
-            system.idOf(ref).let { if (system.exists("AllergyConflict", it)) materializeAllergyConflict(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("AllergyConflict", it)) materializeAllergyConflict(it) else null } }
 
         val interactionConflicts: InteractionConflictQuery get() = InteractionConflictQuery(Query("InteractionConflict"))
         /** The record behind [ref] as a member of InteractionConflict, or null when it is not one. */
         fun interactionConflict(ref: Ref<Prescription>): InteractionConflict? =
-            system.idOf(ref).let { if (system.exists("InteractionConflict", it)) materializeInteractionConflict(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("InteractionConflict", it)) materializeInteractionConflict(it) else null } }
 
         val cleareds: ClearedQuery get() = ClearedQuery(Query("Cleared"))
         /** The record behind [ref] as a member of Cleared, or null when it is not one. */
         fun cleared(ref: Ref<Prescription>): Cleared? =
-            system.idOf(ref).let { if (system.exists("Cleared", it)) materializeCleared(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Cleared", it)) materializeCleared(it) else null } }
 
         val fillables: FillableQuery get() = FillableQuery(Query("Fillable"))
         /** The record behind [ref] as a member of Fillable, or null when it is not one. */
         fun fillable(ref: Ref<Prescription>): Fillable? =
-            system.idOf(ref).let { if (system.exists("Fillable", it)) materializeFillable(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Fillable", it)) materializeFillable(it) else null } }
 
         val multiplePrescriberss: MultiplePrescribersQuery get() = MultiplePrescribersQuery(Query("MultiplePrescribers"))
         /** The record behind [ref] as a member of MultiplePrescribers, or null when it is not one. */
         fun multiplePrescribers(ref: Ref<Patient>): MultiplePrescribers? =
-            system.idOf(ref).let { if (system.exists("MultiplePrescribers", it)) materializeMultiplePrescribers(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("MultiplePrescribers", it)) materializeMultiplePrescribers(it) else null } }
 
         val verifiedFills: VerifiedFillQuery get() = VerifiedFillQuery(Query("VerifiedFill"))
         /** The record behind [ref] as a member of VerifiedFill, or null when it is not one. */
         fun verifiedFill(ref: Ref<Fill>): VerifiedFill? =
-            system.idOf(ref).let { if (system.exists("VerifiedFill", it)) materializeVerifiedFill(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("VerifiedFill", it)) materializeVerifiedFill(it) else null } }
 
         val rejectedFills: RejectedFillQuery get() = RejectedFillQuery(Query("RejectedFill"))
         /** The record behind [ref] as a member of RejectedFill, or null when it is not one. */
         fun rejectedFill(ref: Ref<Fill>): RejectedFill? =
-            system.idOf(ref).let { if (system.exists("RejectedFill", it)) materializeRejectedFill(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("RejectedFill", it)) materializeRejectedFill(it) else null } }
 
         val consumingFills: ConsumingFillQuery get() = ConsumingFillQuery(Query("ConsumingFill"))
         /** The record behind [ref] as a member of ConsumingFill, or null when it is not one. */
         fun consumingFill(ref: Ref<Fill>): ConsumingFill? =
-            system.idOf(ref).let { if (system.exists("ConsumingFill", it)) materializeConsumingFill(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ConsumingFill", it)) materializeConsumingFill(it) else null } }
 
         val counsellingDues: CounsellingDueQuery get() = CounsellingDueQuery(Query("CounsellingDue"))
         /** The record behind [ref] as a member of CounsellingDue, or null when it is not one. */
         fun counsellingDue(ref: Ref<Fill>): CounsellingDue? =
-            system.idOf(ref).let { if (system.exists("CounsellingDue", it)) materializeCounsellingDue(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("CounsellingDue", it)) materializeCounsellingDue(it) else null } }
 
         val readyForPickups: ReadyForPickupQuery get() = ReadyForPickupQuery(Query("ReadyForPickup"))
         /** The record behind [ref] as a member of ReadyForPickup, or null when it is not one. */
         fun readyForPickup(ref: Ref<Fill>): ReadyForPickup? =
-            system.idOf(ref).let { if (system.exists("ReadyForPickup", it)) materializeReadyForPickup(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ReadyForPickup", it)) materializeReadyForPickup(it) else null } }
 
         val uncollecteds: UncollectedQuery get() = UncollectedQuery(Query("Uncollected"))
         /** The record behind [ref] as a member of Uncollected, or null when it is not one. */
         fun uncollected(ref: Ref<Fill>): Uncollected? =
-            system.idOf(ref).let { if (system.exists("Uncollected", it)) materializeUncollected(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Uncollected", it)) materializeUncollected(it) else null } }
 
         val openRefillTasks: OpenRefillTaskQuery get() = OpenRefillTaskQuery(Query("OpenRefillTask"))
         /** The record behind [ref] as a member of OpenRefillTask, or null when it is not one. */
         fun openRefillTask(ref: Ref<RefillTask>): OpenRefillTask? =
-            system.idOf(ref).let { if (system.exists("OpenRefillTask", it)) materializeOpenRefillTask(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("OpenRefillTask", it)) materializeOpenRefillTask(it) else null } }
 
         val overdueRefillTasks: OverdueRefillTaskQuery get() = OverdueRefillTaskQuery(Query("OverdueRefillTask"))
         /** The record behind [ref] as a member of OverdueRefillTask, or null when it is not one. */
         fun overdueRefillTask(ref: Ref<RefillTask>): OverdueRefillTask? =
-            system.idOf(ref).let { if (system.exists("OverdueRefillTask", it)) materializeOverdueRefillTask(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("OverdueRefillTask", it)) materializeOverdueRefillTask(it) else null } }
 
         val autoRefills: AutoRefillQuery get() = AutoRefillQuery(Query("AutoRefill"))
         /** The record behind [ref] as a member of AutoRefill, or null when it is not one. */
         fun autoRefill(ref: Ref<Prescription>): AutoRefill? =
-            system.idOf(ref).let { if (system.exists("AutoRefill", it)) materializeAutoRefill(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("AutoRefill", it)) materializeAutoRefill(it) else null } }
 
         val insuredFills: InsuredFillQuery get() = InsuredFillQuery(Query("InsuredFill"))
         /** The record behind [ref] as a member of InsuredFill, or null when it is not one. */
         fun insuredFill(ref: Ref<Fill>): InsuredFill? =
-            system.idOf(ref).let { if (system.exists("InsuredFill", it)) materializeInsuredFill(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("InsuredFill", it)) materializeInsuredFill(it) else null } }
 
         val pendingClaims: PendingClaimQuery get() = PendingClaimQuery(Query("PendingClaim"))
         /** The record behind [ref] as a member of PendingClaim, or null when it is not one. */
         fun pendingClaim(ref: Ref<Claim>): PendingClaim? =
-            system.idOf(ref).let { if (system.exists("PendingClaim", it)) materializePendingClaim(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("PendingClaim", it)) materializePendingClaim(it) else null } }
 
         val paidClaims: PaidClaimQuery get() = PaidClaimQuery(Query("PaidClaim"))
         /** The record behind [ref] as a member of PaidClaim, or null when it is not one. */
         fun paidClaim(ref: Ref<Claim>): PaidClaim? =
-            system.idOf(ref).let { if (system.exists("PaidClaim", it)) materializePaidClaim(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("PaidClaim", it)) materializePaidClaim(it) else null } }
 
         val rejectedClaims: RejectedClaimQuery get() = RejectedClaimQuery(Query("RejectedClaim"))
         /** The record behind [ref] as a member of RejectedClaim, or null when it is not one. */
         fun rejectedClaim(ref: Ref<Claim>): RejectedClaim? =
-            system.idOf(ref).let { if (system.exists("RejectedClaim", it)) materializeRejectedClaim(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("RejectedClaim", it)) materializeRejectedClaim(it) else null } }
 
         val staleClaims: StaleClaimQuery get() = StaleClaimQuery(Query("StaleClaim"))
         /** The record behind [ref] as a member of StaleClaim, or null when it is not one. */
         fun staleClaim(ref: Ref<Claim>): StaleClaim? =
-            system.idOf(ref).let { if (system.exists("StaleClaim", it)) materializeStaleClaim(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("StaleClaim", it)) materializeStaleClaim(it) else null } }
     }
 
     inner class StaffQuery(q: Query) : TypedQuery<StaffFields, Staff>(system, q, StaffFields(), { materializeStaff(it) }) {
@@ -3140,462 +3140,463 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     )
 
     // ── reads for a Staff: what the surface returns to one of them (Reference §22, "The actor") ──
-    fun read(viewer: Ref<Staff>): StaffRead = StaffRead(system.idOf(viewer))
+    fun read(viewer: Ref<Staff>): StaffRead = StaffRead(viewer)
 
-    inner class StaffRead(private val viewer: Long) {
+    // the viewer is held as a reference: a handle would die with the scope of the first read
+    inner class StaffRead(private val viewer: Ref<Staff>) {
         val staffs: StaffQuery get() = StaffQuery(Query("Staff", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun staff(ref: Ref<Staff>): Staff? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Staff", it)) materializeStaff(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Staff", it)) materializeStaff(it) else null } }
         fun staff(key: StoreKey): Staff? = staff(Ref.Persisted("Staff", key))
         fun staff(key: Long): Staff? = staff(StoreKey(key))
         val licenceRenewals: LicenceRenewalQuery get() = LicenceRenewalQuery(Query("LicenceRenewal", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun licenceRenewal(ref: Ref<LicenceRenewal>): LicenceRenewal? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("LicenceRenewal", it)) materializeLicenceRenewal(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("LicenceRenewal", it)) materializeLicenceRenewal(it) else null } }
         fun licenceRenewal(key: StoreKey): LicenceRenewal? = licenceRenewal(Ref.Persisted("LicenceRenewal", key))
         fun licenceRenewal(key: Long): LicenceRenewal? = licenceRenewal(StoreKey(key))
         val licenceReminders: LicenceReminderQuery get() = LicenceReminderQuery(Query("LicenceReminder", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun licenceReminder(ref: Ref<LicenceReminder>): LicenceReminder? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("LicenceReminder", it)) materializeLicenceReminder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("LicenceReminder", it)) materializeLicenceReminder(it) else null } }
         fun licenceReminder(key: StoreKey): LicenceReminder? = licenceReminder(Ref.Persisted("LicenceReminder", key))
         fun licenceReminder(key: Long): LicenceReminder? = licenceReminder(StoreKey(key))
         val ingredients: IngredientQuery get() = IngredientQuery(Query("Ingredient", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun ingredient(ref: Ref<Ingredient>): Ingredient? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Ingredient", it)) materializeIngredient(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Ingredient", it)) materializeIngredient(it) else null } }
         fun ingredient(key: StoreKey): Ingredient? = ingredient(Ref.Persisted("Ingredient", key))
         fun ingredient(key: Long): Ingredient? = ingredient(StoreKey(key))
         val drugs: DrugQuery get() = DrugQuery(Query("Drug", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun drug(ref: Ref<Drug>): Drug? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Drug", it)) materializeDrug(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Drug", it)) materializeDrug(it) else null } }
         fun drug(key: StoreKey): Drug? = drug(Ref.Persisted("Drug", key))
         fun drug(key: Long): Drug? = drug(StoreKey(key))
         val interactions: InteractionQuery get() = InteractionQuery(Query("Interaction", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun interaction(ref: Ref<Interaction>): Interaction? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Interaction", it)) materializeInteraction(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Interaction", it)) materializeInteraction(it) else null } }
         fun interaction(key: StoreKey): Interaction? = interaction(Ref.Persisted("Interaction", key))
         fun interaction(key: Long): Interaction? = interaction(StoreKey(key))
         val priceChanges: PriceChangeQuery get() = PriceChangeQuery(Query("PriceChange", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun priceChange(ref: Ref<PriceChange>): PriceChange? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("PriceChange", it)) materializePriceChange(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("PriceChange", it)) materializePriceChange(it) else null } }
         fun priceChange(key: StoreKey): PriceChange? = priceChange(Ref.Persisted("PriceChange", key))
         fun priceChange(key: Long): PriceChange? = priceChange(StoreKey(key))
         val priceWithdrawals: PriceWithdrawalQuery get() = PriceWithdrawalQuery(Query("PriceWithdrawal", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun priceWithdrawal(ref: Ref<PriceWithdrawal>): PriceWithdrawal? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("PriceWithdrawal", it)) materializePriceWithdrawal(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("PriceWithdrawal", it)) materializePriceWithdrawal(it) else null } }
         fun priceWithdrawal(key: StoreKey): PriceWithdrawal? = priceWithdrawal(Ref.Persisted("PriceWithdrawal", key))
         fun priceWithdrawal(key: Long): PriceWithdrawal? = priceWithdrawal(StoreKey(key))
         val priceWithdrawalRefusals: PriceWithdrawalRefusalQuery get() = PriceWithdrawalRefusalQuery(Query("PriceWithdrawalRefusal", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun priceWithdrawalRefusal(ref: Ref<PriceWithdrawalRefusal>): PriceWithdrawalRefusal? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("PriceWithdrawalRefusal", it)) materializePriceWithdrawalRefusal(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("PriceWithdrawalRefusal", it)) materializePriceWithdrawalRefusal(it) else null } }
         fun priceWithdrawalRefusal(key: StoreKey): PriceWithdrawalRefusal? = priceWithdrawalRefusal(Ref.Persisted("PriceWithdrawalRefusal", key))
         fun priceWithdrawalRefusal(key: Long): PriceWithdrawalRefusal? = priceWithdrawalRefusal(StoreKey(key))
         val stockLots: StockLotQuery get() = StockLotQuery(Query("StockLot", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun stockLot(ref: Ref<StockLot>): StockLot? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("StockLot", it)) materializeStockLot(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("StockLot", it)) materializeStockLot(it) else null } }
         fun stockLot(key: StoreKey): StockLot? = stockLot(Ref.Persisted("StockLot", key))
         fun stockLot(key: Long): StockLot? = stockLot(StoreKey(key))
         val stockAdjustments: StockAdjustmentQuery get() = StockAdjustmentQuery(Query("StockAdjustment", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun stockAdjustment(ref: Ref<StockAdjustment>): StockAdjustment? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("StockAdjustment", it)) materializeStockAdjustment(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("StockAdjustment", it)) materializeStockAdjustment(it) else null } }
         fun stockAdjustment(key: StoreKey): StockAdjustment? = stockAdjustment(Ref.Persisted("StockAdjustment", key))
         fun stockAdjustment(key: Long): StockAdjustment? = stockAdjustment(StoreKey(key))
         val countConfirmations: CountConfirmationQuery get() = CountConfirmationQuery(Query("CountConfirmation", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun countConfirmation(ref: Ref<CountConfirmation>): CountConfirmation? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("CountConfirmation", it)) materializeCountConfirmation(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("CountConfirmation", it)) materializeCountConfirmation(it) else null } }
         fun countConfirmation(key: StoreKey): CountConfirmation? = countConfirmation(Ref.Persisted("CountConfirmation", key))
         fun countConfirmation(key: Long): CountConfirmation? = countConfirmation(StoreKey(key))
         val quarantines: QuarantineQuery get() = QuarantineQuery(Query("Quarantine", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun quarantine(ref: Ref<Quarantine>): Quarantine? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Quarantine", it)) materializeQuarantine(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Quarantine", it)) materializeQuarantine(it) else null } }
         fun quarantine(key: StoreKey): Quarantine? = quarantine(Ref.Persisted("Quarantine", key))
         fun quarantine(key: Long): Quarantine? = quarantine(StoreKey(key))
         val recalls: RecallQuery get() = RecallQuery(Query("Recall", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun recall(ref: Ref<Recall>): Recall? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Recall", it)) materializeRecall(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Recall", it)) materializeRecall(it) else null } }
         fun recall(key: StoreKey): Recall? = recall(Ref.Persisted("Recall", key))
         fun recall(key: Long): Recall? = recall(StoreKey(key))
         val recallNotices: RecallNoticeQuery get() = RecallNoticeQuery(Query("RecallNotice", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun recallNotice(ref: Ref<RecallNotice>): RecallNotice? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("RecallNotice", it)) materializeRecallNotice(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("RecallNotice", it)) materializeRecallNotice(it) else null } }
         fun recallNotice(key: StoreKey): RecallNotice? = recallNotice(Ref.Persisted("RecallNotice", key))
         fun recallNotice(key: Long): RecallNotice? = recallNotice(StoreKey(key))
         val purchaseOrders: PurchaseOrderQuery get() = PurchaseOrderQuery(Query("PurchaseOrder", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun purchaseOrder(ref: Ref<PurchaseOrder>): PurchaseOrder? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("PurchaseOrder", it)) materializePurchaseOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("PurchaseOrder", it)) materializePurchaseOrder(it) else null } }
         fun purchaseOrder(key: StoreKey): PurchaseOrder? = purchaseOrder(Ref.Persisted("PurchaseOrder", key))
         fun purchaseOrder(key: Long): PurchaseOrder? = purchaseOrder(StoreKey(key))
         val insurancePlans: InsurancePlanQuery get() = InsurancePlanQuery(Query("InsurancePlan", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun insurancePlan(ref: Ref<InsurancePlan>): InsurancePlan? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("InsurancePlan", it)) materializeInsurancePlan(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("InsurancePlan", it)) materializeInsurancePlan(it) else null } }
         fun insurancePlan(key: StoreKey): InsurancePlan? = insurancePlan(Ref.Persisted("InsurancePlan", key))
         fun insurancePlan(key: Long): InsurancePlan? = insurancePlan(StoreKey(key))
         val patients: PatientQuery get() = PatientQuery(Query("Patient", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun patient(ref: Ref<Patient>): Patient? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Patient", it)) materializePatient(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Patient", it)) materializePatient(it) else null } }
         fun patient(key: StoreKey): Patient? = patient(Ref.Persisted("Patient", key))
         fun patient(key: Long): Patient? = patient(StoreKey(key))
         val prescribers: PrescriberQuery get() = PrescriberQuery(Query("Prescriber", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun prescriber(ref: Ref<Prescriber>): Prescriber? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Prescriber", it)) materializePrescriber(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Prescriber", it)) materializePrescriber(it) else null } }
         fun prescriber(key: StoreKey): Prescriber? = prescriber(Ref.Persisted("Prescriber", key))
         fun prescriber(key: Long): Prescriber? = prescriber(StoreKey(key))
         val notices: NoticeQuery get() = NoticeQuery(Query("Notice", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun notice(ref: Ref<Notice>): Notice? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Notice", it)) materializeNotice(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Notice", it)) materializeNotice(it) else null } }
         fun notice(key: StoreKey): Notice? = notice(Ref.Persisted("Notice", key))
         fun notice(key: Long): Notice? = notice(StoreKey(key))
         val prescriberOrders: PrescriberOrderQuery get() = PrescriberOrderQuery(Query("PrescriberOrder", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun prescriberOrder(ref: Ref<PrescriberOrder>): PrescriberOrder? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("PrescriberOrder", it)) materializePrescriberOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("PrescriberOrder", it)) materializePrescriberOrder(it) else null } }
         fun prescriberOrder(key: StoreKey): PrescriberOrder? = prescriberOrder(Ref.Persisted("PrescriberOrder", key))
         fun prescriberOrder(key: Long): PrescriberOrder? = prescriberOrder(StoreKey(key))
         val prescriptions: PrescriptionQuery get() = PrescriptionQuery(Query("Prescription", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun prescription(ref: Ref<Prescription>): Prescription? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Prescription", it)) materializePrescription(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Prescription", it)) materializePrescription(it) else null } }
         fun prescription(key: StoreKey): Prescription? = prescription(Ref.Persisted("Prescription", key))
         fun prescription(key: Long): Prescription? = prescription(StoreKey(key))
         val discontinuations: DiscontinuationQuery get() = DiscontinuationQuery(Query("Discontinuation", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun discontinuation(ref: Ref<Discontinuation>): Discontinuation? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Discontinuation", it)) materializeDiscontinuation(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Discontinuation", it)) materializeDiscontinuation(it) else null } }
         fun discontinuation(key: StoreKey): Discontinuation? = discontinuation(Ref.Persisted("Discontinuation", key))
         fun discontinuation(key: Long): Discontinuation? = discontinuation(StoreKey(key))
         val correctionRefusals: CorrectionRefusalQuery get() = CorrectionRefusalQuery(Query("CorrectionRefusal", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun correctionRefusal(ref: Ref<CorrectionRefusal>): CorrectionRefusal? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("CorrectionRefusal", it)) materializeCorrectionRefusal(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("CorrectionRefusal", it)) materializeCorrectionRefusal(it) else null } }
         fun correctionRefusal(key: StoreKey): CorrectionRefusal? = correctionRefusal(Ref.Persisted("CorrectionRefusal", key))
         fun correctionRefusal(key: Long): CorrectionRefusal? = correctionRefusal(StoreKey(key))
         val entryVoids: EntryVoidQuery get() = EntryVoidQuery(Query("EntryVoid", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun entryVoid(ref: Ref<EntryVoid>): EntryVoid? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("EntryVoid", it)) materializeEntryVoid(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("EntryVoid", it)) materializeEntryVoid(it) else null } }
         fun entryVoid(key: StoreKey): EntryVoid? = entryVoid(Ref.Persisted("EntryVoid", key))
         fun entryVoid(key: Long): EntryVoid? = entryVoid(StoreKey(key))
         val voidRefusals: VoidRefusalQuery get() = VoidRefusalQuery(Query("VoidRefusal", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun voidRefusal(ref: Ref<VoidRefusal>): VoidRefusal? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("VoidRefusal", it)) materializeVoidRefusal(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("VoidRefusal", it)) materializeVoidRefusal(it) else null } }
         fun voidRefusal(key: StoreKey): VoidRefusal? = voidRefusal(Ref.Persisted("VoidRefusal", key))
         fun voidRefusal(key: Long): VoidRefusal? = voidRefusal(StoreKey(key))
         val conflictOverrides: ConflictOverrideQuery get() = ConflictOverrideQuery(Query("ConflictOverride", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun conflictOverride(ref: Ref<ConflictOverride>): ConflictOverride? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ConflictOverride", it)) materializeConflictOverride(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("ConflictOverride", it)) materializeConflictOverride(it) else null } }
         fun conflictOverride(key: StoreKey): ConflictOverride? = conflictOverride(Ref.Persisted("ConflictOverride", key))
         fun conflictOverride(key: Long): ConflictOverride? = conflictOverride(StoreKey(key))
         val pharmacistAlerts: PharmacistAlertQuery get() = PharmacistAlertQuery(Query("PharmacistAlert", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun pharmacistAlert(ref: Ref<PharmacistAlert>): PharmacistAlert? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("PharmacistAlert", it)) materializePharmacistAlert(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("PharmacistAlert", it)) materializePharmacistAlert(it) else null } }
         fun pharmacistAlert(key: StoreKey): PharmacistAlert? = pharmacistAlert(Ref.Persisted("PharmacistAlert", key))
         fun pharmacistAlert(key: Long): PharmacistAlert? = pharmacistAlert(StoreKey(key))
         val monitoringChecks: MonitoringCheckQuery get() = MonitoringCheckQuery(Query("MonitoringCheck", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun monitoringCheck(ref: Ref<MonitoringCheck>): MonitoringCheck? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("MonitoringCheck", it)) materializeMonitoringCheck(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("MonitoringCheck", it)) materializeMonitoringCheck(it) else null } }
         fun monitoringCheck(key: StoreKey): MonitoringCheck? = monitoringCheck(Ref.Persisted("MonitoringCheck", key))
         fun monitoringCheck(key: Long): MonitoringCheck? = monitoringCheck(StoreKey(key))
         val fills: FillQuery get() = FillQuery(Query("Fill", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun fill(ref: Ref<Fill>): Fill? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Fill", it)) materializeFill(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Fill", it)) materializeFill(it) else null } }
         fun fill(key: StoreKey): Fill? = fill(Ref.Persisted("Fill", key))
         fun fill(key: Long): Fill? = fill(StoreKey(key))
         val fillRefusals: FillRefusalQuery get() = FillRefusalQuery(Query("FillRefusal", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun fillRefusal(ref: Ref<FillRefusal>): FillRefusal? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("FillRefusal", it)) materializeFillRefusal(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("FillRefusal", it)) materializeFillRefusal(it) else null } }
         fun fillRefusal(key: StoreKey): FillRefusal? = fillRefusal(Ref.Persisted("FillRefusal", key))
         fun fillRefusal(key: Long): FillRefusal? = fillRefusal(StoreKey(key))
         val controlledLogEntrys: ControlledLogEntryQuery get() = ControlledLogEntryQuery(Query("ControlledLogEntry", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun controlledLogEntry(ref: Ref<ControlledLogEntry>): ControlledLogEntry? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ControlledLogEntry", it)) materializeControlledLogEntry(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("ControlledLogEntry", it)) materializeControlledLogEntry(it) else null } }
         fun controlledLogEntry(key: StoreKey): ControlledLogEntry? = controlledLogEntry(Ref.Persisted("ControlledLogEntry", key))
         fun controlledLogEntry(key: Long): ControlledLogEntry? = controlledLogEntry(StoreKey(key))
         val verifications: VerificationQuery get() = VerificationQuery(Query("Verification", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun verification(ref: Ref<Verification>): Verification? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Verification", it)) materializeVerification(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Verification", it)) materializeVerification(it) else null } }
         fun verification(key: StoreKey): Verification? = verification(Ref.Persisted("Verification", key))
         fun verification(key: Long): Verification? = verification(StoreKey(key))
         val counsellings: CounsellingQuery get() = CounsellingQuery(Query("Counselling", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun counselling(ref: Ref<Counselling>): Counselling? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Counselling", it)) materializeCounselling(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Counselling", it)) materializeCounselling(it) else null } }
         fun counselling(key: StoreKey): Counselling? = counselling(Ref.Persisted("Counselling", key))
         fun counselling(key: Long): Counselling? = counselling(StoreKey(key))
         val returnToStocks: ReturnToStockQuery get() = ReturnToStockQuery(Query("ReturnToStock", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun returnToStock(ref: Ref<ReturnToStock>): ReturnToStock? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ReturnToStock", it)) materializeReturnToStock(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("ReturnToStock", it)) materializeReturnToStock(it) else null } }
         fun returnToStock(key: StoreKey): ReturnToStock? = returnToStock(Ref.Persisted("ReturnToStock", key))
         fun returnToStock(key: Long): ReturnToStock? = returnToStock(StoreKey(key))
         val counterExits: CounterExitQuery get() = CounterExitQuery(Query("CounterExit", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun counterExit(ref: Ref<CounterExit>): CounterExit? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("CounterExit", it)) materializeCounterExit(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("CounterExit", it)) materializeCounterExit(it) else null } }
         fun counterExit(key: StoreKey): CounterExit? = counterExit(Ref.Persisted("CounterExit", key))
         fun counterExit(key: Long): CounterExit? = counterExit(StoreKey(key))
         val pickups: PickupQuery get() = PickupQuery(Query("Pickup", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun pickup(ref: Ref<Pickup>): Pickup? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Pickup", it)) materializePickup(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Pickup", it)) materializePickup(it) else null } }
         fun pickup(key: StoreKey): Pickup? = pickup(Ref.Persisted("Pickup", key))
         fun pickup(key: Long): Pickup? = pickup(StoreKey(key))
         val counterAlerts: CounterAlertQuery get() = CounterAlertQuery(Query("CounterAlert", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun counterAlert(ref: Ref<CounterAlert>): CounterAlert? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("CounterAlert", it)) materializeCounterAlert(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("CounterAlert", it)) materializeCounterAlert(it) else null } }
         fun counterAlert(key: StoreKey): CounterAlert? = counterAlert(Ref.Persisted("CounterAlert", key))
         fun counterAlert(key: Long): CounterAlert? = counterAlert(StoreKey(key))
         val refillTasks: RefillTaskQuery get() = RefillTaskQuery(Query("RefillTask", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun refillTask(ref: Ref<RefillTask>): RefillTask? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("RefillTask", it)) materializeRefillTask(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("RefillTask", it)) materializeRefillTask(it) else null } }
         fun refillTask(key: StoreKey): RefillTask? = refillTask(Ref.Persisted("RefillTask", key))
         fun refillTask(key: Long): RefillTask? = refillTask(StoreKey(key))
         val refillRefusals: RefillRefusalQuery get() = RefillRefusalQuery(Query("RefillRefusal", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun refillRefusal(ref: Ref<RefillRefusal>): RefillRefusal? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("RefillRefusal", it)) materializeRefillRefusal(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("RefillRefusal", it)) materializeRefillRefusal(it) else null } }
         fun refillRefusal(key: StoreKey): RefillRefusal? = refillRefusal(Ref.Persisted("RefillRefusal", key))
         fun refillRefusal(key: Long): RefillRefusal? = refillRefusal(StoreKey(key))
         val authorisationRequests: AuthorisationRequestQuery get() = AuthorisationRequestQuery(Query("AuthorisationRequest", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun authorisationRequest(ref: Ref<AuthorisationRequest>): AuthorisationRequest? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("AuthorisationRequest", it)) materializeAuthorisationRequest(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("AuthorisationRequest", it)) materializeAuthorisationRequest(it) else null } }
         fun authorisationRequest(key: StoreKey): AuthorisationRequest? = authorisationRequest(Ref.Persisted("AuthorisationRequest", key))
         fun authorisationRequest(key: Long): AuthorisationRequest? = authorisationRequest(StoreKey(key))
         val taskNags: TaskNagQuery get() = TaskNagQuery(Query("TaskNag", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun taskNag(ref: Ref<TaskNag>): TaskNag? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("TaskNag", it)) materializeTaskNag(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("TaskNag", it)) materializeTaskNag(it) else null } }
         fun taskNag(key: StoreKey): TaskNag? = taskNag(Ref.Persisted("TaskNag", key))
         fun taskNag(key: Long): TaskNag? = taskNag(StoreKey(key))
         val autoRefillEnrolments: AutoRefillEnrolmentQuery get() = AutoRefillEnrolmentQuery(Query("AutoRefillEnrolment", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun autoRefillEnrolment(ref: Ref<AutoRefillEnrolment>): AutoRefillEnrolment? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("AutoRefillEnrolment", it)) materializeAutoRefillEnrolment(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("AutoRefillEnrolment", it)) materializeAutoRefillEnrolment(it) else null } }
         fun autoRefillEnrolment(key: StoreKey): AutoRefillEnrolment? = autoRefillEnrolment(Ref.Persisted("AutoRefillEnrolment", key))
         fun autoRefillEnrolment(key: Long): AutoRefillEnrolment? = autoRefillEnrolment(StoreKey(key))
         val autoRefillCancellations: AutoRefillCancellationQuery get() = AutoRefillCancellationQuery(Query("AutoRefillCancellation", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun autoRefillCancellation(ref: Ref<AutoRefillCancellation>): AutoRefillCancellation? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("AutoRefillCancellation", it)) materializeAutoRefillCancellation(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("AutoRefillCancellation", it)) materializeAutoRefillCancellation(it) else null } }
         fun autoRefillCancellation(key: StoreKey): AutoRefillCancellation? = autoRefillCancellation(Ref.Persisted("AutoRefillCancellation", key))
         fun autoRefillCancellation(key: Long): AutoRefillCancellation? = autoRefillCancellation(StoreKey(key))
         val claims: ClaimQuery get() = ClaimQuery(Query("Claim", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun claim(ref: Ref<Claim>): Claim? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Claim", it)) materializeClaim(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Claim", it)) materializeClaim(it) else null } }
         fun claim(key: StoreKey): Claim? = claim(Ref.Persisted("Claim", key))
         fun claim(key: Long): Claim? = claim(StoreKey(key))
         val claimResponses: ClaimResponseQuery get() = ClaimResponseQuery(Query("ClaimResponse", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun claimResponse(ref: Ref<ClaimResponse>): ClaimResponse? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ClaimResponse", it)) materializeClaimResponse(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("ClaimResponse", it)) materializeClaimResponse(it) else null } }
         fun claimResponse(key: StoreKey): ClaimResponse? = claimResponse(Ref.Persisted("ClaimResponse", key))
         fun claimResponse(key: Long): ClaimResponse? = claimResponse(StoreKey(key))
         val claimFollowUps: ClaimFollowUpQuery get() = ClaimFollowUpQuery(Query("ClaimFollowUp", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun claimFollowUp(ref: Ref<ClaimFollowUp>): ClaimFollowUp? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ClaimFollowUp", it)) materializeClaimFollowUp(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("ClaimFollowUp", it)) materializeClaimFollowUp(it) else null } }
         fun claimFollowUp(key: StoreKey): ClaimFollowUp? = claimFollowUp(Ref.Persisted("ClaimFollowUp", key))
         fun claimFollowUp(key: Long): ClaimFollowUp? = claimFollowUp(StoreKey(key))
         val controlledInventorySnapshots: ControlledInventorySnapshotQuery get() = ControlledInventorySnapshotQuery(Query("ControlledInventorySnapshot", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun controlledInventorySnapshot(ref: Ref<ControlledInventorySnapshot>): ControlledInventorySnapshot? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ControlledInventorySnapshot", it)) materializeControlledInventorySnapshot(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("ControlledInventorySnapshot", it)) materializeControlledInventorySnapshot(it) else null } }
         fun controlledInventorySnapshot(key: StoreKey): ControlledInventorySnapshot? = controlledInventorySnapshot(Ref.Persisted("ControlledInventorySnapshot", key))
         fun controlledInventorySnapshot(key: Long): ControlledInventorySnapshot? = controlledInventorySnapshot(StoreKey(key))
         val pharmacists: PharmacistQuery get() = PharmacistQuery(Query("Pharmacist", viewer = viewer))
         /** The record behind [ref] as a member of Pharmacist, or null when it is not one or not shown to this viewer. */
         fun pharmacist(ref: Ref<Staff>): Pharmacist? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Pharmacist", it)) materializePharmacist(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Pharmacist", it)) materializePharmacist(it) else null } }
         val technicians: TechnicianQuery get() = TechnicianQuery(Query("Technician", viewer = viewer))
         /** The record behind [ref] as a member of Technician, or null when it is not one or not shown to this viewer. */
         fun technician(ref: Ref<Staff>): Technician? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Technician", it)) materializeTechnician(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Technician", it)) materializeTechnician(it) else null } }
         val administrators: AdministratorQuery get() = AdministratorQuery(Query("Administrator", viewer = viewer))
         /** The record behind [ref] as a member of Administrator, or null when it is not one or not shown to this viewer. */
         fun administrator(ref: Ref<Staff>): Administrator? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Administrator", it)) materializeAdministrator(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Administrator", it)) materializeAdministrator(it) else null } }
         val licensedPharmacists: LicensedPharmacistQuery get() = LicensedPharmacistQuery(Query("LicensedPharmacist", viewer = viewer))
         /** The record behind [ref] as a member of LicensedPharmacist, or null when it is not one or not shown to this viewer. */
         fun licensedPharmacist(ref: Ref<Staff>): LicensedPharmacist? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("LicensedPharmacist", it)) materializeLicensedPharmacist(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("LicensedPharmacist", it)) materializeLicensedPharmacist(it) else null } }
         val licenceExpiringSoons: LicenceExpiringSoonQuery get() = LicenceExpiringSoonQuery(Query("LicenceExpiringSoon", viewer = viewer))
         /** The record behind [ref] as a member of LicenceExpiringSoon, or null when it is not one or not shown to this viewer. */
         fun licenceExpiringSoon(ref: Ref<Staff>): LicenceExpiringSoon? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("LicenceExpiringSoon", it)) materializeLicenceExpiringSoon(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("LicenceExpiringSoon", it)) materializeLicenceExpiringSoon(it) else null } }
         val controlleds: ControlledQuery get() = ControlledQuery(Query("Controlled", viewer = viewer))
         /** The record behind [ref] as a member of Controlled, or null when it is not one or not shown to this viewer. */
         fun controlled(ref: Ref<Drug>): Controlled? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Controlled", it)) materializeControlled(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Controlled", it)) materializeControlled(it) else null } }
         val scheduleTwos: ScheduleTwoQuery get() = ScheduleTwoQuery(Query("ScheduleTwo", viewer = viewer))
         /** The record behind [ref] as a member of ScheduleTwo, or null when it is not one or not shown to this viewer. */
         fun scheduleTwo(ref: Ref<Drug>): ScheduleTwo? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ScheduleTwo", it)) materializeScheduleTwo(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("ScheduleTwo", it)) materializeScheduleTwo(it) else null } }
         val lowStocks: LowStockQuery get() = LowStockQuery(Query("LowStock", viewer = viewer))
         /** The record behind [ref] as a member of LowStock, or null when it is not one or not shown to this viewer. */
         fun lowStock(ref: Ref<Drug>): LowStock? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("LowStock", it)) materializeLowStock(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("LowStock", it)) materializeLowStock(it) else null } }
         val effectivePrices: EffectivePriceQuery get() = EffectivePriceQuery(Query("EffectivePrice", viewer = viewer))
         /** The record behind [ref] as a member of EffectivePrice, or null when it is not one or not shown to this viewer. */
         fun effectivePrice(ref: Ref<PriceChange>): EffectivePrice? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("EffectivePrice", it)) materializeEffectivePrice(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("EffectivePrice", it)) materializeEffectivePrice(it) else null } }
         val expiredLots: ExpiredLotQuery get() = ExpiredLotQuery(Query("ExpiredLot", viewer = viewer))
         /** The record behind [ref] as a member of ExpiredLot, or null when it is not one or not shown to this viewer. */
         fun expiredLot(ref: Ref<StockLot>): ExpiredLot? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ExpiredLot", it)) materializeExpiredLot(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("ExpiredLot", it)) materializeExpiredLot(it) else null } }
         val quarantinedLots: QuarantinedLotQuery get() = QuarantinedLotQuery(Query("QuarantinedLot", viewer = viewer))
         /** The record behind [ref] as a member of QuarantinedLot, or null when it is not one or not shown to this viewer. */
         fun quarantinedLot(ref: Ref<StockLot>): QuarantinedLot? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("QuarantinedLot", it)) materializeQuarantinedLot(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("QuarantinedLot", it)) materializeQuarantinedLot(it) else null } }
         val recalledLots: RecalledLotQuery get() = RecalledLotQuery(Query("RecalledLot", viewer = viewer))
         /** The record behind [ref] as a member of RecalledLot, or null when it is not one or not shown to this viewer. */
         fun recalledLot(ref: Ref<StockLot>): RecalledLot? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("RecalledLot", it)) materializeRecalledLot(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("RecalledLot", it)) materializeRecalledLot(it) else null } }
         val usableLots: UsableLotQuery get() = UsableLotQuery(Query("UsableLot", viewer = viewer))
         /** The record behind [ref] as a member of UsableLot, or null when it is not one or not shown to this viewer. */
         fun usableLot(ref: Ref<StockLot>): UsableLot? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("UsableLot", it)) materializeUsableLot(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("UsableLot", it)) materializeUsableLot(it) else null } }
         val openPurchaseOrders: OpenPurchaseOrderQuery get() = OpenPurchaseOrderQuery(Query("OpenPurchaseOrder", viewer = viewer))
         /** The record behind [ref] as a member of OpenPurchaseOrder, or null when it is not one or not shown to this viewer. */
         fun openPurchaseOrder(ref: Ref<PurchaseOrder>): OpenPurchaseOrder? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("OpenPurchaseOrder", it)) materializeOpenPurchaseOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("OpenPurchaseOrder", it)) materializeOpenPurchaseOrder(it) else null } }
         val receivedPurchaseOrders: ReceivedPurchaseOrderQuery get() = ReceivedPurchaseOrderQuery(Query("ReceivedPurchaseOrder", viewer = viewer))
         /** The record behind [ref] as a member of ReceivedPurchaseOrder, or null when it is not one or not shown to this viewer. */
         fun receivedPurchaseOrder(ref: Ref<PurchaseOrder>): ReceivedPurchaseOrder? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ReceivedPurchaseOrder", it)) materializeReceivedPurchaseOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("ReceivedPurchaseOrder", it)) materializeReceivedPurchaseOrder(it) else null } }
         val recipients: RecipientQuery get() = RecipientQuery(Query("Recipient", viewer = viewer))
         val discontinueds: DiscontinuedQuery get() = DiscontinuedQuery(Query("Discontinued", viewer = viewer))
         /** The record behind [ref] as a member of Discontinued, or null when it is not one or not shown to this viewer. */
         fun discontinued(ref: Ref<Prescription>): Discontinued? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Discontinued", it)) materializeDiscontinued(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Discontinued", it)) materializeDiscontinued(it) else null } }
         val expireds: ExpiredQuery get() = ExpiredQuery(Query("Expired", viewer = viewer))
         /** The record behind [ref] as a member of Expired, or null when it is not one or not shown to this viewer. */
         fun expired(ref: Ref<Prescription>): Expired? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Expired", it)) materializeExpired(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Expired", it)) materializeExpired(it) else null } }
         val exhausteds: ExhaustedQuery get() = ExhaustedQuery(Query("Exhausted", viewer = viewer))
         /** The record behind [ref] as a member of Exhausted, or null when it is not one or not shown to this viewer. */
         fun exhausted(ref: Ref<Prescription>): Exhausted? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Exhausted", it)) materializeExhausted(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Exhausted", it)) materializeExhausted(it) else null } }
         val currents: CurrentQuery get() = CurrentQuery(Query("Current", viewer = viewer))
         /** The record behind [ref] as a member of Current, or null when it is not one or not shown to this viewer. */
         fun current(ref: Ref<Prescription>): Current? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Current", it)) materializeCurrent(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Current", it)) materializeCurrent(it) else null } }
         val activePrescriptions: ActivePrescriptionQuery get() = ActivePrescriptionQuery(Query("ActivePrescription", viewer = viewer))
         /** The record behind [ref] as a member of ActivePrescription, or null when it is not one or not shown to this viewer. */
         fun activePrescription(ref: Ref<Prescription>): ActivePrescription? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ActivePrescription", it)) materializeActivePrescription(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("ActivePrescription", it)) materializeActivePrescription(it) else null } }
         val filledPrescriptions: FilledPrescriptionQuery get() = FilledPrescriptionQuery(Query("FilledPrescription", viewer = viewer))
         /** The record behind [ref] as a member of FilledPrescription, or null when it is not one or not shown to this viewer. */
         fun filledPrescription(ref: Ref<Prescription>): FilledPrescription? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("FilledPrescription", it)) materializeFilledPrescription(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("FilledPrescription", it)) materializeFilledPrescription(it) else null } }
         val voideds: VoidedQuery get() = VoidedQuery(Query("Voided", viewer = viewer))
         /** The record behind [ref] as a member of Voided, or null when it is not one or not shown to this viewer. */
         fun voided(ref: Ref<Prescription>): Voided? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Voided", it)) materializeVoided(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Voided", it)) materializeVoided(it) else null } }
         val allergyConflicts: AllergyConflictQuery get() = AllergyConflictQuery(Query("AllergyConflict", viewer = viewer))
         /** The record behind [ref] as a member of AllergyConflict, or null when it is not one or not shown to this viewer. */
         fun allergyConflict(ref: Ref<Prescription>): AllergyConflict? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("AllergyConflict", it)) materializeAllergyConflict(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("AllergyConflict", it)) materializeAllergyConflict(it) else null } }
         val interactionConflicts: InteractionConflictQuery get() = InteractionConflictQuery(Query("InteractionConflict", viewer = viewer))
         /** The record behind [ref] as a member of InteractionConflict, or null when it is not one or not shown to this viewer. */
         fun interactionConflict(ref: Ref<Prescription>): InteractionConflict? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("InteractionConflict", it)) materializeInteractionConflict(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("InteractionConflict", it)) materializeInteractionConflict(it) else null } }
         val cleareds: ClearedQuery get() = ClearedQuery(Query("Cleared", viewer = viewer))
         /** The record behind [ref] as a member of Cleared, or null when it is not one or not shown to this viewer. */
         fun cleared(ref: Ref<Prescription>): Cleared? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Cleared", it)) materializeCleared(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Cleared", it)) materializeCleared(it) else null } }
         val fillables: FillableQuery get() = FillableQuery(Query("Fillable", viewer = viewer))
         /** The record behind [ref] as a member of Fillable, or null when it is not one or not shown to this viewer. */
         fun fillable(ref: Ref<Prescription>): Fillable? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Fillable", it)) materializeFillable(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Fillable", it)) materializeFillable(it) else null } }
         val multiplePrescriberss: MultiplePrescribersQuery get() = MultiplePrescribersQuery(Query("MultiplePrescribers", viewer = viewer))
         /** The record behind [ref] as a member of MultiplePrescribers, or null when it is not one or not shown to this viewer. */
         fun multiplePrescribers(ref: Ref<Patient>): MultiplePrescribers? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("MultiplePrescribers", it)) materializeMultiplePrescribers(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("MultiplePrescribers", it)) materializeMultiplePrescribers(it) else null } }
         val verifiedFills: VerifiedFillQuery get() = VerifiedFillQuery(Query("VerifiedFill", viewer = viewer))
         /** The record behind [ref] as a member of VerifiedFill, or null when it is not one or not shown to this viewer. */
         fun verifiedFill(ref: Ref<Fill>): VerifiedFill? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("VerifiedFill", it)) materializeVerifiedFill(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("VerifiedFill", it)) materializeVerifiedFill(it) else null } }
         val rejectedFills: RejectedFillQuery get() = RejectedFillQuery(Query("RejectedFill", viewer = viewer))
         /** The record behind [ref] as a member of RejectedFill, or null when it is not one or not shown to this viewer. */
         fun rejectedFill(ref: Ref<Fill>): RejectedFill? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("RejectedFill", it)) materializeRejectedFill(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("RejectedFill", it)) materializeRejectedFill(it) else null } }
         val consumingFills: ConsumingFillQuery get() = ConsumingFillQuery(Query("ConsumingFill", viewer = viewer))
         /** The record behind [ref] as a member of ConsumingFill, or null when it is not one or not shown to this viewer. */
         fun consumingFill(ref: Ref<Fill>): ConsumingFill? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ConsumingFill", it)) materializeConsumingFill(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("ConsumingFill", it)) materializeConsumingFill(it) else null } }
         val counsellingDues: CounsellingDueQuery get() = CounsellingDueQuery(Query("CounsellingDue", viewer = viewer))
         /** The record behind [ref] as a member of CounsellingDue, or null when it is not one or not shown to this viewer. */
         fun counsellingDue(ref: Ref<Fill>): CounsellingDue? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("CounsellingDue", it)) materializeCounsellingDue(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("CounsellingDue", it)) materializeCounsellingDue(it) else null } }
         val readyForPickups: ReadyForPickupQuery get() = ReadyForPickupQuery(Query("ReadyForPickup", viewer = viewer))
         /** The record behind [ref] as a member of ReadyForPickup, or null when it is not one or not shown to this viewer. */
         fun readyForPickup(ref: Ref<Fill>): ReadyForPickup? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ReadyForPickup", it)) materializeReadyForPickup(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("ReadyForPickup", it)) materializeReadyForPickup(it) else null } }
         val uncollecteds: UncollectedQuery get() = UncollectedQuery(Query("Uncollected", viewer = viewer))
         /** The record behind [ref] as a member of Uncollected, or null when it is not one or not shown to this viewer. */
         fun uncollected(ref: Ref<Fill>): Uncollected? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Uncollected", it)) materializeUncollected(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Uncollected", it)) materializeUncollected(it) else null } }
         val openRefillTasks: OpenRefillTaskQuery get() = OpenRefillTaskQuery(Query("OpenRefillTask", viewer = viewer))
         /** The record behind [ref] as a member of OpenRefillTask, or null when it is not one or not shown to this viewer. */
         fun openRefillTask(ref: Ref<RefillTask>): OpenRefillTask? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("OpenRefillTask", it)) materializeOpenRefillTask(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("OpenRefillTask", it)) materializeOpenRefillTask(it) else null } }
         val overdueRefillTasks: OverdueRefillTaskQuery get() = OverdueRefillTaskQuery(Query("OverdueRefillTask", viewer = viewer))
         /** The record behind [ref] as a member of OverdueRefillTask, or null when it is not one or not shown to this viewer. */
         fun overdueRefillTask(ref: Ref<RefillTask>): OverdueRefillTask? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("OverdueRefillTask", it)) materializeOverdueRefillTask(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("OverdueRefillTask", it)) materializeOverdueRefillTask(it) else null } }
         val autoRefills: AutoRefillQuery get() = AutoRefillQuery(Query("AutoRefill", viewer = viewer))
         /** The record behind [ref] as a member of AutoRefill, or null when it is not one or not shown to this viewer. */
         fun autoRefill(ref: Ref<Prescription>): AutoRefill? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("AutoRefill", it)) materializeAutoRefill(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("AutoRefill", it)) materializeAutoRefill(it) else null } }
         val insuredFills: InsuredFillQuery get() = InsuredFillQuery(Query("InsuredFill", viewer = viewer))
         /** The record behind [ref] as a member of InsuredFill, or null when it is not one or not shown to this viewer. */
         fun insuredFill(ref: Ref<Fill>): InsuredFill? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("InsuredFill", it)) materializeInsuredFill(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("InsuredFill", it)) materializeInsuredFill(it) else null } }
         val pendingClaims: PendingClaimQuery get() = PendingClaimQuery(Query("PendingClaim", viewer = viewer))
         /** The record behind [ref] as a member of PendingClaim, or null when it is not one or not shown to this viewer. */
         fun pendingClaim(ref: Ref<Claim>): PendingClaim? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("PendingClaim", it)) materializePendingClaim(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("PendingClaim", it)) materializePendingClaim(it) else null } }
         val paidClaims: PaidClaimQuery get() = PaidClaimQuery(Query("PaidClaim", viewer = viewer))
         /** The record behind [ref] as a member of PaidClaim, or null when it is not one or not shown to this viewer. */
         fun paidClaim(ref: Ref<Claim>): PaidClaim? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("PaidClaim", it)) materializePaidClaim(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("PaidClaim", it)) materializePaidClaim(it) else null } }
         val rejectedClaims: RejectedClaimQuery get() = RejectedClaimQuery(Query("RejectedClaim", viewer = viewer))
         /** The record behind [ref] as a member of RejectedClaim, or null when it is not one or not shown to this viewer. */
         fun rejectedClaim(ref: Ref<Claim>): RejectedClaim? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("RejectedClaim", it)) materializeRejectedClaim(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("RejectedClaim", it)) materializeRejectedClaim(it) else null } }
         val staleClaims: StaleClaimQuery get() = StaleClaimQuery(Query("StaleClaim", viewer = viewer))
         /** The record behind [ref] as a member of StaleClaim, or null when it is not one or not shown to this viewer. */
         fun staleClaim(ref: Ref<Claim>): StaleClaim? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("StaleClaim", it)) materializeStaleClaim(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("StaleClaim", it)) materializeStaleClaim(it) else null } }
     }
 
     companion object {

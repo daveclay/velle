@@ -40,7 +40,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("LockNote", raw).carrying(input, "LockNote")
+        return system.commit("LockNote", raw).carrying(input)
     }
 
     /** Queue key: [unlockNote.note].
@@ -53,7 +53,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("UnlockNote", raw).carrying(input, "UnlockNote")
+        return system.commit("UnlockNote", raw).carrying(input)
     }
 
     /** Queue key: [renameText.note].
@@ -66,7 +66,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("RenameText", raw).carrying(input, "RenameText")
+        return system.commit("RenameText", raw).carrying(input)
     }
 
     /** Queue key: [bareEdit.note].
@@ -79,7 +79,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("BareEdit", raw).carrying(input, "BareEdit")
+        return system.commit("BareEdit", raw).carrying(input)
     }
 
     /** Queue key: [safeEdit.note].
@@ -92,7 +92,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("SafeEdit", raw).carrying(input, "SafeEdit")
+        return system.commit("SafeEdit", raw).carrying(input)
     }
 
     /** Queue key: [transientEdit.note].
@@ -108,22 +108,22 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         return system.commit("TransientEdit", raw).carryingNoRecord(input)
     }
 
-    fun notes(): List<Note> = system.instancesOf("Note").map { materializeNote(it) }
-    fun lockNotes(): List<LockNote> = system.instancesOf("LockNote").map { materializeLockNote(it) }
-    fun unlockNotes(): List<UnlockNote> = system.instancesOf("UnlockNote").map { materializeUnlockNote(it) }
-    fun renameTexts(): List<RenameText> = system.instancesOf("RenameText").map { materializeRenameText(it) }
-    fun bareEdits(): List<BareEdit> = system.instancesOf("BareEdit").map { materializeBareEdit(it) }
-    fun bareEditRefusals(): List<BareEditRefusal> = system.instancesOf("BareEditRefusal").map { materializeBareEditRefusal(it) }
-    fun safeEdits(): List<SafeEdit> = system.instancesOf("SafeEdit").map { materializeSafeEdit(it) }
-    fun editApplications(): List<EditApplication> = system.instancesOf("EditApplication").map { materializeEditApplication(it) }
-    fun editRefusals(): List<EditRefusal> = system.instancesOf("EditRefusal").map { materializeEditRefusal(it) }
-    fun transientEditRefusals(): List<TransientEditRefusal> = system.instancesOf("TransientEditRefusal").map { materializeTransientEditRefusal(it) }
-    fun lockedNotes(): List<LockedNote> = system.instancesOf("LockedNote").map { materializeLockedNote(it) }
-    fun applicableBareEdits(): List<ApplicableBareEdit> = system.instancesOf("ApplicableBareEdit").map { materializeApplicableBareEdit(it) }
-    fun refusedBareEdits(): List<RefusedBareEdit> = system.instancesOf("RefusedBareEdit").map { materializeRefusedBareEdit(it) }
-    fun unhandledSafeEdits(): List<UnhandledSafeEdit> = system.instancesOf("UnhandledSafeEdit").map { materializeUnhandledSafeEdit(it) }
-    fun applicableSafeEdits(): List<ApplicableSafeEdit> = system.instancesOf("ApplicableSafeEdit").map { materializeApplicableSafeEdit(it) }
-    fun refusedSafeEdits(): List<RefusedSafeEdit> = system.instancesOf("RefusedSafeEdit").map { materializeRefusedSafeEdit(it) }
+    fun notes(): List<Note> = system.scope { system.instancesOf("Note").map { materializeNote(it) } }
+    fun lockNotes(): List<LockNote> = system.scope { system.instancesOf("LockNote").map { materializeLockNote(it) } }
+    fun unlockNotes(): List<UnlockNote> = system.scope { system.instancesOf("UnlockNote").map { materializeUnlockNote(it) } }
+    fun renameTexts(): List<RenameText> = system.scope { system.instancesOf("RenameText").map { materializeRenameText(it) } }
+    fun bareEdits(): List<BareEdit> = system.scope { system.instancesOf("BareEdit").map { materializeBareEdit(it) } }
+    fun bareEditRefusals(): List<BareEditRefusal> = system.scope { system.instancesOf("BareEditRefusal").map { materializeBareEditRefusal(it) } }
+    fun safeEdits(): List<SafeEdit> = system.scope { system.instancesOf("SafeEdit").map { materializeSafeEdit(it) } }
+    fun editApplications(): List<EditApplication> = system.scope { system.instancesOf("EditApplication").map { materializeEditApplication(it) } }
+    fun editRefusals(): List<EditRefusal> = system.scope { system.instancesOf("EditRefusal").map { materializeEditRefusal(it) } }
+    fun transientEditRefusals(): List<TransientEditRefusal> = system.scope { system.instancesOf("TransientEditRefusal").map { materializeTransientEditRefusal(it) } }
+    fun lockedNotes(): List<LockedNote> = system.scope { system.instancesOf("LockedNote").map { materializeLockedNote(it) } }
+    fun applicableBareEdits(): List<ApplicableBareEdit> = system.scope { system.instancesOf("ApplicableBareEdit").map { materializeApplicableBareEdit(it) } }
+    fun refusedBareEdits(): List<RefusedBareEdit> = system.scope { system.instancesOf("RefusedBareEdit").map { materializeRefusedBareEdit(it) } }
+    fun unhandledSafeEdits(): List<UnhandledSafeEdit> = system.scope { system.instancesOf("UnhandledSafeEdit").map { materializeUnhandledSafeEdit(it) } }
+    fun applicableSafeEdits(): List<ApplicableSafeEdit> = system.scope { system.instancesOf("ApplicableSafeEdit").map { materializeApplicableSafeEdit(it) } }
+    fun refusedSafeEdits(): List<RefusedSafeEdit> = system.scope { system.instancesOf("RefusedSafeEdit").map { materializeRefusedSafeEdit(it) } }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -135,9 +135,9 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            return materialize(id)
+            materialize(id)
         }
 
         val notes: NoteQuery get() = NoteQuery(Query("Note"))
@@ -193,32 +193,32 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         val lockedNotes: LockedNoteQuery get() = LockedNoteQuery(Query("LockedNote"))
         /** The record behind [ref] as a member of LockedNote, or null when it is not one. */
         fun lockedNote(ref: Ref<Note>): LockedNote? =
-            system.idOf(ref).let { if (system.exists("LockedNote", it)) materializeLockedNote(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("LockedNote", it)) materializeLockedNote(it) else null } }
 
         val applicableBareEdits: ApplicableBareEditQuery get() = ApplicableBareEditQuery(Query("ApplicableBareEdit"))
         /** The record behind [ref] as a member of ApplicableBareEdit, or null when it is not one. */
         fun applicableBareEdit(ref: Ref<BareEdit>): ApplicableBareEdit? =
-            system.idOf(ref).let { if (system.exists("ApplicableBareEdit", it)) materializeApplicableBareEdit(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ApplicableBareEdit", it)) materializeApplicableBareEdit(it) else null } }
 
         val refusedBareEdits: RefusedBareEditQuery get() = RefusedBareEditQuery(Query("RefusedBareEdit"))
         /** The record behind [ref] as a member of RefusedBareEdit, or null when it is not one. */
         fun refusedBareEdit(ref: Ref<BareEdit>): RefusedBareEdit? =
-            system.idOf(ref).let { if (system.exists("RefusedBareEdit", it)) materializeRefusedBareEdit(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("RefusedBareEdit", it)) materializeRefusedBareEdit(it) else null } }
 
         val unhandledSafeEdits: UnhandledSafeEditQuery get() = UnhandledSafeEditQuery(Query("UnhandledSafeEdit"))
         /** The record behind [ref] as a member of UnhandledSafeEdit, or null when it is not one. */
         fun unhandledSafeEdit(ref: Ref<SafeEdit>): UnhandledSafeEdit? =
-            system.idOf(ref).let { if (system.exists("UnhandledSafeEdit", it)) materializeUnhandledSafeEdit(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("UnhandledSafeEdit", it)) materializeUnhandledSafeEdit(it) else null } }
 
         val applicableSafeEdits: ApplicableSafeEditQuery get() = ApplicableSafeEditQuery(Query("ApplicableSafeEdit"))
         /** The record behind [ref] as a member of ApplicableSafeEdit, or null when it is not one. */
         fun applicableSafeEdit(ref: Ref<SafeEdit>): ApplicableSafeEdit? =
-            system.idOf(ref).let { if (system.exists("ApplicableSafeEdit", it)) materializeApplicableSafeEdit(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ApplicableSafeEdit", it)) materializeApplicableSafeEdit(it) else null } }
 
         val refusedSafeEdits: RefusedSafeEditQuery get() = RefusedSafeEditQuery(Query("RefusedSafeEdit"))
         /** The record behind [ref] as a member of RefusedSafeEdit, or null when it is not one. */
         fun refusedSafeEdit(ref: Ref<SafeEdit>): RefusedSafeEdit? =
-            system.idOf(ref).let { if (system.exists("RefusedSafeEdit", it)) materializeRefusedSafeEdit(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("RefusedSafeEdit", it)) materializeRefusedSafeEdit(it) else null } }
     }
 
     inner class NoteQuery(q: Query) : TypedQuery<NoteFields, Note>(system, q, NoteFields(), { materializeNote(it) }) {

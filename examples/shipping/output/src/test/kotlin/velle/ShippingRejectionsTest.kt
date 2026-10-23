@@ -65,19 +65,19 @@ class ShippingRejectionsTest {
         // The act refused, with its fields as submitted.
         val act = assertNotNull(r.act)
         assertEquals("Cancellation", act.shape)
-        assertEquals(RecordRef("Order", sys.system.idOf(order)), act.fields["order"])
+        assertEquals(RecordRef("Order", order.key), act.fields["order"])
         assertEquals(seventh, act.fields["requestedOn"])
 
         // The record protected is not the act: the shipment already on file.
         val shipment = r.violating.single()
         assertEquals("Shipment", shipment.shape)
         assertEquals(sixth, shipment.fields["shippedOn"])
-        assertEquals(RecordRef("Order", sys.system.idOf(order)), shipment.fields["order"])
+        assertEquals(RecordRef("Order", order.key), shipment.fields["order"])
 
         // The pivot: the order, the one record the act references that the
         // prohibition read through — what the person was acting on.
         val pivot = r.pivots.single()
-        assertEquals(RecordRef("Order", sys.system.idOf(order)), pivot.ref)
+        assertEquals(RecordRef("Order", order.key), pivot.ref)
         assertEquals("4471", pivot.fields["reference"])
         assertEquals(emptyList(), r.witnesses, "nothing else was read")
 
@@ -119,7 +119,7 @@ class ShippingRejectionsTest {
 
         // The pivot is still the order; the witness is a record that already
         // exists, the cancellation of the 6th.
-        assertEquals(RecordRef("Order", sys.system.idOf(order)), r.pivots.single().ref)
+        assertEquals(RecordRef("Order", order.key), r.pivots.single().ref)
         val cancellation = r.witnesses.single()
         assertEquals("Cancellation", cancellation.shape)
         assertEquals(sixth, cancellation.fields["requestedOn"])
@@ -149,7 +149,7 @@ class ShippingRejectionsTest {
 
         accept(sys.commit(NewCancellation(other, seventh)))
         val r = rejection(sys.commit(NewShipment(other, seventh)))
-        assertEquals(RecordRef("Order", sys.system.idOf(other)), r.pivots.single().ref, "the rejection is about the other order")
+        assertEquals(RecordRef("Order", other.key), r.pivots.single().ref, "the rejection is about the other order")
 
         with(sys) {
             assertEquals(true, sys.read(other).isCancelledOrder)

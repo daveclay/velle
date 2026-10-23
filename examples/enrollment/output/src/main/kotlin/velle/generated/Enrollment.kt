@@ -27,7 +27,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Advisor", raw).carrying(input, "Advisor")
+        return system.commit("Advisor", raw).carrying(input)
     }
 
     /** Queue keys: none — this commit contends with no other work.
@@ -40,7 +40,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Course", raw).carrying(input, "Course")
+        return system.commit("Course", raw).carrying(input)
     }
 
     /** Queue key: [student.advisor].
@@ -53,7 +53,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Student", raw).carrying(input, "Student")
+        return system.commit("Student", raw).carrying(input)
     }
 
     /** Queue keys: [setEnrollment.student], [setEnrollment.student.advisor].
@@ -122,11 +122,11 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         return system.commit("AssignAdvisor", raw).carryingNoRecord(input)
     }
 
-    fun advisors(): List<Advisor> = system.instancesOf("Advisor").map { materializeAdvisor(it) }
-    fun courses(): List<Course> = system.instancesOf("Course").map { materializeCourse(it) }
-    fun students(): List<Student> = system.instancesOf("Student").map { materializeStudent(it) }
-    fun overloadeds(): List<Overloaded> = system.instancesOf("Overloaded").map { materializeOverloaded(it) }
-    fun untaggeds(): List<Untagged> = system.instancesOf("Untagged").map { materializeUntagged(it) }
+    fun advisors(): List<Advisor> = system.scope { system.instancesOf("Advisor").map { materializeAdvisor(it) } }
+    fun courses(): List<Course> = system.scope { system.instancesOf("Course").map { materializeCourse(it) } }
+    fun students(): List<Student> = system.scope { system.instancesOf("Student").map { materializeStudent(it) } }
+    fun overloadeds(): List<Overloaded> = system.scope { system.instancesOf("Overloaded").map { materializeOverloaded(it) } }
+    fun untaggeds(): List<Untagged> = system.scope { system.instancesOf("Untagged").map { materializeUntagged(it) } }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -138,9 +138,9 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            return materialize(id)
+            materialize(id)
         }
 
         val advisors: AdvisorQuery get() = AdvisorQuery(Query("Advisor"))
@@ -161,12 +161,12 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         val overloadeds: OverloadedQuery get() = OverloadedQuery(Query("Overloaded"))
         /** The record behind [ref] as a member of Overloaded, or null when it is not one. */
         fun overloaded(ref: Ref<Student>): Overloaded? =
-            system.idOf(ref).let { if (system.exists("Overloaded", it)) materializeOverloaded(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Overloaded", it)) materializeOverloaded(it) else null } }
 
         val untaggeds: UntaggedQuery get() = UntaggedQuery(Query("Untagged"))
         /** The record behind [ref] as a member of Untagged, or null when it is not one. */
         fun untagged(ref: Ref<Student>): Untagged? =
-            system.idOf(ref).let { if (system.exists("Untagged", it)) materializeUntagged(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Untagged", it)) materializeUntagged(it) else null } }
     }
 
     inner class AdvisorQuery(q: Query) : TypedQuery<AdvisorFields, Advisor>(system, q, AdvisorFields(), { materializeAdvisor(it) }) {

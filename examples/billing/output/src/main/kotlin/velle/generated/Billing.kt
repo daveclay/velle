@@ -44,7 +44,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CorrectEmail", raw).carrying(input, "CorrectEmail")
+        return system.commit("CorrectEmail", raw).carrying(input)
     }
 
     /** Queue key: [billCustomer.customer].
@@ -70,7 +70,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("LineItem", raw).carrying(input, "LineItem")
+        return system.commit("LineItem", raw).carrying(input)
     }
 
     /** Queue keys: [submitPayment.invoice], [submitPayment.invoice.customer].
@@ -96,7 +96,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Issuance", raw).carrying(input, "Issuance")
+        return system.commit("Issuance", raw).carrying(input)
     }
 
     /** Queue keys: [changeDueDate.invoice], [changeDueDate.invoice.customer].
@@ -122,7 +122,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ArchiveRequest", raw).carrying(input, "ArchiveRequest")
+        return system.commit("ArchiveRequest", raw).carrying(input)
     }
 
     /** Queue key: [unarchiveRequest.invoice].
@@ -135,28 +135,28 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("UnarchiveRequest", raw).carrying(input, "UnarchiveRequest")
+        return system.commit("UnarchiveRequest", raw).carrying(input)
     }
 
-    fun customers(): List<Customer> = system.instancesOf("Customer").map { materializeCustomer(it) }
-    fun correctEmails(): List<CorrectEmail> = system.instancesOf("CorrectEmail").map { materializeCorrectEmail(it) }
-    fun invoices(): List<Invoice> = system.instancesOf("Invoice").map { materializeInvoice(it) }
-    fun lineItems(): List<LineItem> = system.instancesOf("LineItem").map { materializeLineItem(it) }
-    fun payments(): List<Payment> = system.instancesOf("Payment").map { materializePayment(it) }
-    fun receipts(): List<Receipt> = system.instancesOf("Receipt").map { materializeReceipt(it) }
-    fun receiptEmails(): List<ReceiptEmail> = system.instancesOf("ReceiptEmail").map { materializeReceiptEmail(it) }
-    fun reminders(): List<Reminder> = system.instancesOf("Reminder").map { materializeReminder(it) }
-    fun issuances(): List<Issuance> = system.instancesOf("Issuance").map { materializeIssuance(it) }
-    fun dueChangeRefusals(): List<DueChangeRefusal> = system.instancesOf("DueChangeRefusal").map { materializeDueChangeRefusal(it) }
-    fun archiveRequests(): List<ArchiveRequest> = system.instancesOf("ArchiveRequest").map { materializeArchiveRequest(it) }
-    fun unarchiveRequests(): List<UnarchiveRequest> = system.instancesOf("UnarchiveRequest").map { materializeUnarchiveRequest(it) }
-    fun unarchiveNotices(): List<UnarchiveNotice> = system.instancesOf("UnarchiveNotice").map { materializeUnarchiveNotice(it) }
-    fun paidInvoices(): List<PaidInvoice> = system.instancesOf("PaidInvoice").map { materializePaidInvoice(it) }
-    fun unemailedReceipts(): List<UnemailedReceipt> = system.instancesOf("UnemailedReceipt").map { materializeUnemailedReceipt(it) }
-    fun overdueInvoices(): List<OverdueInvoice> = system.instancesOf("OverdueInvoice").map { materializeOverdueInvoice(it) }
-    fun actionableOverdues(): List<ActionableOverdue> = system.instancesOf("ActionableOverdue").map { materializeActionableOverdue(it) }
-    fun issuedInvoices(): List<IssuedInvoice> = system.instancesOf("IssuedInvoice").map { materializeIssuedInvoice(it) }
-    fun archivedInvoices(): List<ArchivedInvoice> = system.instancesOf("ArchivedInvoice").map { materializeArchivedInvoice(it) }
+    fun customers(): List<Customer> = system.scope { system.instancesOf("Customer").map { materializeCustomer(it) } }
+    fun correctEmails(): List<CorrectEmail> = system.scope { system.instancesOf("CorrectEmail").map { materializeCorrectEmail(it) } }
+    fun invoices(): List<Invoice> = system.scope { system.instancesOf("Invoice").map { materializeInvoice(it) } }
+    fun lineItems(): List<LineItem> = system.scope { system.instancesOf("LineItem").map { materializeLineItem(it) } }
+    fun payments(): List<Payment> = system.scope { system.instancesOf("Payment").map { materializePayment(it) } }
+    fun receipts(): List<Receipt> = system.scope { system.instancesOf("Receipt").map { materializeReceipt(it) } }
+    fun receiptEmails(): List<ReceiptEmail> = system.scope { system.instancesOf("ReceiptEmail").map { materializeReceiptEmail(it) } }
+    fun reminders(): List<Reminder> = system.scope { system.instancesOf("Reminder").map { materializeReminder(it) } }
+    fun issuances(): List<Issuance> = system.scope { system.instancesOf("Issuance").map { materializeIssuance(it) } }
+    fun dueChangeRefusals(): List<DueChangeRefusal> = system.scope { system.instancesOf("DueChangeRefusal").map { materializeDueChangeRefusal(it) } }
+    fun archiveRequests(): List<ArchiveRequest> = system.scope { system.instancesOf("ArchiveRequest").map { materializeArchiveRequest(it) } }
+    fun unarchiveRequests(): List<UnarchiveRequest> = system.scope { system.instancesOf("UnarchiveRequest").map { materializeUnarchiveRequest(it) } }
+    fun unarchiveNotices(): List<UnarchiveNotice> = system.scope { system.instancesOf("UnarchiveNotice").map { materializeUnarchiveNotice(it) } }
+    fun paidInvoices(): List<PaidInvoice> = system.scope { system.instancesOf("PaidInvoice").map { materializePaidInvoice(it) } }
+    fun unemailedReceipts(): List<UnemailedReceipt> = system.scope { system.instancesOf("UnemailedReceipt").map { materializeUnemailedReceipt(it) } }
+    fun overdueInvoices(): List<OverdueInvoice> = system.scope { system.instancesOf("OverdueInvoice").map { materializeOverdueInvoice(it) } }
+    fun actionableOverdues(): List<ActionableOverdue> = system.scope { system.instancesOf("ActionableOverdue").map { materializeActionableOverdue(it) } }
+    fun issuedInvoices(): List<IssuedInvoice> = system.scope { system.instancesOf("IssuedInvoice").map { materializeIssuedInvoice(it) } }
+    fun archivedInvoices(): List<ArchivedInvoice> = system.scope { system.instancesOf("ArchivedInvoice").map { materializeArchivedInvoice(it) } }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -168,9 +168,9 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            return materialize(id)
+            materialize(id)
         }
 
         val customers: CustomerQuery get() = CustomerQuery(Query("Customer"))
@@ -241,32 +241,32 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         val paidInvoices: PaidInvoiceQuery get() = PaidInvoiceQuery(Query("PaidInvoice"))
         /** The record behind [ref] as a member of PaidInvoice, or null when it is not one. */
         fun paidInvoice(ref: Ref<Invoice>): PaidInvoice? =
-            system.idOf(ref).let { if (system.exists("PaidInvoice", it)) materializePaidInvoice(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("PaidInvoice", it)) materializePaidInvoice(it) else null } }
 
         val unemailedReceipts: UnemailedReceiptQuery get() = UnemailedReceiptQuery(Query("UnemailedReceipt"))
         /** The record behind [ref] as a member of UnemailedReceipt, or null when it is not one. */
         fun unemailedReceipt(ref: Ref<Receipt>): UnemailedReceipt? =
-            system.idOf(ref).let { if (system.exists("UnemailedReceipt", it)) materializeUnemailedReceipt(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("UnemailedReceipt", it)) materializeUnemailedReceipt(it) else null } }
 
         val overdueInvoices: OverdueInvoiceQuery get() = OverdueInvoiceQuery(Query("OverdueInvoice"))
         /** The record behind [ref] as a member of OverdueInvoice, or null when it is not one. */
         fun overdueInvoice(ref: Ref<Invoice>): OverdueInvoice? =
-            system.idOf(ref).let { if (system.exists("OverdueInvoice", it)) materializeOverdueInvoice(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("OverdueInvoice", it)) materializeOverdueInvoice(it) else null } }
 
         val actionableOverdues: ActionableOverdueQuery get() = ActionableOverdueQuery(Query("ActionableOverdue"))
         /** The record behind [ref] as a member of ActionableOverdue, or null when it is not one. */
         fun actionableOverdue(ref: Ref<Invoice>): ActionableOverdue? =
-            system.idOf(ref).let { if (system.exists("ActionableOverdue", it)) materializeActionableOverdue(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ActionableOverdue", it)) materializeActionableOverdue(it) else null } }
 
         val issuedInvoices: IssuedInvoiceQuery get() = IssuedInvoiceQuery(Query("IssuedInvoice"))
         /** The record behind [ref] as a member of IssuedInvoice, or null when it is not one. */
         fun issuedInvoice(ref: Ref<Invoice>): IssuedInvoice? =
-            system.idOf(ref).let { if (system.exists("IssuedInvoice", it)) materializeIssuedInvoice(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("IssuedInvoice", it)) materializeIssuedInvoice(it) else null } }
 
         val archivedInvoices: ArchivedInvoiceQuery get() = ArchivedInvoiceQuery(Query("ArchivedInvoice"))
         /** The record behind [ref] as a member of ArchivedInvoice, or null when it is not one. */
         fun archivedInvoice(ref: Ref<Invoice>): ArchivedInvoice? =
-            system.idOf(ref).let { if (system.exists("ArchivedInvoice", it)) materializeArchivedInvoice(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ArchivedInvoice", it)) materializeArchivedInvoice(it) else null } }
     }
 
     inner class CustomerQuery(q: Query) : TypedQuery<CustomerFields, Customer>(system, q, CustomerFields(), { materializeCustomer(it) }) {

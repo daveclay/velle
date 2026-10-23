@@ -40,7 +40,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("DuesPayment", raw).carrying(input, "DuesPayment")
+        return system.commit("DuesPayment", raw).carrying(input)
     }
 
     /** Queue keys: [purchase.member], [purchase.member.referrer], [purchase.member.referrer.referrer].
@@ -53,7 +53,7 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Purchase", raw).carrying(input, "Purchase")
+        return system.commit("Purchase", raw).carrying(input)
     }
 
     /** Queue key: [enrollment.member].
@@ -66,20 +66,20 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Enrollment", raw).carrying(input, "Enrollment")
+        return system.commit("Enrollment", raw).carrying(input)
     }
 
-    fun members(): List<Member> = system.instancesOf("Member").map { materializeMember(it) }
-    fun duesPayments(): List<DuesPayment> = system.instancesOf("DuesPayment").map { materializeDuesPayment(it) }
-    fun purchases(): List<Purchase> = system.instancesOf("Purchase").map { materializePurchase(it) }
-    fun thankYouNotes(): List<ThankYouNote> = system.instancesOf("ThankYouNote").map { materializeThankYouNote(it) }
-    fun enrollments(): List<Enrollment> = system.instancesOf("Enrollment").map { materializeEnrollment(it) }
-    fun safetyWaivers(): List<SafetyWaiver> = system.instancesOf("SafetyWaiver").map { materializeSafetyWaiver(it) }
-    fun orientationRecords(): List<OrientationRecord> = system.instancesOf("OrientationRecord").map { materializeOrientationRecord(it) }
-    fun keycards(): List<Keycard> = system.instancesOf("Keycard").map { materializeKeycard(it) }
-    fun qualifiedPurchases(): List<QualifiedPurchase> = system.instancesOf("QualifiedPurchase").map { materializeQualifiedPurchase(it) }
-    fun vipPurchases(): List<VipPurchase> = system.instancesOf("VipPurchase").map { materializeVipPurchase(it) }
-    fun certifiedMembers(): List<CertifiedMember> = system.instancesOf("CertifiedMember").map { materializeCertifiedMember(it) }
+    fun members(): List<Member> = system.scope { system.instancesOf("Member").map { materializeMember(it) } }
+    fun duesPayments(): List<DuesPayment> = system.scope { system.instancesOf("DuesPayment").map { materializeDuesPayment(it) } }
+    fun purchases(): List<Purchase> = system.scope { system.instancesOf("Purchase").map { materializePurchase(it) } }
+    fun thankYouNotes(): List<ThankYouNote> = system.scope { system.instancesOf("ThankYouNote").map { materializeThankYouNote(it) } }
+    fun enrollments(): List<Enrollment> = system.scope { system.instancesOf("Enrollment").map { materializeEnrollment(it) } }
+    fun safetyWaivers(): List<SafetyWaiver> = system.scope { system.instancesOf("SafetyWaiver").map { materializeSafetyWaiver(it) } }
+    fun orientationRecords(): List<OrientationRecord> = system.scope { system.instancesOf("OrientationRecord").map { materializeOrientationRecord(it) } }
+    fun keycards(): List<Keycard> = system.scope { system.instancesOf("Keycard").map { materializeKeycard(it) } }
+    fun qualifiedPurchases(): List<QualifiedPurchase> = system.scope { system.instancesOf("QualifiedPurchase").map { materializeQualifiedPurchase(it) } }
+    fun vipPurchases(): List<VipPurchase> = system.scope { system.instancesOf("VipPurchase").map { materializeVipPurchase(it) } }
+    fun certifiedMembers(): List<CertifiedMember> = system.scope { system.instancesOf("CertifiedMember").map { materializeCertifiedMember(it) } }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -91,9 +91,9 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            return materialize(id)
+            materialize(id)
         }
 
         val members: MemberQuery get() = MemberQuery(Query("Member"))
@@ -139,17 +139,17 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         val qualifiedPurchases: QualifiedPurchaseQuery get() = QualifiedPurchaseQuery(Query("QualifiedPurchase"))
         /** The record behind [ref] as a member of QualifiedPurchase, or null when it is not one. */
         fun qualifiedPurchase(ref: Ref<Purchase>): QualifiedPurchase? =
-            system.idOf(ref).let { if (system.exists("QualifiedPurchase", it)) materializeQualifiedPurchase(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("QualifiedPurchase", it)) materializeQualifiedPurchase(it) else null } }
 
         val vipPurchases: VipPurchaseQuery get() = VipPurchaseQuery(Query("VipPurchase"))
         /** The record behind [ref] as a member of VipPurchase, or null when it is not one. */
         fun vipPurchase(ref: Ref<Purchase>): VipPurchase? =
-            system.idOf(ref).let { if (system.exists("VipPurchase", it)) materializeVipPurchase(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("VipPurchase", it)) materializeVipPurchase(it) else null } }
 
         val certifiedMembers: CertifiedMemberQuery get() = CertifiedMemberQuery(Query("CertifiedMember"))
         /** The record behind [ref] as a member of CertifiedMember, or null when it is not one. */
         fun certifiedMember(ref: Ref<Member>): CertifiedMember? =
-            system.idOf(ref).let { if (system.exists("CertifiedMember", it)) materializeCertifiedMember(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("CertifiedMember", it)) materializeCertifiedMember(it) else null } }
     }
 
     inner class MemberQuery(q: Query) : TypedQuery<MemberFields, Member>(system, q, MemberFields(), { materializeMember(it) }) {

@@ -32,7 +32,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Contact", raw).carrying(input, "Contact")
+        return system.commit("Contact", raw).carrying(input)
     }
 
     /** Queue keys: [card.billingContact] — plus system-wide width below.
@@ -88,7 +88,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Card", raw).carrying(input, "Card")
+        return system.commit("Card", raw).carrying(input)
     }
 
     /** Queue keys: [customer.card] — plus system-wide width below.
@@ -125,7 +125,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Customer", raw).carrying(input, "Customer")
+        return system.commit("Customer", raw).carrying(input)
     }
 
     /** Queue keys: [cardUpdate.card], [cardUpdate.customer], [cardUpdate.customer.card] — plus system-wide width below.
@@ -162,7 +162,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CardUpdate", raw).carrying(input, "CardUpdate")
+        return system.commit("CardUpdate", raw).carrying(input)
     }
 
     /** Queue keys: [placeOrder.customer], [placeOrder.customer.card] — plus system-wide width below.
@@ -268,7 +268,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ChangeShippingAddress", raw).carrying(input, "ChangeShippingAddress")
+        return system.commit("ChangeShippingAddress", raw).carrying(input)
     }
 
     /** Queue keys: [issueRefund.order] — plus system-wide width below.
@@ -338,7 +338,7 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ManualCharge", raw).carrying(input, "ManualCharge")
+        return system.commit("ManualCharge", raw).carrying(input)
     }
 
     /** Queue key: [extensionRequest.order].
@@ -351,57 +351,57 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ExtensionRequest", raw).carrying(input, "ExtensionRequest")
+        return system.commit("ExtensionRequest", raw).carrying(input)
     }
 
-    fun contacts(): List<Contact> = system.instancesOf("Contact").map { materializeContact(it) }
-    fun cards(): List<Card> = system.instancesOf("Card").map { materializeCard(it) }
-    fun customers(): List<Customer> = system.instancesOf("Customer").map { materializeCustomer(it) }
-    fun cardUpdates(): List<CardUpdate> = system.instancesOf("CardUpdate").map { materializeCardUpdate(it) }
-    fun orders(): List<Order> = system.instancesOf("Order").map { materializeOrder(it) }
-    fun chargeAttempts(): List<ChargeAttempt> = system.instancesOf("ChargeAttempt").map { materializeChargeAttempt(it) }
-    fun chargeResponses(): List<ChargeResponse> = system.instancesOf("ChargeResponse").map { materializeChargeResponse(it) }
-    fun attemptTimeouts(): List<AttemptTimeout> = system.instancesOf("AttemptTimeout").map { materializeAttemptTimeout(it) }
-    fun stockReservations(): List<StockReservation> = system.instancesOf("StockReservation").map { materializeStockReservation(it) }
-    fun reservationReleases(): List<ReservationRelease> = system.instancesOf("ReservationRelease").map { materializeReservationRelease(it) }
-    fun receipts(): List<Receipt> = system.instancesOf("Receipt").map { materializeReceipt(it) }
-    fun shipments(): List<Shipment> = system.instancesOf("Shipment").map { materializeShipment(it) }
-    fun changeShippingAddresss(): List<ChangeShippingAddress> = system.instancesOf("ChangeShippingAddress").map { materializeChangeShippingAddress(it) }
-    fun addressChangeApplications(): List<AddressChangeApplication> = system.instancesOf("AddressChangeApplication").map { materializeAddressChangeApplication(it) }
-    fun addressChangeRefusals(): List<AddressChangeRefusal> = system.instancesOf("AddressChangeRefusal").map { materializeAddressChangeRefusal(it) }
-    fun refunds(): List<Refund> = system.instancesOf("Refund").map { materializeRefund(it) }
-    fun settlementReversals(): List<SettlementReversal> = system.instancesOf("SettlementReversal").map { materializeSettlementReversal(it) }
-    fun manualCharges(): List<ManualCharge> = system.instancesOf("ManualCharge").map { materializeManualCharge(it) }
-    fun extensionRequests(): List<ExtensionRequest> = system.instancesOf("ExtensionRequest").map { materializeExtensionRequest(it) }
-    fun paymentExtensions(): List<PaymentExtension> = system.instancesOf("PaymentExtension").map { materializePaymentExtension(it) }
-    fun paymentReminders(): List<PaymentReminder> = system.instancesOf("PaymentReminder").map { materializePaymentReminder(it) }
-    fun dunningFlags(): List<DunningFlag> = system.instancesOf("DunningFlag").map { materializeDunningFlag(it) }
-    fun dunningResolutions(): List<DunningResolution> = system.instancesOf("DunningResolution").map { materializeDunningResolution(it) }
-    fun settledOrders(): List<SettledOrder> = system.instancesOf("SettledOrder").map { materializeSettledOrder(it) }
-    fun neverChargeds(): List<NeverCharged> = system.instancesOf("NeverCharged").map { materializeNeverCharged(it) }
-    fun unpaidOrders(): List<UnpaidOrder> = system.instancesOf("UnpaidOrder").map { materializeUnpaidOrder(it) }
-    fun refundedOrders(): List<RefundedOrder> = system.instancesOf("RefundedOrder").map { materializeRefundedOrder(it) }
-    fun chargeableOrders(): List<ChargeableOrder> = system.instancesOf("ChargeableOrder").map { materializeChargeableOrder(it) }
-    fun pendingAttempts(): List<PendingAttempt> = system.instancesOf("PendingAttempt").map { materializePendingAttempt(it) }
-    fun completedAttempts(): List<CompletedAttempt> = system.instancesOf("CompletedAttempt").map { materializeCompletedAttempt(it) }
-    fun successfulCharges(): List<SuccessfulCharge> = system.instancesOf("SuccessfulCharge").map { materializeSuccessfulCharge(it) }
-    fun failedCharges(): List<FailedCharge> = system.instancesOf("FailedCharge").map { materializeFailedCharge(it) }
-    fun timedOutAttempts(): List<TimedOutAttempt> = system.instancesOf("TimedOutAttempt").map { materializeTimedOutAttempt(it) }
-    fun activeReservations(): List<ActiveReservation> = system.instancesOf("ActiveReservation").map { materializeActiveReservation(it) }
-    fun retryableOrders(): List<RetryableOrder> = system.instancesOf("RetryableOrder").map { materializeRetryableOrder(it) }
-    fun stalePendingAttempts(): List<StalePendingAttempt> = system.instancesOf("StalePendingAttempt").map { materializeStalePendingAttempt(it) }
-    fun exhaustedOrders(): List<ExhaustedOrder> = system.instancesOf("ExhaustedOrder").map { materializeExhaustedOrder(it) }
-    fun reservedOrders(): List<ReservedOrder> = system.instancesOf("ReservedOrder").map { materializeReservedOrder(it) }
-    fun unshippedOrders(): List<UnshippedOrder> = system.instancesOf("UnshippedOrder").map { materializeUnshippedOrder(it) }
-    fun readyToShips(): List<ReadyToShip> = system.instancesOf("ReadyToShip").map { materializeReadyToShip(it) }
-    fun unhandledAddressChanges(): List<UnhandledAddressChange> = system.instancesOf("UnhandledAddressChange").map { materializeUnhandledAddressChange(it) }
-    fun applicableAddressChanges(): List<ApplicableAddressChange> = system.instancesOf("ApplicableAddressChange").map { materializeApplicableAddressChange(it) }
-    fun refusedAddressChanges(): List<RefusedAddressChange> = system.instancesOf("RefusedAddressChange").map { materializeRefusedAddressChange(it) }
-    fun refundAfterFailures(): List<RefundAfterFailure> = system.instancesOf("RefundAfterFailure").map { materializeRefundAfterFailure(it) }
-    fun overdueOrders(): List<OverdueOrder> = system.instancesOf("OverdueOrder").map { materializeOverdueOrder(it) }
-    fun inGracePeriods(): List<InGracePeriod> = system.instancesOf("InGracePeriod").map { materializeInGracePeriod(it) }
-    fun openDunningFlags(): List<OpenDunningFlag> = system.instancesOf("OpenDunningFlag").map { materializeOpenDunningFlag(it) }
-    fun closableDunningFlags(): List<ClosableDunningFlag> = system.instancesOf("ClosableDunningFlag").map { materializeClosableDunningFlag(it) }
+    fun contacts(): List<Contact> = system.scope { system.instancesOf("Contact").map { materializeContact(it) } }
+    fun cards(): List<Card> = system.scope { system.instancesOf("Card").map { materializeCard(it) } }
+    fun customers(): List<Customer> = system.scope { system.instancesOf("Customer").map { materializeCustomer(it) } }
+    fun cardUpdates(): List<CardUpdate> = system.scope { system.instancesOf("CardUpdate").map { materializeCardUpdate(it) } }
+    fun orders(): List<Order> = system.scope { system.instancesOf("Order").map { materializeOrder(it) } }
+    fun chargeAttempts(): List<ChargeAttempt> = system.scope { system.instancesOf("ChargeAttempt").map { materializeChargeAttempt(it) } }
+    fun chargeResponses(): List<ChargeResponse> = system.scope { system.instancesOf("ChargeResponse").map { materializeChargeResponse(it) } }
+    fun attemptTimeouts(): List<AttemptTimeout> = system.scope { system.instancesOf("AttemptTimeout").map { materializeAttemptTimeout(it) } }
+    fun stockReservations(): List<StockReservation> = system.scope { system.instancesOf("StockReservation").map { materializeStockReservation(it) } }
+    fun reservationReleases(): List<ReservationRelease> = system.scope { system.instancesOf("ReservationRelease").map { materializeReservationRelease(it) } }
+    fun receipts(): List<Receipt> = system.scope { system.instancesOf("Receipt").map { materializeReceipt(it) } }
+    fun shipments(): List<Shipment> = system.scope { system.instancesOf("Shipment").map { materializeShipment(it) } }
+    fun changeShippingAddresss(): List<ChangeShippingAddress> = system.scope { system.instancesOf("ChangeShippingAddress").map { materializeChangeShippingAddress(it) } }
+    fun addressChangeApplications(): List<AddressChangeApplication> = system.scope { system.instancesOf("AddressChangeApplication").map { materializeAddressChangeApplication(it) } }
+    fun addressChangeRefusals(): List<AddressChangeRefusal> = system.scope { system.instancesOf("AddressChangeRefusal").map { materializeAddressChangeRefusal(it) } }
+    fun refunds(): List<Refund> = system.scope { system.instancesOf("Refund").map { materializeRefund(it) } }
+    fun settlementReversals(): List<SettlementReversal> = system.scope { system.instancesOf("SettlementReversal").map { materializeSettlementReversal(it) } }
+    fun manualCharges(): List<ManualCharge> = system.scope { system.instancesOf("ManualCharge").map { materializeManualCharge(it) } }
+    fun extensionRequests(): List<ExtensionRequest> = system.scope { system.instancesOf("ExtensionRequest").map { materializeExtensionRequest(it) } }
+    fun paymentExtensions(): List<PaymentExtension> = system.scope { system.instancesOf("PaymentExtension").map { materializePaymentExtension(it) } }
+    fun paymentReminders(): List<PaymentReminder> = system.scope { system.instancesOf("PaymentReminder").map { materializePaymentReminder(it) } }
+    fun dunningFlags(): List<DunningFlag> = system.scope { system.instancesOf("DunningFlag").map { materializeDunningFlag(it) } }
+    fun dunningResolutions(): List<DunningResolution> = system.scope { system.instancesOf("DunningResolution").map { materializeDunningResolution(it) } }
+    fun settledOrders(): List<SettledOrder> = system.scope { system.instancesOf("SettledOrder").map { materializeSettledOrder(it) } }
+    fun neverChargeds(): List<NeverCharged> = system.scope { system.instancesOf("NeverCharged").map { materializeNeverCharged(it) } }
+    fun unpaidOrders(): List<UnpaidOrder> = system.scope { system.instancesOf("UnpaidOrder").map { materializeUnpaidOrder(it) } }
+    fun refundedOrders(): List<RefundedOrder> = system.scope { system.instancesOf("RefundedOrder").map { materializeRefundedOrder(it) } }
+    fun chargeableOrders(): List<ChargeableOrder> = system.scope { system.instancesOf("ChargeableOrder").map { materializeChargeableOrder(it) } }
+    fun pendingAttempts(): List<PendingAttempt> = system.scope { system.instancesOf("PendingAttempt").map { materializePendingAttempt(it) } }
+    fun completedAttempts(): List<CompletedAttempt> = system.scope { system.instancesOf("CompletedAttempt").map { materializeCompletedAttempt(it) } }
+    fun successfulCharges(): List<SuccessfulCharge> = system.scope { system.instancesOf("SuccessfulCharge").map { materializeSuccessfulCharge(it) } }
+    fun failedCharges(): List<FailedCharge> = system.scope { system.instancesOf("FailedCharge").map { materializeFailedCharge(it) } }
+    fun timedOutAttempts(): List<TimedOutAttempt> = system.scope { system.instancesOf("TimedOutAttempt").map { materializeTimedOutAttempt(it) } }
+    fun activeReservations(): List<ActiveReservation> = system.scope { system.instancesOf("ActiveReservation").map { materializeActiveReservation(it) } }
+    fun retryableOrders(): List<RetryableOrder> = system.scope { system.instancesOf("RetryableOrder").map { materializeRetryableOrder(it) } }
+    fun stalePendingAttempts(): List<StalePendingAttempt> = system.scope { system.instancesOf("StalePendingAttempt").map { materializeStalePendingAttempt(it) } }
+    fun exhaustedOrders(): List<ExhaustedOrder> = system.scope { system.instancesOf("ExhaustedOrder").map { materializeExhaustedOrder(it) } }
+    fun reservedOrders(): List<ReservedOrder> = system.scope { system.instancesOf("ReservedOrder").map { materializeReservedOrder(it) } }
+    fun unshippedOrders(): List<UnshippedOrder> = system.scope { system.instancesOf("UnshippedOrder").map { materializeUnshippedOrder(it) } }
+    fun readyToShips(): List<ReadyToShip> = system.scope { system.instancesOf("ReadyToShip").map { materializeReadyToShip(it) } }
+    fun unhandledAddressChanges(): List<UnhandledAddressChange> = system.scope { system.instancesOf("UnhandledAddressChange").map { materializeUnhandledAddressChange(it) } }
+    fun applicableAddressChanges(): List<ApplicableAddressChange> = system.scope { system.instancesOf("ApplicableAddressChange").map { materializeApplicableAddressChange(it) } }
+    fun refusedAddressChanges(): List<RefusedAddressChange> = system.scope { system.instancesOf("RefusedAddressChange").map { materializeRefusedAddressChange(it) } }
+    fun refundAfterFailures(): List<RefundAfterFailure> = system.scope { system.instancesOf("RefundAfterFailure").map { materializeRefundAfterFailure(it) } }
+    fun overdueOrders(): List<OverdueOrder> = system.scope { system.instancesOf("OverdueOrder").map { materializeOverdueOrder(it) } }
+    fun inGracePeriods(): List<InGracePeriod> = system.scope { system.instancesOf("InGracePeriod").map { materializeInGracePeriod(it) } }
+    fun openDunningFlags(): List<OpenDunningFlag> = system.scope { system.instancesOf("OpenDunningFlag").map { materializeOpenDunningFlag(it) } }
+    fun closableDunningFlags(): List<ClosableDunningFlag> = system.scope { system.instancesOf("ClosableDunningFlag").map { materializeClosableDunningFlag(it) } }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -413,9 +413,9 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            return materialize(id)
+            materialize(id)
         }
 
         val contacts: ContactQuery get() = ContactQuery(Query("Contact"))
@@ -536,127 +536,127 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         val settledOrders: SettledOrderQuery get() = SettledOrderQuery(Query("SettledOrder"))
         /** The record behind [ref] as a member of SettledOrder, or null when it is not one. */
         fun settledOrder(ref: Ref<Order>): SettledOrder? =
-            system.idOf(ref).let { if (system.exists("SettledOrder", it)) materializeSettledOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("SettledOrder", it)) materializeSettledOrder(it) else null } }
 
         val neverChargeds: NeverChargedQuery get() = NeverChargedQuery(Query("NeverCharged"))
         /** The record behind [ref] as a member of NeverCharged, or null when it is not one. */
         fun neverCharged(ref: Ref<Order>): NeverCharged? =
-            system.idOf(ref).let { if (system.exists("NeverCharged", it)) materializeNeverCharged(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("NeverCharged", it)) materializeNeverCharged(it) else null } }
 
         val unpaidOrders: UnpaidOrderQuery get() = UnpaidOrderQuery(Query("UnpaidOrder"))
         /** The record behind [ref] as a member of UnpaidOrder, or null when it is not one. */
         fun unpaidOrder(ref: Ref<Order>): UnpaidOrder? =
-            system.idOf(ref).let { if (system.exists("UnpaidOrder", it)) materializeUnpaidOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("UnpaidOrder", it)) materializeUnpaidOrder(it) else null } }
 
         val refundedOrders: RefundedOrderQuery get() = RefundedOrderQuery(Query("RefundedOrder"))
         /** The record behind [ref] as a member of RefundedOrder, or null when it is not one. */
         fun refundedOrder(ref: Ref<Order>): RefundedOrder? =
-            system.idOf(ref).let { if (system.exists("RefundedOrder", it)) materializeRefundedOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("RefundedOrder", it)) materializeRefundedOrder(it) else null } }
 
         val chargeableOrders: ChargeableOrderQuery get() = ChargeableOrderQuery(Query("ChargeableOrder"))
         /** The record behind [ref] as a member of ChargeableOrder, or null when it is not one. */
         fun chargeableOrder(ref: Ref<Order>): ChargeableOrder? =
-            system.idOf(ref).let { if (system.exists("ChargeableOrder", it)) materializeChargeableOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ChargeableOrder", it)) materializeChargeableOrder(it) else null } }
 
         val pendingAttempts: PendingAttemptQuery get() = PendingAttemptQuery(Query("PendingAttempt"))
         /** The record behind [ref] as a member of PendingAttempt, or null when it is not one. */
         fun pendingAttempt(ref: Ref<ChargeAttempt>): PendingAttempt? =
-            system.idOf(ref).let { if (system.exists("PendingAttempt", it)) materializePendingAttempt(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("PendingAttempt", it)) materializePendingAttempt(it) else null } }
 
         val completedAttempts: CompletedAttemptQuery get() = CompletedAttemptQuery(Query("CompletedAttempt"))
         /** The record behind [ref] as a member of CompletedAttempt, or null when it is not one. */
         fun completedAttempt(ref: Ref<ChargeAttempt>): CompletedAttempt? =
-            system.idOf(ref).let { if (system.exists("CompletedAttempt", it)) materializeCompletedAttempt(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("CompletedAttempt", it)) materializeCompletedAttempt(it) else null } }
 
         val successfulCharges: SuccessfulChargeQuery get() = SuccessfulChargeQuery(Query("SuccessfulCharge"))
         /** The record behind [ref] as a member of SuccessfulCharge, or null when it is not one. */
         fun successfulCharge(ref: Ref<ChargeAttempt>): SuccessfulCharge? =
-            system.idOf(ref).let { if (system.exists("SuccessfulCharge", it)) materializeSuccessfulCharge(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("SuccessfulCharge", it)) materializeSuccessfulCharge(it) else null } }
 
         val failedCharges: FailedChargeQuery get() = FailedChargeQuery(Query("FailedCharge"))
         /** The record behind [ref] as a member of FailedCharge, or null when it is not one. */
         fun failedCharge(ref: Ref<ChargeAttempt>): FailedCharge? =
-            system.idOf(ref).let { if (system.exists("FailedCharge", it)) materializeFailedCharge(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("FailedCharge", it)) materializeFailedCharge(it) else null } }
 
         val timedOutAttempts: TimedOutAttemptQuery get() = TimedOutAttemptQuery(Query("TimedOutAttempt"))
         /** The record behind [ref] as a member of TimedOutAttempt, or null when it is not one. */
         fun timedOutAttempt(ref: Ref<ChargeAttempt>): TimedOutAttempt? =
-            system.idOf(ref).let { if (system.exists("TimedOutAttempt", it)) materializeTimedOutAttempt(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("TimedOutAttempt", it)) materializeTimedOutAttempt(it) else null } }
 
         val activeReservations: ActiveReservationQuery get() = ActiveReservationQuery(Query("ActiveReservation"))
         /** The record behind [ref] as a member of ActiveReservation, or null when it is not one. */
         fun activeReservation(ref: Ref<StockReservation>): ActiveReservation? =
-            system.idOf(ref).let { if (system.exists("ActiveReservation", it)) materializeActiveReservation(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ActiveReservation", it)) materializeActiveReservation(it) else null } }
 
         val retryableOrders: RetryableOrderQuery get() = RetryableOrderQuery(Query("RetryableOrder"))
         /** The record behind [ref] as a member of RetryableOrder, or null when it is not one. */
         fun retryableOrder(ref: Ref<Order>): RetryableOrder? =
-            system.idOf(ref).let { if (system.exists("RetryableOrder", it)) materializeRetryableOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("RetryableOrder", it)) materializeRetryableOrder(it) else null } }
 
         val stalePendingAttempts: StalePendingAttemptQuery get() = StalePendingAttemptQuery(Query("StalePendingAttempt"))
         /** The record behind [ref] as a member of StalePendingAttempt, or null when it is not one. */
         fun stalePendingAttempt(ref: Ref<ChargeAttempt>): StalePendingAttempt? =
-            system.idOf(ref).let { if (system.exists("StalePendingAttempt", it)) materializeStalePendingAttempt(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("StalePendingAttempt", it)) materializeStalePendingAttempt(it) else null } }
 
         val exhaustedOrders: ExhaustedOrderQuery get() = ExhaustedOrderQuery(Query("ExhaustedOrder"))
         /** The record behind [ref] as a member of ExhaustedOrder, or null when it is not one. */
         fun exhaustedOrder(ref: Ref<Order>): ExhaustedOrder? =
-            system.idOf(ref).let { if (system.exists("ExhaustedOrder", it)) materializeExhaustedOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ExhaustedOrder", it)) materializeExhaustedOrder(it) else null } }
 
         val reservedOrders: ReservedOrderQuery get() = ReservedOrderQuery(Query("ReservedOrder"))
         /** The record behind [ref] as a member of ReservedOrder, or null when it is not one. */
         fun reservedOrder(ref: Ref<Order>): ReservedOrder? =
-            system.idOf(ref).let { if (system.exists("ReservedOrder", it)) materializeReservedOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ReservedOrder", it)) materializeReservedOrder(it) else null } }
 
         val unshippedOrders: UnshippedOrderQuery get() = UnshippedOrderQuery(Query("UnshippedOrder"))
         /** The record behind [ref] as a member of UnshippedOrder, or null when it is not one. */
         fun unshippedOrder(ref: Ref<Order>): UnshippedOrder? =
-            system.idOf(ref).let { if (system.exists("UnshippedOrder", it)) materializeUnshippedOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("UnshippedOrder", it)) materializeUnshippedOrder(it) else null } }
 
         val readyToShips: ReadyToShipQuery get() = ReadyToShipQuery(Query("ReadyToShip"))
         /** The record behind [ref] as a member of ReadyToShip, or null when it is not one. */
         fun readyToShip(ref: Ref<Order>): ReadyToShip? =
-            system.idOf(ref).let { if (system.exists("ReadyToShip", it)) materializeReadyToShip(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ReadyToShip", it)) materializeReadyToShip(it) else null } }
 
         val unhandledAddressChanges: UnhandledAddressChangeQuery get() = UnhandledAddressChangeQuery(Query("UnhandledAddressChange"))
         /** The record behind [ref] as a member of UnhandledAddressChange, or null when it is not one. */
         fun unhandledAddressChange(ref: Ref<ChangeShippingAddress>): UnhandledAddressChange? =
-            system.idOf(ref).let { if (system.exists("UnhandledAddressChange", it)) materializeUnhandledAddressChange(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("UnhandledAddressChange", it)) materializeUnhandledAddressChange(it) else null } }
 
         val applicableAddressChanges: ApplicableAddressChangeQuery get() = ApplicableAddressChangeQuery(Query("ApplicableAddressChange"))
         /** The record behind [ref] as a member of ApplicableAddressChange, or null when it is not one. */
         fun applicableAddressChange(ref: Ref<ChangeShippingAddress>): ApplicableAddressChange? =
-            system.idOf(ref).let { if (system.exists("ApplicableAddressChange", it)) materializeApplicableAddressChange(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ApplicableAddressChange", it)) materializeApplicableAddressChange(it) else null } }
 
         val refusedAddressChanges: RefusedAddressChangeQuery get() = RefusedAddressChangeQuery(Query("RefusedAddressChange"))
         /** The record behind [ref] as a member of RefusedAddressChange, or null when it is not one. */
         fun refusedAddressChange(ref: Ref<ChangeShippingAddress>): RefusedAddressChange? =
-            system.idOf(ref).let { if (system.exists("RefusedAddressChange", it)) materializeRefusedAddressChange(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("RefusedAddressChange", it)) materializeRefusedAddressChange(it) else null } }
 
         val refundAfterFailures: RefundAfterFailureQuery get() = RefundAfterFailureQuery(Query("RefundAfterFailure"))
         /** The record behind [ref] as a member of RefundAfterFailure, or null when it is not one. */
         fun refundAfterFailure(ref: Ref<Order>): RefundAfterFailure? =
-            system.idOf(ref).let { if (system.exists("RefundAfterFailure", it)) materializeRefundAfterFailure(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("RefundAfterFailure", it)) materializeRefundAfterFailure(it) else null } }
 
         val overdueOrders: OverdueOrderQuery get() = OverdueOrderQuery(Query("OverdueOrder"))
         /** The record behind [ref] as a member of OverdueOrder, or null when it is not one. */
         fun overdueOrder(ref: Ref<Order>): OverdueOrder? =
-            system.idOf(ref).let { if (system.exists("OverdueOrder", it)) materializeOverdueOrder(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("OverdueOrder", it)) materializeOverdueOrder(it) else null } }
 
         val inGracePeriods: InGracePeriodQuery get() = InGracePeriodQuery(Query("InGracePeriod"))
         /** The record behind [ref] as a member of InGracePeriod, or null when it is not one. */
         fun inGracePeriod(ref: Ref<Order>): InGracePeriod? =
-            system.idOf(ref).let { if (system.exists("InGracePeriod", it)) materializeInGracePeriod(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("InGracePeriod", it)) materializeInGracePeriod(it) else null } }
 
         val openDunningFlags: OpenDunningFlagQuery get() = OpenDunningFlagQuery(Query("OpenDunningFlag"))
         /** The record behind [ref] as a member of OpenDunningFlag, or null when it is not one. */
         fun openDunningFlag(ref: Ref<DunningFlag>): OpenDunningFlag? =
-            system.idOf(ref).let { if (system.exists("OpenDunningFlag", it)) materializeOpenDunningFlag(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("OpenDunningFlag", it)) materializeOpenDunningFlag(it) else null } }
 
         val closableDunningFlags: ClosableDunningFlagQuery get() = ClosableDunningFlagQuery(Query("ClosableDunningFlag"))
         /** The record behind [ref] as a member of ClosableDunningFlag, or null when it is not one. */
         fun closableDunningFlag(ref: Ref<DunningFlag>): ClosableDunningFlag? =
-            system.idOf(ref).let { if (system.exists("ClosableDunningFlag", it)) materializeClosableDunningFlag(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ClosableDunningFlag", it)) materializeClosableDunningFlag(it) else null } }
     }
 
     inner class ContactQuery(q: Query) : TypedQuery<ContactFields, Contact>(system, q, ContactFields(), { materializeContact(it) }) {

@@ -27,7 +27,7 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ContainerType", raw).carrying(input, "ContainerType")
+        return system.commit("ContainerType", raw).carrying(input)
     }
 
     /** Queue key: [experimentDesign.containerType].
@@ -41,14 +41,14 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
         val raw = input.raw(system, reg)
         val parts = input.parts(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ExperimentDesign", raw, parts).carrying(input, "ExperimentDesign")
+        return system.commit("ExperimentDesign", raw, parts).carrying(input)
     }
 
-    fun containerTypes(): List<ContainerType> = system.instancesOf("ContainerType").map { materializeContainerType(it) }
-    fun experimentDesigns(): List<ExperimentDesign> = system.instancesOf("ExperimentDesign").map { materializeExperimentDesign(it) }
-    fun conditions(): List<Condition> = system.instancesOf("Condition").map { materializeCondition(it) }
-    fun containers(): List<Container> = system.instancesOf("Container").map { materializeContainer(it) }
-    fun wells(): List<Well> = system.instancesOf("Well").map { materializeWell(it) }
+    fun containerTypes(): List<ContainerType> = system.scope { system.instancesOf("ContainerType").map { materializeContainerType(it) } }
+    fun experimentDesigns(): List<ExperimentDesign> = system.scope { system.instancesOf("ExperimentDesign").map { materializeExperimentDesign(it) } }
+    fun conditions(): List<Condition> = system.scope { system.instancesOf("Condition").map { materializeCondition(it) } }
+    fun containers(): List<Container> = system.scope { system.instancesOf("Container").map { materializeContainer(it) } }
+    fun wells(): List<Well> = system.scope { system.instancesOf("Well").map { materializeWell(it) } }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -60,9 +60,9 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            return materialize(id)
+            materialize(id)
         }
 
         val containerTypes: ContainerTypeQuery get() = ContainerTypeQuery(Query("ContainerType"))

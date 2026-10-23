@@ -31,7 +31,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Crop", raw).carrying(input, "Crop")
+        return system.commit("Crop", raw).carrying(input)
     }
 
     /** Queue key: [pathogen.host].
@@ -44,7 +44,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Pathogen", raw).carrying(input, "Pathogen")
+        return system.commit("Pathogen", raw).carrying(input)
     }
 
     /** Queue keys: none — this commit contends with no other work.
@@ -57,7 +57,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Peptide", raw).carrying(input, "Peptide")
+        return system.commit("Peptide", raw).carrying(input)
     }
 
     /** Queue keys: none — this commit contends with no other work.
@@ -70,7 +70,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AssayProtocol", raw).carrying(input, "AssayProtocol")
+        return system.commit("AssayProtocol", raw).carrying(input)
     }
 
     /** Queue keys: [labExperiment.pathogen], [labExperiment.peptide], [labExperiment.protocol].
@@ -83,7 +83,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("LabExperiment", raw).carrying(input, "LabExperiment")
+        return system.commit("LabExperiment", raw).carrying(input)
     }
 
     /** Queue keys: [assay.experiment], [assay.experiment.protocol].
@@ -96,7 +96,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Assay", raw).carrying(input, "Assay")
+        return system.commit("Assay", raw).carrying(input)
     }
 
     /** Queue keys: [assayReading.assay] — plus system-wide width below.
@@ -119,7 +119,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AssayReading", raw).carrying(input, "AssayReading")
+        return system.commit("AssayReading", raw).carrying(input)
     }
 
     /** Queue: system-wide.
@@ -138,7 +138,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Greenhouse", raw).carrying(input, "Greenhouse")
+        return system.commit("Greenhouse", raw).carrying(input)
     }
 
     /** Queue keys: [climateReading.greenhouse] — plus system-wide width below.
@@ -159,7 +159,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ClimateReading", raw).carrying(input, "ClimateReading")
+        return system.commit("ClimateReading", raw).carrying(input)
     }
 
     /** Queue: system-wide.
@@ -173,7 +173,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("GreenhouseProtocol", raw).carrying(input, "GreenhouseProtocol")
+        return system.commit("GreenhouseProtocol", raw).carrying(input)
     }
 
     /** Queue keys: [requestGreenhouseTrial.greenhouse], [requestGreenhouseTrial.pathogen], [requestGreenhouseTrial.peptide], [requestGreenhouseTrial.protocol] — plus system-wide width below.
@@ -203,7 +203,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("GreenhousePlot", raw).carrying(input, "GreenhousePlot")
+        return system.commit("GreenhousePlot", raw).carrying(input)
     }
 
     /** Queue keys: [treatment.trial] — plus system-wide width below.
@@ -226,7 +226,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Treatment", raw).carrying(input, "Treatment")
+        return system.commit("Treatment", raw).carrying(input)
     }
 
     /** Queue keys: [plotObservation.plot], [plotObservation.plot.trial] — plus system-wide width below.
@@ -246,7 +246,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PlotObservation", raw).carrying(input, "PlotObservation")
+        return system.commit("PlotObservation", raw).carrying(input)
     }
 
     /** Queue keys: [correctObservation.observation], [correctObservation.observation.plot], [correctObservation.observation.plot.trial].
@@ -306,7 +306,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("FieldSite", raw).carrying(input, "FieldSite")
+        return system.commit("FieldSite", raw).carrying(input)
     }
 
     /** Queue keys: [permit.crop], [permit.site].
@@ -319,7 +319,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Permit", raw).carrying(input, "Permit")
+        return system.commit("Permit", raw).carrying(input)
     }
 
     /** Queue keys: [weatherObservation.site] — plus system-wide width below.
@@ -336,7 +336,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("WeatherObservation", raw).carrying(input, "WeatherObservation")
+        return system.commit("WeatherObservation", raw).carrying(input)
     }
 
     /** Queue keys: none — this commit contends with no other work.
@@ -349,7 +349,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("FieldProtocol", raw).carrying(input, "FieldProtocol")
+        return system.commit("FieldProtocol", raw).carrying(input)
     }
 
     /** Queue keys: [requestFieldTrial.crop], [requestFieldTrial.pathogen], [requestFieldTrial.peptide], [requestFieldTrial.protocol], [requestFieldTrial.site] — plus system-wide width below.
@@ -392,7 +392,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("FieldPlot", raw).carrying(input, "FieldPlot")
+        return system.commit("FieldPlot", raw).carrying(input)
     }
 
     /** Queue keys: [applyTreatment.trial], [applyTreatment.trial.site].
@@ -418,7 +418,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Scouting", raw).carrying(input, "Scouting")
+        return system.commit("Scouting", raw).carrying(input)
     }
 
     /** Queue key: [harvest.plot].
@@ -431,7 +431,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Harvest", raw).carrying(input, "Harvest")
+        return system.commit("Harvest", raw).carrying(input)
     }
 
     /** Queue keys: [phytotoxicityReport.plot] — plus system-wide width below.
@@ -447,7 +447,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PhytotoxicityReport", raw).carrying(input, "PhytotoxicityReport")
+        return system.commit("PhytotoxicityReport", raw).carrying(input)
     }
 
     /** Queue key: [collectionTask.trial].
@@ -460,7 +460,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CollectionTask", raw).carrying(input, "CollectionTask")
+        return system.commit("CollectionTask", raw).carrying(input)
     }
 
     /** Queue keys: [rescheduleTask.task], [rescheduleTask.task.trial].
@@ -489,82 +489,82 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         return system.commit("CancelTask", raw).carryingNoRecord(input)
     }
 
-    fun crops(): List<Crop> = system.instancesOf("Crop").map { materializeCrop(it) }
-    fun pathogens(): List<Pathogen> = system.instancesOf("Pathogen").map { materializePathogen(it) }
-    fun peptides(): List<Peptide> = system.instancesOf("Peptide").map { materializePeptide(it) }
-    fun assayProtocols(): List<AssayProtocol> = system.instancesOf("AssayProtocol").map { materializeAssayProtocol(it) }
-    fun labExperiments(): List<LabExperiment> = system.instancesOf("LabExperiment").map { materializeLabExperiment(it) }
-    fun assays(): List<Assay> = system.instancesOf("Assay").map { materializeAssay(it) }
-    fun assayReadings(): List<AssayReading> = system.instancesOf("AssayReading").map { materializeAssayReading(it) }
-    fun labHits(): List<LabHit> = system.instancesOf("LabHit").map { materializeLabHit(it) }
-    fun labHitRetractions(): List<LabHitRetraction> = system.instancesOf("LabHitRetraction").map { materializeLabHitRetraction(it) }
-    fun greenhouses(): List<Greenhouse> = system.instancesOf("Greenhouse").map { materializeGreenhouse(it) }
-    fun climateReadings(): List<ClimateReading> = system.instancesOf("ClimateReading").map { materializeClimateReading(it) }
-    fun greenhouseProtocols(): List<GreenhouseProtocol> = system.instancesOf("GreenhouseProtocol").map { materializeGreenhouseProtocol(it) }
-    fun greenhouseTrials(): List<GreenhouseTrial> = system.instancesOf("GreenhouseTrial").map { materializeGreenhouseTrial(it) }
-    fun greenhouseRefusals(): List<GreenhouseRefusal> = system.instancesOf("GreenhouseRefusal").map { materializeGreenhouseRefusal(it) }
-    fun greenhousePlots(): List<GreenhousePlot> = system.instancesOf("GreenhousePlot").map { materializeGreenhousePlot(it) }
-    fun treatments(): List<Treatment> = system.instancesOf("Treatment").map { materializeTreatment(it) }
-    fun plotObservations(): List<PlotObservation> = system.instancesOf("PlotObservation").map { materializePlotObservation(it) }
-    fun greenhouseResults(): List<GreenhouseResult> = system.instancesOf("GreenhouseResult").map { materializeGreenhouseResult(it) }
-    fun observationCorrections(): List<ObservationCorrection> = system.instancesOf("ObservationCorrection").map { materializeObservationCorrection(it) }
-    fun correctionRefusals(): List<CorrectionRefusal> = system.instancesOf("CorrectionRefusal").map { materializeCorrectionRefusal(it) }
-    fun voidRecords(): List<VoidRecord> = system.instancesOf("VoidRecord").map { materializeVoidRecord(it) }
-    fun voidRefusals(): List<VoidRefusal> = system.instancesOf("VoidRefusal").map { materializeVoidRefusal(it) }
-    fun moveRefusals(): List<MoveRefusal> = system.instancesOf("MoveRefusal").map { materializeMoveRefusal(it) }
-    fun climateExcursions(): List<ClimateExcursion> = system.instancesOf("ClimateExcursion").map { materializeClimateExcursion(it) }
-    fun excursionEnds(): List<ExcursionEnd> = system.instancesOf("ExcursionEnd").map { materializeExcursionEnd(it) }
-    fun sensorAlerts(): List<SensorAlert> = system.instancesOf("SensorAlert").map { materializeSensorAlert(it) }
-    fun fieldSites(): List<FieldSite> = system.instancesOf("FieldSite").map { materializeFieldSite(it) }
-    fun permits(): List<Permit> = system.instancesOf("Permit").map { materializePermit(it) }
-    fun weatherObservations(): List<WeatherObservation> = system.instancesOf("WeatherObservation").map { materializeWeatherObservation(it) }
-    fun fieldProtocols(): List<FieldProtocol> = system.instancesOf("FieldProtocol").map { materializeFieldProtocol(it) }
-    fun fieldTrials(): List<FieldTrial> = system.instancesOf("FieldTrial").map { materializeFieldTrial(it) }
-    fun fieldRefusals(): List<FieldRefusal> = system.instancesOf("FieldRefusal").map { materializeFieldRefusal(it) }
-    fun plantings(): List<Planting> = system.instancesOf("Planting").map { materializePlanting(it) }
-    fun fieldPlots(): List<FieldPlot> = system.instancesOf("FieldPlot").map { materializeFieldPlot(it) }
-    fun treatmentApplications(): List<TreatmentApplication> = system.instancesOf("TreatmentApplication").map { materializeTreatmentApplication(it) }
-    fun reapplicationNotices(): List<ReapplicationNotice> = system.instancesOf("ReapplicationNotice").map { materializeReapplicationNotice(it) }
-    fun scoutings(): List<Scouting> = system.instancesOf("Scouting").map { materializeScouting(it) }
-    fun harvests(): List<Harvest> = system.instancesOf("Harvest").map { materializeHarvest(it) }
-    fun phytotoxicityReports(): List<PhytotoxicityReport> = system.instancesOf("PhytotoxicityReport").map { materializePhytotoxicityReport(it) }
-    fun haltNotices(): List<HaltNotice> = system.instancesOf("HaltNotice").map { materializeHaltNotice(it) }
-    fun collectionTasks(): List<CollectionTask> = system.instancesOf("CollectionTask").map { materializeCollectionTask(it) }
-    fun taskReminders(): List<TaskReminder> = system.instancesOf("TaskReminder").map { materializeTaskReminder(it) }
-    fun rescheduleRefusals(): List<RescheduleRefusal> = system.instancesOf("RescheduleRefusal").map { materializeRescheduleRefusal(it) }
-    fun taskCancellations(): List<TaskCancellation> = system.instancesOf("TaskCancellation").map { materializeTaskCancellation(it) }
-    fun cancelRefusals(): List<CancelRefusal> = system.instancesOf("CancelRefusal").map { materializeCancelRefusal(it) }
-    fun completedAssays(): List<CompletedAssay> = system.instancesOf("CompletedAssay").map { materializeCompletedAssay(it) }
-    fun hitExperiments(): List<HitExperiment> = system.instancesOf("HitExperiment").map { materializeHitExperiment(it) }
-    fun labValidateds(): List<LabValidated> = system.instancesOf("LabValidated").map { materializeLabValidated(it) }
-    fun treatedTrials(): List<TreatedTrial> = system.instancesOf("TreatedTrial").map { materializeTreatedTrial(it) }
-    fun laidOutTrials(): List<LaidOutTrial> = system.instancesOf("LaidOutTrial").map { materializeLaidOutTrial(it) }
-    fun observedToEnds(): List<ObservedToEnd> = system.instancesOf("ObservedToEnd").map { materializeObservedToEnd(it) }
-    fun completeTrials(): List<CompleteTrial> = system.instancesOf("CompleteTrial").map { materializeCompleteTrial(it) }
-    fun effectiveTrials(): List<EffectiveTrial> = system.instancesOf("EffectiveTrial").map { materializeEffectiveTrial(it) }
-    fun evaluatedTrials(): List<EvaluatedTrial> = system.instancesOf("EvaluatedTrial").map { materializeEvaluatedTrial(it) }
-    fun greenhouseValidateds(): List<GreenhouseValidated> = system.instancesOf("GreenhouseValidated").map { materializeGreenhouseValidated(it) }
-    fun deprioritizeds(): List<Deprioritized> = system.instancesOf("Deprioritized").map { materializeDeprioritized(it) }
-    fun lockedObservations(): List<LockedObservation> = system.instancesOf("LockedObservation").map { materializeLockedObservation(it) }
-    fun treatedPlots(): List<TreatedPlot> = system.instancesOf("TreatedPlot").map { materializeTreatedPlot(it) }
-    fun activeTrials(): List<ActiveTrial> = system.instancesOf("ActiveTrial").map { materializeActiveTrial(it) }
-    fun outOfBands(): List<OutOfBand> = system.instancesOf("OutOfBand").map { materializeOutOfBand(it) }
-    fun openExcursions(): List<OpenExcursion> = system.instancesOf("OpenExcursion").map { materializeOpenExcursion(it) }
-    fun closableExcursions(): List<ClosableExcursion> = system.instancesOf("ClosableExcursion").map { materializeClosableExcursion(it) }
-    fun compromisedTrials(): List<CompromisedTrial> = system.instancesOf("CompromisedTrial").map { materializeCompromisedTrial(it) }
-    fun silentGreenhouses(): List<SilentGreenhouse> = system.instancesOf("SilentGreenhouse").map { materializeSilentGreenhouse(it) }
-    fun permittedTrials(): List<PermittedTrial> = system.instancesOf("PermittedTrial").map { materializePermittedTrial(it) }
-    fun plantedTrials(): List<PlantedTrial> = system.instancesOf("PlantedTrial").map { materializePlantedTrial(it) }
-    fun washedOffApplications(): List<WashedOffApplication> = system.instancesOf("WashedOffApplication").map { materializeWashedOffApplication(it) }
-    fun neverScouteds(): List<NeverScouted> = system.instancesOf("NeverScouted").map { materializeNeverScouted(it) }
-    fun harvestedTrials(): List<HarvestedTrial> = system.instancesOf("HarvestedTrial").map { materializeHarvestedTrial(it) }
-    fun successfulFieldTrials(): List<SuccessfulFieldTrial> = system.instancesOf("SuccessfulFieldTrial").map { materializeSuccessfulFieldTrial(it) }
-    fun fieldValidateds(): List<FieldValidated> = system.instancesOf("FieldValidated").map { materializeFieldValidated(it) }
-    fun haltedTrials(): List<HaltedTrial> = system.instancesOf("HaltedTrial").map { materializeHaltedTrial(it) }
-    fun trials(): List<Trial> = system.instancesOf("Trial").map { materializeTrial(it) }
-    fun doneTasks(): List<DoneTask> = system.instancesOf("DoneTask").map { materializeDoneTask(it) }
-    fun openTasks(): List<OpenTask> = system.instancesOf("OpenTask").map { materializeOpenTask(it) }
-    fun overdueTasks(): List<OverdueTask> = system.instancesOf("OverdueTask").map { materializeOverdueTask(it) }
+    fun crops(): List<Crop> = system.scope { system.instancesOf("Crop").map { materializeCrop(it) } }
+    fun pathogens(): List<Pathogen> = system.scope { system.instancesOf("Pathogen").map { materializePathogen(it) } }
+    fun peptides(): List<Peptide> = system.scope { system.instancesOf("Peptide").map { materializePeptide(it) } }
+    fun assayProtocols(): List<AssayProtocol> = system.scope { system.instancesOf("AssayProtocol").map { materializeAssayProtocol(it) } }
+    fun labExperiments(): List<LabExperiment> = system.scope { system.instancesOf("LabExperiment").map { materializeLabExperiment(it) } }
+    fun assays(): List<Assay> = system.scope { system.instancesOf("Assay").map { materializeAssay(it) } }
+    fun assayReadings(): List<AssayReading> = system.scope { system.instancesOf("AssayReading").map { materializeAssayReading(it) } }
+    fun labHits(): List<LabHit> = system.scope { system.instancesOf("LabHit").map { materializeLabHit(it) } }
+    fun labHitRetractions(): List<LabHitRetraction> = system.scope { system.instancesOf("LabHitRetraction").map { materializeLabHitRetraction(it) } }
+    fun greenhouses(): List<Greenhouse> = system.scope { system.instancesOf("Greenhouse").map { materializeGreenhouse(it) } }
+    fun climateReadings(): List<ClimateReading> = system.scope { system.instancesOf("ClimateReading").map { materializeClimateReading(it) } }
+    fun greenhouseProtocols(): List<GreenhouseProtocol> = system.scope { system.instancesOf("GreenhouseProtocol").map { materializeGreenhouseProtocol(it) } }
+    fun greenhouseTrials(): List<GreenhouseTrial> = system.scope { system.instancesOf("GreenhouseTrial").map { materializeGreenhouseTrial(it) } }
+    fun greenhouseRefusals(): List<GreenhouseRefusal> = system.scope { system.instancesOf("GreenhouseRefusal").map { materializeGreenhouseRefusal(it) } }
+    fun greenhousePlots(): List<GreenhousePlot> = system.scope { system.instancesOf("GreenhousePlot").map { materializeGreenhousePlot(it) } }
+    fun treatments(): List<Treatment> = system.scope { system.instancesOf("Treatment").map { materializeTreatment(it) } }
+    fun plotObservations(): List<PlotObservation> = system.scope { system.instancesOf("PlotObservation").map { materializePlotObservation(it) } }
+    fun greenhouseResults(): List<GreenhouseResult> = system.scope { system.instancesOf("GreenhouseResult").map { materializeGreenhouseResult(it) } }
+    fun observationCorrections(): List<ObservationCorrection> = system.scope { system.instancesOf("ObservationCorrection").map { materializeObservationCorrection(it) } }
+    fun correctionRefusals(): List<CorrectionRefusal> = system.scope { system.instancesOf("CorrectionRefusal").map { materializeCorrectionRefusal(it) } }
+    fun voidRecords(): List<VoidRecord> = system.scope { system.instancesOf("VoidRecord").map { materializeVoidRecord(it) } }
+    fun voidRefusals(): List<VoidRefusal> = system.scope { system.instancesOf("VoidRefusal").map { materializeVoidRefusal(it) } }
+    fun moveRefusals(): List<MoveRefusal> = system.scope { system.instancesOf("MoveRefusal").map { materializeMoveRefusal(it) } }
+    fun climateExcursions(): List<ClimateExcursion> = system.scope { system.instancesOf("ClimateExcursion").map { materializeClimateExcursion(it) } }
+    fun excursionEnds(): List<ExcursionEnd> = system.scope { system.instancesOf("ExcursionEnd").map { materializeExcursionEnd(it) } }
+    fun sensorAlerts(): List<SensorAlert> = system.scope { system.instancesOf("SensorAlert").map { materializeSensorAlert(it) } }
+    fun fieldSites(): List<FieldSite> = system.scope { system.instancesOf("FieldSite").map { materializeFieldSite(it) } }
+    fun permits(): List<Permit> = system.scope { system.instancesOf("Permit").map { materializePermit(it) } }
+    fun weatherObservations(): List<WeatherObservation> = system.scope { system.instancesOf("WeatherObservation").map { materializeWeatherObservation(it) } }
+    fun fieldProtocols(): List<FieldProtocol> = system.scope { system.instancesOf("FieldProtocol").map { materializeFieldProtocol(it) } }
+    fun fieldTrials(): List<FieldTrial> = system.scope { system.instancesOf("FieldTrial").map { materializeFieldTrial(it) } }
+    fun fieldRefusals(): List<FieldRefusal> = system.scope { system.instancesOf("FieldRefusal").map { materializeFieldRefusal(it) } }
+    fun plantings(): List<Planting> = system.scope { system.instancesOf("Planting").map { materializePlanting(it) } }
+    fun fieldPlots(): List<FieldPlot> = system.scope { system.instancesOf("FieldPlot").map { materializeFieldPlot(it) } }
+    fun treatmentApplications(): List<TreatmentApplication> = system.scope { system.instancesOf("TreatmentApplication").map { materializeTreatmentApplication(it) } }
+    fun reapplicationNotices(): List<ReapplicationNotice> = system.scope { system.instancesOf("ReapplicationNotice").map { materializeReapplicationNotice(it) } }
+    fun scoutings(): List<Scouting> = system.scope { system.instancesOf("Scouting").map { materializeScouting(it) } }
+    fun harvests(): List<Harvest> = system.scope { system.instancesOf("Harvest").map { materializeHarvest(it) } }
+    fun phytotoxicityReports(): List<PhytotoxicityReport> = system.scope { system.instancesOf("PhytotoxicityReport").map { materializePhytotoxicityReport(it) } }
+    fun haltNotices(): List<HaltNotice> = system.scope { system.instancesOf("HaltNotice").map { materializeHaltNotice(it) } }
+    fun collectionTasks(): List<CollectionTask> = system.scope { system.instancesOf("CollectionTask").map { materializeCollectionTask(it) } }
+    fun taskReminders(): List<TaskReminder> = system.scope { system.instancesOf("TaskReminder").map { materializeTaskReminder(it) } }
+    fun rescheduleRefusals(): List<RescheduleRefusal> = system.scope { system.instancesOf("RescheduleRefusal").map { materializeRescheduleRefusal(it) } }
+    fun taskCancellations(): List<TaskCancellation> = system.scope { system.instancesOf("TaskCancellation").map { materializeTaskCancellation(it) } }
+    fun cancelRefusals(): List<CancelRefusal> = system.scope { system.instancesOf("CancelRefusal").map { materializeCancelRefusal(it) } }
+    fun completedAssays(): List<CompletedAssay> = system.scope { system.instancesOf("CompletedAssay").map { materializeCompletedAssay(it) } }
+    fun hitExperiments(): List<HitExperiment> = system.scope { system.instancesOf("HitExperiment").map { materializeHitExperiment(it) } }
+    fun labValidateds(): List<LabValidated> = system.scope { system.instancesOf("LabValidated").map { materializeLabValidated(it) } }
+    fun treatedTrials(): List<TreatedTrial> = system.scope { system.instancesOf("TreatedTrial").map { materializeTreatedTrial(it) } }
+    fun laidOutTrials(): List<LaidOutTrial> = system.scope { system.instancesOf("LaidOutTrial").map { materializeLaidOutTrial(it) } }
+    fun observedToEnds(): List<ObservedToEnd> = system.scope { system.instancesOf("ObservedToEnd").map { materializeObservedToEnd(it) } }
+    fun completeTrials(): List<CompleteTrial> = system.scope { system.instancesOf("CompleteTrial").map { materializeCompleteTrial(it) } }
+    fun effectiveTrials(): List<EffectiveTrial> = system.scope { system.instancesOf("EffectiveTrial").map { materializeEffectiveTrial(it) } }
+    fun evaluatedTrials(): List<EvaluatedTrial> = system.scope { system.instancesOf("EvaluatedTrial").map { materializeEvaluatedTrial(it) } }
+    fun greenhouseValidateds(): List<GreenhouseValidated> = system.scope { system.instancesOf("GreenhouseValidated").map { materializeGreenhouseValidated(it) } }
+    fun deprioritizeds(): List<Deprioritized> = system.scope { system.instancesOf("Deprioritized").map { materializeDeprioritized(it) } }
+    fun lockedObservations(): List<LockedObservation> = system.scope { system.instancesOf("LockedObservation").map { materializeLockedObservation(it) } }
+    fun treatedPlots(): List<TreatedPlot> = system.scope { system.instancesOf("TreatedPlot").map { materializeTreatedPlot(it) } }
+    fun activeTrials(): List<ActiveTrial> = system.scope { system.instancesOf("ActiveTrial").map { materializeActiveTrial(it) } }
+    fun outOfBands(): List<OutOfBand> = system.scope { system.instancesOf("OutOfBand").map { materializeOutOfBand(it) } }
+    fun openExcursions(): List<OpenExcursion> = system.scope { system.instancesOf("OpenExcursion").map { materializeOpenExcursion(it) } }
+    fun closableExcursions(): List<ClosableExcursion> = system.scope { system.instancesOf("ClosableExcursion").map { materializeClosableExcursion(it) } }
+    fun compromisedTrials(): List<CompromisedTrial> = system.scope { system.instancesOf("CompromisedTrial").map { materializeCompromisedTrial(it) } }
+    fun silentGreenhouses(): List<SilentGreenhouse> = system.scope { system.instancesOf("SilentGreenhouse").map { materializeSilentGreenhouse(it) } }
+    fun permittedTrials(): List<PermittedTrial> = system.scope { system.instancesOf("PermittedTrial").map { materializePermittedTrial(it) } }
+    fun plantedTrials(): List<PlantedTrial> = system.scope { system.instancesOf("PlantedTrial").map { materializePlantedTrial(it) } }
+    fun washedOffApplications(): List<WashedOffApplication> = system.scope { system.instancesOf("WashedOffApplication").map { materializeWashedOffApplication(it) } }
+    fun neverScouteds(): List<NeverScouted> = system.scope { system.instancesOf("NeverScouted").map { materializeNeverScouted(it) } }
+    fun harvestedTrials(): List<HarvestedTrial> = system.scope { system.instancesOf("HarvestedTrial").map { materializeHarvestedTrial(it) } }
+    fun successfulFieldTrials(): List<SuccessfulFieldTrial> = system.scope { system.instancesOf("SuccessfulFieldTrial").map { materializeSuccessfulFieldTrial(it) } }
+    fun fieldValidateds(): List<FieldValidated> = system.scope { system.instancesOf("FieldValidated").map { materializeFieldValidated(it) } }
+    fun haltedTrials(): List<HaltedTrial> = system.scope { system.instancesOf("HaltedTrial").map { materializeHaltedTrial(it) } }
+    fun trials(): List<Trial> = system.scope { system.instancesOf("Trial").map { materializeTrial(it) } }
+    fun doneTasks(): List<DoneTask> = system.scope { system.instancesOf("DoneTask").map { materializeDoneTask(it) } }
+    fun openTasks(): List<OpenTask> = system.scope { system.instancesOf("OpenTask").map { materializeOpenTask(it) } }
+    fun overdueTasks(): List<OverdueTask> = system.scope { system.instancesOf("OverdueTask").map { materializeOverdueTask(it) } }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -576,9 +576,9 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            return materialize(id)
+            materialize(id)
         }
 
         val crops: CropQuery get() = CropQuery(Query("Crop"))
@@ -809,154 +809,154 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         val completedAssays: CompletedAssayQuery get() = CompletedAssayQuery(Query("CompletedAssay"))
         /** The record behind [ref] as a member of CompletedAssay, or null when it is not one. */
         fun completedAssay(ref: Ref<Assay>): CompletedAssay? =
-            system.idOf(ref).let { if (system.exists("CompletedAssay", it)) materializeCompletedAssay(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("CompletedAssay", it)) materializeCompletedAssay(it) else null } }
 
         val hitExperiments: HitExperimentQuery get() = HitExperimentQuery(Query("HitExperiment"))
         /** The record behind [ref] as a member of HitExperiment, or null when it is not one. */
         fun hitExperiment(ref: Ref<LabExperiment>): HitExperiment? =
-            system.idOf(ref).let { if (system.exists("HitExperiment", it)) materializeHitExperiment(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("HitExperiment", it)) materializeHitExperiment(it) else null } }
 
         val labValidateds: LabValidatedQuery get() = LabValidatedQuery(Query("LabValidated"))
         /** The record behind [ref] as a member of LabValidated, or null when it is not one. */
         fun labValidated(ref: Ref<Peptide>): LabValidated? =
-            system.idOf(ref).let { if (system.exists("LabValidated", it)) materializeLabValidated(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("LabValidated", it)) materializeLabValidated(it) else null } }
 
         val treatedTrials: TreatedTrialQuery get() = TreatedTrialQuery(Query("TreatedTrial"))
         /** The record behind [ref] as a member of TreatedTrial, or null when it is not one. */
         fun treatedTrial(ref: Ref<GreenhouseTrial>): TreatedTrial? =
-            system.idOf(ref).let { if (system.exists("TreatedTrial", it)) materializeTreatedTrial(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("TreatedTrial", it)) materializeTreatedTrial(it) else null } }
 
         val laidOutTrials: LaidOutTrialQuery get() = LaidOutTrialQuery(Query("LaidOutTrial"))
         /** The record behind [ref] as a member of LaidOutTrial, or null when it is not one. */
         fun laidOutTrial(ref: Ref<GreenhouseTrial>): LaidOutTrial? =
-            system.idOf(ref).let { if (system.exists("LaidOutTrial", it)) materializeLaidOutTrial(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("LaidOutTrial", it)) materializeLaidOutTrial(it) else null } }
 
         val observedToEnds: ObservedToEndQuery get() = ObservedToEndQuery(Query("ObservedToEnd"))
         /** The record behind [ref] as a member of ObservedToEnd, or null when it is not one. */
         fun observedToEnd(ref: Ref<GreenhouseTrial>): ObservedToEnd? =
-            system.idOf(ref).let { if (system.exists("ObservedToEnd", it)) materializeObservedToEnd(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ObservedToEnd", it)) materializeObservedToEnd(it) else null } }
 
         val completeTrials: CompleteTrialQuery get() = CompleteTrialQuery(Query("CompleteTrial"))
         /** The record behind [ref] as a member of CompleteTrial, or null when it is not one. */
         fun completeTrial(ref: Ref<GreenhouseTrial>): CompleteTrial? =
-            system.idOf(ref).let { if (system.exists("CompleteTrial", it)) materializeCompleteTrial(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("CompleteTrial", it)) materializeCompleteTrial(it) else null } }
 
         val effectiveTrials: EffectiveTrialQuery get() = EffectiveTrialQuery(Query("EffectiveTrial"))
         /** The record behind [ref] as a member of EffectiveTrial, or null when it is not one. */
         fun effectiveTrial(ref: Ref<GreenhouseTrial>): EffectiveTrial? =
-            system.idOf(ref).let { if (system.exists("EffectiveTrial", it)) materializeEffectiveTrial(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("EffectiveTrial", it)) materializeEffectiveTrial(it) else null } }
 
         val evaluatedTrials: EvaluatedTrialQuery get() = EvaluatedTrialQuery(Query("EvaluatedTrial"))
         /** The record behind [ref] as a member of EvaluatedTrial, or null when it is not one. */
         fun evaluatedTrial(ref: Ref<GreenhouseTrial>): EvaluatedTrial? =
-            system.idOf(ref).let { if (system.exists("EvaluatedTrial", it)) materializeEvaluatedTrial(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("EvaluatedTrial", it)) materializeEvaluatedTrial(it) else null } }
 
         val greenhouseValidateds: GreenhouseValidatedQuery get() = GreenhouseValidatedQuery(Query("GreenhouseValidated"))
         /** The record behind [ref] as a member of GreenhouseValidated, or null when it is not one. */
         fun greenhouseValidated(ref: Ref<Peptide>): GreenhouseValidated? =
-            system.idOf(ref).let { if (system.exists("GreenhouseValidated", it)) materializeGreenhouseValidated(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("GreenhouseValidated", it)) materializeGreenhouseValidated(it) else null } }
 
         val deprioritizeds: DeprioritizedQuery get() = DeprioritizedQuery(Query("Deprioritized"))
         /** The record behind [ref] as a member of Deprioritized, or null when it is not one. */
         fun deprioritized(ref: Ref<Peptide>): Deprioritized? =
-            system.idOf(ref).let { if (system.exists("Deprioritized", it)) materializeDeprioritized(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Deprioritized", it)) materializeDeprioritized(it) else null } }
 
         val lockedObservations: LockedObservationQuery get() = LockedObservationQuery(Query("LockedObservation"))
         /** The record behind [ref] as a member of LockedObservation, or null when it is not one. */
         fun lockedObservation(ref: Ref<PlotObservation>): LockedObservation? =
-            system.idOf(ref).let { if (system.exists("LockedObservation", it)) materializeLockedObservation(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("LockedObservation", it)) materializeLockedObservation(it) else null } }
 
         val treatedPlots: TreatedPlotQuery get() = TreatedPlotQuery(Query("TreatedPlot"))
         /** The record behind [ref] as a member of TreatedPlot, or null when it is not one. */
         fun treatedPlot(ref: Ref<GreenhousePlot>): TreatedPlot? =
-            system.idOf(ref).let { if (system.exists("TreatedPlot", it)) materializeTreatedPlot(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("TreatedPlot", it)) materializeTreatedPlot(it) else null } }
 
         val activeTrials: ActiveTrialQuery get() = ActiveTrialQuery(Query("ActiveTrial"))
         /** The record behind [ref] as a member of ActiveTrial, or null when it is not one. */
         fun activeTrial(ref: Ref<GreenhouseTrial>): ActiveTrial? =
-            system.idOf(ref).let { if (system.exists("ActiveTrial", it)) materializeActiveTrial(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ActiveTrial", it)) materializeActiveTrial(it) else null } }
 
         val outOfBands: OutOfBandQuery get() = OutOfBandQuery(Query("OutOfBand"))
         /** The record behind [ref] as a member of OutOfBand, or null when it is not one. */
         fun outOfBand(ref: Ref<Greenhouse>): OutOfBand? =
-            system.idOf(ref).let { if (system.exists("OutOfBand", it)) materializeOutOfBand(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("OutOfBand", it)) materializeOutOfBand(it) else null } }
 
         val openExcursions: OpenExcursionQuery get() = OpenExcursionQuery(Query("OpenExcursion"))
         /** The record behind [ref] as a member of OpenExcursion, or null when it is not one. */
         fun openExcursion(ref: Ref<ClimateExcursion>): OpenExcursion? =
-            system.idOf(ref).let { if (system.exists("OpenExcursion", it)) materializeOpenExcursion(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("OpenExcursion", it)) materializeOpenExcursion(it) else null } }
 
         val closableExcursions: ClosableExcursionQuery get() = ClosableExcursionQuery(Query("ClosableExcursion"))
         /** The record behind [ref] as a member of ClosableExcursion, or null when it is not one. */
         fun closableExcursion(ref: Ref<ClimateExcursion>): ClosableExcursion? =
-            system.idOf(ref).let { if (system.exists("ClosableExcursion", it)) materializeClosableExcursion(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ClosableExcursion", it)) materializeClosableExcursion(it) else null } }
 
         val compromisedTrials: CompromisedTrialQuery get() = CompromisedTrialQuery(Query("CompromisedTrial"))
         /** The record behind [ref] as a member of CompromisedTrial, or null when it is not one. */
         fun compromisedTrial(ref: Ref<GreenhouseTrial>): CompromisedTrial? =
-            system.idOf(ref).let { if (system.exists("CompromisedTrial", it)) materializeCompromisedTrial(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("CompromisedTrial", it)) materializeCompromisedTrial(it) else null } }
 
         val silentGreenhouses: SilentGreenhouseQuery get() = SilentGreenhouseQuery(Query("SilentGreenhouse"))
         /** The record behind [ref] as a member of SilentGreenhouse, or null when it is not one. */
         fun silentGreenhouse(ref: Ref<Greenhouse>): SilentGreenhouse? =
-            system.idOf(ref).let { if (system.exists("SilentGreenhouse", it)) materializeSilentGreenhouse(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("SilentGreenhouse", it)) materializeSilentGreenhouse(it) else null } }
 
         val permittedTrials: PermittedTrialQuery get() = PermittedTrialQuery(Query("PermittedTrial"))
         /** The record behind [ref] as a member of PermittedTrial, or null when it is not one. */
         fun permittedTrial(ref: Ref<FieldTrial>): PermittedTrial? =
-            system.idOf(ref).let { if (system.exists("PermittedTrial", it)) materializePermittedTrial(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("PermittedTrial", it)) materializePermittedTrial(it) else null } }
 
         val plantedTrials: PlantedTrialQuery get() = PlantedTrialQuery(Query("PlantedTrial"))
         /** The record behind [ref] as a member of PlantedTrial, or null when it is not one. */
         fun plantedTrial(ref: Ref<FieldTrial>): PlantedTrial? =
-            system.idOf(ref).let { if (system.exists("PlantedTrial", it)) materializePlantedTrial(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("PlantedTrial", it)) materializePlantedTrial(it) else null } }
 
         val washedOffApplications: WashedOffApplicationQuery get() = WashedOffApplicationQuery(Query("WashedOffApplication"))
         /** The record behind [ref] as a member of WashedOffApplication, or null when it is not one. */
         fun washedOffApplication(ref: Ref<TreatmentApplication>): WashedOffApplication? =
-            system.idOf(ref).let { if (system.exists("WashedOffApplication", it)) materializeWashedOffApplication(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("WashedOffApplication", it)) materializeWashedOffApplication(it) else null } }
 
         val neverScouteds: NeverScoutedQuery get() = NeverScoutedQuery(Query("NeverScouted"))
         /** The record behind [ref] as a member of NeverScouted, or null when it is not one. */
         fun neverScouted(ref: Ref<FieldTrial>): NeverScouted? =
-            system.idOf(ref).let { if (system.exists("NeverScouted", it)) materializeNeverScouted(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("NeverScouted", it)) materializeNeverScouted(it) else null } }
 
         val harvestedTrials: HarvestedTrialQuery get() = HarvestedTrialQuery(Query("HarvestedTrial"))
         /** The record behind [ref] as a member of HarvestedTrial, or null when it is not one. */
         fun harvestedTrial(ref: Ref<FieldTrial>): HarvestedTrial? =
-            system.idOf(ref).let { if (system.exists("HarvestedTrial", it)) materializeHarvestedTrial(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("HarvestedTrial", it)) materializeHarvestedTrial(it) else null } }
 
         val successfulFieldTrials: SuccessfulFieldTrialQuery get() = SuccessfulFieldTrialQuery(Query("SuccessfulFieldTrial"))
         /** The record behind [ref] as a member of SuccessfulFieldTrial, or null when it is not one. */
         fun successfulFieldTrial(ref: Ref<FieldTrial>): SuccessfulFieldTrial? =
-            system.idOf(ref).let { if (system.exists("SuccessfulFieldTrial", it)) materializeSuccessfulFieldTrial(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("SuccessfulFieldTrial", it)) materializeSuccessfulFieldTrial(it) else null } }
 
         val fieldValidateds: FieldValidatedQuery get() = FieldValidatedQuery(Query("FieldValidated"))
         /** The record behind [ref] as a member of FieldValidated, or null when it is not one. */
         fun fieldValidated(ref: Ref<Peptide>): FieldValidated? =
-            system.idOf(ref).let { if (system.exists("FieldValidated", it)) materializeFieldValidated(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("FieldValidated", it)) materializeFieldValidated(it) else null } }
 
         val haltedTrials: HaltedTrialQuery get() = HaltedTrialQuery(Query("HaltedTrial"))
         /** The record behind [ref] as a member of HaltedTrial, or null when it is not one. */
         fun haltedTrial(ref: Ref<FieldTrial>): HaltedTrial? =
-            system.idOf(ref).let { if (system.exists("HaltedTrial", it)) materializeHaltedTrial(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("HaltedTrial", it)) materializeHaltedTrial(it) else null } }
 
         val trials: TrialQuery get() = TrialQuery(Query("Trial"))
 
         val doneTasks: DoneTaskQuery get() = DoneTaskQuery(Query("DoneTask"))
         /** The record behind [ref] as a member of DoneTask, or null when it is not one. */
         fun doneTask(ref: Ref<CollectionTask>): DoneTask? =
-            system.idOf(ref).let { if (system.exists("DoneTask", it)) materializeDoneTask(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("DoneTask", it)) materializeDoneTask(it) else null } }
 
         val openTasks: OpenTaskQuery get() = OpenTaskQuery(Query("OpenTask"))
         /** The record behind [ref] as a member of OpenTask, or null when it is not one. */
         fun openTask(ref: Ref<CollectionTask>): OpenTask? =
-            system.idOf(ref).let { if (system.exists("OpenTask", it)) materializeOpenTask(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("OpenTask", it)) materializeOpenTask(it) else null } }
 
         val overdueTasks: OverdueTaskQuery get() = OverdueTaskQuery(Query("OverdueTask"))
         /** The record behind [ref] as a member of OverdueTask, or null when it is not one. */
         fun overdueTask(ref: Ref<CollectionTask>): OverdueTask? =
-            system.idOf(ref).let { if (system.exists("OverdueTask", it)) materializeOverdueTask(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("OverdueTask", it)) materializeOverdueTask(it) else null } }
     }
 
     inner class CropQuery(q: Query) : TypedQuery<CropFields, Crop>(system, q, CropFields(), { materializeCrop(it) }) {

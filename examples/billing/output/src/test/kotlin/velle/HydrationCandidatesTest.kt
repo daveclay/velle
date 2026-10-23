@@ -63,6 +63,21 @@ class HydrationCandidatesTest {
         }
 
     @Test
+    fun `no handle outlives the commit or read that minted it`() {
+        val (billing, _) = connect()
+        accept(billing.commit(NewSignUp("Ada", "ada@x.com")))
+        assertEquals(0, billing.system.liveHandles, "a commit's handles are dropped when it returns")
+        val cust = billing.customers().last()
+        assertEquals(0, billing.system.liveHandles, "a read's handles are dropped when it returns")
+        // the input's reference is converted to a handle before the runtime is entered; it goes with the commit
+        accept(billing.commit(NewBillCustomer(cust, due = today().plusDays(30))))
+        assertEquals(0, billing.system.liveHandles)
+        val inv = billing.invoices().last()
+        assertEquals(inv.key, billing.read(inv).key, "a reference resolves after the handle behind it is gone")
+        assertEquals(0, billing.system.liveHandles)
+    }
+
+    @Test
     fun `a commit nothing watches scans no tables at all`() {
         val (billing, store) = connect()
         store.reset()

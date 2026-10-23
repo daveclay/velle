@@ -27,7 +27,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Peptide", raw).carrying(input, "Peptide")
+        return system.commit("Peptide", raw).carrying(input)
     }
 
     /** Queue keys: none — this commit contends with no other work.
@@ -40,7 +40,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("BacteriaStrain", raw).carrying(input, "BacteriaStrain")
+        return system.commit("BacteriaStrain", raw).carrying(input)
     }
 
     /** Queue keys: none — this commit contends with no other work.
@@ -53,7 +53,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("FermenterRun", raw).carrying(input, "FermenterRun")
+        return system.commit("FermenterRun", raw).carrying(input)
     }
 
     /** Queue keys: none — this commit contends with no other work.
@@ -66,7 +66,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Vendor", raw).carrying(input, "Vendor")
+        return system.commit("Vendor", raw).carrying(input)
     }
 
     /** Queue keys: [peptideBatch.origin], [peptideBatch.peptide] — plus system-wide width below.
@@ -81,24 +81,24 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         val raw = input.raw(system, reg)
         val parts = input.parts(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PeptideBatch", raw, parts).carrying(input, "PeptideBatch")
+        return system.commit("PeptideBatch", raw, parts).carrying(input)
     }
 
-    fun peptides(): List<Peptide> = system.instancesOf("Peptide").map { materializePeptide(it) }
-    fun bacteriaStrains(): List<BacteriaStrain> = system.instancesOf("BacteriaStrain").map { materializeBacteriaStrain(it) }
-    fun fermenterRuns(): List<FermenterRun> = system.instancesOf("FermenterRun").map { materializeFermenterRun(it) }
-    fun vendors(): List<Vendor> = system.instancesOf("Vendor").map { materializeVendor(it) }
-    fun fermentations(): List<Fermentation> = system.instancesOf("Fermentation").map { materializeFermentation(it) }
-    fun externalOrders(): List<ExternalOrder> = system.instancesOf("ExternalOrder").map { materializeExternalOrder(it) }
-    fun compositions(): List<Composition> = system.instancesOf("Composition").map { materializeComposition(it) }
-    fun components(): List<Component> = system.instancesOf("Component").map { materializeComponent(it) }
-    fun peptideBatchs(): List<PeptideBatch> = system.instancesOf("PeptideBatch").map { materializePeptideBatch(it) }
-    fun depletionNotices(): List<DepletionNotice> = system.instancesOf("DepletionNotice").map { materializeDepletionNotice(it) }
-    fun origins(): List<Origin> = system.instancesOf("Origin").map { materializeOrigin(it) }
-    fun fermenteds(): List<Fermented> = system.instancesOf("Fermented").map { materializeFermented(it) }
-    fun ordereds(): List<Ordered> = system.instancesOf("Ordered").map { materializeOrdered(it) }
-    fun composites(): List<Composite> = system.instancesOf("Composite").map { materializeComposite(it) }
-    fun depleteds(): List<Depleted> = system.instancesOf("Depleted").map { materializeDepleted(it) }
+    fun peptides(): List<Peptide> = system.scope { system.instancesOf("Peptide").map { materializePeptide(it) } }
+    fun bacteriaStrains(): List<BacteriaStrain> = system.scope { system.instancesOf("BacteriaStrain").map { materializeBacteriaStrain(it) } }
+    fun fermenterRuns(): List<FermenterRun> = system.scope { system.instancesOf("FermenterRun").map { materializeFermenterRun(it) } }
+    fun vendors(): List<Vendor> = system.scope { system.instancesOf("Vendor").map { materializeVendor(it) } }
+    fun fermentations(): List<Fermentation> = system.scope { system.instancesOf("Fermentation").map { materializeFermentation(it) } }
+    fun externalOrders(): List<ExternalOrder> = system.scope { system.instancesOf("ExternalOrder").map { materializeExternalOrder(it) } }
+    fun compositions(): List<Composition> = system.scope { system.instancesOf("Composition").map { materializeComposition(it) } }
+    fun components(): List<Component> = system.scope { system.instancesOf("Component").map { materializeComponent(it) } }
+    fun peptideBatchs(): List<PeptideBatch> = system.scope { system.instancesOf("PeptideBatch").map { materializePeptideBatch(it) } }
+    fun depletionNotices(): List<DepletionNotice> = system.scope { system.instancesOf("DepletionNotice").map { materializeDepletionNotice(it) } }
+    fun origins(): List<Origin> = system.scope { system.instancesOf("Origin").map { materializeOrigin(it) } }
+    fun fermenteds(): List<Fermented> = system.scope { system.instancesOf("Fermented").map { materializeFermented(it) } }
+    fun ordereds(): List<Ordered> = system.scope { system.instancesOf("Ordered").map { materializeOrdered(it) } }
+    fun composites(): List<Composite> = system.scope { system.instancesOf("Composite").map { materializeComposite(it) } }
+    fun depleteds(): List<Depleted> = system.scope { system.instancesOf("Depleted").map { materializeDepleted(it) } }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -110,9 +110,9 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            return materialize(id)
+            materialize(id)
         }
 
         val peptides: PeptideQuery get() = PeptideQuery(Query("Peptide"))
@@ -170,22 +170,22 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         val fermenteds: FermentedQuery get() = FermentedQuery(Query("Fermented"))
         /** The record behind [ref] as a member of Fermented, or null when it is not one. */
         fun fermented(ref: Ref<PeptideBatch>): Fermented? =
-            system.idOf(ref).let { if (system.exists("Fermented", it)) materializeFermented(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Fermented", it)) materializeFermented(it) else null } }
 
         val ordereds: OrderedQuery get() = OrderedQuery(Query("Ordered"))
         /** The record behind [ref] as a member of Ordered, or null when it is not one. */
         fun ordered(ref: Ref<PeptideBatch>): Ordered? =
-            system.idOf(ref).let { if (system.exists("Ordered", it)) materializeOrdered(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Ordered", it)) materializeOrdered(it) else null } }
 
         val composites: CompositeQuery get() = CompositeQuery(Query("Composite"))
         /** The record behind [ref] as a member of Composite, or null when it is not one. */
         fun composite(ref: Ref<PeptideBatch>): Composite? =
-            system.idOf(ref).let { if (system.exists("Composite", it)) materializeComposite(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Composite", it)) materializeComposite(it) else null } }
 
         val depleteds: DepletedQuery get() = DepletedQuery(Query("Depleted"))
         /** The record behind [ref] as a member of Depleted, or null when it is not one. */
         fun depleted(ref: Ref<PeptideBatch>): Depleted? =
-            system.idOf(ref).let { if (system.exists("Depleted", it)) materializeDepleted(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Depleted", it)) materializeDepleted(it) else null } }
     }
 
     inner class PeptideQuery(q: Query) : TypedQuery<PeptideFields, Peptide>(system, q, PeptideFields(), { materializePeptide(it) }) {

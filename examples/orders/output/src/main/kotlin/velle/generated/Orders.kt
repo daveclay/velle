@@ -27,7 +27,7 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Customer", raw).carrying(input, "Customer")
+        return system.commit("Customer", raw).carrying(input)
     }
 
     /** Queue keys: none — this commit contends with no other work.
@@ -40,7 +40,7 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
         input.register(reg)
         val raw = input.raw(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Product", raw).carrying(input, "Product")
+        return system.commit("Product", raw).carrying(input)
     }
 
     /** Queue key: [order.customer].
@@ -54,15 +54,15 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
         val raw = input.raw(system, reg)
         val parts = input.parts(system, reg)
         reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Order", raw, parts).carrying(input, "Order")
+        return system.commit("Order", raw, parts).carrying(input)
     }
 
-    fun customers(): List<Customer> = system.instancesOf("Customer").map { materializeCustomer(it) }
-    fun products(): List<Product> = system.instancesOf("Product").map { materializeProduct(it) }
-    fun orders(): List<Order> = system.instancesOf("Order").map { materializeOrder(it) }
-    fun orderLines(): List<OrderLine> = system.instancesOf("OrderLine").map { materializeOrderLine(it) }
-    fun customizations(): List<Customization> = system.instancesOf("Customization").map { materializeCustomization(it) }
-    fun reservations(): List<Reservation> = system.instancesOf("Reservation").map { materializeReservation(it) }
+    fun customers(): List<Customer> = system.scope { system.instancesOf("Customer").map { materializeCustomer(it) } }
+    fun products(): List<Product> = system.scope { system.instancesOf("Product").map { materializeProduct(it) } }
+    fun orders(): List<Order> = system.scope { system.instancesOf("Order").map { materializeOrder(it) } }
+    fun orderLines(): List<OrderLine> = system.scope { system.instancesOf("OrderLine").map { materializeOrderLine(it) } }
+    fun customizations(): List<Customization> = system.scope { system.instancesOf("Customization").map { materializeCustomization(it) } }
+    fun reservations(): List<Reservation> = system.scope { system.instancesOf("Reservation").map { materializeReservation(it) } }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -74,9 +74,9 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            return materialize(id)
+            materialize(id)
         }
 
         val customers: CustomerQuery get() = CustomerQuery(Query("Customer"))

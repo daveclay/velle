@@ -58,9 +58,9 @@ class ActorTest {
         return VelleSystem(Model(Parser.parse(spec)))
     }
 
-    private fun VelleSystem.admin(): Long = seed("Staff", mapOf("name" to "Ada", "role" to "admin"))
-    private fun VelleSystem.pharmacist(name: String = "Priya"): Long = seed("Staff", mapOf("name" to name, "role" to "pharmacist"))
-    private fun VelleSystem.lot(): Long = seed("Lot", mapOf("number" to "L1"))
+    private fun VelleSystem.admin(): Long = idOf(seed("Staff", mapOf("name" to "Ada", "role" to "admin")))
+    private fun VelleSystem.pharmacist(name: String = "Priya"): Long = idOf(seed("Staff", mapOf("name" to name, "role" to "pharmacist")))
+    private fun VelleSystem.lot(): Long = idOf(seed("Lot", mapOf("number" to "L1")))
 
     // ── parsing and printing ─────────────────────────────────────────────────
 

@@ -67,15 +67,16 @@ data class Rejection(
 class TickRejected(val schedule: String, val at: java.time.Instant, val rejections: List<Rejection>) :
     Exception(rejections.joinToString("\n\n") { it.message })
 
-/** A reference to a record: its shape and session-local id. */
-data class RecordRef(val shape: String, val id: Long) {
-    override fun toString() = "$shape#$id"
+/** A reference to a record: its shape and store key — the same pair a [Ref] carries. A record
+ *  the refused transaction created has no key yet and is named by the runtime's handle instead. */
+data class RecordRef(val shape: String, val key: StoreKey) {
+    override fun toString() = "$shape#${key.value}"
 }
 
 /** A record as the rejection saw it: its reference and stored fields, references as [RecordRef]. */
 data class RecordSnapshot(val ref: RecordRef, val fields: Map<String, Any?>) {
     val shape get() = ref.shape
-    val id get() = ref.id
+    val key get() = ref.key
 }
 
 /** One step of the prohibition's evaluation. */

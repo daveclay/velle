@@ -66,9 +66,9 @@ class TickRejectionTest {
         assertNull(r.act)
         assertEquals("RemindScouting", r.rule)
         assertEquals("Nightly", r.schedule)
-        assertEquals(RecordRef("Planting", planting), r.subject?.ref)
+        assertEquals(RecordRef("Planting", StoreKey(planting)), r.subject?.ref)
         assertEquals(listOf("ScoutingReminder"), r.produced.map { it.shape })
-        assertEquals(listOf(RecordRef("Planting", planting)), r.violating.map { it.ref })
+        assertEquals(listOf(RecordRef("Planting", StoreKey(planting))), r.violating.map { it.ref })
         assertEquals("2026-10-07", r.today)
         assertEquals(
             """

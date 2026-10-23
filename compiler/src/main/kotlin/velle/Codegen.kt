@@ -335,7 +335,7 @@ object Codegen {
             line("        val raw = input.raw(system, reg)")
             if (edges.isNotEmpty()) line("        val parts = input.parts(system, reg)")
             line("        reg.problem()?.let { return Commit.Refused(input, it) }")
-            line("        return system.commit(\"$shape\", raw${if (edges.isEmpty()) "" else ", parts"}$actorArg).${if (transient) "carryingNoRecord(input)" else "carrying(input, \"$shape\")"}")
+            line("        return system.commit(\"$shape\", raw${if (edges.isEmpty()) "" else ", parts"}$actorArg).${if (transient) "carryingNoRecord(input)" else "carrying(input)"}")
             line("    }")
             line()
         }
@@ -441,12 +441,12 @@ object Codegen {
         // ── accessors: the degenerate query — every instance, as model objects ──
         fun shapeAccessors(shape: String) {
             if (shape in model.transients) return // an input to the state, never readable after its commit
-            line("    fun ${plural(shape)}(): List<$shape> = system.instancesOf(\"$shape\").map { materialize$shape(it) }")
+            line("    fun ${plural(shape)}(): List<$shape> = system.scope { system.instancesOf(\"$shape\").map { materialize$shape(it) } }")
         }
 
         fun refinementAccessors(ref: String) {
             if (!isRoot(ref)) return
-            line("    fun ${plural(ref)}(): List<$ref> = system.instancesOf(\"$ref\").map { materialize$ref(it) }")
+            line("    fun ${plural(ref)}(): List<$ref> = system.scope { system.instancesOf(\"$ref\").map { materialize$ref(it) } }")
         }
 
         fun readSurface() {
@@ -461,9 +461,9 @@ object Codegen {
             line()
             line("        /** The model object behind a reference, read now; throws when the record no longer exists. */")
             line("        inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T")
-            line("        @PublishedApi internal fun fetch(id: Long): Ref<*> {")
+            line("        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {")
             line("            system.currentShapeOf(id) ?: throw NoSuchElementException(\"no current record for \${system.refFor(id)}\")")
-            line("            return materialize(id)")
+            line("            materialize(id)")
             line("        }")
             queryRoots.forEach { root ->
                 line()
@@ -477,7 +477,7 @@ object Codegen {
                     !isUnion(root) -> {
                         line("        /** The record behind [ref] as a member of $root, or null when it is not one. */")
                         line("        fun ${decap(root)}(ref: Ref<${refTarget(root)}>): $root? =")
-                        line("            system.idOf(ref).let { if (system.exists(\"$root\", it)) materialize$root(it) else null }")
+                        line("            system.scope { system.idOf(ref).let { if (system.exists(\"$root\", it)) materialize$root(it) else null } }")
                     }
                 }
             }
@@ -507,33 +507,34 @@ object Codegen {
             val roots = queryRoots.filter { recordShown(it, v) }
             line()
             line("    // ── reads for a $v: what the surface returns to one of them (Reference §22, \"The actor\") ──")
-            line("    fun read(viewer: Ref<$v>): ${v}Read = ${v}Read(system.idOf(viewer))")
+            line("    fun read(viewer: Ref<$v>): ${v}Read = ${v}Read(viewer)")
             line()
-            line("    inner class ${v}Read(private val viewer: Long) {")
+            line("    // the viewer is held as a reference: a handle would die with the scope of the first read")
+            line("    inner class ${v}Read(private val viewer: Ref<$v>) {")
             for (root in roots) {
                 val view = viewType(root, v)
                 val query = if (hasGated(root)) "${root}QueryFor$v" else "${root}Query"
                 line("        val ${plural(root)}: $query get() = $query(Query(\"$root\", viewer = viewer))")
-                val mat = if (hasGated(root)) "materialize${root}For$v(viewer, it)" else "materialize$root(it)"
+                val mat = if (hasGated(root)) "materialize${root}For$v(system.idOf(viewer), it)" else "materialize$root(it)"
                 when {
                     root in model.shapes -> {
                         line("        /** The record behind [ref], or null when it is gone or not shown to this viewer. */")
                         line("        fun ${decap(root)}(ref: Ref<$root>): $view? =")
-                        line("            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists(\"$root\", it)) $mat else null }")
+                        line("            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists(\"$root\", it)) $mat else null } }")
                         line("        fun ${decap(root)}(key: StoreKey): $view? = ${decap(root)}(Ref.Persisted(\"$root\", key))")
                         line("        fun ${decap(root)}(key: Long): $view? = ${decap(root)}(StoreKey(key))")
                     }
                     !isUnion(root) -> {
                         line("        /** The record behind [ref] as a member of $root, or null when it is not one or not shown to this viewer. */")
                         line("        fun ${decap(root)}(ref: Ref<${refTarget(root)}>): $view? =")
-                        line("            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists(\"$root\", it)) $mat else null }")
+                        line("            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists(\"$root\", it)) $mat else null } }")
                     }
                 }
             }
             line("    }")
             for (root in roots.filter { hasGated(it) }) {
                 line()
-                line("    inner class ${root}QueryFor$v(q: Query) : TypedQuery<${root}Fields, ${root}For$v>(system, q, ${root}Fields(), { materialize${root}For$v(q.viewer!!, it) }) {")
+                line("    inner class ${root}QueryFor$v(q: Query) : TypedQuery<${root}Fields, ${root}For$v>(system, q, ${root}Fields(), { materialize${root}For$v(system.idOf(q.viewer!!), it) }) {")
                 line("        override fun with(q: Query) = ${root}QueryFor$v(q)")
                 line("    }")
             }

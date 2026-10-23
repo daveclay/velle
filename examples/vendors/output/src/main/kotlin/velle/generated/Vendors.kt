@@ -59,13 +59,13 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         return system.commit("ChangePrice", raw, actor = system.idOf(actor)).carryingNoRecord(input)
     }
 
-    fun staffs(): List<Staff> = system.instancesOf("Staff").map { materializeStaff(it) }
-    fun vendorAssignments(): List<VendorAssignment> = system.instancesOf("VendorAssignment").map { materializeVendorAssignment(it) }
-    fun vendors(): List<Vendor> = system.instancesOf("Vendor").map { materializeVendor(it) }
-    fun products(): List<Product> = system.instancesOf("Product").map { materializeProduct(it) }
-    fun marginAlerts(): List<MarginAlert> = system.instancesOf("MarginAlert").map { materializeMarginAlert(it) }
-    fun administrators(): List<Administrator> = system.instancesOf("Administrator").map { materializeAdministrator(it) }
-    fun thinMargins(): List<ThinMargin> = system.instancesOf("ThinMargin").map { materializeThinMargin(it) }
+    fun staffs(): List<Staff> = system.scope { system.instancesOf("Staff").map { materializeStaff(it) } }
+    fun vendorAssignments(): List<VendorAssignment> = system.scope { system.instancesOf("VendorAssignment").map { materializeVendorAssignment(it) } }
+    fun vendors(): List<Vendor> = system.scope { system.instancesOf("Vendor").map { materializeVendor(it) } }
+    fun products(): List<Product> = system.scope { system.instancesOf("Product").map { materializeProduct(it) } }
+    fun marginAlerts(): List<MarginAlert> = system.scope { system.instancesOf("MarginAlert").map { materializeMarginAlert(it) } }
+    fun administrators(): List<Administrator> = system.scope { system.instancesOf("Administrator").map { materializeAdministrator(it) } }
+    fun thinMargins(): List<ThinMargin> = system.scope { system.instancesOf("ThinMargin").map { materializeThinMargin(it) } }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -77,9 +77,9 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
         /** The model object behind a reference, read now; throws when the record no longer exists. */
         inline operator fun <reified T : Any> invoke(ref: Ref<T>): T = fetch(system.idOf(ref)) as T
-        @PublishedApi internal fun fetch(id: Long): Ref<*> {
+        @PublishedApi internal fun fetch(id: Long): Ref<*> = system.scope {
             system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            return materialize(id)
+            materialize(id)
         }
 
         val staffs: StaffQuery get() = StaffQuery(Query("Staff"))
@@ -110,12 +110,12 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         val administrators: AdministratorQuery get() = AdministratorQuery(Query("Administrator"))
         /** The record behind [ref] as a member of Administrator, or null when it is not one. */
         fun administrator(ref: Ref<Staff>): Administrator? =
-            system.idOf(ref).let { if (system.exists("Administrator", it)) materializeAdministrator(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("Administrator", it)) materializeAdministrator(it) else null } }
 
         val thinMargins: ThinMarginQuery get() = ThinMarginQuery(Query("ThinMargin"))
         /** The record behind [ref] as a member of ThinMargin, or null when it is not one. */
         fun thinMargin(ref: Ref<Product>): ThinMargin? =
-            system.idOf(ref).let { if (system.exists("ThinMargin", it)) materializeThinMargin(it) else null }
+            system.scope { system.idOf(ref).let { if (system.exists("ThinMargin", it)) materializeThinMargin(it) else null } }
     }
 
     inner class StaffQuery(q: Query) : TypedQuery<StaffFields, Staff>(system, q, StaffFields(), { materializeStaff(it) }) {
@@ -212,54 +212,55 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     )
 
     // ── reads for a Staff: what the surface returns to one of them (Reference §22, "The actor") ──
-    fun read(viewer: Ref<Staff>): StaffRead = StaffRead(system.idOf(viewer))
+    fun read(viewer: Ref<Staff>): StaffRead = StaffRead(viewer)
 
-    inner class StaffRead(private val viewer: Long) {
+    // the viewer is held as a reference: a handle would die with the scope of the first read
+    inner class StaffRead(private val viewer: Ref<Staff>) {
         val staffs: StaffQuery get() = StaffQuery(Query("Staff", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun staff(ref: Ref<Staff>): Staff? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Staff", it)) materializeStaff(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Staff", it)) materializeStaff(it) else null } }
         fun staff(key: StoreKey): Staff? = staff(Ref.Persisted("Staff", key))
         fun staff(key: Long): Staff? = staff(StoreKey(key))
         val vendorAssignments: VendorAssignmentQuery get() = VendorAssignmentQuery(Query("VendorAssignment", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun vendorAssignment(ref: Ref<VendorAssignment>): VendorAssignment? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("VendorAssignment", it)) materializeVendorAssignment(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("VendorAssignment", it)) materializeVendorAssignment(it) else null } }
         fun vendorAssignment(key: StoreKey): VendorAssignment? = vendorAssignment(Ref.Persisted("VendorAssignment", key))
         fun vendorAssignment(key: Long): VendorAssignment? = vendorAssignment(StoreKey(key))
         val vendors: VendorQuery get() = VendorQuery(Query("Vendor", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun vendor(ref: Ref<Vendor>): Vendor? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Vendor", it)) materializeVendor(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Vendor", it)) materializeVendor(it) else null } }
         fun vendor(key: StoreKey): Vendor? = vendor(Ref.Persisted("Vendor", key))
         fun vendor(key: Long): Vendor? = vendor(StoreKey(key))
         val products: ProductQueryForStaff get() = ProductQueryForStaff(Query("Product", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun product(ref: Ref<Product>): ProductForStaff? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Product", it)) materializeProductForStaff(viewer, it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Product", it)) materializeProductForStaff(system.idOf(viewer), it) else null } }
         fun product(key: StoreKey): ProductForStaff? = product(Ref.Persisted("Product", key))
         fun product(key: Long): ProductForStaff? = product(StoreKey(key))
         val marginAlerts: MarginAlertQuery get() = MarginAlertQuery(Query("MarginAlert", viewer = viewer))
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
         fun marginAlert(ref: Ref<MarginAlert>): MarginAlert? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("MarginAlert", it)) materializeMarginAlert(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("MarginAlert", it)) materializeMarginAlert(it) else null } }
         fun marginAlert(key: StoreKey): MarginAlert? = marginAlert(Ref.Persisted("MarginAlert", key))
         fun marginAlert(key: Long): MarginAlert? = marginAlert(StoreKey(key))
         val administrators: AdministratorQuery get() = AdministratorQuery(Query("Administrator", viewer = viewer))
         /** The record behind [ref] as a member of Administrator, or null when it is not one or not shown to this viewer. */
         fun administrator(ref: Ref<Staff>): Administrator? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("Administrator", it)) materializeAdministrator(it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Administrator", it)) materializeAdministrator(it) else null } }
         val thinMargins: ThinMarginQueryForStaff get() = ThinMarginQueryForStaff(Query("ThinMargin", viewer = viewer))
         /** The record behind [ref] as a member of ThinMargin, or null when it is not one or not shown to this viewer. */
         fun thinMargin(ref: Ref<Product>): ThinMarginForStaff? =
-            system.idOf(ref).let { if (system.visibleCurrent(viewer, it) && system.exists("ThinMargin", it)) materializeThinMarginForStaff(viewer, it) else null }
+            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("ThinMargin", it)) materializeThinMarginForStaff(system.idOf(viewer), it) else null } }
     }
 
-    inner class ProductQueryForStaff(q: Query) : TypedQuery<ProductFields, ProductForStaff>(system, q, ProductFields(), { materializeProductForStaff(q.viewer!!, it) }) {
+    inner class ProductQueryForStaff(q: Query) : TypedQuery<ProductFields, ProductForStaff>(system, q, ProductFields(), { materializeProductForStaff(system.idOf(q.viewer!!), it) }) {
         override fun with(q: Query) = ProductQueryForStaff(q)
     }
 
-    inner class ThinMarginQueryForStaff(q: Query) : TypedQuery<ThinMarginFields, ThinMarginForStaff>(system, q, ThinMarginFields(), { materializeThinMarginForStaff(q.viewer!!, it) }) {
+    inner class ThinMarginQueryForStaff(q: Query) : TypedQuery<ThinMarginFields, ThinMarginForStaff>(system, q, ThinMarginFields(), { materializeThinMarginForStaff(system.idOf(q.viewer!!), it) }) {
         override fun with(q: Query) = ThinMarginQueryForStaff(q)
     }
 

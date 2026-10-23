@@ -164,6 +164,14 @@ The language-side layer, for the reader who works on Velle rather than against i
 - **The pre-filter.** `fetchCandidates` over-returning is always legal — a performance surface under the superset contract (`compiler/src/main/kotlin/velle/Hydration.kt`, `fetchCandidates`), orthogonal to correctness. Only `fetchCaptures` sits on the correctness side of that line ([§7](Reference-07-Derived-properties)'s deliberate asymmetry there), and its guarantees are [U2](#the-universal-transaction)/[U4](#the-universal-transaction)'s.
 - **Refusal handling.** Wrapper code may log, rate-limit, or audit refused acts in the engineer's own tables — that data is theirs, not Velle-visible state, and [U5](#the-universal-transaction) doesn't touch it.
 
+### Handles and their lifetime
+
+Inside the runtime a record is a number, the handle, minted when the runtime creates the record or first loads its row. A handle is private to one running system. The identity that crosses the boundary is the pair of shape and store key that every reference carries ([Binding API](Binding-API), "Reading a record"), and the runtime keeps a map between the two.
+
+Over a store that map lives for one unit of work: a commit together with the `after commit` firings it queues, a tick, or one read. The generated commit converts the input's references to handles, calls the runtime, and when the call returns the runtime drops the map and the rows it loaded. The generated read surface does the same around each read. Memory is therefore bounded by the largest single unit of work, not by how many records the system has ever touched. In memory, with no store, the handle is the identity and nothing is dropped.
+
+A record the refused transaction created never reached the store and has no key. A rejection names such a record by its handle, which is only meaningful for reading the message.
+
 ## Capture lifecycle
 
 One timeline per membership ([§8](Reference-08-Refinements), [§13](Reference-13-Exit-triggers)): **entry commit** — captured expressions evaluated against post-state, values fixed; **during membership** — readable wherever the refinement's properties are in scope (narrowing, [§8](Reference-08-Refinements)); **exit commit** — exit rules fired from that commit may read them (the last reader); **close of exit commit** — retracted. Re-entry re-captures from scratch. A capture never survives its transaction — which is why a capture-reading exit rule can never be `after commit` (validated, [V7](checks#v7--capture-transaction-boundedness)); durable reactions read reified acts instead ([§13](Reference-13-Exit-triggers)). Deletion is the exit commit for every membership the instance held, at once: the deletion-side rules are the last readers of all of its captures, and all retract at that commit's close ([§13, "Deletion as a second exit cause"](Reference-13-Exit-triggers#deletion-as-a-second-exit-cause-when-deleted)).
