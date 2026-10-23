@@ -410,12 +410,26 @@ rule MarkLaidOut when LaidOutDesign {
 }
 ```
 
+Deleting every member of a collection has a spelling today too: a rule on the member shape, fired once per record, with the act that calls for the deletion in its condition (Reference §12, "Deletion"; `SweepOrphanedDrafts` in `examples/moderation/moderation.velle`). Every check §12 lists applies per container: a required `one` reference still pointing at one refuses the delete, and an `undeletable` refinement gates it.
+
+```
+act CancelDesign {
+    design: one ExperimentDesign
+}
+
+shape CancelledContainer = Container where exists (CancelDesign where design == this.design)
+
+rule DiscardContainers when CancelledContainer {
+    delete this
+}
+```
+
 **Options.**
 
-- Creations and nested blocks only. Assignment keeps its one spelling, and the block never deletes.
-- Any statement. Assignment in a block is a second spelling of fan-out, and deletion in a block is a new fan-out delete that Reference §12 refuses today.
+- Creations and nested blocks only. Assignment keeps its one spelling, and deletion keeps its one spelling, a rule per record.
+- Any statement. Assignment in a block is a second spelling of fan-out, and deletion in a block is a second spelling of the per-record rule.
 
-**Recommendation.** Creations and nested blocks only. One spelling per want. If fan-out delete is ever wanted, it is its own question.
+**Recommendation.** Creations and nested blocks only. One spelling per want, and nothing a block could delete is out of reach of the per-record rule.
 
 **Dave:**
 
