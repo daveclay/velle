@@ -338,6 +338,7 @@ class Parser(private val tokens: List<Token>) {
             return DeleteStmt(PathExpr(root, segs))
         }
         if (at(TokType.UIDENT)) return parseCreation()
+        if (peek().isKw("for") && peekAhead(1).let { it.type == TokType.LIDENT && it.text == "each" }) return parseForEach()
         // assignment: literal static path (Reference §12) — plain '.' only
         val root = when {
             peek().isKw("this") -> { next(); "this" }
@@ -349,6 +350,28 @@ class Parser(private val tokens: List<Token>) {
         expect(TokType.ASSIGN)
         skipNewlines()
         return Assignment(PathExpr(root, segs), parseValue())
+    }
+
+    /** `for each a in X, b in 1..n { ... }` (Reference §14): `each` and `in` are contextual words. */
+    private fun parseForEach(): ForEach {
+        expectKw("for")
+        next() // each
+        val bindings = mutableListOf<LoopBinding>()
+        do {
+            skipNewlines()
+            val name = expect(TokType.LIDENT).text
+            val inWord = peek()
+            if (inWord.type != TokType.LIDENT || inWord.text != "in") fail("expected 'in' after the name of a `for each`", inWord)
+            next()
+            skipNewlines()
+            val first = parseValue()
+            val source: LoopSource =
+                if (at(TokType.DOTDOT)) { next(); skipNewlines(); LoopSource.Range(first, parseValue()) }
+                else LoopSource.Over(first)
+            bindings.add(LoopBinding(name, source))
+        } while (consumeIf(TokType.COMMA))
+        skipNewlines()
+        return ForEach(bindings, parseRuleBody())
     }
 
     private fun parseCreation(): Creation {

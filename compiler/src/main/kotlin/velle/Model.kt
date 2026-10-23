@@ -627,6 +627,7 @@ class Model(val decls: List<Decl>) {
     private fun collectPath(p: PathExpr, subject: String, s: ReadSummary, aliases: Map<String, String> = emptyMap(), root: String = subject) {
         val scope: String? = when {
             p.root == "this" -> root
+            aliases[p.root] == VALUE_ALIAS -> { if (p.segs.isNotEmpty()) s.opaque = true; return }
             p.root in aliases -> aliases.getValue(p.root)
             p.root in shapes || p.root in refinements -> {
                 // bare refinement name as a membership atom
@@ -666,9 +667,17 @@ class Model(val decls: List<Decl>) {
         }
     }
 
+    /** The element scope of a collection expression, or null when it cannot be resolved. */
+    fun collectionElement(c: CollectionExpr, subject: String, aliases: Map<String, String> = emptyMap()): String? =
+        collectCollection(c, subject, ReadSummary(), aliases)
+
+    /** The scalar type a `many <scalar>` member's elements have. */
+    fun scalarOf(name: String): VType = typeOf(ScalarType(name, optional = false))
+
     fun pathElementShape(p: PathExpr, subject: String, aliases: Map<String, String> = emptyMap(), root: String = subject): String? {
         var scope: String? = when {
             p.root == "this" -> root
+            aliases[p.root] == VALUE_ALIAS -> return null
             p.root in aliases -> aliases.getValue(p.root)
             else -> membersOf(subject)[p.root]?.type?.let { it.instanceShape() ?: (it as? VType.Coll)?.shape }
         }
@@ -746,6 +755,10 @@ sealed interface VType {
         else -> null
     }
 }
+
+/** The alias scope of a `for each` name bound to numbers or scalar values
+ *  (Reference §14): a value, never a record, so no member resolves on it. */
+const val VALUE_ALIAS = "<value>"
 
 class ReadSummary {
     /** (owner shape, stored field) pairs the predicate/expression reads */

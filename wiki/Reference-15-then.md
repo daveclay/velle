@@ -24,7 +24,7 @@ When one statement reads another's result, the order is already fixed and `then`
 
 A rule body is one commit ([§11](Reference-11-rule-when-on)). `then` orders statements inside it. Nothing outside the rule can see a state between the two statements.
 
-`then` sits between two statements; `from` is the form of one creation statement ([§14](Reference-14-for)). A one-statement body has no `then`.
+`then` sits between two statements; `from` is the form of one creation statement ([§14](Reference-14-for)). A one-statement body has no `then`. A `for each` block ([§14](Reference-14-for)) is one statement to the `then` around it. Inside the block, `then` orders the block's statements each time it runs.
 
 Rules using `then`: `examples/membership/membership.velle`, `examples/pharmacy/pharmacy.velle`.
 

@@ -40,6 +40,9 @@ class Evaluator(private val system: VelleSystem) {
         /** The body's `as` names (Reference §14): each the index, in the firing's
          *  creation list, of the record it stands for — a [Value.VPendingRef]. */
         val pending: Map<String, Int> = emptyMap(),
+        /** The names a `for each` binds (Reference §14), each to the element of
+         *  the current iteration: a record as a [Value.VRef], or a number. */
+        val locals: Map<String, Value> = emptyMap(),
     ) {
         fun innermost(): Pair<String, Long> = elements.lastOrNull() ?: (subjectScope to subjectId)
         fun push(scope: String, id: Long, alias: String?): Ctx = copy(
@@ -173,6 +176,7 @@ class Evaluator(private val system: VelleSystem) {
         var v: Value = when {
             p.root == "this" -> Value.VRef(ctx.subjectId)
             p.root in ctx.aliases -> Value.VRef(ctx.aliases.getValue(p.root).second)
+            p.root in ctx.locals -> ctx.locals.getValue(p.root)
             // a record the firing creates (`as name`): a pending reference, whole only
             p.root in ctx.pending ->
                 if (p.segs.isEmpty()) return Value.VPendingRef(ctx.pending.getValue(p.root))
@@ -269,6 +273,19 @@ class Evaluator(private val system: VelleSystem) {
         else referencing
         trace?.add(Trace.Read(id, "$shape for this", Value.VColl(found, model.baseOf(shape) ?: shape)))
         return found
+    }
+
+    /** The elements a `for each` runs over (Reference §14): the records of a
+     *  collection, or the values of a scalar collection. */
+    fun collectionValues(e: Expr, ctx: Ctx): List<Value> = when {
+        e is PathExpr && e.segs.isEmpty() && (e.root in model.shapes || e.root in model.refinements) ->
+            bindingCandidates(Binding(e), ctx).second.map { Value.VRef(it) }
+        else -> when (val v = eval(e, ctx)) {
+            is Value.VColl -> v.ids.map { Value.VRef(it) }
+            is Value.VVals -> v.values
+            Value.VEmpty, Value.VNone -> emptyList()
+            else -> throw VelleRuntimeError("'for each' over '${Printer.expr(e)}', which is not a collection (validator gap, V34)")
+        }
     }
 
     private fun bindingCandidates(b: Binding, ctx: Ctx, where: Expr? = null): Pair<String, List<Long>> = when (val src = b.source) {

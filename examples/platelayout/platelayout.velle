@@ -1,0 +1,107 @@
+-- Plate layout: a scientist submits an experiment design — the conditions to
+-- test, a container type, how many containers, how many replicates — and the
+-- software lays out every container and every well. The twelfth Velle spec,
+-- written to stress one question against a domain that needs it: many records
+-- from one request. A creation statement creates one record and a rule fires
+-- once per record, so a request carrying counts, or a product of sets, had no
+-- spelling until `for each` (Reference §14).
+--
+-- What the domain asks of the language, and where each answer lives:
+--   · one request, many records — a `for each` block in the rule body runs
+--     its statements once per element of each source, nested for a product:
+--     containers × replicates containers, and under each the wells
+--     (Reference §14, "Creating one record per element")
+--   · a number as a set — the range `1..n`, the one place a number becomes a
+--     set, legal only as a `for each` source
+--   · a tree of created records — the container is named with `as` and its
+--     wells point at it, all in one firing (Reference §14, "Naming the record
+--     a statement creates")
+--   · the conditions arrive with the design — `with conditions`, so they are
+--     records a block can run over (Reference §6, "Inline part creation")
+--   · the whole layout lands or is refused as one — every created container
+--     and well is an entrant of the design's transaction, so one refused well
+--     refuses the design (Reference §20, "All-or-nothing batches")
+--   · the counts as readable facts — derivations over the laid-out records,
+--     never a stored tally
+--
+-- Comment convention (as in payments.velle): plain comments tell the business
+-- story; `velle:` comments note the language machinery on show.
+
+-- ── Reference data ───────────────────────────────────────────────────────────
+
+-- A kind of plate: how many wells it carries.
+act ContainerType {
+    name: text
+    wellsPerContainer: integer
+}
+
+-- ── The request ──────────────────────────────────────────────────────────────
+
+-- One submission. The conditions arrive with it; the containers and wells are
+-- what the spec lays out from it.
+-- velle: `with conditions` — the conditions are parts of the design's closure,
+-- so the design and its conditions land as one commit (Reference §6)
+act ExperimentDesign {
+    containerType: one ContainerType
+    containerCount: integer
+    replicates: integer
+    -- each condition occupies a block of this many wells on every container
+    wellsPerCondition: integer
+    laidOutContainers: integer = count(containers)
+    laidOutWells: integer = sum(containers, wellCount)
+} with conditions
+
+-- A value to test, and which block of wells holds it on every container.
+shape Condition {
+    design: one ExperimentDesign
+    block: integer
+    value: decimal
+}
+
+-- ── What the spec lays out ───────────────────────────────────────────────────
+
+shape Container {
+    design: one ExperimentDesign
+    replicate: integer
+    position: integer
+    wellCount: integer = count(wells)
+}
+
+shape Well {
+    container: one Container
+    position: integer
+    condition: one Condition
+}
+
+-- ── The books rules ──────────────────────────────────────────────────────────
+
+-- A design with nothing to test, or nothing to lay out, is a mistake.
+never (ExperimentDesign where count(conditions) == 0)
+never (ExperimentDesign where containerCount < 1 or replicates < 1)
+
+-- The blocks fill the plate exactly: conditions × wells per condition is the
+-- container type's well count.
+never (ExperimentDesign where wellsPerCondition * count(conditions) != containerType.wellsPerContainer)
+
+-- Every condition names a block the plate has.
+never (Condition where block < 1 or block > count(design.conditions))
+
+-- ── The layout ───────────────────────────────────────────────────────────────
+
+-- "When a design is submitted, lay out every container and every well."
+-- velle: the outer block runs once per replicate per position and names the
+-- container it creates; the inner block runs once per condition per slot in
+-- the condition's block, and each well points at the container the outer
+-- block just created. Six containers of ninety-six wells, from one firing.
+rule LayOut when ExperimentDesign {
+    for each replicate in 1..replicates, position in 1..containerCount {
+        Container from { design: this, replicate: replicate, position: position } as container
+        for each condition in conditions, slot in 1..wellsPerCondition {
+            Well from {
+                container: container
+                condition: condition
+                position: (condition.block - 1) * wellsPerCondition + slot
+            }
+        }
+    }
+}

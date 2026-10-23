@@ -390,12 +390,13 @@ class DomainAnalysis(private val model: Model) {
         val seen = mutableSetOf<String>()
         for (r in model.rules.values) {
             val scope = conditionScope(r.condition)
-            for (item in r.body) when (item) {
+            for (item in r.body.statements()) when (item) {
                 is Assignment -> { bodyPath(item.target, scope, out, seen); bodyCorr(item.value, scope, out, seen) }
                 is Creation -> {
                     item.forExpr?.let { bodyCorr(it, scope, out, seen) }
                     for (f in item.fields) bodyCorr(f.value, scope, out, seen)
                 }
+                is ForEach -> item.sourceExprs().forEach { bodyCorr(it, scope, out, seen) }
                 is DeleteStmt -> bodyCorr(item.target, scope, out, seen)
                 ThenMarker -> {}
             }
@@ -538,15 +539,36 @@ class DomainAnalysis(private val model: Model) {
         }.let { c ->
             // a record the body creates (`as name`, Reference §14) is fresh in this
             // envelope: a reference to it keys nothing
-            val created = rule.body.filterIsInstance<Creation>().mapNotNull { cr -> cr.alias?.let { it to walker.Scope(cr.shape, Anchor.Fresh(emptyMap())) } }
+            val created = rule.creations().mapNotNull { cr -> cr.alias?.let { it to walker.Scope(cr.shape, Anchor.Fresh(emptyMap())) } }
             if (created.isEmpty()) c else walker.Ctx(c.subject, c.elements, c.aliases + created)
         }
         walker.walkRef(rule.condition, ctx)
-        for (item in rule.body) when (item) {
+        walkBody(rule.body, walker, ctx, events)
+    }
+
+    /** One level of a body; a `for each` name is an alias for its element, so
+     *  reads through it are keyed where the collection's elements are. */
+    private fun walkBody(items: List<BodyItem>, walker: Walker, ctx: Walker.Ctx, events: MutableList<Event>) {
+        for (item in items) when (item) {
             is Assignment -> walker.walkAssignment(item, ctx, events)
             is Creation -> walker.walkCreation(item, ctx, events)
             is DeleteStmt -> walker.walkDelete(item, ctx, events)
             ThenMarker -> {}
+            is ForEach -> {
+                var inner = ctx
+                for (b in item.bindings) {
+                    val sc: Walker.Scope = when (val s = b.source) {
+                        is LoopSource.Range -> {
+                            walker.walkExpr(s.from, inner); walker.walkExpr(s.to, inner)
+                            walker.Scope(VALUE_ALIAS, Anchor.Unknown)
+                        }
+                        is LoopSource.Over -> (if (s.expr is PathExpr) walker.walkCollection(CollectionExpr(listOf(Binding(s.expr))), inner)
+                            else walker.walkExpr(s.expr, inner)) ?: walker.Scope("?", Anchor.Unknown)
+                    }
+                    inner = walker.Ctx(inner.subject, inner.elements, inner.aliases + (b.name to sc))
+                }
+                walkBody(item.body, walker, inner, events)
+            }
         }
     }
 

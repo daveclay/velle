@@ -42,7 +42,8 @@ internal class KindCatalog(private val model: Model) {
     fun producedKinds(rule: RuleDecl): List<CommitKind> {
         val subject = (rule.condition as? RefName)?.name ?: model.baseOfExpr(rule.condition)
         val out = mutableListOf<CommitKind>()
-        for (item in rule.body) when (item) {
+        for (item in rule.body.statements()) when (item) {
+            is ForEach -> {} // its statements follow, flattened
             is Creation -> out.add(CommitKind.Create(item.shape))
             is Assignment -> {
                 val t = item.target

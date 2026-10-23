@@ -331,11 +331,34 @@ class Validator(private val model: Model) {
     /** The alias a rule's `by` clause binds, for the read summaries: the actor's
      *  reads are reads on its shape, not an unresolvable root. */
     private fun ruleAliases(rule: RuleDecl): Map<String, String> =
-        rule.by?.let { mapOf(it.name to it.shape) }.orEmpty() + creationAliases(rule)
+        rule.by?.let { mapOf(it.name to it.shape) }.orEmpty() + creationAliases(rule) + loopAliases(rule)
 
     /** The names the body's `as` clauses bind, each to the shape it creates (Reference §14). */
     private fun creationAliases(rule: RuleDecl): Map<String, String> =
-        rule.body.filterIsInstance<Creation>().mapNotNull { c -> c.alias?.let { it to c.shape } }.toMap()
+        rule.creations().mapNotNull { c -> c.alias?.let { it to c.shape } }.toMap()
+
+    /** The names the body's `for each` blocks bind (Reference §14): a record name
+     *  to its element shape, a number or scalar name to [VALUE_ALIAS]. */
+    private fun loopAliases(rule: RuleDecl): Map<String, String> = loopAliasCache.getOrPut(rule.name) {
+        val scope = (rule.condition as? RefName)?.name?.takeIf { it in model.shapes || it in model.refinements }
+            ?: model.baseOfExpr(rule.condition) ?: return@getOrPut emptyMap()
+        val out = linkedMapOf<String, String>()
+        val env = rule.by?.let { mapOf(it.name to it.shape) }.orEmpty() + creationAliases(rule)
+        for ((b, _) in rule.loopBindings()) {
+            out[b.name] = when (val src = b.source) {
+                is LoopSource.Range -> VALUE_ALIAS
+                is LoopSource.Over -> when (val e = src.expr) {
+                    is PathExpr ->
+                        if (e.segs.isEmpty() && (e.root in model.shapes || e.root in model.refinements)) e.root
+                        else model.pathElementShape(e, scope, env + out) ?: VALUE_ALIAS
+                    is SetExpr -> model.collectionElement(e.collection, scope, env + out) ?: VALUE_ALIAS
+                    else -> VALUE_ALIAS
+                }
+            }
+        }
+        out
+    }
+    private val loopAliasCache = mutableMapOf<String, Map<String, String>>()
 
     // ── V19: relationship declaration coherence (Reference §6) ──────────────────
     //
@@ -448,20 +471,112 @@ class Validator(private val model: Model) {
         // in scope for the condition's predicate and the body
         rule.by?.let { aliasScopes[it.name] = it.shape; ruleActor = it }
         // the body's `as` names (Reference §14; V33): each stands for the record its
-        // statement creates, as a reference, for the other statements of the body
+        // statement creates, as a reference, for the other statements of its level
         val created = checkCreationAliases(rule, scope)
-        created.forEach { (name, shape) -> aliasScopes[name] = shape }
         try {
             (rule.condition as? RefName)?.where?.let { checkExpr(it, scope) }
-            for (item in rule.body) when (item) {
+            checkBody(rule, scope, rule.body, created)
+        } finally {
+            rule.by?.let { aliasScopes.remove(it.name); ruleActor = null }
+        }
+    }
+
+    /** One level of a body: the rule's, or a block's. The level's `as` names are
+     *  in scope for every statement of the level and the blocks inside it. */
+    private fun checkBody(rule: RuleDecl, scope: String, items: List<BodyItem>, created: Map<String, String>) {
+        val here = items.filterIsInstance<Creation>().mapNotNull { c -> c.alias?.let { n -> created[n]?.let { n to it } } }
+        here.forEach { (n, s) -> aliasScopes[n] = s }
+        try {
+            for (item in items) when (item) {
                 is Assignment -> checkAssignment(rule, scope, item)
                 is Creation -> checkCreation(rule, scope, item)
                 is DeleteStmt -> {} // legality is V23's (checkDeleteStatements)
                 ThenMarker -> {}
+                is ForEach -> checkForEach(rule, scope, item, created)
             }
         } finally {
-            rule.by?.let { aliasScopes.remove(it.name); ruleActor = null }
-            created.keys.forEach { aliasScopes.remove(it) }
+            here.forEach { (n, _) -> aliasScopes.remove(n) }
+        }
+    }
+
+    // ── V34: a `for each` block (Reference §14) ────────────────────────────────
+    //
+    // Each name runs over a collection the rule can reach, or over a range of
+    // numbers; the name is new in the rule; the block holds creations and
+    // blocks only; an `as` name bound inside a block is read inside it only.
+
+    private sealed interface LoopElem {
+        data class Records(val shape: String) : LoopElem
+        data class Values(val type: VType) : LoopElem
+    }
+
+    private fun checkForEach(rule: RuleDecl, scope: String, fe: ForEach, created: Map<String, String>) {
+        val bound = mutableListOf<String>()
+        for (b in fe.bindings) {
+            val taken = b.name == "this" || b.name in aliasScopes || b.name in scalarAliases || b.name in created ||
+                model.membersOf(scope).containsKey(b.name) || b.name in model.shapes || b.name in model.refinements
+            if (taken)
+                diags.add(Diagnostic("V34", "rule '${rule.name}' — `for each ${b.name}`: '${b.name}' is already a name in this rule " +
+                    "(a field of the subject, the actor, a shape, an `as` name, or another `for each` name); choose another"))
+            val elem: LoopElem? = when (val src = b.source) {
+                is LoopSource.Range -> {
+                    for (e in listOf(src.from, src.to)) {
+                        checkExpr(e, scope)
+                        val t = scalarTypeOf(e, scope)
+                        if (t != null && t !is VType.Num)
+                            diags.add(Diagnostic("V34", "rule '${rule.name}' — '${Printer.expr(e)}' bounds a range but is not a number"))
+                    }
+                    LoopElem.Values(VType.Num("integer"))
+                }
+                is LoopSource.Over -> loopElement(rule, b.name, src.expr, scope)
+            }
+            if (taken || elem == null) continue
+            when (elem) {
+                is LoopElem.Records -> aliasScopes[b.name] = elem.shape
+                is LoopElem.Values -> scalarAliases[b.name] = elem.type
+            }
+            bound.add(b.name)
+        }
+        for (item in fe.body) when (item) {
+            is Assignment -> diags.add(Diagnostic("V34", "rule '${rule.name}' assigns inside `for each` — a block creates records; " +
+                "to write one field of every member of a collection, assign through the collection " +
+                "(`this.${Printer.expr(item.target).substringAfterLast('.')} = ...` on the collection path, Reference §12)"))
+            is DeleteStmt -> diags.add(Diagnostic("V34", "rule '${rule.name}' deletes inside `for each` — a block creates records; " +
+                "to delete every member of a collection, write a rule on the member shape that deletes `this` (Reference §12)"))
+            else -> {}
+        }
+        try {
+            checkBody(rule, scope, fe.body, created)
+        } finally {
+            bound.forEach { aliasScopes.remove(it); scalarAliases.remove(it) }
+        }
+    }
+
+    /** What a `for each` name runs over, or null with a diagnostic when the source is not a collection. */
+    private fun loopElement(rule: RuleDecl, name: String, e: Expr, scope: String): LoopElem? {
+        fun notACollection(): LoopElem? {
+            diags.add(Diagnostic("V34", "rule '${rule.name}' — `for each $name in ${Printer.expr(e)}`: '${Printer.expr(e)}' is not a collection; " +
+                "name a `many` field, an inferred inverse, a filter `(Shape where ...)`, a shape, or a range `1..n` (Reference §14)"))
+            return null
+        }
+        return when (e) {
+            is PathExpr -> {
+                if (e.segs.isEmpty() && (e.root in model.shapes || e.root in model.refinements)) return LoopElem.Records(e.root)
+                val before = diags.size
+                resolvePath(e, scope)
+                if (diags.size > before) return null
+                when (val t = scalarTypeOf(e, scope)) {
+                    is VType.Coll -> LoopElem.Records(t.shape)
+                    is VType.CollS -> LoopElem.Values(model.scalarOf(t.name))
+                    null -> null
+                    else -> notACollection()
+                }
+            }
+            is SetExpr -> {
+                checkExpr(e, scope)
+                model.collectionElement(e.collection, scope, aliasScopes)?.let { LoopElem.Records(it) }
+            }
+            else -> { checkExpr(e, scope); notACollection() }
         }
     }
 
@@ -475,15 +590,16 @@ class Validator(private val model: Model) {
     // since no record could then be created first.
 
     private fun checkCreationAliases(rule: RuleDecl, scope: String): Map<String, String> {
-        val creations = rule.body.filterIsInstance<Creation>()
+        val creations = rule.creations()
+        val loopNames = rule.loopBindings().map { it.first.name }.toSet()
         val out = linkedMapOf<String, String>()
         for (c in creations) {
             val name = c.alias ?: continue
-            val taken = name == "this" || name in aliasScopes || name in out ||
+            val taken = name == "this" || name in aliasScopes || name in out || name in loopNames ||
                 model.membersOf(scope).containsKey(name) || name in model.shapes || name in model.refinements
             if (taken) {
                 diags.add(Diagnostic("V33", "rule '${rule.name}' — '${c.shape} ... as $name': '$name' is already a name in this rule " +
-                    "(a field of the subject, the actor, a shape, or another `as`); choose another"))
+                    "(a field of the subject, the actor, a shape, a `for each` name, or another `as`); choose another"))
                 continue
             }
             out[name] = c.shape
@@ -491,11 +607,34 @@ class Validator(private val model: Model) {
         if (out.isEmpty()) return out
         // where a name may appear: as a whole value in a creation's field or `for`
         fun badReads(e: Expr, where: String) = aliasReads(e, whole = true, names = out.keys, rule = rule, where = where)
-        for (item in rule.body) when (item) {
+        // a name bound inside a block is read inside that block only (V34)
+        fun scoped(items: List<BodyItem>, visible: Set<String>) {
+            val here = visible + items.filterIsInstance<Creation>().mapNotNull { it.alias }
+            for (item in items) when (item) {
+                is Creation -> (item.fields.map { it.value } + listOfNotNull(item.forExpr)).forEach { e ->
+                    out.keys.filter { it !in here && mentions(e, setOf(it)) }.forEach {
+                        diags.add(Diagnostic("V34", "rule '${rule.name}' — '${item.shape}' reads '$it', a name bound by `as` inside a `for each` block, " +
+                            "outside that block; the name stands for one record per element and means nothing outside"))
+                    }
+                }
+                is ForEach -> {
+                    item.bindings.forEach { b ->
+                        val srcs = when (val s = b.source) { is LoopSource.Over -> listOf(s.expr); is LoopSource.Range -> listOf(s.from, s.to) }
+                        srcs.forEach { e -> if (mentions(e, out.keys)) diags.add(Diagnostic("V33", "rule '${rule.name}' — `for each ${b.name}` runs over " +
+                            "'${Printer.expr(e)}', which reads a record this rule creates; it has no fields until the commit lands")) }
+                    }
+                    scoped(item.body, here)
+                }
+                else -> {}
+            }
+        }
+        scoped(rule.body, emptySet())
+        for (item in rule.body.statements()) when (item) {
             is Creation -> {
                 item.forExpr?.let { badReads(it, "a `for` target") }
                 item.fields.forEach { badReads(it.value, "a field of '${item.shape}'") }
             }
+            is ForEach -> {}
             is Assignment -> {
                 if (item.target.root in out)
                     diags.add(Diagnostic("V33", "rule '${rule.name}' assigns through '${item.target.root}', a record this rule creates — " +
@@ -768,7 +907,7 @@ class Validator(private val model: Model) {
             else -> null
         }
         is FunCall -> if (e.name == "lowercase") VType.Text else null
-        is PathExpr -> {
+        is PathExpr -> if (e.root in scalarAliases) (if (e.segs.isEmpty()) scalarAliases[e.root] else null) else {
             val names = if (e.root == "this") e.segs.map { it.name } else listOf(e.root) + e.segs.map { it.name }
             var sc: String? = if (e.root in aliasScopes) aliasScopes[e.root] else (thisScope ?: scope)
             var t: VType? = null
@@ -864,6 +1003,9 @@ class Validator(private val model: Model) {
     /** `as`-alias → element scope, live while the binding's `where` is checked. */
     private val aliasScopes = mutableMapOf<String, String>()
 
+    /** A `for each` name bound to numbers or scalar values (Reference §14): a value with no members. */
+    private val scalarAliases = mutableMapOf<String, VType>()
+
     private fun resolvePath(p: PathExpr, scope: String) {
         // a narrowed prefix (`target is Post` governing this branch) resolves the
         // rest of the path against the narrowed scope — V11's union slice
@@ -879,6 +1021,11 @@ class Validator(private val model: Model) {
         val current: String? = when {
             p.root == "this" -> thisScope ?: scope
             p.root in aliasScopes -> aliasScopes[p.root]
+            p.root in scalarAliases -> {
+                if (p.segs.isNotEmpty())
+                    diags.add(Diagnostic("F1", "'${Printer.expr(p)}' reads through '${p.root}', which is a value, not a record (a `for each` name over numbers or scalar values)"))
+                return
+            }
             p.root in model.shapes || p.root in model.refinements -> return // membership atom / collection source
             else -> {
                 val m = model.membersOf(scope)[p.root]
@@ -1131,7 +1278,7 @@ class Validator(private val model: Model) {
         if (cond.opaque) return true
         return when (k) {
             is CommitKind.Creates -> {
-                val coCreated = k.byRule?.body?.filterIsInstance<Creation>()?.map { it.shape }?.toSet()
+                val coCreated = k.byRule?.body?.statements()?.filterIsInstance<Creation>()?.map { it.shape }?.toSet()
                     ?: setOf(k.shape) // an act's commit carries exactly the act
                 if (k.shape in bases) {
                     if (rule.leaving) return false // a fresh instance was never a member
@@ -1473,7 +1620,7 @@ class Validator(private val model: Model) {
                 assigned.add(w.owner to w.member.name)
                 updateTimestamps(w.owner).forEach { assigned.add(w.owner to it) }
             }
-            val created = a.body.filterIsInstance<Creation>().map { it.shape }.toSet()
+            val created = a.body.statements().filterIsInstance<Creation>().map { it.shape }.toSet()
             val deleted = model.deleteSites.filter { it.rule === a }.map { it.shape }.toSet()
             Triple(assigned, created, deleted)
         }
@@ -1494,7 +1641,7 @@ class Validator(private val model: Model) {
         val s = ReadSummary()
         val scope = subjectScope(rule)
         if (scope != null) {
-            rule.body.forEach { item ->
+            rule.body.statements().forEach { item ->
                 when (item) {
                     is Assignment -> {
                         model.collectExpr(item.value, scope, s, ruleAliases(rule))
@@ -1505,6 +1652,7 @@ class Validator(private val model: Model) {
                         item.forExpr?.let { model.collectExpr(it, scope, s, ruleAliases(rule)) }
                         item.fields.forEach { model.collectExpr(it.value, scope, s, ruleAliases(rule)) }
                     }
+                    is ForEach -> item.sourceExprs().forEach { model.collectExpr(it, scope, s, ruleAliases(rule)) }
                     is DeleteStmt -> model.collectExpr(item.target, scope, s, ruleAliases(rule)) // the route to the target
                     ThenMarker -> {}
                 }
@@ -1551,7 +1699,7 @@ class Validator(private val model: Model) {
         val written = writes.map { it.owner to it.member.name }.toSet()
         val writtenShapes = written.map { it.first }.toSet()
         val created = model.rules.values.flatMap { r ->
-            r.body.filterIsInstance<Creation>().map { model.baseOf(it.shape) ?: it.shape }
+            r.body.statements().filterIsInstance<Creation>().map { model.baseOf(it.shape) ?: it.shape }
         }.toSet()
         model.nevers.indices.filter { i ->
             val n = model.nevers[i]
@@ -1671,7 +1819,7 @@ class Validator(private val model: Model) {
         }
 
     private fun disarmed(rule: RuleDecl, atom: GuardAtom): Boolean = when (atom) {
-        is GuardAtom.Witness -> rule.body.filterIsInstance<Creation>().any { it.shape == atom.shape }
+        is GuardAtom.Witness -> rule.body.statements().filterIsInstance<Creation>().any { it.shape == atom.shape }
         is GuardAtom.Flag -> rule.body.filterIsInstance<Assignment>()
             .any { it.target.segs.lastOrNull()?.name == atom.name || (it.target.segs.isEmpty() && it.target.root == atom.name) }
     }
@@ -1727,10 +1875,11 @@ class Validator(private val model: Model) {
                 else -> {}
             }
         }
-        rule.body.forEach { item ->
+        rule.body.statements().forEach { item ->
             when (item) {
                 is Assignment -> walk(item.value)
                 is Creation -> item.fields.forEach { walk(it.value) }
+                is ForEach -> item.sourceExprs().forEach(::walk)
                 is DeleteStmt -> {}
                 ThenMarker -> {}
             }
@@ -1756,7 +1905,7 @@ class Validator(private val model: Model) {
         }
         model.closures.forEach { (container, edges) -> edges.forEach { addClosure(container, it) } }
         for (rule in model.rules.values) {
-            rule.body.filterIsInstance<Creation>().forEach {
+            rule.body.statements().filterIsInstance<Creation>().forEach {
                 kinds.add(CommitKind.Creates(it.shape, source = "rule ${rule.name}", byRule = rule))
             }
             writes.filter { it.rule === rule }.forEach {
@@ -1789,10 +1938,11 @@ class Validator(private val model: Model) {
             if (rule.condition !is RefName) collectComposite(rule.condition, s)
             val base = model.baseOfExpr(rule.condition)
             base?.let { summary.conditionBase = it }
-            rule.body.forEach { item ->
+            rule.body.statements().forEach { item ->
                 when (item) {
                     is Assignment -> model.collectExpr(item.value, scope, s, ruleAliases(rule))
                     is Creation -> item.fields.forEach { model.collectExpr(it.value, scope, s, ruleAliases(rule)) }
+                    is ForEach -> item.sourceExprs().forEach { model.collectExpr(it, scope, s, ruleAliases(rule)) }
                     is DeleteStmt -> model.collectExpr(item.target, scope, s, ruleAliases(rule))
                     ThenMarker -> {}
                 }
@@ -2418,7 +2568,7 @@ class Validator(private val model: Model) {
                     "use latest/first instead"))
             }
             for (rule in model.rules.values) {
-                for (c in rule.body.filterIsInstance<Creation>()) {
+                for (c in rule.body.statements().filterIsInstance<Creation>()) {
                     if (c.shape != base) continue
                     if (!creationGuarded(rule, c, r, base))
                         diags.add(Diagnostic("V12", "$demand, but rule '${rule.name}' creates '$base' " +
@@ -2573,7 +2723,7 @@ class Validator(private val model: Model) {
         // V17: only the boundary commits a transient act — a rule-created
         // instance would persist, contradicting the marker
         for (rule in model.rules.values) {
-            rule.body.filterIsInstance<Creation>().filter { it.shape in model.transients }.forEach {
+            rule.body.statements().filterIsInstance<Creation>().filter { it.shape in model.transients }.forEach {
                 diags.add(Diagnostic("V17", "rule '${rule.name}' creates transient act '${it.shape}' — " +
                     "a transient act is an input at the boundary, never a rule's effect"))
             }
@@ -2888,7 +3038,7 @@ class Validator(private val model: Model) {
                 val schedules = rule.triggers.filter { it != "commit" }
                 val uncalled = schedules.isNotEmpty() || rule.preposition == "after"
                 if (!uncalled) continue
-                for (c in rule.body.filterIsInstance<Creation>()) {
+                for (c in rule.body.statements().filterIsInstance<Creation>()) {
                     val base = model.baseOf(c.shape) ?: c.shape
                     if (base !in consulted && !s.opaque) continue
                     val moment = if (schedules.isNotEmpty()) "on ${schedules.joinToString(", ")}" else "after commit"
@@ -3003,7 +3153,7 @@ class Validator(private val model: Model) {
                     else -> {}
                 }
             }
-            for (item in rule.body) when (item) {
+            for (item in rule.body.statements()) when (item) {
                 is Creation -> { item.forExpr?.let(::walk); item.fields.forEach { walk(it.value) } }
                 is Assignment -> walk(item.value)
                 else -> {}
@@ -3220,13 +3370,14 @@ class Validator(private val model: Model) {
         }
         for (rule in model.rules.values) {
             walkRef("rule '${rule.name}'", rule.condition)
-            rule.body.forEach { item ->
+            rule.body.statements().forEach { item ->
                 when (item) {
                     is Assignment -> walk("rule '${rule.name}'", item.value)
                     is Creation -> {
                         walk("rule '${rule.name}'", item.forExpr)
                         item.fields.forEach { walk("rule '${rule.name}'", it.value) }
                     }
+                    is ForEach -> item.sourceExprs().forEach { walk("rule '${rule.name}'", it) }
                     else -> {}
                 }
             }

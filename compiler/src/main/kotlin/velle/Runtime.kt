@@ -1349,9 +1349,29 @@ class VelleSystem(
         // a rule declared `by` reads the transaction's root actor (Reference §22):
         // present when the root act carried one, absent on the paths V31 made
         // the clause say `?` for
-        var ctx = Evaluator.Ctx(scope, subject, actor = rule.by?.let { it.name to txn?.actor })
+        val ctx = Evaluator.Ctx(scope, subject, actor = rule.by?.let { it.name to txn?.actor })
         val mutations = mutableListOf<Mutation>()
-        for (item in orderedBody(rule)) when (item) {
+        execute(rule.body, ctx, subject, mutations)
+        if (mutations.isNotEmpty()) applyCommit(mutations)
+    }
+
+    /**
+     * Runs one level of a body: the rule's, or a `for each` block's once per
+     * element (Reference §14). An `as` name bound here is visible to the rest
+     * of this level and to the blocks inside it, never outside.
+     */
+    private fun execute(items: List<BodyItem>, start: Evaluator.Ctx, subject: Long, mutations: MutableList<Mutation>) {
+        var ctx = start
+        for (item in orderedItems(items)) when (item) {
+            is ForEach -> {
+                // nested for a product; a later source may read an earlier name
+                fun iterate(i: Int, c: Evaluator.Ctx) {
+                    if (i == item.bindings.size) { execute(item.body, c, subject, mutations); return }
+                    val b = item.bindings[i]
+                    for (v in loopValues(b.source, c)) iterate(i + 1, c.copy(locals = c.locals + (b.name to v)))
+                }
+                iterate(0, ctx)
+            }
             is Assignment -> {
                 // a collection path fans out: one write per member, the same value
                 // (Reference §6, "fan-out assignment"); a plain path is one target
@@ -1396,34 +1416,49 @@ class VelleSystem(
             }
             ThenMarker -> {} // ordering within one commit is a compilation concern
         }
-        if (mutations.isNotEmpty()) applyCommit(mutations)
+    }
+
+    /** The elements one `for each` name runs over, in the current iteration's context. */
+    private fun loopValues(source: LoopSource, ctx: Evaluator.Ctx): List<Value> = when (source) {
+        is LoopSource.Over -> evaluator.collectionValues(source.expr, ctx)
+        is LoopSource.Range -> {
+            fun bound(e: Expr): Long {
+                val n = (evaluator.eval(e, ctx) as? Value.VNum)?.v
+                    ?: throw VelleRuntimeError("range bound '${Printer.expr(e)}' is not a number")
+                if (n.stripTrailingZeros().scale() > 0)
+                    throw VelleRuntimeError("range bound '${Printer.expr(e)}' is $n, not a whole number")
+                return n.toLong()
+            }
+            val from = bound(source.from); val to = bound(source.to)
+            if (to < from) emptyList() else (from..to).map { Value.VNum(java.math.BigDecimal(it)) }
+        }
     }
 
     /**
-     * The body in an order every `as` name is bound before it is read (Reference
-     * §15: a read orders the two statements). The validator refused cycles (V33),
-     * so a stable topological order exists; statements without such reads keep
-     * their written order.
+     * One level of a body in an order every `as` name bound at that level is
+     * bound before it is read (Reference §15: a read orders the two statements).
+     * The validator refused cycles (V33), so a stable topological order exists;
+     * statements without such reads keep their written order. A block counts as
+     * reading every name its statements read.
      */
-    private fun orderedBody(rule: RuleDecl): List<BodyItem> {
-        val creations = rule.body.filterIsInstance<Creation>().filter { it.alias != null }
-        if (creations.isEmpty()) return rule.body
+    private fun orderedItems(items: List<BodyItem>): List<BodyItem> {
+        val creations = items.filterIsInstance<Creation>().filter { it.alias != null }
+        if (creations.isEmpty()) return items
         val names = creations.map { it.alias!! }.toSet()
         fun reads(item: BodyItem): Set<String> = when (item) {
             is Creation -> (item.fields.map { it.value } + listOfNotNull(item.forExpr)).flatMap { rootsOf(it) }.filter { it in names }.toSet()
+            is ForEach -> item.body.flatMap { reads(it) }.toSet()
             else -> emptySet()
         }
         val out = mutableListOf<BodyItem>()
         val placed = mutableSetOf<BodyItem>()
-        val bound = mutableSetOf<String>()
         fun place(item: BodyItem) {
             if (item in placed) return
             placed.add(item)
             for (dep in reads(item)) place(creations.first { it.alias == dep })
             out.add(item)
-            (item as? Creation)?.alias?.let { bound.add(it) }
         }
-        rule.body.forEach { place(it) }
+        items.forEach { place(it) }
         return out
     }
 

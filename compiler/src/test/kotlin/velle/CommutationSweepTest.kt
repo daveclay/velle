@@ -365,10 +365,11 @@ class CommutationSweepTest {
             is RefinementDecl -> { ref(d.expr); d.members.filterIsInstance<DerivedProp>().forEach { expr(it.expr) } }
             is RuleDecl -> {
                 ref(d.condition)
-                d.body.forEach { b ->
+                d.body.statements().forEach { b ->
                     when (b) {
                         is Assignment -> expr(b.value)
                         is Creation -> { expr(b.forExpr); b.fields.forEach { expr(it.value) } }
+                        is ForEach -> b.sourceExprs().forEach { expr(it) }
                         is DeleteStmt -> expr(b.target)
                         ThenMarker -> {}
                     }

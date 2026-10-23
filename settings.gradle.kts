@@ -22,4 +22,5 @@ include(
     "examples:pharmacy:output",
     "examples:vendors:output",
     "examples:batches:output",
+    "examples:platelayout:output",
 )

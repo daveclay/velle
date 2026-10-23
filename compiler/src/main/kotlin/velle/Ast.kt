@@ -203,6 +203,62 @@ data class Creation(
 
 data class FieldInit(val name: String, val value: Expr)
 
+/**
+ * `for each <name> in <source>, ... { statements }` (Reference §14): the block's
+ * statements run once per element of each source, nested for a product. A
+ * statement inside is a creation or another block; the names are values for
+ * the block's statements and nothing outside it (checks V34).
+ */
+data class ForEach(val bindings: List<LoopBinding>, val body: List<BodyItem>) : BodyItem
+
+data class LoopBinding(val name: String, val source: LoopSource)
+
+sealed interface LoopSource {
+    /** A collection the rule can reach: a `many` field, an inferred inverse, a
+     *  filter, a bare shape name. */
+    data class Over(val expr: Expr) : LoopSource
+    /** `from..to` — the integers from `from` to `to`, the one place a number
+     *  becomes a set; legal only here. */
+    data class Range(val from: Expr, val to: Expr) : LoopSource
+}
+
+/** The expressions a block's sources read, for the read collectors: each
+ *  collection (a bare shape name as the set it denotes), and each range's two bounds. */
+fun ForEach.sourceExprs(): List<Expr> = bindings.flatMap {
+    when (val s = it.source) {
+        is LoopSource.Over -> listOf(if (s.expr is PathExpr && s.expr.segs.isEmpty() && s.expr.root.first().isUpperCase()) SetExpr(CollectionExpr(listOf(Binding(s.expr)))) else s.expr)
+        is LoopSource.Range -> listOf(s.from, s.to)
+    }
+}
+
+/** Every statement of a body, blocks included, with each block's statements after it. */
+fun List<BodyItem>.statements(): List<BodyItem> =
+    flatMap { if (it is ForEach) listOf(it) + it.body.statements() else listOf(it) }
+
+/** Every creation of the rule, inside blocks or not. */
+fun RuleDecl.creations(): List<Creation> = body.statements().filterIsInstance<Creation>()
+
+/** The creations written outside any block: each creates exactly one record per firing. */
+fun RuleDecl.topCreations(): List<Creation> = body.filterIsInstance<Creation>()
+
+/** Every creation with the `for each` names enclosing it, outermost first; empty for one outside any block. */
+fun RuleDecl.creationsWithLoops(): List<Pair<Creation, List<LoopBinding>>> {
+    val out = mutableListOf<Pair<Creation, List<LoopBinding>>>()
+    fun walk(items: List<BodyItem>, loops: List<LoopBinding>) {
+        for (it in items) when (it) {
+            is Creation -> out.add(it to loops)
+            is ForEach -> walk(it.body, loops + it.bindings)
+            else -> {}
+        }
+    }
+    walk(body, emptyList())
+    return out
+}
+
+/** The names bound in the rule's blocks, each to the block that binds it. */
+fun RuleDecl.loopBindings(): List<Pair<LoopBinding, ForEach>> =
+    body.statements().filterIsInstance<ForEach>().flatMap { fe -> fe.bindings.map { it to fe } }
+
 /** `delete <path>` — instance-granularity mutation (OQ37): the instance ceases
  *  to be part of the state at this commit's close. The target is a literal
  *  static path, like assignment's (Reference §12), and always a to-one instance —

@@ -168,6 +168,10 @@ With a closure (`act ... with`, [§6 "Inline part creation"](Reference-06-Relati
 
 ([§14](Reference-14-for), "Naming the record a statement creates".) The name a creation binds with `as` stands for the created record as a reference and nothing more, since the record has no `id` until the commit lands. The validator rejects a name already in scope (a field of the subject, the rule's actor, a shape or refinement, another `as` in the body); a read through the name (`review.member`); the name anywhere but as a whole value in a creation's field or `for` target, so never inside an operator, an assignment's value, an assignment target, or a `delete`; and a cycle, two named creations each pointing at the other, since no record could then be created first. A read of the name orders the two statements ([§15](Reference-15-then)): the runtime creates the named record first, whatever the written order.
 
+### V34 — A `for each` block
+
+([§14](Reference-14-for), "Creating one record per element".) The block's statements run once per element of each source, so a source must be a collection the rule can reach (a `many` field, an inferred inverse, a filter, a shape name) or a range `from..to` of numbers; a range is legal nowhere else. The validator rejects a source that is not a collection; a range bound that is not a number; a name already in scope (a field of the subject, the rule's actor, a shape or refinement, an `as` name, another `for each` name); an assignment or a `delete` inside a block, since a block creates records and the fan-out spellings are [§12](Reference-12-Assignment)'s; and a read of an `as` name bound inside a block from outside it, since the name stands for one record per element. A name bound over numbers has no members: a read through it is [F1](#f1--name-resolution-and-casing)'s. *Implemented in v0*; `compiler/src/test/kotlin/velle/ForEachTest.kt` carries the exhibits.
+
 ## Advisories
 
 ### A1 — Rung recognition

@@ -18,5 +18,6 @@ tasks.register("generate") {
         ":examples:shipping:output:generate",
         ":examples:pharmacy:output:generate",
         ":examples:batches:output:generate",
+        ":examples:platelayout:output:generate",
     )
 }

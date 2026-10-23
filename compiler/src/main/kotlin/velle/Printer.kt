@@ -38,14 +38,7 @@ object Printer {
                 ).joinToString(", ")
             )
             append(" {\n")
-            d.body.forEach {
-                when (it) {
-                    ThenMarker -> append("    then\n")
-                    is Assignment -> append("    ${expr(it.target)} = ${expr(it.value)}\n")
-                    is Creation -> append("    ${creation(it)}\n")
-                    is DeleteStmt -> append("    delete ${expr(it.target)}\n")
-                }
-            }
+            body(d.body, "    ")
             append("}")
         }
         is NeverDecl -> prohibition(d) +
@@ -74,6 +67,25 @@ object Printer {
 
     private fun condition(e: RefExpr): String =
         if (e is RefName && e.where == null) e.name else "(${refExpr(e)})"
+
+    private fun StringBuilder.body(items: List<BodyItem>, indent: String) {
+        for (it in items) when (it) {
+            ThenMarker -> append("${indent}then\n")
+            is Assignment -> append("$indent${expr(it.target)} = ${expr(it.value)}\n")
+            is Creation -> append("$indent${creation(it)}\n")
+            is DeleteStmt -> append("${indent}delete ${expr(it.target)}\n")
+            is ForEach -> {
+                append("${indent}for each ${it.bindings.joinToString(", ") { b -> "${b.name} in ${loopSource(b.source)}" }} {\n")
+                body(it.body, "$indent    ")
+                append("$indent}\n")
+            }
+        }
+    }
+
+    fun loopSource(s: LoopSource): String = when (s) {
+        is LoopSource.Over -> expr(s.expr)
+        is LoopSource.Range -> "${expr(s.from)}..${expr(s.to)}"
+    }
 
     private fun creation(c: Creation): String = buildString {
         append(c.shape)

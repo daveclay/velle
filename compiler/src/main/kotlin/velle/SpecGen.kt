@@ -85,7 +85,7 @@ object SpecGen {
             // chain heuristic: a state over a produced shape (not an act) roots with its producer
             if (base != null && base !in model.exposed) {
                 val producer = model.rules.values.firstOrNull { rule ->
-                    rule.body.filterIsInstance<Creation>().any { it.shape == base }
+                    rule.creations().any { it.shape == base }
                 }
                 if (producer != null) return storyRootOf(producer)
             }
@@ -164,7 +164,7 @@ object SpecGen {
                             ?: (inner.collection?.bindings?.singleOrNull()?.source as? PathExpr)
                                 ?.takeIf { it.segs.isEmpty() }?.root
                         val base = root?.let { model.baseOf(it) ?: it }
-                        base != null && rule.body.filterIsInstance<Creation>().any { it.shape == base }
+                        base != null && rule.creations().any { it.shape == base }
                     }
                     is PathExpr -> inner.segs.isEmpty() && rule.body.filterIsInstance<Assignment>().any {
                         it.target.segs.lastOrNull()?.name == inner.root ||
@@ -364,10 +364,10 @@ object SpecGen {
             // shape's sole producer — reaching the trigger state may legitimately
             // commit instances of a shared shape (a retry's setup mints the first
             // attempt); those shapes keep only the reference asserts
-            val counts = rule.body.filterIsInstance<Creation>().map { it.shape }.distinct()
+            val counts = rule.topCreations().map { it.shape }.distinct()
                 .filter { shape ->
                     shape !in model.exposed &&
-                        model.rules.values.count { r -> r.body.filterIsInstance<Creation>().any { it.shape == shape } } == 1
+                        model.rules.values.count { r -> r.creations().any { it.shape == shape } } == 1
                 }
             counts.forEach { body.line(2, "val before${it} = count(\"$it\")") }
             var exitActName: String? = null
@@ -447,9 +447,9 @@ object SpecGen {
                 }
             }
 
-            for (creation in rule.body.filterIsInstance<Creation>()) {
+            for (creation in rule.creations()) {
                 val v = "produced${creation.shape}"
-                if (creation.shape in counts)
+                if (creation.shape in counts && creation in rule.topCreations())
                     body.line(2, "assertEquals(before${creation.shape} + 1, count(\"${creation.shape}\"), \"rule ${rule.name}: one '${creation.shape}' per firing\")")
                 val thisFields = creation.fields.filter { it.value == PathExpr("this") }.map { it.name }
                 if (thisFields.isNotEmpty() && !transientSubject) {
@@ -584,8 +584,9 @@ object SpecGen {
                     if (rule.preposition == "after") thens.add("the rule has fired after that transaction")
                 }
             }
-            for (creation in rule.body.filterIsInstance<Creation>()) {
-                thens.add("one more \"${creation.shape}\" exists")
+            for ((creation, loops) in rule.creationsWithLoops()) {
+                if (loops.isEmpty()) thens.add("one more \"${creation.shape}\" exists")
+                else thens.add("a \"${creation.shape}\" exists for each " + loops.joinToString(", ") { "${it.name} in ${Printer.loopSource(it.source)}" })
                 creation.fields.filter { it.value == PathExpr("this") }.forEach {
                     thens.add("that ${creation.shape}'s \"${it.name}\" is the $subject")
                 }
@@ -615,7 +616,7 @@ object SpecGen {
 
         /** The rule's consequences as a domain phrase: "produces a Receipt and sets customer.email". */
         fun effectsPhrase(rule: RuleDecl): String {
-            val created = rule.body.filterIsInstance<Creation>().map { it.shape }.distinct()
+            val created = rule.creations().map { it.shape }.distinct()
             val set = rule.body.filterIsInstance<Assignment>()
                 .map { Printer.expr(it.target).removePrefix("this.") }.distinct()
             val parts = mutableListOf<String>()
