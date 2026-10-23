@@ -318,7 +318,7 @@ The difference the author feels: the chained rule fires for every container, how
 
 **Recommendation.** Allow it. Forbidding it forces a stored field on the intermediate for every datum the inner level reads, and a refinement for every intermediate that can arrive by another route. Both are the costs §5 lists for Candidate B.
 
-**Dave:**
+**Dave:** allow it (2026-10-23).
 
 ### 6.4 Does the construct run over a part collection as well as a range?
 
