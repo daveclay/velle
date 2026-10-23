@@ -88,6 +88,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
   - [ ] Generate `never` cases for `or` ranges (S11).
   - [ ] Generate spec cases for a `never` with a non-comparison predicate: one test per act the constraint can reject, asserting the refusal and carrying the rendered message.
   - [ ] Give a `when leaving R on <Schedule>` rule a generated case that ages a member out and ticks, or state that it is not generated (P10).
+  - [ ] Give a creation inside a `for each` block an expected count computed from the given (each range's width times each collection's size, read off the subject after the commit), or state that it is not generated when a source is a filter, reads an earlier name, or has a bound the test cannot recompute.
   - [ ] Teach SpecGen to generate refinement specs over rule-materialized shapes (PaidInvoice, SettledOrder, Delinquent, ClosedTicket, LockedNote, and kin; OQ31's residue).
   - [ ] Make the generated specs name an ordering datum instead of `last(shape)` over the runtime's scan order.
   - [ ] Give the generated `SpecSupport` a `newSystem()` hook so the generated specs run over a store as the flow tests do.
