@@ -390,7 +390,7 @@ The entry's `condition` is a reference into another branch of the design's closu
 
 **Recommendation.** Any collection. Running over records is the ordinary case for every other construct in Velle, and the range is the addition. The question is only whether to say so in the grammar from the start.
 
-**Dave:**
+**Dave:** any collection (2026-10-23).
 
 ### 6.5 What may a block contain?
 
