@@ -8,9 +8,9 @@ import velle.generated.platelayout.*
 
 /**
  * rule LayOut when ExperimentDesign {
- *     for each replicate in 1..replicates, position in 1..containerCount {
+ *     for each replicate from 1 to replicates, position from 1 to containerCount {
  *         Container from { design: this, replicate: replicate, position: position } as container
- *         for each condition in conditions, slot in 1..wellsPerCondition {
+ *         for each condition in conditions, slot from 1 to wellsPerCondition {
  *             Well from { container: container, condition: condition, position: ((condition.block - 1) * wellsPerCondition) + slot }
  *         }
  *     }

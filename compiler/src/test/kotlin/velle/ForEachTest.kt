@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 /**
  * `for each <name> in <source>, ... { statements }` (Reference §14; OQ64): a
  * block in a rule body that creates one record per element of each source,
- * nested for a product, with a range `1..n` as the one place a number becomes
+ * nested for a product, with a range `from 1 to n` as the one place a number becomes
  * a set — parsing and printing, V34's refusals, and the runtime laying out
  * the whole product in one firing.
  */
@@ -46,9 +46,9 @@ class ForEachTest {
         }
 
         rule LayOut when ExperimentDesign {
-            for each replicate in 1..replicates, position in 1..containerCount {
+            for each replicate from 1 to replicates, position from 1 to containerCount {
                 Container from { design: this, replicate: replicate, position: position } as container
-                for each condition in conditions, slot in 1..wellsPerCondition {
+                for each condition in conditions, slot from 1 to wellsPerCondition {
                     Well from {
                         container: container
                         condition: condition
@@ -86,8 +86,8 @@ class ForEachTest {
         assertIs<LoopSource.Over>(inner.bindings[0].source)
         assertEquals(listOf("container", "condition", "slot"), rule.loopBindings().map { it.first.name }.let { listOf("container") + it.drop(2) })
         val printed = Printer.print(rule)
-        assertTrue("for each replicate in 1..replicates, position in 1..containerCount {" in printed, printed)
-        assertTrue("        for each condition in conditions, slot in 1..wellsPerCondition {" in printed, printed)
+        assertTrue("for each replicate from 1 to replicates, position from 1 to containerCount {" in printed, printed)
+        assertTrue("        for each condition in conditions, slot from 1 to wellsPerCondition {" in printed, printed)
         // the printed form parses to the same rule
         assertEquals(rule, Parser.parse(decls.joinToString("\n") { Printer.print(it) }).filterIsInstance<RuleDecl>().single())
     }
@@ -122,7 +122,7 @@ class ForEachTest {
         containers.forEach { assertEquals(d, sys.get(it, "design")) }
         val wells = sys.instancesOf("Well")
         assertEquals(576, wells.size)
-        // every container holds 96 wells at positions 1..96, 24 per condition
+        // every container holds 96 wells at positions 1 to 96, 24 per condition
         for (c in containers) {
             val own = wells.filter { sys.get(it, "container") == c }
             assertEquals((1..96).map { it.toLong() }.toSet(), own.map { (sys.get(it, "position") as Number).toLong() }.toSet())
@@ -145,7 +145,7 @@ class ForEachTest {
             act Order { lines: integer }
             shape Line { order: one Order, n: integer, copy: integer }
             rule R when Order {
-                for each n in 1..lines, copy in 1..n {
+                for each n from 1 to lines, copy from 1 to n {
                     Line from { order: this, n: n, copy: copy }
                 }
             }
@@ -210,17 +210,17 @@ class ForEachTest {
 
     @Test
     fun `V34 - a range bound that is not a number`() {
-        val d = diags(BASE + "\nrule R when Design { for each x in 1..label { Slot from { design: this, i: x } } }")
+        val d = diags(BASE + "\nrule R when Design { for each x from 1 to label { Slot from { design: this, i: x } } }")
         assertTrue(d.any { it.code == "V34" && "bounds a range but is not a number" in it.message }, d.toString())
     }
 
     @Test
     fun `V34 - a name already in the rule`() {
-        val taken = diags(BASE + "\nrule R when Design { for each n in 1..n { Slot from { design: this, i: n } } }")
+        val taken = diags(BASE + "\nrule R when Design { for each n from 1 to n { Slot from { design: this, i: n } } }")
         assertTrue(taken.any { it.code == "V34" && "already a name" in it.message }, taken.toString())
-        val twice = diags(BASE + "\nrule R when Design { for each i in 1..n, i in items { Slot from { design: this, i: i } } }")
+        val twice = diags(BASE + "\nrule R when Design { for each i from 1 to n, i in items { Slot from { design: this, i: i } } }")
         assertTrue(twice.any { it.code == "V34" && "already a name" in it.message }, twice.toString())
-        val asName = diags(BASE + "\nrule R when Design { for each s in 1..n { Slot from { design: this, i: s } as s } }")
+        val asName = diags(BASE + "\nrule R when Design { for each s from 1 to n { Slot from { design: this, i: s } as s } }")
         assertTrue(asName.any { it.code == "V33" && "already a name" in it.message }, asName.toString())
     }
 
@@ -238,7 +238,7 @@ class ForEachTest {
 
             shape Pair { design: one Design, slot: one Slot }
             rule R when Design {
-                for each i in 1..n { Slot from { design: this, i: i } as slot }
+                for each i from 1 to n { Slot from { design: this, i: i } as slot }
                 Pair from { design: this, slot: slot }
             }
         """.trimIndent()
@@ -248,7 +248,7 @@ class ForEachTest {
 
     @Test
     fun `a number name has no members`() {
-        val d = diags(BASE + "\nrule R when Design { for each i in 1..n { Slot from { design: this, i: i.k } } }")
+        val d = diags(BASE + "\nrule R when Design { for each i from 1 to n { Slot from { design: this, i: i.k } } }")
         assertTrue(d.any { it.code == "F1" && "is a value, not a record" in it.message }, d.toString())
     }
 

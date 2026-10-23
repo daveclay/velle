@@ -556,7 +556,7 @@ class Validator(private val model: Model) {
     private fun loopElement(rule: RuleDecl, name: String, e: Expr, scope: String): LoopElem? {
         fun notACollection(): LoopElem? {
             diags.add(Diagnostic("V34", "rule '${rule.name}' — `for each $name in ${Printer.expr(e)}`: '${Printer.expr(e)}' is not a collection; " +
-                "name a `many` field, an inferred inverse, a filter `(Shape where ...)`, a shape, or a range `1..n` (Reference §14)"))
+                "name a `many` field, an inferred inverse, a filter `(Shape where ...)`, a shape, or a range `from 1 to n` (Reference §14)"))
             return null
         }
         return when (e) {

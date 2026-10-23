@@ -586,7 +586,7 @@ object SpecGen {
             }
             for ((creation, loops) in rule.creationsWithLoops()) {
                 if (loops.isEmpty()) thens.add("one more \"${creation.shape}\" exists")
-                else thens.add("a \"${creation.shape}\" exists for each " + loops.joinToString(", ") { "${it.name} in ${Printer.loopSource(it.source)}" })
+                else thens.add("a \"${creation.shape}\" exists for each " + loops.joinToString(", ") { Printer.loopBinding(it) })
                 creation.fields.filter { it.value == PathExpr("this") }.forEach {
                     thens.add("that ${creation.shape}'s \"${it.name}\" is the $subject")
                 }

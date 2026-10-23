@@ -352,7 +352,7 @@ class Parser(private val tokens: List<Token>) {
         return Assignment(PathExpr(root, segs), parseValue())
     }
 
-    /** `for each a in X, b in 1..n { ... }` (Reference §14): `each` and `in` are contextual words. */
+    /** `for each a in X, b from 1 to n { ... }` (Reference §14): `each`, `in`, and `to` are contextual words. */
     private fun parseForEach(): ForEach {
         expectKw("for")
         next() // each
@@ -360,14 +360,19 @@ class Parser(private val tokens: List<Token>) {
         do {
             skipNewlines()
             val name = expect(TokType.LIDENT).text
-            val inWord = peek()
-            if (inWord.type != TokType.LIDENT || inWord.text != "in") fail("expected 'in' after the name of a `for each`", inWord)
-            next()
-            skipNewlines()
-            val first = parseValue()
-            val source: LoopSource =
-                if (at(TokType.DOTDOT)) { next(); skipNewlines(); LoopSource.Range(first, parseValue()) }
-                else LoopSource.Over(first)
+            val word = peek()
+            val source: LoopSource = when {
+                word.isKw("from") -> {
+                    next(); skipNewlines()
+                    val from = parseValue()
+                    val toWord = peek()
+                    if (toWord.type != TokType.LIDENT || toWord.text != "to") fail("expected 'to' after the first bound of a `for each ... from`", toWord)
+                    next(); skipNewlines()
+                    LoopSource.Range(from, parseValue())
+                }
+                word.type == TokType.LIDENT && word.text == "in" -> { next(); skipNewlines(); LoopSource.Over(parseValue()) }
+                else -> fail("expected 'in <collection>' or 'from <number> to <number>' after the name of a `for each`", word)
+            }
             bindings.add(LoopBinding(name, source))
         } while (consumeIf(TokType.COMMA))
         skipNewlines()

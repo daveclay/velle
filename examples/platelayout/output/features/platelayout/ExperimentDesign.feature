@@ -5,6 +5,6 @@ Feature: ExperimentDesign
   # rule LayOut
   Scenario: A new ExperimentDesign produces a Container and a Well
     When a commit brings one new experimentDesign into "ExperimentDesign"
-    Then a "Container" exists for each replicate in 1..replicates, position in 1..containerCount
+    Then a "Container" exists for each replicate from 1 to replicates, position from 1 to containerCount
     And that Container's "design" is the experimentDesign
-    And a "Well" exists for each replicate in 1..replicates, position in 1..containerCount, condition in conditions, slot in 1..wellsPerCondition
+    And a "Well" exists for each replicate from 1 to replicates, position from 1 to containerCount, condition in conditions, slot from 1 to wellsPerCondition

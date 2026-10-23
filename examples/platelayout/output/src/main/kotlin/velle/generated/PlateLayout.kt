@@ -179,8 +179,8 @@ class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z
 --     its statements once per element of each source, nested for a product:
 --     containers × replicates containers, and under each the wells
 --     (Reference §14, "Creating one record per element")
---   · a number as a set — the range `1..n`, the one place a number becomes a
---     set, legal only as a `for each` source
+--   · a number as a set — the range `from 1 to n`, both ends included, the
+--     one place a number becomes a set, legal only as a `for each` source
 --   · a tree of created records — the container is named with `as` and its
 --     wells point at it, all in one firing (Reference §14, "Naming the record
 --     a statement creates")
@@ -262,9 +262,9 @@ never (Condition where block < 1 or block > count(design.conditions))
 -- the condition's block, and each well points at the container the outer
 -- block just created. Six containers of ninety-six wells, from one firing.
 rule LayOut when ExperimentDesign {
-    for each replicate in 1..replicates, position in 1..containerCount {
+    for each replicate from 1 to replicates, position from 1 to containerCount {
         Container from { design: this, replicate: replicate, position: position } as container
-        for each condition in conditions, slot in 1..wellsPerCondition {
+        for each condition in conditions, slot from 1 to wellsPerCondition {
             Well from {
                 container: container
                 condition: condition

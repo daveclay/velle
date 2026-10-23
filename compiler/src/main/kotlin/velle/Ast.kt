@@ -217,8 +217,8 @@ sealed interface LoopSource {
     /** A collection the rule can reach: a `many` field, an inferred inverse, a
      *  filter, a bare shape name. */
     data class Over(val expr: Expr) : LoopSource
-    /** `from..to` — the integers from `from` to `to`, the one place a number
-     *  becomes a set; legal only here. */
+    /** `from a to b` — the whole numbers from `a` to `b`, both included, the
+     *  one place a number becomes a set; legal only here. */
     data class Range(val from: Expr, val to: Expr) : LoopSource
 }
 

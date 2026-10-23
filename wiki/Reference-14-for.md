@@ -46,7 +46,7 @@ rule OpenAccountReview
 
 ## Creating one record per element (`for each`)
 
-A rule sometimes has to create many records from one: a well for every position on every container a design calls for. `for each` runs the statements inside its braces once per element of a collection, and once per combination when it names several collections. A range `1..n` stands for the numbers one through `n`, so a count stored on the record becomes a set to run over.
+A rule sometimes has to create many records from one: a well for every position on every container a design calls for. `for each` runs the statements inside its braces once per element of a collection, and once per combination when it names several collections. A range `from 1 to n` stands for the whole numbers one through `n`, both included, so a count stored on the record becomes a set to run over.
 
 "When a design is submitted, lay out every container and every well," from `examples/platelayout/platelayout.velle`. A design names a container type with a fixed number of wells, how many containers, how many replicates, and the conditions to test. Each condition takes a block of wells on every container.
 
@@ -77,9 +77,9 @@ shape Well {
 }
 
 rule LayOut when ExperimentDesign {
-    for each replicate in 1..replicates, position in 1..containerCount {
+    for each replicate from 1 to replicates, position from 1 to containerCount {
         Container from { design: this, replicate: replicate, position: position } as container
-        for each condition in conditions, slot in 1..wellsPerCondition {
+        for each condition in conditions, slot from 1 to wellsPerCondition {
             Well from {
                 container: container
                 condition: condition
@@ -90,14 +90,14 @@ rule LayOut when ExperimentDesign {
 }
 ```
 
-- `for each replicate in 1..replicates, position in 1..containerCount` runs the block once per replicate per position. With two replicates and three containers, that is six times. `1..replicates` is the numbers one through `replicates`. A range is allowed only here, after `in`.
+- `for each replicate from 1 to replicates, position from 1 to containerCount` runs the block once per replicate per position. With two replicates and three containers, that is six times. `from 1 to replicates` is the whole numbers one through `replicates`, both included. When the second bound is below the first, the block runs zero times. A zero-based layout is `from 0 to containerCount - 1`. A range is allowed only here, as a `for each` source.
 - `Container from { ... } as container` creates one container each time the outer block runs, and names it.
-- `for each condition in conditions, slot in 1..wellsPerCondition` runs once per condition per slot in its block. `conditions` is the design's own collection. A `for each` may run over any collection the rule can reach: a `many` field, an inferred inverse, a filter such as `(Condition where design == this)`, or a shape name for every record of that shape.
+- `for each condition in conditions, slot from 1 to wellsPerCondition` runs once per condition per slot in its block. `in` names a collection, `from ... to` names a range. `conditions` is the design's own collection. A `for each` may run over any collection the rule can reach: a `many` field, an inferred inverse, a filter such as `(Condition where design == this)`, or a shape name for every record of that shape.
 - `container: container` points each well at the container the outer block just created. The name is bound each time the outer block runs, and only the statements inside that block may read it.
 - `replicate`, `position`, `condition`, and `slot` are values inside their block. `condition.block` reads the condition's field. `slot` is a number and has no fields. Outside the block the names mean nothing.
 - The rule fires once per design. Every container and every well it creates lands in the design's own commit, so a well a `never` refuses refuses the whole design ([§20](Reference-20-State-change-patterns)).
 
-A block holds creations and other blocks. To write one field of every member of a collection, assign through the collection ([§12](Reference-12-Assignment)). To delete every member, write a rule on the member shape that deletes `this` ([§12](Reference-12-Assignment), "Deletion"). A later name in one `for each` may use an earlier one, as in `for each n in 1..lines, copy in 1..n`. `then` inside a block orders the block's statements each time it runs ([§15](Reference-15-then)).
+A block holds creations and other blocks. To write one field of every member of a collection, assign through the collection ([§12](Reference-12-Assignment)). To delete every member, write a rule on the member shape that deletes `this` ([§12](Reference-12-Assignment), "Deletion"). A later name in one `for each` may use an earlier one, as in `for each n from 1 to lines, copy from 1 to n`. `then` inside a block orders the block's statements each time it runs ([§15](Reference-15-then)).
 
 ## What the compiler checks
 

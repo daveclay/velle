@@ -772,7 +772,7 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
 
 private fun ruleActions(rule: RuleDecl): String = rule.body.statements().mapNotNull {
     when (it) {
-        is ForEach -> "for each " + it.bindings.joinToString(", ") { b -> "${b.name} in ${Printer.loopSource(b.source)}" }
+        is ForEach -> "for each " + it.bindings.joinToString(", ") { b -> Printer.loopBinding(b) }
         is Creation -> "inserts ${it.shape}"
         is Assignment -> "sets ${Printer.expr(it.target)} = ${Printer.expr(it.value)}"
         is DeleteStmt -> "deletes ${Printer.expr(it.target)}"

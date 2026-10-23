@@ -117,7 +117,6 @@ class Lexer(private val src: String) {
             c == '>' -> one(TokType.GT)
             c == '?' && n == '.' -> two(TokType.QDOT, "?.")
             c == '?' -> one(TokType.QMARK)
-            c == '.' && n == '.' -> two(TokType.DOTDOT, "..")
             c == '.' -> one(TokType.DOT)
             c == '+' -> one(TokType.PLUS)
             c == '-' -> one(TokType.MINUS)

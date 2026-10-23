@@ -8,8 +8,6 @@ enum class TokType {
     ASSIGN, EQ, NEQ, LT, LE, GT, GE,
     PLUS, MINUS, STAR, SLASH,
     QMARK, DOT, QDOT,
-    /** `..` — the range in a `for each` binding (Reference §14). */
-    DOTDOT,
 }
 
 data class Token(val type: TokType, val text: String, val line: Int, val col: Int) {
@@ -42,12 +40,13 @@ val KEYWORDS: Set<String> = setOf(
 val DURATION_UNITS = setOf("seconds", "minutes", "hours", "days", "weeks")
 
 /**
- * `each` and `in` are contextual, not reserved (Reference §14): `each` reads as
- * part of `for each` only directly after `for` at the start of a statement, and
- * `in` only between a `for each` name and its collection. Everywhere else both
- * are ordinary identifiers.
+ * `each`, `in`, and `to` are contextual, not reserved (Reference §14): `each`
+ * reads as part of `for each` only directly after `for` at the start of a
+ * statement, `in` only between a `for each` name and its collection, and `to`
+ * only between the two bounds of a `for each ... from a to b`. Everywhere else
+ * all three are ordinary identifiers.
  */
-val FOR_EACH_WORDS = setOf("each", "in")
+val FOR_EACH_WORDS = setOf("each", "in", "to")
 
 /**
  * The text comparison operators (Reference §10; OQ51 R1): contextual words that

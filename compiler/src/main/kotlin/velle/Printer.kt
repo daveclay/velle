@@ -75,16 +75,17 @@ object Printer {
             is Creation -> append("$indent${creation(it)}\n")
             is DeleteStmt -> append("${indent}delete ${expr(it.target)}\n")
             is ForEach -> {
-                append("${indent}for each ${it.bindings.joinToString(", ") { b -> "${b.name} in ${loopSource(b.source)}" }} {\n")
+                append("${indent}for each ${it.bindings.joinToString(", ") { b -> loopBinding(b) }} {\n")
                 body(it.body, "$indent    ")
                 append("$indent}\n")
             }
         }
     }
 
-    fun loopSource(s: LoopSource): String = when (s) {
-        is LoopSource.Over -> expr(s.expr)
-        is LoopSource.Range -> "${expr(s.from)}..${expr(s.to)}"
+    /** `name in <collection>` or `name from <a> to <b>` (Reference §14). */
+    fun loopBinding(b: LoopBinding): String = when (val s = b.source) {
+        is LoopSource.Over -> "${b.name} in ${expr(s.expr)}"
+        is LoopSource.Range -> "${b.name} from ${expr(s.from)} to ${expr(s.to)}"
     }
 
     private fun creation(c: Creation): String = buildString {
