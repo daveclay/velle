@@ -431,7 +431,7 @@ rule DiscardContainers when CancelledContainer {
 
 **Recommendation.** Creations and nested blocks only. One spelling per want, and nothing a block could delete is out of reach of the per-record rule.
 
-**Dave:**
+**Dave:** creations and nested blocks only (2026-10-23).
 
 ### 6.6 Should the compiler say anything about a large product?
 
