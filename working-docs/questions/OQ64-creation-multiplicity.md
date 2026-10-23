@@ -324,13 +324,19 @@ The difference the author feels: the chained rule fires for every container, how
 
 **Context.** Which condition a well gets is the domain's choice, not Velle's. In §5 the spec computes it: the conditions arrive numbered, and each container holds a block of wells per condition. In a real lab the scientist often supplies a plate map instead, one entry per well position naming the condition for that position, and the software copies the map onto every container. Both wants exist. The plate map is a part collection on the design, so supporting it means a `for each` can run over a part collection and the created record reads fields off each element.
 
-**Example.** The plate map as parts of the design:
+**Example.** The plate map as parts of the design. The design declares `plateMap` as a view over the entries, because the inferred name would be `plateMapEntrys` (Reference §6, "Renamed and derived collections"). The first rule lays out the containers from the counts, as in §5; the second copies the map onto each container.
 
 ```
+act ContainerType {
+    name: text
+    wellsPerContainer: integer
+}
+
 act ExperimentDesign {
     containerType: one ContainerType
     containerCount: integer
     replicates: integer
+    plateMap: many PlateMapEntry = (PlateMapEntry where design == this)
 } with { conditions, plateMap }
 
 shape Condition {
@@ -340,8 +346,28 @@ shape Condition {
 
 shape PlateMapEntry {
     design: one ExperimentDesign
+    position: integer                -- 1 to design.containerType.wellsPerContainer
+    condition: one Condition
+}
+
+shape Container {
+    design: one ExperimentDesign
+    replicate: integer
+    position: integer
+}
+
+shape Well {
+    container: one Container
     position: integer
     condition: one Condition
+}
+
+never (ExperimentDesign where count(plateMap) != containerType.wellsPerContainer)
+
+rule LayOutContainers when ExperimentDesign {
+    for each replicate in 1..replicates, position in 1..containerCount {
+        Container from { design: this, replicate: replicate, position: position }
+    }
 }
 
 rule LayOutWells when Container {
