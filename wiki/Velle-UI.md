@@ -1,6 +1,7 @@
 # Velle UI
 
 ## Random notes
+- An extension type (Reference §5) could carry how a value of it is entered and rendered: an input mask, a display format. Nothing in `velle.ext.VelleType` blocks adding it later.
 - We're missing an abstract declarative way to describe a view that can be rendered in different places with different concrete options. For example, a list view might have different columns when rendered in different contexts.
 - UI is difficult to build using re-usable agnostic components. Why?
 - UI is tedious: little differences in viewing the same underlying records are important, so there end up being lots of conditionals and toggle properties that complicate things.

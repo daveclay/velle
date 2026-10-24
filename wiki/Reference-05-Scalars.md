@@ -45,7 +45,7 @@ uses velle.finance.Money              -- this library's Money, when two librarie
 uses velle.finance.Money as Cash      -- the same type, written Cash in this spec
 ```
 
-An extension type is one value, never a business concept with parts. An amount and its currency are two fields of a shape, where the product owner reads the rules about them. Writing a type, and the piece that lets a store hold it, is the [Extension types](Extension-types) guide.
+An extension type is one value, never a business concept with parts. An amount and its currency are two fields of a shape, where the product owner reads the rules about them. A path never reaches into a value of the type: `price.currency` is a field of a shape or nothing. A field may hold a set of the type's values with `many`, compared by the type's own equality; `one` takes a shape only. Duration arithmetic stays on `Date` and `DateTime`. Writing a type, and the piece that lets a store hold it, is the [Extension types](Extension-types) guide.
 
 ## The built-in functions
 

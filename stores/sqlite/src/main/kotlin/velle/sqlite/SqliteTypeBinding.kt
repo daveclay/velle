@@ -4,7 +4,7 @@ import java.sql.ResultSet
 import java.util.ServiceLoader
 
 /**
- * How [SqliteStore] holds one registered extension type (Reference §5; OQ65 §2.5):
+ * How [SqliteStore] holds one registered extension type (Reference §5; the wiki guide `Extension-types`, "Holding a type in a store"):
  * the column type, the value handed to JDBC, the read back, and which comparisons
  * the column answers faithfully for the pre-filter. Written by whoever knows the
  * store, as a library of its own: Alice publishes `Money`, Bob publishes the

@@ -38,6 +38,8 @@ shape Invoice {
 - `total: Money = sum(lineItems, amount)` adds up a collection of amounts. The type declares how two amounts add and what an empty collection sums to.
 - `balance <= 0` is the same constant reading again: `0` is read as `Money` once, when the spec compiles.
 
+A field may hold a set of values of the type, written `many Money` as `many text` is written, compared with the type's own equality; a committed set with two equal values is refused, as `many text` is. `one Money` is not a field: `one` and `many` take a shape, and a single value of a type is written `price: Money`. Duration arithmetic such as `due + 3 days` applies to `Date` and `DateTime` only; an extension type takes part in the arithmetic its author declared and nothing else.
+
 When two libraries register a type under one name, or a shape in the spec wants the name, a `uses` line at the top level picks or renames:
 
 ```
@@ -45,7 +47,46 @@ uses velle.finance.Money              -- this library's Money, when two librarie
 uses velle.finance.Money as Cash      -- the same type, written Cash in this spec
 ```
 
-The qualified name after `uses` is the library's namespace and the type's name. With `as`, the type's own name is no longer in scope for it in this spec, so a shape may take it. A `uses` line never removes any other registered type from scope.
+The qualified name after `uses` is the library's namespace and the type's name. With `as`, the type's own name is no longer in scope for it in this spec, so a shape may take it. A `uses` line never removes any other registered type from scope: when two libraries register `Money` and the spec renames one of them, the other is still in scope as `Money`, so a shape of that name is still refused until a second `uses` line renames it too. A `uses` line naming a qualified name no library registers is a compile error listing the registered types that share its last part.
+
+## Constants, and a value with parts
+
+A constant takes its type from the field or the other operand beside it, and that type's reader decides whether the constant is well formed. If a library registered a `Currency` that reads a three-letter text and a `Rate` that reads a fraction between zero and one, a spec would write:
+
+```
+shape Account {
+    owner: one Customer
+    balance: Money initially 0            -- the number 0, read by Money as 0.00
+    currency: Currency                    -- committed; no constant here
+    interest: Rate initially 0.05         -- the number 0.05, read by Rate
+}
+
+never (Account where currency == "XXX")   -- "XXX" read by Currency, because currency is Currency
+never (Account where interest > 1)        -- 1 read by Rate; 1.5 here is a compile error, since Rate refuses it
+```
+
+A reader refuses with a reason, and the reason is the compile error at the constant, in the type's own words. For arithmetic the operator lines decide: `balance * 2` matches `Money * decimal`, so `2` is a number; `balance + 10` matches `Money + Money`, so `10` is read as a `Money`. When more than one line could type the constant, the compiler asks for a field or a typed value instead.
+
+A price in a currency is two values, so it is a shape with two fields, and a constant of it is two constants:
+
+```
+shape Price {
+    amount: Money
+    currency: Currency
+}
+
+shape Quote {
+    price: one Price
+}
+
+never (Quote where price.amount == 12.50 and price.currency == "USD")
+```
+
+There is no way to write `12.50 USD` as one constant, and no reader splits a text into parts. Everything the spec can say about a price is said about its two fields, where the product owner can read it.
+
+## A type with no ordering
+
+A type that is only ever equal or not, a stock-keeping code for instance, declares no ordering. The spec may compare two of its values with `==` and `!=`, hold it in a field, and commit it. It may not write `sku > "A-100"`, order a query by it, or ask `max` of it: each is refused with the sentence that the type declares no ordering and the Kotlin class where one would be added, if the business meant one.
 
 ## Writing a type
 
@@ -85,17 +126,17 @@ class MoneyType : VelleType<Money> {
 ```
 
 - `name` is what a spec writes. `namespace` is the library's dotted lowercase path, and `namespace.name` is what a `uses` line spells.
-- `kotlinClass` is the class a value has everywhere Kotlin sees it: in the generated input classes, in model objects, in a store's row. A committed value of any other class is refused before any rule runs.
+- `kotlinClass` is the class a value has everywhere Kotlin sees it: in the generated input classes, in model objects, in a store's row. A committed value of any other class is refused before any rule runs, the same way a missing required field is, with no `never` behind it.
 - `literals` says which constants a spec may write where a `Money` is expected: a number, a quoted text, both, or neither. The reader turns the constant into a value, or throws `LiteralRejected` with the reason the compiler reports at the constant. `Money` reads `12.50` and refuses `0.125`.
-- `canonical` gives one text per distinct value. The compiler uses it to tell values apart and to check the type's other claims.
+- `canonical` gives one text per distinct value. The compiler uses it to tell values apart, to check the type's other claims, and as the text that stands for the value wherever the runtime needs one. `display`, which defaults to it, is how a value reads in a rejection message.
 - `ordering` is the capability behind `<`, `<=`, `>`, `>=`, `max`, `min`, a selector's `by`, and a query's order. `null` here refuses every one of those for the type.
-- `operators` is the arithmetic the type takes part in, one line per combination of left type, operator, right type, and result. Types are named by qualified name: a builtin by its keyword, a registered type by `namespace.name`. Each line carries two facts about folding a value into itself, `x = x + y` ([§19](Reference-19-Self-referential-folds-and-tolerates)): whether applying two steps in either order gives the same result, and whether applying one step twice changes nothing. `+` on `Money` has the first and not the second, so a rule may fold a balance at a scheduled tick, and an unguarded fold after a commit is still refused.
+- `operators` is the arithmetic the type takes part in, one line per combination of left type, operator, right type, and result. Types are named by qualified name: a builtin by its keyword, a registered type by `namespace.name`. Both directions of a mixed operation are separate lines, as `Money * decimal` and `decimal * Money` are above. An operator returns a value for every pair of its operands and has no way to refuse one; an exception thrown inside it fails the whole transaction and is a bug in the type. An operation that is only sometimes defined is not an operator. Each line carries two facts about folding a value into itself, `x = x + y` ([§19](Reference-19-Self-referential-folds-and-tolerates)): whether applying two steps in either order gives the same result, and whether applying one step twice changes nothing. `+` on `Money` has the first and not the second, so a rule may fold a balance at a scheduled tick, and an unguarded fold after a commit is still refused.
 - `sum` is what `sum(collection, field)` does over a field of the type: the value of an empty collection, and how two values add. `null` refuses `sum` on the type.
-- `samples` is what the generated tests need: a value to commit, the nearest values below and above a given one, and the Kotlin source that constructs a value in a test file.
+- `samples` is what the generated tests need: a value to commit, the nearest values below and above a given one, and the Kotlin source that constructs a value in a test file. `below` and `above` return `null` at the type's edge. For a type with discrete values the step is one unit, a cent for `Money`; for a continuous one any strictly smaller or larger value serves. For a `never (LineItem where price < 0)` the generated test commits `below(0)` expecting refusal and `0` expecting acceptance.
 
-Two members have defaults: `validate` returns the reason a well-formed-looking value is still refused at the boundary, or `null`, and defaults to accepting; `equal` defaults to Kotlin `==`.
+Two members have defaults: `validate` returns the reason a well-formed-looking value is still refused at the boundary, or `null`, and defaults to accepting; `equal` defaults to Kotlin `==`. A reason from `validate` is about the value's form, a blank code or an impossible date. A business rule such as "a balance is never negative" is a `never` in the spec, where the product owner can read it, never a line in `validate`.
 
-A type is registered by naming its class in `META-INF/services/velle.ext.VelleType` in the library's resources, one class per line. A module that depends on the library sees the type.
+A type is registered by naming its class in `META-INF/services/velle.ext.VelleType` in the library's resources, one class per line. A module that depends on the library sees the type. The registry is read in three places, because the spec is read in three places: by the compiler when it generates, by the generated system when it starts, and by a store when it is built.
 
 The compiler checks the type before any spec: the name and namespace are well formed, no two types claim one qualified name, and every claim holds on the type's own samples. A type whose `+` claims that two steps commute, while its samples show otherwise, is refused with the clause that failed and the class to fix.
 
@@ -119,6 +160,8 @@ class SqliteMoneyBinding : SqliteTypeBinding<Money> {
 - `answers` lists the comparisons the column answers with the value's own meaning. An integer of cents orders as amounts order, so this column answers all six. A column that holds a decimal as text would list `==` and `!=` only, and the store would decide `<` in memory instead of asking the database.
 
 The binding is registered in `META-INF/services/velle.sqlite.SqliteTypeBinding`. The SQLite store loads every binding on the classpath when it is built, or takes a list. It refuses to start when the spec stores a type it has no binding for, and when a binding does not read back the type's own sample values unchanged.
+
+A `many` field of the type is a membership table whose value column uses the same binding. The in-memory runtime needs no binding, so a spec runs, and its generated tests pass, before anyone has written one. Another store defines its own binding interface in its own vocabulary: a column type means something to a database and nothing to a wire protocol, so a store over a binary protocol would ask for an encoding and never for a column.
 
 The three pieces are three libraries. The type library knows nothing about stores. The binding library knows the type and one store. The system that uses both depends on both, and its spec names neither.
 
