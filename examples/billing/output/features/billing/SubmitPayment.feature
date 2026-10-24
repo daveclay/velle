@@ -8,14 +8,14 @@ Feature: SubmitPayment
     Then one more "Payment" exists
 
   # never (SubmitPayment where amount <= 0)
-  Scenario: A SubmitPayment where amount at most 0 is refused
+  Scenario: A SubmitPayment where amount at most 0.00 is refused
     Given any committed "Invoice"
-    When a "SubmitPayment" with amount -1 is committed
+    When a "SubmitPayment" with amount -0.01 is committed
     Then it is refused
     And nothing has committed
 
   # never (SubmitPayment where amount <= 0)
-  Scenario: A SubmitPayment with amount 1 is accepted
+  Scenario: A SubmitPayment with amount 0.01 is accepted
     Given any committed "Invoice"
-    When a "SubmitPayment" with amount 1 is committed
+    When a "SubmitPayment" with amount 0.01 is committed
     Then it is accepted

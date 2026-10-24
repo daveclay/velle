@@ -16,14 +16,14 @@ Feature: LineItem
     Then it is accepted
 
   # never (LineItem where price < 0)
-  Scenario: A LineItem where price below 0 is refused
+  Scenario: A LineItem where price below 0.00 is refused
     Given any committed "Invoice"
-    When a "LineItem" with price -1 is committed
+    When a "LineItem" with price -0.01 is committed
     Then it is refused
     And nothing has committed
 
   # never (LineItem where price < 0)
-  Scenario: A LineItem with price 0 is accepted
+  Scenario: A LineItem with price 0.00 is accepted
     Given any committed "Invoice"
-    When a "LineItem" with price 0 is committed
+    When a "LineItem" with price 0.00 is committed
     Then it is accepted

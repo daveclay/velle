@@ -1,6 +1,6 @@
 # 5. Scalars
 
-A scalar is a single value a property holds: text, a number, true or false, a date, or a moment in time. This page lists the scalar types, the built-in functions, and three things that go with a property declaration: a starting value, a timestamp the system keeps, and the identity every record carries. After it you can declare the properties of a [shape](Reference-03-shape) and know which values the system fills in.
+A scalar is a single value a property holds: text, a number, true or false, a date, a moment in time, or a value of a type an engineer has added. This page lists the scalar types, how an added type is named, the built-in functions, and three things that go with a property declaration: a starting value, a timestamp the system keeps, and the identity every record carries. After it you can declare the properties of a [shape](Reference-03-shape) and know which values the system fills in.
 
 ## The types
 
@@ -19,15 +19,41 @@ Each type behaves as its Kotlin counterpart unless the Reference says otherwise.
 
 `now` is the current `DateTime`. `today` is the current `Date` in the system's one time zone, set at deployment, not in the spec.
 
-The Reference also uses `Money`. It is not built in; it stands for a type you will be able to declare later ([§22](Reference-22-Open-unresolved)).
+## Extension types
+
+An extension type is a scalar type an engineer adds: a Kotlin class, published as a library and registered with Velle, that a spec names in type position like `Date`. `Money` is one, from `examples/billing/billing.velle`:
+
+```
+act LineItem {
+    invoice: one Invoice
+    description: text
+    price: Money
+    quantity: integer
+    amount: Money = price * quantity
+}
+
+never (LineItem where price < 0)
+```
+
+- `price: Money` is a field of the type. The name is in scope because the library is on the classpath of the module that compiles the spec; the spec declares nothing.
+- `price * quantity` and `price < 0` are legal because the type's author declared an operator line for `Money * decimal`, an ordering, and a reader for number constants. A spec may do with a value of the type exactly what its author declared, and the compiler names the Kotlin class to extend when the spec asks for more.
+
+When two libraries register one name, or a shape in the spec wants the name, a `uses` line at the top of the spec picks or renames the type:
+
+```
+uses velle.finance.Money              -- this library's Money, when two libraries register one
+uses velle.finance.Money as Cash      -- the same type, written Cash in this spec
+```
+
+An extension type is one value, never a business concept with parts. An amount and its currency are two fields of a shape, where the product owner reads the rules about them. Writing a type, and the piece that lets a store hold it, is the [Extension types](Extension-types) guide.
 
 ## The built-in functions
 
 The list is fixed. A spec may call only these:
 
-- `count`, `sum`, `latest`, `first`, for collections ([§10](Reference-10-Predicate-expressions)).
+- `count`, `sum`, `latest`, `first`, for collections ([§10](Reference-10-Predicate-expressions)). `sum` applies to a number and to an extension type that declares how its values add.
 - `contains`, `starts with`, `ends with`, `like`, for text ([§10](Reference-10-Predicate-expressions)).
-- `lowercase`, `max`, `min`.
+- `lowercase`, `max`, `min`. `max` and `min` apply to numbers and to any extension type that declares an ordering.
 - Duration literals such as `3 days`, in `seconds`, `minutes`, `hours`, `days`, or `weeks` ([§10](Reference-10-Predicate-expressions)).
 - `randomUUID`, only after `initially`.
 
@@ -87,6 +113,8 @@ An act declared `by` carries one more system-filled property: the actor who comm
 ## What the compiler checks
 
 - **Rejects** a call to a function outside the list above, an operator or comparison on mismatched types, and duration arithmetic on anything but a `Date` or `DateTime` ([checks.md, F2](checks#f2--type-checking)).
+- **Rejects** a name in type position that is neither a builtin, nor a shape after `one` or `many`, nor an extension type in scope; a name two registered types share with no `uses` line picking one; and a shape named like an extension type in scope, naming the `uses` line to write ([checks.md, F1](checks#f1--name-resolution-and-casing), [E1](checks#e1--registered-type-names)).
+- **Rejects** an operator, comparison, `sum`, `max`, `min`, or selector `by` on an extension type that does not declare the capability, naming the Kotlin class ([checks.md, E3](checks#e3--a-capability-the-type-does-not-declare)).
 - **Rejects** `initially` on anything but a stored property, and any assignment to a `timestamp` field or `id` ([checks.md, F3](checks#f3--position-rules)).
 - **Rejects** `initially` or `timestamp` on an act, naming the field and where it should move ([checks.md, V21](checks#v21--act-field-forms)).
 - **Rejects** a declared field named `id` ([checks.md, F1](checks#f1--name-resolution-and-casing)).
@@ -95,3 +123,4 @@ An act declared `by` carries one more system-filled property: the actor who comm
 
 - [§7 Derived properties](Reference-07-Derived-properties), for values computed instead of stored.
 - [§10 Predicate expressions](Reference-10-Predicate-expressions), for the functions in use.
+- [Extension types](Extension-types), for writing a type and the piece a store needs to hold it.

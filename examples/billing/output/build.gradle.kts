@@ -16,6 +16,10 @@ dependencies {
     // the generic SQLite backend the hydration spike app (velle/app) and the
     // store-backed tests run over
     implementation(project(":stores:sqlite"))
+    // billing's amounts are `Money` (Reference §5, extension types): Alice's type
+    // library, and Bob's binding so the SQLite store can hold it
+    implementation(project(":extensions:finance"))
+    runtimeOnly(project(":extensions:finance-sqlite"))
     testImplementation(kotlin("test"))
 }
 

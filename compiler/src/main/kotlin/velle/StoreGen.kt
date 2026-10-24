@@ -359,6 +359,7 @@ object StoreGen {
             VType.Bool -> "Boolean"
             VType.DateT -> "LocalDate"
             VType.DateTimeT -> "Instant"
+            is VType.Ext -> model.registry[t.qualifiedName]?.kotlinClass?.qualifiedName ?: "Any"
             is VType.Inst -> "Ref.Persisted"
             is VType.Coll -> "List<Ref.Persisted>"
             is VType.CollS -> "List<${rowKotlin(scalarType(t.name))}>"
@@ -366,13 +367,7 @@ object StoreGen {
             else -> "Any"
         }
 
-        fun scalarType(name: String): VType = when (name) {
-            "text" -> VType.Text
-            "boolean" -> VType.Bool
-            "Date" -> VType.DateT
-            "DateTime" -> VType.DateTimeT
-            else -> VType.Num(name)
-        }
+        fun scalarType(name: String): VType = model.scalarOf(name)
 
         fun fromRaw(expr: String, t: VType): String = when (t) {
             is VType.Num -> when (t.name) {
@@ -385,6 +380,7 @@ object StoreGen {
             VType.DateTimeT -> "$expr as Instant"
             VType.Text -> "$expr as String"
             VType.Bool -> "$expr as Boolean"
+            is VType.Ext -> "$expr as ${rowKotlin(t)}"
             is VType.Inst -> "$expr as Ref.Persisted"
             is VType.Coll -> "($expr as List<*>).map { it as Ref.Persisted }"
             is VType.CollS -> "($expr as List<*>).map { ${fromRaw("it", scalarType(t.name))} }"

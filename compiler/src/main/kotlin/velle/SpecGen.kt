@@ -1,5 +1,6 @@
 package velle
 
+import velle.ext.VelleType
 import java.math.BigDecimal
 
 /**
@@ -234,6 +235,8 @@ object SpecGen {
                             "boolean" -> "false"
                             "Date" -> "java.time.LocalDate.of(2026, 1, 15)"
                             "DateTime" -> "java.time.Instant.parse(\"2026-01-15T00:00:00Z\")"
+                            // an extension type's own sample (Reference §5; testgen.md)
+                            in model.typeScope -> extSampleSource(act.name, p.name, model.typeScope.getValue(t.name)) ?: return null
                             else -> {
                                 val v = pickValue(act.name, p.name, null, java.math.BigDecimal.ZERO) ?: return null
                                 val plain = v.stripTrailingZeros().toPlainString()
@@ -667,10 +670,24 @@ object SpecGen {
                 return skip(ordinal, "derived comparison subject")
             val literal = literalOf(cmp.right) ?: return skip(ordinal, "non-literal bound")
 
-            val violating = pickValue(shape.name, fieldPath.root, mustSatisfy = cmp, literal = literal)
-                ?: return skip(ordinal, "no violating value found")
-            val legal = pickValue(shape.name, fieldPath.root, mustSatisfy = null, literal = literal)
-                ?: return skip(ordinal, "no legal value found")
+            // the bound and the two values either side of it, in the field's own type: a number,
+            // or an extension type's values through its reader, ordering, and neighbours (OQ65)
+            val fieldType = shape.members.filterIsInstance<StoredProp>().first { it.name == fieldPath.root }.type
+            val ext = model.typeScope[(fieldType as ScalarType).name]
+            val (violating, legal) = if (ext != null) {
+                val v = pickExtValue(shape.name, fieldPath.root, ext, mustSatisfy = cmp, literal = literal)
+                    ?: return skip(ordinal, "no violating value found")
+                val l = pickExtValue(shape.name, fieldPath.root, ext, mustSatisfy = null, literal = literal)
+                    ?: return skip(ordinal, "no legal value found")
+                v to l
+            } else {
+                val v = pickValue(shape.name, fieldPath.root, mustSatisfy = cmp, literal = literal)
+                    ?: return skip(ordinal, "no violating value found")
+                val l = pickValue(shape.name, fieldPath.root, mustSatisfy = null, literal = literal)
+                    ?: return skip(ordinal, "no legal value found")
+                Picked.num(v) to Picked.num(l)
+            }
+            val bound = if (ext != null) Picked.ext(ext, extLiteral(ext, literal) ?: return skip(ordinal, "bound is not a value of the type")) else Picked.num(literal)
 
             val fields = commitFields(shape, fieldPath.root) ?: return skip(ordinal, "unconstructible act")
             val opWords = opWords(cmp.op)
@@ -681,27 +698,27 @@ object SpecGen {
             val tests = mutableListOf<String>()
             run {
                 val sentence = if (never.requirement == null)
-                    "never - a ${shape.name} where ${fieldPath.root} $opWords ${plain(literal)} is refused"
-                else "requires - a ${shape.name} with ${fieldPath.root} ${plain(violating)} is refused"
+                    "never - a ${shape.name} where ${fieldPath.root} $opWords ${bound.plain} is refused"
+                else "requires - a ${shape.name} with ${fieldPath.root} ${violating.plain} is refused"
                 val body = StringBuilder()
                 fields.setup.forEach { body.line(2, it) }
                 body.line(2, "val before = count(\"${shape.name}\")")
-                body.line(2, "val result = sys.system.commit(\"${shape.name}\", mapOf(${fields.entries(fieldPath.root, violating)})${fields.partsArg}${fields.actorArg})")
+                body.line(2, "val result = sys.system.commit(\"${shape.name}\", mapOf(${fields.entries(fieldPath.root, violating.source)})${fields.partsArg}${fields.actorArg})")
                 body.line(2, "assertIs<CommitResult.Refused>(result)")
                 body.line(2, "assertEquals(before, count(\"${shape.name}\"), \"a refused act commits nothing\")")
                 recordCase(sentence)
-                recordNeverScenario(never, sentence, shape.name, fieldPath.root, plain(violating), relGivens,
+                recordNeverScenario(never, sentence, shape.name, fieldPath.root, violating.plain, relGivens,
                     "Then it is refused", "And nothing has committed")
                 tests.add(testFn(sentence, body.toString()))
             }
             run {
-                val sentence = "${never.keyword} - a ${shape.name} with ${fieldPath.root} ${plain(legal)} is accepted"
+                val sentence = "${never.keyword} - a ${shape.name} with ${fieldPath.root} ${legal.plain} is accepted"
                 val body = StringBuilder()
                 fields.setup.forEach { body.line(2, it) }
-                body.line(2, "val result = sys.system.commit(\"${shape.name}\", mapOf(${fields.entries(fieldPath.root, legal)})${fields.partsArg}${fields.actorArg})")
+                body.line(2, "val result = sys.system.commit(\"${shape.name}\", mapOf(${fields.entries(fieldPath.root, legal.source)})${fields.partsArg}${fields.actorArg})")
                 body.line(2, "assertIs<CommitResult.Accepted>(result)")
                 recordCase(sentence)
-                recordNeverScenario(never, sentence, shape.name, fieldPath.root, plain(legal), relGivens,
+                recordNeverScenario(never, sentence, shape.name, fieldPath.root, legal.plain, relGivens,
                     "Then it is accepted")
                 tests.add(testFn(sentence, body.toString()))
             }
@@ -756,6 +773,56 @@ object SpecGen {
             }
         }
 
+        /** A value a generated test commits: its Kotlin source and how a sentence names it. */
+        class Picked(val source: String, val plain: String) {
+            companion object {
+                fun num(v: BigDecimal) = Picked("java.math.BigDecimal(\"${v.toPlainString()}\")", v.stripTrailingZeros().toPlainString())
+                fun ext(type: VelleType<*>, v: Any) = Picked(type.kotlinSourceAny(v), type.displayAny(v))
+            }
+        }
+
+        /** The spec's number constant as a value of [type], or null when the type does not read it. */
+        fun extLiteral(type: VelleType<*>, literal: BigDecimal): Any? =
+            (type.readLiteral(literal, null) as? LiteralRead.Ok)?.value
+
+        /** The Kotlin source of [type]'s own sample for an unconstrained act field, falsifying every
+         *  single-conjunct never on the field when the type is ordered; null when none does. */
+        fun extSampleSource(shape: String, field: String, type: VelleType<*>): String? {
+            val constraints = neverComparisonsOn(shape, field)
+            val sample = type.samples.sample
+            if (constraints.isEmpty() || type.ordering == null) return type.kotlinSourceAny(sample)
+            val bounds = constraints.mapNotNull { c -> literalOf(c.right)?.let { extLiteral(type, it) } }
+            val candidates = listOf(sample) + bounds + bounds.mapNotNull { type.belowAny(it) } + bounds.mapNotNull { type.aboveAny(it) }
+            return candidates.firstOrNull { v -> constraints.none { extSatisfies(type, v, it) } }?.let { type.kotlinSourceAny(it) }
+        }
+
+        /**
+         * [pickValue] for a field of an extension type: the bound read as the type, its
+         * neighbours by the type's own `below`/`above`, and the type's sample; satisfaction
+         * through the type's ordering. Null when the type is not ordered or reads no such constant.
+         */
+        fun pickExtValue(shape: String, field: String, type: VelleType<*>, mustSatisfy: Binary?, literal: BigDecimal): Picked? {
+            if (type.ordering == null) return null
+            val bound = extLiteral(type, literal) ?: return null
+            val candidates = listOfNotNull(type.belowAny(bound), bound, type.aboveAny(bound), type.samples.sample)
+            val constraints = neverComparisonsOn(shape, field)
+            val v = candidates.firstOrNull { v ->
+                (mustSatisfy == null || extSatisfies(type, v, mustSatisfy)) &&
+                    constraints.none { it != mustSatisfy && extSatisfies(type, v, it) }
+            } ?: return null
+            return Picked.ext(type, v)
+        }
+
+        fun extSatisfies(type: VelleType<*>, v: Any, cmp: Binary): Boolean {
+            val bound = literalOf(cmp.right)?.let { extLiteral(type, it) } ?: return false
+            val c = type.compareAny(v, bound)
+            return when (cmp.op) {
+                "<" -> c < 0; "<=" -> c <= 0; ">" -> c > 0; ">=" -> c >= 0
+                "==" -> c == 0; "!=" -> c != 0
+                else -> false
+            }
+        }
+
         /** The comparisons `never`s over [shape] forbid on [field]: a single-conjunct
          *  never's comparison, and each disjunct of a range never (`x < 0 or x > 100`)
          *  — a disjunction forbids every one of its arms. */
@@ -790,9 +857,9 @@ object SpecGen {
                         val actorArg: String = "",
                         /** `, parts = mapOf(...)` carrying the values that arrive nested at `one` fields named in `with`; empty otherwise */
                         val partsArg: String = "") {
-            fun entries(overrideField: String, value: BigDecimal): String =
+            fun entries(overrideField: String, valueSource: String): String =
                 pairs.joinToString(", ") { (name, expr) ->
-                    if (name == overrideField) "\"$name\" to java.math.BigDecimal(\"${value.toPlainString()}\")"
+                    if (name == overrideField) "\"$name\" to $valueSource"
                     else "\"$name\" to $expr"
                 }
         }
@@ -842,6 +909,9 @@ object SpecGen {
                             "boolean" -> "false"
                             "Date" -> "java.time.LocalDate.of(2026, 1, 15)"
                             "DateTime" -> "java.time.Instant.parse(\"2026-01-15T00:00:00Z\")"
+                            in model.typeScope ->
+                                if (p.name == constrainedField) "OVERRIDDEN"
+                                else extSampleSource(shape.name, p.name, model.typeScope.getValue(t.name)) ?: return null
                             else -> {
                                 if (p.name == constrainedField) "OVERRIDDEN"
                                 else {

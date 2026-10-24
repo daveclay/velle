@@ -16,6 +16,9 @@ import velle.TimestampProp
 import velle.ActorProp
 import velle.VType
 import velle.VelleSystem
+import velle.canonicalAny
+import velle.equalAny
+import velle.ext.VelleType
 import java.math.BigDecimal
 import java.sql.Connection
 import java.sql.PreparedStatement
@@ -55,9 +58,16 @@ import java.time.LocalDate
  *
  * Column encoding: references and integer/long as INTEGER, decimal/double as
  * TEXT (exact BigDecimal round-trip), boolean as INTEGER 0/1, Date/DateTime as
- * ISO-8601 TEXT.
+ * ISO-8601 TEXT. A registered extension type (Reference §5) is held as its
+ * [SqliteTypeBinding] says; the store refuses to start without one for every
+ * extension type the model stores (E4), [bindings] defaulting to every binding
+ * on the classpath.
  */
-class SqliteStore(private val model: Model, private val conn: Connection) : StateResolver, CommitCallback {
+class SqliteStore(
+    private val model: Model,
+    private val conn: Connection,
+    bindings: List<SqliteTypeBinding<*>> = SqliteTypeBinding.load(),
+) : StateResolver, CommitCallback {
 
     companion object {
         /**
@@ -65,12 +75,45 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
          * [system]'s model in [conn] and connect the system through this store,
          * both halves of the protocol.
          */
-        fun attach(system: VelleSystem, conn: Connection): SqliteStore =
-            SqliteStore(system.model, conn).also {
+        fun attach(system: VelleSystem, conn: Connection, bindings: List<SqliteTypeBinding<*>> = SqliteTypeBinding.load()): SqliteStore =
+            SqliteStore(system.model, conn, bindings).also {
                 it.createSchema()
                 system.connect(it, it)
             }
     }
+
+    private val bindings: Map<String, SqliteTypeBinding<*>> = bindings.associateBy { it.type }
+
+    init {
+        // E4: a binding for every extension type a stored field holds, and the binding
+        // round-trips the type's own samples through a column of its declared type
+        for (type in model.storedExtensionTypes) {
+            val b = this.bindings[type.qualifiedName]
+                ?: throw IllegalStateException("SqliteStore has no binding for '${model.specNameOf(type)}' (${type.qualifiedName}); " +
+                    "add a SqliteTypeBinding<${type.kotlinClass.simpleName}> and name it in META-INF/services/velle.sqlite.SqliteTypeBinding")
+            roundTrip(type, b)
+        }
+    }
+
+    private fun <T : Any> roundTrip(type: VelleType<T>, b: SqliteTypeBinding<*>) {
+        val samples: List<Any> = type.samples.let { s -> listOfNotNull(s.sample, s.below?.invoke(s.sample), s.above?.invoke(s.sample)) }
+        conn.createStatement().use { it.execute("CREATE TEMP TABLE velle_e4 (v ${b.columnType})") }
+        try {
+            for (sample in samples) {
+                conn.prepareStatement("INSERT INTO velle_e4 (v) VALUES (?)").use { ps -> ps.setObject(1, b.bindAny(sample)); ps.executeUpdate() }
+                val back = conn.prepareStatement("SELECT v FROM velle_e4").use { ps -> ps.executeQuery().use { rs -> rs.next(); b.read(rs, "v") } }
+                conn.createStatement().use { it.execute("DELETE FROM velle_e4") }
+                if (!type.equalAny(sample, back))
+                    throw IllegalStateException("SqliteStore's binding for '${model.specNameOf(type)}' (${b::class.qualifiedName}) does not round-trip " +
+                        "${type.canonicalAny(sample)}: it read back ${type.canonicalAny(back)}")
+            }
+        } finally {
+            conn.createStatement().use { it.execute("DROP TABLE velle_e4") }
+        }
+    }
+
+    private fun bindingOf(t: VType.Ext): SqliteTypeBinding<*> =
+        bindings[t.qualifiedName] ?: throw IllegalStateException("SqliteStore has no binding for '${t.qualifiedName}'")
 
     /** A scalar, to-one reference, or timestamp column. [union] marks a
      *  reference whose declared target is a static union: the concrete shape
@@ -106,13 +149,7 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
             }
         }
 
-    private fun scalarType(name: String): VType = when (name) {
-        "text" -> VType.Text
-        "boolean" -> VType.Bool
-        "Date" -> VType.DateT
-        "DateTime" -> VType.DateTimeT
-        else -> VType.Num(name)
-    }
+    private fun scalarType(name: String): VType = model.scalarOf(name)
 
     private val persistedShapes = model.shapes.keys.filter { it !in model.transients }
 
@@ -153,6 +190,7 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
     private fun sqlType(t: VType): String = when (t) {
         is VType.Optional -> sqlType(t.inner)
         is VType.Inst -> "INTEGER"
+        is VType.Ext -> bindingOf(t).columnType
         is VType.Num -> if (t.name == "integer" || t.name == "long") "INTEGER" else "TEXT"
         VType.Bool -> "INTEGER"
         else -> "TEXT"
@@ -260,6 +298,10 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
         private fun renderCmp(f: QF.Cmp, shape: String, alias: String, positive: Boolean): String {
             val colType = columnsOf(shape).find { it.name == f.field }?.type
                 ?: return degrade(positive)
+            // an extension type's column answers only the comparisons its binding claims
+            (colType.let { if (it is VType.Optional) it.inner else it } as? VType.Ext)?.let { ext ->
+                if (f.op !in bindingOf(ext).answers) return degrade(positive)
+            }
             val encoded = encode(f.value, colType) ?: return degrade(positive)
             val col = """$alias."${f.field}""""
             // the text operators (Reference §10) render to LIKE with `\` as the escape
@@ -307,6 +349,8 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
                 is QConst.QDateTime -> null
                 // an instance constant (the query API's "this customer"): the row key
                 is QConst.QRef -> (c.ref.key.value as? Number)?.toLong().takeIf { bare is VType.Inst }
+                // an extension type's constant: as its binding hands it to the column
+                is QConst.QExt -> if (bare is VType.Ext && bare.qualifiedName == c.type.qualifiedName) bindingOf(bare).bindAny(c.value) else null
             }
         }
     }
@@ -342,6 +386,7 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
         is VType.Num ->
             if (t.name == "integer" || t.name == "long") rs.getLong(name)
             else BigDecimal(rs.getString(name))
+        is VType.Ext -> bindingOf(t).read(rs, name)
         VType.Bool -> rs.getInt(name) != 0
         VType.DateT -> LocalDate.parse(rs.getString(name))
         VType.DateTimeT -> Instant.parse(rs.getString(name))
@@ -521,6 +566,7 @@ class SqliteStore(private val model: Model, private val conn: Connection) : Stat
         v == null -> null
         t is VType.Optional -> writeColumn(t.inner, v, minted)
         t is VType.Inst -> refKey(v, minted)
+        t is VType.Ext -> bindingOf(t).bindAny(v)
         t is VType.Num ->
             if (t.name == "integer" || t.name == "long") toBigDecimal(v).longValueExact()
             else toBigDecimal(v).toPlainString()

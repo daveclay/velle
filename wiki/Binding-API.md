@@ -130,6 +130,7 @@ when (val c = sys.read(comment.target)) {       // the model object of the concr
 - `read(ref)` takes a `Ref<T>` the system handed you, such as a model object or one of its fields, and returns the `T`. It throws when the record has been deleted since the reference was taken. A reference built by hand from a shape name and a key does not compile here; a key goes through `read.order(key)`.
 - A reference typed by a union ([§9](Reference-09-Composing-refinements)) always names one operand in `shape`, never the union. Reading it returns the operand's model object, so a `when` over the operands' classes covers every case.
 - Two references are equal when their shape and key are equal, whichever class carries them. Whether two reads of one record returned the same fields is a comparison you make yourself.
+- A field of an [extension type](Extension-types) is that type's own class on every surface: `price: Money` in the spec is `price: Money` on the input class, the model object, and the typed store's row, and a query compares it with `Money.of("10.00")`.
 
 A generated system also holds a numeric handle for every record it has touched. The handle is private to one running system and never reaches the engineer: it is not the store's key, two running copies of the same system give one row different handles, and a restart forgets them all. If a `Long` shows up in the generated code, it is one of these, and nothing on the surface takes or returns it.
 

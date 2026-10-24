@@ -152,21 +152,38 @@ internal class QueryEngine(private val system: VelleSystem) {
         return matching(q).size
     }
 
-    fun sum(q: Query, member: String): BigDecimal {
+    fun sum(q: Query, member: String): BigDecimal = (sumValue(q, member) as Value.VNum).v
+
+    /** The sum of [member] over the matching rows: a number, or a value of the member's
+     *  extension type through its declared `sum` (Reference §5; refused with E3 without one). */
+    fun sumValue(q: Query, member: String): Value {
         val m = model.membersOf(q.root)[member]
+        val bare = m?.type?.let { (it as? VType.Optional)?.inner ?: it }
+        val ext = bare?.let { model.extTypeOf(it) }
         val extra = when {
             m == null -> listOf(Diagnostic("F1", "sum of '$member' — '${q.root}' has no member '$member'"))
-            ((m.type as? VType.Optional)?.inner ?: m.type) !is VType.Num ->
+            ext != null -> if (ext.sum == null)
+                listOf(Diagnostic("E3", "sum of '$member' — '${model.specNameOf(ext)}' (${ext::class.qualifiedName}) declares no sum"))
+                else emptyList()
+            bare !is VType.Num ->
                 listOf(Diagnostic("F2", "sum of '$member' — ${q.root}.$member is not a number"))
             else -> emptyList()
         }
         checkedUnordered(q, extra)
+        if (ext != null) {
+            var acc: Any = ext.sum!!.zero
+            for (id in matching(q)) {
+                val v = system.evaluator.readMember(id, q.root, member)
+                if (v is Value.VExt) acc = ext.sumAny(acc, v.v)
+            }
+            return Value.VExt(ext, acc)
+        }
         var total = BigDecimal.ZERO
         for (id in matching(q)) {
             val v = system.evaluator.readMember(id, q.root, member)
             if (v is Value.VNum) total = total.add(v.v)
         }
-        return total
+        return Value.VNum(total)
     }
 }
 
@@ -237,6 +254,31 @@ class DateTimeField(path: List<String>) : ScalarField<Instant>(path) {
     override fun lit(v: Instant): Expr = ValueLit(Value.VDateTime(v))
 }
 
+/**
+ * A member of a registered extension type (Reference §5): equality tests, under the
+ * type's own `equal`, and membership of a `many`. [qualifiedName] names the type in
+ * the registry (`velle.finance.Money`); [T] is its Kotlin class.
+ */
+open class ExtField<T : Any>(path: List<String>, qualifiedName: String) : Fields(path) {
+    internal val type: velle.ext.VelleType<*> = TypeRegistry.default[qualifiedName]
+        ?: throw IllegalStateException("no registered type '$qualifiedName' is on the classpath")
+    protected fun lit(v: T): Expr = ValueLit(Value.VExt(type, v))
+    infix fun eq(v: T): Expr = Binary("==", pathExpr(), lit(v))
+    infix fun neq(v: T): Expr = Binary("!=", pathExpr(), lit(v))
+}
+
+/** A member of an extension type that declares an ordering: the ordered comparisons and
+ *  the order datums as well. The codegen chooses this class only for an ordered type, so
+ *  a query ordering by an unordered one does not compile. */
+class OrderedExtField<T : Any>(path: List<String>, qualifiedName: String) : ExtField<T>(path, qualifiedName) {
+    infix fun lt(v: T): Expr = Binary("<", pathExpr(), lit(v))
+    infix fun lte(v: T): Expr = Binary("<=", pathExpr(), lit(v))
+    infix fun gt(v: T): Expr = Binary(">", pathExpr(), lit(v))
+    infix fun gte(v: T): Expr = Binary(">=", pathExpr(), lit(v))
+    val ascending: OrderDatum get() = OrderDatum(fieldPath.single(), descending = false)
+    val descending: OrderDatum get() = OrderDatum(fieldPath.single(), descending = true)
+}
+
 /** A reference to a shape the codegen has no fields class for (a union): identity tests only. */
 class RefField(path: List<String>) : Fields(path)
 
@@ -287,6 +329,11 @@ class TypedQuery<F : Fields, T>(
     fun count(): Int = system.scope { system.count(query) }
 
     fun sum(member: F.() -> NumField): BigDecimal = system.scope { system.sum(query, fields.member().fieldPath.single()) }
+
+    /** The sum of a member of an extension type, as that type; refused when the type declares no `sum`. */
+    @Suppress("UNCHECKED_CAST")
+    fun <V : Any> sumOf(member: F.() -> ExtField<V>): V =
+        system.scope { (system.sumValue(query, fields.member().fieldPath.single()) as Value.VExt).v as V }
 }
 
 /**

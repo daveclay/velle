@@ -1,5 +1,8 @@
 package velle
 
+import velle.ext.VelleType
+import java.math.BigDecimal
+
 /**
  * The v0 validator: the coarse, fail-closed slices of checks.md.
  *
@@ -33,6 +36,7 @@ class Validator(private val model: Model) {
     }
 
     fun run() {
+        checkTypeNames()          // F1/E1: every name in type position is a builtin, a shape, or a registered type
         checkShapeDeclarations()
         checkRelationshipCoherence() // V19
         checkRefinementDeclarations()
@@ -107,13 +111,31 @@ class Validator(private val model: Model) {
 
     // ── F1/F2/F3: declarations ───────────────────────────────────────────────
 
+    /** Every capitalized name in type position resolves (Reference §5): `Date`, `DateTime`,
+     *  or a registered extension type in scope. A shape's name after `one`/`many` is a
+     *  relationship and checked in [checkShapeDeclarations]; a registered type there is F1. */
+    private fun checkTypeNames() {
+        val members = model.shapes.values.flatMap { s -> s.members.map { s.name to it } } +
+            model.refinements.values.flatMap { r -> r.members.map { r.name to it } }
+        for ((owner, m) in members) {
+            val (field, t) = when (m) { is StoredProp -> m.name to m.type; is DerivedProp -> m.name to m.type; else -> null } ?: continue
+            val at = "'$owner.$field'"
+            when (t) {
+                is ScalarType -> if (!TypeRegistry.isBuiltin(t.name)) model.resolveTypeName(t.name, at)
+                is RelType -> if (t.shape !in model.shapes && t.shape !in model.refinements && t.shape in model.typeScope)
+                    diags.add(Diagnostic("F1", "$at: '${t.shape}' is a registered type, not a shape; " +
+                        "a field of it is `$field: ${t.shape}`" + (if (t.many) " or `many ${t.shape}`" else "")))
+            }
+        }
+    }
+
     private fun checkShapeDeclarations() {
         for ((name, shape) in model.shapes) {
             for (m in shape.members) when (m) {
                 is StoredProp -> {
                     if (m.name == "id") diags.add(Diagnostic("F3", "'$name.id' — 'id' is reserved (Reference §5)"))
                     val t = m.type
-                    if (t is RelType && t.shape !in model.shapes && t.shape !in model.refinements)
+                    if (t is RelType && t.shape !in model.shapes && t.shape !in model.refinements && t.shape !in model.typeScope)
                         diags.add(Diagnostic("F1", "'$name.${m.name}' relates to unknown shape '${t.shape}'"))
                     // a static union — a pure `or` of base shapes — is a stable target
                     // type (Reference §6); any refinement carrying a predicate is not
@@ -124,7 +146,7 @@ class Validator(private val model: Model) {
                                 "'${t.shape}' is a union whose operands carry a predicate; a field's target union must be " +
                                 "a pure `or` of base shapes (Reference §9)"
                             else "State the condition on the act that creates '$name': '$name requires ${m.name} to be ${t.shape}', or a gate refinement")))
-                    m.initially?.let { checkExpr(it, name, allowGenerator = true) }
+                    m.initially?.let { checkExpr(it, name, allowGenerator = true); checkExtWrite(model.typeOf(t), it, name, "'$name.${m.name} initially'") }
                     // `initially required` demands an optional type: the whole point of
                     // the decomposition is read-side optionality with creation-side
                     // requiredness (OQ37-R10); a plain field is already both
@@ -749,6 +771,7 @@ class Validator(private val model: Model) {
             }
         }
         checkExpr(a.value, scope)
+        checkExtWrite(resolved.member.type, a.value, scope, "rule '${rule.name}' assigns ${resolved.owner}.${resolved.member.name}")
     }
 
     private fun checkCreation(rule: RuleDecl, scope: String, c: Creation) {
@@ -839,6 +862,14 @@ class Validator(private val model: Model) {
                             diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.op}' compares text, but '${Printer.expr(side)}' is not text"))
                     }
                 }
+                // an extension type takes part only through what it declares (Reference §5; OQ65)
+                when (e.op) {
+                    "==", "!=", "<", "<=", ">", ">=" -> checkExtComparison(e, scope)
+                    "+", "-", "*", "/" -> {
+                        val l = scalarTypeOf(e.left, scope); val r = scalarTypeOf(e.right, scope)
+                        if (l is VType.Ext || r is VType.Ext) operatorLine(e, l, r, scope)
+                    }
+                }
             }
             is ValueLit, is RefLit -> {}
             is NotExpr -> checkExpr(e.inner, scope)
@@ -877,6 +908,7 @@ class Validator(private val model: Model) {
                 if (e.name !in setOf("lowercase", "max", "min"))
                     diags.add(Diagnostic("F2", "unknown function '${e.name}' — the builtin list is closed (Reference §5)"))
                 e.args.forEach { checkExpr(it, scope) }
+                checkFunctionCall(e, scope)
             }
             is SingularFor -> {
                 checkExpr(e.forExpr, scope)
@@ -904,9 +936,32 @@ class Validator(private val model: Model) {
             is Value.VBool -> VType.Bool
             is Value.VDate -> VType.DateT
             is Value.VDateTime -> VType.DateTimeT
+            is Value.VExt -> VType.Ext(e.value.type.qualifiedName)
             else -> null
         }
-        is FunCall -> if (e.name == "lowercase") VType.Text else null
+        is UnaryMinus -> scalarTypeOf(e.inner, scope)
+        is FunCall -> when (e.name) {
+            "lowercase" -> VType.Text
+            // max/min have the type of their arguments: the first typed one that is not a bare constant
+            "max", "min" -> e.args.firstNotNullOfOrNull { a -> scalarTypeOf(a, scope)?.takeIf { it is VType.Ext || constantOf(a) == null } }
+                ?: e.args.firstNotNullOfOrNull { scalarTypeOf(it, scope) }
+            else -> null
+        }
+        is AggCall -> when (e.name) {
+            "count" -> VType.Num("integer")
+            "sum" -> e.field?.let { f -> model.collectionElement(e.collection, scope, aliasScopes)?.let { el -> model.membersOf(el)[f]?.type } }
+                ?.let { (it as? VType.Optional)?.inner ?: it }
+            else -> null
+        }
+        // arithmetic: numbers stay numbers; an extension type's line names its result
+        is Binary -> if (e.op !in setOf("+", "-", "*", "/")) null else {
+            val l = scalarTypeOf(e.left, scope); val r = scalarTypeOf(e.right, scope)
+            when {
+                l is VType.Ext || r is VType.Ext -> operatorLine(e, l, r, scope)?.let { typeNamed(it.result) }
+                l is VType.Num && r is VType.Num -> VType.Num("decimal")
+                else -> null
+            }
+        }
         is PathExpr -> if (e.root in scalarAliases) (if (e.segs.isEmpty()) scalarAliases[e.root] else null) else {
             val names = if (e.root == "this") e.segs.map { it.name } else listOf(e.root) + e.segs.map { it.name }
             var sc: String? = if (e.root in aliasScopes) aliasScopes[e.root] else (thisScope ?: scope)
@@ -924,7 +979,170 @@ class Validator(private val model: Model) {
 
     private fun isOrderable(t: VType): Boolean {
         val bare = (t as? VType.Optional)?.inner ?: t
-        return bare is VType.Num || bare == VType.Text || bare == VType.DateT || bare == VType.DateTimeT
+        return bare is VType.Num || bare == VType.Text || bare == VType.DateT || bare == VType.DateTimeT ||
+            (bare is VType.Ext && model.registry[bare.qualifiedName]?.ordering != null)
+    }
+
+    // ── extension types in expressions (Reference §5; OQ65 D2, D4; checks E3) ─────────
+
+    /** A bare constant: its number or its text, or null for anything else. */
+    private fun constantOf(e: Expr): Pair<BigDecimal?, String?>? = when (e) {
+        is IntLit -> BigDecimal(e.value) to null
+        is DecLit -> BigDecimal(e.text) to null
+        is UnaryMinus -> constantOf(e.inner)?.let { (n, _) -> n?.negate()?.let { it to null } }
+        is TextLit -> null to e.value
+        else -> null
+    }
+
+    /** The registry's name for a type: a builtin keyword or `namespace.name`; null when unknown. */
+    private fun registryName(t: VType?): String? = when (val bare = (t as? VType.Optional)?.inner ?: t) {
+        is VType.Ext -> bare.qualifiedName
+        is VType.Num -> "decimal"
+        VType.Text -> "text"
+        VType.Bool -> "boolean"
+        VType.DateT -> "Date"
+        VType.DateTimeT -> "DateTime"
+        else -> null
+    }
+
+    private fun typeNamed(name: String): VType? = when (name) {
+        in TypeRegistry.NUMBER_NAMES -> VType.Num(name)
+        "text" -> VType.Text
+        "boolean" -> VType.Bool
+        "Date" -> VType.DateT
+        "DateTime" -> VType.DateTimeT
+        else -> model.registry[name]?.let { VType.Ext(it.qualifiedName) }
+    }
+
+    private fun extOf(t: VType?): VelleType<*>? = ((t as? VType.Optional)?.inner ?: t)?.let { if (it is VType.Ext) model.registry[it.qualifiedName] else null }
+
+    /** A type's name as this spec writes it, with its Kotlin class, for an E3 sentence. */
+    private fun describe(t: VelleType<*>) = "'${model.specNameOf(t)}' (${t::class.qualifiedName})"
+
+    /** Whether a constant of this form can be read as the type [name] names. */
+    private fun readsConstant(name: String, c: Pair<BigDecimal?, String?>): Boolean = when {
+        name in TypeRegistry.NUMBER_NAMES -> c.first != null
+        name == "text" -> c.second != null
+        else -> model.registry[name]?.let { t -> (c.first != null && t.literals.fromNumber != null) || (c.second != null && t.literals.fromText != null) } ?: false
+    }
+
+    /** A constant where [type] is expected: F2 when the type reads no such constant or
+     *  its reader refuses this one (OQ65 D2). Returns whether it read. */
+    private fun checkConstantAs(c: Pair<BigDecimal?, String?>, type: VelleType<*>, at: Expr): Boolean =
+        when (val read = type.readLiteral(c.first, c.second)) {
+            is LiteralRead.Ok -> true
+            is LiteralRead.NoReader -> {
+                diags.add(Diagnostic("F2", "'${Printer.expr(at)}' — ${describe(type)} reads no ${read.form} constant; " +
+                    "compare with a field of that type, or add a `literals` reader to the type"))
+                false
+            }
+            is LiteralRead.Rejected -> {
+                diags.add(Diagnostic("F2", "'${Printer.expr(at)}' — ${describe(type)} rejects this constant: ${read.reason}"))
+                false
+            }
+        }
+
+    /**
+     * The operator line an arithmetic expression with an extension operand uses, from the
+     * registry's table (OQ65): `balance * 2` matches `(Money, *, decimal)`, `balance + 10`
+     * matches `(Money, +, Money)` and reads `10` as Money. Diagnoses (E3) a line no type
+     * declares and (F2) a constant more than one line could type. Null when untyped.
+     */
+    private fun operatorLine(e: Binary, l: VType?, r: VType?, scope: String): velle.ext.Operator<*, *, *>? {
+        val registry = model.registry
+        val lc = constantOf(e.left); val rc = constantOf(e.right)
+        val ln = registryName(l); val rn = registryName(r)
+        val lext = extOf(l); val rext = extOf(r)
+        fun refuse(msg: String): velle.ext.Operator<*, *, *>? { diags.add(Diagnostic("E3", "'${Printer.expr(e)}' — $msg")); return null }
+        return when {
+            lext != null && rc != null -> {
+                val lines = registry.operatorsFrom(lext.qualifiedName, e.op).filter { readsConstant(it.right, rc) }
+                when (lines.size) {
+                    0 -> refuse("${describe(lext)} declares no '${e.op}' taking a constant on the right; " +
+                        "declare the operator on the type, or write a field or typed value instead of the constant")
+                    1 -> lines.single().also { line -> registry[line.right]?.let { checkConstantAs(rc, it, e.right) } }
+                    else -> { diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — the constant could be ${lines.joinToString(" or ") { "a ${registry.describe(it.right)}" }}; " +
+                        "write a field or a typed value instead")); null }
+                }
+            }
+            rext != null && lc != null -> {
+                val lines = registry.operatorsTo(rext.qualifiedName, e.op).filter { readsConstant(it.left, lc) }
+                when (lines.size) {
+                    0 -> refuse("${describe(rext)} declares no '${e.op}' taking a constant on the left; " +
+                        "declare the operator on the type, or write a field or typed value instead of the constant")
+                    1 -> lines.single().also { line -> registry[line.left]?.let { checkConstantAs(lc, it, e.left) } }
+                    else -> { diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — the constant could be ${lines.joinToString(" or ") { "a ${registry.describe(it.left)}" }}; " +
+                        "write a field or a typed value instead")); null }
+                }
+            }
+            ln != null && rn != null -> registry.operator(ln, e.op, rn)
+                ?: refuse("no type declares '${ln.substringAfterLast('.')} ${e.op} ${rn.substringAfterLast('.')}'; " +
+                    "${describe(lext ?: rext!!)} is where to declare it")
+            else -> null
+        }
+    }
+
+    /**
+     * A comparison with an extension operand (OQ65 D4; E3): `==`/`!=` need the two sides
+     * to be the one type (a constant reads as it); `< <= > >=` also need the type ordered.
+     */
+    private fun checkExtComparison(e: Binary, scope: String) {
+        val l = scalarTypeOf(e.left, scope); val r = scalarTypeOf(e.right, scope)
+        val lext = extOf(l); val rext = extOf(r)
+        if (lext == null && rext == null) return
+        val ordered = e.op in setOf("<", "<=", ">", ">=")
+        for (t in listOfNotNull(lext, rext).distinct())
+            if (ordered && t.ordering == null)
+                diags.add(Diagnostic("E3", "'${Printer.expr(e)}' — ${describe(t)} declares no ordering, so '${e.op}' is not defined on it; " +
+                    "declare `ordering` on the type, or compare a field that is ordered"))
+        when {
+            lext != null && rext != null -> if (lext !== rext)
+                diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — compares a ${describe(lext)} with a ${describe(rext)}, two different types"))
+            lext != null -> constantOf(e.right)?.let { checkConstantAs(it, lext, e.right) }
+                ?: r?.let { diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — compares a ${describe(lext)} with '${Printer.expr(e.right)}', which is not one")) }
+            rext != null -> constantOf(e.left)?.let { checkConstantAs(it, rext, e.left) }
+                ?: l?.let { diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — compares a ${describe(rext)} with '${Printer.expr(e.left)}', which is not one")) }
+        }
+    }
+
+    /** A value written to a field of an extension type is of that type: a constant it reads,
+     *  or an expression of the type (OQ65 D2). Builtin-typed targets are not checked here. */
+    private fun checkExtWrite(target: VType, value: Expr, scope: String, at: String) {
+        val ext = extOf(target) ?: return
+        constantOf(value)?.let { checkConstantAs(it, ext, value); return }
+        val vt = scalarTypeOf(value, scope) ?: return
+        val vext = extOf(vt)
+        if (vext !== ext)
+            diags.add(Diagnostic("F2", "$at — assigns ${vext?.let { describe(it) } ?: "'${Printer.expr(value)}'"} to a field of ${describe(ext)}"))
+    }
+
+    /**
+     * The builtin functions, each keyed by the capability its arguments need (OQ65 D4):
+     * `lowercase` needs builtin text; `max`/`min` need one ordered type across every
+     * argument, with constants read as that type. The dispatch Custom functions (OQ66)
+     * will register into.
+     */
+    private fun checkFunctionCall(e: FunCall, scope: String) {
+        when (e.name) {
+            "max", "min" -> {
+                val types = e.args.map { scalarTypeOf(it, scope) }
+                val ext = types.firstNotNullOfOrNull { extOf(it) } ?: return
+                if (ext.ordering == null)
+                    diags.add(Diagnostic("E3", "'${Printer.expr(e)}' — ${describe(ext)} declares no ordering, so '${e.name}' is not defined on it; " +
+                        "declare `ordering` on the type"))
+                for ((a, t) in e.args.zip(types)) {
+                    val c = constantOf(a)
+                    when {
+                        c != null -> checkConstantAs(c, ext, a)
+                        t == null -> {}
+                        extOf(t) !== ext -> diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.name}' takes one type; " +
+                            "'${Printer.expr(a)}' is not a ${describe(ext)}"))
+                    }
+                }
+            }
+            "lowercase" -> e.args.firstOrNull()?.let { a -> extOf(scalarTypeOf(a, scope))?.let { t ->
+                diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — 'lowercase' takes text, not a ${describe(t)}")) } }
+        }
     }
 
     /**
@@ -981,8 +1199,11 @@ class Validator(private val model: Model) {
         }
         c.where?.let { checkExpr(it, element) }
         sumField?.let {
-            if (model.membersOf(element)[it] == null)
+            val m = model.membersOf(element)[it]
+            if (m == null)
                 diags.add(Diagnostic("F1", "sum(..., $it) — '$element' has no member '$it'"))
+            else extOf(m.type)?.let { t -> if (t.sum == null)
+                diags.add(Diagnostic("E3", "sum(..., $it) — ${describe(t)} declares no sum, so '$element.$it' cannot be summed; declare `sum` on the type")) }
         }
         // selectors' `by` datums: each must be an orderable member of the
         // element — the author's ordering statement, typechecked (F2, Reference §10)
@@ -990,10 +1211,11 @@ class Validator(private val model: Model) {
             val m = model.membersOf(element)[d]
             if (m == null)
                 diags.add(Diagnostic("F2", "selector 'by $d' — '$element' has no member '$d'"))
-            else {
-                val t = (m.type as? VType.Optional)?.inner ?: m.type
-                val orderable = t is VType.Num || t == VType.Text || t == VType.DateT || t == VType.DateTimeT
-                if (!orderable)
+            else if (!isOrderable(m.type)) {
+                val ext = extOf(m.type)
+                if (ext != null)
+                    diags.add(Diagnostic("E3", "selector 'by $d' — ${describe(ext)} declares no ordering, so '$element.$d' cannot order a selector; declare `ordering` on the type"))
+                else
                     diags.add(Diagnostic("F2", "selector 'by $d' — $element.$d is not orderable (Reference §10)"))
             }
         }
@@ -2123,8 +2345,15 @@ class Validator(private val model: Model) {
             }
             if ((w.owner to w.member.name) !in rhsReads.fields) continue // not self-referential
             val assignment = w.rule.body.filterIsInstance<Assignment>().first { it.target == w.target }
-            val whitelisted = (assignment.value as? FunCall)?.name in setOf("max", "min")
-            if (whitelisted) continue
+            // the step's two facts (Reference §19): `max`/`min` are idempotent and commute for any
+            // ordered type; `+`/`-` commute; an extension type's operator declares its own (OQ65)
+            val facts: TypeRegistry.FoldFacts? = when (val v = assignment.value) {
+                is FunCall -> if (v.name in setOf("max", "min")) TypeRegistry.FoldFacts(commutes = true, idempotent = true) else null
+                is Binary -> extOf(w.member.type)?.let { model.registry.foldFacts(it.qualifiedName, v.op) }
+                    ?: if (v.op in setOf("+", "-")) TypeRegistry.FoldFacts(commutes = true, idempotent = false) else null
+                else -> null
+            }
+            if (facts?.idempotent == true) continue
             val schedules = w.rule.triggers.filter { it != "commit" }
             val tolerates = (model.shapes[w.owner]?.members
                 ?.filterIsInstance<StoredProp>()?.find { it.name == w.member.name })?.tolerates
@@ -2136,7 +2365,7 @@ class Validator(private val model: Model) {
                     "or declare `tolerates duplication` (Reference §19)"))
             // +/- folds commute with each other ((x-a)-b == (x-b)-a); only genuinely
             // order-dependent forms (streaks, resets) fail this
-            val orderSafe = assignment.value.let { it is Binary && it.op in setOf("+", "-") }
+            val orderSafe = facts?.commutes == true
             if (schedules.isNotEmpty() && !orderSafe && tolerates != "reordering")
                 diags.add(Diagnostic("V8", "'${w.owner}.${w.member.name}' is an order-dependent fold on a tick cadence " +
                     "(rule '${w.rule.name}') — nothing orders one tick's firings; " +

@@ -18,7 +18,7 @@ classDiagram
         name: text
         email: text
         signedUpOn: timestamp on create
-        largestPayment: decimal = 0
+        largestPayment: Money = 0
     }
     class CorrectEmail {
         <<act>>
@@ -32,23 +32,23 @@ classDiagram
         due: Date
         reference: text = randomUUID
         issuedOn: timestamp on create
-        /total: decimal
-        /balance: decimal
+        /total: Money
+        /balance: Money
         /status: text
     }
     class LineItem {
         <<act>>
         description: text
-        price: decimal
+        price: Money
         quantity: integer
-        /amount: decimal
+        /amount: Money
     }
     class SubmitPayment {
         <<transient act>>
-        amount: decimal
+        amount: Money
     }
     class Payment {
-        amount: decimal
+        amount: Money
         receivedOn: timestamp on create
     }
     class Receipt {

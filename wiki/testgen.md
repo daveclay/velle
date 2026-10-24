@@ -47,7 +47,7 @@ plus the rules hanging off it. One generated spec file per **story root**:
 | Tick sweep | member at tick → effect + linkage; the guard holds across ticks; a literal time window (`today - 7 days`) is advanced past and the sweep reopens |
 | `when leaving` rule | exit produces the effects; the subject is no longer a member |
 | Partition pair | the act subject is a member of exactly one side |
-| `never` or `requires` (single comparison against a literal, on an act) | a violating act is refused and nothing commits; a boundary-legal act is accepted; the case titles follow the author's spelling |
+| `never` or `requires` (single comparison against a literal, on an act) | a violating act is refused and nothing commits; a boundary-legal act is accepted; the case titles follow the author's spelling. For a field of an extension type ([Reference §5](Reference-05-Scalars#extension-types)) the bound is the constant read as the type, the values either side of it come from the type's own `below`/`above`, an unconstrained field takes the type's sample, and each value is written in the test with the Kotlin source the type gives (`Money.of("-0.01")`) |
 
 ## The given/derived split
 

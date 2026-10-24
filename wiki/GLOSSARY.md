@@ -88,6 +88,14 @@ Coined terms used across the documents, one line each, with the pointer that def
 - **retraction** — deletion of a capture row at the exit commit's close: the contract's one sanctioned delete, legal because a capture is memory, not a record of the world ([`evaluation.md`](evaluation) [U2](evaluation#the-universal-transaction); `Hydration.kt`, `Retraction`).
 - **session handle / store key** — runtime identity is process-local; durable identity belongs to the store and round-trips as `Ref.Persisted`/`StoreKey` (`Hydration.kt`). Session handles never reach the engineer: the surface works in references (below).
 
+## Extension types (Reference §5, "Extension types"; the Extension types guide)
+
+- **extension type** — a scalar type an engineer adds: a Kotlin class implementing `velle.ext.VelleType<T>`, registered on the classpath, named in a spec in type position like `Date`; one value and a mapping for it, never a business concept with parts ([Reference §5](Reference-05-Scalars#extension-types), [Extension types](Extension-types)).
+- **registry** — every extension type a running compiler or system knows: the classes named in `META-INF/services/velle.ext.VelleType` across the classpath, loaded once, checked before any spec ([checks E1, E2](checks#extension-checks)).
+- **capability** — one thing a spec may do with a value of a type, declared by the type's author as a member of the type: an ordering, an operator line, a sum, a literal reader; a function or operator asks for the capability it needs of each argument, and a type that does not declare it is refused with the class named ([checks E3](checks#e3--a-capability-the-type-does-not-declare)).
+- **store binding** — how one store holds one extension type, written in the store's own vocabulary by whoever knows the store (`velle.sqlite.SqliteTypeBinding<T>` for the SQLite store): the column type, the value handed to the driver, the read back, and which comparisons the column answers faithfully; a library of its own, beside the type's ([Extension types](Extension-types), "Holding a type in a store"; [checks E4](checks#e4--a-store-holds-every-type-it-stores)).
+- **`uses` line** — `uses <namespace>.<Name> [as <Name>]` at the top of a spec: picks one of two registered types sharing a name, or brings a type into the spec under another name so a shape may take its own ([Reference §5](Reference-05-Scalars#extension-types), [`grammar.md`](grammar)).
+
 ## Reads (Reference §22)
 
 - **query** — one read request: a root (a shape or refinement), a filter in the spec's predicate language over the root's members, a required order, a page; composed by whoever asks, never declared in the spec ([Reference §22](Reference-22-Open-unresolved); `compiler/src/main/kotlin/velle/Read.kt`). Called a "query", never a "question".

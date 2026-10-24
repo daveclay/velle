@@ -98,7 +98,8 @@ object RejectionRenderer {
             is RecordRef -> label(v)
             is BigDecimal -> v.stripTrailingZeros().toPlainString()
             is List<*> -> v.joinToString(", ", "[", "]") { show(it) }
-            else -> v.toString()
+            // a value of a registered extension type reads as the type displays it (Reference §5; OQ65)
+            else -> TypeRegistry.default.typeOfValue(v)?.displayAny(v) ?: v.toString()
         }
         fun record(s: RecordSnapshot) =
             "${label(s.ref)}: " + s.fields.entries.joinToString(", ") { (k, v) -> "$k = ${show(v)}" }

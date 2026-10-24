@@ -1,6 +1,6 @@
 package velle
 
-import java.math.BigDecimal
+import velle.finance.Money
 import velle.generated.*
 import java.sql.Connection
 import java.sql.DriverManager
@@ -97,8 +97,8 @@ class HydrationCandidatesTest {
         val inv = billing.invoices().last()
         store.reset()
 
-        accept(billing.commit(NewLineItem(inv, "Design", BigDecimal("1200.00"), 1)))
-        accept(billing.commit(NewSubmitPayment(inv, BigDecimal("1200.00"))))
+        accept(billing.commit(NewLineItem(inv, "Design", Money.of("1200.00"), 1)))
+        accept(billing.commit(NewSubmitPayment(inv, Money.of("1200.00"))))
 
         assertEquals("paid", billing.read(inv).status)
         assertEquals(1, sqlCount("Receipt"))
@@ -120,7 +120,7 @@ class HydrationCandidatesTest {
         val cust = billing.customers().last()
         accept(billing.commit(NewBillCustomer(cust, due = today().minusDays(10))))
         val overdue = billing.invoices().last()
-        accept(billing.commit(NewLineItem(overdue, "Old work", BigDecimal("99.00"), 1)))
+        accept(billing.commit(NewLineItem(overdue, "Old work", Money.of("99.00"), 1)))
         store.reset()
 
         billing.tickWeekly()
@@ -145,7 +145,7 @@ class HydrationCandidatesTest {
         val cust = first.customers().last()
         accept(first.commit(NewBillCustomer(cust, due = today().minusDays(10))))
         val overdue = first.invoices().last()
-        accept(first.commit(NewLineItem(overdue, "Old work", BigDecimal("99.00"), 1)))
+        accept(first.commit(NewLineItem(overdue, "Old work", Money.of("99.00"), 1)))
         first.tickWeekly()
         assertEquals(1, sqlCount("Reminder"))
 

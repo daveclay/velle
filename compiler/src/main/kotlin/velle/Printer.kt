@@ -44,6 +44,7 @@ object Printer {
         is NeverDecl -> prohibition(d) +
             if (d.toleratesContention) " tolerates contention" else ""
         is VisibilityDefault -> visible(d.clause)
+        is UsesDecl -> "uses ${d.qualified}" + (d.alias?.let { " as $it" } ?: "")
     }
 
     /** `visible to Staff as viewer where ...` / `visible to anyone` (Reference §22). */

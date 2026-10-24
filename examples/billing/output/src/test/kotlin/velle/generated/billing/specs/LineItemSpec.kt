@@ -19,7 +19,7 @@ class LineItemSpec : SpecSupport() {
         // given: any committed 'Invoice'
         val invoice = givens.someInvoice()
         val before = count("LineItem")
-        val result = sys.system.commit("LineItem", mapOf("invoice" to idOf(invoice), "description" to "sample", "price" to java.math.BigDecimal("0"), "quantity" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("LineItem", mapOf("invoice" to idOf(invoice), "description" to "sample", "price" to velle.finance.Money.of("12.50"), "quantity" to java.math.BigDecimal("-1")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("LineItem"), "a refused act commits nothing")
     }
@@ -28,25 +28,25 @@ class LineItemSpec : SpecSupport() {
     fun `never - a LineItem with quantity 1 is accepted`() {
         // given: any committed 'Invoice'
         val invoice = givens.someInvoice()
-        val result = sys.system.commit("LineItem", mapOf("invoice" to idOf(invoice), "description" to "sample", "price" to java.math.BigDecimal("0"), "quantity" to java.math.BigDecimal("1")))
+        val result = sys.system.commit("LineItem", mapOf("invoice" to idOf(invoice), "description" to "sample", "price" to velle.finance.Money.of("12.50"), "quantity" to java.math.BigDecimal("1")))
         assertIs<CommitResult.Accepted>(result)
     }
 
     @Test
-    fun `never - a LineItem where price below 0 is refused`() {
+    fun `never - a LineItem where price below 0 00 is refused`() {
         // given: any committed 'Invoice'
         val invoice = givens.someInvoice()
         val before = count("LineItem")
-        val result = sys.system.commit("LineItem", mapOf("invoice" to idOf(invoice), "description" to "sample", "price" to java.math.BigDecimal("-1"), "quantity" to java.math.BigDecimal("1")))
+        val result = sys.system.commit("LineItem", mapOf("invoice" to idOf(invoice), "description" to "sample", "price" to velle.finance.Money.of("-0.01"), "quantity" to java.math.BigDecimal("1")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("LineItem"), "a refused act commits nothing")
     }
 
     @Test
-    fun `never - a LineItem with price 0 is accepted`() {
+    fun `never - a LineItem with price 0 00 is accepted`() {
         // given: any committed 'Invoice'
         val invoice = givens.someInvoice()
-        val result = sys.system.commit("LineItem", mapOf("invoice" to idOf(invoice), "description" to "sample", "price" to java.math.BigDecimal("0"), "quantity" to java.math.BigDecimal("1")))
+        val result = sys.system.commit("LineItem", mapOf("invoice" to idOf(invoice), "description" to "sample", "price" to velle.finance.Money.of("0.00"), "quantity" to java.math.BigDecimal("1")))
         assertIs<CommitResult.Accepted>(result)
     }
 }

@@ -35,13 +35,34 @@ class Parser(private val tokens: List<Token>) {
             t.isKw("never") -> parseNever()
             t.type == TokType.UIDENT && peekAhead(1).isKw("requires") -> parseRequires()
             t.isKw("act") || t.isKw("transient") -> parseAct()
+            t.isKw("uses") -> parseUses()
             // the spec-wide visibility default (Reference §22): `visible to Staff` / `visible to anyone`
             atVisible() -> {
                 val c = parseVisibleClause(allowWhere = false)
                 VisibilityDefault(c)
             }
-            else -> fail("expected a declaration (shape/act/rule/never/requires/visible)", t)
+            else -> fail("expected a declaration (shape/act/rule/never/requires/visible/uses)", t)
         }
+    }
+
+    // ── uses ─────────────────────────────────────────────────────────────────
+
+    /** `uses velle.finance.Money [as Cash]`: a dotted lowercase path ending in the type's
+     *  capitalized name (Reference §5, extension types). */
+    private fun parseUses(): UsesDecl {
+        expectKw("uses")
+        val parts = mutableListOf<String>()
+        val first = peek()
+        if (!at(TokType.LIDENT)) fail("'uses' takes a qualified type name such as velle.finance.Money", first)
+        parts.add(next().text)
+        while (consumeIf(TokType.DOT)) {
+            val t = peek()
+            if (!at(TokType.LIDENT) && !at(TokType.UIDENT)) fail("'uses' takes a qualified type name such as velle.finance.Money", t)
+            parts.add(next().text)
+        }
+        if (!parts.last().first().isUpperCase()) fail("'uses' names a type: the last part is its capitalized name (velle.finance.Money)", first)
+        val alias = if (peek().isKw("as")) { next(); expect(TokType.UIDENT).text } else null
+        return UsesDecl(parts.joinToString("."), alias)
     }
 
     // ── shape / refinement ───────────────────────────────────────────────────
@@ -188,6 +209,8 @@ class Parser(private val tokens: List<Token>) {
                 val many = t.isKw("many")
                 val target = peek()
                 // `many` also takes a scalar — an owned collection of values (Reference §6)
+                // a capitalized name after `one`/`many` is a shape here; `many Money`
+                // (an owned set of an extension type's values) is resolved by the model
                 val scalar = when {
                     target.type == TokType.KW && target.text in SCALAR_KEYWORDS -> target.text
                     target.type == TokType.UIDENT && (target.text == "Date" || target.text == "DateTime") -> target.text
@@ -207,7 +230,9 @@ class Parser(private val tokens: List<Token>) {
             t.type == TokType.KW && t.text in SCALAR_KEYWORDS -> {
                 next(); ScalarType(t.text, consumeIf(TokType.QMARK))
             }
-            t.type == TokType.UIDENT && (t.text == "Date" || t.text == "DateTime") -> {
+            // `Date`, `DateTime`, or a registered extension type by the name the spec
+            // gives it (Reference §5): the model resolves the name, F1 when nothing has it
+            t.type == TokType.UIDENT -> {
                 next(); ScalarType(t.text, consumeIf(TokType.QMARK))
             }
             else -> fail("expected a type", t)

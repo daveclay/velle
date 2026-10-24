@@ -55,6 +55,9 @@ sealed interface QConst {
     /** An instance the store already holds — the query API's "this customer"
      *  (Reference §22) against a to-one reference column. */
     data class QRef(val ref: Ref.Persisted) : QConst
+    /** A value of a registered extension type (Reference §5): a spec constant the type
+     *  read, or a value the query API supplied. The store's binding encodes it. */
+    data class QExt(val type: velle.ext.VelleType<*>, val value: Any) : QConst
 }
 
 /**
@@ -265,9 +268,18 @@ class QueryCompiler(
         val wantInstance = const is QConst.QRef
         if (wantInstance && op != "==" && op != "!=") return null
         val hops = resolveHops(p, scope, wantInstance = wantInstance) ?: return null
-        if (!typesMatch(hops.last().second.type.strip(), const)) return null
-        if (op in TEXT_OPERATORS && const !is QConst.QText) return null
-        return wrapHops(hops.dropLast(1), QF.Cmp(hops.last().first, op, const))
+        val colType = hops.last().second.type.strip()
+        // a number or text constant against an extension-typed column reads as the type (OQ65 D2)
+        val typed = if (colType is VType.Ext && (const is QConst.QNum || const is QConst.QText)) {
+            val t = model.registry[colType.qualifiedName] ?: return null
+            when (val r = t.readLiteral((const as? QConst.QNum)?.v, (const as? QConst.QText)?.v)) {
+                is LiteralRead.Ok -> QConst.QExt(t, r.value)
+                else -> return null
+            }
+        } else const
+        if (!typesMatch(colType, typed)) return null
+        if (op in TEXT_OPERATORS && typed !is QConst.QText) return null
+        return wrapHops(hops.dropLast(1), QF.Cmp(hops.last().first, op, typed))
     }
 
     private fun flip(op: String): String = when (op) {
@@ -281,6 +293,7 @@ class QueryCompiler(
         is QConst.QDate -> t == VType.DateT
         is QConst.QDateTime -> t == VType.DateTimeT
         is QConst.QRef -> t is VType.Inst && model.typeAccepts(t.shape, c.ref.shape)
+        is QConst.QExt -> t is VType.Ext && t.qualifiedName == c.type.qualifiedName
     }
 
     // ── paths ────────────────────────────────────────────────────────────────
@@ -345,6 +358,7 @@ class QueryCompiler(
             is Value.VDate -> QConst.QDate(v.v)
             is Value.VDateTime -> QConst.QDateTime(v.v)
             is Value.VRef -> keyOf(v.id)?.let { QConst.QRef(it) } // unpersisted: nothing to test in the store
+            is Value.VExt -> QConst.QExt(v.type, v.v)
             else -> null
         }
         is RefLit -> QConst.QRef(Ref.Persisted(e.ref.shape, e.ref.key))

@@ -20,8 +20,8 @@ class ClassDiagramGenTest {
 
     @Test
     fun `derived properties carry the UML slash, not their expressions`() {
-        assertTrue("/total: decimal" in diagram)
-        assertTrue("/balance: decimal" in diagram)
+        assertTrue("/total: Money" in diagram)
+        assertTrue("/balance: Money" in diagram)
         assertFalse("sum(" in diagram, "derivation expressions stay out of the class boxes")
     }
 

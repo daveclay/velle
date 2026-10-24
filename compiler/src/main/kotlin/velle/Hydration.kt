@@ -77,7 +77,9 @@ sealed interface RowRef {
  * predicate; captures travel on their own channel). Scalar values are plain
  * Kotlin — String, Boolean, BigDecimal (all numerics), LocalDate, Instant —
  * every to-one reference is a [Ref.Persisted] built by the store, and a
- * declared `many` is a List of those (or of scalars) in membership order.
+ * declared `many` is a List of those (or of scalars) in membership order. A
+ * field of a registered extension type (Reference §5) holds the type's own
+ * Kotlin object; how the store encodes it is the store's binding for that type.
  *
  * A field typed with a static union (Reference §9) still arrives as a
  * [Ref.Persisted] naming the concrete operand: keys are unique only per

@@ -6,6 +6,10 @@
 --
 -- Comment convention (here and in membership.velle): plain comments tell the
 -- business story; `velle:` comments note the language machinery on show.
+--
+-- Amounts are `Money`, an extension type (Reference §5) from the velle.finance
+-- library on this system's classpath: exact to the cent, ordered, summable, and
+-- read from a plain number constant. Nothing declares it; the name is in scope.
 
 -- ── Customers ────────────────────────────────────────────────────────────────
 
@@ -23,7 +27,7 @@ shape Customer {
     name: text
     email: text
     signedUpOn: timestamp on create
-    largestPayment: decimal initially 0
+    largestPayment: Money initially 0
 }
 
 rule AdmitCustomer when SignUp {
@@ -57,8 +61,8 @@ shape Invoice {
     due: Date
     reference: text initially randomUUID
     issuedOn: timestamp on create
-    total: decimal = sum(lineItems, amount)
-    balance: decimal = total - sum(payments, amount)
+    total: Money = sum(lineItems, amount)
+    balance: Money = total - sum(payments, amount)
     status: text = if balance <= 0 then "paid" else if due < today then "overdue" else "open"
 }
 
@@ -69,9 +73,9 @@ rule OpenInvoice when BillCustomer {
 act LineItem {
     invoice: one Invoice
     description: text
-    price: decimal
+    price: Money
     quantity: integer
-    amount: decimal = price * quantity
+    amount: Money = price * quantity
 }
 
 -- No line item may have a zero quantity or a negative price — bad submissions
@@ -86,14 +90,14 @@ never (LineItem where price < 0)
 -- the door, before anything is kept.
 transient act SubmitPayment {
     invoice: one Invoice
-    amount: decimal
+    amount: Money
 }
 
 never (SubmitPayment where amount <= 0)
 
 shape Payment {
     invoice: one Invoice
-    amount: decimal
+    amount: Money
     receivedOn: timestamp on create
 }
 

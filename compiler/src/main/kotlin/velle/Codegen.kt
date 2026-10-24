@@ -624,10 +624,10 @@ object Codegen {
                 line("class ${root}Fields(path: List<String> = emptyList()) : Fields(path) {")
                 for ((memberName, m) in dataMembers(root)) {
                     val handle = fieldHandle(m.type) ?: continue
-                    line("    val $memberName: $handle get() = $handle(fieldPath + \"$memberName\")")
+                    line("    val $memberName: $handle get() = ${fieldHandleCtor(m.type, memberName)}")
                 }
                 if (root in model.shapes) unionMembers(root).forEach { (name, _, t) ->
-                    fieldHandle(t)?.let { line("    val $name: $it get() = $it(fieldPath + \"$name\")") }
+                    fieldHandle(t)?.let { line("    val $name: $it get() = ${fieldHandleCtor(t, name)}") }
                 }
                 // memberships of every refinement over this root (`isOverdueInvoice()`)
                 membershipsOf(root).forEach { r -> line("    fun is$r(): Expr = isA(\"$r\")") }
@@ -638,6 +638,10 @@ object Codegen {
         /** The field-handle class for a member's type; null for members the builder does not filter on (collections). */
         fun fieldHandle(t: VType): String? = when (t) {
             is VType.Num -> "NumField"
+            // an extension type (Reference §5): ordered comparisons only when the type declares an ordering
+            is VType.Ext -> model.registry[t.qualifiedName]?.let { x ->
+                (if (x.ordering != null) "OrderedExtField" else "ExtField") + "<${x.kotlinClass.qualifiedName}>"
+            }
             VType.Text -> "TextField"
             VType.Bool -> "BoolField"
             VType.DateT -> "DateField"
@@ -645,6 +649,13 @@ object Codegen {
             is VType.Inst -> if (isRoot(t.shape)) "${t.shape}Fields" else "RefField"
             is VType.Optional -> fieldHandle(t.inner)
             else -> null
+        }
+
+        /** The expression constructing a member's field handle; an extension type's names the type. */
+        fun fieldHandleCtor(t: VType, name: String): String {
+            val bare = (t as? VType.Optional)?.inner ?: t
+            val handle = fieldHandle(t)!!
+            return if (bare is VType.Ext) "$handle(fieldPath + \"$name\", \"${bare.qualifiedName}\")" else "$handle(fieldPath + \"$name\")"
         }
 
         fun specConstant() {
@@ -703,11 +714,13 @@ object Codegen {
             "boolean" -> "Boolean"
             "Date" -> "LocalDate"
             "DateTime" -> "Instant"
-            else -> "Any"
+            // a registered extension type: its own class, fully qualified (Reference §5; OQ65)
+            else -> model.typeScope[name]?.kotlinClass?.qualifiedName ?: "Any"
         }
 
         fun kotlinType(t: VType): String = when (t) {
             is VType.Num -> scalarKotlin(t.name)
+            is VType.Ext -> model.registry[t.qualifiedName]?.kotlinClass?.qualifiedName ?: "Any"
             VType.Text -> "String"
             VType.Bool -> "Boolean"
             VType.DateT -> "LocalDate"
@@ -731,6 +744,7 @@ object Codegen {
             VType.Bool -> "$call as Boolean"
             VType.DateT -> "$call as LocalDate"
             VType.DateTimeT -> "$call as Instant"
+            is VType.Ext -> "$call as ${kotlinType(t)}"
             is VType.Inst -> "system.refFor($call as Long)"
             is VType.Coll -> "($call as List<*>).map { system.refFor(it as Long) }"
             is VType.CollS -> when (t.name) {

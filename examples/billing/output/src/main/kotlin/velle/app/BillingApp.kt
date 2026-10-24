@@ -4,7 +4,7 @@ import velle.Commit
 import velle.generated.*
 import velle.generated.BillingSystem
 import velle.sqlite.SqliteStore
-import java.math.BigDecimal
+import velle.finance.Money
 import java.sql.Connection
 import java.sql.DriverManager
 import java.time.Instant
@@ -45,8 +45,8 @@ fun main() {
         val cust = billing.customers().last()
         accept(billing.commit(NewBillCustomer(cust, due = today().plusDays(30))))
         val inv = billing.invoices().last()
-        accept(billing.commit(NewLineItem(inv, "Design work", BigDecimal("1200.00"), 1)))
-        accept(billing.commit(NewLineItem(inv, "Hosting", BigDecimal("50.00"), 2)))
+        accept(billing.commit(NewLineItem(inv, "Design work", Money.of("1200.00"), 1)))
+        accept(billing.commit(NewLineItem(inv, "Hosting", Money.of("50.00"), 2)))
         accept(billing.commit(NewIssuance(inv)))
         println("committed customer #${cust.key.value}, invoice #${inv.key.value} with two line items, issued")
 
@@ -54,13 +54,13 @@ fun main() {
         billing.read(inv).let { println("   invoice.total=${it.total}  balance=${it.balance}  status=${it.status}") }
 
         // a `never` refusal: rejected at the boundary, nothing reaches the DB
-        val refused = billing.commit(NewSubmitPayment(inv, BigDecimal.ZERO))
+        val refused = billing.commit(NewSubmitPayment(inv, Money.ZERO))
         println("zero payment -> $refused")
 
         // payment in full: one envelope = Payment + largestPayment assign + Receipt,
         // landed as one SQLite transaction; EmailReceipt is `after commit` — its
         // ReceiptEmail is a second envelope, a second SQLite transaction
-        accept(billing.commit(NewSubmitPayment(inv, BigDecimal("1300.00"))))
+        accept(billing.commit(NewSubmitPayment(inv, Money.of("1300.00"))))
         println("paid in full -> status=${billing.read(inv).status}")
         println()
 
@@ -68,7 +68,7 @@ fun main() {
         // candidate query brings back overdue invoices from SQLite
         accept(billing.commit(NewBillCustomer(cust, due = today().minusDays(10))))
         val overdue = billing.invoices().last()
-        accept(billing.commit(NewLineItem(overdue, "Old work", BigDecimal("99.00"), 1)))
+        accept(billing.commit(NewLineItem(overdue, "Old work", Money.of("99.00"), 1)))
         billing.tickWeekly()
         println("committed overdue invoice #${overdue.key.value}, ran the weekly tick")
         println()

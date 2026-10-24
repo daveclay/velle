@@ -2,7 +2,7 @@ package velle
 
 import java.io.File
 import velle.generated.*
-import java.math.BigDecimal
+import velle.finance.Money
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -65,19 +65,19 @@ open class GeneratedApiTest {
         assertIs<Commit.Accepted<*, *>>(sys.commit(NewBillCustomer(ada, LocalDate.of(2026, 2, 1))))
         val invoice = sys.invoices().single()
         assertIs<Commit.Accepted<*, *>>(
-            sys.commit(NewLineItem(invoice, "widgets", BigDecimal("100"), 2)))
+            sys.commit(NewLineItem(invoice, "widgets", Money.of("100"), 2)))
 
-        assertEquals(0, sys.read(invoice).total.compareTo(BigDecimal("200")))
+        assertEquals(Money.of("200"), sys.read(invoice).total)
         assertEquals("open", sys.read(invoice).status)
         assertEquals(2, sys.read(sys.read(invoice).lineItems.single()).quantity)
         assertEquals("Ada", sys.read(sys.read(invoice).customer).name)
 
-        assertIs<Commit.Accepted<*, *>>(sys.commit(NewSubmitPayment(invoice, BigDecimal("200"))))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewSubmitPayment(invoice, Money.of("200"))))
         with(sys) { assertTrue(sys.read(invoice).isPaidInvoice) }
         assertEquals("paid", sys.read(invoice).status)
         assertEquals(1, sys.receipts().size)
         assertEquals(1, sys.receiptEmails().size)
-        assertEquals(0, sys.read(ada).largestPayment.compareTo(BigDecimal("200")))
+        assertEquals(Money.of("200"), sys.read(ada).largestPayment)
         assertEquals(invoice, sys.read(sys.receipts().single()).invoice)
     }
 
@@ -86,15 +86,15 @@ open class GeneratedApiTest {
         val sys = newSystem()
         sys.commit(NewSignUp("Ada", "a@x.com"))
         sys.commit(NewBillCustomer(sys.customers().single(), LocalDate.of(2026, 2, 1)))
-        val input = NewSubmitPayment(sys.invoices().single(), BigDecimal.ZERO)
+        val input = NewSubmitPayment(sys.invoices().single(), Money.ZERO)
         val refused = assertIs<Commit.Refused<NewSubmitPayment, *>>(sys.commit(input))
         // the verdict carries what was refused as the engineer's own type, not a map
         assertEquals(input, refused.input)
-        assertEquals(0, refused.input.amount.compareTo(BigDecimal.ZERO))
+        assertEquals(Money.ZERO, refused.input.amount)
         assertEquals(0, sys.payments().size)
         val accepted = assertIs<Commit.Accepted<NewSubmitPayment, *>>(
-            sys.commit(NewSubmitPayment(sys.invoices().single(), BigDecimal("5"))))
-        assertEquals(0, accepted.input.amount.compareTo(BigDecimal("5")))
+            sys.commit(NewSubmitPayment(sys.invoices().single(), Money.of("5"))))
+        assertEquals(Money.of("5"), accepted.input.amount)
     }
 
     @Test
@@ -120,7 +120,7 @@ open class GeneratedApiTest {
         val sys = newSystem()
         sys.commit(NewSignUp("Ada", "a@x.com"))
         sys.commit(NewBillCustomer(sys.customers().single(), LocalDate.of(2025, 12, 1)))
-        sys.commit(NewLineItem(sys.invoices().single(), "widgets", BigDecimal("50"), 1))
+        sys.commit(NewLineItem(sys.invoices().single(), "widgets", Money.of("50"), 1))
 
         with(sys) { assertTrue(sys.read(invoices().single()).isOverdueInvoice) }
         sys.tickWeekly()

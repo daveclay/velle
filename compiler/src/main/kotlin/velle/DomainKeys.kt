@@ -76,11 +76,14 @@ object DomainKeys {
             // only certainly known when the act *is* that shape
             if (v.shape != act) return null
             val raw = fields[v.field] ?: return null
-            values.add("${v.shape}.${v.field}" to normalize(raw))
+            values.add("${v.shape}.${v.field}" to normalize(raw, sys.model.registry))
         }
         return Tokens(rows, values)
     }
 
-    private fun normalize(raw: Any): String =
-        if (raw is BigDecimal) raw.stripTrailingZeros().toPlainString() else raw.toString()
+    /** One token per distinct value: numbers by plain value, an extension type by its `canonical`. */
+    private fun normalize(raw: Any, registry: TypeRegistry): String = when {
+        raw is BigDecimal -> raw.stripTrailingZeros().toPlainString()
+        else -> registry.typeOfValue(raw)?.canonicalAny(raw) ?: raw.toString()
+    }
 }

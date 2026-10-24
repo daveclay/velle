@@ -27,6 +27,12 @@ sealed interface Value {
      *  ([VPendingRef] among [VRef]s); resolved to a [VColl] as creations land. */
     data class VPendingColl(val items: List<Value>, val shape: String) : Value
     data class VDuration(val amount: Long, val unit: String) : Value
+    /** A value of a registered extension type (Reference §5; OQ65): the type's own Kotlin object. */
+    data class VExt(val type: velle.ext.VelleType<*>, val v: Any) : Value {
+        override fun equals(other: Any?): Boolean = other is VExt && other.type === type && type.equalAny(v, other.v)
+        override fun hashCode(): Int = type.canonicalAny(v).hashCode()
+        override fun toString(): String = "VExt(${type.name} ${type.canonicalAny(v)})"
+    }
     data object VNone : Value
 
     companion object {
@@ -430,6 +436,13 @@ class VelleSystem(
         )
         VType.DateT -> Value.VDate(raw as? LocalDate ?: throw VelleRuntimeError("hydrating $at: not a Date ($raw)"))
         VType.DateTimeT -> Value.VDateTime(raw as? Instant ?: throw VelleRuntimeError("hydrating $at: not a DateTime ($raw)"))
+        // the Row contract: a field of an extension type holds the type's Kotlin object
+        is VType.Ext -> {
+            val type = model.registry[t.qualifiedName] ?: throw VelleRuntimeError("hydrating $at: no registered type '${t.qualifiedName}'")
+            if (!type.kotlinClass.isInstance(raw))
+                throw VelleRuntimeError("hydrating $at: not a ${type.kotlinClass.qualifiedName} ($raw)")
+            Value.VExt(type, raw)
+        }
         is VType.Coll -> Value.VColl(
             (raw as? List<*> ?: throw VelleRuntimeError("hydrating $at: not a collection ($raw)"))
                 .map { el ->
@@ -446,13 +459,7 @@ class VelleSystem(
         else -> throw VelleRuntimeError("hydrating $at: unsupported type for $raw")
     }
 
-    private fun scalarVType(name: String): VType = when (name) {
-        "text" -> VType.Text
-        "boolean" -> VType.Bool
-        "Date" -> VType.DateT
-        "DateTime" -> VType.DateTimeT
-        else -> VType.Num(name)
-    }
+    private fun scalarVType(name: String): VType = model.scalarOf(name)
     private val lastTick = HashMap<String, Instant>()
     private val startInstant = startTime
     val evaluator = Evaluator(this)
@@ -736,8 +743,12 @@ class VelleSystem(
         // a `one` field pointing at a new record elsewhere in this act (OQ63 §6.2.2)
         // is resolved after every value is appended, below
         val (own, siblingRefs) = splitNewRefs(suppliedFields)
-        val supplied = convertFields(decl, own, skipRequired = byValueHere + siblingRefs.map { it.first })
-            ?: return CommitResult.Refused(typeFailure(decl, own))
+        val supplied = try {
+            convertFields(decl, own, skipRequired = byValueHere + siblingRefs.map { it.first })
+                ?: return CommitResult.Refused(typeFailure(decl, own))
+        } catch (e: PartRefusal) {
+            return CommitResult.Refused(e.reason) // an extension type's `validate` refused a value
+        }
         val converted = if (actorProp != null) supplied + (actorProp.name to Value.VRef(actor!!)) else supplied
 
         val build = ClosureBuild()
@@ -1053,7 +1064,14 @@ class VelleSystem(
         "boolean" -> (raw as? Boolean)?.let { Value.VBool(it) }
         "Date" -> (raw as? LocalDate)?.let { Value.VDate(it) }
         "DateTime" -> (raw as? Instant)?.let { Value.VDateTime(it) }
-        else -> runCatching { Value.num(raw) }.getOrNull()
+        in TypeRegistry.NUMBER_NAMES -> runCatching { Value.num(raw) }.getOrNull()
+        else -> {
+            // an extension type (Reference §5; OQ65): the value is the type's own class and
+            // passes its `validate`; anything else is a type-level refusal at the boundary
+            val type = model.typeScope[name] ?: return null
+            if (!type.kotlinClass.isInstance(raw)) null
+            else type.validateAny(raw)?.let { reason -> throw PartRefusal("type: ${model.specNameOf(type)} — $reason") } ?: Value.VExt(type, raw)
+        }
     }
 
     private fun typeFailure(decl: ShapeDecl, supplied: Map<String, Any?>): String {
@@ -1381,13 +1399,15 @@ class VelleSystem(
         }
     }
 
-    /** Fit a collection value to its declared field type: type the bare `empty`
-     *  literal, and dedupe — a `many` is a set (Reference §6). Non-collections pass through. */
+    /** Fit a value to its declared field type: type the bare `empty` literal, dedupe a
+     *  collection (a `many` is a set, Reference §6), and read a number or text constant
+     *  as the field's extension type (Reference §5; OQ65 D2). Everything else passes through. */
     internal fun coerceCollection(v: Value, type: TypeRef): Value = when {
         v == Value.VEmpty && type is RelType && type.many -> Value.VColl(emptyList(), type.shape)
         v == Value.VEmpty && type is ScalarType && type.many -> Value.VVals(emptyList())
         v is Value.VColl -> Value.VColl(v.ids.distinct(), v.shape)
-        v is Value.VVals -> Value.VVals(v.values.distinct())
+        v is Value.VVals -> Value.VVals(v.values.distinct().map { el -> (type as? ScalarType)?.let { evaluator.coerceLiteral(el, model.typeScope[it.name]) } ?: el })
+        type is ScalarType && !type.many -> evaluator.coerceLiteral(v, model.typeScope[type.name])
         else -> v
     }
 
@@ -1677,6 +1697,7 @@ class VelleSystem(
             is Value.VColl -> v.ids.filter { instance(it) != null }.map { refOf(it) }
             is Value.VVals -> v.values.map { plain(it) }
             is Value.VDuration -> "${v.amount} ${v.unit}"
+            is Value.VExt -> v.v // rendered through the type's `display` by Rejection.show
             Value.VEmpty -> emptyList<Any?>()
             Value.VNone, is Value.VPendingRef, is Value.VPendingColl -> null
         }
@@ -1860,6 +1881,7 @@ class VelleSystem(
     fun count(q: Query): Int = queries.count(q)
 
     fun sum(q: Query, member: String): BigDecimal = queries.sum(q, member)
+    fun sumValue(q: Query, member: String): Value = queries.sumValue(q, member)
 
     // ── query surface (read-only; the typed-accessor codegen wraps this) ─────
 
@@ -1902,6 +1924,7 @@ class VelleSystem(
         is Value.VVals -> v.values.map { unwrap(it) }
         Value.VEmpty -> emptyList<Any?>()
         is Value.VDuration -> v.amount to v.unit
+        is Value.VExt -> v.v
         is Value.VPendingRef, is Value.VPendingColl -> throw VelleRuntimeError("pending closure reference escaped its commit")
         Value.VNone -> null
     }

@@ -19,7 +19,7 @@ data class CustomerRow(
     val name: String,
     val email: String,
     val signedUpOn: Instant,
-    val largestPayment: BigDecimal,
+    val largestPayment: velle.finance.Money,
 )
 
 /** One stored CorrectEmail row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -43,7 +43,7 @@ data class LineItemRow(
     val key: StoreKey,
     val invoice: Ref.Persisted,
     val description: String,
-    val price: BigDecimal,
+    val price: velle.finance.Money,
     val quantity: Int,
 )
 
@@ -51,7 +51,7 @@ data class LineItemRow(
 data class PaymentRow(
     val key: StoreKey,
     val invoice: Ref.Persisted,
-    val amount: BigDecimal,
+    val amount: velle.finance.Money,
     val receivedOn: Instant,
 )
 
@@ -401,7 +401,7 @@ fun Row.toCustomerRow(): CustomerRow = CustomerRow(
     name = fields["name"] as String,
     email = fields["email"] as String,
     signedUpOn = fields["signedUpOn"] as Instant,
-    largestPayment = fields["largestPayment"] as BigDecimal,
+    largestPayment = fields["largestPayment"] as velle.finance.Money,
 )
 
 fun CustomerRow.toRow(): Row = Row("Customer", key, buildMap {
@@ -441,7 +441,7 @@ fun Row.toLineItemRow(): LineItemRow = LineItemRow(
     key = key,
     invoice = fields["invoice"] as Ref.Persisted,
     description = fields["description"] as String,
-    price = fields["price"] as BigDecimal,
+    price = fields["price"] as velle.finance.Money,
     quantity = (fields["quantity"] as Number).toInt(),
 )
 
@@ -455,7 +455,7 @@ fun LineItemRow.toRow(): Row = Row("LineItem", key, buildMap {
 fun Row.toPaymentRow(): PaymentRow = PaymentRow(
     key = key,
     invoice = fields["invoice"] as Ref.Persisted,
-    amount = fields["amount"] as BigDecimal,
+    amount = fields["amount"] as velle.finance.Money,
     receivedOn = fields["receivedOn"] as Instant,
 )
 

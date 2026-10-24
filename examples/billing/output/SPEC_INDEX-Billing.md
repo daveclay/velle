@@ -24,8 +24,8 @@ each case below is an executable test.
 ## SubmitPaymentSpec.kt
 
 - RecordPayment - a new SubmitPayment produces a Payment
-- never - a SubmitPayment where amount at most 0 is refused
-- never - a SubmitPayment with amount 1 is accepted
+- never - a SubmitPayment where amount at most 0.00 is refused
+- never - a SubmitPayment with amount 0.01 is accepted
 
 ## PaymentSpec.kt
 
@@ -35,5 +35,5 @@ each case below is an executable test.
 
 - never - a LineItem where quantity at most 0 is refused
 - never - a LineItem with quantity 1 is accepted
-- never - a LineItem where price below 0 is refused
-- never - a LineItem with price 0 is accepted
+- never - a LineItem where price below 0.00 is refused
+- never - a LineItem with price 0.00 is accepted

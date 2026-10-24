@@ -110,11 +110,14 @@ latest(Referral where referrer == this by referredOn).referee
 
 ## Dates and durations
 
+A number or a quoted text compared with a field of an [extension type](Reference-05-Scalars#extension-types) reads as that type: in `balance < 0` with `balance: Money`, the `0` is a `Money`, read once when the spec compiles. The type's author decides which constants it reads and what arithmetic it takes part in; `balance * 2` and `balance + 10` are legal when the author declared `Money * decimal` and `Money + Money`.
+
 `today - 7 days` and `now + 14 days` add or subtract a duration from a `Date` or `DateTime`. A duration is an integer followed by `seconds`, `minutes`, `hours`, `days`, or `weeks`. On a `Date` the step is a calendar step: `+ 1 days` is the next calendar date. On a `DateTime` it is exact clock time: `3 days` is seventy-two hours.
 
 ## What the compiler checks
 
 - The compiler rejects a comparison between values of different types, a text operator on a non-text value, duration arithmetic on anything but a `Date` or `DateTime`, a `by` property that is not orderable, and `x is R` when `x` and `R` share no base shape ([checks.md, F2](checks#f2--type-checking)).
+- The compiler rejects a constant an extension type's reader refuses or does not read, and an operator, comparison, or `sum` the type does not declare, naming the Kotlin class to extend ([checks.md, E3](checks#e3--a-capability-the-type-does-not-declare)).
 - The compiler rejects plain `.` through an optional value with no earlier presence test, and names `?.` as the alternative ([checks.md, V11](checks#v11--narrowing-analysis)).
 - The compiler rejects `(Shape for expr)` and `exists Shape for expr` when more than one field matches the subject's type, or when it cannot prove at most one record exists. The diagnostic asks for `latest` or `first` over a filtered collection ([checks.md, V12](checks#v12--singular-reference-proofs)).
 - When a change to a shape, such as a second `Customer` field, makes an existing `for` ambiguous, the compiler reports one diagnostic naming the declaration and every expression it broke ([checks.md, V13](checks#v13--ambiguity-is-a-connected-diagnostic)).

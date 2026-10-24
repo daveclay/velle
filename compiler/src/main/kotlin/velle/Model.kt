@@ -1,5 +1,7 @@
 package velle
 
+import velle.ext.VelleType
+
 /**
  * Resolved-spec model: symbol tables, refinement→base resolution, member lookup
  * (including refinement properties and inferred inverse relationships), and the
@@ -10,9 +12,36 @@ package velle
  * `lineItems`. The naming rule is a convention the Reference uses by example
  * (`invoices`, `payments`) without stating it — flagged for the docs.
  */
-class Model(val decls: List<Decl>) {
+class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.default) {
 
     val diagnostics = mutableListOf<Diagnostic>()
+
+    /** The spec's `uses` lines (Reference §5, extension types). */
+    val uses: List<UsesDecl> = rawDecls.filterIsInstance<UsesDecl>()
+
+    /** The declarations, with `many X` read as an owned set of values where `X` is a
+     *  registered type and not a shape: the parser cannot tell `many Tag` from `many Customer`. */
+    val decls: List<Decl>
+
+    /** The registered type each name in scope resolves to: `uses` aliases and picks first,
+     *  then every registered type under its own name unless a `uses` line renamed it or
+     *  two libraries register the name. Built by [resolveTypeScope]. */
+    val typeScope: Map<String, VelleType<*>>
+
+    /** Names two registered types share with no `uses` line picking one: naming one is E1. */
+    private val ambiguousTypeNames: Map<String, List<VelleType<*>>>
+
+    /** The spec's name for a registered type, for diagnostics and generated prose. */
+    fun specNameOf(type: VelleType<*>): String =
+        typeScope.entries.firstOrNull { it.value === type }?.key ?: type.qualifiedName
+
+    /** The registered type behind a [VType.Ext], or the type a stored field of [t] holds. */
+    fun extTypeOf(t: VType): VelleType<*>? = when (t) {
+        is VType.Ext -> registry[t.qualifiedName]
+        is VType.Optional -> extTypeOf(t.inner)
+        is VType.CollS -> typeScope[t.name]
+        else -> null
+    }
 
     val shapes = linkedMapOf<String, ShapeDecl>()
     val refinements = linkedMapOf<String, RefinementDecl>()
@@ -31,7 +60,25 @@ class Model(val decls: List<Decl>) {
     private var visibilityDefaultDecl: VisibleClause? = null
 
     init {
+        diagnostics.addAll(registry.diagnostics)
+        val (scope, ambiguous) = resolveTypeScope()
+        typeScope = scope
+        ambiguousTypeNames = ambiguous
+        val shapeNames = rawDecls.mapNotNull { (it as? ShapeDecl)?.name ?: (it as? RefinementDecl)?.name }.toSet()
+        fun manyOfType(t: TypeRef): TypeRef =
+            if (t is RelType && t.many && t.shape !in shapeNames && t.shape in scope) ScalarType(t.shape, optional = false, many = true) else t
+        fun fix(m: Member): Member = when (m) {
+            is StoredProp -> m.copy(type = manyOfType(m.type))
+            is DerivedProp -> m.copy(type = manyOfType(m.type))
+            else -> m
+        }
+        decls = rawDecls.map { d -> when (d) {
+            is ShapeDecl -> d.copy(members = d.members.map(::fix))
+            is RefinementDecl -> d.copy(members = d.members.map(::fix))
+            else -> d
+        } }
         for (d in decls) when (d) {
+            is UsesDecl -> {}
             is ShapeDecl -> {
                 if (!register(d.name)) continue
                 shapes[d.name] = d
@@ -118,7 +165,62 @@ class Model(val decls: List<Decl>) {
             error("F1", "duplicate shape/refinement name '$name'")
             return false
         }
+        typeScope[name]?.let { t ->
+            error("E1", "'$name' is both a shape in this spec and the registered type '${t.qualifiedName}'; " +
+                "add `uses ${t.qualifiedName} as <Name>` to call the type something else here")
+        }
         return true
+    }
+
+    // ── extension types (Reference §5; OQ65) ─────────────────────────────────
+
+    private fun resolveTypeScope(): Pair<Map<String, VelleType<*>>, Map<String, List<VelleType<*>>>> {
+        val scope = linkedMapOf<String, VelleType<*>>()
+        val picked = mutableSetOf<String>()
+        for (u in uses) {
+            val t = registry[u.qualified]
+            if (t == null) {
+                error("F1", "`uses ${u.qualified}`: no registered type has that name" +
+                    (registry.named(u.qualified.substringAfterLast('.')).takeIf { it.isNotEmpty() }
+                        ?.let { c -> "; the registry has ${c.joinToString { "'${it.qualifiedName}'" }}" } ?: ""))
+                continue
+            }
+            if (TypeRegistry.isBuiltin(u.name))
+                error("E1", "`uses ${u.qualified} as ${u.name}`: '${u.name}' is a builtin type name (Reference §5)")
+            val prior = scope.put(u.name, t)
+            if (prior != null && prior !== t)
+                error("E1", "two `uses` lines bring '${prior.qualifiedName}' and '${t.qualifiedName}' into scope as '${u.name}'")
+            picked.add(t.qualifiedName)
+        }
+        val ambiguous = linkedMapOf<String, List<VelleType<*>>>()
+        for ((name, types) in registry.byQualifiedName.values.filter { it.qualifiedName !in picked }.groupBy { it.name }) {
+            if (name in scope) continue // a `uses` line owns the name
+            if (types.size == 1) scope[name] = types.single()
+            else ambiguous[name] = types
+        }
+        return scope to ambiguous
+    }
+
+    /** Resolves a name in type position that is not a builtin (Reference §5): a registered
+     *  type, with F1/E1 and null when nothing in scope has the name. */
+    fun resolveTypeName(name: String, at: String): VelleType<*>? {
+        typeScope[name]?.let { return it }
+        ambiguousTypeNames[name]?.let { types ->
+            error("E1", "$at: '$name' names ${types.size} registered types (${types.joinToString { "'${it.qualifiedName}'" }}); " +
+                "add `uses <one of them>` to pick one")
+            return null
+        }
+        if (name in shapes || name in refinements)
+            error("F1", "$at: '$name' is a shape; a field holding a record is `one $name` or `many $name` (Reference §6)")
+        else
+            error("F1", "$at: no builtin or registered type is named '$name' (Reference §5)")
+        return null
+    }
+
+    /** Every registered type a stored field of the spec holds (the types a store must bind, E4). */
+    val storedExtensionTypes: Set<VelleType<*>> by lazy {
+        shapes.values.flatMap { s -> s.members.filterIsInstance<StoredProp>() }
+            .mapNotNull { (it.type as? ScalarType)?.let { st -> typeScope[st.name] } }.toSet()
     }
 
     fun error(code: String, message: String) = diagnostics.add(Diagnostic(code, message))
@@ -490,7 +592,7 @@ class Model(val decls: List<Decl>) {
             "boolean" -> VType.Bool
             "Date" -> VType.DateT
             "DateTime" -> VType.DateTimeT
-            else -> VType.Unknown
+            else -> typeScope[t.name]?.let { VType.Ext(it.qualifiedName) } ?: VType.Unknown
         }.let { if (t.optional) VType.Optional(it) else it }
         is RelType ->
             if (t.many) VType.Coll(t.shape)
@@ -735,6 +837,8 @@ data class ClosureEdge(
 
 sealed interface VType {
     data class Num(val name: String) : VType
+    /** A registered extension type (Reference §5; OQ65), by `namespace.name`. */
+    data class Ext(val qualifiedName: String) : VType
     data object Text : VType
     data object Bool : VType
     data object DateT : VType

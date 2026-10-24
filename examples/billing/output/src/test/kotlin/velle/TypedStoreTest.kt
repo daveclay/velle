@@ -1,6 +1,6 @@
 package velle
 
-import java.math.BigDecimal
+import velle.finance.Money
 import velle.generated.*
 import java.sql.Connection
 import java.sql.DriverManager
@@ -86,8 +86,8 @@ class TypedStoreTest {
         val cust = billing.customers().last()
         accept(billing.commit(NewBillCustomer(cust, due = LocalDate.of(2026, 2, 1))))
         val inv = billing.invoices().last()
-        accept(billing.commit(NewLineItem(inv, "Design", BigDecimal("1200.00"), 1)))
-        accept(billing.commit(NewSubmitPayment(inv, BigDecimal("1200.00"))))
+        accept(billing.commit(NewLineItem(inv, "Design", Money.of("1200.00"), 1)))
+        accept(billing.commit(NewSubmitPayment(inv, Money.of("1200.00"))))
         assertEquals("paid", billing.read(inv).status)
         assertEquals(1, billing.receipts().size)
         assertEquals(1, billing.receiptEmails().size)
@@ -95,7 +95,7 @@ class TypedStoreTest {
         // the weekly sweep routes to the hand-tuned override, typed and folded
         accept(billing.commit(NewBillCustomer(cust, due = LocalDate.of(2025, 12, 20))))
         val overdue = billing.invoices().last()
-        accept(billing.commit(NewLineItem(overdue, "Old work", BigDecimal("99.00"), 1)))
+        accept(billing.commit(NewLineItem(overdue, "Old work", Money.of("99.00"), 1)))
         billing.tickWeekly()
 
         assertEquals(1, billing.reminders().size)

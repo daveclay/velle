@@ -1,6 +1,6 @@
 package velle
 
-import java.math.BigDecimal
+import velle.finance.Money
 import velle.generated.*
 import java.sql.Connection
 import java.sql.DriverManager
@@ -36,7 +36,7 @@ open class QueryApiTest {
     private fun BillingSystem.invoice(
         customer: Customer,
         due: LocalDate,
-        amount: BigDecimal? = null,
+        amount: Money? = null,
     ): Invoice {
         commit(NewBillCustomer(customer, due))
         val inv = invoices().last()
@@ -52,19 +52,19 @@ open class QueryApiTest {
     fun `a filter over a derived property, ordered, returns data classes`() {
         val sys = newSystem()
         val ada = sys.customer("Ada")
-        sys.invoice(ada, d3, BigDecimal("30"))
-        sys.invoice(ada, d1, BigDecimal("10"))
+        sys.invoice(ada, d3, Money.of("30"))
+        sys.invoice(ada, d1, Money.of("10"))
         sys.invoice(ada, d2) // no balance: excluded
-        val paid = sys.invoice(ada, d1, BigDecimal("50"))
-        sys.commit(NewSubmitPayment(paid, BigDecimal("50"))) // paid off: excluded
+        val paid = sys.invoice(ada, d1, Money.of("50"))
+        sys.commit(NewSubmitPayment(paid, Money.of("50"))) // paid off: excluded
 
         val unpaid: List<Invoice> = sys.read.invoices
-            .where { balance gt 0 and (due lte d3) }
+            .where { balance gt Money.ZERO and (due lte d3) }
             .orderBy { due.ascending }
             .list()
 
         assertEquals(listOf(d1, d3), unpaid.map { it.due })
-        assertEquals(listOf(BigDecimal("10"), BigDecimal("30")).map { it.stripTrailingZeros() }, unpaid.map { it.balance.stripTrailingZeros() })
+        assertEquals(listOf(Money.of("10"), Money.of("30")), unpaid.map { it.balance })
         assertEquals("Ada", sys.read(unpaid.first().customer).name) // a reference is a handle; reading it is a fetch
     }
 
@@ -88,8 +88,8 @@ open class QueryApiTest {
     fun `a refinement is a root and a membership test`() {
         val sys = newSystem()
         val ada = sys.customer("Ada")
-        sys.invoice(ada, d1, BigDecimal("10"))   // overdue once the clock passes d1
-        sys.invoice(ada, d3, BigDecimal("10"))   // not yet due
+        sys.invoice(ada, d1, Money.of("10"))   // overdue once the clock passes d1
+        sys.invoice(ada, d3, Money.of("10"))   // not yet due
         sys.setTime(d2.atStartOfDay().toInstant(java.time.ZoneOffset.UTC))
 
         val overdue = sys.read.overdueInvoices.orderBy { due.ascending }.list()
@@ -174,38 +174,38 @@ open class QueryApiTest {
     fun `descending order, a secondary datum, and absent values last`() {
         val sys = newSystem()
         val ada = sys.customer("Ada")
-        sys.invoice(ada, d2, BigDecimal("5"))
-        sys.invoice(ada, d1, BigDecimal("20"))
-        sys.invoice(ada, d1, BigDecimal("10"))
+        sys.invoice(ada, d2, Money.of("5"))
+        sys.invoice(ada, d1, Money.of("20"))
+        sys.invoice(ada, d1, Money.of("10"))
 
         val rows = sys.read.invoices.orderBy { due.descending }.thenBy { total.ascending }.list()
         assertEquals(listOf(d2, d1, d1), rows.map { it.due })
-        assertEquals(listOf("5", "10", "20"), rows.map { it.total.stripTrailingZeros().toPlainString() })
+        assertEquals(listOf("5.00", "10.00", "20.00"), rows.map { it.total.toString() })
     }
 
     @Test
     fun `count and sum are composed aggregates - no spec declaration`() {
         val sys = newSystem()
         val ada = sys.customer("Ada")
-        sys.invoice(ada, d1, BigDecimal("10"))
-        sys.invoice(ada, d2, BigDecimal("30"))
+        sys.invoice(ada, d1, Money.of("10"))
+        sys.invoice(ada, d2, Money.of("30"))
         sys.invoice(ada, d3)
 
         assertEquals(3, sys.read.invoices.count())
-        assertEquals(2, sys.read.invoices.where { balance gt 0 }.count())
-        assertEquals(0, BigDecimal("40").compareTo(sys.read.invoices.sum { total }))
-        assertEquals(0, BigDecimal("30").compareTo(sys.read.invoices.where { due gte d2 }.sum { total }))
+        assertEquals(2, sys.read.invoices.where { balance gt Money.ZERO }.count())
+        assertEquals(Money.of("40"), sys.read.invoices.sumOf { total })
+        assertEquals(Money.of("30"), sys.read.invoices.where { due gte d2 }.sumOf { total })
     }
 
     @Test
     fun `a registered query is checked by name and runs by name`() {
         val sys = newSystem()
         val ada = sys.customer("Ada")
-        sys.invoice(ada, d1, BigDecimal("10"))
+        sys.invoice(ada, d1, Money.of("10"))
         sys.invoice(ada, d2)
 
         val unpaidFor = sys.read.register("unpaidInvoices") {
-            invoices.where { balance gt 0 }.orderBy { due.ascending }
+            invoices.where { balance gt Money.ZERO }.orderBy { due.ascending }
         }
         assertEquals(listOf("unpaidInvoices"), sys.read.registry.names)
         assertTrue(sys.read.registry.validate().isEmpty())
@@ -217,18 +217,18 @@ open class QueryApiTest {
     fun `fetch by identity - a handle points, the data class carries the data and the membership flags`() {
         val sys = newSystem()
         val ada = sys.customer("Ada")
-        val inv = sys.invoice(ada, d1, BigDecimal("10"))
+        val inv = sys.invoice(ada, d1, Money.of("10"))
 
         // the handle has no getters; the data class is one read at the moment of the fetch
         val before = sys.read(inv)
         assertEquals(inv, before)                       // the same identity: a model object is a reference
-        assertEquals(0, BigDecimal("10").compareTo(before.balance))
+        assertEquals(Money.of("10"), before.balance)
         assertEquals(false, before.isPaidInvoice)
 
-        sys.commit(NewSubmitPayment(inv, BigDecimal("10")))
-        assertEquals(0, BigDecimal("10").compareTo(before.balance), "a data class does not change after the fact")
+        sys.commit(NewSubmitPayment(inv, Money.of("10")))
+        assertEquals(Money.of("10"), before.balance, "a data class does not change after the fact")
         val after = sys.read(inv)
-        assertEquals(0, BigDecimal.ZERO.compareTo(after.balance))
+        assertEquals(Money.ZERO, after.balance)
         assertEquals(true, after.isPaidInvoice)
         assertEquals("paid", after.status)
 
@@ -250,7 +250,7 @@ open class QueryApiTest {
         assertEquals(1, sys.read.invoices.count())
         val inv = sys.read.invoices.orderBy { due.ascending }.list().single()
         assertEquals(ada, inv.customer)
-        assertEquals(BigDecimal.ZERO.compareTo(inv.balance), 0)
+        assertEquals(Money.ZERO, inv.balance)
     }
 }
 

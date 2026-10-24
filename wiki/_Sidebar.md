@@ -40,6 +40,7 @@
 
 - [[Authorization|Authorization]]
 - [[Binding API|Binding-API]]
+- [[Extension types|Extension-types]]
 
 **Notes**
 

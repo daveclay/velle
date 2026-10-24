@@ -112,6 +112,15 @@ data class Requirement(val subject: String, val predicate: Expr)
  */
 data class VisibilityDefault(val clause: VisibleClause) : Decl
 
+/** `uses velle.finance.Money [as Cash]` (Reference §5, extension types): picks the
+ *  registered type [qualified] when two libraries register one name, or brings it
+ *  into the spec under [alias]. With an alias, the type's own name is no longer in
+ *  scope for it in this spec. */
+data class UsesDecl(val qualified: String, val alias: String? = null) : Decl {
+    /** The name the spec writes for the type. */
+    val name: String get() = alias ?: qualified.substringAfterLast('.')
+}
+
 // ── Shape / refinement members ───────────────────────────────────────────────
 
 sealed interface Member

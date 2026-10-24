@@ -40,6 +40,9 @@ The compiler does not analyze your formula. It recognizes a short list of forms 
 | `max(x, amount)`, `min`, set-union, boolean-or | provably yes | provably yes |
 | `x + amount` (`sum`, `count`) | no | provably yes (commutative) |
 | streak, moving average, "reset on miss" | no | no |
+| `x + amount` where `x` is an [extension type](Reference-05-Scalars#extension-types) | as the type's author declared for `+` | as the type's author declared for `+` |
+
+For an extension type the author answers both columns per operator, and the compiler checks each answer on the type's own sample values. `Money` declares that two `+` steps may be applied in either order and that one step applied twice is not the same as once, so a `Money` fold reads the second row of the table.
 
 A fold is rejected when the rule is exposed to a hazard its form is not known to be safe under. The error asks for a policy: "this value's correctness depends on each qualifying commit being folded exactly once; state how that is ensured." A streak really does break under replay, so the error is correct even when the code is what you meant. The four answers:
 

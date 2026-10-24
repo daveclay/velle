@@ -25,7 +25,9 @@ A **commit** is one mutation entering state at a discrete moment: an act instanc
 commitAct(actInstance):
   1. boundary validation: type-level checks first — a duplicate reference in a `many`
      field is refused here (collections are sets; multiplicity that matters is data on
-     an edge shape, §6) — then the door: the prohibitions no rule can move (§21),
+     an edge shape, §6), and so is a value of an extension type (§5) that is not the
+     type's Kotlin class or that the type's own `validate` refuses, with its reason —
+     then the door: the prohibitions no rule can move (§21),
      evaluated over pre-state plus the act's closure as if landed and nothing
      processed — violation → refusal naming the act and what was violated;
      nothing begins
@@ -167,6 +169,8 @@ The language-side layer, for the reader who works on Velle rather than against i
 ### Handles and their lifetime
 
 Inside the runtime a record is a number, the handle, minted when the runtime creates the record or first loads its row. A handle is private to one running system. The identity that crosses the boundary is the pair of shape and store key that every reference carries ([Binding API](Binding-API), "Reading a record"), and the runtime keeps a map between the two.
+
+A field of an extension type ([Reference §5](Reference-05-Scalars#extension-types)) crosses the store boundary as the type's own Kotlin object, in a row and in the commit set alike. How the store encodes it is the store's binding for that type ([Extension types](Extension-types), "Holding a type in a store"): the runtime never sees a column, and the store never sees the type's arithmetic. A store is built only when it holds a binding for every extension type the model stores ([E4](checks#e4--a-store-holds-every-type-it-stores)).
 
 Over a store that map lives for one unit of work: a commit together with the `after commit` firings it queues, a tick, or one read. The generated commit converts the input's references to handles, calls the runtime, and when the call returns the runtime drops the map and the rows it loaded. The generated read surface does the same around each read. Memory is therefore bounded by the largest single unit of work, not by how many records the system has ever touched. In memory, with no store, the handle is the identity and nothing is dropped.
 

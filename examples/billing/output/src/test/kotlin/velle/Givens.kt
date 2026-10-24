@@ -1,6 +1,6 @@
 package velle.generated.billing
 
-import java.math.BigDecimal
+import velle.finance.Money
 import velle.generated.*
 import java.time.LocalDate
 import velle.generated.BillingSystem
@@ -24,7 +24,7 @@ class Givens(private val sys: BillingSystem) : RequiredGivens {
     }
 
     private fun invoiceWithBalance(
-        amount: BigDecimal,
+        amount: Money,
         due: LocalDate = LocalDate.of(2026, 2, 1),
     ): Invoice {
         val inv = invoice(due)
@@ -41,7 +41,7 @@ class Givens(private val sys: BillingSystem) : RequiredGivens {
     }
 
     override fun submitPayment() {
-        sys.commit(NewSubmitPayment(invoiceWithBalance(BigDecimal("100")), BigDecimal("40")))
+        sys.commit(NewSubmitPayment(invoiceWithBalance(Money.of("100")), Money.of("40")))
     }
 
     override fun correctEmail(): CorrectEmail {
@@ -50,15 +50,15 @@ class Givens(private val sys: BillingSystem) : RequiredGivens {
     }
 
     override fun payment(): Payment {
-        sys.commit(NewSubmitPayment(invoiceWithBalance(BigDecimal("100")), BigDecimal("40")))
+        sys.commit(NewSubmitPayment(invoiceWithBalance(Money.of("100")), Money.of("40")))
         return sys.payments().last()
     }
 
     override fun someInvoice(): Invoice = invoice()
 
     override fun paidInvoice(): Invoice {
-        val inv = invoiceWithBalance(BigDecimal("100"))
-        sys.commit(NewSubmitPayment(inv, BigDecimal("100"))) // covering payment: newly paid
+        val inv = invoiceWithBalance(Money.of("100"))
+        sys.commit(NewSubmitPayment(inv, Money.of("100"))) // covering payment: newly paid
         return inv
     }
 
@@ -68,7 +68,7 @@ class Givens(private val sys: BillingSystem) : RequiredGivens {
     }
 
     override fun invoiceForRemindOverdue(): Invoice =
-        invoiceWithBalance(BigDecimal("100"), due = LocalDate.of(2025, 12, 1))
+        invoiceWithBalance(Money.of("100"), due = LocalDate.of(2025, 12, 1))
 
     override fun applicableDueChange() {
         sys.commit(NewChangeDueDate(invoice(), LocalDate.of(2026, 3, 1))) // draft: change applies

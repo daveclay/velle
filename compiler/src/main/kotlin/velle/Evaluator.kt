@@ -369,14 +369,29 @@ class Evaluator(private val system: VelleSystem) {
     private fun evalAgg(e: AggCall, ctx: Ctx): Value = when (e.name) {
         "count" -> Value.VNum(BigDecimal(combinations(e.collection, ctx).count()))
         "sum" -> {
-            var acc = BigDecimal.ZERO
-            for (c in combinations(e.collection, ctx)) {
-                val (scope, id) = c.innermost()
-                val v = readMember(id, scope, e.field!!) as? Value.VNum
-                    ?: throw VelleRuntimeError("sum over non-numeric '${e.field}'")
-                acc = acc.add(v.v)
+            // a field of an extension type sums through its declared `sum` (Reference §5; OQ65)
+            val element = system.model.collectionElement(e.collection, ctx.subjectScope)
+            val ext = element?.let { system.model.membersOf(it)[e.field!!]?.type }?.let { system.model.extTypeOf(it) }
+            if (ext != null) {
+                val sum = ext.sum ?: throw VelleRuntimeError("'${ext.name}' declares no sum — validator gap")
+                var acc: Any = sum.zero
+                for (c in combinations(e.collection, ctx)) {
+                    val (scope, id) = c.innermost()
+                    val v = readMember(id, scope, e.field!!)
+                    if (v == Value.VNone) continue
+                    acc = ext.sumAny(acc, (v as? Value.VExt)?.v ?: throw VelleRuntimeError("sum over '${e.field}': not a ${ext.name} ($v)"))
+                }
+                Value.VExt(ext, acc)
+            } else {
+                var acc = BigDecimal.ZERO
+                for (c in combinations(e.collection, ctx)) {
+                    val (scope, id) = c.innermost()
+                    val v = readMember(id, scope, e.field!!) as? Value.VNum
+                        ?: throw VelleRuntimeError("sum over non-numeric '${e.field}'")
+                    acc = acc.add(v.v)
+                }
+                Value.VNum(acc)
             }
-            Value.VNum(acc)
         }
         "latest", "first" -> {
             val all = combinations(e.collection, ctx).map { it.innermost() }.toList()
@@ -418,12 +433,51 @@ class Evaluator(private val system: VelleSystem) {
             Value.VText(v.v.lowercase())
         }
         "max", "min" -> {
-            val nums = e.args.map {
-                (eval(it, ctx) as? Value.VNum)?.v ?: throw VelleRuntimeError("${e.name} on non-number")
+            // the *ordered* capability (Reference §5; OQ65 D4): numbers by value, an
+            // extension type through its declared ordering, constants read as that type
+            val values = e.args.map { eval(it, ctx) }
+            val ext = values.filterIsInstance<Value.VExt>().firstOrNull()
+            if (ext != null) {
+                val typed = values.map { coerceLiteral(it, ext.type) }
+                typed.reduce { a, b ->
+                    val c = compareValues(a, b)
+                    if (e.name == "max") (if (c >= 0) a else b) else (if (c <= 0) a else b)
+                }
+            } else {
+                val nums = values.map { (it as? Value.VNum)?.v ?: throw VelleRuntimeError("${e.name} on non-number") }
+                Value.VNum(if (e.name == "max") nums.max() else nums.min())
             }
-            Value.VNum(if (e.name == "max") nums.max() else nums.min())
         }
         else -> throw VelleRuntimeError("unknown function '${e.name}' (the builtin list is closed)")
+    }
+
+    /**
+     * A number or text constant where a value of extension type [type] is expected reads
+     * as that type (Reference §5; OQ65 D2): `balance < 0` with `balance: Money` reads `0`
+     * through `Money`'s number reader. The validator checked the reader exists and
+     * accepts the constant; here a refusal is a runtime error, never a silent value.
+     * Anything that is not a bare constant, or no type, passes through.
+     */
+    internal fun coerceLiteral(v: Value, type: velle.ext.VelleType<*>?): Value {
+        if (type == null) return v
+        val read = when (v) {
+            is Value.VNum -> type.readLiteral(v.v, null)
+            is Value.VText -> type.readLiteral(null, v.v)
+            else -> return v
+        }
+        return when (read) {
+            is LiteralRead.Ok -> Value.VExt(type, read.value)
+            is LiteralRead.NoReader -> throw VelleRuntimeError("'${system.model.specNameOf(type)}' reads no ${read.form} constant — validator gap")
+            is LiteralRead.Rejected -> throw VelleRuntimeError("'${system.model.specNameOf(type)}' rejects the constant: ${read.reason}")
+        }
+    }
+
+    /** The two operands of a binary operator with a constant on one side and an extension
+     *  value on the other: the constant takes the other side's type. */
+    private fun unify(l: Value, r: Value): Pair<Value, Value> = when {
+        l is Value.VExt && r !is Value.VExt -> l to coerceLiteral(r, l.type)
+        r is Value.VExt && l !is Value.VExt -> coerceLiteral(l, r.type) to r
+        else -> l to r
     }
 
     private fun evalSingularFor(e: SingularFor, ctx: Ctx): Value {
@@ -444,8 +498,12 @@ class Evaluator(private val system: VelleSystem) {
             "and" -> return Value.VBool(truthy(eval(e.left, ctx)) && truthy(eval(e.right, ctx)))
             "or" -> return Value.VBool(truthy(eval(e.left, ctx)) || truthy(eval(e.right, ctx)))
         }
-        val l = eval(e.left, ctx)
-        val r = eval(e.right, ctx)
+        val l0 = eval(e.left, ctx)
+        val r0 = eval(e.right, ctx)
+        // an extension type's arithmetic is its declared operator table (Reference §5;
+        // OQ65): `Money * decimal` keeps the number a number, `Money + 10` reads 10 as Money
+        if (l0 is Value.VExt || r0 is Value.VExt) extOperator(e.op, l0, r0)?.let { return it }
+        val (l, r) = if (e.op in setOf("==", "!=", "<", "<=", ">", ">=")) unify(l0, r0) else l0 to r0
         return when (e.op) {
             "+", "-" -> arith(e.op, l, r)
             "*", "/" -> {
@@ -485,6 +543,60 @@ class Evaluator(private val system: VelleSystem) {
             }
             else -> throw VelleRuntimeError("unknown operator '${e.op}'")
         }
+    }
+
+    /** `l op r` through the registry's operator table when an extension value takes part
+     *  and the operator is arithmetic; null for a comparison or an absent operand (the
+     *  caller's rules apply), a runtime error for a line no type declares. */
+    private fun extOperator(op: String, l: Value, r: Value): Value? {
+        if (op !in setOf("+", "-", "*", "/")) return null
+        if (l == Value.VNone || r == Value.VNone) return null
+        val registry = system.model.registry
+        fun nameOf(v: Value): String? = when (v) {
+            is Value.VExt -> v.type.qualifiedName
+            is Value.VNum -> "decimal"
+            is Value.VText -> "text"
+            else -> null
+        }
+        // a constant takes the type the one matching operator line gives it
+        val (left, right) = when {
+            l is Value.VExt && r is Value.VNum || l is Value.VExt && r is Value.VText -> {
+                val lines = registry.operatorsFrom(l.type.qualifiedName, op).filter { line -> acceptsConstant(line.right, r) }
+                l to (lines.singleOrNull()?.let { line -> readAs(line.right, r) } ?: r)
+            }
+            r is Value.VExt && (l is Value.VNum || l is Value.VText) -> {
+                val lines = registry.operatorsTo(r.type.qualifiedName, op).filter { line -> acceptsConstant(line.left, l) }
+                (lines.singleOrNull()?.let { line -> readAs(line.left, l) } ?: l) to r
+            }
+            else -> l to r
+        }
+        val line = registry.operator(nameOf(left) ?: return null, op, nameOf(right) ?: return null)
+            ?: throw VelleRuntimeError("no operator '${nameOf(left)} $op ${nameOf(right)}' is declared (Reference §5) — validator gap")
+        val out = line.applyAny(unwrapOperand(left), unwrapOperand(right))
+        return registry[line.result]?.let { Value.VExt(it, out) } ?: when (out) {
+            is java.math.BigDecimal, is Int, is Long, is Double -> Value.num(out)
+            is String -> Value.VText(out)
+            is Boolean -> Value.VBool(out)
+            else -> throw VelleRuntimeError("operator '${line.left} $op ${line.right}' returned $out, not a ${line.result}")
+        }
+    }
+
+    private fun acceptsConstant(typeName: String, c: Value): Boolean = when {
+        typeName in TypeRegistry.NUMBER_NAMES -> c is Value.VNum
+        typeName == "text" -> c is Value.VText
+        else -> system.model.registry[typeName]?.let { t ->
+            (c is Value.VNum && t.literals.fromNumber != null) || (c is Value.VText && t.literals.fromText != null)
+        } ?: false
+    }
+
+    private fun readAs(typeName: String, c: Value): Value =
+        system.model.registry[typeName]?.let { coerceLiteral(c, it) } ?: c
+
+    private fun unwrapOperand(v: Value): Any = when (v) {
+        is Value.VExt -> v.v
+        is Value.VNum -> v.v
+        is Value.VText -> v.v
+        else -> throw VelleRuntimeError("operand $v has no extension operator form")
     }
 
     private fun collectionSize(v: Value): Int? = when (v) {
@@ -582,11 +694,15 @@ class Evaluator(private val system: VelleSystem) {
     private fun valueEquals(l: Value, r: Value): Boolean = when {
         l is Value.VNum && r is Value.VNum -> l.v.compareTo(r.v) == 0
         l is Value.VRef && r is Value.VRef -> l.id == r.id // identity comparison (Reference §5)
+        l is Value.VExt && r is Value.VExt -> l.type === r.type && l.type.equalAny(l.v, r.v)
+        l is Value.VExt || r is Value.VExt -> { val (a, b) = unify(l, r); a == b }
         else -> l == r
     }
 
     private fun compareValues(l: Value, r: Value): Int = when {
         l is Value.VNum && r is Value.VNum -> l.v.compareTo(r.v)
+        l is Value.VExt && r is Value.VExt && l.type === r.type -> l.type.compareAny(l.v, r.v)
+        l is Value.VExt || r is Value.VExt -> { val (a, b) = unify(l, r); if (a is Value.VExt && b is Value.VExt) compareValues(a, b) else throw VelleRuntimeError("cannot order $l against $r") }
         l is Value.VDate && r is Value.VDate -> l.v.compareTo(r.v)
         l is Value.VDateTime && r is Value.VDateTime -> l.v.compareTo(r.v)
         l is Value.VText && r is Value.VText -> l.v.compareTo(r.v)

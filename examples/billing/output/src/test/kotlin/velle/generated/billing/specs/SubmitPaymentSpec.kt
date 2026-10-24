@@ -25,20 +25,20 @@ class SubmitPaymentSpec : SpecSupport() {
     }
 
     @Test
-    fun `never - a SubmitPayment where amount at most 0 is refused`() {
+    fun `never - a SubmitPayment where amount at most 0 00 is refused`() {
         // given: any committed 'Invoice'
         val invoice = givens.someInvoice()
         val before = count("SubmitPayment")
-        val result = sys.system.commit("SubmitPayment", mapOf("invoice" to idOf(invoice), "amount" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("SubmitPayment", mapOf("invoice" to idOf(invoice), "amount" to velle.finance.Money.of("-0.01")))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("SubmitPayment"), "a refused act commits nothing")
     }
 
     @Test
-    fun `never - a SubmitPayment with amount 1 is accepted`() {
+    fun `never - a SubmitPayment with amount 0 01 is accepted`() {
         // given: any committed 'Invoice'
         val invoice = givens.someInvoice()
-        val result = sys.system.commit("SubmitPayment", mapOf("invoice" to idOf(invoice), "amount" to java.math.BigDecimal("1")))
+        val result = sys.system.commit("SubmitPayment", mapOf("invoice" to idOf(invoice), "amount" to velle.finance.Money.of("0.01")))
         assertIs<CommitResult.Accepted>(result)
     }
 }
