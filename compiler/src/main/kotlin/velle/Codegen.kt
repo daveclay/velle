@@ -437,8 +437,7 @@ object Codegen {
             line("    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──")
             line("    val read = Read()")
             line()
-            line("    inner class Read : ReadSurface<Read>(system) {")
-            line("        override fun modelOf(id: Long): Ref<*> = materialize(id)")
+            line("    inner class Read : ReadSurface<Read>(system, { materialize(it) }) {")
             queryRoots.forEach { root ->
                 line()
                 line("        val ${plural(root)}: ${root}Query get() = query(\"$root\", ${root}Fields()) { materialize$root(it) }")

@@ -51,15 +51,14 @@ abstract class GeneratedSystem(spec: String, startTime: Instant) {
 
 /** The base of a generated `Read`: `read(ref)`, the query registry, and the
  *  helpers behind the one typed line the generator emits per shape. [Self] is the
- *  generated class, so a registered query is built against its typed roots. */
-abstract class ReadSurface<Self : ReadSurface<Self>>(protected val system: VelleSystem) {
+ *  generated class, so a registered query is built against its typed roots;
+ *  [modelOf] builds the model object of whatever shape an instance is (a
+ *  union-typed reference resolves to its operand's). */
+abstract class ReadSurface<Self : ReadSurface<Self>>(protected val system: VelleSystem, private val modelOf: (Long) -> Ref<*>) {
     /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
     val registry = QueryRegistry()
     @Suppress("UNCHECKED_CAST")
     fun <Q : TypedQuery<*, *>> register(name: String, build: Self.() -> Q): Q = registry.register(name, (this as Self).build())
-
-    /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
-    protected abstract fun modelOf(id: Long): Ref<*>
 
     /** The model object behind a reference, read now; throws when the record no longer exists. */
     @Suppress("UNCHECKED_CAST")

@@ -59,8 +59,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
-    inner class Read : ReadSurface<Read>(system) {
-        override fun modelOf(id: Long): Ref<*> = materialize(id)
+    inner class Read : ReadSurface<Read>(system, { materialize(it) }) {
 
         val peptides: PeptideQuery get() = query("Peptide", PeptideFields()) { materializePeptide(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
