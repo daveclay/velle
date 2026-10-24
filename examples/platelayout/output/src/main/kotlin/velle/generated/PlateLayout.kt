@@ -7,113 +7,56 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
-
-    val system: VelleSystem = VelleSystem(Model(Parser.parse(SPEC)), startTime)
-
-    // ── clock (harness-controlled; ticks are separate calls) ──
-    val now: Instant get() = system.now
-    fun advanceSeconds(seconds: Long) = system.advance(seconds)
-    fun advanceDays(days: Long) = system.advanceDays(days)
-    fun setTime(t: Instant) = system.setTime(t)
+class PlateLayoutSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewContainerType): Commit<NewContainerType, Ref<ContainerType>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ContainerType", raw).carrying(input)
-    }
+    fun commit(input: NewContainerType): Commit<NewContainerType, Ref<ContainerType>> =
+        boundary("ContainerType", input).carrying(input)
 
     /** Queue key: [experimentDesign.containerType].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewExperimentDesign): Commit<NewExperimentDesign, Ref<ExperimentDesign>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        val parts = input.parts(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ExperimentDesign", raw, parts).carrying(input)
-    }
+    fun commit(input: NewExperimentDesign): Commit<NewExperimentDesign, Ref<ExperimentDesign>> =
+        boundary("ExperimentDesign", input).carrying(input)
 
-    fun containerTypes(): List<ContainerType> = system.scope { system.instancesOf("ContainerType").map { materializeContainerType(it) } }
-    fun experimentDesigns(): List<ExperimentDesign> = system.scope { system.instancesOf("ExperimentDesign").map { materializeExperimentDesign(it) } }
-    fun conditions(): List<Condition> = system.scope { system.instancesOf("Condition").map { materializeCondition(it) } }
-    fun containers(): List<Container> = system.scope { system.instancesOf("Container").map { materializeContainer(it) } }
-    fun wells(): List<Well> = system.scope { system.instancesOf("Well").map { materializeWell(it) } }
+    fun containerTypes(): List<ContainerType> = all("ContainerType") { materializeContainerType(it) }
+    fun experimentDesigns(): List<ExperimentDesign> = all("ExperimentDesign") { materializeExperimentDesign(it) }
+    fun conditions(): List<Condition> = all("Condition") { materializeCondition(it) }
+    fun containers(): List<Container> = all("Container") { materializeContainer(it) }
+    fun wells(): List<Well> = all("Well") { materializeWell(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
-    inner class Read {
-        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
-        val registry = QueryRegistry()
-        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+    inner class Read : ReadSurface<Read>(system) {
+        override fun modelOf(id: Long): Ref<*> = materialize(id)
 
-        /** The model object behind a reference, read now; throws when the record no longer exists. */
-        @Suppress("UNCHECKED_CAST")
-        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
-        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
-        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
-        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
-        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
-            val id = system.idOf(ref)
-            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            materialize(id)
-        }
-
-        val containerTypes: ContainerTypeQuery get() = ContainerTypeQuery(Query("ContainerType"))
+        val containerTypes: ContainerTypeQuery get() = query("ContainerType", ContainerTypeFields()) { materializeContainerType(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun containerType(key: StoreKey): ContainerType = invoke<ContainerType>(Ref.Persisted("ContainerType", key))
+        fun containerType(key: StoreKey): ContainerType = byKey("ContainerType", key)
         fun containerType(key: Long): ContainerType = containerType(StoreKey(key))
 
-        val experimentDesigns: ExperimentDesignQuery get() = ExperimentDesignQuery(Query("ExperimentDesign"))
+        val experimentDesigns: ExperimentDesignQuery get() = query("ExperimentDesign", ExperimentDesignFields()) { materializeExperimentDesign(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun experimentDesign(key: StoreKey): ExperimentDesign = invoke<ExperimentDesign>(Ref.Persisted("ExperimentDesign", key))
+        fun experimentDesign(key: StoreKey): ExperimentDesign = byKey("ExperimentDesign", key)
         fun experimentDesign(key: Long): ExperimentDesign = experimentDesign(StoreKey(key))
 
-        val conditions: ConditionQuery get() = ConditionQuery(Query("Condition"))
+        val conditions: ConditionQuery get() = query("Condition", ConditionFields()) { materializeCondition(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun condition(key: StoreKey): Condition = invoke<Condition>(Ref.Persisted("Condition", key))
+        fun condition(key: StoreKey): Condition = byKey("Condition", key)
         fun condition(key: Long): Condition = condition(StoreKey(key))
 
-        val containers: ContainerQuery get() = ContainerQuery(Query("Container"))
+        val containers: ContainerQuery get() = query("Container", ContainerFields()) { materializeContainer(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun container(key: StoreKey): Container = invoke<Container>(Ref.Persisted("Container", key))
+        fun container(key: StoreKey): Container = byKey("Container", key)
         fun container(key: Long): Container = container(StoreKey(key))
 
-        val wells: WellQuery get() = WellQuery(Query("Well"))
+        val wells: WellQuery get() = query("Well", WellFields()) { materializeWell(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun well(key: StoreKey): Well = invoke<Well>(Ref.Persisted("Well", key))
+        fun well(key: StoreKey): Well = byKey("Well", key)
         fun well(key: Long): Well = well(StoreKey(key))
-    }
-
-    inner class ContainerTypeQuery(q: Query) : TypedQuery<ContainerTypeFields, ContainerType>(system, q, ContainerTypeFields(), { materializeContainerType(it) }) {
-        override fun with(q: Query) = ContainerTypeQuery(q)
-    }
-
-    inner class ExperimentDesignQuery(q: Query) : TypedQuery<ExperimentDesignFields, ExperimentDesign>(system, q, ExperimentDesignFields(), { materializeExperimentDesign(it) }) {
-        override fun with(q: Query) = ExperimentDesignQuery(q)
-    }
-
-    inner class ConditionQuery(q: Query) : TypedQuery<ConditionFields, Condition>(system, q, ConditionFields(), { materializeCondition(it) }) {
-        override fun with(q: Query) = ConditionQuery(q)
-    }
-
-    inner class ContainerQuery(q: Query) : TypedQuery<ContainerFields, Container>(system, q, ContainerFields(), { materializeContainer(it) }) {
-        override fun with(q: Query) = ContainerQuery(q)
-    }
-
-    inner class WellQuery(q: Query) : TypedQuery<WellFields, Well>(system, q, WellFields(), { materializeWell(it) }) {
-        override fun with(q: Query) = WellQuery(q)
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -282,17 +225,24 @@ rule LayOut when ExperimentDesign {
     }
 }
 
+// ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias ContainerTypeQuery = TypedQuery<ContainerTypeFields, ContainerType>
+typealias ExperimentDesignQuery = TypedQuery<ExperimentDesignFields, ExperimentDesign>
+typealias ConditionQuery = TypedQuery<ConditionFields, Condition>
+typealias ContainerQuery = TypedQuery<ContainerFields, Container>
+typealias WellQuery = TypedQuery<WellFields, Well>
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewContainerType(
     val name: String,
     val wellsPerContainer: Int,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("wellsPerContainer", wellsPerContainer)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ContainerType") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -303,17 +253,17 @@ data class NewExperimentDesign(
     val replicates: Int,
     val wellsPerCondition: Int,
     val conditions: List<NewCondition> = emptyList(),
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("containerType", system.idOf(containerType))
         put("containerCount", containerCount)
         put("replicates", replicates)
         put("wellsPerCondition", wellsPerCondition)
     }
-    internal fun parts(system: VelleSystem, reg: NewRegistry): Map<String, List<Map<String, Any?>>> = buildMap {
+    override fun parts(system: VelleSystem, reg: NewRegistry): Map<String, List<Map<String, Any?>>> = buildMap {
         put("conditions", conditions.map { it.asValue(system, reg) })
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
         conditions.forEach { reg.add(it); it.register(reg) }
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + parts(system, reg) + ("@shape" to "ExperimentDesign") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
@@ -323,12 +273,12 @@ data class NewExperimentDesign(
 data class NewCondition(
     val block: Int,
     val value: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("block", block)
         put("value", value)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Condition") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }

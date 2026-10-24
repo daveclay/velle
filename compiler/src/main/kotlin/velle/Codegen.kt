@@ -33,11 +33,8 @@ object Codegen {
         fun emit(): String {
             collectReferenceTypes()
             header()
-            line("class ${name}System(startTime: Instant = Instant.parse(\"2026-01-01T09:00:00Z\")) {")
+            line("class ${name}System(startTime: Instant = Instant.parse(\"2026-01-01T09:00:00Z\")) : GeneratedSystem(SPEC, startTime) {")
             line()
-            line("    val system: VelleSystem = VelleSystem(Model(Parser.parse(SPEC)), startTime)")
-            line()
-            clock()
             ticks()
             model.exposed.forEach { commitFn(it) }
             model.shapes.keys.forEach { shapeAccessors(it) }
@@ -46,6 +43,7 @@ object Codegen {
             specConstant()
             line("}")
             line()
+            queryAliases()
             actInputTypes()
             closureInputTypes()
             referenceTypes()
@@ -65,15 +63,6 @@ object Codegen {
             line("import java.math.BigDecimal")
             line("import java.time.Instant")
             line("import java.time.LocalDate")
-            line()
-        }
-
-        fun clock() {
-            line("    // ── clock (harness-controlled; ticks are separate calls) ──")
-            line("    val now: Instant get() = system.now")
-            line("    fun advanceSeconds(seconds: Long) = system.advance(seconds)")
-            line("    fun advanceDays(days: Long) = system.advanceDays(days)")
-            line("    fun setTime(t: Instant) = system.setTime(t)")
             line()
         }
 
@@ -200,8 +189,10 @@ object Codegen {
             // must supply a value — a required, non-null parameter
             val required = plain.filter { it.initially == null && (!isOptional(it.type) || it.initiallyRequired) }
             val optional = plain.filter { it.initially != null || (isOptional(it.type) && !it.initiallyRequired) }
-            val implements = supertypesOf[name].orEmpty().let { if (it.isEmpty()) "" else " : " + it.joinToString(", ") }
-            val ov = if (implements.isEmpty()) "" else "override "
+            // every input class is a NewValue; one in a union's `New` interface also implements that
+            val unionIfaces = supertypesOf[name].orEmpty()
+            val implements = " : " + (unionIfaces + "NewValue").joinToString(", ")
+            val ov = if (unionIfaces.isEmpty()) "" else "override "
             fun target(p: StoredProp) = (p.type as RelType).shape
             fun isMany(p: StoredProp) = (p.type as RelType).many
             // a `many` field's elements are each a handle or a new value (Reference §6)
@@ -212,8 +203,8 @@ object Codegen {
             val token = "(reg.tokenOrNull(this)?.let { mapOf(\"${VelleSystem.NEW_KEY}\" to it) } ?: emptyMap())"
             if (!hasParams) {
                 line("class $name$implements {")
-                line("    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = emptyMap()")
-                line("    ${ov}fun register(reg: NewRegistry) {}")
+                line("    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = emptyMap()")
+                line("    override fun register(reg: NewRegistry) {}")
                 line("    ${ov}fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = mapOf(\"${VelleSystem.SHAPE_KEY}\" to \"$shape\") + $token")
                 line("}")
                 line()
@@ -226,7 +217,7 @@ object Codegen {
             refFields.filter { isOptional(it.type) }.forEach { line("    val ${it.name}: ${refType(it)} = null,") }
             parts.forEach { line("    val ${it.prop}: List<${closureClassName(it, act)}> = emptyList(),") }
             line(")$implements {")
-            line("    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {")
+            line("    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {")
             required.forEach { line("        put(\"${it.name}\", ${rawExpr(it.name, it.type)})") }
             optional.forEach { line("        ${it.name}?.let { put(\"${it.name}\", ${rawExpr("it", it.type)}) }") }
             refFields.filter { !isMany(it) }.forEach { line("        (${it.name} as? ${referenceTypeName(target(it))}.Existing)?.let { put(\"${it.name}\", system.idOf(it.ref)) }") }
@@ -243,12 +234,12 @@ object Codegen {
             if (partsApart && edges.isNotEmpty()) {
                 // an act's inline parts travel beside its fields (Reference §6,
                 // "Inline part creation"); a part's own nested parts ride in its map
-                line("    internal fun parts(system: VelleSystem, reg: NewRegistry): Map<String, List<Map<String, Any?>>> = buildMap {")
+                line("    override fun parts(system: VelleSystem, reg: NewRegistry): Map<String, List<Map<String, Any?>>> = buildMap {")
                 stored.filter { it.name in byValueProps }.forEach { line("        " + nestedLine(it)) }
                 parts.forEach { line("        put(\"${it.prop}\", ${it.prop}.map { it.asValue(system, reg) })") }
                 line("    }")
             }
-            line("    ${ov}fun register(reg: NewRegistry) {")
+            line("    override fun register(reg: NewRegistry) {")
             stored.filter { it.name in byValueProps }.forEach { line("        (${it.name} as? ${referenceTypeName(target(it))}.New)?.let { reg.add(it.value); it.value.register(reg) }") }
             parts.forEach { line("        ${it.prop}.forEach { reg.add(it); it.register(reg) }") }
             line("    }")
@@ -324,19 +315,11 @@ object Codegen {
             // (Reference §22, "The actor"): the committer, never a field of the input
             val actor = model.actorOf(shape)
             val actorParam = actor?.let { ", ${it.name}: Ref<${refBase(it.shape)}>" } ?: ""
-            val actorArg = actor?.let { ", actor = system.idOf(${it.name})" } ?: ""
+            val actorArg = actor?.let { ", ${it.name}" } ?: ""
             val transient = shape in model.transients
             val result = if (transient) "Nothing?" else "Ref<$shape>"
-            line("    fun commit(input: $input$actorParam): Commit<$input, $result> {")
-            line("        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by")
-            line("        // identity, and a field pointing at a sibling names it; refused before the runtime")
-            line("        val reg = NewRegistry()")
-            line("        input.register(reg)")
-            line("        val raw = input.raw(system, reg)")
-            if (edges.isNotEmpty()) line("        val parts = input.parts(system, reg)")
-            line("        reg.problem()?.let { return Commit.Refused(input, it) }")
-            line("        return system.commit(\"$shape\", raw${if (edges.isEmpty()) "" else ", parts"}$actorArg).${if (transient) "carryingNoRecord(input)" else "carrying(input)"}")
-            line("    }")
+            line("    fun commit(input: $input$actorParam): Commit<$input, $result> =")
+            line("        boundary(\"$shape\", input$actorArg).${if (transient) "carryingNoRecord(input)" else "carrying(input)"}")
             line()
         }
 
@@ -441,12 +424,12 @@ object Codegen {
         // ── accessors: the degenerate query — every instance, as model objects ──
         fun shapeAccessors(shape: String) {
             if (shape in model.transients) return // an input to the state, never readable after its commit
-            line("    fun ${plural(shape)}(): List<$shape> = system.scope { system.instancesOf(\"$shape\").map { materialize$shape(it) } }")
+            line("    fun ${plural(shape)}(): List<$shape> = all(\"$shape\") { materialize$shape(it) }")
         }
 
         fun refinementAccessors(ref: String) {
             if (!isRoot(ref)) return
-            line("    fun ${plural(ref)}(): List<$ref> = system.scope { system.instancesOf(\"$ref\").map { materialize$ref(it) } }")
+            line("    fun ${plural(ref)}(): List<$ref> = all(\"$ref\") { materialize$ref(it) }")
         }
 
         fun readSurface() {
@@ -454,45 +437,24 @@ object Codegen {
             line("    // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──")
             line("    val read = Read()")
             line()
-            line("    inner class Read {")
-            line("        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */")
-            line("        val registry = QueryRegistry()")
-            line("        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())")
-            line()
-            line("        /** The model object behind a reference, read now; throws when the record no longer exists. */")
-            line("        @Suppress(\"UNCHECKED_CAST\")")
-            line("        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T")
-            line("        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */")
-            line("        @Deprecated(\"read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you\", level = DeprecationLevel.ERROR)")
-            line("        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()")
-            line("        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {")
-            line("            val id = system.idOf(ref)")
-            line("            system.currentShapeOf(id) ?: throw NoSuchElementException(\"no current record for \${system.refFor(id)}\")")
-            line("            materialize(id)")
-            line("        }")
+            line("    inner class Read : ReadSurface<Read>(system) {")
+            line("        override fun modelOf(id: Long): Ref<*> = materialize(id)")
             queryRoots.forEach { root ->
                 line()
-                line("        val ${plural(root)}: ${root}Query get() = ${root}Query(Query(\"$root\"))")
+                line("        val ${plural(root)}: ${root}Query get() = query(\"$root\", ${root}Fields()) { materialize$root(it) }")
                 when {
                     root in model.shapes -> {
                         line("        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */")
-                        line("        fun ${decap(root)}(key: StoreKey): $root = invoke<$root>(Ref.Persisted(\"$root\", key))")
+                        line("        fun ${decap(root)}(key: StoreKey): $root = byKey(\"$root\", key)")
                         line("        fun ${decap(root)}(key: Long): $root = ${decap(root)}(StoreKey(key))")
                     }
                     !isUnion(root) -> {
                         line("        /** The record behind [ref] as a member of $root, or null when it is not one. */")
-                        line("        fun ${decap(root)}(ref: Ref<${refTarget(root)}>): $root? =")
-                        line("            system.scope { system.idOf(ref).let { if (system.exists(\"$root\", it)) materialize$root(it) else null } }")
+                        line("        fun ${decap(root)}(ref: Ref<${refTarget(root)}>): $root? = member(\"$root\", ref) { materialize$root(it) }")
                     }
                 }
             }
             line("    }")
-            queryRoots.forEach { root ->
-                line()
-                line("    inner class ${root}Query(q: Query) : TypedQuery<${root}Fields, $root>(system, q, ${root}Fields(), { materialize$root(it) }) {")
-                line("        override fun with(q: Query) = ${root}Query(q)")
-                line("    }")
-            }
             line()
             line("    /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */")
             line("    private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {")
@@ -501,6 +463,18 @@ object Codegen {
             line("    }")
             queryRoots.forEach { root -> materializer(root) }
             viewerShapes.forEach { v -> viewerReadSurface(v) }
+        }
+
+        /** One name per typed query, so `read.orders` reads as an `OrderQuery` and a viewer's as an `OrderQueryForStaff`. */
+        fun queryAliases() {
+            line("// ── the typed queries: one name per root, and per root a viewer sees with fields gated ──")
+            queryRoots.forEach { root -> line("typealias ${root}Query = TypedQuery<${root}Fields, $root>") }
+            viewerShapes.forEach { v ->
+                queryRoots.filter { recordShown(it, v) && hasGated(it) }.forEach { root ->
+                    line("typealias ${root}QueryFor$v = TypedQuery<${root}Fields, ${root}For$v>")
+                }
+            }
+            line()
         }
 
         /** The read surface for a viewer of shape [v] (Reference §22, "The actor"): the same
@@ -514,35 +488,26 @@ object Codegen {
             line("    // ── reads for a $v: what the surface returns to one of them (Reference §22, \"The actor\") ──")
             line("    fun read(viewer: Ref<$v>): ${v}Read = ${v}Read(viewer)")
             line()
-            line("    // the viewer is held as a reference: a handle would die with the scope of the first read")
-            line("    inner class ${v}Read(private val viewer: Ref<$v>) {")
+            line("    inner class ${v}Read(viewer: Ref<$v>) : ViewerReadSurface(system, viewer) {")
             for (root in roots) {
                 val view = viewType(root, v)
                 val query = if (hasGated(root)) "${root}QueryFor$v" else "${root}Query"
-                line("        val ${plural(root)}: $query get() = $query(Query(\"$root\", viewer = viewer))")
                 val mat = if (hasGated(root)) "materialize${root}For$v(system.idOf(viewer), it)" else "materialize$root(it)"
+                line("        val ${plural(root)}: $query get() = query(\"$root\", ${root}Fields()) { $mat }")
                 when {
                     root in model.shapes -> {
                         line("        /** The record behind [ref], or null when it is gone or not shown to this viewer. */")
-                        line("        fun ${decap(root)}(ref: Ref<$root>): $view? =")
-                        line("            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists(\"$root\", it)) $mat else null } }")
+                        line("        fun ${decap(root)}(ref: Ref<$root>): $view? = shown(\"$root\", ref) { $mat }")
                         line("        fun ${decap(root)}(key: StoreKey): $view? = ${decap(root)}(Ref.Persisted(\"$root\", key))")
                         line("        fun ${decap(root)}(key: Long): $view? = ${decap(root)}(StoreKey(key))")
                     }
                     !isUnion(root) -> {
                         line("        /** The record behind [ref] as a member of $root, or null when it is not one or not shown to this viewer. */")
-                        line("        fun ${decap(root)}(ref: Ref<${refTarget(root)}>): $view? =")
-                        line("            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists(\"$root\", it)) $mat else null } }")
+                        line("        fun ${decap(root)}(ref: Ref<${refTarget(root)}>): $view? = shown(\"$root\", ref) { $mat }")
                     }
                 }
             }
             line("    }")
-            for (root in roots.filter { hasGated(it) }) {
-                line()
-                line("    inner class ${root}QueryFor$v(q: Query) : TypedQuery<${root}Fields, ${root}For$v>(system, q, ${root}Fields(), { materialize${root}For$v(system.idOf(q.viewer!!), it) }) {")
-                line("        override fun with(q: Query) = ${root}QueryFor$v(q)")
-                line("    }")
-            }
             for (root in roots.filter { hasGated(it) }) viewerMaterializer(root, v)
         }
 

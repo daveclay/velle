@@ -7,198 +7,101 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
-
-    val system: VelleSystem = VelleSystem(Model(Parser.parse(SPEC)), startTime)
-
-    // ── clock (harness-controlled; ticks are separate calls) ──
-    val now: Instant get() = system.now
-    fun advanceSeconds(seconds: Long) = system.advance(seconds)
-    fun advanceDays(days: Long) = system.advanceDays(days)
-    fun setTime(t: Instant) = system.setTime(t)
+class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
 
     /** Queue keys: [join.referrer], [join.referrer.referrer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewJoin): Commit<NewJoin, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Join", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewJoin): Commit<NewJoin, Nothing?> =
+        boundary("Join", input).carryingNoRecord(input)
 
     /** Queue key: [duesPayment.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewDuesPayment): Commit<NewDuesPayment, Ref<DuesPayment>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("DuesPayment", raw).carrying(input)
-    }
+    fun commit(input: NewDuesPayment): Commit<NewDuesPayment, Ref<DuesPayment>> =
+        boundary("DuesPayment", input).carrying(input)
 
     /** Queue keys: [purchase.member], [purchase.member.referrer], [purchase.member.referrer.referrer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPurchase): Commit<NewPurchase, Ref<Purchase>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Purchase", raw).carrying(input)
-    }
+    fun commit(input: NewPurchase): Commit<NewPurchase, Ref<Purchase>> =
+        boundary("Purchase", input).carrying(input)
 
     /** Queue key: [enrollment.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewEnrollment): Commit<NewEnrollment, Ref<Enrollment>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Enrollment", raw).carrying(input)
-    }
+    fun commit(input: NewEnrollment): Commit<NewEnrollment, Ref<Enrollment>> =
+        boundary("Enrollment", input).carrying(input)
 
-    fun members(): List<Member> = system.scope { system.instancesOf("Member").map { materializeMember(it) } }
-    fun duesPayments(): List<DuesPayment> = system.scope { system.instancesOf("DuesPayment").map { materializeDuesPayment(it) } }
-    fun purchases(): List<Purchase> = system.scope { system.instancesOf("Purchase").map { materializePurchase(it) } }
-    fun thankYouNotes(): List<ThankYouNote> = system.scope { system.instancesOf("ThankYouNote").map { materializeThankYouNote(it) } }
-    fun enrollments(): List<Enrollment> = system.scope { system.instancesOf("Enrollment").map { materializeEnrollment(it) } }
-    fun safetyWaivers(): List<SafetyWaiver> = system.scope { system.instancesOf("SafetyWaiver").map { materializeSafetyWaiver(it) } }
-    fun orientationRecords(): List<OrientationRecord> = system.scope { system.instancesOf("OrientationRecord").map { materializeOrientationRecord(it) } }
-    fun keycards(): List<Keycard> = system.scope { system.instancesOf("Keycard").map { materializeKeycard(it) } }
-    fun qualifiedPurchases(): List<QualifiedPurchase> = system.scope { system.instancesOf("QualifiedPurchase").map { materializeQualifiedPurchase(it) } }
-    fun vipPurchases(): List<VipPurchase> = system.scope { system.instancesOf("VipPurchase").map { materializeVipPurchase(it) } }
-    fun certifiedMembers(): List<CertifiedMember> = system.scope { system.instancesOf("CertifiedMember").map { materializeCertifiedMember(it) } }
+    fun members(): List<Member> = all("Member") { materializeMember(it) }
+    fun duesPayments(): List<DuesPayment> = all("DuesPayment") { materializeDuesPayment(it) }
+    fun purchases(): List<Purchase> = all("Purchase") { materializePurchase(it) }
+    fun thankYouNotes(): List<ThankYouNote> = all("ThankYouNote") { materializeThankYouNote(it) }
+    fun enrollments(): List<Enrollment> = all("Enrollment") { materializeEnrollment(it) }
+    fun safetyWaivers(): List<SafetyWaiver> = all("SafetyWaiver") { materializeSafetyWaiver(it) }
+    fun orientationRecords(): List<OrientationRecord> = all("OrientationRecord") { materializeOrientationRecord(it) }
+    fun keycards(): List<Keycard> = all("Keycard") { materializeKeycard(it) }
+    fun qualifiedPurchases(): List<QualifiedPurchase> = all("QualifiedPurchase") { materializeQualifiedPurchase(it) }
+    fun vipPurchases(): List<VipPurchase> = all("VipPurchase") { materializeVipPurchase(it) }
+    fun certifiedMembers(): List<CertifiedMember> = all("CertifiedMember") { materializeCertifiedMember(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
-    inner class Read {
-        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
-        val registry = QueryRegistry()
-        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+    inner class Read : ReadSurface<Read>(system) {
+        override fun modelOf(id: Long): Ref<*> = materialize(id)
 
-        /** The model object behind a reference, read now; throws when the record no longer exists. */
-        @Suppress("UNCHECKED_CAST")
-        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
-        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
-        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
-        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
-        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
-            val id = system.idOf(ref)
-            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            materialize(id)
-        }
-
-        val members: MemberQuery get() = MemberQuery(Query("Member"))
+        val members: MemberQuery get() = query("Member", MemberFields()) { materializeMember(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun member(key: StoreKey): Member = invoke<Member>(Ref.Persisted("Member", key))
+        fun member(key: StoreKey): Member = byKey("Member", key)
         fun member(key: Long): Member = member(StoreKey(key))
 
-        val duesPayments: DuesPaymentQuery get() = DuesPaymentQuery(Query("DuesPayment"))
+        val duesPayments: DuesPaymentQuery get() = query("DuesPayment", DuesPaymentFields()) { materializeDuesPayment(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun duesPayment(key: StoreKey): DuesPayment = invoke<DuesPayment>(Ref.Persisted("DuesPayment", key))
+        fun duesPayment(key: StoreKey): DuesPayment = byKey("DuesPayment", key)
         fun duesPayment(key: Long): DuesPayment = duesPayment(StoreKey(key))
 
-        val purchases: PurchaseQuery get() = PurchaseQuery(Query("Purchase"))
+        val purchases: PurchaseQuery get() = query("Purchase", PurchaseFields()) { materializePurchase(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun purchase(key: StoreKey): Purchase = invoke<Purchase>(Ref.Persisted("Purchase", key))
+        fun purchase(key: StoreKey): Purchase = byKey("Purchase", key)
         fun purchase(key: Long): Purchase = purchase(StoreKey(key))
 
-        val thankYouNotes: ThankYouNoteQuery get() = ThankYouNoteQuery(Query("ThankYouNote"))
+        val thankYouNotes: ThankYouNoteQuery get() = query("ThankYouNote", ThankYouNoteFields()) { materializeThankYouNote(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun thankYouNote(key: StoreKey): ThankYouNote = invoke<ThankYouNote>(Ref.Persisted("ThankYouNote", key))
+        fun thankYouNote(key: StoreKey): ThankYouNote = byKey("ThankYouNote", key)
         fun thankYouNote(key: Long): ThankYouNote = thankYouNote(StoreKey(key))
 
-        val enrollments: EnrollmentQuery get() = EnrollmentQuery(Query("Enrollment"))
+        val enrollments: EnrollmentQuery get() = query("Enrollment", EnrollmentFields()) { materializeEnrollment(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun enrollment(key: StoreKey): Enrollment = invoke<Enrollment>(Ref.Persisted("Enrollment", key))
+        fun enrollment(key: StoreKey): Enrollment = byKey("Enrollment", key)
         fun enrollment(key: Long): Enrollment = enrollment(StoreKey(key))
 
-        val safetyWaivers: SafetyWaiverQuery get() = SafetyWaiverQuery(Query("SafetyWaiver"))
+        val safetyWaivers: SafetyWaiverQuery get() = query("SafetyWaiver", SafetyWaiverFields()) { materializeSafetyWaiver(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun safetyWaiver(key: StoreKey): SafetyWaiver = invoke<SafetyWaiver>(Ref.Persisted("SafetyWaiver", key))
+        fun safetyWaiver(key: StoreKey): SafetyWaiver = byKey("SafetyWaiver", key)
         fun safetyWaiver(key: Long): SafetyWaiver = safetyWaiver(StoreKey(key))
 
-        val orientationRecords: OrientationRecordQuery get() = OrientationRecordQuery(Query("OrientationRecord"))
+        val orientationRecords: OrientationRecordQuery get() = query("OrientationRecord", OrientationRecordFields()) { materializeOrientationRecord(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun orientationRecord(key: StoreKey): OrientationRecord = invoke<OrientationRecord>(Ref.Persisted("OrientationRecord", key))
+        fun orientationRecord(key: StoreKey): OrientationRecord = byKey("OrientationRecord", key)
         fun orientationRecord(key: Long): OrientationRecord = orientationRecord(StoreKey(key))
 
-        val keycards: KeycardQuery get() = KeycardQuery(Query("Keycard"))
+        val keycards: KeycardQuery get() = query("Keycard", KeycardFields()) { materializeKeycard(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun keycard(key: StoreKey): Keycard = invoke<Keycard>(Ref.Persisted("Keycard", key))
+        fun keycard(key: StoreKey): Keycard = byKey("Keycard", key)
         fun keycard(key: Long): Keycard = keycard(StoreKey(key))
 
-        val qualifiedPurchases: QualifiedPurchaseQuery get() = QualifiedPurchaseQuery(Query("QualifiedPurchase"))
+        val qualifiedPurchases: QualifiedPurchaseQuery get() = query("QualifiedPurchase", QualifiedPurchaseFields()) { materializeQualifiedPurchase(it) }
         /** The record behind [ref] as a member of QualifiedPurchase, or null when it is not one. */
-        fun qualifiedPurchase(ref: Ref<Purchase>): QualifiedPurchase? =
-            system.scope { system.idOf(ref).let { if (system.exists("QualifiedPurchase", it)) materializeQualifiedPurchase(it) else null } }
+        fun qualifiedPurchase(ref: Ref<Purchase>): QualifiedPurchase? = member("QualifiedPurchase", ref) { materializeQualifiedPurchase(it) }
 
-        val vipPurchases: VipPurchaseQuery get() = VipPurchaseQuery(Query("VipPurchase"))
+        val vipPurchases: VipPurchaseQuery get() = query("VipPurchase", VipPurchaseFields()) { materializeVipPurchase(it) }
         /** The record behind [ref] as a member of VipPurchase, or null when it is not one. */
-        fun vipPurchase(ref: Ref<Purchase>): VipPurchase? =
-            system.scope { system.idOf(ref).let { if (system.exists("VipPurchase", it)) materializeVipPurchase(it) else null } }
+        fun vipPurchase(ref: Ref<Purchase>): VipPurchase? = member("VipPurchase", ref) { materializeVipPurchase(it) }
 
-        val certifiedMembers: CertifiedMemberQuery get() = CertifiedMemberQuery(Query("CertifiedMember"))
+        val certifiedMembers: CertifiedMemberQuery get() = query("CertifiedMember", CertifiedMemberFields()) { materializeCertifiedMember(it) }
         /** The record behind [ref] as a member of CertifiedMember, or null when it is not one. */
-        fun certifiedMember(ref: Ref<Member>): CertifiedMember? =
-            system.scope { system.idOf(ref).let { if (system.exists("CertifiedMember", it)) materializeCertifiedMember(it) else null } }
-    }
-
-    inner class MemberQuery(q: Query) : TypedQuery<MemberFields, Member>(system, q, MemberFields(), { materializeMember(it) }) {
-        override fun with(q: Query) = MemberQuery(q)
-    }
-
-    inner class DuesPaymentQuery(q: Query) : TypedQuery<DuesPaymentFields, DuesPayment>(system, q, DuesPaymentFields(), { materializeDuesPayment(it) }) {
-        override fun with(q: Query) = DuesPaymentQuery(q)
-    }
-
-    inner class PurchaseQuery(q: Query) : TypedQuery<PurchaseFields, Purchase>(system, q, PurchaseFields(), { materializePurchase(it) }) {
-        override fun with(q: Query) = PurchaseQuery(q)
-    }
-
-    inner class ThankYouNoteQuery(q: Query) : TypedQuery<ThankYouNoteFields, ThankYouNote>(system, q, ThankYouNoteFields(), { materializeThankYouNote(it) }) {
-        override fun with(q: Query) = ThankYouNoteQuery(q)
-    }
-
-    inner class EnrollmentQuery(q: Query) : TypedQuery<EnrollmentFields, Enrollment>(system, q, EnrollmentFields(), { materializeEnrollment(it) }) {
-        override fun with(q: Query) = EnrollmentQuery(q)
-    }
-
-    inner class SafetyWaiverQuery(q: Query) : TypedQuery<SafetyWaiverFields, SafetyWaiver>(system, q, SafetyWaiverFields(), { materializeSafetyWaiver(it) }) {
-        override fun with(q: Query) = SafetyWaiverQuery(q)
-    }
-
-    inner class OrientationRecordQuery(q: Query) : TypedQuery<OrientationRecordFields, OrientationRecord>(system, q, OrientationRecordFields(), { materializeOrientationRecord(it) }) {
-        override fun with(q: Query) = OrientationRecordQuery(q)
-    }
-
-    inner class KeycardQuery(q: Query) : TypedQuery<KeycardFields, Keycard>(system, q, KeycardFields(), { materializeKeycard(it) }) {
-        override fun with(q: Query) = KeycardQuery(q)
-    }
-
-    inner class QualifiedPurchaseQuery(q: Query) : TypedQuery<QualifiedPurchaseFields, QualifiedPurchase>(system, q, QualifiedPurchaseFields(), { materializeQualifiedPurchase(it) }) {
-        override fun with(q: Query) = QualifiedPurchaseQuery(q)
-    }
-
-    inner class VipPurchaseQuery(q: Query) : TypedQuery<VipPurchaseFields, VipPurchase>(system, q, VipPurchaseFields(), { materializeVipPurchase(it) }) {
-        override fun with(q: Query) = VipPurchaseQuery(q)
-    }
-
-    inner class CertifiedMemberQuery(q: Query) : TypedQuery<CertifiedMemberFields, CertifiedMember>(system, q, CertifiedMemberFields(), { materializeCertifiedMember(it) }) {
-        override fun with(q: Query) = CertifiedMemberQuery(q)
+        fun certifiedMember(ref: Ref<Member>): CertifiedMember? = member("CertifiedMember", ref) { materializeCertifiedMember(it) }
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -491,17 +394,30 @@ rule IssueKeycard when (CertifiedMember where not exists Keycard for this) {
     }
 }
 
+// ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias MemberQuery = TypedQuery<MemberFields, Member>
+typealias DuesPaymentQuery = TypedQuery<DuesPaymentFields, DuesPayment>
+typealias PurchaseQuery = TypedQuery<PurchaseFields, Purchase>
+typealias ThankYouNoteQuery = TypedQuery<ThankYouNoteFields, ThankYouNote>
+typealias EnrollmentQuery = TypedQuery<EnrollmentFields, Enrollment>
+typealias SafetyWaiverQuery = TypedQuery<SafetyWaiverFields, SafetyWaiver>
+typealias OrientationRecordQuery = TypedQuery<OrientationRecordFields, OrientationRecord>
+typealias KeycardQuery = TypedQuery<KeycardFields, Keycard>
+typealias QualifiedPurchaseQuery = TypedQuery<QualifiedPurchaseFields, QualifiedPurchase>
+typealias VipPurchaseQuery = TypedQuery<VipPurchaseFields, VipPurchase>
+typealias CertifiedMemberQuery = TypedQuery<CertifiedMemberFields, CertifiedMember>
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewJoin(
     val name: String,
     val referrer: Ref<Member>? = null,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         referrer?.let { put("referrer", system.idOf(it)) }
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Join") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -511,14 +427,14 @@ data class NewDuesPayment(
     val coveredMonth: String,
     val dueBy: LocalDate,
     val paidOn: LocalDate,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("coveredMonth", coveredMonth)
         put("dueBy", dueBy)
         put("paidOn", paidOn)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "DuesPayment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -526,23 +442,23 @@ data class NewDuesPayment(
 data class NewPurchase(
     val member: Ref<Member>,
     val amount: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("amount", amount)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Purchase") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewEnrollment(
     val member: Ref<Member>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Enrollment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }

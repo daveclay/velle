@@ -158,7 +158,7 @@ class VisibilityTest {
         assertTrue("val cost: BigDecimal?" in src)
         assertTrue("fun read(viewer: Ref<Staff>): StaffRead" in src)
         assertTrue("fun product(ref: Ref<Product>): ProductForStaff?" in src)
-        assertTrue("val vendors: VendorQuery get() = VendorQuery(Query(\"Vendor\", viewer = viewer))" in src)
+        assertTrue("val vendors: VendorQuery get() = query(\"Vendor\", VendorFields()) { materializeVendor(it) }" in src, src)
         assertNull(Regex("interface VendorFor").find(src), "no gated field on Vendor: the class is the view")
     }
 }

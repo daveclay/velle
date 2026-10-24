@@ -135,7 +135,7 @@ A generated system also holds a numeric handle for every record it has touched. 
 
 ## The raw surface
 
-The runtime's own `commit(shape, fields, parts)` takes maps instead of classes, and the generated specs use it. The generated functions that build model objects from handles are private to the generated class; `read` is the only way to get a model object. A nested value is a map carrying `"@shape"` when the field's type is a union; a value others point at carries `"@new"` with a number, and the pointing field holds `NewRef(number)`. The generated classes produce these maps, so hand-written code rarely needs them.
+The runtime's own `commit(shape, fields, parts)` takes maps instead of classes, and the generated specs use it. The generated functions that build model objects from handles are private to the generated class; `read` is the only way to get a model object. A generated system extends `GeneratedSystem`, and its readers extend `ReadSurface` and `ViewerReadSurface`; those hold what every spec's surface does the same way, and nothing on them beyond what this page names is for the engineer to call. A nested value is a map carrying `"@shape"` when the field's type is a union; a value others point at carries `"@new"` with a number, and the pointing field holds `NewRef(number)`. The generated classes produce these maps, so hand-written code rarely needs them.
 
 ## Related pages
 

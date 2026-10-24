@@ -7,127 +7,62 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
-
-    val system: VelleSystem = VelleSystem(Model(Parser.parse(SPEC)), startTime)
-
-    // ── clock (harness-controlled; ticks are separate calls) ──
-    val now: Instant get() = system.now
-    fun advanceSeconds(seconds: Long) = system.advance(seconds)
-    fun advanceDays(days: Long) = system.advanceDays(days)
-    fun setTime(t: Instant) = system.setTime(t)
+class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewOrder): Commit<NewOrder, Ref<Order>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Order", raw).carrying(input)
-    }
+    fun commit(input: NewOrder): Commit<NewOrder, Ref<Order>> =
+        boundary("Order", input).carrying(input)
 
     /** Queue keys: [cancellation.order] — plus system-wide width below.
      *  System-wide over Shipment — reads Shipment.order with no path back to any key (unexamined (A5)).
      *  System-wide over Cancellation — consults Cancellation through 'cancellations' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCancellation): Commit<NewCancellation, Ref<Cancellation>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Cancellation", raw).carrying(input)
-    }
+    fun commit(input: NewCancellation): Commit<NewCancellation, Ref<Cancellation>> =
+        boundary("Cancellation", input).carrying(input)
 
     /** Queue key: [shipment.order].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewShipment): Commit<NewShipment, Ref<Shipment>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Shipment", raw).carrying(input)
-    }
+    fun commit(input: NewShipment): Commit<NewShipment, Ref<Shipment>> =
+        boundary("Shipment", input).carrying(input)
 
-    fun orders(): List<Order> = system.scope { system.instancesOf("Order").map { materializeOrder(it) } }
-    fun cancellations(): List<Cancellation> = system.scope { system.instancesOf("Cancellation").map { materializeCancellation(it) } }
-    fun shipments(): List<Shipment> = system.scope { system.instancesOf("Shipment").map { materializeShipment(it) } }
-    fun cancelledOrders(): List<CancelledOrder> = system.scope { system.instancesOf("CancelledOrder").map { materializeCancelledOrder(it) } }
-    fun shippedOrders(): List<ShippedOrder> = system.scope { system.instancesOf("ShippedOrder").map { materializeShippedOrder(it) } }
+    fun orders(): List<Order> = all("Order") { materializeOrder(it) }
+    fun cancellations(): List<Cancellation> = all("Cancellation") { materializeCancellation(it) }
+    fun shipments(): List<Shipment> = all("Shipment") { materializeShipment(it) }
+    fun cancelledOrders(): List<CancelledOrder> = all("CancelledOrder") { materializeCancelledOrder(it) }
+    fun shippedOrders(): List<ShippedOrder> = all("ShippedOrder") { materializeShippedOrder(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
-    inner class Read {
-        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
-        val registry = QueryRegistry()
-        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+    inner class Read : ReadSurface<Read>(system) {
+        override fun modelOf(id: Long): Ref<*> = materialize(id)
 
-        /** The model object behind a reference, read now; throws when the record no longer exists. */
-        @Suppress("UNCHECKED_CAST")
-        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
-        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
-        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
-        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
-        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
-            val id = system.idOf(ref)
-            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            materialize(id)
-        }
-
-        val orders: OrderQuery get() = OrderQuery(Query("Order"))
+        val orders: OrderQuery get() = query("Order", OrderFields()) { materializeOrder(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun order(key: StoreKey): Order = invoke<Order>(Ref.Persisted("Order", key))
+        fun order(key: StoreKey): Order = byKey("Order", key)
         fun order(key: Long): Order = order(StoreKey(key))
 
-        val cancellations: CancellationQuery get() = CancellationQuery(Query("Cancellation"))
+        val cancellations: CancellationQuery get() = query("Cancellation", CancellationFields()) { materializeCancellation(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun cancellation(key: StoreKey): Cancellation = invoke<Cancellation>(Ref.Persisted("Cancellation", key))
+        fun cancellation(key: StoreKey): Cancellation = byKey("Cancellation", key)
         fun cancellation(key: Long): Cancellation = cancellation(StoreKey(key))
 
-        val shipments: ShipmentQuery get() = ShipmentQuery(Query("Shipment"))
+        val shipments: ShipmentQuery get() = query("Shipment", ShipmentFields()) { materializeShipment(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun shipment(key: StoreKey): Shipment = invoke<Shipment>(Ref.Persisted("Shipment", key))
+        fun shipment(key: StoreKey): Shipment = byKey("Shipment", key)
         fun shipment(key: Long): Shipment = shipment(StoreKey(key))
 
-        val cancelledOrders: CancelledOrderQuery get() = CancelledOrderQuery(Query("CancelledOrder"))
+        val cancelledOrders: CancelledOrderQuery get() = query("CancelledOrder", CancelledOrderFields()) { materializeCancelledOrder(it) }
         /** The record behind [ref] as a member of CancelledOrder, or null when it is not one. */
-        fun cancelledOrder(ref: Ref<Order>): CancelledOrder? =
-            system.scope { system.idOf(ref).let { if (system.exists("CancelledOrder", it)) materializeCancelledOrder(it) else null } }
+        fun cancelledOrder(ref: Ref<Order>): CancelledOrder? = member("CancelledOrder", ref) { materializeCancelledOrder(it) }
 
-        val shippedOrders: ShippedOrderQuery get() = ShippedOrderQuery(Query("ShippedOrder"))
+        val shippedOrders: ShippedOrderQuery get() = query("ShippedOrder", ShippedOrderFields()) { materializeShippedOrder(it) }
         /** The record behind [ref] as a member of ShippedOrder, or null when it is not one. */
-        fun shippedOrder(ref: Ref<Order>): ShippedOrder? =
-            system.scope { system.idOf(ref).let { if (system.exists("ShippedOrder", it)) materializeShippedOrder(it) else null } }
-    }
-
-    inner class OrderQuery(q: Query) : TypedQuery<OrderFields, Order>(system, q, OrderFields(), { materializeOrder(it) }) {
-        override fun with(q: Query) = OrderQuery(q)
-    }
-
-    inner class CancellationQuery(q: Query) : TypedQuery<CancellationFields, Cancellation>(system, q, CancellationFields(), { materializeCancellation(it) }) {
-        override fun with(q: Query) = CancellationQuery(q)
-    }
-
-    inner class ShipmentQuery(q: Query) : TypedQuery<ShipmentFields, Shipment>(system, q, ShipmentFields(), { materializeShipment(it) }) {
-        override fun with(q: Query) = ShipmentQuery(q)
-    }
-
-    inner class CancelledOrderQuery(q: Query) : TypedQuery<CancelledOrderFields, CancelledOrder>(system, q, CancelledOrderFields(), { materializeCancelledOrder(it) }) {
-        override fun with(q: Query) = CancelledOrderQuery(q)
-    }
-
-    inner class ShippedOrderQuery(q: Query) : TypedQuery<ShippedOrderFields, ShippedOrder>(system, q, ShippedOrderFields(), { materializeShippedOrder(it) }) {
-        override fun with(q: Query) = ShippedOrderQuery(q)
+        fun shippedOrder(ref: Ref<Order>): ShippedOrder? = member("ShippedOrder", ref) { materializeShippedOrder(it) }
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -248,15 +183,22 @@ never (Shipment where order is CancelledOrder)
     }
 }
 
+// ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias OrderQuery = TypedQuery<OrderFields, Order>
+typealias CancellationQuery = TypedQuery<CancellationFields, Cancellation>
+typealias ShipmentQuery = TypedQuery<ShipmentFields, Shipment>
+typealias CancelledOrderQuery = TypedQuery<CancelledOrderFields, CancelledOrder>
+typealias ShippedOrderQuery = TypedQuery<ShippedOrderFields, ShippedOrder>
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewOrder(
     val reference: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("reference", reference)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Order") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -264,12 +206,12 @@ data class NewOrder(
 data class NewCancellation(
     val order: Ref<Order>,
     val requestedOn: LocalDate,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("order", system.idOf(order))
         put("requestedOn", requestedOn)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Cancellation") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -277,12 +219,12 @@ data class NewCancellation(
 data class NewShipment(
     val order: Ref<Order>,
     val shippedOn: LocalDate,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("order", system.idOf(order))
         put("shippedOn", shippedOn)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Shipment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }

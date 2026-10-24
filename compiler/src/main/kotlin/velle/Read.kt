@@ -252,13 +252,13 @@ data class QueryPage<T>(val items: List<T>, val next: Cursor?)
  * a [Query] under construction, the root's fields object for the lambdas, and
  * the materializer from a handle to the shape's data class (R5).
  */
-abstract class TypedQuery<F : Fields, T>(
+class TypedQuery<F : Fields, T>(
     val system: VelleSystem,
     val query: Query,
-    protected val fields: F,
+    private val fields: F,
     private val materialize: (Long) -> T,
 ) {
-    protected abstract fun with(q: Query): TypedQuery<F, T>
+    private fun with(q: Query) = TypedQuery(system, q, fields, materialize)
 
     /** Narrows the query; a second `where` is a conjunction with the first. */
     fun where(predicate: F.() -> Expr): TypedQuery<F, T> {

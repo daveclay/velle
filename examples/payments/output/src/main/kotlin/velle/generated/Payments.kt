@@ -7,15 +7,7 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
-
-    val system: VelleSystem = VelleSystem(Model(Parser.parse(SPEC)), startTime)
-
-    // ── clock (harness-controlled; ticks are separate calls) ──
-    val now: Instant get() = system.now
-    fun advanceSeconds(seconds: Long) = system.advance(seconds)
-    fun advanceDays(days: Long) = system.advanceDays(days)
-    fun setTime(t: Instant) = system.setTime(t)
+class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
 
     // ── ticks: scheduled events and user acts are both external input ──
     fun tickDaily() = system.tick("Daily")
@@ -25,15 +17,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewContact): Commit<NewContact, Ref<Contact>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Contact", raw).carrying(input)
-    }
+    fun commit(input: NewContact): Commit<NewContact, Ref<Contact>> =
+        boundary("Contact", input).carrying(input)
 
     /** Queue keys: [card.billingContact] — plus system-wide width below.
      *  System-wide over Order — reads Order.customer with no path back to any key (unexamined (A5)).
@@ -81,15 +66,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over DunningResolution — consults DunningResolution through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCard): Commit<NewCard, Ref<Card>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Card", raw).carrying(input)
-    }
+    fun commit(input: NewCard): Commit<NewCard, Ref<Card>> =
+        boundary("Card", input).carrying(input)
 
     /** Queue keys: [customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
@@ -118,15 +96,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCustomer): Commit<NewCustomer, Ref<Customer>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Customer", raw).carrying(input)
-    }
+    fun commit(input: NewCustomer): Commit<NewCustomer, Ref<Customer>> =
+        boundary("Customer", input).carrying(input)
 
     /** Queue keys: [cardUpdate.card], [cardUpdate.customer], [cardUpdate.customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
@@ -155,15 +126,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCardUpdate): Commit<NewCardUpdate, Ref<CardUpdate>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CardUpdate", raw).carrying(input)
-    }
+    fun commit(input: NewCardUpdate): Commit<NewCardUpdate, Ref<CardUpdate>> =
+        boundary("CardUpdate", input).carrying(input)
 
     /** Queue keys: [placeOrder.customer], [placeOrder.customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
@@ -192,15 +156,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPlaceOrder): Commit<NewPlaceOrder, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PlaceOrder", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewPlaceOrder): Commit<NewPlaceOrder, Nothing?> =
+        boundary("PlaceOrder", input).carryingNoRecord(input)
 
     /** Queue keys: [processorVerdict.attempt] — plus system-wide width below.
      *  System-wide over ChargeAttempt — consults ChargeAttempt correlated through 'order' (unexamined (A5)).
@@ -248,28 +205,14 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeAttempt — consults ChargeAttempt through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewProcessorVerdict): Commit<NewProcessorVerdict, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ProcessorVerdict", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewProcessorVerdict): Commit<NewProcessorVerdict, Nothing?> =
+        boundary("ProcessorVerdict", input).carryingNoRecord(input)
 
     /** Queue keys: [changeShippingAddress.order], [changeShippingAddress.order.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewChangeShippingAddress): Commit<NewChangeShippingAddress, Ref<ChangeShippingAddress>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ChangeShippingAddress", raw).carrying(input)
-    }
+    fun commit(input: NewChangeShippingAddress): Commit<NewChangeShippingAddress, Ref<ChangeShippingAddress>> =
+        boundary("ChangeShippingAddress", input).carrying(input)
 
     /** Queue keys: [issueRefund.order] — plus system-wide width below.
      *  System-wide over AddressChangeApplication — consults AddressChangeApplication through a path the derivation cannot key (unexamined (A5)).
@@ -294,15 +237,8 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Shipment — consults Shipment through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewIssueRefund): Commit<NewIssueRefund, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("IssueRefund", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewIssueRefund): Commit<NewIssueRefund, Nothing?> =
+        boundary("IssueRefund", input).carryingNoRecord(input)
 
     /** Queue keys: [manualCharge.order], [manualCharge.order.customer], [manualCharge.order.customer.card] — plus system-wide width below.
      *  System-wide over ReservationRelease — `ReservationRelease` reads every ReservationRelease and correlates to no key (unexamined (A5)).
@@ -331,529 +267,284 @@ class PaymentsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ChargeResponse — consults ChargeResponse through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewManualCharge): Commit<NewManualCharge, Ref<ManualCharge>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ManualCharge", raw).carrying(input)
-    }
+    fun commit(input: NewManualCharge): Commit<NewManualCharge, Ref<ManualCharge>> =
+        boundary("ManualCharge", input).carrying(input)
 
     /** Queue key: [extensionRequest.order].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewExtensionRequest): Commit<NewExtensionRequest, Ref<ExtensionRequest>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ExtensionRequest", raw).carrying(input)
-    }
+    fun commit(input: NewExtensionRequest): Commit<NewExtensionRequest, Ref<ExtensionRequest>> =
+        boundary("ExtensionRequest", input).carrying(input)
 
-    fun contacts(): List<Contact> = system.scope { system.instancesOf("Contact").map { materializeContact(it) } }
-    fun cards(): List<Card> = system.scope { system.instancesOf("Card").map { materializeCard(it) } }
-    fun customers(): List<Customer> = system.scope { system.instancesOf("Customer").map { materializeCustomer(it) } }
-    fun cardUpdates(): List<CardUpdate> = system.scope { system.instancesOf("CardUpdate").map { materializeCardUpdate(it) } }
-    fun orders(): List<Order> = system.scope { system.instancesOf("Order").map { materializeOrder(it) } }
-    fun chargeAttempts(): List<ChargeAttempt> = system.scope { system.instancesOf("ChargeAttempt").map { materializeChargeAttempt(it) } }
-    fun chargeResponses(): List<ChargeResponse> = system.scope { system.instancesOf("ChargeResponse").map { materializeChargeResponse(it) } }
-    fun attemptTimeouts(): List<AttemptTimeout> = system.scope { system.instancesOf("AttemptTimeout").map { materializeAttemptTimeout(it) } }
-    fun stockReservations(): List<StockReservation> = system.scope { system.instancesOf("StockReservation").map { materializeStockReservation(it) } }
-    fun reservationReleases(): List<ReservationRelease> = system.scope { system.instancesOf("ReservationRelease").map { materializeReservationRelease(it) } }
-    fun receipts(): List<Receipt> = system.scope { system.instancesOf("Receipt").map { materializeReceipt(it) } }
-    fun shipments(): List<Shipment> = system.scope { system.instancesOf("Shipment").map { materializeShipment(it) } }
-    fun changeShippingAddresss(): List<ChangeShippingAddress> = system.scope { system.instancesOf("ChangeShippingAddress").map { materializeChangeShippingAddress(it) } }
-    fun addressChangeApplications(): List<AddressChangeApplication> = system.scope { system.instancesOf("AddressChangeApplication").map { materializeAddressChangeApplication(it) } }
-    fun addressChangeRefusals(): List<AddressChangeRefusal> = system.scope { system.instancesOf("AddressChangeRefusal").map { materializeAddressChangeRefusal(it) } }
-    fun refunds(): List<Refund> = system.scope { system.instancesOf("Refund").map { materializeRefund(it) } }
-    fun settlementReversals(): List<SettlementReversal> = system.scope { system.instancesOf("SettlementReversal").map { materializeSettlementReversal(it) } }
-    fun manualCharges(): List<ManualCharge> = system.scope { system.instancesOf("ManualCharge").map { materializeManualCharge(it) } }
-    fun extensionRequests(): List<ExtensionRequest> = system.scope { system.instancesOf("ExtensionRequest").map { materializeExtensionRequest(it) } }
-    fun paymentExtensions(): List<PaymentExtension> = system.scope { system.instancesOf("PaymentExtension").map { materializePaymentExtension(it) } }
-    fun paymentReminders(): List<PaymentReminder> = system.scope { system.instancesOf("PaymentReminder").map { materializePaymentReminder(it) } }
-    fun dunningFlags(): List<DunningFlag> = system.scope { system.instancesOf("DunningFlag").map { materializeDunningFlag(it) } }
-    fun dunningResolutions(): List<DunningResolution> = system.scope { system.instancesOf("DunningResolution").map { materializeDunningResolution(it) } }
-    fun settledOrders(): List<SettledOrder> = system.scope { system.instancesOf("SettledOrder").map { materializeSettledOrder(it) } }
-    fun neverChargeds(): List<NeverCharged> = system.scope { system.instancesOf("NeverCharged").map { materializeNeverCharged(it) } }
-    fun unpaidOrders(): List<UnpaidOrder> = system.scope { system.instancesOf("UnpaidOrder").map { materializeUnpaidOrder(it) } }
-    fun refundedOrders(): List<RefundedOrder> = system.scope { system.instancesOf("RefundedOrder").map { materializeRefundedOrder(it) } }
-    fun chargeableOrders(): List<ChargeableOrder> = system.scope { system.instancesOf("ChargeableOrder").map { materializeChargeableOrder(it) } }
-    fun pendingAttempts(): List<PendingAttempt> = system.scope { system.instancesOf("PendingAttempt").map { materializePendingAttempt(it) } }
-    fun completedAttempts(): List<CompletedAttempt> = system.scope { system.instancesOf("CompletedAttempt").map { materializeCompletedAttempt(it) } }
-    fun successfulCharges(): List<SuccessfulCharge> = system.scope { system.instancesOf("SuccessfulCharge").map { materializeSuccessfulCharge(it) } }
-    fun failedCharges(): List<FailedCharge> = system.scope { system.instancesOf("FailedCharge").map { materializeFailedCharge(it) } }
-    fun timedOutAttempts(): List<TimedOutAttempt> = system.scope { system.instancesOf("TimedOutAttempt").map { materializeTimedOutAttempt(it) } }
-    fun activeReservations(): List<ActiveReservation> = system.scope { system.instancesOf("ActiveReservation").map { materializeActiveReservation(it) } }
-    fun retryableOrders(): List<RetryableOrder> = system.scope { system.instancesOf("RetryableOrder").map { materializeRetryableOrder(it) } }
-    fun stalePendingAttempts(): List<StalePendingAttempt> = system.scope { system.instancesOf("StalePendingAttempt").map { materializeStalePendingAttempt(it) } }
-    fun exhaustedOrders(): List<ExhaustedOrder> = system.scope { system.instancesOf("ExhaustedOrder").map { materializeExhaustedOrder(it) } }
-    fun reservedOrders(): List<ReservedOrder> = system.scope { system.instancesOf("ReservedOrder").map { materializeReservedOrder(it) } }
-    fun unshippedOrders(): List<UnshippedOrder> = system.scope { system.instancesOf("UnshippedOrder").map { materializeUnshippedOrder(it) } }
-    fun readyToShips(): List<ReadyToShip> = system.scope { system.instancesOf("ReadyToShip").map { materializeReadyToShip(it) } }
-    fun unhandledAddressChanges(): List<UnhandledAddressChange> = system.scope { system.instancesOf("UnhandledAddressChange").map { materializeUnhandledAddressChange(it) } }
-    fun applicableAddressChanges(): List<ApplicableAddressChange> = system.scope { system.instancesOf("ApplicableAddressChange").map { materializeApplicableAddressChange(it) } }
-    fun refusedAddressChanges(): List<RefusedAddressChange> = system.scope { system.instancesOf("RefusedAddressChange").map { materializeRefusedAddressChange(it) } }
-    fun refundAfterFailures(): List<RefundAfterFailure> = system.scope { system.instancesOf("RefundAfterFailure").map { materializeRefundAfterFailure(it) } }
-    fun overdueOrders(): List<OverdueOrder> = system.scope { system.instancesOf("OverdueOrder").map { materializeOverdueOrder(it) } }
-    fun inGracePeriods(): List<InGracePeriod> = system.scope { system.instancesOf("InGracePeriod").map { materializeInGracePeriod(it) } }
-    fun openDunningFlags(): List<OpenDunningFlag> = system.scope { system.instancesOf("OpenDunningFlag").map { materializeOpenDunningFlag(it) } }
-    fun closableDunningFlags(): List<ClosableDunningFlag> = system.scope { system.instancesOf("ClosableDunningFlag").map { materializeClosableDunningFlag(it) } }
+    fun contacts(): List<Contact> = all("Contact") { materializeContact(it) }
+    fun cards(): List<Card> = all("Card") { materializeCard(it) }
+    fun customers(): List<Customer> = all("Customer") { materializeCustomer(it) }
+    fun cardUpdates(): List<CardUpdate> = all("CardUpdate") { materializeCardUpdate(it) }
+    fun orders(): List<Order> = all("Order") { materializeOrder(it) }
+    fun chargeAttempts(): List<ChargeAttempt> = all("ChargeAttempt") { materializeChargeAttempt(it) }
+    fun chargeResponses(): List<ChargeResponse> = all("ChargeResponse") { materializeChargeResponse(it) }
+    fun attemptTimeouts(): List<AttemptTimeout> = all("AttemptTimeout") { materializeAttemptTimeout(it) }
+    fun stockReservations(): List<StockReservation> = all("StockReservation") { materializeStockReservation(it) }
+    fun reservationReleases(): List<ReservationRelease> = all("ReservationRelease") { materializeReservationRelease(it) }
+    fun receipts(): List<Receipt> = all("Receipt") { materializeReceipt(it) }
+    fun shipments(): List<Shipment> = all("Shipment") { materializeShipment(it) }
+    fun changeShippingAddresss(): List<ChangeShippingAddress> = all("ChangeShippingAddress") { materializeChangeShippingAddress(it) }
+    fun addressChangeApplications(): List<AddressChangeApplication> = all("AddressChangeApplication") { materializeAddressChangeApplication(it) }
+    fun addressChangeRefusals(): List<AddressChangeRefusal> = all("AddressChangeRefusal") { materializeAddressChangeRefusal(it) }
+    fun refunds(): List<Refund> = all("Refund") { materializeRefund(it) }
+    fun settlementReversals(): List<SettlementReversal> = all("SettlementReversal") { materializeSettlementReversal(it) }
+    fun manualCharges(): List<ManualCharge> = all("ManualCharge") { materializeManualCharge(it) }
+    fun extensionRequests(): List<ExtensionRequest> = all("ExtensionRequest") { materializeExtensionRequest(it) }
+    fun paymentExtensions(): List<PaymentExtension> = all("PaymentExtension") { materializePaymentExtension(it) }
+    fun paymentReminders(): List<PaymentReminder> = all("PaymentReminder") { materializePaymentReminder(it) }
+    fun dunningFlags(): List<DunningFlag> = all("DunningFlag") { materializeDunningFlag(it) }
+    fun dunningResolutions(): List<DunningResolution> = all("DunningResolution") { materializeDunningResolution(it) }
+    fun settledOrders(): List<SettledOrder> = all("SettledOrder") { materializeSettledOrder(it) }
+    fun neverChargeds(): List<NeverCharged> = all("NeverCharged") { materializeNeverCharged(it) }
+    fun unpaidOrders(): List<UnpaidOrder> = all("UnpaidOrder") { materializeUnpaidOrder(it) }
+    fun refundedOrders(): List<RefundedOrder> = all("RefundedOrder") { materializeRefundedOrder(it) }
+    fun chargeableOrders(): List<ChargeableOrder> = all("ChargeableOrder") { materializeChargeableOrder(it) }
+    fun pendingAttempts(): List<PendingAttempt> = all("PendingAttempt") { materializePendingAttempt(it) }
+    fun completedAttempts(): List<CompletedAttempt> = all("CompletedAttempt") { materializeCompletedAttempt(it) }
+    fun successfulCharges(): List<SuccessfulCharge> = all("SuccessfulCharge") { materializeSuccessfulCharge(it) }
+    fun failedCharges(): List<FailedCharge> = all("FailedCharge") { materializeFailedCharge(it) }
+    fun timedOutAttempts(): List<TimedOutAttempt> = all("TimedOutAttempt") { materializeTimedOutAttempt(it) }
+    fun activeReservations(): List<ActiveReservation> = all("ActiveReservation") { materializeActiveReservation(it) }
+    fun retryableOrders(): List<RetryableOrder> = all("RetryableOrder") { materializeRetryableOrder(it) }
+    fun stalePendingAttempts(): List<StalePendingAttempt> = all("StalePendingAttempt") { materializeStalePendingAttempt(it) }
+    fun exhaustedOrders(): List<ExhaustedOrder> = all("ExhaustedOrder") { materializeExhaustedOrder(it) }
+    fun reservedOrders(): List<ReservedOrder> = all("ReservedOrder") { materializeReservedOrder(it) }
+    fun unshippedOrders(): List<UnshippedOrder> = all("UnshippedOrder") { materializeUnshippedOrder(it) }
+    fun readyToShips(): List<ReadyToShip> = all("ReadyToShip") { materializeReadyToShip(it) }
+    fun unhandledAddressChanges(): List<UnhandledAddressChange> = all("UnhandledAddressChange") { materializeUnhandledAddressChange(it) }
+    fun applicableAddressChanges(): List<ApplicableAddressChange> = all("ApplicableAddressChange") { materializeApplicableAddressChange(it) }
+    fun refusedAddressChanges(): List<RefusedAddressChange> = all("RefusedAddressChange") { materializeRefusedAddressChange(it) }
+    fun refundAfterFailures(): List<RefundAfterFailure> = all("RefundAfterFailure") { materializeRefundAfterFailure(it) }
+    fun overdueOrders(): List<OverdueOrder> = all("OverdueOrder") { materializeOverdueOrder(it) }
+    fun inGracePeriods(): List<InGracePeriod> = all("InGracePeriod") { materializeInGracePeriod(it) }
+    fun openDunningFlags(): List<OpenDunningFlag> = all("OpenDunningFlag") { materializeOpenDunningFlag(it) }
+    fun closableDunningFlags(): List<ClosableDunningFlag> = all("ClosableDunningFlag") { materializeClosableDunningFlag(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
-    inner class Read {
-        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
-        val registry = QueryRegistry()
-        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+    inner class Read : ReadSurface<Read>(system) {
+        override fun modelOf(id: Long): Ref<*> = materialize(id)
 
-        /** The model object behind a reference, read now; throws when the record no longer exists. */
-        @Suppress("UNCHECKED_CAST")
-        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
-        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
-        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
-        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
-        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
-            val id = system.idOf(ref)
-            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            materialize(id)
-        }
-
-        val contacts: ContactQuery get() = ContactQuery(Query("Contact"))
+        val contacts: ContactQuery get() = query("Contact", ContactFields()) { materializeContact(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun contact(key: StoreKey): Contact = invoke<Contact>(Ref.Persisted("Contact", key))
+        fun contact(key: StoreKey): Contact = byKey("Contact", key)
         fun contact(key: Long): Contact = contact(StoreKey(key))
 
-        val cards: CardQuery get() = CardQuery(Query("Card"))
+        val cards: CardQuery get() = query("Card", CardFields()) { materializeCard(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun card(key: StoreKey): Card = invoke<Card>(Ref.Persisted("Card", key))
+        fun card(key: StoreKey): Card = byKey("Card", key)
         fun card(key: Long): Card = card(StoreKey(key))
 
-        val customers: CustomerQuery get() = CustomerQuery(Query("Customer"))
+        val customers: CustomerQuery get() = query("Customer", CustomerFields()) { materializeCustomer(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun customer(key: StoreKey): Customer = invoke<Customer>(Ref.Persisted("Customer", key))
+        fun customer(key: StoreKey): Customer = byKey("Customer", key)
         fun customer(key: Long): Customer = customer(StoreKey(key))
 
-        val cardUpdates: CardUpdateQuery get() = CardUpdateQuery(Query("CardUpdate"))
+        val cardUpdates: CardUpdateQuery get() = query("CardUpdate", CardUpdateFields()) { materializeCardUpdate(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun cardUpdate(key: StoreKey): CardUpdate = invoke<CardUpdate>(Ref.Persisted("CardUpdate", key))
+        fun cardUpdate(key: StoreKey): CardUpdate = byKey("CardUpdate", key)
         fun cardUpdate(key: Long): CardUpdate = cardUpdate(StoreKey(key))
 
-        val orders: OrderQuery get() = OrderQuery(Query("Order"))
+        val orders: OrderQuery get() = query("Order", OrderFields()) { materializeOrder(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun order(key: StoreKey): Order = invoke<Order>(Ref.Persisted("Order", key))
+        fun order(key: StoreKey): Order = byKey("Order", key)
         fun order(key: Long): Order = order(StoreKey(key))
 
-        val chargeAttempts: ChargeAttemptQuery get() = ChargeAttemptQuery(Query("ChargeAttempt"))
+        val chargeAttempts: ChargeAttemptQuery get() = query("ChargeAttempt", ChargeAttemptFields()) { materializeChargeAttempt(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun chargeAttempt(key: StoreKey): ChargeAttempt = invoke<ChargeAttempt>(Ref.Persisted("ChargeAttempt", key))
+        fun chargeAttempt(key: StoreKey): ChargeAttempt = byKey("ChargeAttempt", key)
         fun chargeAttempt(key: Long): ChargeAttempt = chargeAttempt(StoreKey(key))
 
-        val chargeResponses: ChargeResponseQuery get() = ChargeResponseQuery(Query("ChargeResponse"))
+        val chargeResponses: ChargeResponseQuery get() = query("ChargeResponse", ChargeResponseFields()) { materializeChargeResponse(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun chargeResponse(key: StoreKey): ChargeResponse = invoke<ChargeResponse>(Ref.Persisted("ChargeResponse", key))
+        fun chargeResponse(key: StoreKey): ChargeResponse = byKey("ChargeResponse", key)
         fun chargeResponse(key: Long): ChargeResponse = chargeResponse(StoreKey(key))
 
-        val attemptTimeouts: AttemptTimeoutQuery get() = AttemptTimeoutQuery(Query("AttemptTimeout"))
+        val attemptTimeouts: AttemptTimeoutQuery get() = query("AttemptTimeout", AttemptTimeoutFields()) { materializeAttemptTimeout(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun attemptTimeout(key: StoreKey): AttemptTimeout = invoke<AttemptTimeout>(Ref.Persisted("AttemptTimeout", key))
+        fun attemptTimeout(key: StoreKey): AttemptTimeout = byKey("AttemptTimeout", key)
         fun attemptTimeout(key: Long): AttemptTimeout = attemptTimeout(StoreKey(key))
 
-        val stockReservations: StockReservationQuery get() = StockReservationQuery(Query("StockReservation"))
+        val stockReservations: StockReservationQuery get() = query("StockReservation", StockReservationFields()) { materializeStockReservation(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun stockReservation(key: StoreKey): StockReservation = invoke<StockReservation>(Ref.Persisted("StockReservation", key))
+        fun stockReservation(key: StoreKey): StockReservation = byKey("StockReservation", key)
         fun stockReservation(key: Long): StockReservation = stockReservation(StoreKey(key))
 
-        val reservationReleases: ReservationReleaseQuery get() = ReservationReleaseQuery(Query("ReservationRelease"))
+        val reservationReleases: ReservationReleaseQuery get() = query("ReservationRelease", ReservationReleaseFields()) { materializeReservationRelease(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun reservationRelease(key: StoreKey): ReservationRelease = invoke<ReservationRelease>(Ref.Persisted("ReservationRelease", key))
+        fun reservationRelease(key: StoreKey): ReservationRelease = byKey("ReservationRelease", key)
         fun reservationRelease(key: Long): ReservationRelease = reservationRelease(StoreKey(key))
 
-        val receipts: ReceiptQuery get() = ReceiptQuery(Query("Receipt"))
+        val receipts: ReceiptQuery get() = query("Receipt", ReceiptFields()) { materializeReceipt(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun receipt(key: StoreKey): Receipt = invoke<Receipt>(Ref.Persisted("Receipt", key))
+        fun receipt(key: StoreKey): Receipt = byKey("Receipt", key)
         fun receipt(key: Long): Receipt = receipt(StoreKey(key))
 
-        val shipments: ShipmentQuery get() = ShipmentQuery(Query("Shipment"))
+        val shipments: ShipmentQuery get() = query("Shipment", ShipmentFields()) { materializeShipment(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun shipment(key: StoreKey): Shipment = invoke<Shipment>(Ref.Persisted("Shipment", key))
+        fun shipment(key: StoreKey): Shipment = byKey("Shipment", key)
         fun shipment(key: Long): Shipment = shipment(StoreKey(key))
 
-        val changeShippingAddresss: ChangeShippingAddressQuery get() = ChangeShippingAddressQuery(Query("ChangeShippingAddress"))
+        val changeShippingAddresss: ChangeShippingAddressQuery get() = query("ChangeShippingAddress", ChangeShippingAddressFields()) { materializeChangeShippingAddress(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun changeShippingAddress(key: StoreKey): ChangeShippingAddress = invoke<ChangeShippingAddress>(Ref.Persisted("ChangeShippingAddress", key))
+        fun changeShippingAddress(key: StoreKey): ChangeShippingAddress = byKey("ChangeShippingAddress", key)
         fun changeShippingAddress(key: Long): ChangeShippingAddress = changeShippingAddress(StoreKey(key))
 
-        val addressChangeApplications: AddressChangeApplicationQuery get() = AddressChangeApplicationQuery(Query("AddressChangeApplication"))
+        val addressChangeApplications: AddressChangeApplicationQuery get() = query("AddressChangeApplication", AddressChangeApplicationFields()) { materializeAddressChangeApplication(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun addressChangeApplication(key: StoreKey): AddressChangeApplication = invoke<AddressChangeApplication>(Ref.Persisted("AddressChangeApplication", key))
+        fun addressChangeApplication(key: StoreKey): AddressChangeApplication = byKey("AddressChangeApplication", key)
         fun addressChangeApplication(key: Long): AddressChangeApplication = addressChangeApplication(StoreKey(key))
 
-        val addressChangeRefusals: AddressChangeRefusalQuery get() = AddressChangeRefusalQuery(Query("AddressChangeRefusal"))
+        val addressChangeRefusals: AddressChangeRefusalQuery get() = query("AddressChangeRefusal", AddressChangeRefusalFields()) { materializeAddressChangeRefusal(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun addressChangeRefusal(key: StoreKey): AddressChangeRefusal = invoke<AddressChangeRefusal>(Ref.Persisted("AddressChangeRefusal", key))
+        fun addressChangeRefusal(key: StoreKey): AddressChangeRefusal = byKey("AddressChangeRefusal", key)
         fun addressChangeRefusal(key: Long): AddressChangeRefusal = addressChangeRefusal(StoreKey(key))
 
-        val refunds: RefundQuery get() = RefundQuery(Query("Refund"))
+        val refunds: RefundQuery get() = query("Refund", RefundFields()) { materializeRefund(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun refund(key: StoreKey): Refund = invoke<Refund>(Ref.Persisted("Refund", key))
+        fun refund(key: StoreKey): Refund = byKey("Refund", key)
         fun refund(key: Long): Refund = refund(StoreKey(key))
 
-        val settlementReversals: SettlementReversalQuery get() = SettlementReversalQuery(Query("SettlementReversal"))
+        val settlementReversals: SettlementReversalQuery get() = query("SettlementReversal", SettlementReversalFields()) { materializeSettlementReversal(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun settlementReversal(key: StoreKey): SettlementReversal = invoke<SettlementReversal>(Ref.Persisted("SettlementReversal", key))
+        fun settlementReversal(key: StoreKey): SettlementReversal = byKey("SettlementReversal", key)
         fun settlementReversal(key: Long): SettlementReversal = settlementReversal(StoreKey(key))
 
-        val manualCharges: ManualChargeQuery get() = ManualChargeQuery(Query("ManualCharge"))
+        val manualCharges: ManualChargeQuery get() = query("ManualCharge", ManualChargeFields()) { materializeManualCharge(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun manualCharge(key: StoreKey): ManualCharge = invoke<ManualCharge>(Ref.Persisted("ManualCharge", key))
+        fun manualCharge(key: StoreKey): ManualCharge = byKey("ManualCharge", key)
         fun manualCharge(key: Long): ManualCharge = manualCharge(StoreKey(key))
 
-        val extensionRequests: ExtensionRequestQuery get() = ExtensionRequestQuery(Query("ExtensionRequest"))
+        val extensionRequests: ExtensionRequestQuery get() = query("ExtensionRequest", ExtensionRequestFields()) { materializeExtensionRequest(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun extensionRequest(key: StoreKey): ExtensionRequest = invoke<ExtensionRequest>(Ref.Persisted("ExtensionRequest", key))
+        fun extensionRequest(key: StoreKey): ExtensionRequest = byKey("ExtensionRequest", key)
         fun extensionRequest(key: Long): ExtensionRequest = extensionRequest(StoreKey(key))
 
-        val paymentExtensions: PaymentExtensionQuery get() = PaymentExtensionQuery(Query("PaymentExtension"))
+        val paymentExtensions: PaymentExtensionQuery get() = query("PaymentExtension", PaymentExtensionFields()) { materializePaymentExtension(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun paymentExtension(key: StoreKey): PaymentExtension = invoke<PaymentExtension>(Ref.Persisted("PaymentExtension", key))
+        fun paymentExtension(key: StoreKey): PaymentExtension = byKey("PaymentExtension", key)
         fun paymentExtension(key: Long): PaymentExtension = paymentExtension(StoreKey(key))
 
-        val paymentReminders: PaymentReminderQuery get() = PaymentReminderQuery(Query("PaymentReminder"))
+        val paymentReminders: PaymentReminderQuery get() = query("PaymentReminder", PaymentReminderFields()) { materializePaymentReminder(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun paymentReminder(key: StoreKey): PaymentReminder = invoke<PaymentReminder>(Ref.Persisted("PaymentReminder", key))
+        fun paymentReminder(key: StoreKey): PaymentReminder = byKey("PaymentReminder", key)
         fun paymentReminder(key: Long): PaymentReminder = paymentReminder(StoreKey(key))
 
-        val dunningFlags: DunningFlagQuery get() = DunningFlagQuery(Query("DunningFlag"))
+        val dunningFlags: DunningFlagQuery get() = query("DunningFlag", DunningFlagFields()) { materializeDunningFlag(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun dunningFlag(key: StoreKey): DunningFlag = invoke<DunningFlag>(Ref.Persisted("DunningFlag", key))
+        fun dunningFlag(key: StoreKey): DunningFlag = byKey("DunningFlag", key)
         fun dunningFlag(key: Long): DunningFlag = dunningFlag(StoreKey(key))
 
-        val dunningResolutions: DunningResolutionQuery get() = DunningResolutionQuery(Query("DunningResolution"))
+        val dunningResolutions: DunningResolutionQuery get() = query("DunningResolution", DunningResolutionFields()) { materializeDunningResolution(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun dunningResolution(key: StoreKey): DunningResolution = invoke<DunningResolution>(Ref.Persisted("DunningResolution", key))
+        fun dunningResolution(key: StoreKey): DunningResolution = byKey("DunningResolution", key)
         fun dunningResolution(key: Long): DunningResolution = dunningResolution(StoreKey(key))
 
-        val settledOrders: SettledOrderQuery get() = SettledOrderQuery(Query("SettledOrder"))
+        val settledOrders: SettledOrderQuery get() = query("SettledOrder", SettledOrderFields()) { materializeSettledOrder(it) }
         /** The record behind [ref] as a member of SettledOrder, or null when it is not one. */
-        fun settledOrder(ref: Ref<Order>): SettledOrder? =
-            system.scope { system.idOf(ref).let { if (system.exists("SettledOrder", it)) materializeSettledOrder(it) else null } }
+        fun settledOrder(ref: Ref<Order>): SettledOrder? = member("SettledOrder", ref) { materializeSettledOrder(it) }
 
-        val neverChargeds: NeverChargedQuery get() = NeverChargedQuery(Query("NeverCharged"))
+        val neverChargeds: NeverChargedQuery get() = query("NeverCharged", NeverChargedFields()) { materializeNeverCharged(it) }
         /** The record behind [ref] as a member of NeverCharged, or null when it is not one. */
-        fun neverCharged(ref: Ref<Order>): NeverCharged? =
-            system.scope { system.idOf(ref).let { if (system.exists("NeverCharged", it)) materializeNeverCharged(it) else null } }
+        fun neverCharged(ref: Ref<Order>): NeverCharged? = member("NeverCharged", ref) { materializeNeverCharged(it) }
 
-        val unpaidOrders: UnpaidOrderQuery get() = UnpaidOrderQuery(Query("UnpaidOrder"))
+        val unpaidOrders: UnpaidOrderQuery get() = query("UnpaidOrder", UnpaidOrderFields()) { materializeUnpaidOrder(it) }
         /** The record behind [ref] as a member of UnpaidOrder, or null when it is not one. */
-        fun unpaidOrder(ref: Ref<Order>): UnpaidOrder? =
-            system.scope { system.idOf(ref).let { if (system.exists("UnpaidOrder", it)) materializeUnpaidOrder(it) else null } }
+        fun unpaidOrder(ref: Ref<Order>): UnpaidOrder? = member("UnpaidOrder", ref) { materializeUnpaidOrder(it) }
 
-        val refundedOrders: RefundedOrderQuery get() = RefundedOrderQuery(Query("RefundedOrder"))
+        val refundedOrders: RefundedOrderQuery get() = query("RefundedOrder", RefundedOrderFields()) { materializeRefundedOrder(it) }
         /** The record behind [ref] as a member of RefundedOrder, or null when it is not one. */
-        fun refundedOrder(ref: Ref<Order>): RefundedOrder? =
-            system.scope { system.idOf(ref).let { if (system.exists("RefundedOrder", it)) materializeRefundedOrder(it) else null } }
+        fun refundedOrder(ref: Ref<Order>): RefundedOrder? = member("RefundedOrder", ref) { materializeRefundedOrder(it) }
 
-        val chargeableOrders: ChargeableOrderQuery get() = ChargeableOrderQuery(Query("ChargeableOrder"))
+        val chargeableOrders: ChargeableOrderQuery get() = query("ChargeableOrder", ChargeableOrderFields()) { materializeChargeableOrder(it) }
         /** The record behind [ref] as a member of ChargeableOrder, or null when it is not one. */
-        fun chargeableOrder(ref: Ref<Order>): ChargeableOrder? =
-            system.scope { system.idOf(ref).let { if (system.exists("ChargeableOrder", it)) materializeChargeableOrder(it) else null } }
+        fun chargeableOrder(ref: Ref<Order>): ChargeableOrder? = member("ChargeableOrder", ref) { materializeChargeableOrder(it) }
 
-        val pendingAttempts: PendingAttemptQuery get() = PendingAttemptQuery(Query("PendingAttempt"))
+        val pendingAttempts: PendingAttemptQuery get() = query("PendingAttempt", PendingAttemptFields()) { materializePendingAttempt(it) }
         /** The record behind [ref] as a member of PendingAttempt, or null when it is not one. */
-        fun pendingAttempt(ref: Ref<ChargeAttempt>): PendingAttempt? =
-            system.scope { system.idOf(ref).let { if (system.exists("PendingAttempt", it)) materializePendingAttempt(it) else null } }
+        fun pendingAttempt(ref: Ref<ChargeAttempt>): PendingAttempt? = member("PendingAttempt", ref) { materializePendingAttempt(it) }
 
-        val completedAttempts: CompletedAttemptQuery get() = CompletedAttemptQuery(Query("CompletedAttempt"))
+        val completedAttempts: CompletedAttemptQuery get() = query("CompletedAttempt", CompletedAttemptFields()) { materializeCompletedAttempt(it) }
         /** The record behind [ref] as a member of CompletedAttempt, or null when it is not one. */
-        fun completedAttempt(ref: Ref<ChargeAttempt>): CompletedAttempt? =
-            system.scope { system.idOf(ref).let { if (system.exists("CompletedAttempt", it)) materializeCompletedAttempt(it) else null } }
+        fun completedAttempt(ref: Ref<ChargeAttempt>): CompletedAttempt? = member("CompletedAttempt", ref) { materializeCompletedAttempt(it) }
 
-        val successfulCharges: SuccessfulChargeQuery get() = SuccessfulChargeQuery(Query("SuccessfulCharge"))
+        val successfulCharges: SuccessfulChargeQuery get() = query("SuccessfulCharge", SuccessfulChargeFields()) { materializeSuccessfulCharge(it) }
         /** The record behind [ref] as a member of SuccessfulCharge, or null when it is not one. */
-        fun successfulCharge(ref: Ref<ChargeAttempt>): SuccessfulCharge? =
-            system.scope { system.idOf(ref).let { if (system.exists("SuccessfulCharge", it)) materializeSuccessfulCharge(it) else null } }
+        fun successfulCharge(ref: Ref<ChargeAttempt>): SuccessfulCharge? = member("SuccessfulCharge", ref) { materializeSuccessfulCharge(it) }
 
-        val failedCharges: FailedChargeQuery get() = FailedChargeQuery(Query("FailedCharge"))
+        val failedCharges: FailedChargeQuery get() = query("FailedCharge", FailedChargeFields()) { materializeFailedCharge(it) }
         /** The record behind [ref] as a member of FailedCharge, or null when it is not one. */
-        fun failedCharge(ref: Ref<ChargeAttempt>): FailedCharge? =
-            system.scope { system.idOf(ref).let { if (system.exists("FailedCharge", it)) materializeFailedCharge(it) else null } }
+        fun failedCharge(ref: Ref<ChargeAttempt>): FailedCharge? = member("FailedCharge", ref) { materializeFailedCharge(it) }
 
-        val timedOutAttempts: TimedOutAttemptQuery get() = TimedOutAttemptQuery(Query("TimedOutAttempt"))
+        val timedOutAttempts: TimedOutAttemptQuery get() = query("TimedOutAttempt", TimedOutAttemptFields()) { materializeTimedOutAttempt(it) }
         /** The record behind [ref] as a member of TimedOutAttempt, or null when it is not one. */
-        fun timedOutAttempt(ref: Ref<ChargeAttempt>): TimedOutAttempt? =
-            system.scope { system.idOf(ref).let { if (system.exists("TimedOutAttempt", it)) materializeTimedOutAttempt(it) else null } }
+        fun timedOutAttempt(ref: Ref<ChargeAttempt>): TimedOutAttempt? = member("TimedOutAttempt", ref) { materializeTimedOutAttempt(it) }
 
-        val activeReservations: ActiveReservationQuery get() = ActiveReservationQuery(Query("ActiveReservation"))
+        val activeReservations: ActiveReservationQuery get() = query("ActiveReservation", ActiveReservationFields()) { materializeActiveReservation(it) }
         /** The record behind [ref] as a member of ActiveReservation, or null when it is not one. */
-        fun activeReservation(ref: Ref<StockReservation>): ActiveReservation? =
-            system.scope { system.idOf(ref).let { if (system.exists("ActiveReservation", it)) materializeActiveReservation(it) else null } }
+        fun activeReservation(ref: Ref<StockReservation>): ActiveReservation? = member("ActiveReservation", ref) { materializeActiveReservation(it) }
 
-        val retryableOrders: RetryableOrderQuery get() = RetryableOrderQuery(Query("RetryableOrder"))
+        val retryableOrders: RetryableOrderQuery get() = query("RetryableOrder", RetryableOrderFields()) { materializeRetryableOrder(it) }
         /** The record behind [ref] as a member of RetryableOrder, or null when it is not one. */
-        fun retryableOrder(ref: Ref<Order>): RetryableOrder? =
-            system.scope { system.idOf(ref).let { if (system.exists("RetryableOrder", it)) materializeRetryableOrder(it) else null } }
+        fun retryableOrder(ref: Ref<Order>): RetryableOrder? = member("RetryableOrder", ref) { materializeRetryableOrder(it) }
 
-        val stalePendingAttempts: StalePendingAttemptQuery get() = StalePendingAttemptQuery(Query("StalePendingAttempt"))
+        val stalePendingAttempts: StalePendingAttemptQuery get() = query("StalePendingAttempt", StalePendingAttemptFields()) { materializeStalePendingAttempt(it) }
         /** The record behind [ref] as a member of StalePendingAttempt, or null when it is not one. */
-        fun stalePendingAttempt(ref: Ref<ChargeAttempt>): StalePendingAttempt? =
-            system.scope { system.idOf(ref).let { if (system.exists("StalePendingAttempt", it)) materializeStalePendingAttempt(it) else null } }
+        fun stalePendingAttempt(ref: Ref<ChargeAttempt>): StalePendingAttempt? = member("StalePendingAttempt", ref) { materializeStalePendingAttempt(it) }
 
-        val exhaustedOrders: ExhaustedOrderQuery get() = ExhaustedOrderQuery(Query("ExhaustedOrder"))
+        val exhaustedOrders: ExhaustedOrderQuery get() = query("ExhaustedOrder", ExhaustedOrderFields()) { materializeExhaustedOrder(it) }
         /** The record behind [ref] as a member of ExhaustedOrder, or null when it is not one. */
-        fun exhaustedOrder(ref: Ref<Order>): ExhaustedOrder? =
-            system.scope { system.idOf(ref).let { if (system.exists("ExhaustedOrder", it)) materializeExhaustedOrder(it) else null } }
+        fun exhaustedOrder(ref: Ref<Order>): ExhaustedOrder? = member("ExhaustedOrder", ref) { materializeExhaustedOrder(it) }
 
-        val reservedOrders: ReservedOrderQuery get() = ReservedOrderQuery(Query("ReservedOrder"))
+        val reservedOrders: ReservedOrderQuery get() = query("ReservedOrder", ReservedOrderFields()) { materializeReservedOrder(it) }
         /** The record behind [ref] as a member of ReservedOrder, or null when it is not one. */
-        fun reservedOrder(ref: Ref<Order>): ReservedOrder? =
-            system.scope { system.idOf(ref).let { if (system.exists("ReservedOrder", it)) materializeReservedOrder(it) else null } }
+        fun reservedOrder(ref: Ref<Order>): ReservedOrder? = member("ReservedOrder", ref) { materializeReservedOrder(it) }
 
-        val unshippedOrders: UnshippedOrderQuery get() = UnshippedOrderQuery(Query("UnshippedOrder"))
+        val unshippedOrders: UnshippedOrderQuery get() = query("UnshippedOrder", UnshippedOrderFields()) { materializeUnshippedOrder(it) }
         /** The record behind [ref] as a member of UnshippedOrder, or null when it is not one. */
-        fun unshippedOrder(ref: Ref<Order>): UnshippedOrder? =
-            system.scope { system.idOf(ref).let { if (system.exists("UnshippedOrder", it)) materializeUnshippedOrder(it) else null } }
+        fun unshippedOrder(ref: Ref<Order>): UnshippedOrder? = member("UnshippedOrder", ref) { materializeUnshippedOrder(it) }
 
-        val readyToShips: ReadyToShipQuery get() = ReadyToShipQuery(Query("ReadyToShip"))
+        val readyToShips: ReadyToShipQuery get() = query("ReadyToShip", ReadyToShipFields()) { materializeReadyToShip(it) }
         /** The record behind [ref] as a member of ReadyToShip, or null when it is not one. */
-        fun readyToShip(ref: Ref<Order>): ReadyToShip? =
-            system.scope { system.idOf(ref).let { if (system.exists("ReadyToShip", it)) materializeReadyToShip(it) else null } }
+        fun readyToShip(ref: Ref<Order>): ReadyToShip? = member("ReadyToShip", ref) { materializeReadyToShip(it) }
 
-        val unhandledAddressChanges: UnhandledAddressChangeQuery get() = UnhandledAddressChangeQuery(Query("UnhandledAddressChange"))
+        val unhandledAddressChanges: UnhandledAddressChangeQuery get() = query("UnhandledAddressChange", UnhandledAddressChangeFields()) { materializeUnhandledAddressChange(it) }
         /** The record behind [ref] as a member of UnhandledAddressChange, or null when it is not one. */
-        fun unhandledAddressChange(ref: Ref<ChangeShippingAddress>): UnhandledAddressChange? =
-            system.scope { system.idOf(ref).let { if (system.exists("UnhandledAddressChange", it)) materializeUnhandledAddressChange(it) else null } }
+        fun unhandledAddressChange(ref: Ref<ChangeShippingAddress>): UnhandledAddressChange? = member("UnhandledAddressChange", ref) { materializeUnhandledAddressChange(it) }
 
-        val applicableAddressChanges: ApplicableAddressChangeQuery get() = ApplicableAddressChangeQuery(Query("ApplicableAddressChange"))
+        val applicableAddressChanges: ApplicableAddressChangeQuery get() = query("ApplicableAddressChange", ApplicableAddressChangeFields()) { materializeApplicableAddressChange(it) }
         /** The record behind [ref] as a member of ApplicableAddressChange, or null when it is not one. */
-        fun applicableAddressChange(ref: Ref<ChangeShippingAddress>): ApplicableAddressChange? =
-            system.scope { system.idOf(ref).let { if (system.exists("ApplicableAddressChange", it)) materializeApplicableAddressChange(it) else null } }
+        fun applicableAddressChange(ref: Ref<ChangeShippingAddress>): ApplicableAddressChange? = member("ApplicableAddressChange", ref) { materializeApplicableAddressChange(it) }
 
-        val refusedAddressChanges: RefusedAddressChangeQuery get() = RefusedAddressChangeQuery(Query("RefusedAddressChange"))
+        val refusedAddressChanges: RefusedAddressChangeQuery get() = query("RefusedAddressChange", RefusedAddressChangeFields()) { materializeRefusedAddressChange(it) }
         /** The record behind [ref] as a member of RefusedAddressChange, or null when it is not one. */
-        fun refusedAddressChange(ref: Ref<ChangeShippingAddress>): RefusedAddressChange? =
-            system.scope { system.idOf(ref).let { if (system.exists("RefusedAddressChange", it)) materializeRefusedAddressChange(it) else null } }
+        fun refusedAddressChange(ref: Ref<ChangeShippingAddress>): RefusedAddressChange? = member("RefusedAddressChange", ref) { materializeRefusedAddressChange(it) }
 
-        val refundAfterFailures: RefundAfterFailureQuery get() = RefundAfterFailureQuery(Query("RefundAfterFailure"))
+        val refundAfterFailures: RefundAfterFailureQuery get() = query("RefundAfterFailure", RefundAfterFailureFields()) { materializeRefundAfterFailure(it) }
         /** The record behind [ref] as a member of RefundAfterFailure, or null when it is not one. */
-        fun refundAfterFailure(ref: Ref<Order>): RefundAfterFailure? =
-            system.scope { system.idOf(ref).let { if (system.exists("RefundAfterFailure", it)) materializeRefundAfterFailure(it) else null } }
+        fun refundAfterFailure(ref: Ref<Order>): RefundAfterFailure? = member("RefundAfterFailure", ref) { materializeRefundAfterFailure(it) }
 
-        val overdueOrders: OverdueOrderQuery get() = OverdueOrderQuery(Query("OverdueOrder"))
+        val overdueOrders: OverdueOrderQuery get() = query("OverdueOrder", OverdueOrderFields()) { materializeOverdueOrder(it) }
         /** The record behind [ref] as a member of OverdueOrder, or null when it is not one. */
-        fun overdueOrder(ref: Ref<Order>): OverdueOrder? =
-            system.scope { system.idOf(ref).let { if (system.exists("OverdueOrder", it)) materializeOverdueOrder(it) else null } }
+        fun overdueOrder(ref: Ref<Order>): OverdueOrder? = member("OverdueOrder", ref) { materializeOverdueOrder(it) }
 
-        val inGracePeriods: InGracePeriodQuery get() = InGracePeriodQuery(Query("InGracePeriod"))
+        val inGracePeriods: InGracePeriodQuery get() = query("InGracePeriod", InGracePeriodFields()) { materializeInGracePeriod(it) }
         /** The record behind [ref] as a member of InGracePeriod, or null when it is not one. */
-        fun inGracePeriod(ref: Ref<Order>): InGracePeriod? =
-            system.scope { system.idOf(ref).let { if (system.exists("InGracePeriod", it)) materializeInGracePeriod(it) else null } }
+        fun inGracePeriod(ref: Ref<Order>): InGracePeriod? = member("InGracePeriod", ref) { materializeInGracePeriod(it) }
 
-        val openDunningFlags: OpenDunningFlagQuery get() = OpenDunningFlagQuery(Query("OpenDunningFlag"))
+        val openDunningFlags: OpenDunningFlagQuery get() = query("OpenDunningFlag", OpenDunningFlagFields()) { materializeOpenDunningFlag(it) }
         /** The record behind [ref] as a member of OpenDunningFlag, or null when it is not one. */
-        fun openDunningFlag(ref: Ref<DunningFlag>): OpenDunningFlag? =
-            system.scope { system.idOf(ref).let { if (system.exists("OpenDunningFlag", it)) materializeOpenDunningFlag(it) else null } }
+        fun openDunningFlag(ref: Ref<DunningFlag>): OpenDunningFlag? = member("OpenDunningFlag", ref) { materializeOpenDunningFlag(it) }
 
-        val closableDunningFlags: ClosableDunningFlagQuery get() = ClosableDunningFlagQuery(Query("ClosableDunningFlag"))
+        val closableDunningFlags: ClosableDunningFlagQuery get() = query("ClosableDunningFlag", ClosableDunningFlagFields()) { materializeClosableDunningFlag(it) }
         /** The record behind [ref] as a member of ClosableDunningFlag, or null when it is not one. */
-        fun closableDunningFlag(ref: Ref<DunningFlag>): ClosableDunningFlag? =
-            system.scope { system.idOf(ref).let { if (system.exists("ClosableDunningFlag", it)) materializeClosableDunningFlag(it) else null } }
-    }
-
-    inner class ContactQuery(q: Query) : TypedQuery<ContactFields, Contact>(system, q, ContactFields(), { materializeContact(it) }) {
-        override fun with(q: Query) = ContactQuery(q)
-    }
-
-    inner class CardQuery(q: Query) : TypedQuery<CardFields, Card>(system, q, CardFields(), { materializeCard(it) }) {
-        override fun with(q: Query) = CardQuery(q)
-    }
-
-    inner class CustomerQuery(q: Query) : TypedQuery<CustomerFields, Customer>(system, q, CustomerFields(), { materializeCustomer(it) }) {
-        override fun with(q: Query) = CustomerQuery(q)
-    }
-
-    inner class CardUpdateQuery(q: Query) : TypedQuery<CardUpdateFields, CardUpdate>(system, q, CardUpdateFields(), { materializeCardUpdate(it) }) {
-        override fun with(q: Query) = CardUpdateQuery(q)
-    }
-
-    inner class OrderQuery(q: Query) : TypedQuery<OrderFields, Order>(system, q, OrderFields(), { materializeOrder(it) }) {
-        override fun with(q: Query) = OrderQuery(q)
-    }
-
-    inner class ChargeAttemptQuery(q: Query) : TypedQuery<ChargeAttemptFields, ChargeAttempt>(system, q, ChargeAttemptFields(), { materializeChargeAttempt(it) }) {
-        override fun with(q: Query) = ChargeAttemptQuery(q)
-    }
-
-    inner class ChargeResponseQuery(q: Query) : TypedQuery<ChargeResponseFields, ChargeResponse>(system, q, ChargeResponseFields(), { materializeChargeResponse(it) }) {
-        override fun with(q: Query) = ChargeResponseQuery(q)
-    }
-
-    inner class AttemptTimeoutQuery(q: Query) : TypedQuery<AttemptTimeoutFields, AttemptTimeout>(system, q, AttemptTimeoutFields(), { materializeAttemptTimeout(it) }) {
-        override fun with(q: Query) = AttemptTimeoutQuery(q)
-    }
-
-    inner class StockReservationQuery(q: Query) : TypedQuery<StockReservationFields, StockReservation>(system, q, StockReservationFields(), { materializeStockReservation(it) }) {
-        override fun with(q: Query) = StockReservationQuery(q)
-    }
-
-    inner class ReservationReleaseQuery(q: Query) : TypedQuery<ReservationReleaseFields, ReservationRelease>(system, q, ReservationReleaseFields(), { materializeReservationRelease(it) }) {
-        override fun with(q: Query) = ReservationReleaseQuery(q)
-    }
-
-    inner class ReceiptQuery(q: Query) : TypedQuery<ReceiptFields, Receipt>(system, q, ReceiptFields(), { materializeReceipt(it) }) {
-        override fun with(q: Query) = ReceiptQuery(q)
-    }
-
-    inner class ShipmentQuery(q: Query) : TypedQuery<ShipmentFields, Shipment>(system, q, ShipmentFields(), { materializeShipment(it) }) {
-        override fun with(q: Query) = ShipmentQuery(q)
-    }
-
-    inner class ChangeShippingAddressQuery(q: Query) : TypedQuery<ChangeShippingAddressFields, ChangeShippingAddress>(system, q, ChangeShippingAddressFields(), { materializeChangeShippingAddress(it) }) {
-        override fun with(q: Query) = ChangeShippingAddressQuery(q)
-    }
-
-    inner class AddressChangeApplicationQuery(q: Query) : TypedQuery<AddressChangeApplicationFields, AddressChangeApplication>(system, q, AddressChangeApplicationFields(), { materializeAddressChangeApplication(it) }) {
-        override fun with(q: Query) = AddressChangeApplicationQuery(q)
-    }
-
-    inner class AddressChangeRefusalQuery(q: Query) : TypedQuery<AddressChangeRefusalFields, AddressChangeRefusal>(system, q, AddressChangeRefusalFields(), { materializeAddressChangeRefusal(it) }) {
-        override fun with(q: Query) = AddressChangeRefusalQuery(q)
-    }
-
-    inner class RefundQuery(q: Query) : TypedQuery<RefundFields, Refund>(system, q, RefundFields(), { materializeRefund(it) }) {
-        override fun with(q: Query) = RefundQuery(q)
-    }
-
-    inner class SettlementReversalQuery(q: Query) : TypedQuery<SettlementReversalFields, SettlementReversal>(system, q, SettlementReversalFields(), { materializeSettlementReversal(it) }) {
-        override fun with(q: Query) = SettlementReversalQuery(q)
-    }
-
-    inner class ManualChargeQuery(q: Query) : TypedQuery<ManualChargeFields, ManualCharge>(system, q, ManualChargeFields(), { materializeManualCharge(it) }) {
-        override fun with(q: Query) = ManualChargeQuery(q)
-    }
-
-    inner class ExtensionRequestQuery(q: Query) : TypedQuery<ExtensionRequestFields, ExtensionRequest>(system, q, ExtensionRequestFields(), { materializeExtensionRequest(it) }) {
-        override fun with(q: Query) = ExtensionRequestQuery(q)
-    }
-
-    inner class PaymentExtensionQuery(q: Query) : TypedQuery<PaymentExtensionFields, PaymentExtension>(system, q, PaymentExtensionFields(), { materializePaymentExtension(it) }) {
-        override fun with(q: Query) = PaymentExtensionQuery(q)
-    }
-
-    inner class PaymentReminderQuery(q: Query) : TypedQuery<PaymentReminderFields, PaymentReminder>(system, q, PaymentReminderFields(), { materializePaymentReminder(it) }) {
-        override fun with(q: Query) = PaymentReminderQuery(q)
-    }
-
-    inner class DunningFlagQuery(q: Query) : TypedQuery<DunningFlagFields, DunningFlag>(system, q, DunningFlagFields(), { materializeDunningFlag(it) }) {
-        override fun with(q: Query) = DunningFlagQuery(q)
-    }
-
-    inner class DunningResolutionQuery(q: Query) : TypedQuery<DunningResolutionFields, DunningResolution>(system, q, DunningResolutionFields(), { materializeDunningResolution(it) }) {
-        override fun with(q: Query) = DunningResolutionQuery(q)
-    }
-
-    inner class SettledOrderQuery(q: Query) : TypedQuery<SettledOrderFields, SettledOrder>(system, q, SettledOrderFields(), { materializeSettledOrder(it) }) {
-        override fun with(q: Query) = SettledOrderQuery(q)
-    }
-
-    inner class NeverChargedQuery(q: Query) : TypedQuery<NeverChargedFields, NeverCharged>(system, q, NeverChargedFields(), { materializeNeverCharged(it) }) {
-        override fun with(q: Query) = NeverChargedQuery(q)
-    }
-
-    inner class UnpaidOrderQuery(q: Query) : TypedQuery<UnpaidOrderFields, UnpaidOrder>(system, q, UnpaidOrderFields(), { materializeUnpaidOrder(it) }) {
-        override fun with(q: Query) = UnpaidOrderQuery(q)
-    }
-
-    inner class RefundedOrderQuery(q: Query) : TypedQuery<RefundedOrderFields, RefundedOrder>(system, q, RefundedOrderFields(), { materializeRefundedOrder(it) }) {
-        override fun with(q: Query) = RefundedOrderQuery(q)
-    }
-
-    inner class ChargeableOrderQuery(q: Query) : TypedQuery<ChargeableOrderFields, ChargeableOrder>(system, q, ChargeableOrderFields(), { materializeChargeableOrder(it) }) {
-        override fun with(q: Query) = ChargeableOrderQuery(q)
-    }
-
-    inner class PendingAttemptQuery(q: Query) : TypedQuery<PendingAttemptFields, PendingAttempt>(system, q, PendingAttemptFields(), { materializePendingAttempt(it) }) {
-        override fun with(q: Query) = PendingAttemptQuery(q)
-    }
-
-    inner class CompletedAttemptQuery(q: Query) : TypedQuery<CompletedAttemptFields, CompletedAttempt>(system, q, CompletedAttemptFields(), { materializeCompletedAttempt(it) }) {
-        override fun with(q: Query) = CompletedAttemptQuery(q)
-    }
-
-    inner class SuccessfulChargeQuery(q: Query) : TypedQuery<SuccessfulChargeFields, SuccessfulCharge>(system, q, SuccessfulChargeFields(), { materializeSuccessfulCharge(it) }) {
-        override fun with(q: Query) = SuccessfulChargeQuery(q)
-    }
-
-    inner class FailedChargeQuery(q: Query) : TypedQuery<FailedChargeFields, FailedCharge>(system, q, FailedChargeFields(), { materializeFailedCharge(it) }) {
-        override fun with(q: Query) = FailedChargeQuery(q)
-    }
-
-    inner class TimedOutAttemptQuery(q: Query) : TypedQuery<TimedOutAttemptFields, TimedOutAttempt>(system, q, TimedOutAttemptFields(), { materializeTimedOutAttempt(it) }) {
-        override fun with(q: Query) = TimedOutAttemptQuery(q)
-    }
-
-    inner class ActiveReservationQuery(q: Query) : TypedQuery<ActiveReservationFields, ActiveReservation>(system, q, ActiveReservationFields(), { materializeActiveReservation(it) }) {
-        override fun with(q: Query) = ActiveReservationQuery(q)
-    }
-
-    inner class RetryableOrderQuery(q: Query) : TypedQuery<RetryableOrderFields, RetryableOrder>(system, q, RetryableOrderFields(), { materializeRetryableOrder(it) }) {
-        override fun with(q: Query) = RetryableOrderQuery(q)
-    }
-
-    inner class StalePendingAttemptQuery(q: Query) : TypedQuery<StalePendingAttemptFields, StalePendingAttempt>(system, q, StalePendingAttemptFields(), { materializeStalePendingAttempt(it) }) {
-        override fun with(q: Query) = StalePendingAttemptQuery(q)
-    }
-
-    inner class ExhaustedOrderQuery(q: Query) : TypedQuery<ExhaustedOrderFields, ExhaustedOrder>(system, q, ExhaustedOrderFields(), { materializeExhaustedOrder(it) }) {
-        override fun with(q: Query) = ExhaustedOrderQuery(q)
-    }
-
-    inner class ReservedOrderQuery(q: Query) : TypedQuery<ReservedOrderFields, ReservedOrder>(system, q, ReservedOrderFields(), { materializeReservedOrder(it) }) {
-        override fun with(q: Query) = ReservedOrderQuery(q)
-    }
-
-    inner class UnshippedOrderQuery(q: Query) : TypedQuery<UnshippedOrderFields, UnshippedOrder>(system, q, UnshippedOrderFields(), { materializeUnshippedOrder(it) }) {
-        override fun with(q: Query) = UnshippedOrderQuery(q)
-    }
-
-    inner class ReadyToShipQuery(q: Query) : TypedQuery<ReadyToShipFields, ReadyToShip>(system, q, ReadyToShipFields(), { materializeReadyToShip(it) }) {
-        override fun with(q: Query) = ReadyToShipQuery(q)
-    }
-
-    inner class UnhandledAddressChangeQuery(q: Query) : TypedQuery<UnhandledAddressChangeFields, UnhandledAddressChange>(system, q, UnhandledAddressChangeFields(), { materializeUnhandledAddressChange(it) }) {
-        override fun with(q: Query) = UnhandledAddressChangeQuery(q)
-    }
-
-    inner class ApplicableAddressChangeQuery(q: Query) : TypedQuery<ApplicableAddressChangeFields, ApplicableAddressChange>(system, q, ApplicableAddressChangeFields(), { materializeApplicableAddressChange(it) }) {
-        override fun with(q: Query) = ApplicableAddressChangeQuery(q)
-    }
-
-    inner class RefusedAddressChangeQuery(q: Query) : TypedQuery<RefusedAddressChangeFields, RefusedAddressChange>(system, q, RefusedAddressChangeFields(), { materializeRefusedAddressChange(it) }) {
-        override fun with(q: Query) = RefusedAddressChangeQuery(q)
-    }
-
-    inner class RefundAfterFailureQuery(q: Query) : TypedQuery<RefundAfterFailureFields, RefundAfterFailure>(system, q, RefundAfterFailureFields(), { materializeRefundAfterFailure(it) }) {
-        override fun with(q: Query) = RefundAfterFailureQuery(q)
-    }
-
-    inner class OverdueOrderQuery(q: Query) : TypedQuery<OverdueOrderFields, OverdueOrder>(system, q, OverdueOrderFields(), { materializeOverdueOrder(it) }) {
-        override fun with(q: Query) = OverdueOrderQuery(q)
-    }
-
-    inner class InGracePeriodQuery(q: Query) : TypedQuery<InGracePeriodFields, InGracePeriod>(system, q, InGracePeriodFields(), { materializeInGracePeriod(it) }) {
-        override fun with(q: Query) = InGracePeriodQuery(q)
-    }
-
-    inner class OpenDunningFlagQuery(q: Query) : TypedQuery<OpenDunningFlagFields, OpenDunningFlag>(system, q, OpenDunningFlagFields(), { materializeOpenDunningFlag(it) }) {
-        override fun with(q: Query) = OpenDunningFlagQuery(q)
-    }
-
-    inner class ClosableDunningFlagQuery(q: Query) : TypedQuery<ClosableDunningFlagFields, ClosableDunningFlag>(system, q, ClosableDunningFlagFields(), { materializeClosableDunningFlag(it) }) {
-        override fun with(q: Query) = ClosableDunningFlagQuery(q)
+        fun closableDunningFlag(ref: Ref<DunningFlag>): ClosableDunningFlag? = member("ClosableDunningFlag", ref) { materializeClosableDunningFlag(it) }
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -2120,17 +1811,67 @@ rule CloseDunningEpisode when ClosableDunningFlag on Daily {
     }
 }
 
+// ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias ContactQuery = TypedQuery<ContactFields, Contact>
+typealias CardQuery = TypedQuery<CardFields, Card>
+typealias CustomerQuery = TypedQuery<CustomerFields, Customer>
+typealias CardUpdateQuery = TypedQuery<CardUpdateFields, CardUpdate>
+typealias OrderQuery = TypedQuery<OrderFields, Order>
+typealias ChargeAttemptQuery = TypedQuery<ChargeAttemptFields, ChargeAttempt>
+typealias ChargeResponseQuery = TypedQuery<ChargeResponseFields, ChargeResponse>
+typealias AttemptTimeoutQuery = TypedQuery<AttemptTimeoutFields, AttemptTimeout>
+typealias StockReservationQuery = TypedQuery<StockReservationFields, StockReservation>
+typealias ReservationReleaseQuery = TypedQuery<ReservationReleaseFields, ReservationRelease>
+typealias ReceiptQuery = TypedQuery<ReceiptFields, Receipt>
+typealias ShipmentQuery = TypedQuery<ShipmentFields, Shipment>
+typealias ChangeShippingAddressQuery = TypedQuery<ChangeShippingAddressFields, ChangeShippingAddress>
+typealias AddressChangeApplicationQuery = TypedQuery<AddressChangeApplicationFields, AddressChangeApplication>
+typealias AddressChangeRefusalQuery = TypedQuery<AddressChangeRefusalFields, AddressChangeRefusal>
+typealias RefundQuery = TypedQuery<RefundFields, Refund>
+typealias SettlementReversalQuery = TypedQuery<SettlementReversalFields, SettlementReversal>
+typealias ManualChargeQuery = TypedQuery<ManualChargeFields, ManualCharge>
+typealias ExtensionRequestQuery = TypedQuery<ExtensionRequestFields, ExtensionRequest>
+typealias PaymentExtensionQuery = TypedQuery<PaymentExtensionFields, PaymentExtension>
+typealias PaymentReminderQuery = TypedQuery<PaymentReminderFields, PaymentReminder>
+typealias DunningFlagQuery = TypedQuery<DunningFlagFields, DunningFlag>
+typealias DunningResolutionQuery = TypedQuery<DunningResolutionFields, DunningResolution>
+typealias SettledOrderQuery = TypedQuery<SettledOrderFields, SettledOrder>
+typealias NeverChargedQuery = TypedQuery<NeverChargedFields, NeverCharged>
+typealias UnpaidOrderQuery = TypedQuery<UnpaidOrderFields, UnpaidOrder>
+typealias RefundedOrderQuery = TypedQuery<RefundedOrderFields, RefundedOrder>
+typealias ChargeableOrderQuery = TypedQuery<ChargeableOrderFields, ChargeableOrder>
+typealias PendingAttemptQuery = TypedQuery<PendingAttemptFields, PendingAttempt>
+typealias CompletedAttemptQuery = TypedQuery<CompletedAttemptFields, CompletedAttempt>
+typealias SuccessfulChargeQuery = TypedQuery<SuccessfulChargeFields, SuccessfulCharge>
+typealias FailedChargeQuery = TypedQuery<FailedChargeFields, FailedCharge>
+typealias TimedOutAttemptQuery = TypedQuery<TimedOutAttemptFields, TimedOutAttempt>
+typealias ActiveReservationQuery = TypedQuery<ActiveReservationFields, ActiveReservation>
+typealias RetryableOrderQuery = TypedQuery<RetryableOrderFields, RetryableOrder>
+typealias StalePendingAttemptQuery = TypedQuery<StalePendingAttemptFields, StalePendingAttempt>
+typealias ExhaustedOrderQuery = TypedQuery<ExhaustedOrderFields, ExhaustedOrder>
+typealias ReservedOrderQuery = TypedQuery<ReservedOrderFields, ReservedOrder>
+typealias UnshippedOrderQuery = TypedQuery<UnshippedOrderFields, UnshippedOrder>
+typealias ReadyToShipQuery = TypedQuery<ReadyToShipFields, ReadyToShip>
+typealias UnhandledAddressChangeQuery = TypedQuery<UnhandledAddressChangeFields, UnhandledAddressChange>
+typealias ApplicableAddressChangeQuery = TypedQuery<ApplicableAddressChangeFields, ApplicableAddressChange>
+typealias RefusedAddressChangeQuery = TypedQuery<RefusedAddressChangeFields, RefusedAddressChange>
+typealias RefundAfterFailureQuery = TypedQuery<RefundAfterFailureFields, RefundAfterFailure>
+typealias OverdueOrderQuery = TypedQuery<OverdueOrderFields, OverdueOrder>
+typealias InGracePeriodQuery = TypedQuery<InGracePeriodFields, InGracePeriod>
+typealias OpenDunningFlagQuery = TypedQuery<OpenDunningFlagFields, OpenDunningFlag>
+typealias ClosableDunningFlagQuery = TypedQuery<ClosableDunningFlagFields, ClosableDunningFlag>
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewContact(
     val name: String,
     val email: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("email", email)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Contact") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -2139,13 +1880,13 @@ data class NewCard(
     val number: String,
     val expiresOn: LocalDate,
     val billingContact: Ref<Contact>? = null,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("number", number)
         put("expiresOn", expiresOn)
         billingContact?.let { put("billingContact", system.idOf(it)) }
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Card") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -2153,12 +1894,12 @@ data class NewCard(
 data class NewCustomer(
     val name: String,
     val card: Ref<Card>? = null,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         card?.let { put("card", system.idOf(it)) }
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Customer") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -2166,12 +1907,12 @@ data class NewCustomer(
 data class NewCardUpdate(
     val customer: Ref<Customer>,
     val card: Ref<Card>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("customer", system.idOf(customer))
         put("card", system.idOf(card))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CardUpdate") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -2181,14 +1922,14 @@ data class NewPlaceOrder(
     val amount: BigDecimal,
     val dueBy: LocalDate,
     val shippingAddress: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("customer", system.idOf(customer))
         put("amount", amount)
         put("dueBy", dueBy)
         put("shippingAddress", shippingAddress)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "PlaceOrder") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -2196,12 +1937,12 @@ data class NewPlaceOrder(
 data class NewProcessorVerdict(
     val attempt: Ref<ChargeAttempt>,
     val outcome: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("attempt", system.idOf(attempt))
         put("outcome", outcome)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ProcessorVerdict") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -2209,12 +1950,12 @@ data class NewProcessorVerdict(
 data class NewChangeShippingAddress(
     val order: Ref<Order>,
     val newAddress: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("order", system.idOf(order))
         put("newAddress", newAddress)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ChangeShippingAddress") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -2222,34 +1963,34 @@ data class NewChangeShippingAddress(
 data class NewIssueRefund(
     val order: Ref<Order>,
     val amount: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("order", system.idOf(order))
         put("amount", amount)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "IssueRefund") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewManualCharge(
     val order: Ref<Order>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("order", system.idOf(order))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ManualCharge") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewExtensionRequest(
     val order: Ref<Order>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("order", system.idOf(order))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ExtensionRequest") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }

@@ -7,191 +7,91 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
-
-    val system: VelleSystem = VelleSystem(Model(Parser.parse(SPEC)), startTime)
-
-    // ── clock (harness-controlled; ticks are separate calls) ──
-    val now: Instant get() = system.now
-    fun advanceSeconds(seconds: Long) = system.advance(seconds)
-    fun advanceDays(days: Long) = system.advanceDays(days)
-    fun setTime(t: Instant) = system.setTime(t)
+class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAdvisor): Commit<NewAdvisor, Ref<Advisor>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Advisor", raw).carrying(input)
-    }
+    fun commit(input: NewAdvisor): Commit<NewAdvisor, Ref<Advisor>> =
+        boundary("Advisor", input).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCourse): Commit<NewCourse, Ref<Course>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Course", raw).carrying(input)
-    }
+    fun commit(input: NewCourse): Commit<NewCourse, Ref<Course>> =
+        boundary("Course", input).carrying(input)
 
     /** Queue key: [student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewStudent): Commit<NewStudent, Ref<Student>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Student", raw).carrying(input)
-    }
+    fun commit(input: NewStudent): Commit<NewStudent, Ref<Student>> =
+        boundary("Student", input).carrying(input)
 
     /** Queue keys: [setEnrollment.student], [setEnrollment.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSetEnrollment): Commit<NewSetEnrollment, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("SetEnrollment", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewSetEnrollment): Commit<NewSetEnrollment, Nothing?> =
+        boundary("SetEnrollment", input).carryingNoRecord(input)
 
     /** Queue keys: [enroll.student], [enroll.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewEnroll): Commit<NewEnroll, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Enroll", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewEnroll): Commit<NewEnroll, Nothing?> =
+        boundary("Enroll", input).carryingNoRecord(input)
 
     /** Queue keys: [drop.student], [drop.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewDrop): Commit<NewDrop, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Drop", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewDrop): Commit<NewDrop, Nothing?> =
+        boundary("Drop", input).carryingNoRecord(input)
 
     /** Queue keys: [tag.student], [tag.student.advisor].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewTag): Commit<NewTag, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Tag", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewTag): Commit<NewTag, Nothing?> =
+        boundary("Tag", input).carryingNoRecord(input)
 
     /** Queue keys: [assignAdvisor.advisor] — plus system-wide width below.
      *  System-wide over Student — writes a Student whose 'advisor' reference the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssignAdvisor): Commit<NewAssignAdvisor, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AssignAdvisor", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewAssignAdvisor): Commit<NewAssignAdvisor, Nothing?> =
+        boundary("AssignAdvisor", input).carryingNoRecord(input)
 
-    fun advisors(): List<Advisor> = system.scope { system.instancesOf("Advisor").map { materializeAdvisor(it) } }
-    fun courses(): List<Course> = system.scope { system.instancesOf("Course").map { materializeCourse(it) } }
-    fun students(): List<Student> = system.scope { system.instancesOf("Student").map { materializeStudent(it) } }
-    fun overloadeds(): List<Overloaded> = system.scope { system.instancesOf("Overloaded").map { materializeOverloaded(it) } }
-    fun untaggeds(): List<Untagged> = system.scope { system.instancesOf("Untagged").map { materializeUntagged(it) } }
+    fun advisors(): List<Advisor> = all("Advisor") { materializeAdvisor(it) }
+    fun courses(): List<Course> = all("Course") { materializeCourse(it) }
+    fun students(): List<Student> = all("Student") { materializeStudent(it) }
+    fun overloadeds(): List<Overloaded> = all("Overloaded") { materializeOverloaded(it) }
+    fun untaggeds(): List<Untagged> = all("Untagged") { materializeUntagged(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
-    inner class Read {
-        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
-        val registry = QueryRegistry()
-        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+    inner class Read : ReadSurface<Read>(system) {
+        override fun modelOf(id: Long): Ref<*> = materialize(id)
 
-        /** The model object behind a reference, read now; throws when the record no longer exists. */
-        @Suppress("UNCHECKED_CAST")
-        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
-        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
-        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
-        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
-        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
-            val id = system.idOf(ref)
-            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            materialize(id)
-        }
-
-        val advisors: AdvisorQuery get() = AdvisorQuery(Query("Advisor"))
+        val advisors: AdvisorQuery get() = query("Advisor", AdvisorFields()) { materializeAdvisor(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun advisor(key: StoreKey): Advisor = invoke<Advisor>(Ref.Persisted("Advisor", key))
+        fun advisor(key: StoreKey): Advisor = byKey("Advisor", key)
         fun advisor(key: Long): Advisor = advisor(StoreKey(key))
 
-        val courses: CourseQuery get() = CourseQuery(Query("Course"))
+        val courses: CourseQuery get() = query("Course", CourseFields()) { materializeCourse(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun course(key: StoreKey): Course = invoke<Course>(Ref.Persisted("Course", key))
+        fun course(key: StoreKey): Course = byKey("Course", key)
         fun course(key: Long): Course = course(StoreKey(key))
 
-        val students: StudentQuery get() = StudentQuery(Query("Student"))
+        val students: StudentQuery get() = query("Student", StudentFields()) { materializeStudent(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun student(key: StoreKey): Student = invoke<Student>(Ref.Persisted("Student", key))
+        fun student(key: StoreKey): Student = byKey("Student", key)
         fun student(key: Long): Student = student(StoreKey(key))
 
-        val overloadeds: OverloadedQuery get() = OverloadedQuery(Query("Overloaded"))
+        val overloadeds: OverloadedQuery get() = query("Overloaded", OverloadedFields()) { materializeOverloaded(it) }
         /** The record behind [ref] as a member of Overloaded, or null when it is not one. */
-        fun overloaded(ref: Ref<Student>): Overloaded? =
-            system.scope { system.idOf(ref).let { if (system.exists("Overloaded", it)) materializeOverloaded(it) else null } }
+        fun overloaded(ref: Ref<Student>): Overloaded? = member("Overloaded", ref) { materializeOverloaded(it) }
 
-        val untaggeds: UntaggedQuery get() = UntaggedQuery(Query("Untagged"))
+        val untaggeds: UntaggedQuery get() = query("Untagged", UntaggedFields()) { materializeUntagged(it) }
         /** The record behind [ref] as a member of Untagged, or null when it is not one. */
-        fun untagged(ref: Ref<Student>): Untagged? =
-            system.scope { system.idOf(ref).let { if (system.exists("Untagged", it)) materializeUntagged(it) else null } }
-    }
-
-    inner class AdvisorQuery(q: Query) : TypedQuery<AdvisorFields, Advisor>(system, q, AdvisorFields(), { materializeAdvisor(it) }) {
-        override fun with(q: Query) = AdvisorQuery(q)
-    }
-
-    inner class CourseQuery(q: Query) : TypedQuery<CourseFields, Course>(system, q, CourseFields(), { materializeCourse(it) }) {
-        override fun with(q: Query) = CourseQuery(q)
-    }
-
-    inner class StudentQuery(q: Query) : TypedQuery<StudentFields, Student>(system, q, StudentFields(), { materializeStudent(it) }) {
-        override fun with(q: Query) = StudentQuery(q)
-    }
-
-    inner class OverloadedQuery(q: Query) : TypedQuery<OverloadedFields, Overloaded>(system, q, OverloadedFields(), { materializeOverloaded(it) }) {
-        override fun with(q: Query) = OverloadedQuery(q)
-    }
-
-    inner class UntaggedQuery(q: Query) : TypedQuery<UntaggedFields, Untagged>(system, q, UntaggedFields(), { materializeUntagged(it) }) {
-        override fun with(q: Query) = UntaggedQuery(q)
+        fun untagged(ref: Ref<Student>): Untagged? = member("Untagged", ref) { materializeUntagged(it) }
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -330,15 +230,22 @@ never (Course where capacity < 0)
     }
 }
 
+// ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias AdvisorQuery = TypedQuery<AdvisorFields, Advisor>
+typealias CourseQuery = TypedQuery<CourseFields, Course>
+typealias StudentQuery = TypedQuery<StudentFields, Student>
+typealias OverloadedQuery = TypedQuery<OverloadedFields, Overloaded>
+typealias UntaggedQuery = TypedQuery<UntaggedFields, Untagged>
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewAdvisor(
     val name: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Advisor") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -346,12 +253,12 @@ data class NewAdvisor(
 data class NewCourse(
     val title: String,
     val capacity: Int,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("title", title)
         put("capacity", capacity)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Course") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -361,14 +268,14 @@ data class NewStudent(
     val tags: List<String>,
     val courses: List<Ref<Course>>,
     val advisor: Ref<Advisor>? = null,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("tags", tags)
         put("courses", courses.map { system.idOf(it) })
         advisor?.let { put("advisor", system.idOf(it)) }
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Student") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -376,12 +283,12 @@ data class NewStudent(
 data class NewSetEnrollment(
     val student: Ref<Student>,
     val courses: List<Ref<Course>>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("student", system.idOf(student))
         put("courses", courses.map { system.idOf(it) })
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "SetEnrollment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -389,12 +296,12 @@ data class NewSetEnrollment(
 data class NewEnroll(
     val student: Ref<Student>,
     val course: Ref<Course>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("student", system.idOf(student))
         put("course", system.idOf(course))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Enroll") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -402,12 +309,12 @@ data class NewEnroll(
 data class NewDrop(
     val student: Ref<Student>,
     val course: Ref<Course>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("student", system.idOf(student))
         put("course", system.idOf(course))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Drop") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -415,12 +322,12 @@ data class NewDrop(
 data class NewTag(
     val student: Ref<Student>,
     val tag: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("student", system.idOf(student))
         put("tag", tag)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Tag") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -428,12 +335,12 @@ data class NewTag(
 data class NewAssignAdvisor(
     val advisor: Ref<Advisor>,
     val students: List<Ref<Student>>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("advisor", system.idOf(advisor))
         put("students", students.map { system.idOf(it) })
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "AssignAdvisor") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }

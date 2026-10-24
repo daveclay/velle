@@ -7,136 +7,68 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
-
-    val system: VelleSystem = VelleSystem(Model(Parser.parse(SPEC)), startTime)
-
-    // ── clock (harness-controlled; ticks are separate calls) ──
-    val now: Instant get() = system.now
-    fun advanceSeconds(seconds: Long) = system.advance(seconds)
-    fun advanceDays(days: Long) = system.advanceDays(days)
-    fun setTime(t: Instant) = system.setTime(t)
+class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCustomer): Commit<NewCustomer, Ref<Customer>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Customer", raw).carrying(input)
-    }
+    fun commit(input: NewCustomer): Commit<NewCustomer, Ref<Customer>> =
+        boundary("Customer", input).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewProduct): Commit<NewProduct, Ref<Product>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Product", raw).carrying(input)
-    }
+    fun commit(input: NewProduct): Commit<NewProduct, Ref<Product>> =
+        boundary("Product", input).carrying(input)
 
     /** Queue key: [order.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewOrder): Commit<NewOrder, Ref<Order>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        val parts = input.parts(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Order", raw, parts).carrying(input)
-    }
+    fun commit(input: NewOrder): Commit<NewOrder, Ref<Order>> =
+        boundary("Order", input).carrying(input)
 
-    fun customers(): List<Customer> = system.scope { system.instancesOf("Customer").map { materializeCustomer(it) } }
-    fun products(): List<Product> = system.scope { system.instancesOf("Product").map { materializeProduct(it) } }
-    fun orders(): List<Order> = system.scope { system.instancesOf("Order").map { materializeOrder(it) } }
-    fun orderLines(): List<OrderLine> = system.scope { system.instancesOf("OrderLine").map { materializeOrderLine(it) } }
-    fun customizations(): List<Customization> = system.scope { system.instancesOf("Customization").map { materializeCustomization(it) } }
-    fun reservations(): List<Reservation> = system.scope { system.instancesOf("Reservation").map { materializeReservation(it) } }
+    fun customers(): List<Customer> = all("Customer") { materializeCustomer(it) }
+    fun products(): List<Product> = all("Product") { materializeProduct(it) }
+    fun orders(): List<Order> = all("Order") { materializeOrder(it) }
+    fun orderLines(): List<OrderLine> = all("OrderLine") { materializeOrderLine(it) }
+    fun customizations(): List<Customization> = all("Customization") { materializeCustomization(it) }
+    fun reservations(): List<Reservation> = all("Reservation") { materializeReservation(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
-    inner class Read {
-        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
-        val registry = QueryRegistry()
-        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+    inner class Read : ReadSurface<Read>(system) {
+        override fun modelOf(id: Long): Ref<*> = materialize(id)
 
-        /** The model object behind a reference, read now; throws when the record no longer exists. */
-        @Suppress("UNCHECKED_CAST")
-        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
-        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
-        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
-        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
-        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
-            val id = system.idOf(ref)
-            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            materialize(id)
-        }
-
-        val customers: CustomerQuery get() = CustomerQuery(Query("Customer"))
+        val customers: CustomerQuery get() = query("Customer", CustomerFields()) { materializeCustomer(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun customer(key: StoreKey): Customer = invoke<Customer>(Ref.Persisted("Customer", key))
+        fun customer(key: StoreKey): Customer = byKey("Customer", key)
         fun customer(key: Long): Customer = customer(StoreKey(key))
 
-        val products: ProductQuery get() = ProductQuery(Query("Product"))
+        val products: ProductQuery get() = query("Product", ProductFields()) { materializeProduct(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun product(key: StoreKey): Product = invoke<Product>(Ref.Persisted("Product", key))
+        fun product(key: StoreKey): Product = byKey("Product", key)
         fun product(key: Long): Product = product(StoreKey(key))
 
-        val orders: OrderQuery get() = OrderQuery(Query("Order"))
+        val orders: OrderQuery get() = query("Order", OrderFields()) { materializeOrder(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun order(key: StoreKey): Order = invoke<Order>(Ref.Persisted("Order", key))
+        fun order(key: StoreKey): Order = byKey("Order", key)
         fun order(key: Long): Order = order(StoreKey(key))
 
-        val orderLines: OrderLineQuery get() = OrderLineQuery(Query("OrderLine"))
+        val orderLines: OrderLineQuery get() = query("OrderLine", OrderLineFields()) { materializeOrderLine(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun orderLine(key: StoreKey): OrderLine = invoke<OrderLine>(Ref.Persisted("OrderLine", key))
+        fun orderLine(key: StoreKey): OrderLine = byKey("OrderLine", key)
         fun orderLine(key: Long): OrderLine = orderLine(StoreKey(key))
 
-        val customizations: CustomizationQuery get() = CustomizationQuery(Query("Customization"))
+        val customizations: CustomizationQuery get() = query("Customization", CustomizationFields()) { materializeCustomization(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun customization(key: StoreKey): Customization = invoke<Customization>(Ref.Persisted("Customization", key))
+        fun customization(key: StoreKey): Customization = byKey("Customization", key)
         fun customization(key: Long): Customization = customization(StoreKey(key))
 
-        val reservations: ReservationQuery get() = ReservationQuery(Query("Reservation"))
+        val reservations: ReservationQuery get() = query("Reservation", ReservationFields()) { materializeReservation(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun reservation(key: StoreKey): Reservation = invoke<Reservation>(Ref.Persisted("Reservation", key))
+        fun reservation(key: StoreKey): Reservation = byKey("Reservation", key)
         fun reservation(key: Long): Reservation = reservation(StoreKey(key))
-    }
-
-    inner class CustomerQuery(q: Query) : TypedQuery<CustomerFields, Customer>(system, q, CustomerFields(), { materializeCustomer(it) }) {
-        override fun with(q: Query) = CustomerQuery(q)
-    }
-
-    inner class ProductQuery(q: Query) : TypedQuery<ProductFields, Product>(system, q, ProductFields(), { materializeProduct(it) }) {
-        override fun with(q: Query) = ProductQuery(q)
-    }
-
-    inner class OrderQuery(q: Query) : TypedQuery<OrderFields, Order>(system, q, OrderFields(), { materializeOrder(it) }) {
-        override fun with(q: Query) = OrderQuery(q)
-    }
-
-    inner class OrderLineQuery(q: Query) : TypedQuery<OrderLineFields, OrderLine>(system, q, OrderLineFields(), { materializeOrderLine(it) }) {
-        override fun with(q: Query) = OrderLineQuery(q)
-    }
-
-    inner class CustomizationQuery(q: Query) : TypedQuery<CustomizationFields, Customization>(system, q, CustomizationFields(), { materializeCustomization(it) }) {
-        override fun with(q: Query) = CustomizationQuery(q)
-    }
-
-    inner class ReservationQuery(q: Query) : TypedQuery<ReservationFields, Reservation>(system, q, ReservationFields(), { materializeReservation(it) }) {
-        override fun with(q: Query) = ReservationQuery(q)
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -246,26 +178,34 @@ never (OrderLine where quantity <= 0)
     }
 }
 
+// ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias CustomerQuery = TypedQuery<CustomerFields, Customer>
+typealias ProductQuery = TypedQuery<ProductFields, Product>
+typealias OrderQuery = TypedQuery<OrderFields, Order>
+typealias OrderLineQuery = TypedQuery<OrderLineFields, OrderLine>
+typealias CustomizationQuery = TypedQuery<CustomizationFields, Customization>
+typealias ReservationQuery = TypedQuery<ReservationFields, Reservation>
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewCustomer(
     val name: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Customer") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewProduct(
     val sku: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("sku", sku)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Product") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -274,15 +214,15 @@ data class NewOrder(
     val customer: Ref<Customer>,
     val placedOn: LocalDate,
     val orderLines: List<NewOrderLine> = emptyList(),
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("customer", system.idOf(customer))
         put("placedOn", placedOn)
     }
-    internal fun parts(system: VelleSystem, reg: NewRegistry): Map<String, List<Map<String, Any?>>> = buildMap {
+    override fun parts(system: VelleSystem, reg: NewRegistry): Map<String, List<Map<String, Any?>>> = buildMap {
         put("orderLines", orderLines.map { it.asValue(system, reg) })
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
         orderLines.forEach { reg.add(it); it.register(reg) }
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + parts(system, reg) + ("@shape" to "Order") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
@@ -291,11 +231,11 @@ data class NewOrder(
 // ── closure input values (Reference §6, "Inline part creation") ──
 data class NewCustomization(
     val note: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("note", note)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Customization") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -304,13 +244,13 @@ data class NewOrderLine(
     val product: Ref<Product>,
     val quantity: Int,
     val customizations: List<NewCustomization> = emptyList(),
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("product", system.idOf(product))
         put("quantity", quantity)
         put("customizations", customizations.map { it.asValue(system, reg) })
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
         customizations.forEach { reg.add(it); it.register(reg) }
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "OrderLine") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())

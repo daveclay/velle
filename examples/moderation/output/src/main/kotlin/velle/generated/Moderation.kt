@@ -7,244 +7,124 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
-
-    val system: VelleSystem = VelleSystem(Model(Parser.parse(SPEC)), startTime)
-
-    // ── clock (harness-controlled; ticks are separate calls) ──
-    val now: Instant get() = system.now
-    fun advanceSeconds(seconds: Long) = system.advance(seconds)
-    fun advanceDays(days: Long) = system.advanceDays(days)
-    fun setTime(t: Instant) = system.setTime(t)
+class ModerationSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSeller): Commit<NewSeller, Ref<Seller>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Seller", raw).carrying(input)
-    }
+    fun commit(input: NewSeller): Commit<NewSeller, Ref<Seller>> =
+        boundary("Seller", input).carrying(input)
 
     /** Queue key: [listing.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewListing): Commit<NewListing, Ref<Listing>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Listing", raw).carrying(input)
-    }
+    fun commit(input: NewListing): Commit<NewListing, Ref<Listing>> =
+        boundary("Listing", input).carrying(input)
 
     /** Queue keys: [publish.listing], [publish.listing.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPublish): Commit<NewPublish, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Publish", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewPublish): Commit<NewPublish, Nothing?> =
+        boundary("Publish", input).carryingNoRecord(input)
 
     /** Queue key: [listingReport.listing].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewListingReport): Commit<NewListingReport, Ref<ListingReport>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ListingReport", raw).carrying(input)
-    }
+    fun commit(input: NewListingReport): Commit<NewListingReport, Ref<ListingReport>> =
+        boundary("ListingReport", input).carrying(input)
 
     /** Queue keys: [discardDraft.listing], [discardDraft.listing.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewDiscardDraft): Commit<NewDiscardDraft, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("DiscardDraft", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewDiscardDraft): Commit<NewDiscardDraft, Nothing?> =
+        boundary("DiscardDraft", input).carryingNoRecord(input)
 
     /** Queue key: [closeAccount.seller].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCloseAccount): Commit<NewCloseAccount, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CloseAccount", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewCloseAccount): Commit<NewCloseAccount, Nothing?> =
+        boundary("CloseAccount", input).carryingNoRecord(input)
 
-    fun sellers(): List<Seller> = system.scope { system.instancesOf("Seller").map { materializeSeller(it) } }
-    fun listings(): List<Listing> = system.scope { system.instancesOf("Listing").map { materializeListing(it) } }
-    fun publicationNotices(): List<PublicationNotice> = system.scope { system.instancesOf("PublicationNotice").map { materializePublicationNotice(it) } }
-    fun sellerNotices(): List<SellerNotice> = system.scope { system.instancesOf("SellerNotice").map { materializeSellerNotice(it) } }
-    fun draftClosures(): List<DraftClosure> = system.scope { system.instancesOf("DraftClosure").map { materializeDraftClosure(it) } }
-    fun listingReports(): List<ListingReport> = system.scope { system.instancesOf("ListingReport").map { materializeListingReport(it) } }
-    fun reporterNotices(): List<ReporterNotice> = system.scope { system.instancesOf("ReporterNotice").map { materializeReporterNotice(it) } }
-    fun discardRecords(): List<DiscardRecord> = system.scope { system.instancesOf("DiscardRecord").map { materializeDiscardRecord(it) } }
-    fun discardRefusals(): List<DiscardRefusal> = system.scope { system.instancesOf("DiscardRefusal").map { materializeDiscardRefusal(it) } }
-    fun drafts(): List<Draft> = system.scope { system.instancesOf("Draft").map { materializeDraft(it) } }
-    fun publishedListings(): List<PublishedListing> = system.scope { system.instancesOf("PublishedListing").map { materializePublishedListing(it) } }
-    fun orphanReports(): List<OrphanReport> = system.scope { system.instancesOf("OrphanReport").map { materializeOrphanReport(it) } }
-    fun orphanedListings(): List<OrphanedListing> = system.scope { system.instancesOf("OrphanedListing").map { materializeOrphanedListing(it) } }
+    fun sellers(): List<Seller> = all("Seller") { materializeSeller(it) }
+    fun listings(): List<Listing> = all("Listing") { materializeListing(it) }
+    fun publicationNotices(): List<PublicationNotice> = all("PublicationNotice") { materializePublicationNotice(it) }
+    fun sellerNotices(): List<SellerNotice> = all("SellerNotice") { materializeSellerNotice(it) }
+    fun draftClosures(): List<DraftClosure> = all("DraftClosure") { materializeDraftClosure(it) }
+    fun listingReports(): List<ListingReport> = all("ListingReport") { materializeListingReport(it) }
+    fun reporterNotices(): List<ReporterNotice> = all("ReporterNotice") { materializeReporterNotice(it) }
+    fun discardRecords(): List<DiscardRecord> = all("DiscardRecord") { materializeDiscardRecord(it) }
+    fun discardRefusals(): List<DiscardRefusal> = all("DiscardRefusal") { materializeDiscardRefusal(it) }
+    fun drafts(): List<Draft> = all("Draft") { materializeDraft(it) }
+    fun publishedListings(): List<PublishedListing> = all("PublishedListing") { materializePublishedListing(it) }
+    fun orphanReports(): List<OrphanReport> = all("OrphanReport") { materializeOrphanReport(it) }
+    fun orphanedListings(): List<OrphanedListing> = all("OrphanedListing") { materializeOrphanedListing(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
-    inner class Read {
-        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
-        val registry = QueryRegistry()
-        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+    inner class Read : ReadSurface<Read>(system) {
+        override fun modelOf(id: Long): Ref<*> = materialize(id)
 
-        /** The model object behind a reference, read now; throws when the record no longer exists. */
-        @Suppress("UNCHECKED_CAST")
-        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
-        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
-        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
-        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
-        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
-            val id = system.idOf(ref)
-            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            materialize(id)
-        }
-
-        val sellers: SellerQuery get() = SellerQuery(Query("Seller"))
+        val sellers: SellerQuery get() = query("Seller", SellerFields()) { materializeSeller(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun seller(key: StoreKey): Seller = invoke<Seller>(Ref.Persisted("Seller", key))
+        fun seller(key: StoreKey): Seller = byKey("Seller", key)
         fun seller(key: Long): Seller = seller(StoreKey(key))
 
-        val listings: ListingQuery get() = ListingQuery(Query("Listing"))
+        val listings: ListingQuery get() = query("Listing", ListingFields()) { materializeListing(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun listing(key: StoreKey): Listing = invoke<Listing>(Ref.Persisted("Listing", key))
+        fun listing(key: StoreKey): Listing = byKey("Listing", key)
         fun listing(key: Long): Listing = listing(StoreKey(key))
 
-        val publicationNotices: PublicationNoticeQuery get() = PublicationNoticeQuery(Query("PublicationNotice"))
+        val publicationNotices: PublicationNoticeQuery get() = query("PublicationNotice", PublicationNoticeFields()) { materializePublicationNotice(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun publicationNotice(key: StoreKey): PublicationNotice = invoke<PublicationNotice>(Ref.Persisted("PublicationNotice", key))
+        fun publicationNotice(key: StoreKey): PublicationNotice = byKey("PublicationNotice", key)
         fun publicationNotice(key: Long): PublicationNotice = publicationNotice(StoreKey(key))
 
-        val sellerNotices: SellerNoticeQuery get() = SellerNoticeQuery(Query("SellerNotice"))
+        val sellerNotices: SellerNoticeQuery get() = query("SellerNotice", SellerNoticeFields()) { materializeSellerNotice(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun sellerNotice(key: StoreKey): SellerNotice = invoke<SellerNotice>(Ref.Persisted("SellerNotice", key))
+        fun sellerNotice(key: StoreKey): SellerNotice = byKey("SellerNotice", key)
         fun sellerNotice(key: Long): SellerNotice = sellerNotice(StoreKey(key))
 
-        val draftClosures: DraftClosureQuery get() = DraftClosureQuery(Query("DraftClosure"))
+        val draftClosures: DraftClosureQuery get() = query("DraftClosure", DraftClosureFields()) { materializeDraftClosure(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun draftClosure(key: StoreKey): DraftClosure = invoke<DraftClosure>(Ref.Persisted("DraftClosure", key))
+        fun draftClosure(key: StoreKey): DraftClosure = byKey("DraftClosure", key)
         fun draftClosure(key: Long): DraftClosure = draftClosure(StoreKey(key))
 
-        val listingReports: ListingReportQuery get() = ListingReportQuery(Query("ListingReport"))
+        val listingReports: ListingReportQuery get() = query("ListingReport", ListingReportFields()) { materializeListingReport(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun listingReport(key: StoreKey): ListingReport = invoke<ListingReport>(Ref.Persisted("ListingReport", key))
+        fun listingReport(key: StoreKey): ListingReport = byKey("ListingReport", key)
         fun listingReport(key: Long): ListingReport = listingReport(StoreKey(key))
 
-        val reporterNotices: ReporterNoticeQuery get() = ReporterNoticeQuery(Query("ReporterNotice"))
+        val reporterNotices: ReporterNoticeQuery get() = query("ReporterNotice", ReporterNoticeFields()) { materializeReporterNotice(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun reporterNotice(key: StoreKey): ReporterNotice = invoke<ReporterNotice>(Ref.Persisted("ReporterNotice", key))
+        fun reporterNotice(key: StoreKey): ReporterNotice = byKey("ReporterNotice", key)
         fun reporterNotice(key: Long): ReporterNotice = reporterNotice(StoreKey(key))
 
-        val discardRecords: DiscardRecordQuery get() = DiscardRecordQuery(Query("DiscardRecord"))
+        val discardRecords: DiscardRecordQuery get() = query("DiscardRecord", DiscardRecordFields()) { materializeDiscardRecord(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun discardRecord(key: StoreKey): DiscardRecord = invoke<DiscardRecord>(Ref.Persisted("DiscardRecord", key))
+        fun discardRecord(key: StoreKey): DiscardRecord = byKey("DiscardRecord", key)
         fun discardRecord(key: Long): DiscardRecord = discardRecord(StoreKey(key))
 
-        val discardRefusals: DiscardRefusalQuery get() = DiscardRefusalQuery(Query("DiscardRefusal"))
+        val discardRefusals: DiscardRefusalQuery get() = query("DiscardRefusal", DiscardRefusalFields()) { materializeDiscardRefusal(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun discardRefusal(key: StoreKey): DiscardRefusal = invoke<DiscardRefusal>(Ref.Persisted("DiscardRefusal", key))
+        fun discardRefusal(key: StoreKey): DiscardRefusal = byKey("DiscardRefusal", key)
         fun discardRefusal(key: Long): DiscardRefusal = discardRefusal(StoreKey(key))
 
-        val drafts: DraftQuery get() = DraftQuery(Query("Draft"))
+        val drafts: DraftQuery get() = query("Draft", DraftFields()) { materializeDraft(it) }
         /** The record behind [ref] as a member of Draft, or null when it is not one. */
-        fun draft(ref: Ref<Listing>): Draft? =
-            system.scope { system.idOf(ref).let { if (system.exists("Draft", it)) materializeDraft(it) else null } }
+        fun draft(ref: Ref<Listing>): Draft? = member("Draft", ref) { materializeDraft(it) }
 
-        val publishedListings: PublishedListingQuery get() = PublishedListingQuery(Query("PublishedListing"))
+        val publishedListings: PublishedListingQuery get() = query("PublishedListing", PublishedListingFields()) { materializePublishedListing(it) }
         /** The record behind [ref] as a member of PublishedListing, or null when it is not one. */
-        fun publishedListing(ref: Ref<Listing>): PublishedListing? =
-            system.scope { system.idOf(ref).let { if (system.exists("PublishedListing", it)) materializePublishedListing(it) else null } }
+        fun publishedListing(ref: Ref<Listing>): PublishedListing? = member("PublishedListing", ref) { materializePublishedListing(it) }
 
-        val orphanReports: OrphanReportQuery get() = OrphanReportQuery(Query("OrphanReport"))
+        val orphanReports: OrphanReportQuery get() = query("OrphanReport", OrphanReportFields()) { materializeOrphanReport(it) }
         /** The record behind [ref] as a member of OrphanReport, or null when it is not one. */
-        fun orphanReport(ref: Ref<ListingReport>): OrphanReport? =
-            system.scope { system.idOf(ref).let { if (system.exists("OrphanReport", it)) materializeOrphanReport(it) else null } }
+        fun orphanReport(ref: Ref<ListingReport>): OrphanReport? = member("OrphanReport", ref) { materializeOrphanReport(it) }
 
-        val orphanedListings: OrphanedListingQuery get() = OrphanedListingQuery(Query("OrphanedListing"))
+        val orphanedListings: OrphanedListingQuery get() = query("OrphanedListing", OrphanedListingFields()) { materializeOrphanedListing(it) }
         /** The record behind [ref] as a member of OrphanedListing, or null when it is not one. */
-        fun orphanedListing(ref: Ref<Listing>): OrphanedListing? =
-            system.scope { system.idOf(ref).let { if (system.exists("OrphanedListing", it)) materializeOrphanedListing(it) else null } }
-    }
-
-    inner class SellerQuery(q: Query) : TypedQuery<SellerFields, Seller>(system, q, SellerFields(), { materializeSeller(it) }) {
-        override fun with(q: Query) = SellerQuery(q)
-    }
-
-    inner class ListingQuery(q: Query) : TypedQuery<ListingFields, Listing>(system, q, ListingFields(), { materializeListing(it) }) {
-        override fun with(q: Query) = ListingQuery(q)
-    }
-
-    inner class PublicationNoticeQuery(q: Query) : TypedQuery<PublicationNoticeFields, PublicationNotice>(system, q, PublicationNoticeFields(), { materializePublicationNotice(it) }) {
-        override fun with(q: Query) = PublicationNoticeQuery(q)
-    }
-
-    inner class SellerNoticeQuery(q: Query) : TypedQuery<SellerNoticeFields, SellerNotice>(system, q, SellerNoticeFields(), { materializeSellerNotice(it) }) {
-        override fun with(q: Query) = SellerNoticeQuery(q)
-    }
-
-    inner class DraftClosureQuery(q: Query) : TypedQuery<DraftClosureFields, DraftClosure>(system, q, DraftClosureFields(), { materializeDraftClosure(it) }) {
-        override fun with(q: Query) = DraftClosureQuery(q)
-    }
-
-    inner class ListingReportQuery(q: Query) : TypedQuery<ListingReportFields, ListingReport>(system, q, ListingReportFields(), { materializeListingReport(it) }) {
-        override fun with(q: Query) = ListingReportQuery(q)
-    }
-
-    inner class ReporterNoticeQuery(q: Query) : TypedQuery<ReporterNoticeFields, ReporterNotice>(system, q, ReporterNoticeFields(), { materializeReporterNotice(it) }) {
-        override fun with(q: Query) = ReporterNoticeQuery(q)
-    }
-
-    inner class DiscardRecordQuery(q: Query) : TypedQuery<DiscardRecordFields, DiscardRecord>(system, q, DiscardRecordFields(), { materializeDiscardRecord(it) }) {
-        override fun with(q: Query) = DiscardRecordQuery(q)
-    }
-
-    inner class DiscardRefusalQuery(q: Query) : TypedQuery<DiscardRefusalFields, DiscardRefusal>(system, q, DiscardRefusalFields(), { materializeDiscardRefusal(it) }) {
-        override fun with(q: Query) = DiscardRefusalQuery(q)
-    }
-
-    inner class DraftQuery(q: Query) : TypedQuery<DraftFields, Draft>(system, q, DraftFields(), { materializeDraft(it) }) {
-        override fun with(q: Query) = DraftQuery(q)
-    }
-
-    inner class PublishedListingQuery(q: Query) : TypedQuery<PublishedListingFields, PublishedListing>(system, q, PublishedListingFields(), { materializePublishedListing(it) }) {
-        override fun with(q: Query) = PublishedListingQuery(q)
-    }
-
-    inner class OrphanReportQuery(q: Query) : TypedQuery<OrphanReportFields, OrphanReport>(system, q, OrphanReportFields(), { materializeOrphanReport(it) }) {
-        override fun with(q: Query) = OrphanReportQuery(q)
-    }
-
-    inner class OrphanedListingQuery(q: Query) : TypedQuery<OrphanedListingFields, OrphanedListing>(system, q, OrphanedListingFields(), { materializeOrphanedListing(it) }) {
-        override fun with(q: Query) = OrphanedListingQuery(q)
+        fun orphanedListing(ref: Ref<Listing>): OrphanedListing? = member("OrphanedListing", ref) { materializeOrphanedListing(it) }
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -575,15 +455,30 @@ rule SweepOrphanedDrafts when (OrphanedListing where isDraft) {
     }
 }
 
+// ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias SellerQuery = TypedQuery<SellerFields, Seller>
+typealias ListingQuery = TypedQuery<ListingFields, Listing>
+typealias PublicationNoticeQuery = TypedQuery<PublicationNoticeFields, PublicationNotice>
+typealias SellerNoticeQuery = TypedQuery<SellerNoticeFields, SellerNotice>
+typealias DraftClosureQuery = TypedQuery<DraftClosureFields, DraftClosure>
+typealias ListingReportQuery = TypedQuery<ListingReportFields, ListingReport>
+typealias ReporterNoticeQuery = TypedQuery<ReporterNoticeFields, ReporterNotice>
+typealias DiscardRecordQuery = TypedQuery<DiscardRecordFields, DiscardRecord>
+typealias DiscardRefusalQuery = TypedQuery<DiscardRefusalFields, DiscardRefusal>
+typealias DraftQuery = TypedQuery<DraftFields, Draft>
+typealias PublishedListingQuery = TypedQuery<PublishedListingFields, PublishedListing>
+typealias OrphanReportQuery = TypedQuery<OrphanReportFields, OrphanReport>
+typealias OrphanedListingQuery = TypedQuery<OrphanedListingFields, OrphanedListing>
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewSeller(
     val name: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Seller") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -592,24 +487,24 @@ data class NewListing(
     val title: String,
     val seller: Ref<Seller>,
     val isDraft: Boolean? = null,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("title", title)
         put("seller", system.idOf(seller))
         isDraft?.let { put("isDraft", it) }
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Listing") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewPublish(
     val listing: Ref<Listing>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("listing", system.idOf(listing))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Publish") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -618,13 +513,13 @@ data class NewListingReport(
     val listing: Ref<Listing>,
     val listingTitle: String,
     val reason: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("listing", system.idOf(listing))
         put("listingTitle", listingTitle)
         put("reason", reason)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ListingReport") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -632,23 +527,23 @@ data class NewListingReport(
 data class NewDiscardDraft(
     val listing: Ref<Listing>,
     val reason: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("listing", system.idOf(listing))
         put("reason", reason)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "DiscardDraft") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewCloseAccount(
     val seller: Ref<Seller>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("seller", system.idOf(seller))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CloseAccount") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }

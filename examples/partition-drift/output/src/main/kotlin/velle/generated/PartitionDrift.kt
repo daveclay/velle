@@ -7,287 +7,146 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
-
-    val system: VelleSystem = VelleSystem(Model(Parser.parse(SPEC)), startTime)
-
-    // ── clock (harness-controlled; ticks are separate calls) ──
-    val now: Instant get() = system.now
-    fun advanceSeconds(seconds: Long) = system.advance(seconds)
-    fun advanceDays(days: Long) = system.advanceDays(days)
-    fun setTime(t: Instant) = system.setTime(t)
+class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCreateNote): Commit<NewCreateNote, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CreateNote", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewCreateNote): Commit<NewCreateNote, Nothing?> =
+        boundary("CreateNote", input).carryingNoRecord(input)
 
     /** Queue key: [lockNote.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewLockNote): Commit<NewLockNote, Ref<LockNote>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("LockNote", raw).carrying(input)
-    }
+    fun commit(input: NewLockNote): Commit<NewLockNote, Ref<LockNote>> =
+        boundary("LockNote", input).carrying(input)
 
     /** Queue key: [unlockNote.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewUnlockNote): Commit<NewUnlockNote, Ref<UnlockNote>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("UnlockNote", raw).carrying(input)
-    }
+    fun commit(input: NewUnlockNote): Commit<NewUnlockNote, Ref<UnlockNote>> =
+        boundary("UnlockNote", input).carrying(input)
 
     /** Queue key: [renameText.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRenameText): Commit<NewRenameText, Ref<RenameText>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("RenameText", raw).carrying(input)
-    }
+    fun commit(input: NewRenameText): Commit<NewRenameText, Ref<RenameText>> =
+        boundary("RenameText", input).carrying(input)
 
     /** Queue key: [bareEdit.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewBareEdit): Commit<NewBareEdit, Ref<BareEdit>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("BareEdit", raw).carrying(input)
-    }
+    fun commit(input: NewBareEdit): Commit<NewBareEdit, Ref<BareEdit>> =
+        boundary("BareEdit", input).carrying(input)
 
     /** Queue key: [safeEdit.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSafeEdit): Commit<NewSafeEdit, Ref<SafeEdit>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("SafeEdit", raw).carrying(input)
-    }
+    fun commit(input: NewSafeEdit): Commit<NewSafeEdit, Ref<SafeEdit>> =
+        boundary("SafeEdit", input).carrying(input)
 
     /** Queue key: [transientEdit.note].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewTransientEdit): Commit<NewTransientEdit, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("TransientEdit", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewTransientEdit): Commit<NewTransientEdit, Nothing?> =
+        boundary("TransientEdit", input).carryingNoRecord(input)
 
-    fun notes(): List<Note> = system.scope { system.instancesOf("Note").map { materializeNote(it) } }
-    fun lockNotes(): List<LockNote> = system.scope { system.instancesOf("LockNote").map { materializeLockNote(it) } }
-    fun unlockNotes(): List<UnlockNote> = system.scope { system.instancesOf("UnlockNote").map { materializeUnlockNote(it) } }
-    fun renameTexts(): List<RenameText> = system.scope { system.instancesOf("RenameText").map { materializeRenameText(it) } }
-    fun bareEdits(): List<BareEdit> = system.scope { system.instancesOf("BareEdit").map { materializeBareEdit(it) } }
-    fun bareEditRefusals(): List<BareEditRefusal> = system.scope { system.instancesOf("BareEditRefusal").map { materializeBareEditRefusal(it) } }
-    fun safeEdits(): List<SafeEdit> = system.scope { system.instancesOf("SafeEdit").map { materializeSafeEdit(it) } }
-    fun editApplications(): List<EditApplication> = system.scope { system.instancesOf("EditApplication").map { materializeEditApplication(it) } }
-    fun editRefusals(): List<EditRefusal> = system.scope { system.instancesOf("EditRefusal").map { materializeEditRefusal(it) } }
-    fun transientEditRefusals(): List<TransientEditRefusal> = system.scope { system.instancesOf("TransientEditRefusal").map { materializeTransientEditRefusal(it) } }
-    fun lockedNotes(): List<LockedNote> = system.scope { system.instancesOf("LockedNote").map { materializeLockedNote(it) } }
-    fun applicableBareEdits(): List<ApplicableBareEdit> = system.scope { system.instancesOf("ApplicableBareEdit").map { materializeApplicableBareEdit(it) } }
-    fun refusedBareEdits(): List<RefusedBareEdit> = system.scope { system.instancesOf("RefusedBareEdit").map { materializeRefusedBareEdit(it) } }
-    fun unhandledSafeEdits(): List<UnhandledSafeEdit> = system.scope { system.instancesOf("UnhandledSafeEdit").map { materializeUnhandledSafeEdit(it) } }
-    fun applicableSafeEdits(): List<ApplicableSafeEdit> = system.scope { system.instancesOf("ApplicableSafeEdit").map { materializeApplicableSafeEdit(it) } }
-    fun refusedSafeEdits(): List<RefusedSafeEdit> = system.scope { system.instancesOf("RefusedSafeEdit").map { materializeRefusedSafeEdit(it) } }
+    fun notes(): List<Note> = all("Note") { materializeNote(it) }
+    fun lockNotes(): List<LockNote> = all("LockNote") { materializeLockNote(it) }
+    fun unlockNotes(): List<UnlockNote> = all("UnlockNote") { materializeUnlockNote(it) }
+    fun renameTexts(): List<RenameText> = all("RenameText") { materializeRenameText(it) }
+    fun bareEdits(): List<BareEdit> = all("BareEdit") { materializeBareEdit(it) }
+    fun bareEditRefusals(): List<BareEditRefusal> = all("BareEditRefusal") { materializeBareEditRefusal(it) }
+    fun safeEdits(): List<SafeEdit> = all("SafeEdit") { materializeSafeEdit(it) }
+    fun editApplications(): List<EditApplication> = all("EditApplication") { materializeEditApplication(it) }
+    fun editRefusals(): List<EditRefusal> = all("EditRefusal") { materializeEditRefusal(it) }
+    fun transientEditRefusals(): List<TransientEditRefusal> = all("TransientEditRefusal") { materializeTransientEditRefusal(it) }
+    fun lockedNotes(): List<LockedNote> = all("LockedNote") { materializeLockedNote(it) }
+    fun applicableBareEdits(): List<ApplicableBareEdit> = all("ApplicableBareEdit") { materializeApplicableBareEdit(it) }
+    fun refusedBareEdits(): List<RefusedBareEdit> = all("RefusedBareEdit") { materializeRefusedBareEdit(it) }
+    fun unhandledSafeEdits(): List<UnhandledSafeEdit> = all("UnhandledSafeEdit") { materializeUnhandledSafeEdit(it) }
+    fun applicableSafeEdits(): List<ApplicableSafeEdit> = all("ApplicableSafeEdit") { materializeApplicableSafeEdit(it) }
+    fun refusedSafeEdits(): List<RefusedSafeEdit> = all("RefusedSafeEdit") { materializeRefusedSafeEdit(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
-    inner class Read {
-        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
-        val registry = QueryRegistry()
-        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+    inner class Read : ReadSurface<Read>(system) {
+        override fun modelOf(id: Long): Ref<*> = materialize(id)
 
-        /** The model object behind a reference, read now; throws when the record no longer exists. */
-        @Suppress("UNCHECKED_CAST")
-        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
-        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
-        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
-        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
-        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
-            val id = system.idOf(ref)
-            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            materialize(id)
-        }
-
-        val notes: NoteQuery get() = NoteQuery(Query("Note"))
+        val notes: NoteQuery get() = query("Note", NoteFields()) { materializeNote(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun note(key: StoreKey): Note = invoke<Note>(Ref.Persisted("Note", key))
+        fun note(key: StoreKey): Note = byKey("Note", key)
         fun note(key: Long): Note = note(StoreKey(key))
 
-        val lockNotes: LockNoteQuery get() = LockNoteQuery(Query("LockNote"))
+        val lockNotes: LockNoteQuery get() = query("LockNote", LockNoteFields()) { materializeLockNote(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun lockNote(key: StoreKey): LockNote = invoke<LockNote>(Ref.Persisted("LockNote", key))
+        fun lockNote(key: StoreKey): LockNote = byKey("LockNote", key)
         fun lockNote(key: Long): LockNote = lockNote(StoreKey(key))
 
-        val unlockNotes: UnlockNoteQuery get() = UnlockNoteQuery(Query("UnlockNote"))
+        val unlockNotes: UnlockNoteQuery get() = query("UnlockNote", UnlockNoteFields()) { materializeUnlockNote(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun unlockNote(key: StoreKey): UnlockNote = invoke<UnlockNote>(Ref.Persisted("UnlockNote", key))
+        fun unlockNote(key: StoreKey): UnlockNote = byKey("UnlockNote", key)
         fun unlockNote(key: Long): UnlockNote = unlockNote(StoreKey(key))
 
-        val renameTexts: RenameTextQuery get() = RenameTextQuery(Query("RenameText"))
+        val renameTexts: RenameTextQuery get() = query("RenameText", RenameTextFields()) { materializeRenameText(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun renameText(key: StoreKey): RenameText = invoke<RenameText>(Ref.Persisted("RenameText", key))
+        fun renameText(key: StoreKey): RenameText = byKey("RenameText", key)
         fun renameText(key: Long): RenameText = renameText(StoreKey(key))
 
-        val bareEdits: BareEditQuery get() = BareEditQuery(Query("BareEdit"))
+        val bareEdits: BareEditQuery get() = query("BareEdit", BareEditFields()) { materializeBareEdit(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun bareEdit(key: StoreKey): BareEdit = invoke<BareEdit>(Ref.Persisted("BareEdit", key))
+        fun bareEdit(key: StoreKey): BareEdit = byKey("BareEdit", key)
         fun bareEdit(key: Long): BareEdit = bareEdit(StoreKey(key))
 
-        val bareEditRefusals: BareEditRefusalQuery get() = BareEditRefusalQuery(Query("BareEditRefusal"))
+        val bareEditRefusals: BareEditRefusalQuery get() = query("BareEditRefusal", BareEditRefusalFields()) { materializeBareEditRefusal(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun bareEditRefusal(key: StoreKey): BareEditRefusal = invoke<BareEditRefusal>(Ref.Persisted("BareEditRefusal", key))
+        fun bareEditRefusal(key: StoreKey): BareEditRefusal = byKey("BareEditRefusal", key)
         fun bareEditRefusal(key: Long): BareEditRefusal = bareEditRefusal(StoreKey(key))
 
-        val safeEdits: SafeEditQuery get() = SafeEditQuery(Query("SafeEdit"))
+        val safeEdits: SafeEditQuery get() = query("SafeEdit", SafeEditFields()) { materializeSafeEdit(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun safeEdit(key: StoreKey): SafeEdit = invoke<SafeEdit>(Ref.Persisted("SafeEdit", key))
+        fun safeEdit(key: StoreKey): SafeEdit = byKey("SafeEdit", key)
         fun safeEdit(key: Long): SafeEdit = safeEdit(StoreKey(key))
 
-        val editApplications: EditApplicationQuery get() = EditApplicationQuery(Query("EditApplication"))
+        val editApplications: EditApplicationQuery get() = query("EditApplication", EditApplicationFields()) { materializeEditApplication(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun editApplication(key: StoreKey): EditApplication = invoke<EditApplication>(Ref.Persisted("EditApplication", key))
+        fun editApplication(key: StoreKey): EditApplication = byKey("EditApplication", key)
         fun editApplication(key: Long): EditApplication = editApplication(StoreKey(key))
 
-        val editRefusals: EditRefusalQuery get() = EditRefusalQuery(Query("EditRefusal"))
+        val editRefusals: EditRefusalQuery get() = query("EditRefusal", EditRefusalFields()) { materializeEditRefusal(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun editRefusal(key: StoreKey): EditRefusal = invoke<EditRefusal>(Ref.Persisted("EditRefusal", key))
+        fun editRefusal(key: StoreKey): EditRefusal = byKey("EditRefusal", key)
         fun editRefusal(key: Long): EditRefusal = editRefusal(StoreKey(key))
 
-        val transientEditRefusals: TransientEditRefusalQuery get() = TransientEditRefusalQuery(Query("TransientEditRefusal"))
+        val transientEditRefusals: TransientEditRefusalQuery get() = query("TransientEditRefusal", TransientEditRefusalFields()) { materializeTransientEditRefusal(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun transientEditRefusal(key: StoreKey): TransientEditRefusal = invoke<TransientEditRefusal>(Ref.Persisted("TransientEditRefusal", key))
+        fun transientEditRefusal(key: StoreKey): TransientEditRefusal = byKey("TransientEditRefusal", key)
         fun transientEditRefusal(key: Long): TransientEditRefusal = transientEditRefusal(StoreKey(key))
 
-        val lockedNotes: LockedNoteQuery get() = LockedNoteQuery(Query("LockedNote"))
+        val lockedNotes: LockedNoteQuery get() = query("LockedNote", LockedNoteFields()) { materializeLockedNote(it) }
         /** The record behind [ref] as a member of LockedNote, or null when it is not one. */
-        fun lockedNote(ref: Ref<Note>): LockedNote? =
-            system.scope { system.idOf(ref).let { if (system.exists("LockedNote", it)) materializeLockedNote(it) else null } }
+        fun lockedNote(ref: Ref<Note>): LockedNote? = member("LockedNote", ref) { materializeLockedNote(it) }
 
-        val applicableBareEdits: ApplicableBareEditQuery get() = ApplicableBareEditQuery(Query("ApplicableBareEdit"))
+        val applicableBareEdits: ApplicableBareEditQuery get() = query("ApplicableBareEdit", ApplicableBareEditFields()) { materializeApplicableBareEdit(it) }
         /** The record behind [ref] as a member of ApplicableBareEdit, or null when it is not one. */
-        fun applicableBareEdit(ref: Ref<BareEdit>): ApplicableBareEdit? =
-            system.scope { system.idOf(ref).let { if (system.exists("ApplicableBareEdit", it)) materializeApplicableBareEdit(it) else null } }
+        fun applicableBareEdit(ref: Ref<BareEdit>): ApplicableBareEdit? = member("ApplicableBareEdit", ref) { materializeApplicableBareEdit(it) }
 
-        val refusedBareEdits: RefusedBareEditQuery get() = RefusedBareEditQuery(Query("RefusedBareEdit"))
+        val refusedBareEdits: RefusedBareEditQuery get() = query("RefusedBareEdit", RefusedBareEditFields()) { materializeRefusedBareEdit(it) }
         /** The record behind [ref] as a member of RefusedBareEdit, or null when it is not one. */
-        fun refusedBareEdit(ref: Ref<BareEdit>): RefusedBareEdit? =
-            system.scope { system.idOf(ref).let { if (system.exists("RefusedBareEdit", it)) materializeRefusedBareEdit(it) else null } }
+        fun refusedBareEdit(ref: Ref<BareEdit>): RefusedBareEdit? = member("RefusedBareEdit", ref) { materializeRefusedBareEdit(it) }
 
-        val unhandledSafeEdits: UnhandledSafeEditQuery get() = UnhandledSafeEditQuery(Query("UnhandledSafeEdit"))
+        val unhandledSafeEdits: UnhandledSafeEditQuery get() = query("UnhandledSafeEdit", UnhandledSafeEditFields()) { materializeUnhandledSafeEdit(it) }
         /** The record behind [ref] as a member of UnhandledSafeEdit, or null when it is not one. */
-        fun unhandledSafeEdit(ref: Ref<SafeEdit>): UnhandledSafeEdit? =
-            system.scope { system.idOf(ref).let { if (system.exists("UnhandledSafeEdit", it)) materializeUnhandledSafeEdit(it) else null } }
+        fun unhandledSafeEdit(ref: Ref<SafeEdit>): UnhandledSafeEdit? = member("UnhandledSafeEdit", ref) { materializeUnhandledSafeEdit(it) }
 
-        val applicableSafeEdits: ApplicableSafeEditQuery get() = ApplicableSafeEditQuery(Query("ApplicableSafeEdit"))
+        val applicableSafeEdits: ApplicableSafeEditQuery get() = query("ApplicableSafeEdit", ApplicableSafeEditFields()) { materializeApplicableSafeEdit(it) }
         /** The record behind [ref] as a member of ApplicableSafeEdit, or null when it is not one. */
-        fun applicableSafeEdit(ref: Ref<SafeEdit>): ApplicableSafeEdit? =
-            system.scope { system.idOf(ref).let { if (system.exists("ApplicableSafeEdit", it)) materializeApplicableSafeEdit(it) else null } }
+        fun applicableSafeEdit(ref: Ref<SafeEdit>): ApplicableSafeEdit? = member("ApplicableSafeEdit", ref) { materializeApplicableSafeEdit(it) }
 
-        val refusedSafeEdits: RefusedSafeEditQuery get() = RefusedSafeEditQuery(Query("RefusedSafeEdit"))
+        val refusedSafeEdits: RefusedSafeEditQuery get() = query("RefusedSafeEdit", RefusedSafeEditFields()) { materializeRefusedSafeEdit(it) }
         /** The record behind [ref] as a member of RefusedSafeEdit, or null when it is not one. */
-        fun refusedSafeEdit(ref: Ref<SafeEdit>): RefusedSafeEdit? =
-            system.scope { system.idOf(ref).let { if (system.exists("RefusedSafeEdit", it)) materializeRefusedSafeEdit(it) else null } }
-    }
-
-    inner class NoteQuery(q: Query) : TypedQuery<NoteFields, Note>(system, q, NoteFields(), { materializeNote(it) }) {
-        override fun with(q: Query) = NoteQuery(q)
-    }
-
-    inner class LockNoteQuery(q: Query) : TypedQuery<LockNoteFields, LockNote>(system, q, LockNoteFields(), { materializeLockNote(it) }) {
-        override fun with(q: Query) = LockNoteQuery(q)
-    }
-
-    inner class UnlockNoteQuery(q: Query) : TypedQuery<UnlockNoteFields, UnlockNote>(system, q, UnlockNoteFields(), { materializeUnlockNote(it) }) {
-        override fun with(q: Query) = UnlockNoteQuery(q)
-    }
-
-    inner class RenameTextQuery(q: Query) : TypedQuery<RenameTextFields, RenameText>(system, q, RenameTextFields(), { materializeRenameText(it) }) {
-        override fun with(q: Query) = RenameTextQuery(q)
-    }
-
-    inner class BareEditQuery(q: Query) : TypedQuery<BareEditFields, BareEdit>(system, q, BareEditFields(), { materializeBareEdit(it) }) {
-        override fun with(q: Query) = BareEditQuery(q)
-    }
-
-    inner class BareEditRefusalQuery(q: Query) : TypedQuery<BareEditRefusalFields, BareEditRefusal>(system, q, BareEditRefusalFields(), { materializeBareEditRefusal(it) }) {
-        override fun with(q: Query) = BareEditRefusalQuery(q)
-    }
-
-    inner class SafeEditQuery(q: Query) : TypedQuery<SafeEditFields, SafeEdit>(system, q, SafeEditFields(), { materializeSafeEdit(it) }) {
-        override fun with(q: Query) = SafeEditQuery(q)
-    }
-
-    inner class EditApplicationQuery(q: Query) : TypedQuery<EditApplicationFields, EditApplication>(system, q, EditApplicationFields(), { materializeEditApplication(it) }) {
-        override fun with(q: Query) = EditApplicationQuery(q)
-    }
-
-    inner class EditRefusalQuery(q: Query) : TypedQuery<EditRefusalFields, EditRefusal>(system, q, EditRefusalFields(), { materializeEditRefusal(it) }) {
-        override fun with(q: Query) = EditRefusalQuery(q)
-    }
-
-    inner class TransientEditRefusalQuery(q: Query) : TypedQuery<TransientEditRefusalFields, TransientEditRefusal>(system, q, TransientEditRefusalFields(), { materializeTransientEditRefusal(it) }) {
-        override fun with(q: Query) = TransientEditRefusalQuery(q)
-    }
-
-    inner class LockedNoteQuery(q: Query) : TypedQuery<LockedNoteFields, LockedNote>(system, q, LockedNoteFields(), { materializeLockedNote(it) }) {
-        override fun with(q: Query) = LockedNoteQuery(q)
-    }
-
-    inner class ApplicableBareEditQuery(q: Query) : TypedQuery<ApplicableBareEditFields, ApplicableBareEdit>(system, q, ApplicableBareEditFields(), { materializeApplicableBareEdit(it) }) {
-        override fun with(q: Query) = ApplicableBareEditQuery(q)
-    }
-
-    inner class RefusedBareEditQuery(q: Query) : TypedQuery<RefusedBareEditFields, RefusedBareEdit>(system, q, RefusedBareEditFields(), { materializeRefusedBareEdit(it) }) {
-        override fun with(q: Query) = RefusedBareEditQuery(q)
-    }
-
-    inner class UnhandledSafeEditQuery(q: Query) : TypedQuery<UnhandledSafeEditFields, UnhandledSafeEdit>(system, q, UnhandledSafeEditFields(), { materializeUnhandledSafeEdit(it) }) {
-        override fun with(q: Query) = UnhandledSafeEditQuery(q)
-    }
-
-    inner class ApplicableSafeEditQuery(q: Query) : TypedQuery<ApplicableSafeEditFields, ApplicableSafeEdit>(system, q, ApplicableSafeEditFields(), { materializeApplicableSafeEdit(it) }) {
-        override fun with(q: Query) = ApplicableSafeEditQuery(q)
-    }
-
-    inner class RefusedSafeEditQuery(q: Query) : TypedQuery<RefusedSafeEditFields, RefusedSafeEdit>(system, q, RefusedSafeEditFields(), { materializeRefusedSafeEdit(it) }) {
-        override fun with(q: Query) = RefusedSafeEditQuery(q)
+        fun refusedSafeEdit(ref: Ref<SafeEdit>): RefusedSafeEdit? = member("RefusedSafeEdit", ref) { materializeRefusedSafeEdit(it) }
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -631,39 +490,57 @@ rule RefuseTransientEdit when RefusedTransientEdit {
     }
 }
 
+// ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias NoteQuery = TypedQuery<NoteFields, Note>
+typealias LockNoteQuery = TypedQuery<LockNoteFields, LockNote>
+typealias UnlockNoteQuery = TypedQuery<UnlockNoteFields, UnlockNote>
+typealias RenameTextQuery = TypedQuery<RenameTextFields, RenameText>
+typealias BareEditQuery = TypedQuery<BareEditFields, BareEdit>
+typealias BareEditRefusalQuery = TypedQuery<BareEditRefusalFields, BareEditRefusal>
+typealias SafeEditQuery = TypedQuery<SafeEditFields, SafeEdit>
+typealias EditApplicationQuery = TypedQuery<EditApplicationFields, EditApplication>
+typealias EditRefusalQuery = TypedQuery<EditRefusalFields, EditRefusal>
+typealias TransientEditRefusalQuery = TypedQuery<TransientEditRefusalFields, TransientEditRefusal>
+typealias LockedNoteQuery = TypedQuery<LockedNoteFields, LockedNote>
+typealias ApplicableBareEditQuery = TypedQuery<ApplicableBareEditFields, ApplicableBareEdit>
+typealias RefusedBareEditQuery = TypedQuery<RefusedBareEditFields, RefusedBareEdit>
+typealias UnhandledSafeEditQuery = TypedQuery<UnhandledSafeEditFields, UnhandledSafeEdit>
+typealias ApplicableSafeEditQuery = TypedQuery<ApplicableSafeEditFields, ApplicableSafeEdit>
+typealias RefusedSafeEditQuery = TypedQuery<RefusedSafeEditFields, RefusedSafeEdit>
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewCreateNote(
     val title: String,
     val body: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("title", title)
         put("body", body)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CreateNote") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewLockNote(
     val note: Ref<Note>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("note", system.idOf(note))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "LockNote") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewUnlockNote(
     val note: Ref<Note>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("note", system.idOf(note))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "UnlockNote") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -671,12 +548,12 @@ data class NewUnlockNote(
 data class NewRenameText(
     val note: Ref<Note>,
     val newText: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("note", system.idOf(note))
         put("newText", newText)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "RenameText") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -684,12 +561,12 @@ data class NewRenameText(
 data class NewBareEdit(
     val note: Ref<Note>,
     val newText: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("note", system.idOf(note))
         put("newText", newText)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "BareEdit") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -697,12 +574,12 @@ data class NewBareEdit(
 data class NewSafeEdit(
     val note: Ref<Note>,
     val newTitle: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("note", system.idOf(note))
         put("newTitle", newTitle)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "SafeEdit") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -710,12 +587,12 @@ data class NewSafeEdit(
 data class NewTransientEdit(
     val note: Ref<Note>,
     val newTitle: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("note", system.idOf(note))
         put("newTitle", newTitle)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "TransientEdit") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }

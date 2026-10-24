@@ -7,15 +7,7 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
-
-    val system: VelleSystem = VelleSystem(Model(Parser.parse(SPEC)), startTime)
-
-    // ── clock (harness-controlled; ticks are separate calls) ──
-    val now: Instant get() = system.now
-    fun advanceSeconds(seconds: Long) = system.advance(seconds)
-    fun advanceDays(days: Long) = system.advanceDays(days)
-    fun setTime(t: Instant) = system.setTime(t)
+class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
 
     // ── ticks: scheduled events and user acts are both external input ──
     fun tickHourly() = system.tick("Hourly")
@@ -24,80 +16,38 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCrop): Commit<NewCrop, Ref<Crop>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Crop", raw).carrying(input)
-    }
+    fun commit(input: NewCrop): Commit<NewCrop, Ref<Crop>> =
+        boundary("Crop", input).carrying(input)
 
     /** Queue key: [pathogen.host].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPathogen): Commit<NewPathogen, Ref<Pathogen>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Pathogen", raw).carrying(input)
-    }
+    fun commit(input: NewPathogen): Commit<NewPathogen, Ref<Pathogen>> =
+        boundary("Pathogen", input).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPeptide): Commit<NewPeptide, Ref<Peptide>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Peptide", raw).carrying(input)
-    }
+    fun commit(input: NewPeptide): Commit<NewPeptide, Ref<Peptide>> =
+        boundary("Peptide", input).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssayProtocol): Commit<NewAssayProtocol, Ref<AssayProtocol>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AssayProtocol", raw).carrying(input)
-    }
+    fun commit(input: NewAssayProtocol): Commit<NewAssayProtocol, Ref<AssayProtocol>> =
+        boundary("AssayProtocol", input).carrying(input)
 
     /** Queue keys: [labExperiment.pathogen], [labExperiment.peptide], [labExperiment.protocol].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewLabExperiment): Commit<NewLabExperiment, Ref<LabExperiment>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("LabExperiment", raw).carrying(input)
-    }
+    fun commit(input: NewLabExperiment): Commit<NewLabExperiment, Ref<LabExperiment>> =
+        boundary("LabExperiment", input).carrying(input)
 
     /** Queue keys: [assay.experiment], [assay.experiment.protocol].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssay): Commit<NewAssay, Ref<Assay>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Assay", raw).carrying(input)
-    }
+    fun commit(input: NewAssay): Commit<NewAssay, Ref<Assay>> =
+        boundary("Assay", input).carrying(input)
 
     /** Queue keys: [assayReading.assay] — plus system-wide width below.
      *  System-wide over Assay — consults Assay through 'assays' with no keyable owner (unexamined (A5)).
@@ -112,15 +62,8 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over LabHitRetraction — creates LabHitRetraction referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssayReading): Commit<NewAssayReading, Ref<AssayReading>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AssayReading", raw).carrying(input)
-    }
+    fun commit(input: NewAssayReading): Commit<NewAssayReading, Ref<AssayReading>> =
+        boundary("AssayReading", input).carrying(input)
 
     /** Queue: system-wide.
      *  System-wide over ClimateReading — consults ClimateReading through 'climateReadings' with no keyable owner (unexamined (A5)).
@@ -131,15 +74,8 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Greenhouse — reads Greenhouse.minTemperature with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewGreenhouse): Commit<NewGreenhouse, Ref<Greenhouse>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Greenhouse", raw).carrying(input)
-    }
+    fun commit(input: NewGreenhouse): Commit<NewGreenhouse, Ref<Greenhouse>> =
+        boundary("Greenhouse", input).carrying(input)
 
     /** Queue keys: [climateReading.greenhouse] — plus system-wide width below.
      *  System-wide over ExcursionEnd — consults ExcursionEnd through a path the derivation cannot key (unexamined (A5)).
@@ -152,29 +88,15 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ExcursionEnd — consults ExcursionEnd through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewClimateReading): Commit<NewClimateReading, Ref<ClimateReading>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ClimateReading", raw).carrying(input)
-    }
+    fun commit(input: NewClimateReading): Commit<NewClimateReading, Ref<ClimateReading>> =
+        boundary("ClimateReading", input).carrying(input)
 
     /** Queue: system-wide.
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewGreenhouseProtocol): Commit<NewGreenhouseProtocol, Ref<GreenhouseProtocol>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("GreenhouseProtocol", raw).carrying(input)
-    }
+    fun commit(input: NewGreenhouseProtocol): Commit<NewGreenhouseProtocol, Ref<GreenhouseProtocol>> =
+        boundary("GreenhouseProtocol", input).carrying(input)
 
     /** Queue keys: [requestGreenhouseTrial.greenhouse], [requestGreenhouseTrial.pathogen], [requestGreenhouseTrial.peptide], [requestGreenhouseTrial.protocol] — plus system-wide width below.
      *  System-wide over AssayProtocol — reads AssayProtocol.durationHours with no path back to any key (unexamined (A5)).
@@ -182,29 +104,15 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRequestGreenhouseTrial): Commit<NewRequestGreenhouseTrial, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("RequestGreenhouseTrial", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewRequestGreenhouseTrial): Commit<NewRequestGreenhouseTrial, Nothing?> =
+        boundary("RequestGreenhouseTrial", input).carryingNoRecord(input)
 
     /** Queue keys: [greenhousePlot.trial], [greenhousePlot.trial.protocol] — plus system-wide width below.
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewGreenhousePlot): Commit<NewGreenhousePlot, Ref<GreenhousePlot>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("GreenhousePlot", raw).carrying(input)
-    }
+    fun commit(input: NewGreenhousePlot): Commit<NewGreenhousePlot, Ref<GreenhousePlot>> =
+        boundary("GreenhousePlot", input).carrying(input)
 
     /** Queue keys: [treatment.trial] — plus system-wide width below.
      *  System-wide over GreenhousePlot — consults GreenhousePlot correlated through 'trial' (unexamined (A5)).
@@ -219,15 +127,8 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Treatment — consults Treatment through 'treatments' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewTreatment): Commit<NewTreatment, Ref<Treatment>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Treatment", raw).carrying(input)
-    }
+    fun commit(input: NewTreatment): Commit<NewTreatment, Ref<Treatment>> =
+        boundary("Treatment", input).carrying(input)
 
     /** Queue keys: [plotObservation.plot], [plotObservation.plot.trial] — plus system-wide width below.
      *  System-wide over GreenhousePlot — consults GreenhousePlot correlated through 'trial' (unexamined (A5)).
@@ -239,28 +140,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ObservationCorrection — consults ObservationCorrection through 'observationCorrections' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPlotObservation): Commit<NewPlotObservation, Ref<PlotObservation>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PlotObservation", raw).carrying(input)
-    }
+    fun commit(input: NewPlotObservation): Commit<NewPlotObservation, Ref<PlotObservation>> =
+        boundary("PlotObservation", input).carrying(input)
 
     /** Queue keys: [correctObservation.observation], [correctObservation.observation.plot], [correctObservation.observation.plot.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCorrectObservation): Commit<NewCorrectObservation, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CorrectObservation", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewCorrectObservation): Commit<NewCorrectObservation, Nothing?> =
+        boundary("CorrectObservation", input).carryingNoRecord(input)
 
     /** Queue keys: [voidObservation.observation], [voidObservation.observation.plot], [voidObservation.observation.plot.trial] — plus system-wide width below.
      *  System-wide over GreenhousePlot — consults GreenhousePlot correlated through 'trial' (unexamined (A5)).
@@ -272,55 +159,27 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ObservationCorrection — consults ObservationCorrection through 'observationCorrections' with no keyable owner (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewVoidObservation): Commit<NewVoidObservation, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("VoidObservation", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewVoidObservation): Commit<NewVoidObservation, Nothing?> =
+        boundary("VoidObservation", input).carryingNoRecord(input)
 
     /** Queue keys: [movePlot.plot], [movePlot.plot.trial], [movePlot.plot.trial.protocol] — plus system-wide width below.
      *  System-wide over PlotObservation — reads PlotObservation.dayAfterTreatment with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewMovePlot): Commit<NewMovePlot, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("MovePlot", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewMovePlot): Commit<NewMovePlot, Nothing?> =
+        boundary("MovePlot", input).carryingNoRecord(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewFieldSite): Commit<NewFieldSite, Ref<FieldSite>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("FieldSite", raw).carrying(input)
-    }
+    fun commit(input: NewFieldSite): Commit<NewFieldSite, Ref<FieldSite>> =
+        boundary("FieldSite", input).carrying(input)
 
     /** Queue keys: [permit.crop], [permit.site].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPermit): Commit<NewPermit, Ref<Permit>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Permit", raw).carrying(input)
-    }
+    fun commit(input: NewPermit): Commit<NewPermit, Ref<Permit>> =
+        boundary("Permit", input).carrying(input)
 
     /** Queue keys: [weatherObservation.site] — plus system-wide width below.
      *  System-wide over TreatmentApplication — reads TreatmentApplication.trial with no path back to any key (unexamined (A5)).
@@ -329,28 +188,14 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over ReapplicationNotice — consults ReapplicationNotice through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewWeatherObservation): Commit<NewWeatherObservation, Ref<WeatherObservation>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("WeatherObservation", raw).carrying(input)
-    }
+    fun commit(input: NewWeatherObservation): Commit<NewWeatherObservation, Ref<WeatherObservation>> =
+        boundary("WeatherObservation", input).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewFieldProtocol): Commit<NewFieldProtocol, Ref<FieldProtocol>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("FieldProtocol", raw).carrying(input)
-    }
+    fun commit(input: NewFieldProtocol): Commit<NewFieldProtocol, Ref<FieldProtocol>> =
+        boundary("FieldProtocol", input).carrying(input)
 
     /** Queue keys: [requestFieldTrial.crop], [requestFieldTrial.pathogen], [requestFieldTrial.peptide], [requestFieldTrial.protocol], [requestFieldTrial.site] — plus system-wide width below.
      *  System-wide over GreenhouseResult — `GreenhouseResult` reads every GreenhouseResult and correlates to no key (unexamined (A5)).
@@ -359,80 +204,38 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over GreenhouseTrial — reads GreenhouseTrial.peptide with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRequestFieldTrial): Commit<NewRequestFieldTrial, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("RequestFieldTrial", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewRequestFieldTrial): Commit<NewRequestFieldTrial, Nothing?> =
+        boundary("RequestFieldTrial", input).carryingNoRecord(input)
 
     /** Queue keys: [plantTrial.trial], [plantTrial.trial.site].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPlantTrial): Commit<NewPlantTrial, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PlantTrial", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewPlantTrial): Commit<NewPlantTrial, Nothing?> =
+        boundary("PlantTrial", input).carryingNoRecord(input)
 
     /** Queue key: [fieldPlot.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewFieldPlot): Commit<NewFieldPlot, Ref<FieldPlot>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("FieldPlot", raw).carrying(input)
-    }
+    fun commit(input: NewFieldPlot): Commit<NewFieldPlot, Ref<FieldPlot>> =
+        boundary("FieldPlot", input).carrying(input)
 
     /** Queue keys: [applyTreatment.trial], [applyTreatment.trial.site].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewApplyTreatment): Commit<NewApplyTreatment, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ApplyTreatment", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewApplyTreatment): Commit<NewApplyTreatment, Nothing?> =
+        boundary("ApplyTreatment", input).carryingNoRecord(input)
 
     /** Queue key: [scouting.plot].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewScouting): Commit<NewScouting, Ref<Scouting>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Scouting", raw).carrying(input)
-    }
+    fun commit(input: NewScouting): Commit<NewScouting, Ref<Scouting>> =
+        boundary("Scouting", input).carrying(input)
 
     /** Queue key: [harvest.plot].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewHarvest): Commit<NewHarvest, Ref<Harvest>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Harvest", raw).carrying(input)
-    }
+    fun commit(input: NewHarvest): Commit<NewHarvest, Ref<Harvest>> =
+        boundary("Harvest", input).carrying(input)
 
     /** Queue keys: [phytotoxicityReport.plot] — plus system-wide width below.
      *  System-wide over FieldPlot — consults FieldPlot through 'fieldPlots' with no keyable owner (unexamined (A5)).
@@ -440,832 +243,456 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over HaltNotice — consults HaltNotice through a path the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPhytotoxicityReport): Commit<NewPhytotoxicityReport, Ref<PhytotoxicityReport>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PhytotoxicityReport", raw).carrying(input)
-    }
+    fun commit(input: NewPhytotoxicityReport): Commit<NewPhytotoxicityReport, Ref<PhytotoxicityReport>> =
+        boundary("PhytotoxicityReport", input).carrying(input)
 
     /** Queue key: [collectionTask.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCollectionTask): Commit<NewCollectionTask, Ref<CollectionTask>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CollectionTask", raw).carrying(input)
-    }
+    fun commit(input: NewCollectionTask): Commit<NewCollectionTask, Ref<CollectionTask>> =
+        boundary("CollectionTask", input).carrying(input)
 
     /** Queue keys: [rescheduleTask.task], [rescheduleTask.task.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRescheduleTask): Commit<NewRescheduleTask, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("RescheduleTask", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewRescheduleTask): Commit<NewRescheduleTask, Nothing?> =
+        boundary("RescheduleTask", input).carryingNoRecord(input)
 
     /** Queue keys: [cancelTask.task], [cancelTask.task.trial].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCancelTask): Commit<NewCancelTask, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CancelTask", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewCancelTask): Commit<NewCancelTask, Nothing?> =
+        boundary("CancelTask", input).carryingNoRecord(input)
 
-    fun crops(): List<Crop> = system.scope { system.instancesOf("Crop").map { materializeCrop(it) } }
-    fun pathogens(): List<Pathogen> = system.scope { system.instancesOf("Pathogen").map { materializePathogen(it) } }
-    fun peptides(): List<Peptide> = system.scope { system.instancesOf("Peptide").map { materializePeptide(it) } }
-    fun assayProtocols(): List<AssayProtocol> = system.scope { system.instancesOf("AssayProtocol").map { materializeAssayProtocol(it) } }
-    fun labExperiments(): List<LabExperiment> = system.scope { system.instancesOf("LabExperiment").map { materializeLabExperiment(it) } }
-    fun assays(): List<Assay> = system.scope { system.instancesOf("Assay").map { materializeAssay(it) } }
-    fun assayReadings(): List<AssayReading> = system.scope { system.instancesOf("AssayReading").map { materializeAssayReading(it) } }
-    fun labHits(): List<LabHit> = system.scope { system.instancesOf("LabHit").map { materializeLabHit(it) } }
-    fun labHitRetractions(): List<LabHitRetraction> = system.scope { system.instancesOf("LabHitRetraction").map { materializeLabHitRetraction(it) } }
-    fun greenhouses(): List<Greenhouse> = system.scope { system.instancesOf("Greenhouse").map { materializeGreenhouse(it) } }
-    fun climateReadings(): List<ClimateReading> = system.scope { system.instancesOf("ClimateReading").map { materializeClimateReading(it) } }
-    fun greenhouseProtocols(): List<GreenhouseProtocol> = system.scope { system.instancesOf("GreenhouseProtocol").map { materializeGreenhouseProtocol(it) } }
-    fun greenhouseTrials(): List<GreenhouseTrial> = system.scope { system.instancesOf("GreenhouseTrial").map { materializeGreenhouseTrial(it) } }
-    fun greenhouseRefusals(): List<GreenhouseRefusal> = system.scope { system.instancesOf("GreenhouseRefusal").map { materializeGreenhouseRefusal(it) } }
-    fun greenhousePlots(): List<GreenhousePlot> = system.scope { system.instancesOf("GreenhousePlot").map { materializeGreenhousePlot(it) } }
-    fun treatments(): List<Treatment> = system.scope { system.instancesOf("Treatment").map { materializeTreatment(it) } }
-    fun plotObservations(): List<PlotObservation> = system.scope { system.instancesOf("PlotObservation").map { materializePlotObservation(it) } }
-    fun greenhouseResults(): List<GreenhouseResult> = system.scope { system.instancesOf("GreenhouseResult").map { materializeGreenhouseResult(it) } }
-    fun observationCorrections(): List<ObservationCorrection> = system.scope { system.instancesOf("ObservationCorrection").map { materializeObservationCorrection(it) } }
-    fun correctionRefusals(): List<CorrectionRefusal> = system.scope { system.instancesOf("CorrectionRefusal").map { materializeCorrectionRefusal(it) } }
-    fun voidRecords(): List<VoidRecord> = system.scope { system.instancesOf("VoidRecord").map { materializeVoidRecord(it) } }
-    fun voidRefusals(): List<VoidRefusal> = system.scope { system.instancesOf("VoidRefusal").map { materializeVoidRefusal(it) } }
-    fun moveRefusals(): List<MoveRefusal> = system.scope { system.instancesOf("MoveRefusal").map { materializeMoveRefusal(it) } }
-    fun climateExcursions(): List<ClimateExcursion> = system.scope { system.instancesOf("ClimateExcursion").map { materializeClimateExcursion(it) } }
-    fun excursionEnds(): List<ExcursionEnd> = system.scope { system.instancesOf("ExcursionEnd").map { materializeExcursionEnd(it) } }
-    fun sensorAlerts(): List<SensorAlert> = system.scope { system.instancesOf("SensorAlert").map { materializeSensorAlert(it) } }
-    fun fieldSites(): List<FieldSite> = system.scope { system.instancesOf("FieldSite").map { materializeFieldSite(it) } }
-    fun permits(): List<Permit> = system.scope { system.instancesOf("Permit").map { materializePermit(it) } }
-    fun weatherObservations(): List<WeatherObservation> = system.scope { system.instancesOf("WeatherObservation").map { materializeWeatherObservation(it) } }
-    fun fieldProtocols(): List<FieldProtocol> = system.scope { system.instancesOf("FieldProtocol").map { materializeFieldProtocol(it) } }
-    fun fieldTrials(): List<FieldTrial> = system.scope { system.instancesOf("FieldTrial").map { materializeFieldTrial(it) } }
-    fun fieldRefusals(): List<FieldRefusal> = system.scope { system.instancesOf("FieldRefusal").map { materializeFieldRefusal(it) } }
-    fun plantings(): List<Planting> = system.scope { system.instancesOf("Planting").map { materializePlanting(it) } }
-    fun fieldPlots(): List<FieldPlot> = system.scope { system.instancesOf("FieldPlot").map { materializeFieldPlot(it) } }
-    fun treatmentApplications(): List<TreatmentApplication> = system.scope { system.instancesOf("TreatmentApplication").map { materializeTreatmentApplication(it) } }
-    fun reapplicationNotices(): List<ReapplicationNotice> = system.scope { system.instancesOf("ReapplicationNotice").map { materializeReapplicationNotice(it) } }
-    fun scoutings(): List<Scouting> = system.scope { system.instancesOf("Scouting").map { materializeScouting(it) } }
-    fun harvests(): List<Harvest> = system.scope { system.instancesOf("Harvest").map { materializeHarvest(it) } }
-    fun phytotoxicityReports(): List<PhytotoxicityReport> = system.scope { system.instancesOf("PhytotoxicityReport").map { materializePhytotoxicityReport(it) } }
-    fun haltNotices(): List<HaltNotice> = system.scope { system.instancesOf("HaltNotice").map { materializeHaltNotice(it) } }
-    fun collectionTasks(): List<CollectionTask> = system.scope { system.instancesOf("CollectionTask").map { materializeCollectionTask(it) } }
-    fun taskReminders(): List<TaskReminder> = system.scope { system.instancesOf("TaskReminder").map { materializeTaskReminder(it) } }
-    fun rescheduleRefusals(): List<RescheduleRefusal> = system.scope { system.instancesOf("RescheduleRefusal").map { materializeRescheduleRefusal(it) } }
-    fun taskCancellations(): List<TaskCancellation> = system.scope { system.instancesOf("TaskCancellation").map { materializeTaskCancellation(it) } }
-    fun cancelRefusals(): List<CancelRefusal> = system.scope { system.instancesOf("CancelRefusal").map { materializeCancelRefusal(it) } }
-    fun completedAssays(): List<CompletedAssay> = system.scope { system.instancesOf("CompletedAssay").map { materializeCompletedAssay(it) } }
-    fun hitExperiments(): List<HitExperiment> = system.scope { system.instancesOf("HitExperiment").map { materializeHitExperiment(it) } }
-    fun labValidateds(): List<LabValidated> = system.scope { system.instancesOf("LabValidated").map { materializeLabValidated(it) } }
-    fun treatedTrials(): List<TreatedTrial> = system.scope { system.instancesOf("TreatedTrial").map { materializeTreatedTrial(it) } }
-    fun laidOutTrials(): List<LaidOutTrial> = system.scope { system.instancesOf("LaidOutTrial").map { materializeLaidOutTrial(it) } }
-    fun observedToEnds(): List<ObservedToEnd> = system.scope { system.instancesOf("ObservedToEnd").map { materializeObservedToEnd(it) } }
-    fun completeTrials(): List<CompleteTrial> = system.scope { system.instancesOf("CompleteTrial").map { materializeCompleteTrial(it) } }
-    fun effectiveTrials(): List<EffectiveTrial> = system.scope { system.instancesOf("EffectiveTrial").map { materializeEffectiveTrial(it) } }
-    fun evaluatedTrials(): List<EvaluatedTrial> = system.scope { system.instancesOf("EvaluatedTrial").map { materializeEvaluatedTrial(it) } }
-    fun greenhouseValidateds(): List<GreenhouseValidated> = system.scope { system.instancesOf("GreenhouseValidated").map { materializeGreenhouseValidated(it) } }
-    fun deprioritizeds(): List<Deprioritized> = system.scope { system.instancesOf("Deprioritized").map { materializeDeprioritized(it) } }
-    fun lockedObservations(): List<LockedObservation> = system.scope { system.instancesOf("LockedObservation").map { materializeLockedObservation(it) } }
-    fun treatedPlots(): List<TreatedPlot> = system.scope { system.instancesOf("TreatedPlot").map { materializeTreatedPlot(it) } }
-    fun activeTrials(): List<ActiveTrial> = system.scope { system.instancesOf("ActiveTrial").map { materializeActiveTrial(it) } }
-    fun outOfBands(): List<OutOfBand> = system.scope { system.instancesOf("OutOfBand").map { materializeOutOfBand(it) } }
-    fun openExcursions(): List<OpenExcursion> = system.scope { system.instancesOf("OpenExcursion").map { materializeOpenExcursion(it) } }
-    fun closableExcursions(): List<ClosableExcursion> = system.scope { system.instancesOf("ClosableExcursion").map { materializeClosableExcursion(it) } }
-    fun compromisedTrials(): List<CompromisedTrial> = system.scope { system.instancesOf("CompromisedTrial").map { materializeCompromisedTrial(it) } }
-    fun silentGreenhouses(): List<SilentGreenhouse> = system.scope { system.instancesOf("SilentGreenhouse").map { materializeSilentGreenhouse(it) } }
-    fun permittedTrials(): List<PermittedTrial> = system.scope { system.instancesOf("PermittedTrial").map { materializePermittedTrial(it) } }
-    fun plantedTrials(): List<PlantedTrial> = system.scope { system.instancesOf("PlantedTrial").map { materializePlantedTrial(it) } }
-    fun washedOffApplications(): List<WashedOffApplication> = system.scope { system.instancesOf("WashedOffApplication").map { materializeWashedOffApplication(it) } }
-    fun neverScouteds(): List<NeverScouted> = system.scope { system.instancesOf("NeverScouted").map { materializeNeverScouted(it) } }
-    fun harvestedTrials(): List<HarvestedTrial> = system.scope { system.instancesOf("HarvestedTrial").map { materializeHarvestedTrial(it) } }
-    fun successfulFieldTrials(): List<SuccessfulFieldTrial> = system.scope { system.instancesOf("SuccessfulFieldTrial").map { materializeSuccessfulFieldTrial(it) } }
-    fun fieldValidateds(): List<FieldValidated> = system.scope { system.instancesOf("FieldValidated").map { materializeFieldValidated(it) } }
-    fun haltedTrials(): List<HaltedTrial> = system.scope { system.instancesOf("HaltedTrial").map { materializeHaltedTrial(it) } }
-    fun trials(): List<Trial> = system.scope { system.instancesOf("Trial").map { materializeTrial(it) } }
-    fun doneTasks(): List<DoneTask> = system.scope { system.instancesOf("DoneTask").map { materializeDoneTask(it) } }
-    fun openTasks(): List<OpenTask> = system.scope { system.instancesOf("OpenTask").map { materializeOpenTask(it) } }
-    fun overdueTasks(): List<OverdueTask> = system.scope { system.instancesOf("OverdueTask").map { materializeOverdueTask(it) } }
+    fun crops(): List<Crop> = all("Crop") { materializeCrop(it) }
+    fun pathogens(): List<Pathogen> = all("Pathogen") { materializePathogen(it) }
+    fun peptides(): List<Peptide> = all("Peptide") { materializePeptide(it) }
+    fun assayProtocols(): List<AssayProtocol> = all("AssayProtocol") { materializeAssayProtocol(it) }
+    fun labExperiments(): List<LabExperiment> = all("LabExperiment") { materializeLabExperiment(it) }
+    fun assays(): List<Assay> = all("Assay") { materializeAssay(it) }
+    fun assayReadings(): List<AssayReading> = all("AssayReading") { materializeAssayReading(it) }
+    fun labHits(): List<LabHit> = all("LabHit") { materializeLabHit(it) }
+    fun labHitRetractions(): List<LabHitRetraction> = all("LabHitRetraction") { materializeLabHitRetraction(it) }
+    fun greenhouses(): List<Greenhouse> = all("Greenhouse") { materializeGreenhouse(it) }
+    fun climateReadings(): List<ClimateReading> = all("ClimateReading") { materializeClimateReading(it) }
+    fun greenhouseProtocols(): List<GreenhouseProtocol> = all("GreenhouseProtocol") { materializeGreenhouseProtocol(it) }
+    fun greenhouseTrials(): List<GreenhouseTrial> = all("GreenhouseTrial") { materializeGreenhouseTrial(it) }
+    fun greenhouseRefusals(): List<GreenhouseRefusal> = all("GreenhouseRefusal") { materializeGreenhouseRefusal(it) }
+    fun greenhousePlots(): List<GreenhousePlot> = all("GreenhousePlot") { materializeGreenhousePlot(it) }
+    fun treatments(): List<Treatment> = all("Treatment") { materializeTreatment(it) }
+    fun plotObservations(): List<PlotObservation> = all("PlotObservation") { materializePlotObservation(it) }
+    fun greenhouseResults(): List<GreenhouseResult> = all("GreenhouseResult") { materializeGreenhouseResult(it) }
+    fun observationCorrections(): List<ObservationCorrection> = all("ObservationCorrection") { materializeObservationCorrection(it) }
+    fun correctionRefusals(): List<CorrectionRefusal> = all("CorrectionRefusal") { materializeCorrectionRefusal(it) }
+    fun voidRecords(): List<VoidRecord> = all("VoidRecord") { materializeVoidRecord(it) }
+    fun voidRefusals(): List<VoidRefusal> = all("VoidRefusal") { materializeVoidRefusal(it) }
+    fun moveRefusals(): List<MoveRefusal> = all("MoveRefusal") { materializeMoveRefusal(it) }
+    fun climateExcursions(): List<ClimateExcursion> = all("ClimateExcursion") { materializeClimateExcursion(it) }
+    fun excursionEnds(): List<ExcursionEnd> = all("ExcursionEnd") { materializeExcursionEnd(it) }
+    fun sensorAlerts(): List<SensorAlert> = all("SensorAlert") { materializeSensorAlert(it) }
+    fun fieldSites(): List<FieldSite> = all("FieldSite") { materializeFieldSite(it) }
+    fun permits(): List<Permit> = all("Permit") { materializePermit(it) }
+    fun weatherObservations(): List<WeatherObservation> = all("WeatherObservation") { materializeWeatherObservation(it) }
+    fun fieldProtocols(): List<FieldProtocol> = all("FieldProtocol") { materializeFieldProtocol(it) }
+    fun fieldTrials(): List<FieldTrial> = all("FieldTrial") { materializeFieldTrial(it) }
+    fun fieldRefusals(): List<FieldRefusal> = all("FieldRefusal") { materializeFieldRefusal(it) }
+    fun plantings(): List<Planting> = all("Planting") { materializePlanting(it) }
+    fun fieldPlots(): List<FieldPlot> = all("FieldPlot") { materializeFieldPlot(it) }
+    fun treatmentApplications(): List<TreatmentApplication> = all("TreatmentApplication") { materializeTreatmentApplication(it) }
+    fun reapplicationNotices(): List<ReapplicationNotice> = all("ReapplicationNotice") { materializeReapplicationNotice(it) }
+    fun scoutings(): List<Scouting> = all("Scouting") { materializeScouting(it) }
+    fun harvests(): List<Harvest> = all("Harvest") { materializeHarvest(it) }
+    fun phytotoxicityReports(): List<PhytotoxicityReport> = all("PhytotoxicityReport") { materializePhytotoxicityReport(it) }
+    fun haltNotices(): List<HaltNotice> = all("HaltNotice") { materializeHaltNotice(it) }
+    fun collectionTasks(): List<CollectionTask> = all("CollectionTask") { materializeCollectionTask(it) }
+    fun taskReminders(): List<TaskReminder> = all("TaskReminder") { materializeTaskReminder(it) }
+    fun rescheduleRefusals(): List<RescheduleRefusal> = all("RescheduleRefusal") { materializeRescheduleRefusal(it) }
+    fun taskCancellations(): List<TaskCancellation> = all("TaskCancellation") { materializeTaskCancellation(it) }
+    fun cancelRefusals(): List<CancelRefusal> = all("CancelRefusal") { materializeCancelRefusal(it) }
+    fun completedAssays(): List<CompletedAssay> = all("CompletedAssay") { materializeCompletedAssay(it) }
+    fun hitExperiments(): List<HitExperiment> = all("HitExperiment") { materializeHitExperiment(it) }
+    fun labValidateds(): List<LabValidated> = all("LabValidated") { materializeLabValidated(it) }
+    fun treatedTrials(): List<TreatedTrial> = all("TreatedTrial") { materializeTreatedTrial(it) }
+    fun laidOutTrials(): List<LaidOutTrial> = all("LaidOutTrial") { materializeLaidOutTrial(it) }
+    fun observedToEnds(): List<ObservedToEnd> = all("ObservedToEnd") { materializeObservedToEnd(it) }
+    fun completeTrials(): List<CompleteTrial> = all("CompleteTrial") { materializeCompleteTrial(it) }
+    fun effectiveTrials(): List<EffectiveTrial> = all("EffectiveTrial") { materializeEffectiveTrial(it) }
+    fun evaluatedTrials(): List<EvaluatedTrial> = all("EvaluatedTrial") { materializeEvaluatedTrial(it) }
+    fun greenhouseValidateds(): List<GreenhouseValidated> = all("GreenhouseValidated") { materializeGreenhouseValidated(it) }
+    fun deprioritizeds(): List<Deprioritized> = all("Deprioritized") { materializeDeprioritized(it) }
+    fun lockedObservations(): List<LockedObservation> = all("LockedObservation") { materializeLockedObservation(it) }
+    fun treatedPlots(): List<TreatedPlot> = all("TreatedPlot") { materializeTreatedPlot(it) }
+    fun activeTrials(): List<ActiveTrial> = all("ActiveTrial") { materializeActiveTrial(it) }
+    fun outOfBands(): List<OutOfBand> = all("OutOfBand") { materializeOutOfBand(it) }
+    fun openExcursions(): List<OpenExcursion> = all("OpenExcursion") { materializeOpenExcursion(it) }
+    fun closableExcursions(): List<ClosableExcursion> = all("ClosableExcursion") { materializeClosableExcursion(it) }
+    fun compromisedTrials(): List<CompromisedTrial> = all("CompromisedTrial") { materializeCompromisedTrial(it) }
+    fun silentGreenhouses(): List<SilentGreenhouse> = all("SilentGreenhouse") { materializeSilentGreenhouse(it) }
+    fun permittedTrials(): List<PermittedTrial> = all("PermittedTrial") { materializePermittedTrial(it) }
+    fun plantedTrials(): List<PlantedTrial> = all("PlantedTrial") { materializePlantedTrial(it) }
+    fun washedOffApplications(): List<WashedOffApplication> = all("WashedOffApplication") { materializeWashedOffApplication(it) }
+    fun neverScouteds(): List<NeverScouted> = all("NeverScouted") { materializeNeverScouted(it) }
+    fun harvestedTrials(): List<HarvestedTrial> = all("HarvestedTrial") { materializeHarvestedTrial(it) }
+    fun successfulFieldTrials(): List<SuccessfulFieldTrial> = all("SuccessfulFieldTrial") { materializeSuccessfulFieldTrial(it) }
+    fun fieldValidateds(): List<FieldValidated> = all("FieldValidated") { materializeFieldValidated(it) }
+    fun haltedTrials(): List<HaltedTrial> = all("HaltedTrial") { materializeHaltedTrial(it) }
+    fun trials(): List<Trial> = all("Trial") { materializeTrial(it) }
+    fun doneTasks(): List<DoneTask> = all("DoneTask") { materializeDoneTask(it) }
+    fun openTasks(): List<OpenTask> = all("OpenTask") { materializeOpenTask(it) }
+    fun overdueTasks(): List<OverdueTask> = all("OverdueTask") { materializeOverdueTask(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
-    inner class Read {
-        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
-        val registry = QueryRegistry()
-        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+    inner class Read : ReadSurface<Read>(system) {
+        override fun modelOf(id: Long): Ref<*> = materialize(id)
 
-        /** The model object behind a reference, read now; throws when the record no longer exists. */
-        @Suppress("UNCHECKED_CAST")
-        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
-        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
-        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
-        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
-        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
-            val id = system.idOf(ref)
-            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            materialize(id)
-        }
-
-        val crops: CropQuery get() = CropQuery(Query("Crop"))
+        val crops: CropQuery get() = query("Crop", CropFields()) { materializeCrop(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun crop(key: StoreKey): Crop = invoke<Crop>(Ref.Persisted("Crop", key))
+        fun crop(key: StoreKey): Crop = byKey("Crop", key)
         fun crop(key: Long): Crop = crop(StoreKey(key))
 
-        val pathogens: PathogenQuery get() = PathogenQuery(Query("Pathogen"))
+        val pathogens: PathogenQuery get() = query("Pathogen", PathogenFields()) { materializePathogen(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun pathogen(key: StoreKey): Pathogen = invoke<Pathogen>(Ref.Persisted("Pathogen", key))
+        fun pathogen(key: StoreKey): Pathogen = byKey("Pathogen", key)
         fun pathogen(key: Long): Pathogen = pathogen(StoreKey(key))
 
-        val peptides: PeptideQuery get() = PeptideQuery(Query("Peptide"))
+        val peptides: PeptideQuery get() = query("Peptide", PeptideFields()) { materializePeptide(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun peptide(key: StoreKey): Peptide = invoke<Peptide>(Ref.Persisted("Peptide", key))
+        fun peptide(key: StoreKey): Peptide = byKey("Peptide", key)
         fun peptide(key: Long): Peptide = peptide(StoreKey(key))
 
-        val assayProtocols: AssayProtocolQuery get() = AssayProtocolQuery(Query("AssayProtocol"))
+        val assayProtocols: AssayProtocolQuery get() = query("AssayProtocol", AssayProtocolFields()) { materializeAssayProtocol(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun assayProtocol(key: StoreKey): AssayProtocol = invoke<AssayProtocol>(Ref.Persisted("AssayProtocol", key))
+        fun assayProtocol(key: StoreKey): AssayProtocol = byKey("AssayProtocol", key)
         fun assayProtocol(key: Long): AssayProtocol = assayProtocol(StoreKey(key))
 
-        val labExperiments: LabExperimentQuery get() = LabExperimentQuery(Query("LabExperiment"))
+        val labExperiments: LabExperimentQuery get() = query("LabExperiment", LabExperimentFields()) { materializeLabExperiment(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun labExperiment(key: StoreKey): LabExperiment = invoke<LabExperiment>(Ref.Persisted("LabExperiment", key))
+        fun labExperiment(key: StoreKey): LabExperiment = byKey("LabExperiment", key)
         fun labExperiment(key: Long): LabExperiment = labExperiment(StoreKey(key))
 
-        val assays: AssayQuery get() = AssayQuery(Query("Assay"))
+        val assays: AssayQuery get() = query("Assay", AssayFields()) { materializeAssay(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun assay(key: StoreKey): Assay = invoke<Assay>(Ref.Persisted("Assay", key))
+        fun assay(key: StoreKey): Assay = byKey("Assay", key)
         fun assay(key: Long): Assay = assay(StoreKey(key))
 
-        val assayReadings: AssayReadingQuery get() = AssayReadingQuery(Query("AssayReading"))
+        val assayReadings: AssayReadingQuery get() = query("AssayReading", AssayReadingFields()) { materializeAssayReading(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun assayReading(key: StoreKey): AssayReading = invoke<AssayReading>(Ref.Persisted("AssayReading", key))
+        fun assayReading(key: StoreKey): AssayReading = byKey("AssayReading", key)
         fun assayReading(key: Long): AssayReading = assayReading(StoreKey(key))
 
-        val labHits: LabHitQuery get() = LabHitQuery(Query("LabHit"))
+        val labHits: LabHitQuery get() = query("LabHit", LabHitFields()) { materializeLabHit(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun labHit(key: StoreKey): LabHit = invoke<LabHit>(Ref.Persisted("LabHit", key))
+        fun labHit(key: StoreKey): LabHit = byKey("LabHit", key)
         fun labHit(key: Long): LabHit = labHit(StoreKey(key))
 
-        val labHitRetractions: LabHitRetractionQuery get() = LabHitRetractionQuery(Query("LabHitRetraction"))
+        val labHitRetractions: LabHitRetractionQuery get() = query("LabHitRetraction", LabHitRetractionFields()) { materializeLabHitRetraction(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun labHitRetraction(key: StoreKey): LabHitRetraction = invoke<LabHitRetraction>(Ref.Persisted("LabHitRetraction", key))
+        fun labHitRetraction(key: StoreKey): LabHitRetraction = byKey("LabHitRetraction", key)
         fun labHitRetraction(key: Long): LabHitRetraction = labHitRetraction(StoreKey(key))
 
-        val greenhouses: GreenhouseQuery get() = GreenhouseQuery(Query("Greenhouse"))
+        val greenhouses: GreenhouseQuery get() = query("Greenhouse", GreenhouseFields()) { materializeGreenhouse(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun greenhouse(key: StoreKey): Greenhouse = invoke<Greenhouse>(Ref.Persisted("Greenhouse", key))
+        fun greenhouse(key: StoreKey): Greenhouse = byKey("Greenhouse", key)
         fun greenhouse(key: Long): Greenhouse = greenhouse(StoreKey(key))
 
-        val climateReadings: ClimateReadingQuery get() = ClimateReadingQuery(Query("ClimateReading"))
+        val climateReadings: ClimateReadingQuery get() = query("ClimateReading", ClimateReadingFields()) { materializeClimateReading(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun climateReading(key: StoreKey): ClimateReading = invoke<ClimateReading>(Ref.Persisted("ClimateReading", key))
+        fun climateReading(key: StoreKey): ClimateReading = byKey("ClimateReading", key)
         fun climateReading(key: Long): ClimateReading = climateReading(StoreKey(key))
 
-        val greenhouseProtocols: GreenhouseProtocolQuery get() = GreenhouseProtocolQuery(Query("GreenhouseProtocol"))
+        val greenhouseProtocols: GreenhouseProtocolQuery get() = query("GreenhouseProtocol", GreenhouseProtocolFields()) { materializeGreenhouseProtocol(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun greenhouseProtocol(key: StoreKey): GreenhouseProtocol = invoke<GreenhouseProtocol>(Ref.Persisted("GreenhouseProtocol", key))
+        fun greenhouseProtocol(key: StoreKey): GreenhouseProtocol = byKey("GreenhouseProtocol", key)
         fun greenhouseProtocol(key: Long): GreenhouseProtocol = greenhouseProtocol(StoreKey(key))
 
-        val greenhouseTrials: GreenhouseTrialQuery get() = GreenhouseTrialQuery(Query("GreenhouseTrial"))
+        val greenhouseTrials: GreenhouseTrialQuery get() = query("GreenhouseTrial", GreenhouseTrialFields()) { materializeGreenhouseTrial(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun greenhouseTrial(key: StoreKey): GreenhouseTrial = invoke<GreenhouseTrial>(Ref.Persisted("GreenhouseTrial", key))
+        fun greenhouseTrial(key: StoreKey): GreenhouseTrial = byKey("GreenhouseTrial", key)
         fun greenhouseTrial(key: Long): GreenhouseTrial = greenhouseTrial(StoreKey(key))
 
-        val greenhouseRefusals: GreenhouseRefusalQuery get() = GreenhouseRefusalQuery(Query("GreenhouseRefusal"))
+        val greenhouseRefusals: GreenhouseRefusalQuery get() = query("GreenhouseRefusal", GreenhouseRefusalFields()) { materializeGreenhouseRefusal(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun greenhouseRefusal(key: StoreKey): GreenhouseRefusal = invoke<GreenhouseRefusal>(Ref.Persisted("GreenhouseRefusal", key))
+        fun greenhouseRefusal(key: StoreKey): GreenhouseRefusal = byKey("GreenhouseRefusal", key)
         fun greenhouseRefusal(key: Long): GreenhouseRefusal = greenhouseRefusal(StoreKey(key))
 
-        val greenhousePlots: GreenhousePlotQuery get() = GreenhousePlotQuery(Query("GreenhousePlot"))
+        val greenhousePlots: GreenhousePlotQuery get() = query("GreenhousePlot", GreenhousePlotFields()) { materializeGreenhousePlot(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun greenhousePlot(key: StoreKey): GreenhousePlot = invoke<GreenhousePlot>(Ref.Persisted("GreenhousePlot", key))
+        fun greenhousePlot(key: StoreKey): GreenhousePlot = byKey("GreenhousePlot", key)
         fun greenhousePlot(key: Long): GreenhousePlot = greenhousePlot(StoreKey(key))
 
-        val treatments: TreatmentQuery get() = TreatmentQuery(Query("Treatment"))
+        val treatments: TreatmentQuery get() = query("Treatment", TreatmentFields()) { materializeTreatment(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun treatment(key: StoreKey): Treatment = invoke<Treatment>(Ref.Persisted("Treatment", key))
+        fun treatment(key: StoreKey): Treatment = byKey("Treatment", key)
         fun treatment(key: Long): Treatment = treatment(StoreKey(key))
 
-        val plotObservations: PlotObservationQuery get() = PlotObservationQuery(Query("PlotObservation"))
+        val plotObservations: PlotObservationQuery get() = query("PlotObservation", PlotObservationFields()) { materializePlotObservation(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun plotObservation(key: StoreKey): PlotObservation = invoke<PlotObservation>(Ref.Persisted("PlotObservation", key))
+        fun plotObservation(key: StoreKey): PlotObservation = byKey("PlotObservation", key)
         fun plotObservation(key: Long): PlotObservation = plotObservation(StoreKey(key))
 
-        val greenhouseResults: GreenhouseResultQuery get() = GreenhouseResultQuery(Query("GreenhouseResult"))
+        val greenhouseResults: GreenhouseResultQuery get() = query("GreenhouseResult", GreenhouseResultFields()) { materializeGreenhouseResult(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun greenhouseResult(key: StoreKey): GreenhouseResult = invoke<GreenhouseResult>(Ref.Persisted("GreenhouseResult", key))
+        fun greenhouseResult(key: StoreKey): GreenhouseResult = byKey("GreenhouseResult", key)
         fun greenhouseResult(key: Long): GreenhouseResult = greenhouseResult(StoreKey(key))
 
-        val observationCorrections: ObservationCorrectionQuery get() = ObservationCorrectionQuery(Query("ObservationCorrection"))
+        val observationCorrections: ObservationCorrectionQuery get() = query("ObservationCorrection", ObservationCorrectionFields()) { materializeObservationCorrection(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun observationCorrection(key: StoreKey): ObservationCorrection = invoke<ObservationCorrection>(Ref.Persisted("ObservationCorrection", key))
+        fun observationCorrection(key: StoreKey): ObservationCorrection = byKey("ObservationCorrection", key)
         fun observationCorrection(key: Long): ObservationCorrection = observationCorrection(StoreKey(key))
 
-        val correctionRefusals: CorrectionRefusalQuery get() = CorrectionRefusalQuery(Query("CorrectionRefusal"))
+        val correctionRefusals: CorrectionRefusalQuery get() = query("CorrectionRefusal", CorrectionRefusalFields()) { materializeCorrectionRefusal(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun correctionRefusal(key: StoreKey): CorrectionRefusal = invoke<CorrectionRefusal>(Ref.Persisted("CorrectionRefusal", key))
+        fun correctionRefusal(key: StoreKey): CorrectionRefusal = byKey("CorrectionRefusal", key)
         fun correctionRefusal(key: Long): CorrectionRefusal = correctionRefusal(StoreKey(key))
 
-        val voidRecords: VoidRecordQuery get() = VoidRecordQuery(Query("VoidRecord"))
+        val voidRecords: VoidRecordQuery get() = query("VoidRecord", VoidRecordFields()) { materializeVoidRecord(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun voidRecord(key: StoreKey): VoidRecord = invoke<VoidRecord>(Ref.Persisted("VoidRecord", key))
+        fun voidRecord(key: StoreKey): VoidRecord = byKey("VoidRecord", key)
         fun voidRecord(key: Long): VoidRecord = voidRecord(StoreKey(key))
 
-        val voidRefusals: VoidRefusalQuery get() = VoidRefusalQuery(Query("VoidRefusal"))
+        val voidRefusals: VoidRefusalQuery get() = query("VoidRefusal", VoidRefusalFields()) { materializeVoidRefusal(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun voidRefusal(key: StoreKey): VoidRefusal = invoke<VoidRefusal>(Ref.Persisted("VoidRefusal", key))
+        fun voidRefusal(key: StoreKey): VoidRefusal = byKey("VoidRefusal", key)
         fun voidRefusal(key: Long): VoidRefusal = voidRefusal(StoreKey(key))
 
-        val moveRefusals: MoveRefusalQuery get() = MoveRefusalQuery(Query("MoveRefusal"))
+        val moveRefusals: MoveRefusalQuery get() = query("MoveRefusal", MoveRefusalFields()) { materializeMoveRefusal(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun moveRefusal(key: StoreKey): MoveRefusal = invoke<MoveRefusal>(Ref.Persisted("MoveRefusal", key))
+        fun moveRefusal(key: StoreKey): MoveRefusal = byKey("MoveRefusal", key)
         fun moveRefusal(key: Long): MoveRefusal = moveRefusal(StoreKey(key))
 
-        val climateExcursions: ClimateExcursionQuery get() = ClimateExcursionQuery(Query("ClimateExcursion"))
+        val climateExcursions: ClimateExcursionQuery get() = query("ClimateExcursion", ClimateExcursionFields()) { materializeClimateExcursion(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun climateExcursion(key: StoreKey): ClimateExcursion = invoke<ClimateExcursion>(Ref.Persisted("ClimateExcursion", key))
+        fun climateExcursion(key: StoreKey): ClimateExcursion = byKey("ClimateExcursion", key)
         fun climateExcursion(key: Long): ClimateExcursion = climateExcursion(StoreKey(key))
 
-        val excursionEnds: ExcursionEndQuery get() = ExcursionEndQuery(Query("ExcursionEnd"))
+        val excursionEnds: ExcursionEndQuery get() = query("ExcursionEnd", ExcursionEndFields()) { materializeExcursionEnd(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun excursionEnd(key: StoreKey): ExcursionEnd = invoke<ExcursionEnd>(Ref.Persisted("ExcursionEnd", key))
+        fun excursionEnd(key: StoreKey): ExcursionEnd = byKey("ExcursionEnd", key)
         fun excursionEnd(key: Long): ExcursionEnd = excursionEnd(StoreKey(key))
 
-        val sensorAlerts: SensorAlertQuery get() = SensorAlertQuery(Query("SensorAlert"))
+        val sensorAlerts: SensorAlertQuery get() = query("SensorAlert", SensorAlertFields()) { materializeSensorAlert(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun sensorAlert(key: StoreKey): SensorAlert = invoke<SensorAlert>(Ref.Persisted("SensorAlert", key))
+        fun sensorAlert(key: StoreKey): SensorAlert = byKey("SensorAlert", key)
         fun sensorAlert(key: Long): SensorAlert = sensorAlert(StoreKey(key))
 
-        val fieldSites: FieldSiteQuery get() = FieldSiteQuery(Query("FieldSite"))
+        val fieldSites: FieldSiteQuery get() = query("FieldSite", FieldSiteFields()) { materializeFieldSite(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun fieldSite(key: StoreKey): FieldSite = invoke<FieldSite>(Ref.Persisted("FieldSite", key))
+        fun fieldSite(key: StoreKey): FieldSite = byKey("FieldSite", key)
         fun fieldSite(key: Long): FieldSite = fieldSite(StoreKey(key))
 
-        val permits: PermitQuery get() = PermitQuery(Query("Permit"))
+        val permits: PermitQuery get() = query("Permit", PermitFields()) { materializePermit(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun permit(key: StoreKey): Permit = invoke<Permit>(Ref.Persisted("Permit", key))
+        fun permit(key: StoreKey): Permit = byKey("Permit", key)
         fun permit(key: Long): Permit = permit(StoreKey(key))
 
-        val weatherObservations: WeatherObservationQuery get() = WeatherObservationQuery(Query("WeatherObservation"))
+        val weatherObservations: WeatherObservationQuery get() = query("WeatherObservation", WeatherObservationFields()) { materializeWeatherObservation(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun weatherObservation(key: StoreKey): WeatherObservation = invoke<WeatherObservation>(Ref.Persisted("WeatherObservation", key))
+        fun weatherObservation(key: StoreKey): WeatherObservation = byKey("WeatherObservation", key)
         fun weatherObservation(key: Long): WeatherObservation = weatherObservation(StoreKey(key))
 
-        val fieldProtocols: FieldProtocolQuery get() = FieldProtocolQuery(Query("FieldProtocol"))
+        val fieldProtocols: FieldProtocolQuery get() = query("FieldProtocol", FieldProtocolFields()) { materializeFieldProtocol(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun fieldProtocol(key: StoreKey): FieldProtocol = invoke<FieldProtocol>(Ref.Persisted("FieldProtocol", key))
+        fun fieldProtocol(key: StoreKey): FieldProtocol = byKey("FieldProtocol", key)
         fun fieldProtocol(key: Long): FieldProtocol = fieldProtocol(StoreKey(key))
 
-        val fieldTrials: FieldTrialQuery get() = FieldTrialQuery(Query("FieldTrial"))
+        val fieldTrials: FieldTrialQuery get() = query("FieldTrial", FieldTrialFields()) { materializeFieldTrial(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun fieldTrial(key: StoreKey): FieldTrial = invoke<FieldTrial>(Ref.Persisted("FieldTrial", key))
+        fun fieldTrial(key: StoreKey): FieldTrial = byKey("FieldTrial", key)
         fun fieldTrial(key: Long): FieldTrial = fieldTrial(StoreKey(key))
 
-        val fieldRefusals: FieldRefusalQuery get() = FieldRefusalQuery(Query("FieldRefusal"))
+        val fieldRefusals: FieldRefusalQuery get() = query("FieldRefusal", FieldRefusalFields()) { materializeFieldRefusal(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun fieldRefusal(key: StoreKey): FieldRefusal = invoke<FieldRefusal>(Ref.Persisted("FieldRefusal", key))
+        fun fieldRefusal(key: StoreKey): FieldRefusal = byKey("FieldRefusal", key)
         fun fieldRefusal(key: Long): FieldRefusal = fieldRefusal(StoreKey(key))
 
-        val plantings: PlantingQuery get() = PlantingQuery(Query("Planting"))
+        val plantings: PlantingQuery get() = query("Planting", PlantingFields()) { materializePlanting(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun planting(key: StoreKey): Planting = invoke<Planting>(Ref.Persisted("Planting", key))
+        fun planting(key: StoreKey): Planting = byKey("Planting", key)
         fun planting(key: Long): Planting = planting(StoreKey(key))
 
-        val fieldPlots: FieldPlotQuery get() = FieldPlotQuery(Query("FieldPlot"))
+        val fieldPlots: FieldPlotQuery get() = query("FieldPlot", FieldPlotFields()) { materializeFieldPlot(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun fieldPlot(key: StoreKey): FieldPlot = invoke<FieldPlot>(Ref.Persisted("FieldPlot", key))
+        fun fieldPlot(key: StoreKey): FieldPlot = byKey("FieldPlot", key)
         fun fieldPlot(key: Long): FieldPlot = fieldPlot(StoreKey(key))
 
-        val treatmentApplications: TreatmentApplicationQuery get() = TreatmentApplicationQuery(Query("TreatmentApplication"))
+        val treatmentApplications: TreatmentApplicationQuery get() = query("TreatmentApplication", TreatmentApplicationFields()) { materializeTreatmentApplication(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun treatmentApplication(key: StoreKey): TreatmentApplication = invoke<TreatmentApplication>(Ref.Persisted("TreatmentApplication", key))
+        fun treatmentApplication(key: StoreKey): TreatmentApplication = byKey("TreatmentApplication", key)
         fun treatmentApplication(key: Long): TreatmentApplication = treatmentApplication(StoreKey(key))
 
-        val reapplicationNotices: ReapplicationNoticeQuery get() = ReapplicationNoticeQuery(Query("ReapplicationNotice"))
+        val reapplicationNotices: ReapplicationNoticeQuery get() = query("ReapplicationNotice", ReapplicationNoticeFields()) { materializeReapplicationNotice(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun reapplicationNotice(key: StoreKey): ReapplicationNotice = invoke<ReapplicationNotice>(Ref.Persisted("ReapplicationNotice", key))
+        fun reapplicationNotice(key: StoreKey): ReapplicationNotice = byKey("ReapplicationNotice", key)
         fun reapplicationNotice(key: Long): ReapplicationNotice = reapplicationNotice(StoreKey(key))
 
-        val scoutings: ScoutingQuery get() = ScoutingQuery(Query("Scouting"))
+        val scoutings: ScoutingQuery get() = query("Scouting", ScoutingFields()) { materializeScouting(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun scouting(key: StoreKey): Scouting = invoke<Scouting>(Ref.Persisted("Scouting", key))
+        fun scouting(key: StoreKey): Scouting = byKey("Scouting", key)
         fun scouting(key: Long): Scouting = scouting(StoreKey(key))
 
-        val harvests: HarvestQuery get() = HarvestQuery(Query("Harvest"))
+        val harvests: HarvestQuery get() = query("Harvest", HarvestFields()) { materializeHarvest(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun harvest(key: StoreKey): Harvest = invoke<Harvest>(Ref.Persisted("Harvest", key))
+        fun harvest(key: StoreKey): Harvest = byKey("Harvest", key)
         fun harvest(key: Long): Harvest = harvest(StoreKey(key))
 
-        val phytotoxicityReports: PhytotoxicityReportQuery get() = PhytotoxicityReportQuery(Query("PhytotoxicityReport"))
+        val phytotoxicityReports: PhytotoxicityReportQuery get() = query("PhytotoxicityReport", PhytotoxicityReportFields()) { materializePhytotoxicityReport(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun phytotoxicityReport(key: StoreKey): PhytotoxicityReport = invoke<PhytotoxicityReport>(Ref.Persisted("PhytotoxicityReport", key))
+        fun phytotoxicityReport(key: StoreKey): PhytotoxicityReport = byKey("PhytotoxicityReport", key)
         fun phytotoxicityReport(key: Long): PhytotoxicityReport = phytotoxicityReport(StoreKey(key))
 
-        val haltNotices: HaltNoticeQuery get() = HaltNoticeQuery(Query("HaltNotice"))
+        val haltNotices: HaltNoticeQuery get() = query("HaltNotice", HaltNoticeFields()) { materializeHaltNotice(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun haltNotice(key: StoreKey): HaltNotice = invoke<HaltNotice>(Ref.Persisted("HaltNotice", key))
+        fun haltNotice(key: StoreKey): HaltNotice = byKey("HaltNotice", key)
         fun haltNotice(key: Long): HaltNotice = haltNotice(StoreKey(key))
 
-        val collectionTasks: CollectionTaskQuery get() = CollectionTaskQuery(Query("CollectionTask"))
+        val collectionTasks: CollectionTaskQuery get() = query("CollectionTask", CollectionTaskFields()) { materializeCollectionTask(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun collectionTask(key: StoreKey): CollectionTask = invoke<CollectionTask>(Ref.Persisted("CollectionTask", key))
+        fun collectionTask(key: StoreKey): CollectionTask = byKey("CollectionTask", key)
         fun collectionTask(key: Long): CollectionTask = collectionTask(StoreKey(key))
 
-        val taskReminders: TaskReminderQuery get() = TaskReminderQuery(Query("TaskReminder"))
+        val taskReminders: TaskReminderQuery get() = query("TaskReminder", TaskReminderFields()) { materializeTaskReminder(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun taskReminder(key: StoreKey): TaskReminder = invoke<TaskReminder>(Ref.Persisted("TaskReminder", key))
+        fun taskReminder(key: StoreKey): TaskReminder = byKey("TaskReminder", key)
         fun taskReminder(key: Long): TaskReminder = taskReminder(StoreKey(key))
 
-        val rescheduleRefusals: RescheduleRefusalQuery get() = RescheduleRefusalQuery(Query("RescheduleRefusal"))
+        val rescheduleRefusals: RescheduleRefusalQuery get() = query("RescheduleRefusal", RescheduleRefusalFields()) { materializeRescheduleRefusal(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun rescheduleRefusal(key: StoreKey): RescheduleRefusal = invoke<RescheduleRefusal>(Ref.Persisted("RescheduleRefusal", key))
+        fun rescheduleRefusal(key: StoreKey): RescheduleRefusal = byKey("RescheduleRefusal", key)
         fun rescheduleRefusal(key: Long): RescheduleRefusal = rescheduleRefusal(StoreKey(key))
 
-        val taskCancellations: TaskCancellationQuery get() = TaskCancellationQuery(Query("TaskCancellation"))
+        val taskCancellations: TaskCancellationQuery get() = query("TaskCancellation", TaskCancellationFields()) { materializeTaskCancellation(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun taskCancellation(key: StoreKey): TaskCancellation = invoke<TaskCancellation>(Ref.Persisted("TaskCancellation", key))
+        fun taskCancellation(key: StoreKey): TaskCancellation = byKey("TaskCancellation", key)
         fun taskCancellation(key: Long): TaskCancellation = taskCancellation(StoreKey(key))
 
-        val cancelRefusals: CancelRefusalQuery get() = CancelRefusalQuery(Query("CancelRefusal"))
+        val cancelRefusals: CancelRefusalQuery get() = query("CancelRefusal", CancelRefusalFields()) { materializeCancelRefusal(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun cancelRefusal(key: StoreKey): CancelRefusal = invoke<CancelRefusal>(Ref.Persisted("CancelRefusal", key))
+        fun cancelRefusal(key: StoreKey): CancelRefusal = byKey("CancelRefusal", key)
         fun cancelRefusal(key: Long): CancelRefusal = cancelRefusal(StoreKey(key))
 
-        val completedAssays: CompletedAssayQuery get() = CompletedAssayQuery(Query("CompletedAssay"))
+        val completedAssays: CompletedAssayQuery get() = query("CompletedAssay", CompletedAssayFields()) { materializeCompletedAssay(it) }
         /** The record behind [ref] as a member of CompletedAssay, or null when it is not one. */
-        fun completedAssay(ref: Ref<Assay>): CompletedAssay? =
-            system.scope { system.idOf(ref).let { if (system.exists("CompletedAssay", it)) materializeCompletedAssay(it) else null } }
+        fun completedAssay(ref: Ref<Assay>): CompletedAssay? = member("CompletedAssay", ref) { materializeCompletedAssay(it) }
 
-        val hitExperiments: HitExperimentQuery get() = HitExperimentQuery(Query("HitExperiment"))
+        val hitExperiments: HitExperimentQuery get() = query("HitExperiment", HitExperimentFields()) { materializeHitExperiment(it) }
         /** The record behind [ref] as a member of HitExperiment, or null when it is not one. */
-        fun hitExperiment(ref: Ref<LabExperiment>): HitExperiment? =
-            system.scope { system.idOf(ref).let { if (system.exists("HitExperiment", it)) materializeHitExperiment(it) else null } }
+        fun hitExperiment(ref: Ref<LabExperiment>): HitExperiment? = member("HitExperiment", ref) { materializeHitExperiment(it) }
 
-        val labValidateds: LabValidatedQuery get() = LabValidatedQuery(Query("LabValidated"))
+        val labValidateds: LabValidatedQuery get() = query("LabValidated", LabValidatedFields()) { materializeLabValidated(it) }
         /** The record behind [ref] as a member of LabValidated, or null when it is not one. */
-        fun labValidated(ref: Ref<Peptide>): LabValidated? =
-            system.scope { system.idOf(ref).let { if (system.exists("LabValidated", it)) materializeLabValidated(it) else null } }
+        fun labValidated(ref: Ref<Peptide>): LabValidated? = member("LabValidated", ref) { materializeLabValidated(it) }
 
-        val treatedTrials: TreatedTrialQuery get() = TreatedTrialQuery(Query("TreatedTrial"))
+        val treatedTrials: TreatedTrialQuery get() = query("TreatedTrial", TreatedTrialFields()) { materializeTreatedTrial(it) }
         /** The record behind [ref] as a member of TreatedTrial, or null when it is not one. */
-        fun treatedTrial(ref: Ref<GreenhouseTrial>): TreatedTrial? =
-            system.scope { system.idOf(ref).let { if (system.exists("TreatedTrial", it)) materializeTreatedTrial(it) else null } }
+        fun treatedTrial(ref: Ref<GreenhouseTrial>): TreatedTrial? = member("TreatedTrial", ref) { materializeTreatedTrial(it) }
 
-        val laidOutTrials: LaidOutTrialQuery get() = LaidOutTrialQuery(Query("LaidOutTrial"))
+        val laidOutTrials: LaidOutTrialQuery get() = query("LaidOutTrial", LaidOutTrialFields()) { materializeLaidOutTrial(it) }
         /** The record behind [ref] as a member of LaidOutTrial, or null when it is not one. */
-        fun laidOutTrial(ref: Ref<GreenhouseTrial>): LaidOutTrial? =
-            system.scope { system.idOf(ref).let { if (system.exists("LaidOutTrial", it)) materializeLaidOutTrial(it) else null } }
+        fun laidOutTrial(ref: Ref<GreenhouseTrial>): LaidOutTrial? = member("LaidOutTrial", ref) { materializeLaidOutTrial(it) }
 
-        val observedToEnds: ObservedToEndQuery get() = ObservedToEndQuery(Query("ObservedToEnd"))
+        val observedToEnds: ObservedToEndQuery get() = query("ObservedToEnd", ObservedToEndFields()) { materializeObservedToEnd(it) }
         /** The record behind [ref] as a member of ObservedToEnd, or null when it is not one. */
-        fun observedToEnd(ref: Ref<GreenhouseTrial>): ObservedToEnd? =
-            system.scope { system.idOf(ref).let { if (system.exists("ObservedToEnd", it)) materializeObservedToEnd(it) else null } }
+        fun observedToEnd(ref: Ref<GreenhouseTrial>): ObservedToEnd? = member("ObservedToEnd", ref) { materializeObservedToEnd(it) }
 
-        val completeTrials: CompleteTrialQuery get() = CompleteTrialQuery(Query("CompleteTrial"))
+        val completeTrials: CompleteTrialQuery get() = query("CompleteTrial", CompleteTrialFields()) { materializeCompleteTrial(it) }
         /** The record behind [ref] as a member of CompleteTrial, or null when it is not one. */
-        fun completeTrial(ref: Ref<GreenhouseTrial>): CompleteTrial? =
-            system.scope { system.idOf(ref).let { if (system.exists("CompleteTrial", it)) materializeCompleteTrial(it) else null } }
+        fun completeTrial(ref: Ref<GreenhouseTrial>): CompleteTrial? = member("CompleteTrial", ref) { materializeCompleteTrial(it) }
 
-        val effectiveTrials: EffectiveTrialQuery get() = EffectiveTrialQuery(Query("EffectiveTrial"))
+        val effectiveTrials: EffectiveTrialQuery get() = query("EffectiveTrial", EffectiveTrialFields()) { materializeEffectiveTrial(it) }
         /** The record behind [ref] as a member of EffectiveTrial, or null when it is not one. */
-        fun effectiveTrial(ref: Ref<GreenhouseTrial>): EffectiveTrial? =
-            system.scope { system.idOf(ref).let { if (system.exists("EffectiveTrial", it)) materializeEffectiveTrial(it) else null } }
+        fun effectiveTrial(ref: Ref<GreenhouseTrial>): EffectiveTrial? = member("EffectiveTrial", ref) { materializeEffectiveTrial(it) }
 
-        val evaluatedTrials: EvaluatedTrialQuery get() = EvaluatedTrialQuery(Query("EvaluatedTrial"))
+        val evaluatedTrials: EvaluatedTrialQuery get() = query("EvaluatedTrial", EvaluatedTrialFields()) { materializeEvaluatedTrial(it) }
         /** The record behind [ref] as a member of EvaluatedTrial, or null when it is not one. */
-        fun evaluatedTrial(ref: Ref<GreenhouseTrial>): EvaluatedTrial? =
-            system.scope { system.idOf(ref).let { if (system.exists("EvaluatedTrial", it)) materializeEvaluatedTrial(it) else null } }
+        fun evaluatedTrial(ref: Ref<GreenhouseTrial>): EvaluatedTrial? = member("EvaluatedTrial", ref) { materializeEvaluatedTrial(it) }
 
-        val greenhouseValidateds: GreenhouseValidatedQuery get() = GreenhouseValidatedQuery(Query("GreenhouseValidated"))
+        val greenhouseValidateds: GreenhouseValidatedQuery get() = query("GreenhouseValidated", GreenhouseValidatedFields()) { materializeGreenhouseValidated(it) }
         /** The record behind [ref] as a member of GreenhouseValidated, or null when it is not one. */
-        fun greenhouseValidated(ref: Ref<Peptide>): GreenhouseValidated? =
-            system.scope { system.idOf(ref).let { if (system.exists("GreenhouseValidated", it)) materializeGreenhouseValidated(it) else null } }
+        fun greenhouseValidated(ref: Ref<Peptide>): GreenhouseValidated? = member("GreenhouseValidated", ref) { materializeGreenhouseValidated(it) }
 
-        val deprioritizeds: DeprioritizedQuery get() = DeprioritizedQuery(Query("Deprioritized"))
+        val deprioritizeds: DeprioritizedQuery get() = query("Deprioritized", DeprioritizedFields()) { materializeDeprioritized(it) }
         /** The record behind [ref] as a member of Deprioritized, or null when it is not one. */
-        fun deprioritized(ref: Ref<Peptide>): Deprioritized? =
-            system.scope { system.idOf(ref).let { if (system.exists("Deprioritized", it)) materializeDeprioritized(it) else null } }
+        fun deprioritized(ref: Ref<Peptide>): Deprioritized? = member("Deprioritized", ref) { materializeDeprioritized(it) }
 
-        val lockedObservations: LockedObservationQuery get() = LockedObservationQuery(Query("LockedObservation"))
+        val lockedObservations: LockedObservationQuery get() = query("LockedObservation", LockedObservationFields()) { materializeLockedObservation(it) }
         /** The record behind [ref] as a member of LockedObservation, or null when it is not one. */
-        fun lockedObservation(ref: Ref<PlotObservation>): LockedObservation? =
-            system.scope { system.idOf(ref).let { if (system.exists("LockedObservation", it)) materializeLockedObservation(it) else null } }
+        fun lockedObservation(ref: Ref<PlotObservation>): LockedObservation? = member("LockedObservation", ref) { materializeLockedObservation(it) }
 
-        val treatedPlots: TreatedPlotQuery get() = TreatedPlotQuery(Query("TreatedPlot"))
+        val treatedPlots: TreatedPlotQuery get() = query("TreatedPlot", TreatedPlotFields()) { materializeTreatedPlot(it) }
         /** The record behind [ref] as a member of TreatedPlot, or null when it is not one. */
-        fun treatedPlot(ref: Ref<GreenhousePlot>): TreatedPlot? =
-            system.scope { system.idOf(ref).let { if (system.exists("TreatedPlot", it)) materializeTreatedPlot(it) else null } }
+        fun treatedPlot(ref: Ref<GreenhousePlot>): TreatedPlot? = member("TreatedPlot", ref) { materializeTreatedPlot(it) }
 
-        val activeTrials: ActiveTrialQuery get() = ActiveTrialQuery(Query("ActiveTrial"))
+        val activeTrials: ActiveTrialQuery get() = query("ActiveTrial", ActiveTrialFields()) { materializeActiveTrial(it) }
         /** The record behind [ref] as a member of ActiveTrial, or null when it is not one. */
-        fun activeTrial(ref: Ref<GreenhouseTrial>): ActiveTrial? =
-            system.scope { system.idOf(ref).let { if (system.exists("ActiveTrial", it)) materializeActiveTrial(it) else null } }
+        fun activeTrial(ref: Ref<GreenhouseTrial>): ActiveTrial? = member("ActiveTrial", ref) { materializeActiveTrial(it) }
 
-        val outOfBands: OutOfBandQuery get() = OutOfBandQuery(Query("OutOfBand"))
+        val outOfBands: OutOfBandQuery get() = query("OutOfBand", OutOfBandFields()) { materializeOutOfBand(it) }
         /** The record behind [ref] as a member of OutOfBand, or null when it is not one. */
-        fun outOfBand(ref: Ref<Greenhouse>): OutOfBand? =
-            system.scope { system.idOf(ref).let { if (system.exists("OutOfBand", it)) materializeOutOfBand(it) else null } }
+        fun outOfBand(ref: Ref<Greenhouse>): OutOfBand? = member("OutOfBand", ref) { materializeOutOfBand(it) }
 
-        val openExcursions: OpenExcursionQuery get() = OpenExcursionQuery(Query("OpenExcursion"))
+        val openExcursions: OpenExcursionQuery get() = query("OpenExcursion", OpenExcursionFields()) { materializeOpenExcursion(it) }
         /** The record behind [ref] as a member of OpenExcursion, or null when it is not one. */
-        fun openExcursion(ref: Ref<ClimateExcursion>): OpenExcursion? =
-            system.scope { system.idOf(ref).let { if (system.exists("OpenExcursion", it)) materializeOpenExcursion(it) else null } }
+        fun openExcursion(ref: Ref<ClimateExcursion>): OpenExcursion? = member("OpenExcursion", ref) { materializeOpenExcursion(it) }
 
-        val closableExcursions: ClosableExcursionQuery get() = ClosableExcursionQuery(Query("ClosableExcursion"))
+        val closableExcursions: ClosableExcursionQuery get() = query("ClosableExcursion", ClosableExcursionFields()) { materializeClosableExcursion(it) }
         /** The record behind [ref] as a member of ClosableExcursion, or null when it is not one. */
-        fun closableExcursion(ref: Ref<ClimateExcursion>): ClosableExcursion? =
-            system.scope { system.idOf(ref).let { if (system.exists("ClosableExcursion", it)) materializeClosableExcursion(it) else null } }
+        fun closableExcursion(ref: Ref<ClimateExcursion>): ClosableExcursion? = member("ClosableExcursion", ref) { materializeClosableExcursion(it) }
 
-        val compromisedTrials: CompromisedTrialQuery get() = CompromisedTrialQuery(Query("CompromisedTrial"))
+        val compromisedTrials: CompromisedTrialQuery get() = query("CompromisedTrial", CompromisedTrialFields()) { materializeCompromisedTrial(it) }
         /** The record behind [ref] as a member of CompromisedTrial, or null when it is not one. */
-        fun compromisedTrial(ref: Ref<GreenhouseTrial>): CompromisedTrial? =
-            system.scope { system.idOf(ref).let { if (system.exists("CompromisedTrial", it)) materializeCompromisedTrial(it) else null } }
+        fun compromisedTrial(ref: Ref<GreenhouseTrial>): CompromisedTrial? = member("CompromisedTrial", ref) { materializeCompromisedTrial(it) }
 
-        val silentGreenhouses: SilentGreenhouseQuery get() = SilentGreenhouseQuery(Query("SilentGreenhouse"))
+        val silentGreenhouses: SilentGreenhouseQuery get() = query("SilentGreenhouse", SilentGreenhouseFields()) { materializeSilentGreenhouse(it) }
         /** The record behind [ref] as a member of SilentGreenhouse, or null when it is not one. */
-        fun silentGreenhouse(ref: Ref<Greenhouse>): SilentGreenhouse? =
-            system.scope { system.idOf(ref).let { if (system.exists("SilentGreenhouse", it)) materializeSilentGreenhouse(it) else null } }
+        fun silentGreenhouse(ref: Ref<Greenhouse>): SilentGreenhouse? = member("SilentGreenhouse", ref) { materializeSilentGreenhouse(it) }
 
-        val permittedTrials: PermittedTrialQuery get() = PermittedTrialQuery(Query("PermittedTrial"))
+        val permittedTrials: PermittedTrialQuery get() = query("PermittedTrial", PermittedTrialFields()) { materializePermittedTrial(it) }
         /** The record behind [ref] as a member of PermittedTrial, or null when it is not one. */
-        fun permittedTrial(ref: Ref<FieldTrial>): PermittedTrial? =
-            system.scope { system.idOf(ref).let { if (system.exists("PermittedTrial", it)) materializePermittedTrial(it) else null } }
+        fun permittedTrial(ref: Ref<FieldTrial>): PermittedTrial? = member("PermittedTrial", ref) { materializePermittedTrial(it) }
 
-        val plantedTrials: PlantedTrialQuery get() = PlantedTrialQuery(Query("PlantedTrial"))
+        val plantedTrials: PlantedTrialQuery get() = query("PlantedTrial", PlantedTrialFields()) { materializePlantedTrial(it) }
         /** The record behind [ref] as a member of PlantedTrial, or null when it is not one. */
-        fun plantedTrial(ref: Ref<FieldTrial>): PlantedTrial? =
-            system.scope { system.idOf(ref).let { if (system.exists("PlantedTrial", it)) materializePlantedTrial(it) else null } }
+        fun plantedTrial(ref: Ref<FieldTrial>): PlantedTrial? = member("PlantedTrial", ref) { materializePlantedTrial(it) }
 
-        val washedOffApplications: WashedOffApplicationQuery get() = WashedOffApplicationQuery(Query("WashedOffApplication"))
+        val washedOffApplications: WashedOffApplicationQuery get() = query("WashedOffApplication", WashedOffApplicationFields()) { materializeWashedOffApplication(it) }
         /** The record behind [ref] as a member of WashedOffApplication, or null when it is not one. */
-        fun washedOffApplication(ref: Ref<TreatmentApplication>): WashedOffApplication? =
-            system.scope { system.idOf(ref).let { if (system.exists("WashedOffApplication", it)) materializeWashedOffApplication(it) else null } }
+        fun washedOffApplication(ref: Ref<TreatmentApplication>): WashedOffApplication? = member("WashedOffApplication", ref) { materializeWashedOffApplication(it) }
 
-        val neverScouteds: NeverScoutedQuery get() = NeverScoutedQuery(Query("NeverScouted"))
+        val neverScouteds: NeverScoutedQuery get() = query("NeverScouted", NeverScoutedFields()) { materializeNeverScouted(it) }
         /** The record behind [ref] as a member of NeverScouted, or null when it is not one. */
-        fun neverScouted(ref: Ref<FieldTrial>): NeverScouted? =
-            system.scope { system.idOf(ref).let { if (system.exists("NeverScouted", it)) materializeNeverScouted(it) else null } }
+        fun neverScouted(ref: Ref<FieldTrial>): NeverScouted? = member("NeverScouted", ref) { materializeNeverScouted(it) }
 
-        val harvestedTrials: HarvestedTrialQuery get() = HarvestedTrialQuery(Query("HarvestedTrial"))
+        val harvestedTrials: HarvestedTrialQuery get() = query("HarvestedTrial", HarvestedTrialFields()) { materializeHarvestedTrial(it) }
         /** The record behind [ref] as a member of HarvestedTrial, or null when it is not one. */
-        fun harvestedTrial(ref: Ref<FieldTrial>): HarvestedTrial? =
-            system.scope { system.idOf(ref).let { if (system.exists("HarvestedTrial", it)) materializeHarvestedTrial(it) else null } }
+        fun harvestedTrial(ref: Ref<FieldTrial>): HarvestedTrial? = member("HarvestedTrial", ref) { materializeHarvestedTrial(it) }
 
-        val successfulFieldTrials: SuccessfulFieldTrialQuery get() = SuccessfulFieldTrialQuery(Query("SuccessfulFieldTrial"))
+        val successfulFieldTrials: SuccessfulFieldTrialQuery get() = query("SuccessfulFieldTrial", SuccessfulFieldTrialFields()) { materializeSuccessfulFieldTrial(it) }
         /** The record behind [ref] as a member of SuccessfulFieldTrial, or null when it is not one. */
-        fun successfulFieldTrial(ref: Ref<FieldTrial>): SuccessfulFieldTrial? =
-            system.scope { system.idOf(ref).let { if (system.exists("SuccessfulFieldTrial", it)) materializeSuccessfulFieldTrial(it) else null } }
+        fun successfulFieldTrial(ref: Ref<FieldTrial>): SuccessfulFieldTrial? = member("SuccessfulFieldTrial", ref) { materializeSuccessfulFieldTrial(it) }
 
-        val fieldValidateds: FieldValidatedQuery get() = FieldValidatedQuery(Query("FieldValidated"))
+        val fieldValidateds: FieldValidatedQuery get() = query("FieldValidated", FieldValidatedFields()) { materializeFieldValidated(it) }
         /** The record behind [ref] as a member of FieldValidated, or null when it is not one. */
-        fun fieldValidated(ref: Ref<Peptide>): FieldValidated? =
-            system.scope { system.idOf(ref).let { if (system.exists("FieldValidated", it)) materializeFieldValidated(it) else null } }
+        fun fieldValidated(ref: Ref<Peptide>): FieldValidated? = member("FieldValidated", ref) { materializeFieldValidated(it) }
 
-        val haltedTrials: HaltedTrialQuery get() = HaltedTrialQuery(Query("HaltedTrial"))
+        val haltedTrials: HaltedTrialQuery get() = query("HaltedTrial", HaltedTrialFields()) { materializeHaltedTrial(it) }
         /** The record behind [ref] as a member of HaltedTrial, or null when it is not one. */
-        fun haltedTrial(ref: Ref<FieldTrial>): HaltedTrial? =
-            system.scope { system.idOf(ref).let { if (system.exists("HaltedTrial", it)) materializeHaltedTrial(it) else null } }
+        fun haltedTrial(ref: Ref<FieldTrial>): HaltedTrial? = member("HaltedTrial", ref) { materializeHaltedTrial(it) }
 
-        val trials: TrialQuery get() = TrialQuery(Query("Trial"))
+        val trials: TrialQuery get() = query("Trial", TrialFields()) { materializeTrial(it) }
 
-        val doneTasks: DoneTaskQuery get() = DoneTaskQuery(Query("DoneTask"))
+        val doneTasks: DoneTaskQuery get() = query("DoneTask", DoneTaskFields()) { materializeDoneTask(it) }
         /** The record behind [ref] as a member of DoneTask, or null when it is not one. */
-        fun doneTask(ref: Ref<CollectionTask>): DoneTask? =
-            system.scope { system.idOf(ref).let { if (system.exists("DoneTask", it)) materializeDoneTask(it) else null } }
+        fun doneTask(ref: Ref<CollectionTask>): DoneTask? = member("DoneTask", ref) { materializeDoneTask(it) }
 
-        val openTasks: OpenTaskQuery get() = OpenTaskQuery(Query("OpenTask"))
+        val openTasks: OpenTaskQuery get() = query("OpenTask", OpenTaskFields()) { materializeOpenTask(it) }
         /** The record behind [ref] as a member of OpenTask, or null when it is not one. */
-        fun openTask(ref: Ref<CollectionTask>): OpenTask? =
-            system.scope { system.idOf(ref).let { if (system.exists("OpenTask", it)) materializeOpenTask(it) else null } }
+        fun openTask(ref: Ref<CollectionTask>): OpenTask? = member("OpenTask", ref) { materializeOpenTask(it) }
 
-        val overdueTasks: OverdueTaskQuery get() = OverdueTaskQuery(Query("OverdueTask"))
+        val overdueTasks: OverdueTaskQuery get() = query("OverdueTask", OverdueTaskFields()) { materializeOverdueTask(it) }
         /** The record behind [ref] as a member of OverdueTask, or null when it is not one. */
-        fun overdueTask(ref: Ref<CollectionTask>): OverdueTask? =
-            system.scope { system.idOf(ref).let { if (system.exists("OverdueTask", it)) materializeOverdueTask(it) else null } }
-    }
-
-    inner class CropQuery(q: Query) : TypedQuery<CropFields, Crop>(system, q, CropFields(), { materializeCrop(it) }) {
-        override fun with(q: Query) = CropQuery(q)
-    }
-
-    inner class PathogenQuery(q: Query) : TypedQuery<PathogenFields, Pathogen>(system, q, PathogenFields(), { materializePathogen(it) }) {
-        override fun with(q: Query) = PathogenQuery(q)
-    }
-
-    inner class PeptideQuery(q: Query) : TypedQuery<PeptideFields, Peptide>(system, q, PeptideFields(), { materializePeptide(it) }) {
-        override fun with(q: Query) = PeptideQuery(q)
-    }
-
-    inner class AssayProtocolQuery(q: Query) : TypedQuery<AssayProtocolFields, AssayProtocol>(system, q, AssayProtocolFields(), { materializeAssayProtocol(it) }) {
-        override fun with(q: Query) = AssayProtocolQuery(q)
-    }
-
-    inner class LabExperimentQuery(q: Query) : TypedQuery<LabExperimentFields, LabExperiment>(system, q, LabExperimentFields(), { materializeLabExperiment(it) }) {
-        override fun with(q: Query) = LabExperimentQuery(q)
-    }
-
-    inner class AssayQuery(q: Query) : TypedQuery<AssayFields, Assay>(system, q, AssayFields(), { materializeAssay(it) }) {
-        override fun with(q: Query) = AssayQuery(q)
-    }
-
-    inner class AssayReadingQuery(q: Query) : TypedQuery<AssayReadingFields, AssayReading>(system, q, AssayReadingFields(), { materializeAssayReading(it) }) {
-        override fun with(q: Query) = AssayReadingQuery(q)
-    }
-
-    inner class LabHitQuery(q: Query) : TypedQuery<LabHitFields, LabHit>(system, q, LabHitFields(), { materializeLabHit(it) }) {
-        override fun with(q: Query) = LabHitQuery(q)
-    }
-
-    inner class LabHitRetractionQuery(q: Query) : TypedQuery<LabHitRetractionFields, LabHitRetraction>(system, q, LabHitRetractionFields(), { materializeLabHitRetraction(it) }) {
-        override fun with(q: Query) = LabHitRetractionQuery(q)
-    }
-
-    inner class GreenhouseQuery(q: Query) : TypedQuery<GreenhouseFields, Greenhouse>(system, q, GreenhouseFields(), { materializeGreenhouse(it) }) {
-        override fun with(q: Query) = GreenhouseQuery(q)
-    }
-
-    inner class ClimateReadingQuery(q: Query) : TypedQuery<ClimateReadingFields, ClimateReading>(system, q, ClimateReadingFields(), { materializeClimateReading(it) }) {
-        override fun with(q: Query) = ClimateReadingQuery(q)
-    }
-
-    inner class GreenhouseProtocolQuery(q: Query) : TypedQuery<GreenhouseProtocolFields, GreenhouseProtocol>(system, q, GreenhouseProtocolFields(), { materializeGreenhouseProtocol(it) }) {
-        override fun with(q: Query) = GreenhouseProtocolQuery(q)
-    }
-
-    inner class GreenhouseTrialQuery(q: Query) : TypedQuery<GreenhouseTrialFields, GreenhouseTrial>(system, q, GreenhouseTrialFields(), { materializeGreenhouseTrial(it) }) {
-        override fun with(q: Query) = GreenhouseTrialQuery(q)
-    }
-
-    inner class GreenhouseRefusalQuery(q: Query) : TypedQuery<GreenhouseRefusalFields, GreenhouseRefusal>(system, q, GreenhouseRefusalFields(), { materializeGreenhouseRefusal(it) }) {
-        override fun with(q: Query) = GreenhouseRefusalQuery(q)
-    }
-
-    inner class GreenhousePlotQuery(q: Query) : TypedQuery<GreenhousePlotFields, GreenhousePlot>(system, q, GreenhousePlotFields(), { materializeGreenhousePlot(it) }) {
-        override fun with(q: Query) = GreenhousePlotQuery(q)
-    }
-
-    inner class TreatmentQuery(q: Query) : TypedQuery<TreatmentFields, Treatment>(system, q, TreatmentFields(), { materializeTreatment(it) }) {
-        override fun with(q: Query) = TreatmentQuery(q)
-    }
-
-    inner class PlotObservationQuery(q: Query) : TypedQuery<PlotObservationFields, PlotObservation>(system, q, PlotObservationFields(), { materializePlotObservation(it) }) {
-        override fun with(q: Query) = PlotObservationQuery(q)
-    }
-
-    inner class GreenhouseResultQuery(q: Query) : TypedQuery<GreenhouseResultFields, GreenhouseResult>(system, q, GreenhouseResultFields(), { materializeGreenhouseResult(it) }) {
-        override fun with(q: Query) = GreenhouseResultQuery(q)
-    }
-
-    inner class ObservationCorrectionQuery(q: Query) : TypedQuery<ObservationCorrectionFields, ObservationCorrection>(system, q, ObservationCorrectionFields(), { materializeObservationCorrection(it) }) {
-        override fun with(q: Query) = ObservationCorrectionQuery(q)
-    }
-
-    inner class CorrectionRefusalQuery(q: Query) : TypedQuery<CorrectionRefusalFields, CorrectionRefusal>(system, q, CorrectionRefusalFields(), { materializeCorrectionRefusal(it) }) {
-        override fun with(q: Query) = CorrectionRefusalQuery(q)
-    }
-
-    inner class VoidRecordQuery(q: Query) : TypedQuery<VoidRecordFields, VoidRecord>(system, q, VoidRecordFields(), { materializeVoidRecord(it) }) {
-        override fun with(q: Query) = VoidRecordQuery(q)
-    }
-
-    inner class VoidRefusalQuery(q: Query) : TypedQuery<VoidRefusalFields, VoidRefusal>(system, q, VoidRefusalFields(), { materializeVoidRefusal(it) }) {
-        override fun with(q: Query) = VoidRefusalQuery(q)
-    }
-
-    inner class MoveRefusalQuery(q: Query) : TypedQuery<MoveRefusalFields, MoveRefusal>(system, q, MoveRefusalFields(), { materializeMoveRefusal(it) }) {
-        override fun with(q: Query) = MoveRefusalQuery(q)
-    }
-
-    inner class ClimateExcursionQuery(q: Query) : TypedQuery<ClimateExcursionFields, ClimateExcursion>(system, q, ClimateExcursionFields(), { materializeClimateExcursion(it) }) {
-        override fun with(q: Query) = ClimateExcursionQuery(q)
-    }
-
-    inner class ExcursionEndQuery(q: Query) : TypedQuery<ExcursionEndFields, ExcursionEnd>(system, q, ExcursionEndFields(), { materializeExcursionEnd(it) }) {
-        override fun with(q: Query) = ExcursionEndQuery(q)
-    }
-
-    inner class SensorAlertQuery(q: Query) : TypedQuery<SensorAlertFields, SensorAlert>(system, q, SensorAlertFields(), { materializeSensorAlert(it) }) {
-        override fun with(q: Query) = SensorAlertQuery(q)
-    }
-
-    inner class FieldSiteQuery(q: Query) : TypedQuery<FieldSiteFields, FieldSite>(system, q, FieldSiteFields(), { materializeFieldSite(it) }) {
-        override fun with(q: Query) = FieldSiteQuery(q)
-    }
-
-    inner class PermitQuery(q: Query) : TypedQuery<PermitFields, Permit>(system, q, PermitFields(), { materializePermit(it) }) {
-        override fun with(q: Query) = PermitQuery(q)
-    }
-
-    inner class WeatherObservationQuery(q: Query) : TypedQuery<WeatherObservationFields, WeatherObservation>(system, q, WeatherObservationFields(), { materializeWeatherObservation(it) }) {
-        override fun with(q: Query) = WeatherObservationQuery(q)
-    }
-
-    inner class FieldProtocolQuery(q: Query) : TypedQuery<FieldProtocolFields, FieldProtocol>(system, q, FieldProtocolFields(), { materializeFieldProtocol(it) }) {
-        override fun with(q: Query) = FieldProtocolQuery(q)
-    }
-
-    inner class FieldTrialQuery(q: Query) : TypedQuery<FieldTrialFields, FieldTrial>(system, q, FieldTrialFields(), { materializeFieldTrial(it) }) {
-        override fun with(q: Query) = FieldTrialQuery(q)
-    }
-
-    inner class FieldRefusalQuery(q: Query) : TypedQuery<FieldRefusalFields, FieldRefusal>(system, q, FieldRefusalFields(), { materializeFieldRefusal(it) }) {
-        override fun with(q: Query) = FieldRefusalQuery(q)
-    }
-
-    inner class PlantingQuery(q: Query) : TypedQuery<PlantingFields, Planting>(system, q, PlantingFields(), { materializePlanting(it) }) {
-        override fun with(q: Query) = PlantingQuery(q)
-    }
-
-    inner class FieldPlotQuery(q: Query) : TypedQuery<FieldPlotFields, FieldPlot>(system, q, FieldPlotFields(), { materializeFieldPlot(it) }) {
-        override fun with(q: Query) = FieldPlotQuery(q)
-    }
-
-    inner class TreatmentApplicationQuery(q: Query) : TypedQuery<TreatmentApplicationFields, TreatmentApplication>(system, q, TreatmentApplicationFields(), { materializeTreatmentApplication(it) }) {
-        override fun with(q: Query) = TreatmentApplicationQuery(q)
-    }
-
-    inner class ReapplicationNoticeQuery(q: Query) : TypedQuery<ReapplicationNoticeFields, ReapplicationNotice>(system, q, ReapplicationNoticeFields(), { materializeReapplicationNotice(it) }) {
-        override fun with(q: Query) = ReapplicationNoticeQuery(q)
-    }
-
-    inner class ScoutingQuery(q: Query) : TypedQuery<ScoutingFields, Scouting>(system, q, ScoutingFields(), { materializeScouting(it) }) {
-        override fun with(q: Query) = ScoutingQuery(q)
-    }
-
-    inner class HarvestQuery(q: Query) : TypedQuery<HarvestFields, Harvest>(system, q, HarvestFields(), { materializeHarvest(it) }) {
-        override fun with(q: Query) = HarvestQuery(q)
-    }
-
-    inner class PhytotoxicityReportQuery(q: Query) : TypedQuery<PhytotoxicityReportFields, PhytotoxicityReport>(system, q, PhytotoxicityReportFields(), { materializePhytotoxicityReport(it) }) {
-        override fun with(q: Query) = PhytotoxicityReportQuery(q)
-    }
-
-    inner class HaltNoticeQuery(q: Query) : TypedQuery<HaltNoticeFields, HaltNotice>(system, q, HaltNoticeFields(), { materializeHaltNotice(it) }) {
-        override fun with(q: Query) = HaltNoticeQuery(q)
-    }
-
-    inner class CollectionTaskQuery(q: Query) : TypedQuery<CollectionTaskFields, CollectionTask>(system, q, CollectionTaskFields(), { materializeCollectionTask(it) }) {
-        override fun with(q: Query) = CollectionTaskQuery(q)
-    }
-
-    inner class TaskReminderQuery(q: Query) : TypedQuery<TaskReminderFields, TaskReminder>(system, q, TaskReminderFields(), { materializeTaskReminder(it) }) {
-        override fun with(q: Query) = TaskReminderQuery(q)
-    }
-
-    inner class RescheduleRefusalQuery(q: Query) : TypedQuery<RescheduleRefusalFields, RescheduleRefusal>(system, q, RescheduleRefusalFields(), { materializeRescheduleRefusal(it) }) {
-        override fun with(q: Query) = RescheduleRefusalQuery(q)
-    }
-
-    inner class TaskCancellationQuery(q: Query) : TypedQuery<TaskCancellationFields, TaskCancellation>(system, q, TaskCancellationFields(), { materializeTaskCancellation(it) }) {
-        override fun with(q: Query) = TaskCancellationQuery(q)
-    }
-
-    inner class CancelRefusalQuery(q: Query) : TypedQuery<CancelRefusalFields, CancelRefusal>(system, q, CancelRefusalFields(), { materializeCancelRefusal(it) }) {
-        override fun with(q: Query) = CancelRefusalQuery(q)
-    }
-
-    inner class CompletedAssayQuery(q: Query) : TypedQuery<CompletedAssayFields, CompletedAssay>(system, q, CompletedAssayFields(), { materializeCompletedAssay(it) }) {
-        override fun with(q: Query) = CompletedAssayQuery(q)
-    }
-
-    inner class HitExperimentQuery(q: Query) : TypedQuery<HitExperimentFields, HitExperiment>(system, q, HitExperimentFields(), { materializeHitExperiment(it) }) {
-        override fun with(q: Query) = HitExperimentQuery(q)
-    }
-
-    inner class LabValidatedQuery(q: Query) : TypedQuery<LabValidatedFields, LabValidated>(system, q, LabValidatedFields(), { materializeLabValidated(it) }) {
-        override fun with(q: Query) = LabValidatedQuery(q)
-    }
-
-    inner class TreatedTrialQuery(q: Query) : TypedQuery<TreatedTrialFields, TreatedTrial>(system, q, TreatedTrialFields(), { materializeTreatedTrial(it) }) {
-        override fun with(q: Query) = TreatedTrialQuery(q)
-    }
-
-    inner class LaidOutTrialQuery(q: Query) : TypedQuery<LaidOutTrialFields, LaidOutTrial>(system, q, LaidOutTrialFields(), { materializeLaidOutTrial(it) }) {
-        override fun with(q: Query) = LaidOutTrialQuery(q)
-    }
-
-    inner class ObservedToEndQuery(q: Query) : TypedQuery<ObservedToEndFields, ObservedToEnd>(system, q, ObservedToEndFields(), { materializeObservedToEnd(it) }) {
-        override fun with(q: Query) = ObservedToEndQuery(q)
-    }
-
-    inner class CompleteTrialQuery(q: Query) : TypedQuery<CompleteTrialFields, CompleteTrial>(system, q, CompleteTrialFields(), { materializeCompleteTrial(it) }) {
-        override fun with(q: Query) = CompleteTrialQuery(q)
-    }
-
-    inner class EffectiveTrialQuery(q: Query) : TypedQuery<EffectiveTrialFields, EffectiveTrial>(system, q, EffectiveTrialFields(), { materializeEffectiveTrial(it) }) {
-        override fun with(q: Query) = EffectiveTrialQuery(q)
-    }
-
-    inner class EvaluatedTrialQuery(q: Query) : TypedQuery<EvaluatedTrialFields, EvaluatedTrial>(system, q, EvaluatedTrialFields(), { materializeEvaluatedTrial(it) }) {
-        override fun with(q: Query) = EvaluatedTrialQuery(q)
-    }
-
-    inner class GreenhouseValidatedQuery(q: Query) : TypedQuery<GreenhouseValidatedFields, GreenhouseValidated>(system, q, GreenhouseValidatedFields(), { materializeGreenhouseValidated(it) }) {
-        override fun with(q: Query) = GreenhouseValidatedQuery(q)
-    }
-
-    inner class DeprioritizedQuery(q: Query) : TypedQuery<DeprioritizedFields, Deprioritized>(system, q, DeprioritizedFields(), { materializeDeprioritized(it) }) {
-        override fun with(q: Query) = DeprioritizedQuery(q)
-    }
-
-    inner class LockedObservationQuery(q: Query) : TypedQuery<LockedObservationFields, LockedObservation>(system, q, LockedObservationFields(), { materializeLockedObservation(it) }) {
-        override fun with(q: Query) = LockedObservationQuery(q)
-    }
-
-    inner class TreatedPlotQuery(q: Query) : TypedQuery<TreatedPlotFields, TreatedPlot>(system, q, TreatedPlotFields(), { materializeTreatedPlot(it) }) {
-        override fun with(q: Query) = TreatedPlotQuery(q)
-    }
-
-    inner class ActiveTrialQuery(q: Query) : TypedQuery<ActiveTrialFields, ActiveTrial>(system, q, ActiveTrialFields(), { materializeActiveTrial(it) }) {
-        override fun with(q: Query) = ActiveTrialQuery(q)
-    }
-
-    inner class OutOfBandQuery(q: Query) : TypedQuery<OutOfBandFields, OutOfBand>(system, q, OutOfBandFields(), { materializeOutOfBand(it) }) {
-        override fun with(q: Query) = OutOfBandQuery(q)
-    }
-
-    inner class OpenExcursionQuery(q: Query) : TypedQuery<OpenExcursionFields, OpenExcursion>(system, q, OpenExcursionFields(), { materializeOpenExcursion(it) }) {
-        override fun with(q: Query) = OpenExcursionQuery(q)
-    }
-
-    inner class ClosableExcursionQuery(q: Query) : TypedQuery<ClosableExcursionFields, ClosableExcursion>(system, q, ClosableExcursionFields(), { materializeClosableExcursion(it) }) {
-        override fun with(q: Query) = ClosableExcursionQuery(q)
-    }
-
-    inner class CompromisedTrialQuery(q: Query) : TypedQuery<CompromisedTrialFields, CompromisedTrial>(system, q, CompromisedTrialFields(), { materializeCompromisedTrial(it) }) {
-        override fun with(q: Query) = CompromisedTrialQuery(q)
-    }
-
-    inner class SilentGreenhouseQuery(q: Query) : TypedQuery<SilentGreenhouseFields, SilentGreenhouse>(system, q, SilentGreenhouseFields(), { materializeSilentGreenhouse(it) }) {
-        override fun with(q: Query) = SilentGreenhouseQuery(q)
-    }
-
-    inner class PermittedTrialQuery(q: Query) : TypedQuery<PermittedTrialFields, PermittedTrial>(system, q, PermittedTrialFields(), { materializePermittedTrial(it) }) {
-        override fun with(q: Query) = PermittedTrialQuery(q)
-    }
-
-    inner class PlantedTrialQuery(q: Query) : TypedQuery<PlantedTrialFields, PlantedTrial>(system, q, PlantedTrialFields(), { materializePlantedTrial(it) }) {
-        override fun with(q: Query) = PlantedTrialQuery(q)
-    }
-
-    inner class WashedOffApplicationQuery(q: Query) : TypedQuery<WashedOffApplicationFields, WashedOffApplication>(system, q, WashedOffApplicationFields(), { materializeWashedOffApplication(it) }) {
-        override fun with(q: Query) = WashedOffApplicationQuery(q)
-    }
-
-    inner class NeverScoutedQuery(q: Query) : TypedQuery<NeverScoutedFields, NeverScouted>(system, q, NeverScoutedFields(), { materializeNeverScouted(it) }) {
-        override fun with(q: Query) = NeverScoutedQuery(q)
-    }
-
-    inner class HarvestedTrialQuery(q: Query) : TypedQuery<HarvestedTrialFields, HarvestedTrial>(system, q, HarvestedTrialFields(), { materializeHarvestedTrial(it) }) {
-        override fun with(q: Query) = HarvestedTrialQuery(q)
-    }
-
-    inner class SuccessfulFieldTrialQuery(q: Query) : TypedQuery<SuccessfulFieldTrialFields, SuccessfulFieldTrial>(system, q, SuccessfulFieldTrialFields(), { materializeSuccessfulFieldTrial(it) }) {
-        override fun with(q: Query) = SuccessfulFieldTrialQuery(q)
-    }
-
-    inner class FieldValidatedQuery(q: Query) : TypedQuery<FieldValidatedFields, FieldValidated>(system, q, FieldValidatedFields(), { materializeFieldValidated(it) }) {
-        override fun with(q: Query) = FieldValidatedQuery(q)
-    }
-
-    inner class HaltedTrialQuery(q: Query) : TypedQuery<HaltedTrialFields, HaltedTrial>(system, q, HaltedTrialFields(), { materializeHaltedTrial(it) }) {
-        override fun with(q: Query) = HaltedTrialQuery(q)
-    }
-
-    inner class TrialQuery(q: Query) : TypedQuery<TrialFields, Trial>(system, q, TrialFields(), { materializeTrial(it) }) {
-        override fun with(q: Query) = TrialQuery(q)
-    }
-
-    inner class DoneTaskQuery(q: Query) : TypedQuery<DoneTaskFields, DoneTask>(system, q, DoneTaskFields(), { materializeDoneTask(it) }) {
-        override fun with(q: Query) = DoneTaskQuery(q)
-    }
-
-    inner class OpenTaskQuery(q: Query) : TypedQuery<OpenTaskFields, OpenTask>(system, q, OpenTaskFields(), { materializeOpenTask(it) }) {
-        override fun with(q: Query) = OpenTaskQuery(q)
-    }
-
-    inner class OverdueTaskQuery(q: Query) : TypedQuery<OverdueTaskFields, OverdueTask>(system, q, OverdueTaskFields(), { materializeOverdueTask(it) }) {
-        override fun with(q: Query) = OverdueTaskQuery(q)
+        fun overdueTask(ref: Ref<CollectionTask>): OverdueTask? = member("OverdueTask", ref) { materializeOverdueTask(it) }
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -3221,15 +2648,93 @@ rule RefuseCancel when RefusedCancel {
     }
 }
 
+// ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias CropQuery = TypedQuery<CropFields, Crop>
+typealias PathogenQuery = TypedQuery<PathogenFields, Pathogen>
+typealias PeptideQuery = TypedQuery<PeptideFields, Peptide>
+typealias AssayProtocolQuery = TypedQuery<AssayProtocolFields, AssayProtocol>
+typealias LabExperimentQuery = TypedQuery<LabExperimentFields, LabExperiment>
+typealias AssayQuery = TypedQuery<AssayFields, Assay>
+typealias AssayReadingQuery = TypedQuery<AssayReadingFields, AssayReading>
+typealias LabHitQuery = TypedQuery<LabHitFields, LabHit>
+typealias LabHitRetractionQuery = TypedQuery<LabHitRetractionFields, LabHitRetraction>
+typealias GreenhouseQuery = TypedQuery<GreenhouseFields, Greenhouse>
+typealias ClimateReadingQuery = TypedQuery<ClimateReadingFields, ClimateReading>
+typealias GreenhouseProtocolQuery = TypedQuery<GreenhouseProtocolFields, GreenhouseProtocol>
+typealias GreenhouseTrialQuery = TypedQuery<GreenhouseTrialFields, GreenhouseTrial>
+typealias GreenhouseRefusalQuery = TypedQuery<GreenhouseRefusalFields, GreenhouseRefusal>
+typealias GreenhousePlotQuery = TypedQuery<GreenhousePlotFields, GreenhousePlot>
+typealias TreatmentQuery = TypedQuery<TreatmentFields, Treatment>
+typealias PlotObservationQuery = TypedQuery<PlotObservationFields, PlotObservation>
+typealias GreenhouseResultQuery = TypedQuery<GreenhouseResultFields, GreenhouseResult>
+typealias ObservationCorrectionQuery = TypedQuery<ObservationCorrectionFields, ObservationCorrection>
+typealias CorrectionRefusalQuery = TypedQuery<CorrectionRefusalFields, CorrectionRefusal>
+typealias VoidRecordQuery = TypedQuery<VoidRecordFields, VoidRecord>
+typealias VoidRefusalQuery = TypedQuery<VoidRefusalFields, VoidRefusal>
+typealias MoveRefusalQuery = TypedQuery<MoveRefusalFields, MoveRefusal>
+typealias ClimateExcursionQuery = TypedQuery<ClimateExcursionFields, ClimateExcursion>
+typealias ExcursionEndQuery = TypedQuery<ExcursionEndFields, ExcursionEnd>
+typealias SensorAlertQuery = TypedQuery<SensorAlertFields, SensorAlert>
+typealias FieldSiteQuery = TypedQuery<FieldSiteFields, FieldSite>
+typealias PermitQuery = TypedQuery<PermitFields, Permit>
+typealias WeatherObservationQuery = TypedQuery<WeatherObservationFields, WeatherObservation>
+typealias FieldProtocolQuery = TypedQuery<FieldProtocolFields, FieldProtocol>
+typealias FieldTrialQuery = TypedQuery<FieldTrialFields, FieldTrial>
+typealias FieldRefusalQuery = TypedQuery<FieldRefusalFields, FieldRefusal>
+typealias PlantingQuery = TypedQuery<PlantingFields, Planting>
+typealias FieldPlotQuery = TypedQuery<FieldPlotFields, FieldPlot>
+typealias TreatmentApplicationQuery = TypedQuery<TreatmentApplicationFields, TreatmentApplication>
+typealias ReapplicationNoticeQuery = TypedQuery<ReapplicationNoticeFields, ReapplicationNotice>
+typealias ScoutingQuery = TypedQuery<ScoutingFields, Scouting>
+typealias HarvestQuery = TypedQuery<HarvestFields, Harvest>
+typealias PhytotoxicityReportQuery = TypedQuery<PhytotoxicityReportFields, PhytotoxicityReport>
+typealias HaltNoticeQuery = TypedQuery<HaltNoticeFields, HaltNotice>
+typealias CollectionTaskQuery = TypedQuery<CollectionTaskFields, CollectionTask>
+typealias TaskReminderQuery = TypedQuery<TaskReminderFields, TaskReminder>
+typealias RescheduleRefusalQuery = TypedQuery<RescheduleRefusalFields, RescheduleRefusal>
+typealias TaskCancellationQuery = TypedQuery<TaskCancellationFields, TaskCancellation>
+typealias CancelRefusalQuery = TypedQuery<CancelRefusalFields, CancelRefusal>
+typealias CompletedAssayQuery = TypedQuery<CompletedAssayFields, CompletedAssay>
+typealias HitExperimentQuery = TypedQuery<HitExperimentFields, HitExperiment>
+typealias LabValidatedQuery = TypedQuery<LabValidatedFields, LabValidated>
+typealias TreatedTrialQuery = TypedQuery<TreatedTrialFields, TreatedTrial>
+typealias LaidOutTrialQuery = TypedQuery<LaidOutTrialFields, LaidOutTrial>
+typealias ObservedToEndQuery = TypedQuery<ObservedToEndFields, ObservedToEnd>
+typealias CompleteTrialQuery = TypedQuery<CompleteTrialFields, CompleteTrial>
+typealias EffectiveTrialQuery = TypedQuery<EffectiveTrialFields, EffectiveTrial>
+typealias EvaluatedTrialQuery = TypedQuery<EvaluatedTrialFields, EvaluatedTrial>
+typealias GreenhouseValidatedQuery = TypedQuery<GreenhouseValidatedFields, GreenhouseValidated>
+typealias DeprioritizedQuery = TypedQuery<DeprioritizedFields, Deprioritized>
+typealias LockedObservationQuery = TypedQuery<LockedObservationFields, LockedObservation>
+typealias TreatedPlotQuery = TypedQuery<TreatedPlotFields, TreatedPlot>
+typealias ActiveTrialQuery = TypedQuery<ActiveTrialFields, ActiveTrial>
+typealias OutOfBandQuery = TypedQuery<OutOfBandFields, OutOfBand>
+typealias OpenExcursionQuery = TypedQuery<OpenExcursionFields, OpenExcursion>
+typealias ClosableExcursionQuery = TypedQuery<ClosableExcursionFields, ClosableExcursion>
+typealias CompromisedTrialQuery = TypedQuery<CompromisedTrialFields, CompromisedTrial>
+typealias SilentGreenhouseQuery = TypedQuery<SilentGreenhouseFields, SilentGreenhouse>
+typealias PermittedTrialQuery = TypedQuery<PermittedTrialFields, PermittedTrial>
+typealias PlantedTrialQuery = TypedQuery<PlantedTrialFields, PlantedTrial>
+typealias WashedOffApplicationQuery = TypedQuery<WashedOffApplicationFields, WashedOffApplication>
+typealias NeverScoutedQuery = TypedQuery<NeverScoutedFields, NeverScouted>
+typealias HarvestedTrialQuery = TypedQuery<HarvestedTrialFields, HarvestedTrial>
+typealias SuccessfulFieldTrialQuery = TypedQuery<SuccessfulFieldTrialFields, SuccessfulFieldTrial>
+typealias FieldValidatedQuery = TypedQuery<FieldValidatedFields, FieldValidated>
+typealias HaltedTrialQuery = TypedQuery<HaltedTrialFields, HaltedTrial>
+typealias TrialQuery = TypedQuery<TrialFields, Trial>
+typealias DoneTaskQuery = TypedQuery<DoneTaskFields, DoneTask>
+typealias OpenTaskQuery = TypedQuery<OpenTaskFields, OpenTask>
+typealias OverdueTaskQuery = TypedQuery<OverdueTaskFields, OverdueTask>
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewCrop(
     val name: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Crop") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3237,12 +2742,12 @@ data class NewCrop(
 data class NewPathogen(
     val name: String,
     val host: Ref<Crop>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("host", system.idOf(host))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Pathogen") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3250,12 +2755,12 @@ data class NewPathogen(
 data class NewPeptide(
     val code: String,
     val sequence: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("code", code)
         put("sequence", sequence)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Peptide") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3265,14 +2770,14 @@ data class NewAssayProtocol(
     val durationHours: Int,
     val replicates: Int,
     val hitThreshold: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("durationHours", durationHours)
         put("replicates", replicates)
         put("hitThreshold", hitThreshold)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "AssayProtocol") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3281,13 +2786,13 @@ data class NewLabExperiment(
     val peptide: Ref<Peptide>,
     val pathogen: Ref<Pathogen>,
     val protocol: Ref<AssayProtocol>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("peptide", system.idOf(peptide))
         put("pathogen", system.idOf(pathogen))
         put("protocol", system.idOf(protocol))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "LabExperiment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3295,12 +2800,12 @@ data class NewLabExperiment(
 data class NewAssay(
     val experiment: Ref<LabExperiment>,
     val replicate: Int,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("experiment", system.idOf(experiment))
         put("replicate", replicate)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Assay") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3309,13 +2814,13 @@ data class NewAssayReading(
     val assay: Ref<Assay>,
     val hoursElapsed: Int,
     val inhibitionPercent: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("assay", system.idOf(assay))
         put("hoursElapsed", hoursElapsed)
         put("inhibitionPercent", inhibitionPercent)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "AssayReading") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3324,13 +2829,13 @@ data class NewGreenhouse(
     val name: String,
     val minTemperature: BigDecimal,
     val maxTemperature: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("minTemperature", minTemperature)
         put("maxTemperature", maxTemperature)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Greenhouse") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3340,14 +2845,14 @@ data class NewClimateReading(
     val recordedAt: Instant,
     val temperature: BigDecimal,
     val humidity: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("greenhouse", system.idOf(greenhouse))
         put("recordedAt", recordedAt)
         put("temperature", temperature)
         put("humidity", humidity)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ClimateReading") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3357,14 +2862,14 @@ data class NewGreenhouseProtocol(
     val plotsPerArm: Int,
     val finalDay: Int,
     val efficacyThreshold: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("plotsPerArm", plotsPerArm)
         put("finalDay", finalDay)
         put("efficacyThreshold", efficacyThreshold)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "GreenhouseProtocol") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3375,15 +2880,15 @@ data class NewRequestGreenhouseTrial(
     val pathogen: Ref<Pathogen>,
     val greenhouse: Ref<Greenhouse>,
     val protocol: Ref<GreenhouseProtocol>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("requestKey", requestKey)
         put("peptide", system.idOf(peptide))
         put("pathogen", system.idOf(pathogen))
         put("greenhouse", system.idOf(greenhouse))
         put("protocol", system.idOf(protocol))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "RequestGreenhouseTrial") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3392,13 +2897,13 @@ data class NewGreenhousePlot(
     val trial: Ref<GreenhouseTrial>,
     val bench: String,
     val treatment: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("trial", system.idOf(trial))
         put("bench", bench)
         put("treatment", treatment)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "GreenhousePlot") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3406,12 +2911,12 @@ data class NewGreenhousePlot(
 data class NewTreatment(
     val trial: Ref<GreenhouseTrial>,
     val treatedAt: Instant,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("trial", system.idOf(trial))
         put("treatedAt", treatedAt)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Treatment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3421,14 +2926,14 @@ data class NewPlotObservation(
     val dayAfterTreatment: Int,
     val recordedSeverity: BigDecimal,
     val observedOn: LocalDate,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("plot", system.idOf(plot))
         put("dayAfterTreatment", dayAfterTreatment)
         put("recordedSeverity", recordedSeverity)
         put("observedOn", observedOn)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "PlotObservation") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3437,13 +2942,13 @@ data class NewCorrectObservation(
     val observation: Ref<PlotObservation>,
     val correctedSeverity: BigDecimal,
     val reason: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("observation", system.idOf(observation))
         put("correctedSeverity", correctedSeverity)
         put("reason", reason)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CorrectObservation") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3451,12 +2956,12 @@ data class NewCorrectObservation(
 data class NewVoidObservation(
     val observation: Ref<PlotObservation>,
     val reason: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("observation", system.idOf(observation))
         put("reason", reason)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "VoidObservation") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3464,12 +2969,12 @@ data class NewVoidObservation(
 data class NewMovePlot(
     val plot: Ref<GreenhousePlot>,
     val bench: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("plot", system.idOf(plot))
         put("bench", bench)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "MovePlot") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3477,12 +2982,12 @@ data class NewMovePlot(
 data class NewFieldSite(
     val name: String,
     val region: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("region", region)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "FieldSite") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3492,14 +2997,14 @@ data class NewPermit(
     val crop: Ref<Crop>,
     val issuedOn: LocalDate,
     val expiresOn: LocalDate,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("site", system.idOf(site))
         put("crop", system.idOf(crop))
         put("issuedOn", issuedOn)
         put("expiresOn", expiresOn)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Permit") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3509,14 +3014,14 @@ data class NewWeatherObservation(
     val observedOn: LocalDate,
     val rainfallMm: BigDecimal,
     val maxTemperature: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("site", system.idOf(site))
         put("observedOn", observedOn)
         put("rainfallMm", rainfallMm)
         put("maxTemperature", maxTemperature)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "WeatherObservation") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3524,12 +3029,12 @@ data class NewWeatherObservation(
 data class NewFieldProtocol(
     val name: String,
     val yieldGainThreshold: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("yieldGainThreshold", yieldGainThreshold)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "FieldProtocol") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3541,8 +3046,8 @@ data class NewRequestFieldTrial(
     val crop: Ref<Crop>,
     val site: Ref<FieldSite>,
     val protocol: Ref<FieldProtocol>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("requestKey", requestKey)
         put("peptide", system.idOf(peptide))
         put("pathogen", system.idOf(pathogen))
@@ -3550,7 +3055,7 @@ data class NewRequestFieldTrial(
         put("site", system.idOf(site))
         put("protocol", system.idOf(protocol))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "RequestFieldTrial") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3559,13 +3064,13 @@ data class NewPlantTrial(
     val trial: Ref<FieldTrial>,
     val plantedOn: LocalDate,
     val seedLot: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("trial", system.idOf(trial))
         put("plantedOn", plantedOn)
         put("seedLot", seedLot)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "PlantTrial") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3574,13 +3079,13 @@ data class NewFieldPlot(
     val trial: Ref<FieldTrial>,
     val block: Int,
     val treatment: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("trial", system.idOf(trial))
         put("block", block)
         put("treatment", treatment)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "FieldPlot") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3589,13 +3094,13 @@ data class NewApplyTreatment(
     val trial: Ref<FieldTrial>,
     val appliedOn: LocalDate,
     val rateGramsPerHa: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("trial", system.idOf(trial))
         put("appliedOn", appliedOn)
         put("rateGramsPerHa", rateGramsPerHa)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ApplyTreatment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3606,15 +3111,15 @@ data class NewScouting(
     val scoutedOn: LocalDate,
     val incidencePercent: BigDecimal,
     val severity: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("plot", system.idOf(plot))
         put("daysAfterPlanting", daysAfterPlanting)
         put("scoutedOn", scoutedOn)
         put("incidencePercent", incidencePercent)
         put("severity", severity)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Scouting") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3623,13 +3128,13 @@ data class NewHarvest(
     val plot: Ref<FieldPlot>,
     val harvestedOn: LocalDate,
     val yieldKgPerHa: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("plot", system.idOf(plot))
         put("harvestedOn", harvestedOn)
         put("yieldKgPerHa", yieldKgPerHa)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Harvest") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3638,13 +3143,13 @@ data class NewPhytotoxicityReport(
     val plot: Ref<FieldPlot>,
     val observedOn: LocalDate,
     val severity: Int,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("plot", system.idOf(plot))
         put("observedOn", observedOn)
         put("severity", severity)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "PhytotoxicityReport") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3653,13 +3158,13 @@ data class NewCollectionTask(
     val trial: Ref<Trial>,
     val dayMark: Int,
     val dueOn: LocalDate,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("trial", system.idOf(trial))
         put("dayMark", dayMark)
         put("dueOn", dueOn)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CollectionTask") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3667,12 +3172,12 @@ data class NewCollectionTask(
 data class NewRescheduleTask(
     val task: Ref<CollectionTask>,
     val dueOn: LocalDate,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("task", system.idOf(task))
         put("dueOn", dueOn)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "RescheduleTask") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -3680,12 +3185,12 @@ data class NewRescheduleTask(
 data class NewCancelTask(
     val task: Ref<CollectionTask>,
     val reason: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("task", system.idOf(task))
         put("reason", reason)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CancelTask") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }

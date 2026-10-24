@@ -342,13 +342,13 @@ class ClosureTest {
         assertTrue("data class NewCustomization(" in src, src)
         assertTrue("val customizations: List<NewCustomization> = emptyList()" in src, src)
         // the projection: no back-reference, no id, on the input types
-        val newLine = src.substringAfter("data class NewOrderLine(").substringBefore(") {")
+        val newLine = src.substringAfter("data class NewOrderLine(").substringBefore(") : ")
         assertTrue("order" !in newLine, newLine)
         assertTrue("val product: Ref<Product>" in newLine, newLine)
         // the act's input value takes the closure edge, absent by default, and
         // the commit overload takes the input value
         assertTrue("orderLines: List<NewOrderLine> = emptyList()" in src, src)
-        assertTrue("fun commit(input: NewOrder): Commit<NewOrder, Ref<Order>> {" in src, src)
+        assertTrue("fun commit(input: NewOrder): Commit<NewOrder, Ref<Order>> =" in src, src)
     }
 
     // ── a reference supplied by value: a `one` field named in `with` (Reference §6; OQ63 §6.1) ──
@@ -514,7 +514,7 @@ class ClosureTest {
         assertTrue("data class Existing(val ref: Ref<Origin>) : OriginReference" in src, src)
         assertTrue("data class New(val value: NewOrigin) : OriginReference" in src, src)
         assertTrue("sealed interface NewOrigin {" in src, src)
-        assertTrue("data class NewFermentation(" in src && ") : NewOrigin {" in src, src)
+        assertTrue("data class NewFermentation(" in src && ") : NewOrigin, NewValue {" in src, src)
         assertTrue("val origin: OriginReference," in src, src)
         assertTrue("val components: List<NewComponent> = emptyList()" in src, src)
         assertTrue("(origin as? OriginReference.Existing)?.let { put(\"origin\", system.idOf(it.ref)) }" in src, src)
@@ -628,13 +628,13 @@ class ClosureTest {
         val src = Codegen.generate(PLATE, "Plate")
         assertTrue("sealed interface ConditionReference {" in src, src)
         assertTrue("data class New(val value: NewCondition) : ConditionReference" in src, src)
-        val newWell = src.substringAfter("data class NewWell(").substringBefore(") {")
+        val newWell = src.substringAfter("data class NewWell(").substringBefore(") : ")
         assertTrue("val condition: ConditionReference," in newWell, newWell)
         assertTrue("(condition as? ConditionReference.New)?.let { put(\"condition\", NewRef(reg.tokenOf(it.value))) }" in src, src)
         assertTrue("conditions.forEach { reg.add(it); it.register(reg) }" in src, src)
-        assertTrue("reg.problem()?.let { return Commit.Refused(input, it) }" in src, src)
+        assertTrue(Regex("""boundary\("\w+", input\)\.carrying\(input\)""").containsMatchIn(src), src)
         // a field no closure shape satisfies keeps the plain handle
-        val newDesign = src.substringAfter("data class NewExperimentDesign(").substringBefore(") {")
+        val newDesign = src.substringAfter("data class NewExperimentDesign(").substringBefore(") : ")
         assertTrue("val containerType: Ref<ContainerType>," in newDesign, newDesign)
     }
 
@@ -675,7 +675,7 @@ class ClosureTest {
     @Test
     fun `codegen types a many sibling field as a list of references`() {
         val src = Codegen.generate(PLATE_MANY, "Plate")
-        val newWell = src.substringAfter("data class NewWell(").substringBefore(") {")
+        val newWell = src.substringAfter("data class NewWell(").substringBefore(") : ")
         assertTrue("val conditions: List<ConditionReference>," in newWell, newWell)
         assertTrue("put(\"conditions\", conditions.map { when (it) { is ConditionReference.Existing -> system.idOf(it.ref); is ConditionReference.New -> NewRef(reg.tokenOf(it.value)) } })" in src, src)
     }

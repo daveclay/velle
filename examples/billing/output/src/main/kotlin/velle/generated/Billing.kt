@@ -7,15 +7,7 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
-
-    val system: VelleSystem = VelleSystem(Model(Parser.parse(SPEC)), startTime)
-
-    // ── clock (harness-controlled; ticks are separate calls) ──
-    val now: Instant get() = system.now
-    fun advanceSeconds(seconds: Long) = system.advance(seconds)
-    fun advanceDays(days: Long) = system.advanceDays(days)
-    fun setTime(t: Instant) = system.setTime(t)
+class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
 
     // ── ticks: scheduled events and user acts are both external input ──
     fun tickHourly() = system.tick("Hourly")
@@ -24,330 +16,171 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSignUp): Commit<NewSignUp, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("SignUp", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewSignUp): Commit<NewSignUp, Nothing?> =
+        boundary("SignUp", input).carryingNoRecord(input)
 
     /** Queue key: [correctEmail.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCorrectEmail): Commit<NewCorrectEmail, Ref<CorrectEmail>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CorrectEmail", raw).carrying(input)
-    }
+    fun commit(input: NewCorrectEmail): Commit<NewCorrectEmail, Ref<CorrectEmail>> =
+        boundary("CorrectEmail", input).carrying(input)
 
     /** Queue key: [billCustomer.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewBillCustomer): Commit<NewBillCustomer, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("BillCustomer", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewBillCustomer): Commit<NewBillCustomer, Nothing?> =
+        boundary("BillCustomer", input).carryingNoRecord(input)
 
     /** Queue key: [lineItem.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewLineItem): Commit<NewLineItem, Ref<LineItem>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("LineItem", raw).carrying(input)
-    }
+    fun commit(input: NewLineItem): Commit<NewLineItem, Ref<LineItem>> =
+        boundary("LineItem", input).carrying(input)
 
     /** Queue keys: [submitPayment.invoice], [submitPayment.invoice.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSubmitPayment): Commit<NewSubmitPayment, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("SubmitPayment", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewSubmitPayment): Commit<NewSubmitPayment, Nothing?> =
+        boundary("SubmitPayment", input).carryingNoRecord(input)
 
     /** Queue key: [issuance.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewIssuance): Commit<NewIssuance, Ref<Issuance>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Issuance", raw).carrying(input)
-    }
+    fun commit(input: NewIssuance): Commit<NewIssuance, Ref<Issuance>> =
+        boundary("Issuance", input).carrying(input)
 
     /** Queue keys: [changeDueDate.invoice], [changeDueDate.invoice.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewChangeDueDate): Commit<NewChangeDueDate, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ChangeDueDate", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewChangeDueDate): Commit<NewChangeDueDate, Nothing?> =
+        boundary("ChangeDueDate", input).carryingNoRecord(input)
 
     /** Queue key: [archiveRequest.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewArchiveRequest): Commit<NewArchiveRequest, Ref<ArchiveRequest>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ArchiveRequest", raw).carrying(input)
-    }
+    fun commit(input: NewArchiveRequest): Commit<NewArchiveRequest, Ref<ArchiveRequest>> =
+        boundary("ArchiveRequest", input).carrying(input)
 
     /** Queue key: [unarchiveRequest.invoice].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewUnarchiveRequest): Commit<NewUnarchiveRequest, Ref<UnarchiveRequest>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("UnarchiveRequest", raw).carrying(input)
-    }
+    fun commit(input: NewUnarchiveRequest): Commit<NewUnarchiveRequest, Ref<UnarchiveRequest>> =
+        boundary("UnarchiveRequest", input).carrying(input)
 
-    fun customers(): List<Customer> = system.scope { system.instancesOf("Customer").map { materializeCustomer(it) } }
-    fun correctEmails(): List<CorrectEmail> = system.scope { system.instancesOf("CorrectEmail").map { materializeCorrectEmail(it) } }
-    fun invoices(): List<Invoice> = system.scope { system.instancesOf("Invoice").map { materializeInvoice(it) } }
-    fun lineItems(): List<LineItem> = system.scope { system.instancesOf("LineItem").map { materializeLineItem(it) } }
-    fun payments(): List<Payment> = system.scope { system.instancesOf("Payment").map { materializePayment(it) } }
-    fun receipts(): List<Receipt> = system.scope { system.instancesOf("Receipt").map { materializeReceipt(it) } }
-    fun receiptEmails(): List<ReceiptEmail> = system.scope { system.instancesOf("ReceiptEmail").map { materializeReceiptEmail(it) } }
-    fun reminders(): List<Reminder> = system.scope { system.instancesOf("Reminder").map { materializeReminder(it) } }
-    fun issuances(): List<Issuance> = system.scope { system.instancesOf("Issuance").map { materializeIssuance(it) } }
-    fun dueChangeRefusals(): List<DueChangeRefusal> = system.scope { system.instancesOf("DueChangeRefusal").map { materializeDueChangeRefusal(it) } }
-    fun archiveRequests(): List<ArchiveRequest> = system.scope { system.instancesOf("ArchiveRequest").map { materializeArchiveRequest(it) } }
-    fun unarchiveRequests(): List<UnarchiveRequest> = system.scope { system.instancesOf("UnarchiveRequest").map { materializeUnarchiveRequest(it) } }
-    fun unarchiveNotices(): List<UnarchiveNotice> = system.scope { system.instancesOf("UnarchiveNotice").map { materializeUnarchiveNotice(it) } }
-    fun paidInvoices(): List<PaidInvoice> = system.scope { system.instancesOf("PaidInvoice").map { materializePaidInvoice(it) } }
-    fun unemailedReceipts(): List<UnemailedReceipt> = system.scope { system.instancesOf("UnemailedReceipt").map { materializeUnemailedReceipt(it) } }
-    fun overdueInvoices(): List<OverdueInvoice> = system.scope { system.instancesOf("OverdueInvoice").map { materializeOverdueInvoice(it) } }
-    fun actionableOverdues(): List<ActionableOverdue> = system.scope { system.instancesOf("ActionableOverdue").map { materializeActionableOverdue(it) } }
-    fun issuedInvoices(): List<IssuedInvoice> = system.scope { system.instancesOf("IssuedInvoice").map { materializeIssuedInvoice(it) } }
-    fun archivedInvoices(): List<ArchivedInvoice> = system.scope { system.instancesOf("ArchivedInvoice").map { materializeArchivedInvoice(it) } }
+    fun customers(): List<Customer> = all("Customer") { materializeCustomer(it) }
+    fun correctEmails(): List<CorrectEmail> = all("CorrectEmail") { materializeCorrectEmail(it) }
+    fun invoices(): List<Invoice> = all("Invoice") { materializeInvoice(it) }
+    fun lineItems(): List<LineItem> = all("LineItem") { materializeLineItem(it) }
+    fun payments(): List<Payment> = all("Payment") { materializePayment(it) }
+    fun receipts(): List<Receipt> = all("Receipt") { materializeReceipt(it) }
+    fun receiptEmails(): List<ReceiptEmail> = all("ReceiptEmail") { materializeReceiptEmail(it) }
+    fun reminders(): List<Reminder> = all("Reminder") { materializeReminder(it) }
+    fun issuances(): List<Issuance> = all("Issuance") { materializeIssuance(it) }
+    fun dueChangeRefusals(): List<DueChangeRefusal> = all("DueChangeRefusal") { materializeDueChangeRefusal(it) }
+    fun archiveRequests(): List<ArchiveRequest> = all("ArchiveRequest") { materializeArchiveRequest(it) }
+    fun unarchiveRequests(): List<UnarchiveRequest> = all("UnarchiveRequest") { materializeUnarchiveRequest(it) }
+    fun unarchiveNotices(): List<UnarchiveNotice> = all("UnarchiveNotice") { materializeUnarchiveNotice(it) }
+    fun paidInvoices(): List<PaidInvoice> = all("PaidInvoice") { materializePaidInvoice(it) }
+    fun unemailedReceipts(): List<UnemailedReceipt> = all("UnemailedReceipt") { materializeUnemailedReceipt(it) }
+    fun overdueInvoices(): List<OverdueInvoice> = all("OverdueInvoice") { materializeOverdueInvoice(it) }
+    fun actionableOverdues(): List<ActionableOverdue> = all("ActionableOverdue") { materializeActionableOverdue(it) }
+    fun issuedInvoices(): List<IssuedInvoice> = all("IssuedInvoice") { materializeIssuedInvoice(it) }
+    fun archivedInvoices(): List<ArchivedInvoice> = all("ArchivedInvoice") { materializeArchivedInvoice(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
-    inner class Read {
-        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
-        val registry = QueryRegistry()
-        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+    inner class Read : ReadSurface<Read>(system) {
+        override fun modelOf(id: Long): Ref<*> = materialize(id)
 
-        /** The model object behind a reference, read now; throws when the record no longer exists. */
-        @Suppress("UNCHECKED_CAST")
-        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
-        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
-        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
-        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
-        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
-            val id = system.idOf(ref)
-            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            materialize(id)
-        }
-
-        val customers: CustomerQuery get() = CustomerQuery(Query("Customer"))
+        val customers: CustomerQuery get() = query("Customer", CustomerFields()) { materializeCustomer(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun customer(key: StoreKey): Customer = invoke<Customer>(Ref.Persisted("Customer", key))
+        fun customer(key: StoreKey): Customer = byKey("Customer", key)
         fun customer(key: Long): Customer = customer(StoreKey(key))
 
-        val correctEmails: CorrectEmailQuery get() = CorrectEmailQuery(Query("CorrectEmail"))
+        val correctEmails: CorrectEmailQuery get() = query("CorrectEmail", CorrectEmailFields()) { materializeCorrectEmail(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun correctEmail(key: StoreKey): CorrectEmail = invoke<CorrectEmail>(Ref.Persisted("CorrectEmail", key))
+        fun correctEmail(key: StoreKey): CorrectEmail = byKey("CorrectEmail", key)
         fun correctEmail(key: Long): CorrectEmail = correctEmail(StoreKey(key))
 
-        val invoices: InvoiceQuery get() = InvoiceQuery(Query("Invoice"))
+        val invoices: InvoiceQuery get() = query("Invoice", InvoiceFields()) { materializeInvoice(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun invoice(key: StoreKey): Invoice = invoke<Invoice>(Ref.Persisted("Invoice", key))
+        fun invoice(key: StoreKey): Invoice = byKey("Invoice", key)
         fun invoice(key: Long): Invoice = invoice(StoreKey(key))
 
-        val lineItems: LineItemQuery get() = LineItemQuery(Query("LineItem"))
+        val lineItems: LineItemQuery get() = query("LineItem", LineItemFields()) { materializeLineItem(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun lineItem(key: StoreKey): LineItem = invoke<LineItem>(Ref.Persisted("LineItem", key))
+        fun lineItem(key: StoreKey): LineItem = byKey("LineItem", key)
         fun lineItem(key: Long): LineItem = lineItem(StoreKey(key))
 
-        val payments: PaymentQuery get() = PaymentQuery(Query("Payment"))
+        val payments: PaymentQuery get() = query("Payment", PaymentFields()) { materializePayment(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun payment(key: StoreKey): Payment = invoke<Payment>(Ref.Persisted("Payment", key))
+        fun payment(key: StoreKey): Payment = byKey("Payment", key)
         fun payment(key: Long): Payment = payment(StoreKey(key))
 
-        val receipts: ReceiptQuery get() = ReceiptQuery(Query("Receipt"))
+        val receipts: ReceiptQuery get() = query("Receipt", ReceiptFields()) { materializeReceipt(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun receipt(key: StoreKey): Receipt = invoke<Receipt>(Ref.Persisted("Receipt", key))
+        fun receipt(key: StoreKey): Receipt = byKey("Receipt", key)
         fun receipt(key: Long): Receipt = receipt(StoreKey(key))
 
-        val receiptEmails: ReceiptEmailQuery get() = ReceiptEmailQuery(Query("ReceiptEmail"))
+        val receiptEmails: ReceiptEmailQuery get() = query("ReceiptEmail", ReceiptEmailFields()) { materializeReceiptEmail(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun receiptEmail(key: StoreKey): ReceiptEmail = invoke<ReceiptEmail>(Ref.Persisted("ReceiptEmail", key))
+        fun receiptEmail(key: StoreKey): ReceiptEmail = byKey("ReceiptEmail", key)
         fun receiptEmail(key: Long): ReceiptEmail = receiptEmail(StoreKey(key))
 
-        val reminders: ReminderQuery get() = ReminderQuery(Query("Reminder"))
+        val reminders: ReminderQuery get() = query("Reminder", ReminderFields()) { materializeReminder(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun reminder(key: StoreKey): Reminder = invoke<Reminder>(Ref.Persisted("Reminder", key))
+        fun reminder(key: StoreKey): Reminder = byKey("Reminder", key)
         fun reminder(key: Long): Reminder = reminder(StoreKey(key))
 
-        val issuances: IssuanceQuery get() = IssuanceQuery(Query("Issuance"))
+        val issuances: IssuanceQuery get() = query("Issuance", IssuanceFields()) { materializeIssuance(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun issuance(key: StoreKey): Issuance = invoke<Issuance>(Ref.Persisted("Issuance", key))
+        fun issuance(key: StoreKey): Issuance = byKey("Issuance", key)
         fun issuance(key: Long): Issuance = issuance(StoreKey(key))
 
-        val dueChangeRefusals: DueChangeRefusalQuery get() = DueChangeRefusalQuery(Query("DueChangeRefusal"))
+        val dueChangeRefusals: DueChangeRefusalQuery get() = query("DueChangeRefusal", DueChangeRefusalFields()) { materializeDueChangeRefusal(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun dueChangeRefusal(key: StoreKey): DueChangeRefusal = invoke<DueChangeRefusal>(Ref.Persisted("DueChangeRefusal", key))
+        fun dueChangeRefusal(key: StoreKey): DueChangeRefusal = byKey("DueChangeRefusal", key)
         fun dueChangeRefusal(key: Long): DueChangeRefusal = dueChangeRefusal(StoreKey(key))
 
-        val archiveRequests: ArchiveRequestQuery get() = ArchiveRequestQuery(Query("ArchiveRequest"))
+        val archiveRequests: ArchiveRequestQuery get() = query("ArchiveRequest", ArchiveRequestFields()) { materializeArchiveRequest(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun archiveRequest(key: StoreKey): ArchiveRequest = invoke<ArchiveRequest>(Ref.Persisted("ArchiveRequest", key))
+        fun archiveRequest(key: StoreKey): ArchiveRequest = byKey("ArchiveRequest", key)
         fun archiveRequest(key: Long): ArchiveRequest = archiveRequest(StoreKey(key))
 
-        val unarchiveRequests: UnarchiveRequestQuery get() = UnarchiveRequestQuery(Query("UnarchiveRequest"))
+        val unarchiveRequests: UnarchiveRequestQuery get() = query("UnarchiveRequest", UnarchiveRequestFields()) { materializeUnarchiveRequest(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun unarchiveRequest(key: StoreKey): UnarchiveRequest = invoke<UnarchiveRequest>(Ref.Persisted("UnarchiveRequest", key))
+        fun unarchiveRequest(key: StoreKey): UnarchiveRequest = byKey("UnarchiveRequest", key)
         fun unarchiveRequest(key: Long): UnarchiveRequest = unarchiveRequest(StoreKey(key))
 
-        val unarchiveNotices: UnarchiveNoticeQuery get() = UnarchiveNoticeQuery(Query("UnarchiveNotice"))
+        val unarchiveNotices: UnarchiveNoticeQuery get() = query("UnarchiveNotice", UnarchiveNoticeFields()) { materializeUnarchiveNotice(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun unarchiveNotice(key: StoreKey): UnarchiveNotice = invoke<UnarchiveNotice>(Ref.Persisted("UnarchiveNotice", key))
+        fun unarchiveNotice(key: StoreKey): UnarchiveNotice = byKey("UnarchiveNotice", key)
         fun unarchiveNotice(key: Long): UnarchiveNotice = unarchiveNotice(StoreKey(key))
 
-        val paidInvoices: PaidInvoiceQuery get() = PaidInvoiceQuery(Query("PaidInvoice"))
+        val paidInvoices: PaidInvoiceQuery get() = query("PaidInvoice", PaidInvoiceFields()) { materializePaidInvoice(it) }
         /** The record behind [ref] as a member of PaidInvoice, or null when it is not one. */
-        fun paidInvoice(ref: Ref<Invoice>): PaidInvoice? =
-            system.scope { system.idOf(ref).let { if (system.exists("PaidInvoice", it)) materializePaidInvoice(it) else null } }
+        fun paidInvoice(ref: Ref<Invoice>): PaidInvoice? = member("PaidInvoice", ref) { materializePaidInvoice(it) }
 
-        val unemailedReceipts: UnemailedReceiptQuery get() = UnemailedReceiptQuery(Query("UnemailedReceipt"))
+        val unemailedReceipts: UnemailedReceiptQuery get() = query("UnemailedReceipt", UnemailedReceiptFields()) { materializeUnemailedReceipt(it) }
         /** The record behind [ref] as a member of UnemailedReceipt, or null when it is not one. */
-        fun unemailedReceipt(ref: Ref<Receipt>): UnemailedReceipt? =
-            system.scope { system.idOf(ref).let { if (system.exists("UnemailedReceipt", it)) materializeUnemailedReceipt(it) else null } }
+        fun unemailedReceipt(ref: Ref<Receipt>): UnemailedReceipt? = member("UnemailedReceipt", ref) { materializeUnemailedReceipt(it) }
 
-        val overdueInvoices: OverdueInvoiceQuery get() = OverdueInvoiceQuery(Query("OverdueInvoice"))
+        val overdueInvoices: OverdueInvoiceQuery get() = query("OverdueInvoice", OverdueInvoiceFields()) { materializeOverdueInvoice(it) }
         /** The record behind [ref] as a member of OverdueInvoice, or null when it is not one. */
-        fun overdueInvoice(ref: Ref<Invoice>): OverdueInvoice? =
-            system.scope { system.idOf(ref).let { if (system.exists("OverdueInvoice", it)) materializeOverdueInvoice(it) else null } }
+        fun overdueInvoice(ref: Ref<Invoice>): OverdueInvoice? = member("OverdueInvoice", ref) { materializeOverdueInvoice(it) }
 
-        val actionableOverdues: ActionableOverdueQuery get() = ActionableOverdueQuery(Query("ActionableOverdue"))
+        val actionableOverdues: ActionableOverdueQuery get() = query("ActionableOverdue", ActionableOverdueFields()) { materializeActionableOverdue(it) }
         /** The record behind [ref] as a member of ActionableOverdue, or null when it is not one. */
-        fun actionableOverdue(ref: Ref<Invoice>): ActionableOverdue? =
-            system.scope { system.idOf(ref).let { if (system.exists("ActionableOverdue", it)) materializeActionableOverdue(it) else null } }
+        fun actionableOverdue(ref: Ref<Invoice>): ActionableOverdue? = member("ActionableOverdue", ref) { materializeActionableOverdue(it) }
 
-        val issuedInvoices: IssuedInvoiceQuery get() = IssuedInvoiceQuery(Query("IssuedInvoice"))
+        val issuedInvoices: IssuedInvoiceQuery get() = query("IssuedInvoice", IssuedInvoiceFields()) { materializeIssuedInvoice(it) }
         /** The record behind [ref] as a member of IssuedInvoice, or null when it is not one. */
-        fun issuedInvoice(ref: Ref<Invoice>): IssuedInvoice? =
-            system.scope { system.idOf(ref).let { if (system.exists("IssuedInvoice", it)) materializeIssuedInvoice(it) else null } }
+        fun issuedInvoice(ref: Ref<Invoice>): IssuedInvoice? = member("IssuedInvoice", ref) { materializeIssuedInvoice(it) }
 
-        val archivedInvoices: ArchivedInvoiceQuery get() = ArchivedInvoiceQuery(Query("ArchivedInvoice"))
+        val archivedInvoices: ArchivedInvoiceQuery get() = query("ArchivedInvoice", ArchivedInvoiceFields()) { materializeArchivedInvoice(it) }
         /** The record behind [ref] as a member of ArchivedInvoice, or null when it is not one. */
-        fun archivedInvoice(ref: Ref<Invoice>): ArchivedInvoice? =
-            system.scope { system.idOf(ref).let { if (system.exists("ArchivedInvoice", it)) materializeArchivedInvoice(it) else null } }
-    }
-
-    inner class CustomerQuery(q: Query) : TypedQuery<CustomerFields, Customer>(system, q, CustomerFields(), { materializeCustomer(it) }) {
-        override fun with(q: Query) = CustomerQuery(q)
-    }
-
-    inner class CorrectEmailQuery(q: Query) : TypedQuery<CorrectEmailFields, CorrectEmail>(system, q, CorrectEmailFields(), { materializeCorrectEmail(it) }) {
-        override fun with(q: Query) = CorrectEmailQuery(q)
-    }
-
-    inner class InvoiceQuery(q: Query) : TypedQuery<InvoiceFields, Invoice>(system, q, InvoiceFields(), { materializeInvoice(it) }) {
-        override fun with(q: Query) = InvoiceQuery(q)
-    }
-
-    inner class LineItemQuery(q: Query) : TypedQuery<LineItemFields, LineItem>(system, q, LineItemFields(), { materializeLineItem(it) }) {
-        override fun with(q: Query) = LineItemQuery(q)
-    }
-
-    inner class PaymentQuery(q: Query) : TypedQuery<PaymentFields, Payment>(system, q, PaymentFields(), { materializePayment(it) }) {
-        override fun with(q: Query) = PaymentQuery(q)
-    }
-
-    inner class ReceiptQuery(q: Query) : TypedQuery<ReceiptFields, Receipt>(system, q, ReceiptFields(), { materializeReceipt(it) }) {
-        override fun with(q: Query) = ReceiptQuery(q)
-    }
-
-    inner class ReceiptEmailQuery(q: Query) : TypedQuery<ReceiptEmailFields, ReceiptEmail>(system, q, ReceiptEmailFields(), { materializeReceiptEmail(it) }) {
-        override fun with(q: Query) = ReceiptEmailQuery(q)
-    }
-
-    inner class ReminderQuery(q: Query) : TypedQuery<ReminderFields, Reminder>(system, q, ReminderFields(), { materializeReminder(it) }) {
-        override fun with(q: Query) = ReminderQuery(q)
-    }
-
-    inner class IssuanceQuery(q: Query) : TypedQuery<IssuanceFields, Issuance>(system, q, IssuanceFields(), { materializeIssuance(it) }) {
-        override fun with(q: Query) = IssuanceQuery(q)
-    }
-
-    inner class DueChangeRefusalQuery(q: Query) : TypedQuery<DueChangeRefusalFields, DueChangeRefusal>(system, q, DueChangeRefusalFields(), { materializeDueChangeRefusal(it) }) {
-        override fun with(q: Query) = DueChangeRefusalQuery(q)
-    }
-
-    inner class ArchiveRequestQuery(q: Query) : TypedQuery<ArchiveRequestFields, ArchiveRequest>(system, q, ArchiveRequestFields(), { materializeArchiveRequest(it) }) {
-        override fun with(q: Query) = ArchiveRequestQuery(q)
-    }
-
-    inner class UnarchiveRequestQuery(q: Query) : TypedQuery<UnarchiveRequestFields, UnarchiveRequest>(system, q, UnarchiveRequestFields(), { materializeUnarchiveRequest(it) }) {
-        override fun with(q: Query) = UnarchiveRequestQuery(q)
-    }
-
-    inner class UnarchiveNoticeQuery(q: Query) : TypedQuery<UnarchiveNoticeFields, UnarchiveNotice>(system, q, UnarchiveNoticeFields(), { materializeUnarchiveNotice(it) }) {
-        override fun with(q: Query) = UnarchiveNoticeQuery(q)
-    }
-
-    inner class PaidInvoiceQuery(q: Query) : TypedQuery<PaidInvoiceFields, PaidInvoice>(system, q, PaidInvoiceFields(), { materializePaidInvoice(it) }) {
-        override fun with(q: Query) = PaidInvoiceQuery(q)
-    }
-
-    inner class UnemailedReceiptQuery(q: Query) : TypedQuery<UnemailedReceiptFields, UnemailedReceipt>(system, q, UnemailedReceiptFields(), { materializeUnemailedReceipt(it) }) {
-        override fun with(q: Query) = UnemailedReceiptQuery(q)
-    }
-
-    inner class OverdueInvoiceQuery(q: Query) : TypedQuery<OverdueInvoiceFields, OverdueInvoice>(system, q, OverdueInvoiceFields(), { materializeOverdueInvoice(it) }) {
-        override fun with(q: Query) = OverdueInvoiceQuery(q)
-    }
-
-    inner class ActionableOverdueQuery(q: Query) : TypedQuery<ActionableOverdueFields, ActionableOverdue>(system, q, ActionableOverdueFields(), { materializeActionableOverdue(it) }) {
-        override fun with(q: Query) = ActionableOverdueQuery(q)
-    }
-
-    inner class IssuedInvoiceQuery(q: Query) : TypedQuery<IssuedInvoiceFields, IssuedInvoice>(system, q, IssuedInvoiceFields(), { materializeIssuedInvoice(it) }) {
-        override fun with(q: Query) = IssuedInvoiceQuery(q)
-    }
-
-    inner class ArchivedInvoiceQuery(q: Query) : TypedQuery<ArchivedInvoiceFields, ArchivedInvoice>(system, q, ArchivedInvoiceFields(), { materializeArchivedInvoice(it) }) {
-        override fun with(q: Query) = ArchivedInvoiceQuery(q)
+        fun archivedInvoice(ref: Ref<Invoice>): ArchivedInvoice? = member("ArchivedInvoice", ref) { materializeArchivedInvoice(it) }
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -837,17 +670,38 @@ rule NoteUnarchival when leaving ArchivedInvoice {
     }
 }
 
+// ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias CustomerQuery = TypedQuery<CustomerFields, Customer>
+typealias CorrectEmailQuery = TypedQuery<CorrectEmailFields, CorrectEmail>
+typealias InvoiceQuery = TypedQuery<InvoiceFields, Invoice>
+typealias LineItemQuery = TypedQuery<LineItemFields, LineItem>
+typealias PaymentQuery = TypedQuery<PaymentFields, Payment>
+typealias ReceiptQuery = TypedQuery<ReceiptFields, Receipt>
+typealias ReceiptEmailQuery = TypedQuery<ReceiptEmailFields, ReceiptEmail>
+typealias ReminderQuery = TypedQuery<ReminderFields, Reminder>
+typealias IssuanceQuery = TypedQuery<IssuanceFields, Issuance>
+typealias DueChangeRefusalQuery = TypedQuery<DueChangeRefusalFields, DueChangeRefusal>
+typealias ArchiveRequestQuery = TypedQuery<ArchiveRequestFields, ArchiveRequest>
+typealias UnarchiveRequestQuery = TypedQuery<UnarchiveRequestFields, UnarchiveRequest>
+typealias UnarchiveNoticeQuery = TypedQuery<UnarchiveNoticeFields, UnarchiveNotice>
+typealias PaidInvoiceQuery = TypedQuery<PaidInvoiceFields, PaidInvoice>
+typealias UnemailedReceiptQuery = TypedQuery<UnemailedReceiptFields, UnemailedReceipt>
+typealias OverdueInvoiceQuery = TypedQuery<OverdueInvoiceFields, OverdueInvoice>
+typealias ActionableOverdueQuery = TypedQuery<ActionableOverdueFields, ActionableOverdue>
+typealias IssuedInvoiceQuery = TypedQuery<IssuedInvoiceFields, IssuedInvoice>
+typealias ArchivedInvoiceQuery = TypedQuery<ArchivedInvoiceFields, ArchivedInvoice>
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewSignUp(
     val name: String,
     val email: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("email", email)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "SignUp") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -855,12 +709,12 @@ data class NewSignUp(
 data class NewCorrectEmail(
     val customer: Ref<Customer>,
     val corrected: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("customer", system.idOf(customer))
         put("corrected", corrected)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CorrectEmail") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -868,12 +722,12 @@ data class NewCorrectEmail(
 data class NewBillCustomer(
     val customer: Ref<Customer>,
     val due: LocalDate,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("customer", system.idOf(customer))
         put("due", due)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "BillCustomer") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -883,14 +737,14 @@ data class NewLineItem(
     val description: String,
     val price: BigDecimal,
     val quantity: Int,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("invoice", system.idOf(invoice))
         put("description", description)
         put("price", price)
         put("quantity", quantity)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "LineItem") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -898,23 +752,23 @@ data class NewLineItem(
 data class NewSubmitPayment(
     val invoice: Ref<Invoice>,
     val amount: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("invoice", system.idOf(invoice))
         put("amount", amount)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "SubmitPayment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewIssuance(
     val invoice: Ref<Invoice>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("invoice", system.idOf(invoice))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Issuance") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -922,34 +776,34 @@ data class NewIssuance(
 data class NewChangeDueDate(
     val invoice: Ref<Invoice>,
     val newDue: LocalDate,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("invoice", system.idOf(invoice))
         put("newDue", newDue)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ChangeDueDate") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewArchiveRequest(
     val invoice: Ref<Invoice>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("invoice", system.idOf(invoice))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ArchiveRequest") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewUnarchiveRequest(
     val invoice: Ref<Invoice>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("invoice", system.idOf(invoice))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "UnarchiveRequest") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }

@@ -7,30 +7,15 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
-
-    val system: VelleSystem = VelleSystem(Model(Parser.parse(SPEC)), startTime)
-
-    // ── clock (harness-controlled; ticks are separate calls) ──
-    val now: Instant get() = system.now
-    fun advanceSeconds(seconds: Long) = system.advance(seconds)
-    fun advanceDays(days: Long) = system.advanceDays(days)
-    fun setTime(t: Instant) = system.setTime(t)
+class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
 
     /** Queue: system-wide.
      *  System-wide over Post — reads Post.author with no path back to any key (unexamined (A5)).
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewMember): Commit<NewMember, Ref<Member>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Member", raw).carrying(input)
-    }
+    fun commit(input: NewMember): Commit<NewMember, Ref<Member>> =
+        boundary("Member", input).carrying(input)
 
     /** Queue keys: [post.author] — plus system-wide width below.
      *  System-wide over Comment — reads Comment.target with no path back to any key (unexamined (A5)).
@@ -38,15 +23,8 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPost): Commit<NewPost, Ref<Post>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Post", raw).carrying(input)
-    }
+    fun commit(input: NewPost): Commit<NewPost, Ref<Post>> =
+        boundary("Post", input).carrying(input)
 
     /** Queue keys: [photo.author] — plus system-wide width below.
      *  System-wide over Comment — reads Comment.target with no path back to any key (unexamined (A5)).
@@ -54,15 +32,8 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPhoto): Commit<NewPhoto, Ref<Photo>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Photo", raw).carrying(input)
-    }
+    fun commit(input: NewPhoto): Commit<NewPhoto, Ref<Photo>> =
+        boundary("Photo", input).carrying(input)
 
     /** Queue keys: [comment.author], [comment.target] — plus system-wide width below.
      *  System-wide over CommentNotice — creates CommentNotice referencing an instance the derivation cannot key (unexamined (A5)).
@@ -72,133 +43,69 @@ class GallerySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
      *  System-wide over Photo — reads Photo.author with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewComment): Commit<NewComment, Ref<Comment>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Comment", raw).carrying(input)
-    }
+    fun commit(input: NewComment): Commit<NewComment, Ref<Comment>> =
+        boundary("Comment", input).carrying(input)
 
-    fun members(): List<Member> = system.scope { system.instancesOf("Member").map { materializeMember(it) } }
-    fun posts(): List<Post> = system.scope { system.instancesOf("Post").map { materializePost(it) } }
-    fun photos(): List<Photo> = system.scope { system.instancesOf("Photo").map { materializePhoto(it) } }
-    fun comments(): List<Comment> = system.scope { system.instancesOf("Comment").map { materializeComment(it) } }
-    fun popularityNotices(): List<PopularityNotice> = system.scope { system.instancesOf("PopularityNotice").map { materializePopularityNotice(it) } }
-    fun commentNotices(): List<CommentNotice> = system.scope { system.instancesOf("CommentNotice").map { materializeCommentNotice(it) } }
-    fun contents(): List<Content> = system.scope { system.instancesOf("Content").map { materializeContent(it) } }
-    fun populars(): List<Popular> = system.scope { system.instancesOf("Popular").map { materializePopular(it) } }
-    fun postComments(): List<PostComment> = system.scope { system.instancesOf("PostComment").map { materializePostComment(it) } }
-    fun photoComments(): List<PhotoComment> = system.scope { system.instancesOf("PhotoComment").map { materializePhotoComment(it) } }
+    fun members(): List<Member> = all("Member") { materializeMember(it) }
+    fun posts(): List<Post> = all("Post") { materializePost(it) }
+    fun photos(): List<Photo> = all("Photo") { materializePhoto(it) }
+    fun comments(): List<Comment> = all("Comment") { materializeComment(it) }
+    fun popularityNotices(): List<PopularityNotice> = all("PopularityNotice") { materializePopularityNotice(it) }
+    fun commentNotices(): List<CommentNotice> = all("CommentNotice") { materializeCommentNotice(it) }
+    fun contents(): List<Content> = all("Content") { materializeContent(it) }
+    fun populars(): List<Popular> = all("Popular") { materializePopular(it) }
+    fun postComments(): List<PostComment> = all("PostComment") { materializePostComment(it) }
+    fun photoComments(): List<PhotoComment> = all("PhotoComment") { materializePhotoComment(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
-    inner class Read {
-        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
-        val registry = QueryRegistry()
-        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+    inner class Read : ReadSurface<Read>(system) {
+        override fun modelOf(id: Long): Ref<*> = materialize(id)
 
-        /** The model object behind a reference, read now; throws when the record no longer exists. */
-        @Suppress("UNCHECKED_CAST")
-        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
-        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
-        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
-        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
-        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
-            val id = system.idOf(ref)
-            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            materialize(id)
-        }
-
-        val members: MemberQuery get() = MemberQuery(Query("Member"))
+        val members: MemberQuery get() = query("Member", MemberFields()) { materializeMember(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun member(key: StoreKey): Member = invoke<Member>(Ref.Persisted("Member", key))
+        fun member(key: StoreKey): Member = byKey("Member", key)
         fun member(key: Long): Member = member(StoreKey(key))
 
-        val posts: PostQuery get() = PostQuery(Query("Post"))
+        val posts: PostQuery get() = query("Post", PostFields()) { materializePost(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun post(key: StoreKey): Post = invoke<Post>(Ref.Persisted("Post", key))
+        fun post(key: StoreKey): Post = byKey("Post", key)
         fun post(key: Long): Post = post(StoreKey(key))
 
-        val photos: PhotoQuery get() = PhotoQuery(Query("Photo"))
+        val photos: PhotoQuery get() = query("Photo", PhotoFields()) { materializePhoto(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun photo(key: StoreKey): Photo = invoke<Photo>(Ref.Persisted("Photo", key))
+        fun photo(key: StoreKey): Photo = byKey("Photo", key)
         fun photo(key: Long): Photo = photo(StoreKey(key))
 
-        val comments: CommentQuery get() = CommentQuery(Query("Comment"))
+        val comments: CommentQuery get() = query("Comment", CommentFields()) { materializeComment(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun comment(key: StoreKey): Comment = invoke<Comment>(Ref.Persisted("Comment", key))
+        fun comment(key: StoreKey): Comment = byKey("Comment", key)
         fun comment(key: Long): Comment = comment(StoreKey(key))
 
-        val popularityNotices: PopularityNoticeQuery get() = PopularityNoticeQuery(Query("PopularityNotice"))
+        val popularityNotices: PopularityNoticeQuery get() = query("PopularityNotice", PopularityNoticeFields()) { materializePopularityNotice(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun popularityNotice(key: StoreKey): PopularityNotice = invoke<PopularityNotice>(Ref.Persisted("PopularityNotice", key))
+        fun popularityNotice(key: StoreKey): PopularityNotice = byKey("PopularityNotice", key)
         fun popularityNotice(key: Long): PopularityNotice = popularityNotice(StoreKey(key))
 
-        val commentNotices: CommentNoticeQuery get() = CommentNoticeQuery(Query("CommentNotice"))
+        val commentNotices: CommentNoticeQuery get() = query("CommentNotice", CommentNoticeFields()) { materializeCommentNotice(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun commentNotice(key: StoreKey): CommentNotice = invoke<CommentNotice>(Ref.Persisted("CommentNotice", key))
+        fun commentNotice(key: StoreKey): CommentNotice = byKey("CommentNotice", key)
         fun commentNotice(key: Long): CommentNotice = commentNotice(StoreKey(key))
 
-        val contents: ContentQuery get() = ContentQuery(Query("Content"))
+        val contents: ContentQuery get() = query("Content", ContentFields()) { materializeContent(it) }
 
-        val populars: PopularQuery get() = PopularQuery(Query("Popular"))
+        val populars: PopularQuery get() = query("Popular", PopularFields()) { materializePopular(it) }
         /** The record behind [ref] as a member of Popular, or null when it is not one. */
-        fun popular(ref: Ref<Content>): Popular? =
-            system.scope { system.idOf(ref).let { if (system.exists("Popular", it)) materializePopular(it) else null } }
+        fun popular(ref: Ref<Content>): Popular? = member("Popular", ref) { materializePopular(it) }
 
-        val postComments: PostCommentQuery get() = PostCommentQuery(Query("PostComment"))
+        val postComments: PostCommentQuery get() = query("PostComment", PostCommentFields()) { materializePostComment(it) }
         /** The record behind [ref] as a member of PostComment, or null when it is not one. */
-        fun postComment(ref: Ref<Comment>): PostComment? =
-            system.scope { system.idOf(ref).let { if (system.exists("PostComment", it)) materializePostComment(it) else null } }
+        fun postComment(ref: Ref<Comment>): PostComment? = member("PostComment", ref) { materializePostComment(it) }
 
-        val photoComments: PhotoCommentQuery get() = PhotoCommentQuery(Query("PhotoComment"))
+        val photoComments: PhotoCommentQuery get() = query("PhotoComment", PhotoCommentFields()) { materializePhotoComment(it) }
         /** The record behind [ref] as a member of PhotoComment, or null when it is not one. */
-        fun photoComment(ref: Ref<Comment>): PhotoComment? =
-            system.scope { system.idOf(ref).let { if (system.exists("PhotoComment", it)) materializePhotoComment(it) else null } }
-    }
-
-    inner class MemberQuery(q: Query) : TypedQuery<MemberFields, Member>(system, q, MemberFields(), { materializeMember(it) }) {
-        override fun with(q: Query) = MemberQuery(q)
-    }
-
-    inner class PostQuery(q: Query) : TypedQuery<PostFields, Post>(system, q, PostFields(), { materializePost(it) }) {
-        override fun with(q: Query) = PostQuery(q)
-    }
-
-    inner class PhotoQuery(q: Query) : TypedQuery<PhotoFields, Photo>(system, q, PhotoFields(), { materializePhoto(it) }) {
-        override fun with(q: Query) = PhotoQuery(q)
-    }
-
-    inner class CommentQuery(q: Query) : TypedQuery<CommentFields, Comment>(system, q, CommentFields(), { materializeComment(it) }) {
-        override fun with(q: Query) = CommentQuery(q)
-    }
-
-    inner class PopularityNoticeQuery(q: Query) : TypedQuery<PopularityNoticeFields, PopularityNotice>(system, q, PopularityNoticeFields(), { materializePopularityNotice(it) }) {
-        override fun with(q: Query) = PopularityNoticeQuery(q)
-    }
-
-    inner class CommentNoticeQuery(q: Query) : TypedQuery<CommentNoticeFields, CommentNotice>(system, q, CommentNoticeFields(), { materializeCommentNotice(it) }) {
-        override fun with(q: Query) = CommentNoticeQuery(q)
-    }
-
-    inner class ContentQuery(q: Query) : TypedQuery<ContentFields, Content>(system, q, ContentFields(), { materializeContent(it) }) {
-        override fun with(q: Query) = ContentQuery(q)
-    }
-
-    inner class PopularQuery(q: Query) : TypedQuery<PopularFields, Popular>(system, q, PopularFields(), { materializePopular(it) }) {
-        override fun with(q: Query) = PopularQuery(q)
-    }
-
-    inner class PostCommentQuery(q: Query) : TypedQuery<PostCommentFields, PostComment>(system, q, PostCommentFields(), { materializePostComment(it) }) {
-        override fun with(q: Query) = PostCommentQuery(q)
-    }
-
-    inner class PhotoCommentQuery(q: Query) : TypedQuery<PhotoCommentFields, PhotoComment>(system, q, PhotoCommentFields(), { materializePhotoComment(it) }) {
-        override fun with(q: Query) = PhotoCommentQuery(q)
+        fun photoComment(ref: Ref<Comment>): PhotoComment? = member("PhotoComment", ref) { materializePhotoComment(it) }
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -371,15 +278,27 @@ shape PhotoComment = Comment where target is Photo
     }
 }
 
+// ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias MemberQuery = TypedQuery<MemberFields, Member>
+typealias PostQuery = TypedQuery<PostFields, Post>
+typealias PhotoQuery = TypedQuery<PhotoFields, Photo>
+typealias CommentQuery = TypedQuery<CommentFields, Comment>
+typealias PopularityNoticeQuery = TypedQuery<PopularityNoticeFields, PopularityNotice>
+typealias CommentNoticeQuery = TypedQuery<CommentNoticeFields, CommentNotice>
+typealias ContentQuery = TypedQuery<ContentFields, Content>
+typealias PopularQuery = TypedQuery<PopularFields, Popular>
+typealias PostCommentQuery = TypedQuery<PostCommentFields, PostComment>
+typealias PhotoCommentQuery = TypedQuery<PhotoCommentFields, PhotoComment>
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewMember(
     val name: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Member") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -387,12 +306,12 @@ data class NewMember(
 data class NewPost(
     val author: Ref<Member>,
     val body: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("author", system.idOf(author))
         put("body", body)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Post") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -400,12 +319,12 @@ data class NewPost(
 data class NewPhoto(
     val author: Ref<Member>,
     val caption: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("author", system.idOf(author))
         put("caption", caption)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Photo") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -414,13 +333,13 @@ data class NewComment(
     val target: Ref<Content>,
     val author: Ref<Member>,
     val body: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("target", system.idOf(target))
         put("author", system.idOf(author))
         put("body", body)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Comment") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }

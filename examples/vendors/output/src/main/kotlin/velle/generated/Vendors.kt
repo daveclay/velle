@@ -7,148 +7,75 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
-
-    val system: VelleSystem = VelleSystem(Model(Parser.parse(SPEC)), startTime)
-
-    // ── clock (harness-controlled; ticks are separate calls) ──
-    val now: Instant get() = system.now
-    fun advanceSeconds(seconds: Long) = system.advance(seconds)
-    fun advanceDays(days: Long) = system.advanceDays(days)
-    fun setTime(t: Instant) = system.setTime(t)
+class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
 
     /** Queue keys: [assignVendor.staff], [assignVendor.vendor] — plus system-wide width below.
      *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssignVendor, actor: Ref<Staff>): Commit<NewAssignVendor, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AssignVendor", raw, actor = system.idOf(actor)).carryingNoRecord(input)
-    }
+    fun commit(input: NewAssignVendor, actor: Ref<Staff>): Commit<NewAssignVendor, Nothing?> =
+        boundary("AssignVendor", input, actor).carryingNoRecord(input)
 
     /** Queue keys: [listProduct.vendor] — plus system-wide width below.
      *  System-wide over Staff — reads Staff.role with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewListProduct, actor: Ref<Staff>): Commit<NewListProduct, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ListProduct", raw, actor = system.idOf(actor)).carryingNoRecord(input)
-    }
+    fun commit(input: NewListProduct, actor: Ref<Staff>): Commit<NewListProduct, Nothing?> =
+        boundary("ListProduct", input, actor).carryingNoRecord(input)
 
     /** Queue keys: [changePrice.product], [changePrice.product.vendor] — plus system-wide width below.
      *  System-wide over VendorAssignment — consults VendorAssignment correlated through 'staff' (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewChangePrice, actor: Ref<Staff>): Commit<NewChangePrice, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ChangePrice", raw, actor = system.idOf(actor)).carryingNoRecord(input)
-    }
+    fun commit(input: NewChangePrice, actor: Ref<Staff>): Commit<NewChangePrice, Nothing?> =
+        boundary("ChangePrice", input, actor).carryingNoRecord(input)
 
-    fun staffs(): List<Staff> = system.scope { system.instancesOf("Staff").map { materializeStaff(it) } }
-    fun vendorAssignments(): List<VendorAssignment> = system.scope { system.instancesOf("VendorAssignment").map { materializeVendorAssignment(it) } }
-    fun vendors(): List<Vendor> = system.scope { system.instancesOf("Vendor").map { materializeVendor(it) } }
-    fun products(): List<Product> = system.scope { system.instancesOf("Product").map { materializeProduct(it) } }
-    fun marginAlerts(): List<MarginAlert> = system.scope { system.instancesOf("MarginAlert").map { materializeMarginAlert(it) } }
-    fun administrators(): List<Administrator> = system.scope { system.instancesOf("Administrator").map { materializeAdministrator(it) } }
-    fun thinMargins(): List<ThinMargin> = system.scope { system.instancesOf("ThinMargin").map { materializeThinMargin(it) } }
+    fun staffs(): List<Staff> = all("Staff") { materializeStaff(it) }
+    fun vendorAssignments(): List<VendorAssignment> = all("VendorAssignment") { materializeVendorAssignment(it) }
+    fun vendors(): List<Vendor> = all("Vendor") { materializeVendor(it) }
+    fun products(): List<Product> = all("Product") { materializeProduct(it) }
+    fun marginAlerts(): List<MarginAlert> = all("MarginAlert") { materializeMarginAlert(it) }
+    fun administrators(): List<Administrator> = all("Administrator") { materializeAdministrator(it) }
+    fun thinMargins(): List<ThinMargin> = all("ThinMargin") { materializeThinMargin(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
-    inner class Read {
-        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
-        val registry = QueryRegistry()
-        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+    inner class Read : ReadSurface<Read>(system) {
+        override fun modelOf(id: Long): Ref<*> = materialize(id)
 
-        /** The model object behind a reference, read now; throws when the record no longer exists. */
-        @Suppress("UNCHECKED_CAST")
-        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
-        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
-        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
-        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
-        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
-            val id = system.idOf(ref)
-            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            materialize(id)
-        }
-
-        val staffs: StaffQuery get() = StaffQuery(Query("Staff"))
+        val staffs: StaffQuery get() = query("Staff", StaffFields()) { materializeStaff(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun staff(key: StoreKey): Staff = invoke<Staff>(Ref.Persisted("Staff", key))
+        fun staff(key: StoreKey): Staff = byKey("Staff", key)
         fun staff(key: Long): Staff = staff(StoreKey(key))
 
-        val vendorAssignments: VendorAssignmentQuery get() = VendorAssignmentQuery(Query("VendorAssignment"))
+        val vendorAssignments: VendorAssignmentQuery get() = query("VendorAssignment", VendorAssignmentFields()) { materializeVendorAssignment(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun vendorAssignment(key: StoreKey): VendorAssignment = invoke<VendorAssignment>(Ref.Persisted("VendorAssignment", key))
+        fun vendorAssignment(key: StoreKey): VendorAssignment = byKey("VendorAssignment", key)
         fun vendorAssignment(key: Long): VendorAssignment = vendorAssignment(StoreKey(key))
 
-        val vendors: VendorQuery get() = VendorQuery(Query("Vendor"))
+        val vendors: VendorQuery get() = query("Vendor", VendorFields()) { materializeVendor(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun vendor(key: StoreKey): Vendor = invoke<Vendor>(Ref.Persisted("Vendor", key))
+        fun vendor(key: StoreKey): Vendor = byKey("Vendor", key)
         fun vendor(key: Long): Vendor = vendor(StoreKey(key))
 
-        val products: ProductQuery get() = ProductQuery(Query("Product"))
+        val products: ProductQuery get() = query("Product", ProductFields()) { materializeProduct(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun product(key: StoreKey): Product = invoke<Product>(Ref.Persisted("Product", key))
+        fun product(key: StoreKey): Product = byKey("Product", key)
         fun product(key: Long): Product = product(StoreKey(key))
 
-        val marginAlerts: MarginAlertQuery get() = MarginAlertQuery(Query("MarginAlert"))
+        val marginAlerts: MarginAlertQuery get() = query("MarginAlert", MarginAlertFields()) { materializeMarginAlert(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun marginAlert(key: StoreKey): MarginAlert = invoke<MarginAlert>(Ref.Persisted("MarginAlert", key))
+        fun marginAlert(key: StoreKey): MarginAlert = byKey("MarginAlert", key)
         fun marginAlert(key: Long): MarginAlert = marginAlert(StoreKey(key))
 
-        val administrators: AdministratorQuery get() = AdministratorQuery(Query("Administrator"))
+        val administrators: AdministratorQuery get() = query("Administrator", AdministratorFields()) { materializeAdministrator(it) }
         /** The record behind [ref] as a member of Administrator, or null when it is not one. */
-        fun administrator(ref: Ref<Staff>): Administrator? =
-            system.scope { system.idOf(ref).let { if (system.exists("Administrator", it)) materializeAdministrator(it) else null } }
+        fun administrator(ref: Ref<Staff>): Administrator? = member("Administrator", ref) { materializeAdministrator(it) }
 
-        val thinMargins: ThinMarginQuery get() = ThinMarginQuery(Query("ThinMargin"))
+        val thinMargins: ThinMarginQuery get() = query("ThinMargin", ThinMarginFields()) { materializeThinMargin(it) }
         /** The record behind [ref] as a member of ThinMargin, or null when it is not one. */
-        fun thinMargin(ref: Ref<Product>): ThinMargin? =
-            system.scope { system.idOf(ref).let { if (system.exists("ThinMargin", it)) materializeThinMargin(it) else null } }
-    }
-
-    inner class StaffQuery(q: Query) : TypedQuery<StaffFields, Staff>(system, q, StaffFields(), { materializeStaff(it) }) {
-        override fun with(q: Query) = StaffQuery(q)
-    }
-
-    inner class VendorAssignmentQuery(q: Query) : TypedQuery<VendorAssignmentFields, VendorAssignment>(system, q, VendorAssignmentFields(), { materializeVendorAssignment(it) }) {
-        override fun with(q: Query) = VendorAssignmentQuery(q)
-    }
-
-    inner class VendorQuery(q: Query) : TypedQuery<VendorFields, Vendor>(system, q, VendorFields(), { materializeVendor(it) }) {
-        override fun with(q: Query) = VendorQuery(q)
-    }
-
-    inner class ProductQuery(q: Query) : TypedQuery<ProductFields, Product>(system, q, ProductFields(), { materializeProduct(it) }) {
-        override fun with(q: Query) = ProductQuery(q)
-    }
-
-    inner class MarginAlertQuery(q: Query) : TypedQuery<MarginAlertFields, MarginAlert>(system, q, MarginAlertFields(), { materializeMarginAlert(it) }) {
-        override fun with(q: Query) = MarginAlertQuery(q)
-    }
-
-    inner class AdministratorQuery(q: Query) : TypedQuery<AdministratorFields, Administrator>(system, q, AdministratorFields(), { materializeAdministrator(it) }) {
-        override fun with(q: Query) = AdministratorQuery(q)
-    }
-
-    inner class ThinMarginQuery(q: Query) : TypedQuery<ThinMarginFields, ThinMargin>(system, q, ThinMarginFields(), { materializeThinMargin(it) }) {
-        override fun with(q: Query) = ThinMarginQuery(q)
+        fun thinMargin(ref: Ref<Product>): ThinMargin? = member("ThinMargin", ref) { materializeThinMargin(it) }
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -219,54 +146,38 @@ class VendorsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
     // ── reads for a Staff: what the surface returns to one of them (Reference §22, "The actor") ──
     fun read(viewer: Ref<Staff>): StaffRead = StaffRead(viewer)
 
-    // the viewer is held as a reference: a handle would die with the scope of the first read
-    inner class StaffRead(private val viewer: Ref<Staff>) {
-        val staffs: StaffQuery get() = StaffQuery(Query("Staff", viewer = viewer))
+    inner class StaffRead(viewer: Ref<Staff>) : ViewerReadSurface(system, viewer) {
+        val staffs: StaffQuery get() = query("Staff", StaffFields()) { materializeStaff(it) }
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
-        fun staff(ref: Ref<Staff>): Staff? =
-            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Staff", it)) materializeStaff(it) else null } }
+        fun staff(ref: Ref<Staff>): Staff? = shown("Staff", ref) { materializeStaff(it) }
         fun staff(key: StoreKey): Staff? = staff(Ref.Persisted("Staff", key))
         fun staff(key: Long): Staff? = staff(StoreKey(key))
-        val vendorAssignments: VendorAssignmentQuery get() = VendorAssignmentQuery(Query("VendorAssignment", viewer = viewer))
+        val vendorAssignments: VendorAssignmentQuery get() = query("VendorAssignment", VendorAssignmentFields()) { materializeVendorAssignment(it) }
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
-        fun vendorAssignment(ref: Ref<VendorAssignment>): VendorAssignment? =
-            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("VendorAssignment", it)) materializeVendorAssignment(it) else null } }
+        fun vendorAssignment(ref: Ref<VendorAssignment>): VendorAssignment? = shown("VendorAssignment", ref) { materializeVendorAssignment(it) }
         fun vendorAssignment(key: StoreKey): VendorAssignment? = vendorAssignment(Ref.Persisted("VendorAssignment", key))
         fun vendorAssignment(key: Long): VendorAssignment? = vendorAssignment(StoreKey(key))
-        val vendors: VendorQuery get() = VendorQuery(Query("Vendor", viewer = viewer))
+        val vendors: VendorQuery get() = query("Vendor", VendorFields()) { materializeVendor(it) }
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
-        fun vendor(ref: Ref<Vendor>): Vendor? =
-            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Vendor", it)) materializeVendor(it) else null } }
+        fun vendor(ref: Ref<Vendor>): Vendor? = shown("Vendor", ref) { materializeVendor(it) }
         fun vendor(key: StoreKey): Vendor? = vendor(Ref.Persisted("Vendor", key))
         fun vendor(key: Long): Vendor? = vendor(StoreKey(key))
-        val products: ProductQueryForStaff get() = ProductQueryForStaff(Query("Product", viewer = viewer))
+        val products: ProductQueryForStaff get() = query("Product", ProductFields()) { materializeProductForStaff(system.idOf(viewer), it) }
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
-        fun product(ref: Ref<Product>): ProductForStaff? =
-            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Product", it)) materializeProductForStaff(system.idOf(viewer), it) else null } }
+        fun product(ref: Ref<Product>): ProductForStaff? = shown("Product", ref) { materializeProductForStaff(system.idOf(viewer), it) }
         fun product(key: StoreKey): ProductForStaff? = product(Ref.Persisted("Product", key))
         fun product(key: Long): ProductForStaff? = product(StoreKey(key))
-        val marginAlerts: MarginAlertQuery get() = MarginAlertQuery(Query("MarginAlert", viewer = viewer))
+        val marginAlerts: MarginAlertQuery get() = query("MarginAlert", MarginAlertFields()) { materializeMarginAlert(it) }
         /** The record behind [ref], or null when it is gone or not shown to this viewer. */
-        fun marginAlert(ref: Ref<MarginAlert>): MarginAlert? =
-            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("MarginAlert", it)) materializeMarginAlert(it) else null } }
+        fun marginAlert(ref: Ref<MarginAlert>): MarginAlert? = shown("MarginAlert", ref) { materializeMarginAlert(it) }
         fun marginAlert(key: StoreKey): MarginAlert? = marginAlert(Ref.Persisted("MarginAlert", key))
         fun marginAlert(key: Long): MarginAlert? = marginAlert(StoreKey(key))
-        val administrators: AdministratorQuery get() = AdministratorQuery(Query("Administrator", viewer = viewer))
+        val administrators: AdministratorQuery get() = query("Administrator", AdministratorFields()) { materializeAdministrator(it) }
         /** The record behind [ref] as a member of Administrator, or null when it is not one or not shown to this viewer. */
-        fun administrator(ref: Ref<Staff>): Administrator? =
-            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("Administrator", it)) materializeAdministrator(it) else null } }
-        val thinMargins: ThinMarginQueryForStaff get() = ThinMarginQueryForStaff(Query("ThinMargin", viewer = viewer))
+        fun administrator(ref: Ref<Staff>): Administrator? = shown("Administrator", ref) { materializeAdministrator(it) }
+        val thinMargins: ThinMarginQueryForStaff get() = query("ThinMargin", ThinMarginFields()) { materializeThinMarginForStaff(system.idOf(viewer), it) }
         /** The record behind [ref] as a member of ThinMargin, or null when it is not one or not shown to this viewer. */
-        fun thinMargin(ref: Ref<Product>): ThinMarginForStaff? =
-            system.scope { system.idOf(ref).let { if (system.visibleCurrent(system.idOf(viewer), it) && system.exists("ThinMargin", it)) materializeThinMarginForStaff(system.idOf(viewer), it) else null } }
-    }
-
-    inner class ProductQueryForStaff(q: Query) : TypedQuery<ProductFields, ProductForStaff>(system, q, ProductFields(), { materializeProductForStaff(system.idOf(q.viewer!!), it) }) {
-        override fun with(q: Query) = ProductQueryForStaff(q)
-    }
-
-    inner class ThinMarginQueryForStaff(q: Query) : TypedQuery<ThinMarginFields, ThinMarginForStaff>(system, q, ThinMarginFields(), { materializeThinMarginForStaff(system.idOf(q.viewer!!), it) }) {
-        override fun with(q: Query) = ThinMarginQueryForStaff(q)
+        fun thinMargin(ref: Ref<Product>): ThinMarginForStaff? = shown("ThinMargin", ref) { materializeThinMarginForStaff(system.idOf(viewer), it) }
     }
 
     private fun materializeProductForStaff(viewer: Long, id: Long): ProductForStaff {
@@ -425,17 +336,28 @@ rule FlagThinMargin when (ThinMargin where not exists MarginAlert for this) {
     }
 }
 
+// ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias StaffQuery = TypedQuery<StaffFields, Staff>
+typealias VendorAssignmentQuery = TypedQuery<VendorAssignmentFields, VendorAssignment>
+typealias VendorQuery = TypedQuery<VendorFields, Vendor>
+typealias ProductQuery = TypedQuery<ProductFields, Product>
+typealias MarginAlertQuery = TypedQuery<MarginAlertFields, MarginAlert>
+typealias AdministratorQuery = TypedQuery<AdministratorFields, Administrator>
+typealias ThinMarginQuery = TypedQuery<ThinMarginFields, ThinMargin>
+typealias ProductQueryForStaff = TypedQuery<ProductFields, ProductForStaff>
+typealias ThinMarginQueryForStaff = TypedQuery<ThinMarginFields, ThinMarginForStaff>
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewAssignVendor(
     val staff: Ref<Staff>,
     val vendor: Ref<Vendor>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("staff", system.idOf(staff))
         put("vendor", system.idOf(vendor))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "AssignVendor") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -445,14 +367,14 @@ data class NewListProduct(
     val name: String,
     val price: BigDecimal,
     val cost: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("vendor", system.idOf(vendor))
         put("name", name)
         put("price", price)
         put("cost", cost)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ListProduct") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -460,12 +382,12 @@ data class NewListProduct(
 data class NewChangePrice(
     val product: Ref<Product>,
     val price: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("product", system.idOf(product))
         put("price", price)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ChangePrice") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }

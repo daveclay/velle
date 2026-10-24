@@ -7,250 +7,128 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
-
-    val system: VelleSystem = VelleSystem(Model(Parser.parse(SPEC)), startTime)
-
-    // ── clock (harness-controlled; ticks are separate calls) ──
-    val now: Instant get() = system.now
-    fun advanceSeconds(seconds: Long) = system.advance(seconds)
-    fun advanceDays(days: Long) = system.advanceDays(days)
-    fun setTime(t: Instant) = system.setTime(t)
+class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPeptide): Commit<NewPeptide, Ref<Peptide>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Peptide", raw).carrying(input)
-    }
+    fun commit(input: NewPeptide): Commit<NewPeptide, Ref<Peptide>> =
+        boundary("Peptide", input).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewBacteriaStrain): Commit<NewBacteriaStrain, Ref<BacteriaStrain>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("BacteriaStrain", raw).carrying(input)
-    }
+    fun commit(input: NewBacteriaStrain): Commit<NewBacteriaStrain, Ref<BacteriaStrain>> =
+        boundary("BacteriaStrain", input).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewFermenterRun): Commit<NewFermenterRun, Ref<FermenterRun>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("FermenterRun", raw).carrying(input)
-    }
+    fun commit(input: NewFermenterRun): Commit<NewFermenterRun, Ref<FermenterRun>> =
+        boundary("FermenterRun", input).carrying(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewVendor): Commit<NewVendor, Ref<Vendor>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Vendor", raw).carrying(input)
-    }
+    fun commit(input: NewVendor): Commit<NewVendor, Ref<Vendor>> =
+        boundary("Vendor", input).carrying(input)
 
     /** Queue keys: [peptideBatch.origin], [peptideBatch.peptide] — plus system-wide width below.
      *  System-wide over PeptideBatch — reads PeptideBatch.peptide with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPeptideBatch): Commit<NewPeptideBatch, Ref<PeptideBatch>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        val parts = input.parts(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("PeptideBatch", raw, parts).carrying(input)
-    }
+    fun commit(input: NewPeptideBatch): Commit<NewPeptideBatch, Ref<PeptideBatch>> =
+        boundary("PeptideBatch", input).carrying(input)
 
-    fun peptides(): List<Peptide> = system.scope { system.instancesOf("Peptide").map { materializePeptide(it) } }
-    fun bacteriaStrains(): List<BacteriaStrain> = system.scope { system.instancesOf("BacteriaStrain").map { materializeBacteriaStrain(it) } }
-    fun fermenterRuns(): List<FermenterRun> = system.scope { system.instancesOf("FermenterRun").map { materializeFermenterRun(it) } }
-    fun vendors(): List<Vendor> = system.scope { system.instancesOf("Vendor").map { materializeVendor(it) } }
-    fun fermentations(): List<Fermentation> = system.scope { system.instancesOf("Fermentation").map { materializeFermentation(it) } }
-    fun externalOrders(): List<ExternalOrder> = system.scope { system.instancesOf("ExternalOrder").map { materializeExternalOrder(it) } }
-    fun compositions(): List<Composition> = system.scope { system.instancesOf("Composition").map { materializeComposition(it) } }
-    fun components(): List<Component> = system.scope { system.instancesOf("Component").map { materializeComponent(it) } }
-    fun peptideBatchs(): List<PeptideBatch> = system.scope { system.instancesOf("PeptideBatch").map { materializePeptideBatch(it) } }
-    fun depletionNotices(): List<DepletionNotice> = system.scope { system.instancesOf("DepletionNotice").map { materializeDepletionNotice(it) } }
-    fun origins(): List<Origin> = system.scope { system.instancesOf("Origin").map { materializeOrigin(it) } }
-    fun fermenteds(): List<Fermented> = system.scope { system.instancesOf("Fermented").map { materializeFermented(it) } }
-    fun ordereds(): List<Ordered> = system.scope { system.instancesOf("Ordered").map { materializeOrdered(it) } }
-    fun composites(): List<Composite> = system.scope { system.instancesOf("Composite").map { materializeComposite(it) } }
-    fun depleteds(): List<Depleted> = system.scope { system.instancesOf("Depleted").map { materializeDepleted(it) } }
+    fun peptides(): List<Peptide> = all("Peptide") { materializePeptide(it) }
+    fun bacteriaStrains(): List<BacteriaStrain> = all("BacteriaStrain") { materializeBacteriaStrain(it) }
+    fun fermenterRuns(): List<FermenterRun> = all("FermenterRun") { materializeFermenterRun(it) }
+    fun vendors(): List<Vendor> = all("Vendor") { materializeVendor(it) }
+    fun fermentations(): List<Fermentation> = all("Fermentation") { materializeFermentation(it) }
+    fun externalOrders(): List<ExternalOrder> = all("ExternalOrder") { materializeExternalOrder(it) }
+    fun compositions(): List<Composition> = all("Composition") { materializeComposition(it) }
+    fun components(): List<Component> = all("Component") { materializeComponent(it) }
+    fun peptideBatchs(): List<PeptideBatch> = all("PeptideBatch") { materializePeptideBatch(it) }
+    fun depletionNotices(): List<DepletionNotice> = all("DepletionNotice") { materializeDepletionNotice(it) }
+    fun origins(): List<Origin> = all("Origin") { materializeOrigin(it) }
+    fun fermenteds(): List<Fermented> = all("Fermented") { materializeFermented(it) }
+    fun ordereds(): List<Ordered> = all("Ordered") { materializeOrdered(it) }
+    fun composites(): List<Composite> = all("Composite") { materializeComposite(it) }
+    fun depleteds(): List<Depleted> = all("Depleted") { materializeDepleted(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
-    inner class Read {
-        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
-        val registry = QueryRegistry()
-        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+    inner class Read : ReadSurface<Read>(system) {
+        override fun modelOf(id: Long): Ref<*> = materialize(id)
 
-        /** The model object behind a reference, read now; throws when the record no longer exists. */
-        @Suppress("UNCHECKED_CAST")
-        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
-        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
-        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
-        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
-        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
-            val id = system.idOf(ref)
-            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            materialize(id)
-        }
-
-        val peptides: PeptideQuery get() = PeptideQuery(Query("Peptide"))
+        val peptides: PeptideQuery get() = query("Peptide", PeptideFields()) { materializePeptide(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun peptide(key: StoreKey): Peptide = invoke<Peptide>(Ref.Persisted("Peptide", key))
+        fun peptide(key: StoreKey): Peptide = byKey("Peptide", key)
         fun peptide(key: Long): Peptide = peptide(StoreKey(key))
 
-        val bacteriaStrains: BacteriaStrainQuery get() = BacteriaStrainQuery(Query("BacteriaStrain"))
+        val bacteriaStrains: BacteriaStrainQuery get() = query("BacteriaStrain", BacteriaStrainFields()) { materializeBacteriaStrain(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun bacteriaStrain(key: StoreKey): BacteriaStrain = invoke<BacteriaStrain>(Ref.Persisted("BacteriaStrain", key))
+        fun bacteriaStrain(key: StoreKey): BacteriaStrain = byKey("BacteriaStrain", key)
         fun bacteriaStrain(key: Long): BacteriaStrain = bacteriaStrain(StoreKey(key))
 
-        val fermenterRuns: FermenterRunQuery get() = FermenterRunQuery(Query("FermenterRun"))
+        val fermenterRuns: FermenterRunQuery get() = query("FermenterRun", FermenterRunFields()) { materializeFermenterRun(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun fermenterRun(key: StoreKey): FermenterRun = invoke<FermenterRun>(Ref.Persisted("FermenterRun", key))
+        fun fermenterRun(key: StoreKey): FermenterRun = byKey("FermenterRun", key)
         fun fermenterRun(key: Long): FermenterRun = fermenterRun(StoreKey(key))
 
-        val vendors: VendorQuery get() = VendorQuery(Query("Vendor"))
+        val vendors: VendorQuery get() = query("Vendor", VendorFields()) { materializeVendor(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun vendor(key: StoreKey): Vendor = invoke<Vendor>(Ref.Persisted("Vendor", key))
+        fun vendor(key: StoreKey): Vendor = byKey("Vendor", key)
         fun vendor(key: Long): Vendor = vendor(StoreKey(key))
 
-        val fermentations: FermentationQuery get() = FermentationQuery(Query("Fermentation"))
+        val fermentations: FermentationQuery get() = query("Fermentation", FermentationFields()) { materializeFermentation(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun fermentation(key: StoreKey): Fermentation = invoke<Fermentation>(Ref.Persisted("Fermentation", key))
+        fun fermentation(key: StoreKey): Fermentation = byKey("Fermentation", key)
         fun fermentation(key: Long): Fermentation = fermentation(StoreKey(key))
 
-        val externalOrders: ExternalOrderQuery get() = ExternalOrderQuery(Query("ExternalOrder"))
+        val externalOrders: ExternalOrderQuery get() = query("ExternalOrder", ExternalOrderFields()) { materializeExternalOrder(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun externalOrder(key: StoreKey): ExternalOrder = invoke<ExternalOrder>(Ref.Persisted("ExternalOrder", key))
+        fun externalOrder(key: StoreKey): ExternalOrder = byKey("ExternalOrder", key)
         fun externalOrder(key: Long): ExternalOrder = externalOrder(StoreKey(key))
 
-        val compositions: CompositionQuery get() = CompositionQuery(Query("Composition"))
+        val compositions: CompositionQuery get() = query("Composition", CompositionFields()) { materializeComposition(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun composition(key: StoreKey): Composition = invoke<Composition>(Ref.Persisted("Composition", key))
+        fun composition(key: StoreKey): Composition = byKey("Composition", key)
         fun composition(key: Long): Composition = composition(StoreKey(key))
 
-        val components: ComponentQuery get() = ComponentQuery(Query("Component"))
+        val components: ComponentQuery get() = query("Component", ComponentFields()) { materializeComponent(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun component(key: StoreKey): Component = invoke<Component>(Ref.Persisted("Component", key))
+        fun component(key: StoreKey): Component = byKey("Component", key)
         fun component(key: Long): Component = component(StoreKey(key))
 
-        val peptideBatchs: PeptideBatchQuery get() = PeptideBatchQuery(Query("PeptideBatch"))
+        val peptideBatchs: PeptideBatchQuery get() = query("PeptideBatch", PeptideBatchFields()) { materializePeptideBatch(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun peptideBatch(key: StoreKey): PeptideBatch = invoke<PeptideBatch>(Ref.Persisted("PeptideBatch", key))
+        fun peptideBatch(key: StoreKey): PeptideBatch = byKey("PeptideBatch", key)
         fun peptideBatch(key: Long): PeptideBatch = peptideBatch(StoreKey(key))
 
-        val depletionNotices: DepletionNoticeQuery get() = DepletionNoticeQuery(Query("DepletionNotice"))
+        val depletionNotices: DepletionNoticeQuery get() = query("DepletionNotice", DepletionNoticeFields()) { materializeDepletionNotice(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun depletionNotice(key: StoreKey): DepletionNotice = invoke<DepletionNotice>(Ref.Persisted("DepletionNotice", key))
+        fun depletionNotice(key: StoreKey): DepletionNotice = byKey("DepletionNotice", key)
         fun depletionNotice(key: Long): DepletionNotice = depletionNotice(StoreKey(key))
 
-        val origins: OriginQuery get() = OriginQuery(Query("Origin"))
+        val origins: OriginQuery get() = query("Origin", OriginFields()) { materializeOrigin(it) }
 
-        val fermenteds: FermentedQuery get() = FermentedQuery(Query("Fermented"))
+        val fermenteds: FermentedQuery get() = query("Fermented", FermentedFields()) { materializeFermented(it) }
         /** The record behind [ref] as a member of Fermented, or null when it is not one. */
-        fun fermented(ref: Ref<PeptideBatch>): Fermented? =
-            system.scope { system.idOf(ref).let { if (system.exists("Fermented", it)) materializeFermented(it) else null } }
+        fun fermented(ref: Ref<PeptideBatch>): Fermented? = member("Fermented", ref) { materializeFermented(it) }
 
-        val ordereds: OrderedQuery get() = OrderedQuery(Query("Ordered"))
+        val ordereds: OrderedQuery get() = query("Ordered", OrderedFields()) { materializeOrdered(it) }
         /** The record behind [ref] as a member of Ordered, or null when it is not one. */
-        fun ordered(ref: Ref<PeptideBatch>): Ordered? =
-            system.scope { system.idOf(ref).let { if (system.exists("Ordered", it)) materializeOrdered(it) else null } }
+        fun ordered(ref: Ref<PeptideBatch>): Ordered? = member("Ordered", ref) { materializeOrdered(it) }
 
-        val composites: CompositeQuery get() = CompositeQuery(Query("Composite"))
+        val composites: CompositeQuery get() = query("Composite", CompositeFields()) { materializeComposite(it) }
         /** The record behind [ref] as a member of Composite, or null when it is not one. */
-        fun composite(ref: Ref<PeptideBatch>): Composite? =
-            system.scope { system.idOf(ref).let { if (system.exists("Composite", it)) materializeComposite(it) else null } }
+        fun composite(ref: Ref<PeptideBatch>): Composite? = member("Composite", ref) { materializeComposite(it) }
 
-        val depleteds: DepletedQuery get() = DepletedQuery(Query("Depleted"))
+        val depleteds: DepletedQuery get() = query("Depleted", DepletedFields()) { materializeDepleted(it) }
         /** The record behind [ref] as a member of Depleted, or null when it is not one. */
-        fun depleted(ref: Ref<PeptideBatch>): Depleted? =
-            system.scope { system.idOf(ref).let { if (system.exists("Depleted", it)) materializeDepleted(it) else null } }
-    }
-
-    inner class PeptideQuery(q: Query) : TypedQuery<PeptideFields, Peptide>(system, q, PeptideFields(), { materializePeptide(it) }) {
-        override fun with(q: Query) = PeptideQuery(q)
-    }
-
-    inner class BacteriaStrainQuery(q: Query) : TypedQuery<BacteriaStrainFields, BacteriaStrain>(system, q, BacteriaStrainFields(), { materializeBacteriaStrain(it) }) {
-        override fun with(q: Query) = BacteriaStrainQuery(q)
-    }
-
-    inner class FermenterRunQuery(q: Query) : TypedQuery<FermenterRunFields, FermenterRun>(system, q, FermenterRunFields(), { materializeFermenterRun(it) }) {
-        override fun with(q: Query) = FermenterRunQuery(q)
-    }
-
-    inner class VendorQuery(q: Query) : TypedQuery<VendorFields, Vendor>(system, q, VendorFields(), { materializeVendor(it) }) {
-        override fun with(q: Query) = VendorQuery(q)
-    }
-
-    inner class FermentationQuery(q: Query) : TypedQuery<FermentationFields, Fermentation>(system, q, FermentationFields(), { materializeFermentation(it) }) {
-        override fun with(q: Query) = FermentationQuery(q)
-    }
-
-    inner class ExternalOrderQuery(q: Query) : TypedQuery<ExternalOrderFields, ExternalOrder>(system, q, ExternalOrderFields(), { materializeExternalOrder(it) }) {
-        override fun with(q: Query) = ExternalOrderQuery(q)
-    }
-
-    inner class CompositionQuery(q: Query) : TypedQuery<CompositionFields, Composition>(system, q, CompositionFields(), { materializeComposition(it) }) {
-        override fun with(q: Query) = CompositionQuery(q)
-    }
-
-    inner class ComponentQuery(q: Query) : TypedQuery<ComponentFields, Component>(system, q, ComponentFields(), { materializeComponent(it) }) {
-        override fun with(q: Query) = ComponentQuery(q)
-    }
-
-    inner class PeptideBatchQuery(q: Query) : TypedQuery<PeptideBatchFields, PeptideBatch>(system, q, PeptideBatchFields(), { materializePeptideBatch(it) }) {
-        override fun with(q: Query) = PeptideBatchQuery(q)
-    }
-
-    inner class DepletionNoticeQuery(q: Query) : TypedQuery<DepletionNoticeFields, DepletionNotice>(system, q, DepletionNoticeFields(), { materializeDepletionNotice(it) }) {
-        override fun with(q: Query) = DepletionNoticeQuery(q)
-    }
-
-    inner class OriginQuery(q: Query) : TypedQuery<OriginFields, Origin>(system, q, OriginFields(), { materializeOrigin(it) }) {
-        override fun with(q: Query) = OriginQuery(q)
-    }
-
-    inner class FermentedQuery(q: Query) : TypedQuery<FermentedFields, Fermented>(system, q, FermentedFields(), { materializeFermented(it) }) {
-        override fun with(q: Query) = FermentedQuery(q)
-    }
-
-    inner class OrderedQuery(q: Query) : TypedQuery<OrderedFields, Ordered>(system, q, OrderedFields(), { materializeOrdered(it) }) {
-        override fun with(q: Query) = OrderedQuery(q)
-    }
-
-    inner class CompositeQuery(q: Query) : TypedQuery<CompositeFields, Composite>(system, q, CompositeFields(), { materializeComposite(it) }) {
-        override fun with(q: Query) = CompositeQuery(q)
-    }
-
-    inner class DepletedQuery(q: Query) : TypedQuery<DepletedFields, Depleted>(system, q, DepletedFields(), { materializeDepleted(it) }) {
-        override fun with(q: Query) = DepletedQuery(q)
+        fun depleted(ref: Ref<PeptideBatch>): Depleted? = member("Depleted", ref) { materializeDepleted(it) }
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -617,26 +495,43 @@ rule NoteDepletion when Depleted {
     }
 }
 
+// ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias PeptideQuery = TypedQuery<PeptideFields, Peptide>
+typealias BacteriaStrainQuery = TypedQuery<BacteriaStrainFields, BacteriaStrain>
+typealias FermenterRunQuery = TypedQuery<FermenterRunFields, FermenterRun>
+typealias VendorQuery = TypedQuery<VendorFields, Vendor>
+typealias FermentationQuery = TypedQuery<FermentationFields, Fermentation>
+typealias ExternalOrderQuery = TypedQuery<ExternalOrderFields, ExternalOrder>
+typealias CompositionQuery = TypedQuery<CompositionFields, Composition>
+typealias ComponentQuery = TypedQuery<ComponentFields, Component>
+typealias PeptideBatchQuery = TypedQuery<PeptideBatchFields, PeptideBatch>
+typealias DepletionNoticeQuery = TypedQuery<DepletionNoticeFields, DepletionNotice>
+typealias OriginQuery = TypedQuery<OriginFields, Origin>
+typealias FermentedQuery = TypedQuery<FermentedFields, Fermented>
+typealias OrderedQuery = TypedQuery<OrderedFields, Ordered>
+typealias CompositeQuery = TypedQuery<CompositeFields, Composite>
+typealias DepletedQuery = TypedQuery<DepletedFields, Depleted>
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewPeptide(
     val code: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("code", code)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Peptide") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewBacteriaStrain(
     val name: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "BacteriaStrain") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -644,23 +539,23 @@ data class NewBacteriaStrain(
 data class NewFermenterRun(
     val vessel: String,
     val startedOn: LocalDate,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("vessel", vessel)
         put("startedOn", startedOn)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "FermenterRun") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewVendor(
     val name: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Vendor") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -669,16 +564,16 @@ data class NewPeptideBatch(
     val peptide: Ref<Peptide>,
     val quantityMg: BigDecimal,
     val origin: OriginReference,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("peptide", system.idOf(peptide))
         put("quantityMg", quantityMg)
         (origin as? OriginReference.Existing)?.let { put("origin", system.idOf(it.ref)) }
     }
-    internal fun parts(system: VelleSystem, reg: NewRegistry): Map<String, List<Map<String, Any?>>> = buildMap {
+    override fun parts(system: VelleSystem, reg: NewRegistry): Map<String, List<Map<String, Any?>>> = buildMap {
         (origin as? OriginReference.New)?.let { put("origin", listOf(it.value.asValue(system, reg))) }
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
         (origin as? OriginReference.New)?.let { reg.add(it.value); it.value.register(reg) }
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + parts(system, reg) + ("@shape" to "PeptideBatch") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
@@ -688,12 +583,12 @@ data class NewPeptideBatch(
 data class NewComponent(
     val source: Ref<PeptideBatch>,
     val amountMg: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("source", system.idOf(source))
         put("amountMg", amountMg)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Component") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -701,8 +596,8 @@ data class NewComponent(
 data class NewComposition(
     val mixedOn: LocalDate,
     val components: List<NewComponent> = emptyList(),
-) : NewOrigin {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewOrigin, NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("mixedOn", mixedOn)
         put("components", components.map { it.asValue(system, reg) })
     }
@@ -715,8 +610,8 @@ data class NewComposition(
 data class NewExternalOrder(
     val vendor: Ref<Vendor>,
     val orderItem: String,
-) : NewOrigin {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewOrigin, NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("vendor", system.idOf(vendor))
         put("orderItem", orderItem)
     }
@@ -728,8 +623,8 @@ data class NewExternalOrder(
 data class NewFermentation(
     val strain: Ref<BacteriaStrain>,
     val run: Ref<FermenterRun>,
-) : NewOrigin {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewOrigin, NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("strain", system.idOf(strain))
         put("run", system.idOf(run))
     }

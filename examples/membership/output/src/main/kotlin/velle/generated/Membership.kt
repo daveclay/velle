@@ -7,15 +7,7 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
-class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) {
-
-    val system: VelleSystem = VelleSystem(Model(Parser.parse(SPEC)), startTime)
-
-    // ── clock (harness-controlled; ticks are separate calls) ──
-    val now: Instant get() = system.now
-    fun advanceSeconds(seconds: Long) = system.advance(seconds)
-    fun advanceDays(days: Long) = system.advanceDays(days)
-    fun setTime(t: Instant) = system.setTime(t)
+class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
 
     // ── ticks: scheduled events and user acts are both external input ──
     fun tickHourly() = system.tick("Hourly")
@@ -26,15 +18,8 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewPlan): Commit<NewPlan, Ref<Plan>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Plan", raw).carrying(input)
-    }
+    fun commit(input: NewPlan): Commit<NewPlan, Ref<Plan>> =
+        boundary("Plan", input).carrying(input)
 
     /** Queue keys: [signUp.plan], [signUp.referredBy] — plus system-wide width below.
      *  System-wide over Member — reads Member.balance with no path back to any key (unexamined (A5)).
@@ -45,41 +30,20 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
      *  System-wide over AuditEntry — creates AuditEntry referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewSignUp): Commit<NewSignUp, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("SignUp", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewSignUp): Commit<NewSignUp, Nothing?> =
+        boundary("SignUp", input).carryingNoRecord(input)
 
     /** Queue key: [changeEmail.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewChangeEmail): Commit<NewChangeEmail, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ChangeEmail", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewChangeEmail): Commit<NewChangeEmail, Nothing?> =
+        boundary("ChangeEmail", input).carryingNoRecord(input)
 
     /** Queue keys: [visit.member], [visit.member.plan], [visit.member.referredBy].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewVisit): Commit<NewVisit, Ref<Visit>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Visit", raw).carrying(input)
-    }
+    fun commit(input: NewVisit): Commit<NewVisit, Ref<Visit>> =
+        boundary("Visit", input).carrying(input)
 
     /** Queue keys: [makeDeposit.member], [makeDeposit.member.plan], [makeDeposit.member.referredBy] — plus system-wide width below.
      *  System-wide over Member — reads Member.balance with no path back to any key (unexamined (A5)).
@@ -90,462 +54,245 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
      *  System-wide over AuditEntry — creates AuditEntry referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewMakeDeposit): Commit<NewMakeDeposit, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("MakeDeposit", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewMakeDeposit): Commit<NewMakeDeposit, Nothing?> =
+        boundary("MakeDeposit", input).carryingNoRecord(input)
 
     /** Queue keys: none — this commit contends with no other work.
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAgent): Commit<NewAgent, Ref<Agent>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("Agent", raw).carrying(input)
-    }
+    fun commit(input: NewAgent): Commit<NewAgent, Ref<Agent>> =
+        boundary("Agent", input).carrying(input)
 
     /** Queue keys: [raiseTicket.assignee], [raiseTicket.member] — plus system-wide width below.
      *  System-wide over ReopenNotice — creates ReopenNotice referencing an instance the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewRaiseTicket): Commit<NewRaiseTicket, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("RaiseTicket", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewRaiseTicket): Commit<NewRaiseTicket, Nothing?> =
+        boundary("RaiseTicket", input).carryingNoRecord(input)
 
     /** Queue keys: [closeTicket.closedBy], [closeTicket.ticket], [closeTicket.ticket.closedBy].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewCloseTicket): Commit<NewCloseTicket, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("CloseTicket", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewCloseTicket): Commit<NewCloseTicket, Nothing?> =
+        boundary("CloseTicket", input).carryingNoRecord(input)
 
     /** Queue keys: [reopenTicket.ticket], [reopenTicket.ticket.closedBy].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewReopenTicket): Commit<NewReopenTicket, Ref<ReopenTicket>> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("ReopenTicket", raw).carrying(input)
-    }
+    fun commit(input: NewReopenTicket): Commit<NewReopenTicket, Ref<ReopenTicket>> =
+        boundary("ReopenTicket", input).carrying(input)
 
     /** Queue keys: [assignTicket.agent], [assignTicket.ticket], [assignTicket.ticket.assignee], [assignTicket.ticket.member].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
-    fun commit(input: NewAssignTicket): Commit<NewAssignTicket, Nothing?> {
-        // the boundary (OQ63 §6.2.3.3): every new value the input carries gets a token by
-        // identity, and a field pointing at a sibling names it; refused before the runtime
-        val reg = NewRegistry()
-        input.register(reg)
-        val raw = input.raw(system, reg)
-        reg.problem()?.let { return Commit.Refused(input, it) }
-        return system.commit("AssignTicket", raw).carryingNoRecord(input)
-    }
+    fun commit(input: NewAssignTicket): Commit<NewAssignTicket, Nothing?> =
+        boundary("AssignTicket", input).carryingNoRecord(input)
 
-    fun plans(): List<Plan> = system.scope { system.instancesOf("Plan").map { materializePlan(it) } }
-    fun members(): List<Member> = system.scope { system.instancesOf("Member").map { materializeMember(it) } }
-    fun welcomeNotes(): List<WelcomeNote> = system.scope { system.instancesOf("WelcomeNote").map { materializeWelcomeNote(it) } }
-    fun emailChanges(): List<EmailChange> = system.scope { system.instancesOf("EmailChange").map { materializeEmailChange(it) } }
-    fun visits(): List<Visit> = system.scope { system.instancesOf("Visit").map { materializeVisit(it) } }
-    fun analyticsPings(): List<AnalyticsPing> = system.scope { system.instancesOf("AnalyticsPing").map { materializeAnalyticsPing(it) } }
-    fun deposits(): List<Deposit> = system.scope { system.instancesOf("Deposit").map { materializeDeposit(it) } }
-    fun charges(): List<Charge> = system.scope { system.instancesOf("Charge").map { materializeCharge(it) } }
-    fun chargeApplications(): List<ChargeApplication> = system.scope { system.instancesOf("ChargeApplication").map { materializeChargeApplication(it) } }
-    fun delinquencyFlags(): List<DelinquencyFlag> = system.scope { system.instancesOf("DelinquencyFlag").map { materializeDelinquencyFlag(it) } }
-    fun delinquencyResolutions(): List<DelinquencyResolution> = system.scope { system.instancesOf("DelinquencyResolution").map { materializeDelinquencyResolution(it) } }
-    fun auditEntrys(): List<AuditEntry> = system.scope { system.instancesOf("AuditEntry").map { materializeAuditEntry(it) } }
-    fun accountReviews(): List<AccountReview> = system.scope { system.instancesOf("AccountReview").map { materializeAccountReview(it) } }
-    fun agents(): List<Agent> = system.scope { system.instancesOf("Agent").map { materializeAgent(it) } }
-    fun tickets(): List<Ticket> = system.scope { system.instancesOf("Ticket").map { materializeTicket(it) } }
-    fun ticketClosures(): List<TicketClosure> = system.scope { system.instancesOf("TicketClosure").map { materializeTicketClosure(it) } }
-    fun reopenTickets(): List<ReopenTicket> = system.scope { system.instancesOf("ReopenTicket").map { materializeReopenTicket(it) } }
-    fun reopenNotices(): List<ReopenNotice> = system.scope { system.instancesOf("ReopenNotice").map { materializeReopenNotice(it) } }
-    fun escalations(): List<Escalation> = system.scope { system.instancesOf("Escalation").map { materializeEscalation(it) } }
-    fun selfReferrals(): List<SelfReferral> = system.scope { system.instancesOf("SelfReferral").map { materializeSelfReferral(it) } }
-    fun unappliedDeposits(): List<UnappliedDeposit> = system.scope { system.instancesOf("UnappliedDeposit").map { materializeUnappliedDeposit(it) } }
-    fun activeMembers(): List<ActiveMember> = system.scope { system.instancesOf("ActiveMember").map { materializeActiveMember(it) } }
-    fun unappliedCharges(): List<UnappliedCharge> = system.scope { system.instancesOf("UnappliedCharge").map { materializeUnappliedCharge(it) } }
-    fun delinquents(): List<Delinquent> = system.scope { system.instancesOf("Delinquent").map { materializeDelinquent(it) } }
-    fun deepDelinquents(): List<DeepDelinquent> = system.scope { system.instancesOf("DeepDelinquent").map { materializeDeepDelinquent(it) } }
-    fun openDelinquencyFlags(): List<OpenDelinquencyFlag> = system.scope { system.instancesOf("OpenDelinquencyFlag").map { materializeOpenDelinquencyFlag(it) } }
-    fun chronicDelinquents(): List<ChronicDelinquent> = system.scope { system.instancesOf("ChronicDelinquent").map { materializeChronicDelinquent(it) } }
-    fun closedTickets(): List<ClosedTicket> = system.scope { system.instancesOf("ClosedTicket").map { materializeClosedTicket(it) } }
-    fun openTickets(): List<OpenTicket> = system.scope { system.instancesOf("OpenTicket").map { materializeOpenTicket(it) } }
-    fun overdueTickets(): List<OverdueTicket> = system.scope { system.instancesOf("OverdueTicket").map { materializeOverdueTicket(it) } }
-    fun highPrioritys(): List<HighPriority> = system.scope { system.instancesOf("HighPriority").map { materializeHighPriority(it) } }
-    fun unassigneds(): List<Unassigned> = system.scope { system.instancesOf("Unassigned").map { materializeUnassigned(it) } }
-    fun needsAttentions(): List<NeedsAttention> = system.scope { system.instancesOf("NeedsAttention").map { materializeNeedsAttention(it) } }
-    fun urgentQueues(): List<UrgentQueue> = system.scope { system.instancesOf("UrgentQueue").map { materializeUrgentQueue(it) } }
-    fun memberWithDisputedCharges(): List<MemberWithDisputedCharge> = system.scope { system.instancesOf("MemberWithDisputedCharge").map { materializeMemberWithDisputedCharge(it) } }
-    fun lateEscalatedMembers(): List<LateEscalatedMember> = system.scope { system.instancesOf("LateEscalatedMember").map { materializeLateEscalatedMember(it) } }
+    fun plans(): List<Plan> = all("Plan") { materializePlan(it) }
+    fun members(): List<Member> = all("Member") { materializeMember(it) }
+    fun welcomeNotes(): List<WelcomeNote> = all("WelcomeNote") { materializeWelcomeNote(it) }
+    fun emailChanges(): List<EmailChange> = all("EmailChange") { materializeEmailChange(it) }
+    fun visits(): List<Visit> = all("Visit") { materializeVisit(it) }
+    fun analyticsPings(): List<AnalyticsPing> = all("AnalyticsPing") { materializeAnalyticsPing(it) }
+    fun deposits(): List<Deposit> = all("Deposit") { materializeDeposit(it) }
+    fun charges(): List<Charge> = all("Charge") { materializeCharge(it) }
+    fun chargeApplications(): List<ChargeApplication> = all("ChargeApplication") { materializeChargeApplication(it) }
+    fun delinquencyFlags(): List<DelinquencyFlag> = all("DelinquencyFlag") { materializeDelinquencyFlag(it) }
+    fun delinquencyResolutions(): List<DelinquencyResolution> = all("DelinquencyResolution") { materializeDelinquencyResolution(it) }
+    fun auditEntrys(): List<AuditEntry> = all("AuditEntry") { materializeAuditEntry(it) }
+    fun accountReviews(): List<AccountReview> = all("AccountReview") { materializeAccountReview(it) }
+    fun agents(): List<Agent> = all("Agent") { materializeAgent(it) }
+    fun tickets(): List<Ticket> = all("Ticket") { materializeTicket(it) }
+    fun ticketClosures(): List<TicketClosure> = all("TicketClosure") { materializeTicketClosure(it) }
+    fun reopenTickets(): List<ReopenTicket> = all("ReopenTicket") { materializeReopenTicket(it) }
+    fun reopenNotices(): List<ReopenNotice> = all("ReopenNotice") { materializeReopenNotice(it) }
+    fun escalations(): List<Escalation> = all("Escalation") { materializeEscalation(it) }
+    fun selfReferrals(): List<SelfReferral> = all("SelfReferral") { materializeSelfReferral(it) }
+    fun unappliedDeposits(): List<UnappliedDeposit> = all("UnappliedDeposit") { materializeUnappliedDeposit(it) }
+    fun activeMembers(): List<ActiveMember> = all("ActiveMember") { materializeActiveMember(it) }
+    fun unappliedCharges(): List<UnappliedCharge> = all("UnappliedCharge") { materializeUnappliedCharge(it) }
+    fun delinquents(): List<Delinquent> = all("Delinquent") { materializeDelinquent(it) }
+    fun deepDelinquents(): List<DeepDelinquent> = all("DeepDelinquent") { materializeDeepDelinquent(it) }
+    fun openDelinquencyFlags(): List<OpenDelinquencyFlag> = all("OpenDelinquencyFlag") { materializeOpenDelinquencyFlag(it) }
+    fun chronicDelinquents(): List<ChronicDelinquent> = all("ChronicDelinquent") { materializeChronicDelinquent(it) }
+    fun closedTickets(): List<ClosedTicket> = all("ClosedTicket") { materializeClosedTicket(it) }
+    fun openTickets(): List<OpenTicket> = all("OpenTicket") { materializeOpenTicket(it) }
+    fun overdueTickets(): List<OverdueTicket> = all("OverdueTicket") { materializeOverdueTicket(it) }
+    fun highPrioritys(): List<HighPriority> = all("HighPriority") { materializeHighPriority(it) }
+    fun unassigneds(): List<Unassigned> = all("Unassigned") { materializeUnassigned(it) }
+    fun needsAttentions(): List<NeedsAttention> = all("NeedsAttention") { materializeNeedsAttention(it) }
+    fun urgentQueues(): List<UrgentQueue> = all("UrgentQueue") { materializeUrgentQueue(it) }
+    fun memberWithDisputedCharges(): List<MemberWithDisputedCharge> = all("MemberWithDisputedCharge") { materializeMemberWithDisputedCharge(it) }
+    fun lateEscalatedMembers(): List<LateEscalatedMember> = all("LateEscalatedMember") { materializeLateEscalatedMember(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
 
-    inner class Read {
-        /** Queries registered beside the client (OQ51 R9): checked at the build, named for the store. */
-        val registry = QueryRegistry()
-        fun <Q : TypedQuery<*, *>> register(name: String, build: Read.() -> Q): Q = registry.register(name, build())
+    inner class Read : ReadSurface<Read>(system) {
+        override fun modelOf(id: Long): Ref<*> = materialize(id)
 
-        /** The model object behind a reference, read now; throws when the record no longer exists. */
-        @Suppress("UNCHECKED_CAST")
-        operator fun <T : Any> invoke(ref: Ref<T>): T = fetch(ref) as T
-        /** A bare key is not a reference: a persisted reference built by hand is refused at compile time. */
-        @Deprecated("read a record by its key with read.<shape>(key); read(ref) takes a reference the system handed you", level = DeprecationLevel.ERROR)
-        operator fun invoke(ref: Ref<Nothing>): Nothing = throw UnsupportedOperationException()
-        private fun fetch(ref: Ref<*>): Ref<*> = system.scope {
-            val id = system.idOf(ref)
-            system.currentShapeOf(id) ?: throw NoSuchElementException("no current record for ${system.refFor(id)}")
-            materialize(id)
-        }
-
-        val plans: PlanQuery get() = PlanQuery(Query("Plan"))
+        val plans: PlanQuery get() = query("Plan", PlanFields()) { materializePlan(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun plan(key: StoreKey): Plan = invoke<Plan>(Ref.Persisted("Plan", key))
+        fun plan(key: StoreKey): Plan = byKey("Plan", key)
         fun plan(key: Long): Plan = plan(StoreKey(key))
 
-        val members: MemberQuery get() = MemberQuery(Query("Member"))
+        val members: MemberQuery get() = query("Member", MemberFields()) { materializeMember(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun member(key: StoreKey): Member = invoke<Member>(Ref.Persisted("Member", key))
+        fun member(key: StoreKey): Member = byKey("Member", key)
         fun member(key: Long): Member = member(StoreKey(key))
 
-        val welcomeNotes: WelcomeNoteQuery get() = WelcomeNoteQuery(Query("WelcomeNote"))
+        val welcomeNotes: WelcomeNoteQuery get() = query("WelcomeNote", WelcomeNoteFields()) { materializeWelcomeNote(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun welcomeNote(key: StoreKey): WelcomeNote = invoke<WelcomeNote>(Ref.Persisted("WelcomeNote", key))
+        fun welcomeNote(key: StoreKey): WelcomeNote = byKey("WelcomeNote", key)
         fun welcomeNote(key: Long): WelcomeNote = welcomeNote(StoreKey(key))
 
-        val emailChanges: EmailChangeQuery get() = EmailChangeQuery(Query("EmailChange"))
+        val emailChanges: EmailChangeQuery get() = query("EmailChange", EmailChangeFields()) { materializeEmailChange(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun emailChange(key: StoreKey): EmailChange = invoke<EmailChange>(Ref.Persisted("EmailChange", key))
+        fun emailChange(key: StoreKey): EmailChange = byKey("EmailChange", key)
         fun emailChange(key: Long): EmailChange = emailChange(StoreKey(key))
 
-        val visits: VisitQuery get() = VisitQuery(Query("Visit"))
+        val visits: VisitQuery get() = query("Visit", VisitFields()) { materializeVisit(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun visit(key: StoreKey): Visit = invoke<Visit>(Ref.Persisted("Visit", key))
+        fun visit(key: StoreKey): Visit = byKey("Visit", key)
         fun visit(key: Long): Visit = visit(StoreKey(key))
 
-        val analyticsPings: AnalyticsPingQuery get() = AnalyticsPingQuery(Query("AnalyticsPing"))
+        val analyticsPings: AnalyticsPingQuery get() = query("AnalyticsPing", AnalyticsPingFields()) { materializeAnalyticsPing(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun analyticsPing(key: StoreKey): AnalyticsPing = invoke<AnalyticsPing>(Ref.Persisted("AnalyticsPing", key))
+        fun analyticsPing(key: StoreKey): AnalyticsPing = byKey("AnalyticsPing", key)
         fun analyticsPing(key: Long): AnalyticsPing = analyticsPing(StoreKey(key))
 
-        val deposits: DepositQuery get() = DepositQuery(Query("Deposit"))
+        val deposits: DepositQuery get() = query("Deposit", DepositFields()) { materializeDeposit(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun deposit(key: StoreKey): Deposit = invoke<Deposit>(Ref.Persisted("Deposit", key))
+        fun deposit(key: StoreKey): Deposit = byKey("Deposit", key)
         fun deposit(key: Long): Deposit = deposit(StoreKey(key))
 
-        val charges: ChargeQuery get() = ChargeQuery(Query("Charge"))
+        val charges: ChargeQuery get() = query("Charge", ChargeFields()) { materializeCharge(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun charge(key: StoreKey): Charge = invoke<Charge>(Ref.Persisted("Charge", key))
+        fun charge(key: StoreKey): Charge = byKey("Charge", key)
         fun charge(key: Long): Charge = charge(StoreKey(key))
 
-        val chargeApplications: ChargeApplicationQuery get() = ChargeApplicationQuery(Query("ChargeApplication"))
+        val chargeApplications: ChargeApplicationQuery get() = query("ChargeApplication", ChargeApplicationFields()) { materializeChargeApplication(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun chargeApplication(key: StoreKey): ChargeApplication = invoke<ChargeApplication>(Ref.Persisted("ChargeApplication", key))
+        fun chargeApplication(key: StoreKey): ChargeApplication = byKey("ChargeApplication", key)
         fun chargeApplication(key: Long): ChargeApplication = chargeApplication(StoreKey(key))
 
-        val delinquencyFlags: DelinquencyFlagQuery get() = DelinquencyFlagQuery(Query("DelinquencyFlag"))
+        val delinquencyFlags: DelinquencyFlagQuery get() = query("DelinquencyFlag", DelinquencyFlagFields()) { materializeDelinquencyFlag(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun delinquencyFlag(key: StoreKey): DelinquencyFlag = invoke<DelinquencyFlag>(Ref.Persisted("DelinquencyFlag", key))
+        fun delinquencyFlag(key: StoreKey): DelinquencyFlag = byKey("DelinquencyFlag", key)
         fun delinquencyFlag(key: Long): DelinquencyFlag = delinquencyFlag(StoreKey(key))
 
-        val delinquencyResolutions: DelinquencyResolutionQuery get() = DelinquencyResolutionQuery(Query("DelinquencyResolution"))
+        val delinquencyResolutions: DelinquencyResolutionQuery get() = query("DelinquencyResolution", DelinquencyResolutionFields()) { materializeDelinquencyResolution(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun delinquencyResolution(key: StoreKey): DelinquencyResolution = invoke<DelinquencyResolution>(Ref.Persisted("DelinquencyResolution", key))
+        fun delinquencyResolution(key: StoreKey): DelinquencyResolution = byKey("DelinquencyResolution", key)
         fun delinquencyResolution(key: Long): DelinquencyResolution = delinquencyResolution(StoreKey(key))
 
-        val auditEntrys: AuditEntryQuery get() = AuditEntryQuery(Query("AuditEntry"))
+        val auditEntrys: AuditEntryQuery get() = query("AuditEntry", AuditEntryFields()) { materializeAuditEntry(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun auditEntry(key: StoreKey): AuditEntry = invoke<AuditEntry>(Ref.Persisted("AuditEntry", key))
+        fun auditEntry(key: StoreKey): AuditEntry = byKey("AuditEntry", key)
         fun auditEntry(key: Long): AuditEntry = auditEntry(StoreKey(key))
 
-        val accountReviews: AccountReviewQuery get() = AccountReviewQuery(Query("AccountReview"))
+        val accountReviews: AccountReviewQuery get() = query("AccountReview", AccountReviewFields()) { materializeAccountReview(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun accountReview(key: StoreKey): AccountReview = invoke<AccountReview>(Ref.Persisted("AccountReview", key))
+        fun accountReview(key: StoreKey): AccountReview = byKey("AccountReview", key)
         fun accountReview(key: Long): AccountReview = accountReview(StoreKey(key))
 
-        val agents: AgentQuery get() = AgentQuery(Query("Agent"))
+        val agents: AgentQuery get() = query("Agent", AgentFields()) { materializeAgent(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun agent(key: StoreKey): Agent = invoke<Agent>(Ref.Persisted("Agent", key))
+        fun agent(key: StoreKey): Agent = byKey("Agent", key)
         fun agent(key: Long): Agent = agent(StoreKey(key))
 
-        val tickets: TicketQuery get() = TicketQuery(Query("Ticket"))
+        val tickets: TicketQuery get() = query("Ticket", TicketFields()) { materializeTicket(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun ticket(key: StoreKey): Ticket = invoke<Ticket>(Ref.Persisted("Ticket", key))
+        fun ticket(key: StoreKey): Ticket = byKey("Ticket", key)
         fun ticket(key: Long): Ticket = ticket(StoreKey(key))
 
-        val ticketClosures: TicketClosureQuery get() = TicketClosureQuery(Query("TicketClosure"))
+        val ticketClosures: TicketClosureQuery get() = query("TicketClosure", TicketClosureFields()) { materializeTicketClosure(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun ticketClosure(key: StoreKey): TicketClosure = invoke<TicketClosure>(Ref.Persisted("TicketClosure", key))
+        fun ticketClosure(key: StoreKey): TicketClosure = byKey("TicketClosure", key)
         fun ticketClosure(key: Long): TicketClosure = ticketClosure(StoreKey(key))
 
-        val reopenTickets: ReopenTicketQuery get() = ReopenTicketQuery(Query("ReopenTicket"))
+        val reopenTickets: ReopenTicketQuery get() = query("ReopenTicket", ReopenTicketFields()) { materializeReopenTicket(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun reopenTicket(key: StoreKey): ReopenTicket = invoke<ReopenTicket>(Ref.Persisted("ReopenTicket", key))
+        fun reopenTicket(key: StoreKey): ReopenTicket = byKey("ReopenTicket", key)
         fun reopenTicket(key: Long): ReopenTicket = reopenTicket(StoreKey(key))
 
-        val reopenNotices: ReopenNoticeQuery get() = ReopenNoticeQuery(Query("ReopenNotice"))
+        val reopenNotices: ReopenNoticeQuery get() = query("ReopenNotice", ReopenNoticeFields()) { materializeReopenNotice(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun reopenNotice(key: StoreKey): ReopenNotice = invoke<ReopenNotice>(Ref.Persisted("ReopenNotice", key))
+        fun reopenNotice(key: StoreKey): ReopenNotice = byKey("ReopenNotice", key)
         fun reopenNotice(key: Long): ReopenNotice = reopenNotice(StoreKey(key))
 
-        val escalations: EscalationQuery get() = EscalationQuery(Query("Escalation"))
+        val escalations: EscalationQuery get() = query("Escalation", EscalationFields()) { materializeEscalation(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
-        fun escalation(key: StoreKey): Escalation = invoke<Escalation>(Ref.Persisted("Escalation", key))
+        fun escalation(key: StoreKey): Escalation = byKey("Escalation", key)
         fun escalation(key: Long): Escalation = escalation(StoreKey(key))
 
-        val selfReferrals: SelfReferralQuery get() = SelfReferralQuery(Query("SelfReferral"))
+        val selfReferrals: SelfReferralQuery get() = query("SelfReferral", SelfReferralFields()) { materializeSelfReferral(it) }
         /** The record behind [ref] as a member of SelfReferral, or null when it is not one. */
-        fun selfReferral(ref: Ref<Member>): SelfReferral? =
-            system.scope { system.idOf(ref).let { if (system.exists("SelfReferral", it)) materializeSelfReferral(it) else null } }
+        fun selfReferral(ref: Ref<Member>): SelfReferral? = member("SelfReferral", ref) { materializeSelfReferral(it) }
 
-        val unappliedDeposits: UnappliedDepositQuery get() = UnappliedDepositQuery(Query("UnappliedDeposit"))
+        val unappliedDeposits: UnappliedDepositQuery get() = query("UnappliedDeposit", UnappliedDepositFields()) { materializeUnappliedDeposit(it) }
         /** The record behind [ref] as a member of UnappliedDeposit, or null when it is not one. */
-        fun unappliedDeposit(ref: Ref<Deposit>): UnappliedDeposit? =
-            system.scope { system.idOf(ref).let { if (system.exists("UnappliedDeposit", it)) materializeUnappliedDeposit(it) else null } }
+        fun unappliedDeposit(ref: Ref<Deposit>): UnappliedDeposit? = member("UnappliedDeposit", ref) { materializeUnappliedDeposit(it) }
 
-        val activeMembers: ActiveMemberQuery get() = ActiveMemberQuery(Query("ActiveMember"))
+        val activeMembers: ActiveMemberQuery get() = query("ActiveMember", ActiveMemberFields()) { materializeActiveMember(it) }
         /** The record behind [ref] as a member of ActiveMember, or null when it is not one. */
-        fun activeMember(ref: Ref<Member>): ActiveMember? =
-            system.scope { system.idOf(ref).let { if (system.exists("ActiveMember", it)) materializeActiveMember(it) else null } }
+        fun activeMember(ref: Ref<Member>): ActiveMember? = member("ActiveMember", ref) { materializeActiveMember(it) }
 
-        val unappliedCharges: UnappliedChargeQuery get() = UnappliedChargeQuery(Query("UnappliedCharge"))
+        val unappliedCharges: UnappliedChargeQuery get() = query("UnappliedCharge", UnappliedChargeFields()) { materializeUnappliedCharge(it) }
         /** The record behind [ref] as a member of UnappliedCharge, or null when it is not one. */
-        fun unappliedCharge(ref: Ref<Charge>): UnappliedCharge? =
-            system.scope { system.idOf(ref).let { if (system.exists("UnappliedCharge", it)) materializeUnappliedCharge(it) else null } }
+        fun unappliedCharge(ref: Ref<Charge>): UnappliedCharge? = member("UnappliedCharge", ref) { materializeUnappliedCharge(it) }
 
-        val delinquents: DelinquentQuery get() = DelinquentQuery(Query("Delinquent"))
+        val delinquents: DelinquentQuery get() = query("Delinquent", DelinquentFields()) { materializeDelinquent(it) }
         /** The record behind [ref] as a member of Delinquent, or null when it is not one. */
-        fun delinquent(ref: Ref<Member>): Delinquent? =
-            system.scope { system.idOf(ref).let { if (system.exists("Delinquent", it)) materializeDelinquent(it) else null } }
+        fun delinquent(ref: Ref<Member>): Delinquent? = member("Delinquent", ref) { materializeDelinquent(it) }
 
-        val deepDelinquents: DeepDelinquentQuery get() = DeepDelinquentQuery(Query("DeepDelinquent"))
+        val deepDelinquents: DeepDelinquentQuery get() = query("DeepDelinquent", DeepDelinquentFields()) { materializeDeepDelinquent(it) }
         /** The record behind [ref] as a member of DeepDelinquent, or null when it is not one. */
-        fun deepDelinquent(ref: Ref<Member>): DeepDelinquent? =
-            system.scope { system.idOf(ref).let { if (system.exists("DeepDelinquent", it)) materializeDeepDelinquent(it) else null } }
+        fun deepDelinquent(ref: Ref<Member>): DeepDelinquent? = member("DeepDelinquent", ref) { materializeDeepDelinquent(it) }
 
-        val openDelinquencyFlags: OpenDelinquencyFlagQuery get() = OpenDelinquencyFlagQuery(Query("OpenDelinquencyFlag"))
+        val openDelinquencyFlags: OpenDelinquencyFlagQuery get() = query("OpenDelinquencyFlag", OpenDelinquencyFlagFields()) { materializeOpenDelinquencyFlag(it) }
         /** The record behind [ref] as a member of OpenDelinquencyFlag, or null when it is not one. */
-        fun openDelinquencyFlag(ref: Ref<DelinquencyFlag>): OpenDelinquencyFlag? =
-            system.scope { system.idOf(ref).let { if (system.exists("OpenDelinquencyFlag", it)) materializeOpenDelinquencyFlag(it) else null } }
+        fun openDelinquencyFlag(ref: Ref<DelinquencyFlag>): OpenDelinquencyFlag? = member("OpenDelinquencyFlag", ref) { materializeOpenDelinquencyFlag(it) }
 
-        val chronicDelinquents: ChronicDelinquentQuery get() = ChronicDelinquentQuery(Query("ChronicDelinquent"))
+        val chronicDelinquents: ChronicDelinquentQuery get() = query("ChronicDelinquent", ChronicDelinquentFields()) { materializeChronicDelinquent(it) }
         /** The record behind [ref] as a member of ChronicDelinquent, or null when it is not one. */
-        fun chronicDelinquent(ref: Ref<Member>): ChronicDelinquent? =
-            system.scope { system.idOf(ref).let { if (system.exists("ChronicDelinquent", it)) materializeChronicDelinquent(it) else null } }
+        fun chronicDelinquent(ref: Ref<Member>): ChronicDelinquent? = member("ChronicDelinquent", ref) { materializeChronicDelinquent(it) }
 
-        val closedTickets: ClosedTicketQuery get() = ClosedTicketQuery(Query("ClosedTicket"))
+        val closedTickets: ClosedTicketQuery get() = query("ClosedTicket", ClosedTicketFields()) { materializeClosedTicket(it) }
         /** The record behind [ref] as a member of ClosedTicket, or null when it is not one. */
-        fun closedTicket(ref: Ref<Ticket>): ClosedTicket? =
-            system.scope { system.idOf(ref).let { if (system.exists("ClosedTicket", it)) materializeClosedTicket(it) else null } }
+        fun closedTicket(ref: Ref<Ticket>): ClosedTicket? = member("ClosedTicket", ref) { materializeClosedTicket(it) }
 
-        val openTickets: OpenTicketQuery get() = OpenTicketQuery(Query("OpenTicket"))
+        val openTickets: OpenTicketQuery get() = query("OpenTicket", OpenTicketFields()) { materializeOpenTicket(it) }
         /** The record behind [ref] as a member of OpenTicket, or null when it is not one. */
-        fun openTicket(ref: Ref<Ticket>): OpenTicket? =
-            system.scope { system.idOf(ref).let { if (system.exists("OpenTicket", it)) materializeOpenTicket(it) else null } }
+        fun openTicket(ref: Ref<Ticket>): OpenTicket? = member("OpenTicket", ref) { materializeOpenTicket(it) }
 
-        val overdueTickets: OverdueTicketQuery get() = OverdueTicketQuery(Query("OverdueTicket"))
+        val overdueTickets: OverdueTicketQuery get() = query("OverdueTicket", OverdueTicketFields()) { materializeOverdueTicket(it) }
         /** The record behind [ref] as a member of OverdueTicket, or null when it is not one. */
-        fun overdueTicket(ref: Ref<Ticket>): OverdueTicket? =
-            system.scope { system.idOf(ref).let { if (system.exists("OverdueTicket", it)) materializeOverdueTicket(it) else null } }
+        fun overdueTicket(ref: Ref<Ticket>): OverdueTicket? = member("OverdueTicket", ref) { materializeOverdueTicket(it) }
 
-        val highPrioritys: HighPriorityQuery get() = HighPriorityQuery(Query("HighPriority"))
+        val highPrioritys: HighPriorityQuery get() = query("HighPriority", HighPriorityFields()) { materializeHighPriority(it) }
         /** The record behind [ref] as a member of HighPriority, or null when it is not one. */
-        fun highPriority(ref: Ref<Ticket>): HighPriority? =
-            system.scope { system.idOf(ref).let { if (system.exists("HighPriority", it)) materializeHighPriority(it) else null } }
+        fun highPriority(ref: Ref<Ticket>): HighPriority? = member("HighPriority", ref) { materializeHighPriority(it) }
 
-        val unassigneds: UnassignedQuery get() = UnassignedQuery(Query("Unassigned"))
+        val unassigneds: UnassignedQuery get() = query("Unassigned", UnassignedFields()) { materializeUnassigned(it) }
         /** The record behind [ref] as a member of Unassigned, or null when it is not one. */
-        fun unassigned(ref: Ref<Ticket>): Unassigned? =
-            system.scope { system.idOf(ref).let { if (system.exists("Unassigned", it)) materializeUnassigned(it) else null } }
+        fun unassigned(ref: Ref<Ticket>): Unassigned? = member("Unassigned", ref) { materializeUnassigned(it) }
 
-        val needsAttentions: NeedsAttentionQuery get() = NeedsAttentionQuery(Query("NeedsAttention"))
+        val needsAttentions: NeedsAttentionQuery get() = query("NeedsAttention", NeedsAttentionFields()) { materializeNeedsAttention(it) }
         /** The record behind [ref] as a member of NeedsAttention, or null when it is not one. */
-        fun needsAttention(ref: Ref<Ticket>): NeedsAttention? =
-            system.scope { system.idOf(ref).let { if (system.exists("NeedsAttention", it)) materializeNeedsAttention(it) else null } }
+        fun needsAttention(ref: Ref<Ticket>): NeedsAttention? = member("NeedsAttention", ref) { materializeNeedsAttention(it) }
 
-        val urgentQueues: UrgentQueueQuery get() = UrgentQueueQuery(Query("UrgentQueue"))
+        val urgentQueues: UrgentQueueQuery get() = query("UrgentQueue", UrgentQueueFields()) { materializeUrgentQueue(it) }
         /** The record behind [ref] as a member of UrgentQueue, or null when it is not one. */
-        fun urgentQueue(ref: Ref<Ticket>): UrgentQueue? =
-            system.scope { system.idOf(ref).let { if (system.exists("UrgentQueue", it)) materializeUrgentQueue(it) else null } }
+        fun urgentQueue(ref: Ref<Ticket>): UrgentQueue? = member("UrgentQueue", ref) { materializeUrgentQueue(it) }
 
-        val memberWithDisputedCharges: MemberWithDisputedChargeQuery get() = MemberWithDisputedChargeQuery(Query("MemberWithDisputedCharge"))
+        val memberWithDisputedCharges: MemberWithDisputedChargeQuery get() = query("MemberWithDisputedCharge", MemberWithDisputedChargeFields()) { materializeMemberWithDisputedCharge(it) }
         /** The record behind [ref] as a member of MemberWithDisputedCharge, or null when it is not one. */
-        fun memberWithDisputedCharge(ref: Ref<Member>): MemberWithDisputedCharge? =
-            system.scope { system.idOf(ref).let { if (system.exists("MemberWithDisputedCharge", it)) materializeMemberWithDisputedCharge(it) else null } }
+        fun memberWithDisputedCharge(ref: Ref<Member>): MemberWithDisputedCharge? = member("MemberWithDisputedCharge", ref) { materializeMemberWithDisputedCharge(it) }
 
-        val lateEscalatedMembers: LateEscalatedMemberQuery get() = LateEscalatedMemberQuery(Query("LateEscalatedMember"))
+        val lateEscalatedMembers: LateEscalatedMemberQuery get() = query("LateEscalatedMember", LateEscalatedMemberFields()) { materializeLateEscalatedMember(it) }
         /** The record behind [ref] as a member of LateEscalatedMember, or null when it is not one. */
-        fun lateEscalatedMember(ref: Ref<Member>): LateEscalatedMember? =
-            system.scope { system.idOf(ref).let { if (system.exists("LateEscalatedMember", it)) materializeLateEscalatedMember(it) else null } }
-    }
-
-    inner class PlanQuery(q: Query) : TypedQuery<PlanFields, Plan>(system, q, PlanFields(), { materializePlan(it) }) {
-        override fun with(q: Query) = PlanQuery(q)
-    }
-
-    inner class MemberQuery(q: Query) : TypedQuery<MemberFields, Member>(system, q, MemberFields(), { materializeMember(it) }) {
-        override fun with(q: Query) = MemberQuery(q)
-    }
-
-    inner class WelcomeNoteQuery(q: Query) : TypedQuery<WelcomeNoteFields, WelcomeNote>(system, q, WelcomeNoteFields(), { materializeWelcomeNote(it) }) {
-        override fun with(q: Query) = WelcomeNoteQuery(q)
-    }
-
-    inner class EmailChangeQuery(q: Query) : TypedQuery<EmailChangeFields, EmailChange>(system, q, EmailChangeFields(), { materializeEmailChange(it) }) {
-        override fun with(q: Query) = EmailChangeQuery(q)
-    }
-
-    inner class VisitQuery(q: Query) : TypedQuery<VisitFields, Visit>(system, q, VisitFields(), { materializeVisit(it) }) {
-        override fun with(q: Query) = VisitQuery(q)
-    }
-
-    inner class AnalyticsPingQuery(q: Query) : TypedQuery<AnalyticsPingFields, AnalyticsPing>(system, q, AnalyticsPingFields(), { materializeAnalyticsPing(it) }) {
-        override fun with(q: Query) = AnalyticsPingQuery(q)
-    }
-
-    inner class DepositQuery(q: Query) : TypedQuery<DepositFields, Deposit>(system, q, DepositFields(), { materializeDeposit(it) }) {
-        override fun with(q: Query) = DepositQuery(q)
-    }
-
-    inner class ChargeQuery(q: Query) : TypedQuery<ChargeFields, Charge>(system, q, ChargeFields(), { materializeCharge(it) }) {
-        override fun with(q: Query) = ChargeQuery(q)
-    }
-
-    inner class ChargeApplicationQuery(q: Query) : TypedQuery<ChargeApplicationFields, ChargeApplication>(system, q, ChargeApplicationFields(), { materializeChargeApplication(it) }) {
-        override fun with(q: Query) = ChargeApplicationQuery(q)
-    }
-
-    inner class DelinquencyFlagQuery(q: Query) : TypedQuery<DelinquencyFlagFields, DelinquencyFlag>(system, q, DelinquencyFlagFields(), { materializeDelinquencyFlag(it) }) {
-        override fun with(q: Query) = DelinquencyFlagQuery(q)
-    }
-
-    inner class DelinquencyResolutionQuery(q: Query) : TypedQuery<DelinquencyResolutionFields, DelinquencyResolution>(system, q, DelinquencyResolutionFields(), { materializeDelinquencyResolution(it) }) {
-        override fun with(q: Query) = DelinquencyResolutionQuery(q)
-    }
-
-    inner class AuditEntryQuery(q: Query) : TypedQuery<AuditEntryFields, AuditEntry>(system, q, AuditEntryFields(), { materializeAuditEntry(it) }) {
-        override fun with(q: Query) = AuditEntryQuery(q)
-    }
-
-    inner class AccountReviewQuery(q: Query) : TypedQuery<AccountReviewFields, AccountReview>(system, q, AccountReviewFields(), { materializeAccountReview(it) }) {
-        override fun with(q: Query) = AccountReviewQuery(q)
-    }
-
-    inner class AgentQuery(q: Query) : TypedQuery<AgentFields, Agent>(system, q, AgentFields(), { materializeAgent(it) }) {
-        override fun with(q: Query) = AgentQuery(q)
-    }
-
-    inner class TicketQuery(q: Query) : TypedQuery<TicketFields, Ticket>(system, q, TicketFields(), { materializeTicket(it) }) {
-        override fun with(q: Query) = TicketQuery(q)
-    }
-
-    inner class TicketClosureQuery(q: Query) : TypedQuery<TicketClosureFields, TicketClosure>(system, q, TicketClosureFields(), { materializeTicketClosure(it) }) {
-        override fun with(q: Query) = TicketClosureQuery(q)
-    }
-
-    inner class ReopenTicketQuery(q: Query) : TypedQuery<ReopenTicketFields, ReopenTicket>(system, q, ReopenTicketFields(), { materializeReopenTicket(it) }) {
-        override fun with(q: Query) = ReopenTicketQuery(q)
-    }
-
-    inner class ReopenNoticeQuery(q: Query) : TypedQuery<ReopenNoticeFields, ReopenNotice>(system, q, ReopenNoticeFields(), { materializeReopenNotice(it) }) {
-        override fun with(q: Query) = ReopenNoticeQuery(q)
-    }
-
-    inner class EscalationQuery(q: Query) : TypedQuery<EscalationFields, Escalation>(system, q, EscalationFields(), { materializeEscalation(it) }) {
-        override fun with(q: Query) = EscalationQuery(q)
-    }
-
-    inner class SelfReferralQuery(q: Query) : TypedQuery<SelfReferralFields, SelfReferral>(system, q, SelfReferralFields(), { materializeSelfReferral(it) }) {
-        override fun with(q: Query) = SelfReferralQuery(q)
-    }
-
-    inner class UnappliedDepositQuery(q: Query) : TypedQuery<UnappliedDepositFields, UnappliedDeposit>(system, q, UnappliedDepositFields(), { materializeUnappliedDeposit(it) }) {
-        override fun with(q: Query) = UnappliedDepositQuery(q)
-    }
-
-    inner class ActiveMemberQuery(q: Query) : TypedQuery<ActiveMemberFields, ActiveMember>(system, q, ActiveMemberFields(), { materializeActiveMember(it) }) {
-        override fun with(q: Query) = ActiveMemberQuery(q)
-    }
-
-    inner class UnappliedChargeQuery(q: Query) : TypedQuery<UnappliedChargeFields, UnappliedCharge>(system, q, UnappliedChargeFields(), { materializeUnappliedCharge(it) }) {
-        override fun with(q: Query) = UnappliedChargeQuery(q)
-    }
-
-    inner class DelinquentQuery(q: Query) : TypedQuery<DelinquentFields, Delinquent>(system, q, DelinquentFields(), { materializeDelinquent(it) }) {
-        override fun with(q: Query) = DelinquentQuery(q)
-    }
-
-    inner class DeepDelinquentQuery(q: Query) : TypedQuery<DeepDelinquentFields, DeepDelinquent>(system, q, DeepDelinquentFields(), { materializeDeepDelinquent(it) }) {
-        override fun with(q: Query) = DeepDelinquentQuery(q)
-    }
-
-    inner class OpenDelinquencyFlagQuery(q: Query) : TypedQuery<OpenDelinquencyFlagFields, OpenDelinquencyFlag>(system, q, OpenDelinquencyFlagFields(), { materializeOpenDelinquencyFlag(it) }) {
-        override fun with(q: Query) = OpenDelinquencyFlagQuery(q)
-    }
-
-    inner class ChronicDelinquentQuery(q: Query) : TypedQuery<ChronicDelinquentFields, ChronicDelinquent>(system, q, ChronicDelinquentFields(), { materializeChronicDelinquent(it) }) {
-        override fun with(q: Query) = ChronicDelinquentQuery(q)
-    }
-
-    inner class ClosedTicketQuery(q: Query) : TypedQuery<ClosedTicketFields, ClosedTicket>(system, q, ClosedTicketFields(), { materializeClosedTicket(it) }) {
-        override fun with(q: Query) = ClosedTicketQuery(q)
-    }
-
-    inner class OpenTicketQuery(q: Query) : TypedQuery<OpenTicketFields, OpenTicket>(system, q, OpenTicketFields(), { materializeOpenTicket(it) }) {
-        override fun with(q: Query) = OpenTicketQuery(q)
-    }
-
-    inner class OverdueTicketQuery(q: Query) : TypedQuery<OverdueTicketFields, OverdueTicket>(system, q, OverdueTicketFields(), { materializeOverdueTicket(it) }) {
-        override fun with(q: Query) = OverdueTicketQuery(q)
-    }
-
-    inner class HighPriorityQuery(q: Query) : TypedQuery<HighPriorityFields, HighPriority>(system, q, HighPriorityFields(), { materializeHighPriority(it) }) {
-        override fun with(q: Query) = HighPriorityQuery(q)
-    }
-
-    inner class UnassignedQuery(q: Query) : TypedQuery<UnassignedFields, Unassigned>(system, q, UnassignedFields(), { materializeUnassigned(it) }) {
-        override fun with(q: Query) = UnassignedQuery(q)
-    }
-
-    inner class NeedsAttentionQuery(q: Query) : TypedQuery<NeedsAttentionFields, NeedsAttention>(system, q, NeedsAttentionFields(), { materializeNeedsAttention(it) }) {
-        override fun with(q: Query) = NeedsAttentionQuery(q)
-    }
-
-    inner class UrgentQueueQuery(q: Query) : TypedQuery<UrgentQueueFields, UrgentQueue>(system, q, UrgentQueueFields(), { materializeUrgentQueue(it) }) {
-        override fun with(q: Query) = UrgentQueueQuery(q)
-    }
-
-    inner class MemberWithDisputedChargeQuery(q: Query) : TypedQuery<MemberWithDisputedChargeFields, MemberWithDisputedCharge>(system, q, MemberWithDisputedChargeFields(), { materializeMemberWithDisputedCharge(it) }) {
-        override fun with(q: Query) = MemberWithDisputedChargeQuery(q)
-    }
-
-    inner class LateEscalatedMemberQuery(q: Query) : TypedQuery<LateEscalatedMemberFields, LateEscalatedMember>(system, q, LateEscalatedMemberFields(), { materializeLateEscalatedMember(it) }) {
-        override fun with(q: Query) = LateEscalatedMemberQuery(q)
+        fun lateEscalatedMember(ref: Ref<Member>): LateEscalatedMember? = member("LateEscalatedMember", ref) { materializeLateEscalatedMember(it) }
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -1596,17 +1343,55 @@ shape LateEscalatedMember = Member where
     }
 }
 
+// ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias PlanQuery = TypedQuery<PlanFields, Plan>
+typealias MemberQuery = TypedQuery<MemberFields, Member>
+typealias WelcomeNoteQuery = TypedQuery<WelcomeNoteFields, WelcomeNote>
+typealias EmailChangeQuery = TypedQuery<EmailChangeFields, EmailChange>
+typealias VisitQuery = TypedQuery<VisitFields, Visit>
+typealias AnalyticsPingQuery = TypedQuery<AnalyticsPingFields, AnalyticsPing>
+typealias DepositQuery = TypedQuery<DepositFields, Deposit>
+typealias ChargeQuery = TypedQuery<ChargeFields, Charge>
+typealias ChargeApplicationQuery = TypedQuery<ChargeApplicationFields, ChargeApplication>
+typealias DelinquencyFlagQuery = TypedQuery<DelinquencyFlagFields, DelinquencyFlag>
+typealias DelinquencyResolutionQuery = TypedQuery<DelinquencyResolutionFields, DelinquencyResolution>
+typealias AuditEntryQuery = TypedQuery<AuditEntryFields, AuditEntry>
+typealias AccountReviewQuery = TypedQuery<AccountReviewFields, AccountReview>
+typealias AgentQuery = TypedQuery<AgentFields, Agent>
+typealias TicketQuery = TypedQuery<TicketFields, Ticket>
+typealias TicketClosureQuery = TypedQuery<TicketClosureFields, TicketClosure>
+typealias ReopenTicketQuery = TypedQuery<ReopenTicketFields, ReopenTicket>
+typealias ReopenNoticeQuery = TypedQuery<ReopenNoticeFields, ReopenNotice>
+typealias EscalationQuery = TypedQuery<EscalationFields, Escalation>
+typealias SelfReferralQuery = TypedQuery<SelfReferralFields, SelfReferral>
+typealias UnappliedDepositQuery = TypedQuery<UnappliedDepositFields, UnappliedDeposit>
+typealias ActiveMemberQuery = TypedQuery<ActiveMemberFields, ActiveMember>
+typealias UnappliedChargeQuery = TypedQuery<UnappliedChargeFields, UnappliedCharge>
+typealias DelinquentQuery = TypedQuery<DelinquentFields, Delinquent>
+typealias DeepDelinquentQuery = TypedQuery<DeepDelinquentFields, DeepDelinquent>
+typealias OpenDelinquencyFlagQuery = TypedQuery<OpenDelinquencyFlagFields, OpenDelinquencyFlag>
+typealias ChronicDelinquentQuery = TypedQuery<ChronicDelinquentFields, ChronicDelinquent>
+typealias ClosedTicketQuery = TypedQuery<ClosedTicketFields, ClosedTicket>
+typealias OpenTicketQuery = TypedQuery<OpenTicketFields, OpenTicket>
+typealias OverdueTicketQuery = TypedQuery<OverdueTicketFields, OverdueTicket>
+typealias HighPriorityQuery = TypedQuery<HighPriorityFields, HighPriority>
+typealias UnassignedQuery = TypedQuery<UnassignedFields, Unassigned>
+typealias NeedsAttentionQuery = TypedQuery<NeedsAttentionFields, NeedsAttention>
+typealias UrgentQueueQuery = TypedQuery<UrgentQueueFields, UrgentQueue>
+typealias MemberWithDisputedChargeQuery = TypedQuery<MemberWithDisputedChargeFields, MemberWithDisputedCharge>
+typealias LateEscalatedMemberQuery = TypedQuery<LateEscalatedMemberFields, LateEscalatedMember>
+
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
 data class NewPlan(
     val name: String,
     val price: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("price", price)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Plan") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -1616,14 +1401,14 @@ data class NewSignUp(
     val signupEmail: String,
     val plan: Ref<Plan>,
     val referredBy: Ref<Member>? = null,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("signupEmail", signupEmail)
         put("plan", system.idOf(plan))
         referredBy?.let { put("referredBy", system.idOf(it)) }
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "SignUp") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -1631,12 +1416,12 @@ data class NewSignUp(
 data class NewChangeEmail(
     val member: Ref<Member>,
     val newEmail: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("newEmail", newEmail)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ChangeEmail") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -1644,12 +1429,12 @@ data class NewChangeEmail(
 data class NewVisit(
     val member: Ref<Member>,
     val minutes: Int,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("minutes", minutes)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Visit") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -1657,12 +1442,12 @@ data class NewVisit(
 data class NewMakeDeposit(
     val member: Ref<Member>,
     val amount: BigDecimal,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("amount", amount)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "MakeDeposit") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -1670,12 +1455,12 @@ data class NewMakeDeposit(
 data class NewAgent(
     val name: String,
     val email: String,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("email", email)
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Agent") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -1686,15 +1471,15 @@ data class NewRaiseTicket(
     val due: LocalDate,
     val priority: String,
     val assignee: Ref<Agent>? = null,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("member", system.idOf(member))
         put("subject", subject)
         put("due", due)
         put("priority", priority)
         assignee?.let { put("assignee", system.idOf(it)) }
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "RaiseTicket") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -1702,23 +1487,23 @@ data class NewRaiseTicket(
 data class NewCloseTicket(
     val ticket: Ref<Ticket>,
     val closedBy: Ref<Agent>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("ticket", system.idOf(ticket))
         put("closedBy", system.idOf(closedBy))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "CloseTicket") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewReopenTicket(
     val ticket: Ref<Ticket>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("ticket", system.idOf(ticket))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "ReopenTicket") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
@@ -1726,12 +1511,12 @@ data class NewReopenTicket(
 data class NewAssignTicket(
     val ticket: Ref<Ticket>,
     val agent: Ref<Agent>,
-) {
-    fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("ticket", system.idOf(ticket))
         put("agent", system.idOf(agent))
     }
-    fun register(reg: NewRegistry) {
+    override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "AssignTicket") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
