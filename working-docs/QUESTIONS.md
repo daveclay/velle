@@ -1,6 +1,6 @@
 # Open questions and work items — the index
 
-One line per question and per work item here; the discussion lives in `questions/OQ<n>-*.md`, where each file's header states the question in plain terms before the dense part begins. OQ tags are stable — numbers are never renumbered or reused (next free: OQ65), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
+One line per question and per work item here; the discussion lives in `questions/OQ<n>-*.md`, where each file's header states the question in plain terms before the dense part begins. OQ tags are stable — numbers are never renumbered or reused (next free: OQ68), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
 
 **Questions and items.** A question (an OQ) is a design decision with discussion worth keeping. A work item is one action, verb-first, one line. An item whose whole context fits in its line stands alone; an item with context lives under the question that holds it, and the context is in that question's file, never here. Items are grouped by the part of Velle they change, not by where they were found; S-numbers, P-numbers, and B-numbers are findings of the peptides, pharmacy, and batches passes, recorded in OQ16's calibration record.
 
@@ -96,6 +96,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 
 ## Reads: the query API and stores (Reference §22)
 
+- **[OQ67](questions/OQ67-store-api-layers.md)** — the store API in two layers: an agnostic store API (what the runtime's commit and fetch exchange, no SQL) and a SQL store API Velle implements once over it, `SqliteStore` reduced to a dialect; which layer a system provides is given to the compiler · opened 2026-10-24 at Dave's request; what exists and what has to be settled
 - **[OQ57](questions/OQ57-reads-after-oq51.md)** — reads after OQ51: what a query loads, promises, and leaves to the store · OQ51 settled 2026-10-12; most items stated by Dave at the settling
   - [ ] Make the loading of associated and joined records configurable in the query API: lazy handles first; later a query names the relationships it wants loaded with the root, nested to any depth, batched per level.
   - [ ] Support transaction isolation levels for reads: the read request names the isolation it wants and the store binding maps it.
@@ -122,6 +123,8 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 
 - **[OQ28](questions/OQ28-bootstrap-backfill.md)** — bootstrap/backfill: a new rule against pre-existing state · not designed
 - **[OQ59](questions/OQ59-escape-hatch.md)** — the escape hatch: open codegen · deferred, post-v0; the demands from the project's earliest notes, kept when those notes were retired
+- **[OQ65](questions/OQ65-extension-types.md)** — extension types: a scalar type an engineer writes in Kotlin, registered on the classpath, named in a spec like `Date` · opened 2026-10-23; the inventory of every type fact the compiler reads, the `velle.ext.VelleType` API that makes each one a required declaration, a worked `Money`; D1, D2, D4 settled 2026-10-24 (a registered name is in scope as is, `uses <qualified> [as <Name>]` picks or renames; constants are Velle's number and text literals read by the type, a value with parts is a shape; a function accepts a type when the type's declared capabilities say so, `max`/`min` on any ordered type; storage is a store binding per type and store, Alice's type library, Bob's SQLite binding library, Chris's system using both; `Money` is the first example, in `extensions/finance/` + `extensions/finance-sqlite/`, adopted by billing), D3 waits on Dave, the build plan is ordered behind them
+- **[OQ66](questions/OQ66-extension-functions.md)** — extension functions and predicates: a function an engineer writes in Kotlin on OQ65's type-capability contract, and Velle's own builtins expressed the same way · opened 2026-10-24 at Dave's request; waits on OQ65 being built; a sketch and the items to settle
 - **[OQ35](questions/OQ35-mixins.md)** — cross-shape structural mixins · design sketched 2026-09-13; syntax undecided
   - [ ] Restore Reference §22's mixin item, which Reference §9 still points at.
 
