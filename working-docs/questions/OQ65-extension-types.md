@@ -1,6 +1,6 @@
 # OQ65 — Extension types: a scalar type an engineer writes in Kotlin and a spec names like `Date`
 
-**Status:** opened 2026-10-23. The inventory (§1) and the API (§2) are proposed; nothing is built. D1, D2, D4, and D5 settled with Dave 2026-10-24 (a registered name is in scope as is, `uses` renames or picks one; constants use only the literal forms Velle has, and a value with parts is a shape, not a type; a function such as `max` accepts a type when the type's declared capabilities say so, and OQ66 carries custom functions and predicates on the same contract; storage is a third mechanism, a store binding per type and store, written by whoever knows the store; `Money` is the first example); D3 (§3) waits on him; the implementation plan (§4) is ordered for when they land.
+**Status:** opened 2026-10-23. The inventory (§1) and the API (§2) are proposed; nothing is built. D1 through D6 settled with Dave 2026-10-24 (a registered name is in scope as is, `uses` renames or picks one; constants use only the literal forms Velle has, and a value with parts is a shape, not a type; a function such as `max` accepts a type when the type's declared capabilities say so, and OQ66 carries custom functions and predicates on the same contract; storage is a third mechanism, a store binding per type and store, written by whoever knows the store; `Money` is the first example; a type is opaque to the spec, no path reaches into it). The implementation plan (§4) is in progress.
 **In plain terms:** Velle has eight scalar types, all Kotlin-grounded. `Money` appears throughout the Reference and is not one of them. An engineer should be able to write `Money` (or `Percentage`, `Sku`, `PhoneNumber`) once in Kotlin, put it on the classpath, and have every spec in the workspace name it in type position. The compiler proves things about specs using facts about types: which operators apply, whether values are ordered, whether a fold step can be applied twice or out of order, what value sits just past a boundary. Today those facts are hard-coded per builtin. The API an extension type implements must make the engineer state every fact the compiler reads, so that a capability the type does not declare is one the spec cannot use, with a diagnostic naming the type, never a guess.
 **See:** Reference §5 (the builtin list, "The Reference also uses `Money`"), §10 (comparisons, orderable datums, `max`/`min`), §19 (the fold whitelist), §22 "Extensible data types" and "The extension framework" (the three commitments this design honours: validator-facing metadata, distributable, not output) · OQ59 (custom functions' metadata: the same registry, the other hat) · `checks.md` F2, V8 · `evaluation.md` (the Row contract, type-level refusal) · `testgen.md` (boundary cases).
 
@@ -451,9 +451,9 @@ never (Quote where price.amount == 12.50 and price.currency == "USD")
 
 What was weighed and set aside: a text reader that splits `"12.50 USD"` into parts, and a typed literal syntax (`12.50 USD`, `Money("12.50", "USD")`). The first hides two values inside a scalar where the compiler cannot see them; the second makes the lexer and `grammar.md` depend on what is on the classpath. `grammar.md` changes by one sentence: a number or text literal beside an extension-typed operand takes that type, and the type decides whether it is well-formed.
 
-### D3. An extension type is opaque to the spec: no path reaches into it, and no spec-visible member exists on it.
+### D3. Settled 2026-10-24: an extension type is opaque to the spec: no path reaches into it, and no spec-visible member exists on it.
 
-`price.currency` is not an expression; a `Money` with a currency inside is two fields in the spec (§2.0). Cost: a type cannot expose a derived view of itself to the spec. Alternative: let a type declare accessors (`price.currency`, `phone.areaCode`) as members. That is a function with a receiver, which is OQ59's custom-function half of the framework; adding it here would design the function registry on the side. Recommendation: opaque now, and accessors arrive with functions.
+`price.currency` is not an expression; a `Money` with a currency inside is two fields in the spec (§2.0). Cost: a type cannot expose a derived view of itself to the spec. Alternative: let a type declare accessors (`price.currency`, `phone.areaCode`) as members. That is a function with a receiver, which is OQ59's custom-function half of the framework; adding it here would design the function registry on the side. Dave's ruling: opaque. Accessors, if they ever exist, arrive with OQ66's functions.
 
 ### D4. Settled 2026-10-24: a function accepts an extension type when the type's declared capabilities say it may; `max` and `min` accept any type that declares an ordering.
 
@@ -499,7 +499,7 @@ The mechanism is §2.5.
 
 Dave's ruling: "use Money as the first example of this feature." Reference §5 promises `Money`; §8, §13, §19, §20, and `patterns.md` already write it, so every one of those examples becomes real. The type is §2.4's: an exact amount with two decimal places, ordered, with `+`, `-`, `* decimal`, `/ Money`, and `sum`, total in every operation. A `Money` that carries its currency is ruled out by §2.0: it is two values, so it is `shape Price { amount: Money, currency: Currency }` in a spec, and "never compare prices in different currencies" is a `never` the product owner can read. Billing's amounts become `Money`, its output module depends on Alice's and Bob's modules, and the generated tests pass with `Money.of(...)` values.
 
-## 4. Implementation plan, for when §3 lands
+## 4. Implementation plan
 
 Ordered so that each step leaves every example compiling and every test green; the registry with no extensions is the current behaviour.
 
