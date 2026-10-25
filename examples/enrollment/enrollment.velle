@@ -14,6 +14,8 @@ act Advisor {
 act Course {
     title: text
     capacity: integer
+    term: duration                    -- how long the course runs (§5, `duration`)
+    code: uuid initially randomUUID   -- a key the outside world can use (§5, `uuid`)
 }
 
 act Student {
@@ -30,6 +32,8 @@ act Student {
 
 shape Overloaded = Student where count(courses) > 2
 shape Untagged = Student where tags is empty
+shape Honors = Student where tags contains "honors"      -- membership of a `many` of values (§5)
+shape ShortCourse = Course where term < 4 weeks
 
 -- whole-set replacement: the edge set becomes exactly the committed reference set
 transient act SetEnrollment {

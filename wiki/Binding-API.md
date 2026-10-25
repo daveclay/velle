@@ -65,6 +65,8 @@ val batch = NewPeptideBatch(
 
 A `many` field that may hold new values is typed `List<ConditionReference>` in the same way, and each element is `Existing` or `New`.
 
+A `uuid` field is a `java.util.UUID` and a `duration` field a `java.time.Duration` on the input class and the model object ([§5](Reference-05-Scalars)); a `uuid` with `initially randomUUID` is not an input parameter. In a composed query, a text member offers `lowercase`, `uppercase`, `trim`, and `length` (`where { title.length gt 10 }`), a `uuid` member equality only, and a `duration` member the ordered comparisons.
+
 A `many` of values ([§5, "Collections of values"](Reference-05-Scalars#collections-of-values-many)) is a `List` of the element's Kotlin type on the input class and on the model object, `List<String>` for `many text`. A commit with the same value twice is refused unless the property tolerates duplication, in which case the list reads back in the order it was committed.
 
 A reference to a sibling is the sibling's own object. The engineer builds the value once, places it where it is created, and passes the same object wherever another value points at it. From the plate-layout spec in `compiler/src/test/kotlin/velle/ClosureTest.kt`:

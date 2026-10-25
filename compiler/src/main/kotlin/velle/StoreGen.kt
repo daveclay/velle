@@ -152,8 +152,10 @@ object StoreGen {
             line()
             line("import velle.*")
             line("import java.math.BigDecimal")
+            if (model.usesScalar(VType.DurationT)) line("import java.time.Duration")
             line("import java.time.Instant")
             line("import java.time.LocalDate")
+            if (model.usesScalar(VType.UuidT)) line("import java.util.UUID")
             line()
         }
 
@@ -359,6 +361,8 @@ object StoreGen {
             VType.Bool -> "Boolean"
             VType.DateT -> "LocalDate"
             VType.DateTimeT -> "Instant"
+            VType.UuidT -> "UUID"
+            VType.DurationT -> "Duration"
             is VType.Ext -> model.registry[t.qualifiedName]?.kotlinClass?.qualifiedName ?: "Any"
             is VType.Inst -> "Ref.Persisted"
             is VType.Coll -> "List<Ref.Persisted>"
@@ -378,6 +382,8 @@ object StoreGen {
             }
             VType.DateT -> "$expr as LocalDate"
             VType.DateTimeT -> "$expr as Instant"
+            VType.UuidT -> "$expr as UUID"
+            VType.DurationT -> "$expr as Duration"
             VType.Text -> "$expr as String"
             VType.Bool -> "$expr as Boolean"
             is VType.Ext -> "$expr as ${rowKotlin(t)}"

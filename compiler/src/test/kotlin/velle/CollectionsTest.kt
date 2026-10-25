@@ -31,16 +31,16 @@ class CollectionsTest {
 
     private fun VelleSystem.freshStudentAndCourses(): Triple<Long, Long, Long> {
         val s = mustCommit("Student", "name" to "Ada", "courses" to emptyList<Long>())
-        val c1 = mustCommit("Course", "title" to "Logic", "capacity" to 30)
-        val c2 = mustCommit("Course", "title" to "Sets", "capacity" to 30)
+        val c1 = mustCommit("Course", "title" to "Logic", "capacity" to 30, "term" to java.time.Duration.ofDays(84))
+        val c2 = mustCommit("Course", "title" to "Sets", "capacity" to 30, "term" to java.time.Duration.ofDays(84))
         return Triple(s, c1, c2)
     }
 
     @Test
     fun `a committed reference set lands as the edge set, and the inverse is inferred`() {
         val sys = newSystem()
-        val c1 = sys.mustCommit("Course", "title" to "Logic", "capacity" to 30)
-        val c2 = sys.mustCommit("Course", "title" to "Sets", "capacity" to 30)
+        val c1 = sys.mustCommit("Course", "title" to "Logic", "capacity" to 30, "term" to java.time.Duration.ofDays(84))
+        val c2 = sys.mustCommit("Course", "title" to "Sets", "capacity" to 30, "term" to java.time.Duration.ofDays(84))
         val s = sys.mustCommit("Student", "name" to "Ada", "courses" to listOf(c1, c2))
         assertEquals(setOf(c1, c2), coll(sys.get(s, "courses")).toSet())
         // Course.students is the inferred inverse of the declared many (Reference §6)
@@ -59,7 +59,7 @@ class CollectionsTest {
     @Test
     fun `a duplicate reference is refused at the boundary`() {
         val sys = newSystem()
-        val c1 = sys.mustCommit("Course", "title" to "Logic", "capacity" to 30)
+        val c1 = sys.mustCommit("Course", "title" to "Logic", "capacity" to 30, "term" to java.time.Duration.ofDays(84))
         val before = sys.instancesOf("Student").size
         val r = sys.commit("Student", mapOf("name" to "Ada", "courses" to listOf(c1, c1)))
         val refused = assertIs<CommitResult.Refused>(r)
@@ -169,6 +169,18 @@ class CollectionsTest {
     }
 
     @Test
+    fun `contains over a many of values is membership under the element's equality`() {
+        val sys = newSystem()
+        val s = sys.mustCommit("Student", "name" to "Ada", "tags" to listOf("stem"))
+        assertTrue(!sys.isMember(s, "Honors"))
+        sys.mustCommit("Tag", "student" to s, "tag" to "honors")
+        assertTrue(sys.isMember(s, "Honors"))
+        val diags = Validator.validate("act S { scores: many integer }\nshape X = S where scores contains \"a\"")
+        assertTrue(diags.any { it.code == "F2" }, diags.toString())
+        assertTrue(Validator.validate("act S { scores: many integer, n: integer }\nshape X = S where scores contains n").none { it.code == "F2" })
+    }
+
+    @Test
     fun `F2 - a collection of values cannot be filtered, summed, or ordered`() {
         fun diags(body: String) = Validator.validate("""
             act Student { name: text, scores: many integer tolerates duplication }
@@ -225,7 +237,7 @@ class CollectionsTest {
     fun `a refinement reads the declared many`() {
         val sys = newSystem()
         val s = sys.mustCommit("Student", "name" to "Ada")
-        val courses = (1..3).map { sys.mustCommit("Course", "title" to "C$it", "capacity" to 10) }
+        val courses = (1..3).map { sys.mustCommit("Course", "title" to "C$it", "capacity" to 10, "term" to java.time.Duration.ofDays(84)) }
         assertTrue(!sys.isMember(s, "Overloaded"))
         sys.mustCommit("SetEnrollment", "student" to s, "courses" to courses)
         assertTrue(sys.isMember(s, "Overloaded"))

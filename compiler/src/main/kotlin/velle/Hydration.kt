@@ -75,7 +75,8 @@ sealed interface RowRef {
  * One instance as the engineer's storage holds it: stored fields and timestamp
  * fields only (derived properties recompute; refinement membership is the
  * predicate; captures travel on their own channel). Scalar values are plain
- * Kotlin — String, Boolean, BigDecimal (all numerics), LocalDate, Instant —
+ * Kotlin — String, Boolean, BigDecimal (all numerics), LocalDate, Instant,
+ * UUID, java.time.Duration —
  * every to-one reference is a [Ref.Persisted] built by the store, and a
  * declared `many` is a List of those (or of scalars) in membership order. A
  * field of a registered extension type (Reference §5) holds the type's own

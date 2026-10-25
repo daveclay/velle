@@ -14,8 +14,10 @@ A scalar is a single value a property holds: text, a number, true or false, a da
 | `boolean` | true or false |
 | `Date` | a calendar date (`java.time.LocalDate`) |
 | `DateTime` | a moment on the global timeline (`java.time.Instant`) |
+| `uuid` | an identifier the outside world can use (`java.util.UUID`); `==` and `!=` only, never ordered |
+| `duration` | a span of time, written as a duration literal such as `3 days` (`java.time.Duration`) |
 
-Each type behaves as its Kotlin counterpart unless the Reference says otherwise. A `DateTime` has no time zone; when the business needs one, store it as data beside the value.
+Each type behaves as its Kotlin counterpart unless the Reference says otherwise. A `DateTime` has no time zone; when the business needs one, store it as data beside the value. A `uuid` field compared to a quoted text reads the text as a uuid. A `duration` is ordered, adds to and subtracts from another `duration`, moves a `Date` or `DateTime` ([§10](Reference-10-Predicate-expressions)), and is the difference of two dates or two moments: `elapsed: duration = finished - started`. A `Date` moved by a `duration` that is not whole days is an error when the rule runs, as it is for the literal `today + 3 hours`.
 
 `now` is the current `DateTime`. `today` is the current `Date` in the system's one time zone, set at deployment, not in the spec.
 
@@ -83,7 +85,7 @@ What a rule or predicate can do with either form:
 
 - Assign it whole: `this.student.tags = this.tags` replaces every value.
 - Start it empty: `tags: many text initially empty`. A `many` never takes `?`, because the empty collection already means "none".
-- Count it with `count(tags)`, test it with `tags is empty`, and run over it with `for each tag in tags` ([§14](Reference-14-for)), in the kept order when there is one.
+- Count it with `count(tags)`, test it with `tags is empty` or `tags contains "honors"`, and run over it with `for each tag in tags` ([§14](Reference-14-for)), in the kept order when there is one. `shape Honors = Student where tags contains "honors"` is in `examples/enrollment/enrollment.velle`.
 - Read it as a derived property of another record: `tagsSeen: many text = student.tags`.
 
 A collection of values has no members to reach into, so it cannot be filtered with `where`, summed, or ordered with `by`; those belong to collections of records ([§10](Reference-10-Predicate-expressions)).
@@ -93,8 +95,9 @@ A collection of values has no members to reach into, so it cannot be filtered wi
 The list is fixed. A spec may call only these:
 
 - `count`, `sum`, `latest`, `first`, for collections ([§10](Reference-10-Predicate-expressions)). `sum` applies to a number and to an extension type that declares how its values add.
-- `contains`, `starts with`, `ends with`, `like`, for text ([§10](Reference-10-Predicate-expressions)).
-- `lowercase`, `max`, `min`. `max` and `min` apply to numbers and to any extension type that declares an ordering.
+- `contains`, `starts with`, `ends with`, `like`, for text ([§10](Reference-10-Predicate-expressions)). `contains` also tests whether a `many` of values holds a value (below, "Collections of values").
+- `lowercase`, `uppercase`, `trim`, `length`, each taking one text. `length` is a whole number.
+- `max`, `min`. They apply to numbers and to any extension type that declares an ordering.
 - Duration literals such as `3 days`, in `seconds`, `minutes`, `hours`, `days`, or `weeks` ([§10](Reference-10-Predicate-expressions)).
 - `randomUUID`, only after `initially`.
 
@@ -118,7 +121,7 @@ It is allowed on any stored property of a `shape`, relationships included. The v
 
 ## Generated values
 
-`initially` also accepts a generator. `reference: text initially randomUUID` mints a unique value when the record is created, which is how a record gets a key the outside world can use (`examples/billing/billing.velle`). The generator runs once at the creation commit; if that transaction is rolled back and retried, it runs again. `randomUUID` is the only generator. There is no sequence generator; ordering comes from timestamps or declared fields.
+`initially` also accepts a generator. `code: uuid initially randomUUID` mints a unique value when the record is created, which is how a record gets a key the outside world can use (`examples/enrollment/enrollment.velle`). On a `text` field, as `reference: text initially randomUUID` in `examples/billing/billing.velle`, the field gets the value's canonical spelling. The generator runs once at the creation commit; if that transaction is rolled back and retried, it runs again. `randomUUID` is the only generator. There is no sequence generator; ordering comes from timestamps or declared fields.
 
 ## Timestamps (`timestamp`)
 
@@ -153,7 +156,7 @@ An act declared `by` carries one more system-filled property: the actor who comm
 
 ## What the compiler checks
 
-- **Rejects** a call to a function outside the list above, an operator or comparison on mismatched types, and duration arithmetic on anything but a `Date` or `DateTime` ([checks.md, F2](checks#f2--type-checking)).
+- **Rejects** a call to a function outside the list above, a text function with anything but one text argument, an operator or comparison on mismatched types, an ordered comparison on a `uuid` or a `boolean`, and duration arithmetic on anything but a `Date`, a `DateTime`, or a `duration` ([checks.md, F2](checks#f2--type-checking)).
 - **Rejects** a name in type position that is neither a builtin, nor a shape after `one` or `many`, nor an extension type in scope; a name two registered types share with no `uses` line picking one; and a shape named like an extension type in scope, naming the `uses` line to write ([checks.md, F1](checks#f1--name-resolution-and-casing), [E1](checks#e1--registered-type-names)).
 - **Rejects** an operator, comparison, `sum`, `max`, `min`, or selector `by` on an extension type that does not declare the capability, naming the Kotlin class ([checks.md, E3](checks#e3--a-capability-the-type-does-not-declare)).
 - **Rejects** a `where`, `sum`, or `by` over a collection of values ([checks.md, F2](checks#f2--type-checking)).

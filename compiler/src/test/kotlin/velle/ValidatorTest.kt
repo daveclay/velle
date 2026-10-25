@@ -294,7 +294,7 @@ class ValidatorTest {
         val src = """
             act Customer {
                 name: text
-                shout: text = uppercase(name)
+                shout: text = reverse(name)
             }
         """.trimIndent()
         assertTrue(codes(src).contains("F2"), "got: ${diags(src)}")

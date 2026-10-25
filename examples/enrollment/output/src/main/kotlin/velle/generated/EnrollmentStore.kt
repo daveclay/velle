@@ -10,8 +10,10 @@ package velle.generated
 
 import velle.*
 import java.math.BigDecimal
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.util.UUID
 
 /** One stored Advisor row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class AdvisorRow(
@@ -24,6 +26,8 @@ data class CourseRow(
     val key: StoreKey,
     val title: String,
     val capacity: Int,
+    val term: Duration,
+    val code: UUID,
 )
 
 /** One stored Student row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -57,6 +61,9 @@ interface EnrollmentStore {
     fun studentsByAdvisor(target: Ref.Persisted): List<StudentRow>
 
     // ── candidate reads: one per condition with a testable part ──
+    /** Serves refinement ShortCourse — `ShortCourse`.
+     *  Superset contract: any superset of the matching rows is correct. */
+    fun shortCourseCandidates(): List<CourseRow>
     /** Serves never #1 — `Course where capacity < 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never1Candidates(): List<CourseRow>
@@ -64,6 +71,7 @@ interface EnrollmentStore {
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class EnrollmentStoreQuestions(model: Model) {
+    val shortCourseCandidates = QTemplate.of(model, "Course", RefName("ShortCourse"))
     val never1Candidates = QTemplate.of(model, "Course", model.nevers[0].target)
 }
 
@@ -87,6 +95,10 @@ open class EnrollmentStoreOverGeneric(
 
     override fun studentsByAdvisor(target: Ref.Persisted): List<StudentRow> =
         backend.fetchReferencing("Student", "advisor", target).map { it.toStudentRow() }
+
+    override fun shortCourseCandidates(): List<CourseRow> =
+        backend.fetchCandidates("Course", questions.shortCourseCandidates.instantiate(listOf()))
+            .map { it.toCourseRow() }
 
     override fun never1Candidates(): List<CourseRow> =
         backend.fetchCandidates("Course", questions.never1Candidates.instantiate(listOf()))
@@ -121,6 +133,8 @@ class EnrollmentStoreResolver(
 
     override fun fetchCandidates(shape: String, filter: QF): List<Row> {
         if (shape == "Course")
+            questions.shortCourseCandidates.match(filter)?.let { h -> return store.shortCourseCandidates().map { it.toRow() } }
+        if (shape == "Course")
             questions.never1Candidates.match(filter)?.let { h -> return store.never1Candidates().map { it.toRow() } }
         return fetchAll(shape) // unrecognized filters fall back to the scan floor
     }
@@ -145,11 +159,15 @@ fun Row.toCourseRow(): CourseRow = CourseRow(
     key = key,
     title = fields["title"] as String,
     capacity = (fields["capacity"] as Number).toInt(),
+    term = fields["term"] as Duration,
+    code = fields["code"] as UUID,
 )
 
 fun CourseRow.toRow(): Row = Row("Course", key, buildMap {
     put("title", title)
     put("capacity", capacity)
+    put("term", term)
+    put("code", code)
 })
 
 fun Row.toStudentRow(): StudentRow = StudentRow(

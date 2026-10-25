@@ -338,7 +338,7 @@ data class AggCall(
     val orderBy: List<String> = emptyList(),
 ) : Expr
 
-/** Builtin function call from the closed list: lowercase, max, min. */
+/** Builtin function call from the closed list: lowercase, uppercase, trim, length, max, min. */
 data class FunCall(val name: String, val args: List<Expr>) : Expr
 
 /** `(Shape for expr)` — the singular query form. */

@@ -859,8 +859,17 @@ class Validator(private val model: Model) {
                 // a conjunction narrows what follows it (Reference §10)
                 if (e.op == "and") withNarrowing(narrowingsOf(e.left)) { checkExpr(e.right, scope) }
                 else checkExpr(e.right, scope)
-                // the text operators take text on both sides (Reference §10; OQ51 R1)
-                if (e.op in TEXT_OPERATORS) {
+                // the text operators take text on both sides (Reference §10; OQ51 R1);
+                // `values contains x` over a `many` of values takes an element (Reference §5)
+                val leftColl = scalarTypeOf(e.left, scope) as? VType.CollS
+                if (e.op == "contains" && leftColl != null) {
+                    val elem = model.scalarOf(leftColl.name)
+                    val rt = scalarTypeOf(e.right, scope)
+                    // a constant beside an extension element reads through the type (OQ65 D2); otherwise types must agree
+                    if (rt != null && rt != elem && !(rt is VType.Num && elem is VType.Num) && !(elem is VType.Ext && constantOf(e.right) != null))
+                        diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${Printer.expr(e.left)}' holds '${leftColl.name}' values, " +
+                            "but '${Printer.expr(e.right)}' is not one"))
+                } else if (e.op in TEXT_OPERATORS) {
                     for (side in listOf(e.left, e.right)) {
                         val t = scalarTypeOf(side, scope) ?: continue
                         if (t != VType.Text)
@@ -868,6 +877,13 @@ class Validator(private val model: Model) {
                     }
                 }
                 // an extension type takes part only through what it declares (Reference §5; OQ65)
+                // a `uuid` and a `boolean` have no order (Reference §5): `==` and `!=` only
+                if (e.op in setOf("<", "<=", ">", ">="))
+                    for (side in listOf(e.left, e.right)) {
+                        val t = scalarTypeOf(side, scope)?.let { (it as? VType.Optional)?.inner ?: it }
+                        if (t == VType.UuidT || t == VType.Bool)
+                            diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — a ${registryName(t)} has no order; only `==` and `!=` apply"))
+                    }
                 when (e.op) {
                     "==", "!=", "<", "<=", ">", ">=" -> checkExtComparison(e, scope)
                     "+", "-", "*", "/" -> {
@@ -910,7 +926,7 @@ class Validator(private val model: Model) {
                 orderBy = e.orderBy.takeIf { e.name == "latest" || e.name == "first" }
             )
             is FunCall -> {
-                if (e.name !in setOf("lowercase", "max", "min"))
+                if (e.name !in setOf("lowercase", "uppercase", "trim", "length", "max", "min"))
                     diags.add(Diagnostic("F2", "unknown function '${e.name}' — the builtin list is closed (Reference §5)"))
                 e.args.forEach { checkExpr(it, scope) }
                 checkFunctionCall(e, scope)
@@ -935,18 +951,22 @@ class Validator(private val model: Model) {
         is BoolLit -> VType.Bool
         is TodayLit -> VType.DateT
         is NowLit -> VType.DateTimeT
+        is DurationLit -> VType.DurationT
         is ValueLit -> when (e.value) {
             is Value.VText -> VType.Text
             is Value.VNum -> VType.Num("decimal")
             is Value.VBool -> VType.Bool
             is Value.VDate -> VType.DateT
             is Value.VDateTime -> VType.DateTimeT
+            is Value.VUuid -> VType.UuidT
+            is Value.VDuration -> VType.DurationT
             is Value.VExt -> VType.Ext(e.value.type.qualifiedName)
             else -> null
         }
         is UnaryMinus -> scalarTypeOf(e.inner, scope)
         is FunCall -> when (e.name) {
-            "lowercase" -> VType.Text
+            "lowercase", "uppercase", "trim" -> VType.Text
+            "length" -> VType.Num("integer")
             // max/min have the type of their arguments: the first typed one that is not a bare constant
             "max", "min" -> e.args.firstNotNullOfOrNull { a -> scalarTypeOf(a, scope)?.takeIf { it is VType.Ext || constantOf(a) == null } }
                 ?: e.args.firstNotNullOfOrNull { scalarTypeOf(it, scope) }
@@ -964,6 +984,12 @@ class Validator(private val model: Model) {
             when {
                 l is VType.Ext || r is VType.Ext -> operatorLine(e, l, r, scope)?.let { typeNamed(it.result) }
                 l is VType.Num && r is VType.Num -> VType.Num("decimal")
+                // durations (Reference §5): a date or moment moved by a span stays what it was;
+                // two spans make a span; the difference of two dates or two moments is a span
+                e.op in setOf("+", "-") && (l == VType.DateT || l == VType.DateTimeT) && r == VType.DurationT -> l
+                e.op in setOf("+", "-") && l == VType.DurationT && r == VType.DurationT -> VType.DurationT
+                e.op == "-" && l == VType.DateT && r == VType.DateT -> VType.DurationT
+                e.op == "-" && l == VType.DateTimeT && r == VType.DateTimeT -> VType.DurationT
                 else -> null
             }
         }
@@ -984,7 +1010,7 @@ class Validator(private val model: Model) {
 
     private fun isOrderable(t: VType): Boolean {
         val bare = (t as? VType.Optional)?.inner ?: t
-        return bare is VType.Num || bare == VType.Text || bare == VType.DateT || bare == VType.DateTimeT ||
+        return bare is VType.Num || bare == VType.Text || bare == VType.DateT || bare == VType.DateTimeT || bare == VType.DurationT ||
             (bare is VType.Ext && model.registry[bare.qualifiedName]?.ordering != null)
     }
 
@@ -1007,6 +1033,8 @@ class Validator(private val model: Model) {
         VType.Bool -> "boolean"
         VType.DateT -> "Date"
         VType.DateTimeT -> "DateTime"
+        VType.UuidT -> "uuid"
+        VType.DurationT -> "duration"
         else -> null
     }
 
@@ -1016,6 +1044,8 @@ class Validator(private val model: Model) {
         "boolean" -> VType.Bool
         "Date" -> VType.DateT
         "DateTime" -> VType.DateTimeT
+        "uuid" -> VType.UuidT
+        "duration" -> VType.DurationT
         else -> model.registry[name]?.let { VType.Ext(it.qualifiedName) }
     }
 
@@ -1145,8 +1175,18 @@ class Validator(private val model: Model) {
                     }
                 }
             }
-            "lowercase" -> e.args.firstOrNull()?.let { a -> extOf(scalarTypeOf(a, scope))?.let { t ->
-                diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — 'lowercase' takes text, not a ${describe(t)}")) } }
+            "lowercase", "uppercase", "trim", "length" -> {
+                if (e.args.size != 1)
+                    diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.name}' takes one text argument"))
+                e.args.firstOrNull()?.let { a ->
+                    val t = scalarTypeOf(a, scope)
+                    val ext = extOf(t)
+                    if (ext != null)
+                        diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.name}' takes text, not a ${describe(ext)}"))
+                    else if (t != null && t != VType.Text)
+                        diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.name}' takes text, but '${Printer.expr(a)}' is not text"))
+                }
+            }
         }
     }
 

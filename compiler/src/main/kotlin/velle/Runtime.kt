@@ -28,7 +28,24 @@ sealed interface Value {
     /** A `many` field some of whose elements are records this commit creates
      *  ([VPendingRef] among [VRef]s); resolved to a [VColl] as creations land. */
     data class VPendingColl(val items: List<Value>, val shape: String) : Value
-    data class VDuration(val amount: Long, val unit: String) : Value
+    /** A span of time (Reference §5, `duration`): the literal's amount and unit, or a
+     *  stored value read back in the largest unit that divides it evenly. */
+    data class VDuration(val amount: Long, val unit: String) : Value {
+        fun seconds(): Long = amount * unitSeconds(unit)
+        fun toJava(): java.time.Duration = java.time.Duration.ofSeconds(seconds())
+        companion object {
+            fun ofJava(d: java.time.Duration): VDuration = ofSeconds(d.seconds)
+            fun ofSeconds(s: Long): VDuration {
+                for ((unit, n) in UNITS) if (s != 0L && s % n == 0L) return VDuration(s / n, unit)
+                return VDuration(s, "seconds")
+            }
+            fun unitSeconds(unit: String): Long = UNITS.firstOrNull { it.first == unit }?.second
+                ?: throw VelleRuntimeError("unknown duration unit '$unit'")
+            private val UNITS = listOf("weeks" to 604_800L, "days" to 86_400L, "hours" to 3_600L, "minutes" to 60L, "seconds" to 1L)
+        }
+    }
+    /** A `uuid` value (Reference §5). */
+    data class VUuid(val v: UUID) : Value
     /** A value of a registered extension type (Reference §5; OQ65): the type's own Kotlin object. */
     data class VExt(val type: velle.ext.VelleType<*>, val v: Any) : Value {
         override fun equals(other: Any?): Boolean = other is VExt && other.type === type && type.equalAny(v, other.v)
@@ -438,6 +455,8 @@ class VelleSystem(
         )
         VType.DateT -> Value.VDate(raw as? LocalDate ?: throw VelleRuntimeError("hydrating $at: not a Date ($raw)"))
         VType.DateTimeT -> Value.VDateTime(raw as? Instant ?: throw VelleRuntimeError("hydrating $at: not a DateTime ($raw)"))
+        VType.UuidT -> Value.VUuid(raw as? UUID ?: throw VelleRuntimeError("hydrating $at: not a uuid ($raw)"))
+        VType.DurationT -> Value.VDuration.ofJava(raw as? java.time.Duration ?: throw VelleRuntimeError("hydrating $at: not a duration ($raw)"))
         // the Row contract: a field of an extension type holds the type's Kotlin object
         is VType.Ext -> {
             val type = model.registry[t.qualifiedName] ?: throw VelleRuntimeError("hydrating $at: no registered type '${t.qualifiedName}'")
@@ -1071,6 +1090,8 @@ class VelleSystem(
         "boolean" -> (raw as? Boolean)?.let { Value.VBool(it) }
         "Date" -> (raw as? LocalDate)?.let { Value.VDate(it) }
         "DateTime" -> (raw as? Instant)?.let { Value.VDateTime(it) }
+        "uuid" -> (raw as? UUID)?.let { Value.VUuid(it) }
+        "duration" -> (raw as? java.time.Duration)?.let { Value.VDuration.ofJava(it) }
         in TypeRegistry.NUMBER_NAMES -> runCatching { Value.num(raw) }.getOrNull()
         else -> {
             // an extension type (Reference §5; OQ65): the value is the type's own class and
@@ -1342,7 +1363,9 @@ class VelleSystem(
                 continue
             }
             inst.fields[p.name] =
-                if (p.initially == PathExpr("randomUUID")) Value.VText(UUID.randomUUID().toString())
+                if (p.initially == PathExpr("randomUUID"))
+                    // a `uuid` field gets the value; a `text` field its canonical spelling (Reference §5)
+                    UUID.randomUUID().let { if ((p.type as? ScalarType)?.name == "uuid") Value.VUuid(it) else Value.VText(it.toString()) }
                 else coerceCollection(evaluator.eval(p.initially, Evaluator.Ctx(m.shape, id)), p.type)
         }
         for (p in decl.members.filterIsInstance<TimestampProp>())
@@ -1705,6 +1728,7 @@ class VelleSystem(
             is Value.VBool -> v.v
             is Value.VDate -> v.v
             is Value.VDateTime -> v.v
+            is Value.VUuid -> v.v
             is Value.VRef -> if (instance(v.id) != null) refOf(v.id) else null
             is Value.VColl -> v.ids.filter { instance(it) != null }.map { refOf(it) }
             is Value.VVals -> v.values.map { plain(it) }
@@ -1935,7 +1959,8 @@ class VelleSystem(
         is Value.VColl -> v.ids
         is Value.VVals -> v.values.map { unwrap(it) }
         Value.VEmpty -> emptyList<Any?>()
-        is Value.VDuration -> v.amount to v.unit
+        is Value.VDuration -> v.toJava()
+        is Value.VUuid -> v.v
         is Value.VExt -> v.v
         is Value.VPendingRef, is Value.VPendingColl -> throw VelleRuntimeError("pending closure reference escaped its commit")
         Value.VNone -> null

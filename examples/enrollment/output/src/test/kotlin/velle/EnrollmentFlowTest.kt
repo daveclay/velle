@@ -24,7 +24,7 @@ open class EnrollmentFlowTest {
     }
 
     private fun course(title: String): Course {
-        assertIs<Commit.Accepted<*, *>>(sys.commit(NewCourse(title, 30)))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewCourse(title, 30, java.time.Duration.ofDays(84))))
         return sys.courses().last()
     }
 

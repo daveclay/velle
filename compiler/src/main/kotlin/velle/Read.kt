@@ -223,12 +223,16 @@ class TextField(path: List<String>) : ScalarField<String>(path) {
     /** `like`: `%` any run, `_` any one character, `\` escapes either. */
     infix fun like(pattern: String): Expr = Binary("like", pathExpr(), TextLit(pattern))
     /** `lowercase(member)`, for case-folded comparison the author spells visibly. */
-    val lowercase: LowercaseText get() = LowercaseText(fieldPath)
+    val lowercase: TextFunction get() = TextFunction("lowercase", fieldPath)
+    val uppercase: TextFunction get() = TextFunction("uppercase", fieldPath)
+    val trim: TextFunction get() = TextFunction("trim", fieldPath)
+    /** `length(member)`, compared as a whole number. */
+    val length: LengthOf get() = LengthOf(fieldPath)
 }
 
-/** `lowercase(member)` as the left operand of a text comparison. */
-class LowercaseText internal constructor(private val path: List<String>) {
-    private fun call(): Expr = FunCall("lowercase", listOf(PathExpr("this", path.map { Seg(it, false) })))
+/** A text function of a member (`lowercase(member)`, `uppercase`, `trim`) as the left operand of a text comparison. */
+class TextFunction internal constructor(private val name: String, private val path: List<String>) {
+    private fun call(): Expr = FunCall(name, listOf(PathExpr("this", path.map { Seg(it, false) })))
     infix fun eq(v: String): Expr = Binary("==", call(), TextLit(v))
     infix fun contains(v: String): Expr = Binary("contains", call(), TextLit(v))
     infix fun startsWith(v: String): Expr = Binary("starts with", call(), TextLit(v))
@@ -236,8 +240,30 @@ class LowercaseText internal constructor(private val path: List<String>) {
     infix fun like(pattern: String): Expr = Binary("like", call(), TextLit(pattern))
 }
 
+/** `length(member)` as the left operand of a numeric comparison. */
+class LengthOf internal constructor(private val path: List<String>) {
+    private fun call(): Expr = FunCall("length", listOf(PathExpr("this", path.map { Seg(it, false) })))
+    infix fun eq(v: Int): Expr = Binary("==", call(), ValueLit(Value.num(v)))
+    infix fun neq(v: Int): Expr = Binary("!=", call(), ValueLit(Value.num(v)))
+    infix fun lt(v: Int): Expr = Binary("<", call(), ValueLit(Value.num(v)))
+    infix fun lte(v: Int): Expr = Binary("<=", call(), ValueLit(Value.num(v)))
+    infix fun gt(v: Int): Expr = Binary(">", call(), ValueLit(Value.num(v)))
+    infix fun gte(v: Int): Expr = Binary(">=", call(), ValueLit(Value.num(v)))
+}
+
 class NumField(path: List<String>) : ScalarField<Number>(path) {
     override fun lit(v: Number): Expr = ValueLit(Value.num(v))
+}
+
+/** A `uuid` member (Reference §5): equality only. */
+class UuidField(path: List<String>) : Fields(path) {
+    infix fun eq(v: java.util.UUID): Expr = Binary("==", pathExpr(), ValueLit(Value.VUuid(v)))
+    infix fun neq(v: java.util.UUID): Expr = Binary("!=", pathExpr(), ValueLit(Value.VUuid(v)))
+}
+
+/** A `duration` member (Reference §5): ordered, like a number. */
+class DurationField(path: List<String>) : ScalarField<java.time.Duration>(path) {
+    override fun lit(v: java.time.Duration): Expr = ValueLit(Value.VDuration.ofJava(v))
 }
 
 class BoolField(path: List<String>) : Fields(path) {

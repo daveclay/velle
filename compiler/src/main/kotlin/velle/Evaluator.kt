@@ -1,6 +1,7 @@
 package velle
 
 import java.math.BigDecimal
+import java.util.UUID
 
 /**
  * Expression and membership evaluation against the runtime state.
@@ -439,10 +440,15 @@ class Evaluator(private val system: VelleSystem) {
     }
 
     private fun evalFun(e: FunCall, ctx: Ctx): Value = when (e.name) {
-        "lowercase" -> {
-            val v = eval(e.args.single(), ctx) as? Value.VText
-                ?: throw VelleRuntimeError("lowercase on non-text")
-            Value.VText(v.v.lowercase())
+        "lowercase", "uppercase", "trim", "length" -> {
+            val v = (eval(e.args.single(), ctx) as? Value.VText)?.v
+                ?: throw VelleRuntimeError("${e.name} on non-text")
+            when (e.name) {
+                "lowercase" -> Value.VText(v.lowercase())
+                "uppercase" -> Value.VText(v.uppercase())
+                "trim" -> Value.VText(v.trim())
+                else -> Value.VNum(BigDecimal(v.length))
+            }
         }
         "max", "min" -> {
             // the *ordered* capability (Reference §5; OQ65 D4): numbers by value, an
@@ -537,7 +543,11 @@ class Evaluator(private val system: VelleSystem) {
             }
             // the text operators (Reference §10; OQ51 R1): exact, case-sensitive;
             // an absent operand satisfies none of them, like every ordered comparison
-            in TEXT_OPERATORS -> {
+            // `values contains x` over a `many` of values (Reference §5): membership
+            // under the element type's equality; the empty collection contains nothing
+            in TEXT_OPERATORS -> if (e.op == "contains" && (l is Value.VVals || l == Value.VEmpty)) {
+                Value.VBool(l is Value.VVals && l.values.any { valueEquals(it, r) })
+            } else {
                 val a = (l as? Value.VText)?.v
                 val b = (r as? Value.VText)?.v
                 if (a == null || b == null) {
@@ -658,6 +668,14 @@ class Evaluator(private val system: VelleSystem) {
                 ordered,
             )
         }
+        // durations (Reference §5): `duration ± duration`, and the span between two
+        // dates or two moments; a `Date` difference is whole days
+        if (l is Value.VDuration && r is Value.VDuration)
+            return Value.VDuration.ofSeconds(if (op == "+") l.seconds() + r.seconds() else l.seconds() - r.seconds())
+        if (op == "-" && l is Value.VDateTime && r is Value.VDateTime)
+            return Value.VDuration.ofSeconds(java.time.Duration.between(r.v, l.v).seconds)
+        if (op == "-" && l is Value.VDate && r is Value.VDate)
+            return Value.VDuration(java.time.temporal.ChronoUnit.DAYS.between(r.v, l.v), "days")
         if (r is Value.VDuration) {
             val sign = if (op == "+") 1L else -1L
             return when (l) {
@@ -668,20 +686,11 @@ class Evaluator(private val system: VelleSystem) {
                         else -> throw VelleRuntimeError("'${r.unit}' is clock time — not applicable to a Date (Reference §10)")
                     }
                 )
-                is Value.VDateTime -> Value.VDateTime(l.v.plusSeconds(sign * r.amount * unitSeconds(r.unit)))
+                is Value.VDateTime -> Value.VDateTime(l.v.plusSeconds(sign * r.seconds()))
                 else -> throw VelleRuntimeError("duration arithmetic on $l")
             }
         }
         throw VelleRuntimeError("'$op' on $l and $r")
-    }
-
-    private fun unitSeconds(unit: String): Long = when (unit) {
-        "seconds" -> 1
-        "minutes" -> 60
-        "hours" -> 3_600
-        "days" -> 86_400
-        "weeks" -> 604_800
-        else -> throw VelleRuntimeError("unknown duration unit '$unit'")
     }
 
     /** `like`'s pattern as a regex: `%` any run (empty included), `_` any one
@@ -721,6 +730,10 @@ class Evaluator(private val system: VelleSystem) {
         l is Value.VRef && r is Value.VRef -> l.id == r.id // identity comparison (Reference §5)
         l is Value.VExt && r is Value.VExt -> l.type === r.type && l.type.equalAny(l.v, r.v)
         l is Value.VExt || r is Value.VExt -> { val (a, b) = unify(l, r); a == b }
+        l is Value.VDuration && r is Value.VDuration -> l.seconds() == r.seconds()
+        // a text constant beside a uuid reads as one (Reference §5); a malformed one is simply unequal
+        l is Value.VUuid && r is Value.VText -> runCatching { UUID.fromString(r.v) }.getOrNull() == l.v
+        l is Value.VText && r is Value.VUuid -> runCatching { UUID.fromString(l.v) }.getOrNull() == r.v
         else -> l == r
     }
 
@@ -731,6 +744,7 @@ class Evaluator(private val system: VelleSystem) {
         l is Value.VDate && r is Value.VDate -> l.v.compareTo(r.v)
         l is Value.VDateTime && r is Value.VDateTime -> l.v.compareTo(r.v)
         l is Value.VText && r is Value.VText -> l.v.compareTo(r.v)
+        l is Value.VDuration && r is Value.VDuration -> l.seconds().compareTo(r.seconds())
         else -> throw VelleRuntimeError("cannot order $l against $r")
     }
 

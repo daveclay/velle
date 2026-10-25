@@ -315,6 +315,15 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
      * own body members plus everything visible on its operands (union — Reference §9's
      * `or`-restriction is a check's concern, not lookup's).
      */
+    /** True when a member of some shape or refinement holds the scalar [t]: bare, optional,
+     *  or as the element of a `many` of values. The generators import a Kotlin class only when so. */
+    fun usesScalar(t: VType): Boolean = (shapes.keys + refinements.keys).any { sc ->
+        membersOf(sc).values.any { m ->
+            val bare = (m.type as? VType.Optional)?.inner ?: m.type
+            bare == t || (bare is VType.CollS && scalarOf(bare.name) == t)
+        }
+    }
+
     fun membersOf(scope: String): Map<String, MemberInfo> =
         memberCache.getOrPut(scope) { computeMembers(scope) }
 
@@ -594,6 +603,8 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
             "boolean" -> VType.Bool
             "Date" -> VType.DateT
             "DateTime" -> VType.DateTimeT
+            "uuid" -> VType.UuidT
+            "duration" -> VType.DurationT
             else -> typeScope[t.name]?.let { VType.Ext(it.qualifiedName) } ?: VType.Unknown
         }.let { if (t.optional) VType.Optional(it) else it }
         is RelType ->
@@ -845,6 +856,10 @@ sealed interface VType {
     data object Bool : VType
     data object DateT : VType
     data object DateTimeT : VType
+    /** A `uuid` (Reference §5): `java.util.UUID`, equality only, no ordering. */
+    data object UuidT : VType
+    /** A `duration` (Reference §5): a span of time, `java.time.Duration` on the surface. */
+    data object DurationT : VType
     data object Id : VType
     data class Inst(val shape: String) : VType
     data class Coll(val shape: String) : VType

@@ -20,6 +20,8 @@ import velle.canonicalAny
 import velle.equalAny
 import velle.ext.VelleType
 import java.math.BigDecimal
+import java.time.Duration
+import java.util.UUID
 import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.ResultSet
@@ -193,6 +195,7 @@ class SqliteStore(
         is VType.Ext -> bindingOf(t).columnType
         is VType.Num -> if (t.name == "integer" || t.name == "long") "INTEGER" else "TEXT"
         VType.Bool -> "INTEGER"
+        VType.DurationT -> "INTEGER" // whole seconds: orders as the value does
         else -> "TEXT"
     }
 
@@ -343,7 +346,14 @@ class SqliteStore(
                     if (bare is VType.Num && (bare.name == "integer" || bare.name == "long"))
                         runCatching { c.v.longValueExact() }.getOrNull()
                     else null
-                is QConst.QText -> (c.v).takeIf { bare == VType.Text }
+                is QConst.QText -> when (bare) {
+                    VType.Text -> c.v
+                    // a text constant against a uuid column: its canonical spelling, or nothing
+                    VType.UuidT -> runCatching { UUID.fromString(c.v).toString() }.getOrNull()
+                    else -> null
+                }
+                is QConst.QUuid -> c.v.toString().takeIf { bare == VType.UuidT }
+                is QConst.QDuration -> c.v.seconds.takeIf { bare == VType.DurationT }
                 is QConst.QBool -> (if (c.v) 1 else 0).takeIf { bare == VType.Bool }
                 is QConst.QDate -> c.v.toString().takeIf { bare == VType.DateT }
                 is QConst.QDateTime -> null
@@ -390,6 +400,8 @@ class SqliteStore(
         VType.Bool -> rs.getInt(name) != 0
         VType.DateT -> LocalDate.parse(rs.getString(name))
         VType.DateTimeT -> Instant.parse(rs.getString(name))
+        VType.UuidT -> UUID.fromString(rs.getString(name))
+        VType.DurationT -> Duration.ofSeconds(rs.getLong(name))
         else -> rs.getString(name)
     }
 
@@ -571,7 +583,8 @@ class SqliteStore(
             if (t.name == "integer" || t.name == "long") toBigDecimal(v).longValueExact()
             else toBigDecimal(v).toPlainString()
         t == VType.Bool -> if (v as Boolean) 1 else 0
-        else -> v.toString() // Date/DateTime ISO-8601, text as-is
+        t == VType.DurationT -> (v as Duration).seconds
+        else -> v.toString() // Date/DateTime ISO-8601, uuid canonical, text as-is
     }
 
     /** Numerics arrive as BigDecimal from the runtime, but a typed store layer

@@ -16,7 +16,7 @@ class Givens(private val sys: EnrollmentSystem) : RequiredGivens {
     }
 
     private fun course(): Course {
-        sys.commit(NewCourse("Logic", 30))
+        sys.commit(NewCourse("Logic", 30, java.time.Duration.ofDays(84)))
         return sys.courses().last()
     }
 

@@ -52,6 +52,8 @@ sealed interface QConst {
     data class QBool(val v: Boolean) : QConst
     data class QDate(val v: LocalDate) : QConst
     data class QDateTime(val v: Instant) : QConst
+    data class QUuid(val v: java.util.UUID) : QConst
+    data class QDuration(val v: java.time.Duration) : QConst
     /** An instance the store already holds — the query API's "this customer"
      *  (Reference §22) against a to-one reference column. */
     data class QRef(val ref: Ref.Persisted) : QConst
@@ -292,6 +294,8 @@ class QueryCompiler(
         is QConst.QBool -> t == VType.Bool
         is QConst.QDate -> t == VType.DateT
         is QConst.QDateTime -> t == VType.DateTimeT
+        is QConst.QUuid -> t == VType.UuidT
+        is QConst.QDuration -> t == VType.DurationT
         is QConst.QRef -> t is VType.Inst && model.typeAccepts(t.shape, c.ref.shape)
         is QConst.QExt -> t is VType.Ext && t.qualifiedName == c.type.qualifiedName
     }
@@ -348,6 +352,7 @@ class QueryCompiler(
         is BoolLit -> QConst.QBool(e.value)
         TodayLit -> QConst.QDate(today)
         NowLit -> QConst.QDateTime(now)
+        is DurationLit -> QConst.QDuration(Value.VDuration(e.amount, e.unit).toJava())
         is UnaryMinus -> (constFold(e.inner) as? QConst.QNum)?.let { QConst.QNum(it.v.negate()) }
         is Binary -> foldBinary(e)
         // the query API's constants (ValueLit): a value supplied at the moment of asking
@@ -357,6 +362,8 @@ class QueryCompiler(
             is Value.VBool -> QConst.QBool(v.v)
             is Value.VDate -> QConst.QDate(v.v)
             is Value.VDateTime -> QConst.QDateTime(v.v)
+            is Value.VUuid -> QConst.QUuid(v.v)
+            is Value.VDuration -> QConst.QDuration(v.toJava())
             is Value.VRef -> keyOf(v.id)?.let { QConst.QRef(it) } // unpersisted: nothing to test in the store
             is Value.VExt -> QConst.QExt(v.type, v.v)
             else -> null

@@ -61,8 +61,10 @@ object Codegen {
             line()
             line("import velle.*")
             line("import java.math.BigDecimal")
+            if (model.usesScalar(VType.DurationT)) line("import java.time.Duration")
             line("import java.time.Instant")
             line("import java.time.LocalDate")
+            if (model.usesScalar(VType.UuidT)) line("import java.util.UUID")
             line()
         }
 
@@ -646,6 +648,8 @@ object Codegen {
             VType.Bool -> "BoolField"
             VType.DateT -> "DateField"
             VType.DateTimeT -> "DateTimeField"
+            VType.UuidT -> "UuidField"
+            VType.DurationT -> "DurationField"
             is VType.Inst -> if (isRoot(t.shape)) "${t.shape}Fields" else "RefField"
             is VType.Optional -> fieldHandle(t.inner)
             else -> null
@@ -714,6 +718,8 @@ object Codegen {
             "boolean" -> "Boolean"
             "Date" -> "LocalDate"
             "DateTime" -> "Instant"
+            "uuid" -> "UUID"
+            "duration" -> "Duration"
             // a registered extension type: its own class, fully qualified (Reference §5; OQ65)
             else -> model.typeScope[name]?.kotlinClass?.qualifiedName ?: "Any"
         }
@@ -725,6 +731,8 @@ object Codegen {
             VType.Bool -> "Boolean"
             VType.DateT -> "LocalDate"
             VType.DateTimeT -> "Instant"
+            VType.UuidT -> "UUID"
+            VType.DurationT -> "Duration"
             is VType.Inst -> "Ref<${refBase(t.shape)}>"
             is VType.Coll -> "List<Ref<${t.shape}>>"
             is VType.CollS -> "List<${scalarKotlin(t.name)}>"
@@ -744,6 +752,8 @@ object Codegen {
             VType.Bool -> "$call as Boolean"
             VType.DateT -> "$call as LocalDate"
             VType.DateTimeT -> "$call as Instant"
+            VType.UuidT -> "$call as UUID"
+            VType.DurationT -> "$call as Duration"
             is VType.Ext -> "$call as ${kotlinType(t)}"
             is VType.Inst -> "system.refFor($call as Long)"
             is VType.Coll -> "($call as List<*>).map { system.refFor(it as Long) }"

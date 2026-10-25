@@ -235,6 +235,8 @@ object SpecGen {
                             "boolean" -> "false"
                             "Date" -> "java.time.LocalDate.of(2026, 1, 15)"
                             "DateTime" -> "java.time.Instant.parse(\"2026-01-15T00:00:00Z\")"
+                            "uuid" -> "java.util.UUID.fromString(\"00000000-0000-4000-8000-000000000001\")"
+                            "duration" -> "java.time.Duration.ofDays(1)"
                             // an extension type's own sample (Reference §5; testgen.md)
                             in model.typeScope -> extSampleSource(act.name, p.name, model.typeScope.getValue(t.name)) ?: return null
                             else -> {
@@ -909,6 +911,8 @@ object SpecGen {
                             "boolean" -> "false"
                             "Date" -> "java.time.LocalDate.of(2026, 1, 15)"
                             "DateTime" -> "java.time.Instant.parse(\"2026-01-15T00:00:00Z\")"
+                            "uuid" -> "java.util.UUID.fromString(\"00000000-0000-4000-8000-000000000001\")"
+                            "duration" -> "java.time.Duration.ofDays(1)"
                             in model.typeScope ->
                                 if (p.name == constrainedField) "OVERRIDDEN"
                                 else extSampleSource(shape.name, p.name, model.typeScope.getValue(t.name)) ?: return null

@@ -71,7 +71,7 @@ class EnrollmentPersistenceTest {
         accept(first.commit(NewStudent("Ada", tags = emptyList(), notes = emptyList(), courses = emptyList())))
         val ada = first.students().last()
         val courses = listOf("Logic", "Sets", "Proofs").map { title ->
-            accept(first.commit(NewCourse(title, 30)))
+            accept(first.commit(NewCourse(title, 30, java.time.Duration.ofDays(84))))
             first.courses().last()
         }
         accept(first.commit(NewSetEnrollment(ada, listOf(courses[0], courses[1]))))
@@ -90,6 +90,11 @@ class EnrollmentPersistenceTest {
         assertEquals(listOf(logic, sets, proofs), second.read(ada2).courses, "membership order is the junction's insertion order")
         assertEquals(listOf("honors", "stem"), second.read(ada2).tags)
         assertEquals(listOf("late", "early", "late"), second.read(ada2).notes, "a collection tolerating duplication reads back in the order written, duplicates kept")
+        // a `duration` column is whole seconds, a `uuid` column its canonical text (Reference §5)
+        assertEquals(listOf(84L * 86_400), rows("""SELECT term FROM Course WHERE id = 1""").map { it[0] })
+        assertEquals(java.time.Duration.ofDays(84), second.read(logic).term)
+        assertEquals(second.read(logic).code, java.util.UUID.fromString(rows("""SELECT code FROM Course WHERE id = 1""").single()[0] as String))
+        assertTrue(second.shortCourses().none { it.key == logic.key }, "term < 4 weeks over the seconds column")
         assertTrue(second.overloadeds().any { it.key == ada2.key }, "count(courses) > 2 over the junction rows")
         assertTrue(second.untaggeds().none { it.key == ada2.key })
         assertEquals(listOf(ada2), second.read(sets).students, "the m2m inverse scans the declared side's junction")

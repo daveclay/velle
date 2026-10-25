@@ -4,8 +4,10 @@ package velle.generated
 
 import velle.*
 import java.math.BigDecimal
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.util.UUID
 
 class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
 
@@ -69,6 +71,8 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     fun students(): List<Student> = all("Student") { materializeStudent(it) }
     fun overloadeds(): List<Overloaded> = all("Overloaded") { materializeOverloaded(it) }
     fun untaggeds(): List<Untagged> = all("Untagged") { materializeUntagged(it) }
+    fun honorss(): List<Honors> = all("Honors") { materializeHonors(it) }
+    fun shortCourses(): List<ShortCourse> = all("ShortCourse") { materializeShortCourse(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -97,6 +101,14 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         val untaggeds: UntaggedQuery get() = query("Untagged", UntaggedFields()) { materializeUntagged(it) }
         /** The record behind [ref] as a member of Untagged, or null when it is not one. */
         fun untagged(ref: Ref<Student>): Untagged? = member("Untagged", ref) { materializeUntagged(it) }
+
+        val honorss: HonorsQuery get() = query("Honors", HonorsFields()) { materializeHonors(it) }
+        /** The record behind [ref] as a member of Honors, or null when it is not one. */
+        fun honors(ref: Ref<Student>): Honors? = member("Honors", ref) { materializeHonors(it) }
+
+        val shortCourses: ShortCourseQuery get() = query("ShortCourse", ShortCourseFields()) { materializeShortCourse(it) }
+        /** The record behind [ref] as a member of ShortCourse, or null when it is not one. */
+        fun shortCourse(ref: Ref<Course>): ShortCourse? = member("ShortCourse", ref) { materializeShortCourse(it) }
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -118,7 +130,10 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         key = system.refFor(id).key,
         title = system.get(id, "title") as String,
         capacity = (system.get(id, "capacity") as BigDecimal).intValueExact(),
+        term = system.get(id, "term") as Duration,
+        code = system.get(id, "code") as UUID,
         students = (system.get(id, "students") as List<*>).map { system.refFor(it as Long) },
+        isShortCourse = system.isMember(id, "ShortCourse"),
     )
 
     private fun materializeStudent(id: Long): Student = Student(
@@ -130,6 +145,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         courses = (system.get(id, "courses") as List<*>).map { system.refFor(it as Long) },
         isOverloaded = system.isMember(id, "Overloaded"),
         isUntagged = system.isMember(id, "Untagged"),
+        isHonors = system.isMember(id, "Honors"),
     )
 
     private fun materializeOverloaded(id: Long): Overloaded = Overloaded(
@@ -140,6 +156,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         notes = (system.get(id, "notes") as List<*>).map { it as String },
         courses = (system.get(id, "courses") as List<*>).map { system.refFor(it as Long) },
         isUntagged = system.isMember(id, "Untagged"),
+        isHonors = system.isMember(id, "Honors"),
     )
 
     private fun materializeUntagged(id: Long): Untagged = Untagged(
@@ -150,6 +167,27 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         notes = (system.get(id, "notes") as List<*>).map { it as String },
         courses = (system.get(id, "courses") as List<*>).map { system.refFor(it as Long) },
         isOverloaded = system.isMember(id, "Overloaded"),
+        isHonors = system.isMember(id, "Honors"),
+    )
+
+    private fun materializeHonors(id: Long): Honors = Honors(
+        key = system.refFor(id).key,
+        name = system.get(id, "name") as String,
+        advisor = (system.get(id, "advisor") as Long?)?.let { system.refFor(it) },
+        tags = (system.get(id, "tags") as List<*>).map { it as String },
+        notes = (system.get(id, "notes") as List<*>).map { it as String },
+        courses = (system.get(id, "courses") as List<*>).map { system.refFor(it as Long) },
+        isOverloaded = system.isMember(id, "Overloaded"),
+        isUntagged = system.isMember(id, "Untagged"),
+    )
+
+    private fun materializeShortCourse(id: Long): ShortCourse = ShortCourse(
+        key = system.refFor(id).key,
+        title = system.get(id, "title") as String,
+        capacity = (system.get(id, "capacity") as BigDecimal).intValueExact(),
+        term = system.get(id, "term") as Duration,
+        code = system.get(id, "code") as UUID,
+        students = (system.get(id, "students") as List<*>).map { system.refFor(it as Long) },
     )
 
     companion object {
@@ -170,6 +208,8 @@ act Advisor {
 act Course {
     title: text
     capacity: integer
+    term: duration                    -- how long the course runs (§5, `duration`)
+    code: uuid initially randomUUID   -- a key the outside world can use (§5, `uuid`)
 }
 
 act Student {
@@ -186,6 +226,8 @@ act Student {
 
 shape Overloaded = Student where count(courses) > 2
 shape Untagged = Student where tags is empty
+shape Honors = Student where tags contains "honors"      -- membership of a `many` of values (§5)
+shape ShortCourse = Course where term < 4 weeks
 
 -- whole-set replacement: the edge set becomes exactly the committed reference set
 transient act SetEnrollment {
@@ -257,6 +299,8 @@ typealias CourseQuery = TypedQuery<CourseFields, Course>
 typealias StudentQuery = TypedQuery<StudentFields, Student>
 typealias OverloadedQuery = TypedQuery<OverloadedFields, Overloaded>
 typealias UntaggedQuery = TypedQuery<UntaggedFields, Untagged>
+typealias HonorsQuery = TypedQuery<HonorsFields, Honors>
+typealias ShortCourseQuery = TypedQuery<ShortCourseFields, ShortCourse>
 
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
@@ -274,10 +318,14 @@ data class NewAdvisor(
 data class NewCourse(
     val title: String,
     val capacity: Int,
+    val term: Duration,
+    val code: UUID? = null,
 ) : NewValue {
     override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("title", title)
         put("capacity", capacity)
+        put("term", term)
+        code?.let { put("code", it) }
     }
     override fun register(reg: NewRegistry) {
     }
@@ -402,7 +450,11 @@ data class Course(
     override val key: StoreKey,
     val title: String,
     val capacity: Int,
+    val term: Duration,
+    val code: UUID,
     val students: List<Ref<Student>>,
+    /** membership of ShortCourse at the moment of the read */
+    val isShortCourse: Boolean,
 ) : Ref<Course> {
     override val shape: String get() = "Course"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
@@ -420,6 +472,8 @@ data class Student(
     val isOverloaded: Boolean,
     /** membership of Untagged at the moment of the read */
     val isUntagged: Boolean,
+    /** membership of Honors at the moment of the read */
+    val isHonors: Boolean,
 ) : Ref<Student> {
     override val shape: String get() = "Student"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
@@ -435,6 +489,8 @@ data class Overloaded(
     val courses: List<Ref<Course>>,
     /** membership of Untagged at the moment of the read */
     val isUntagged: Boolean,
+    /** membership of Honors at the moment of the read */
+    val isHonors: Boolean,
 ) : Ref<Student> {
     override val shape: String get() = "Student"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
@@ -450,8 +506,40 @@ data class Untagged(
     val courses: List<Ref<Course>>,
     /** membership of Overloaded at the moment of the read */
     val isOverloaded: Boolean,
+    /** membership of Honors at the moment of the read */
+    val isHonors: Boolean,
 ) : Ref<Student> {
     override val shape: String get() = "Student"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
+data class Honors(
+    override val key: StoreKey,
+    val name: String,
+    val advisor: Ref<Advisor>?,
+    val tags: List<String>,
+    val notes: List<String>,
+    val courses: List<Ref<Course>>,
+    /** membership of Overloaded at the moment of the read */
+    val isOverloaded: Boolean,
+    /** membership of Untagged at the moment of the read */
+    val isUntagged: Boolean,
+) : Ref<Student> {
+    override val shape: String get() = "Student"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
+data class ShortCourse(
+    override val key: StoreKey,
+    val title: String,
+    val capacity: Int,
+    val term: Duration,
+    val code: UUID,
+    val students: List<Ref<Student>>,
+) : Ref<Course> {
+    override val shape: String get() = "Course"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -465,6 +553,9 @@ class AdvisorFields(path: List<String> = emptyList()) : Fields(path) {
 class CourseFields(path: List<String> = emptyList()) : Fields(path) {
     val title: TextField get() = TextField(fieldPath + "title")
     val capacity: NumField get() = NumField(fieldPath + "capacity")
+    val term: DurationField get() = DurationField(fieldPath + "term")
+    val code: UuidField get() = UuidField(fieldPath + "code")
+    fun isShortCourse(): Expr = isA("ShortCourse")
 }
 
 class StudentFields(path: List<String> = emptyList()) : Fields(path) {
@@ -472,18 +563,35 @@ class StudentFields(path: List<String> = emptyList()) : Fields(path) {
     val advisor: AdvisorFields get() = AdvisorFields(fieldPath + "advisor")
     fun isOverloaded(): Expr = isA("Overloaded")
     fun isUntagged(): Expr = isA("Untagged")
+    fun isHonors(): Expr = isA("Honors")
 }
 
 class OverloadedFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
     val advisor: AdvisorFields get() = AdvisorFields(fieldPath + "advisor")
     fun isUntagged(): Expr = isA("Untagged")
+    fun isHonors(): Expr = isA("Honors")
 }
 
 class UntaggedFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
     val advisor: AdvisorFields get() = AdvisorFields(fieldPath + "advisor")
     fun isOverloaded(): Expr = isA("Overloaded")
+    fun isHonors(): Expr = isA("Honors")
+}
+
+class HonorsFields(path: List<String> = emptyList()) : Fields(path) {
+    val name: TextField get() = TextField(fieldPath + "name")
+    val advisor: AdvisorFields get() = AdvisorFields(fieldPath + "advisor")
+    fun isOverloaded(): Expr = isA("Overloaded")
+    fun isUntagged(): Expr = isA("Untagged")
+}
+
+class ShortCourseFields(path: List<String> = emptyList()) : Fields(path) {
+    val title: TextField get() = TextField(fieldPath + "title")
+    val capacity: NumField get() = NumField(fieldPath + "capacity")
+    val term: DurationField get() = DurationField(fieldPath + "term")
+    val code: UuidField get() = UuidField(fieldPath + "code")
 }
 
 fun main() {

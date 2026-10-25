@@ -15,14 +15,14 @@ class CourseSpec : SpecSupport() {
     @Test
     fun `never - a Course where capacity below 0 is refused`() {
         val before = count("Course")
-        val result = sys.system.commit("Course", mapOf("title" to "sample", "capacity" to java.math.BigDecimal("-1")))
+        val result = sys.system.commit("Course", mapOf("title" to "sample", "capacity" to java.math.BigDecimal("-1"), "term" to java.time.Duration.ofDays(1)))
         assertIs<CommitResult.Refused>(result)
         assertEquals(before, count("Course"), "a refused act commits nothing")
     }
 
     @Test
     fun `never - a Course with capacity 0 is accepted`() {
-        val result = sys.system.commit("Course", mapOf("title" to "sample", "capacity" to java.math.BigDecimal("0")))
+        val result = sys.system.commit("Course", mapOf("title" to "sample", "capacity" to java.math.BigDecimal("0"), "term" to java.time.Duration.ofDays(1)))
         assertIs<CommitResult.Accepted>(result)
     }
 }
