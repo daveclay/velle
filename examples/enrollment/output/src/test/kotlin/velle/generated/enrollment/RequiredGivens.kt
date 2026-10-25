@@ -26,6 +26,9 @@ interface RequiredGivens {
     /** Commit ONE new 'Tag' that enters 'Tag' at its commit. The act is transient — nothing to return. */
     fun tag()
 
+    /** Commit ONE new 'Note' that enters 'Note' at its commit. The act is transient — nothing to return. */
+    fun note()
+
     /** Commit ONE new 'AssignAdvisor' that enters 'AssignAdvisor' at its commit. The act is transient — nothing to return. */
     fun assignAdvisor()
 }

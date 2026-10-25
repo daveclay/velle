@@ -11,7 +11,7 @@ import velle.generated.*
 class Givens(private val sys: EnrollmentSystem) : RequiredGivens {
 
     private fun student(): Student {
-        sys.commit(NewStudent("Ada", tags = emptyList(), courses = emptyList()))
+        sys.commit(NewStudent("Ada", tags = emptyList(), notes = emptyList(), courses = emptyList()))
         return sys.students().last()
     }
 
@@ -37,6 +37,10 @@ class Givens(private val sys: EnrollmentSystem) : RequiredGivens {
 
     override fun tag() {
         sys.commit(NewTag(student(), "honors"))
+    }
+
+    override fun note() {
+        sys.commit(NewNote(student(), "late to lab"))
     }
 
     override fun assignAdvisor() {

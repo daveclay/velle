@@ -9,7 +9,7 @@ The input/output surface (the acts' typed input values and the `commit` overload
 The state is the set of all shape instances and their stored fields ([Reference §4](Reference-04-State-and-commits)). Per instance, the runtime holds:
 
 - **`id`** — opaque identity, fixed at creation, `==` only ([§5](Reference-05-Scalars)).
-- **Stored fields** — scalar values, to-one references, and declared `many` collections (a many-to-many's edge set as a set of references; a `many <scalar>`'s set of values — [§6](Reference-06-Relationships), ownership). *Inferred* `many` sides are derived from the declared side and need no storage of their own; derived collections (`= (Shape where ...)`) are computed on read like any derived property.
+- **Stored fields** — scalar values, to-one references, and declared `many` collections (a many-to-many's edge set as a set of references; a `many <scalar>`'s set of values, kept with duplicates and in order when the property tolerates duplication — [§6](Reference-06-Relationships), ownership; [§5](Reference-05-Scalars#collections-of-values-many)). *Inferred* `many` sides are derived from the declared side and need no storage of their own; derived collections (`= (Shape where ...)`) are computed on read like any derived property.
 - **Timestamp fields** — `on create` fixed at the creation commit; `on update` advanced by every commit that writes a stored field of the instance, creation included ([§5](Reference-05-Scalars)).
 - **Captures** — per-membership memory: for each refinement membership currently held that declares captured properties, the values fixed at entry ([§8](Reference-08-Refinements); lifecycle below).
 

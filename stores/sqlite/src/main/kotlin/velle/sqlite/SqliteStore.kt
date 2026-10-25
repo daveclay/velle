@@ -45,7 +45,7 @@ import java.time.LocalDate
  *   base shape: the protocol's [Ref.Persisted] always names the concrete shape,
  *   and keys are only unique per table, so the key alone cannot say which row
  *   a union-typed column points at.
- * - A collection field (`many Course`, `many text`; Reference §6) is a junction
+ * - A collection field (`many Course`, `many text`; Reference §6, §5) is a junction
  *   table `<Shape>__<field>` — one row per member, in membership order, with a
  *   discriminator column when the element type is a union.
  * - Per-membership capture memory (Reference §8) is a table per capture-carrying

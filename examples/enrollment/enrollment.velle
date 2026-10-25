@@ -1,5 +1,6 @@
 -- enrollment.velle — the collection constructs of Reference §6 exercised end-to-end:
--- a declared m2m `many` (the owned edge set) with its inferred inverse, `many <scalar>`,
+-- a declared m2m `many` (the owned edge set) with its inferred inverse, `many <scalar>`
+-- with and without `tolerates duplication` (Reference §5, "Collections of values"),
 -- reference-set act fields, whole-set replacement, `+`/`-` union and removal, fan-out
 -- assignment through a one-to-many, derived collection views (the renamed inverse),
 -- and the boundary's duplicate refusal.
@@ -19,7 +20,9 @@ act Student {
     name: text
     advisor: one Advisor?             -- declared side of a one-to-many (child pointer)
     tags: many text                   -- owned collection of values; the committer
-                                      -- supplies the set, possibly empty (§6)
+                                      -- supplies the set, possibly empty (§5, §6)
+    notes: many text tolerates duplication
+                                      -- keeps what it is given, in order, duplicates included (§5)
     courses: many Course              -- declared side of the many-to-many: the edge set
 }
 -- inferred inverses: Course.students (from Student.courses, the m2m view) and
@@ -64,6 +67,16 @@ transient act Tag {
 
 rule ApplyTag when Tag {
     this.student.tags = this.student.tags + this.tag
+}
+
+-- a `many` that tolerates duplication appends on `+`: the same note twice is two notes
+transient act Note {
+    student: one Student
+    note: text
+}
+
+rule ApplyNote when Note {
+    this.student.notes = this.student.notes + this.note
 }
 
 -- fan-out assignment: the act's collection selects the children; one write per

@@ -1,6 +1,6 @@
 # 5. Scalars
 
-A scalar is a single value a property holds: text, a number, true or false, a date, a moment in time, or a value of a type an engineer has added. This page lists the scalar types, how an added type is named, the built-in functions, and three things that go with a property declaration: a starting value, a timestamp the system keeps, and the identity every record carries. After it you can declare the properties of a [shape](Reference-03-shape) and know which values the system fills in.
+A scalar is a single value a property holds: text, a number, true or false, a date, a moment in time, or a value of a type an engineer has added. This page lists the scalar types, how an added type is named, how a property holds several scalar values, the built-in functions, and three things that go with a property declaration: a starting value, a timestamp the system keeps, and the identity every record carries. After it you can declare the properties of a [shape](Reference-03-shape) and know which values the system fills in.
 
 ## The types
 
@@ -45,7 +45,48 @@ uses velle.finance.Money              -- this library's Money, when two librarie
 uses velle.finance.Money as Cash      -- the same type, written Cash in this spec
 ```
 
-An extension type is one value, never a business concept with parts. An amount and its currency are two fields of a shape, where the product owner reads the rules about them. A path never reaches into a value of the type: `price.currency` is a field of a shape or nothing. A field may hold a set of the type's values with `many`, compared by the type's own equality; `one` takes a shape only. Duration arithmetic stays on `Date` and `DateTime`. Writing a type, and the piece that lets a store hold it, is the [Extension types](Extension-types) guide.
+An extension type is one value, never a business concept with parts. An amount and its currency are two fields of a shape, where the product owner reads the rules about them. A path never reaches into a value of the type: `price.currency` is a field of a shape or nothing. A field may hold several of the type's values with `many` (below), compared by the type's own equality; `one` takes a shape only. Duration arithmetic stays on `Date` and `DateTime`. Writing a type, and the piece that lets a store hold it, is the [Extension types](Extension-types) guide.
+
+## Collections of values (`many`)
+
+A property can hold several values of one scalar type instead of one, written `many` before the type. Each value is held once, in no order, as a `many` of records holds each record once ([§6](Reference-06-Relationships)). When the business needs the same value more than once, or in the order it arrived, the property adds `tolerates duplication`, and then the collection keeps exactly what it is given, in that order. The element type is any type in the table above or an extension type in scope.
+
+A student record carries tags an administrator attaches, where attaching the same tag twice means nothing, and notes added over time, where the same note on two days is two notes. From `examples/enrollment/enrollment.velle`:
+
+```
+act Student {
+    name: text
+    advisor: one Advisor?
+    tags: many text
+    notes: many text tolerates duplication
+    courses: many Course
+}
+
+transient act Note {
+    student: one Student
+    note: text
+}
+
+rule ApplyNote when Note {
+    this.student.notes = this.student.notes + this.note
+}
+```
+
+- `tags: many text` holds text values, each once. The committer supplies it, possibly empty. A committed collection holding the same value twice is refused.
+- `notes: many text tolerates duplication` holds text values in the order given, duplicates included. The committer supplies it, possibly empty.
+- `courses: many Course` holds records, not values, so a link cannot arrive twice and the property cannot tolerate duplication.
+- `this.student.notes + this.note` is the collection with the note added at the end. On a property that tolerates duplication, `+` appends and `-` removes every occurrence of the value. On a plain `many`, `+` adds the value when it is absent and `-` removes it when it is present, and otherwise nothing changes. The right-hand side is one value or a collection.
+
+`tolerates duplication` says the same thing it says on a number ([§19](Reference-19-Self-referential-folds-and-tolerates)): the same thing arriving twice is accepted, and the value shows it. On a plain `many` nothing would show, which is why a plain `many` never needs the clause. A rule that appends to such a property on a schedule is also an order-dependent fold, and the compiler asks for `tolerates reordering` as it would for any other.
+
+What a rule or predicate can do with either form:
+
+- Assign it whole: `this.student.tags = this.tags` replaces every value.
+- Start it empty: `tags: many text initially empty`. A `many` never takes `?`, because the empty collection already means "none".
+- Count it with `count(tags)`, test it with `tags is empty`, and run over it with `for each tag in tags` ([§14](Reference-14-for)), in the kept order when there is one.
+- Read it as a derived property of another record: `tagsSeen: many text = student.tags`.
+
+A collection of values has no members to reach into, so it cannot be filtered with `where`, summed, or ordered with `by`; those belong to collections of records ([§10](Reference-10-Predicate-expressions)).
 
 ## The built-in functions
 
@@ -115,6 +156,10 @@ An act declared `by` carries one more system-filled property: the actor who comm
 - **Rejects** a call to a function outside the list above, an operator or comparison on mismatched types, and duration arithmetic on anything but a `Date` or `DateTime` ([checks.md, F2](checks#f2--type-checking)).
 - **Rejects** a name in type position that is neither a builtin, nor a shape after `one` or `many`, nor an extension type in scope; a name two registered types share with no `uses` line picking one; and a shape named like an extension type in scope, naming the `uses` line to write ([checks.md, F1](checks#f1--name-resolution-and-casing), [E1](checks#e1--registered-type-names)).
 - **Rejects** an operator, comparison, `sum`, `max`, `min`, or selector `by` on an extension type that does not declare the capability, naming the Kotlin class ([checks.md, E3](checks#e3--a-capability-the-type-does-not-declare)).
+- **Rejects** a `where`, `sum`, or `by` over a collection of values ([checks.md, F2](checks#f2--type-checking)).
+- **Rejects** `tolerates duplication` on a `many` of records ([checks.md, F3](checks#f3--position-rules)).
+- **Rejects** a rule that appends to a collection tolerating duplication on a schedule, unless the property also tolerates reordering ([checks.md, V8](checks#v8--fold-obligations-and-tolerance-coverage)).
+- **Refuses** at the boundary a committed `many` of values that holds the same value twice, unless the property tolerates duplication ([checks.md, V21](checks#v21--act-field-forms)).
 - **Rejects** `initially` on anything but a stored property, and any assignment to a `timestamp` field or `id` ([checks.md, F3](checks#f3--position-rules)).
 - **Rejects** `initially` or `timestamp` on an act, naming the field and where it should move ([checks.md, V21](checks#v21--act-field-forms)).
 - **Rejects** a declared field named `id` ([checks.md, F1](checks#f1--name-resolution-and-casing)).

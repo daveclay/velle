@@ -37,8 +37,9 @@ The compiler does not analyze your formula. It recognizes a short list of forms 
 
 | fold | duplication-safe? | order-safe? |
 |---|---|---|
-| `max(x, amount)`, `min`, set-union, boolean-or | provably yes | provably yes |
+| `max(x, amount)`, `min`, adding to a `many`, boolean-or | provably yes | provably yes |
 | `x + amount` (`sum`, `count`) | no | provably yes (commutative) |
+| appending to a `many` of values that `tolerates duplication` ([§5](Reference-05-Scalars#collections-of-values-many)) | declared by the clause | no |
 | streak, moving average, "reset on miss" | no | no |
 | `x + amount` where `x` is an [extension type](Reference-05-Scalars#extension-types) | as the type's author declared for `+` | as the type's author declared for `+` |
 

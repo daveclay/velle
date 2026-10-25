@@ -181,8 +181,11 @@ data class FrozenClause(val fields: List<String>) : Member
 data object UndeletableClause : Member
 
 sealed interface TypeRef
-/** `many` marks an owned collection of values (`tags: many text`) — never optional (Reference §6). */
-data class ScalarType(val name: String, val optional: Boolean, val many: Boolean = false) : TypeRef
+/** `many` marks an owned collection of values (`tags: many text`), never optional: each
+ *  value once, no order. With `tolerates duplication` on the property, [ordered] is set:
+ *  the collection keeps what it is given, duplicates included, in the order given
+ *  (Reference §5, "Collections of values"). */
+data class ScalarType(val name: String, val optional: Boolean, val many: Boolean = false, val ordered: Boolean = false) : TypeRef
 /** `many` here is the owned edge set of a many-to-many; `one` the owned side of a one-to-many (Reference §6). */
 data class RelType(val many: Boolean, val shape: String, val optional: Boolean) : TypeRef
 

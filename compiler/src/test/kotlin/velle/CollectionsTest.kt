@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 /**
  * The collection constructs of Reference §6, driven end-to-end through
  * enrollment.velle: declared m2m `many` with its inferred inverse,
- * `many <scalar>`, reference-set act fields, whole-set replacement, `+`/`-`
+ * `many <scalar>` with and without `tolerates duplication` (Reference §5), reference-set act fields, whole-set replacement, `+`/`-`
  * union and removal, fan-out assignment, `initially empty`, derived collection
  * views, the boundary's duplicate refusal — and the V19/V20 validator checks.
  */
@@ -100,6 +100,109 @@ class CollectionsTest {
         sys.mustCommit("Tag", "student" to s, "tag" to "stem") // set semantics
         assertEquals(listOf("honors", "stem"), coll(sys.get(s, "tags")))
         assertTrue(!sys.isMember(s, "Untagged"))
+    }
+
+    @Test
+    fun `a committed many with a duplicate is refused, one tolerating duplication keeps them in order`() {
+        val sys = newSystem()
+        val dup = sys.commit("Student", mapOf("name" to "Ada", "tags" to listOf("stem", "honors", "stem")))
+        assertTrue("`tolerates duplication`" in assertIs<CommitResult.Refused>(dup).reason)
+        val s = sys.mustCommit("Student", "name" to "Ada", "notes" to listOf("late", "early", "late"))
+        assertEquals(listOf("late", "early", "late"), coll(sys.get(s, "notes")))
+    }
+
+    @Test
+    fun `a many tolerating duplication appends on plus, in order, duplicates kept`() {
+        val sys = newSystem()
+        val s = sys.mustCommit("Student", "name" to "Ada")
+        assertEquals(emptyList<Any>(), coll(sys.get(s, "notes")), "an absent many is the empty collection")
+        sys.mustCommit("Note", "student" to s, "note" to "late")
+        sys.mustCommit("Note", "student" to s, "note" to "early")
+        sys.mustCommit("Note", "student" to s, "note" to "late")
+        assertEquals(listOf("late", "early", "late"), coll(sys.get(s, "notes")))
+    }
+
+    @Test
+    fun `a many tolerating duplication removes every occurrence on minus`() {
+        val source = File("../examples/enrollment/enrollment.velle").readText() + """
+            transient act Strike {
+                student: one Student
+                note: text
+            }
+            rule ApplyStrike when Strike {
+                this.student.notes = this.student.notes - this.note
+            }
+        """
+        val diags = Validator.validate(source)
+        check(diags.isEmpty()) { diags.toString() }
+        val sys = VelleSystem(Model(Parser.parse(source)))
+        val s = sys.mustCommit("Student", "name" to "Ada", "notes" to listOf("late", "early", "late"))
+        sys.mustCommit("Strike", "student" to s, "note" to "late")
+        assertEquals(listOf("early"), coll(sys.get(s, "notes")))
+        sys.mustCommit("Strike", "student" to s, "note" to "late") // absent: nothing changes
+        assertEquals(listOf("early"), coll(sys.get(s, "notes")))
+    }
+
+    @Test
+    fun `count and derived views over a many of values`() {
+        val source = """
+            act Student { name: text, tags: many text, notes: many text tolerates duplication }
+            act Enrollment {
+                student: one Student
+                tagsSeen: many text = student.tags
+                notesSeen: many text = student.notes
+                noteCount: integer = count(student.notes)
+                tagCount: integer = count(student.tags)
+            }
+            shape Noted = Enrollment where notesSeen is not empty
+        """
+        val diags = Validator.validate(source)
+        check(diags.isEmpty()) { diags.toString() }
+        val sys = VelleSystem(Model(Parser.parse(source)))
+        val s = sys.mustCommit("Student", "name" to "Ada", "tags" to listOf("x"), "notes" to listOf("a", "b", "a"))
+        val e = sys.mustCommit("Enrollment", "student" to s)
+        assertEquals(listOf("x"), coll(sys.get(e, "tagsSeen")))
+        assertEquals(listOf("a", "b", "a"), coll(sys.get(e, "notesSeen")))
+        assertEquals(3, (sys.get(e, "noteCount") as Number).toInt())
+        assertEquals(1, (sys.get(e, "tagCount") as Number).toInt())
+        assertTrue(sys.isMember(e, "Noted"))
+    }
+
+    @Test
+    fun `F2 - a collection of values cannot be filtered, summed, or ordered`() {
+        fun diags(body: String) = Validator.validate("""
+            act Student { name: text, scores: many integer tolerates duplication }
+            act Report { student: one Student, x: integer = $body }
+        """).filter { it.code == "F2" }
+        assertTrue(diags("count(student.scores where this > 1)").isNotEmpty())
+        assertTrue(diags("sum(student.scores, value)").isNotEmpty())
+        assertTrue(diags("count(student.scores)").isEmpty())
+    }
+
+    @Test
+    fun `V8 - a fold on a many tolerating duplication is order-dependent on a tick, a set fold is not`() {
+        fun spec(clause: String) = """
+            act Log { entries: many text $clause }
+            transient act Append { log: one Log, entry: text }
+            rule Keep when Append {
+                this.log.entries = this.log.entries + this.entry
+            }
+            rule Check when Log on Nightly {
+                this.entries = this.entries + "checked"
+            }
+        """
+        assertTrue(Validator.validate(spec("")).none { it.code == "V8" }, "set union: adding a value twice is adding it once")
+        assertTrue(Validator.validate(spec("tolerates duplication")).any { it.code == "V8" }, "append: a repeated step shows")
+    }
+
+    @Test
+    fun `tolerates duplication on a many of values sets the ordered flag, on a many of records is F3`() {
+        val decl = Parser.parse("act Student { tags: many text\n notes: many text tolerates duplication }").single() as ShapeDecl
+        val props = decl.members.filterIsInstance<StoredProp>()
+        assertEquals(ScalarType("text", optional = false, many = true), props[0].type)
+        assertEquals(ScalarType("text", optional = false, many = true, ordered = true), props[1].type)
+        val diags = Validator.validate("act Course { title: text }\n act Student { courses: many Course tolerates duplication }")
+        assertTrue(diags.any { it.code == "F3" && "cannot tolerate duplication" in it.message }, diags.toString())
     }
 
     @Test

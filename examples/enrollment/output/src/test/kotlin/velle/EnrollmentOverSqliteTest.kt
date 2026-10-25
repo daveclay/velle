@@ -17,7 +17,8 @@ import velle.sqlite.SqliteStore
 /**
  * The enrollment flows over real storage — the collection constructs of
  * Reference §6 persisted: a declared `many` is a junction table, `many text`
- * a value table, and the inferred inverses scan them. Once through the
+ * a value table (kept in order, with duplicates, when the field tolerates
+ * duplication), and the inferred inverses scan them. Once through the
  * generic protocol, once through the generated typed store surface.
  */
 class EnrollmentFlowOverSqliteTest : EnrollmentFlowTest() {
@@ -67,7 +68,7 @@ class EnrollmentPersistenceTest {
     @Test
     fun `edge sets and value sets live in junction tables and read back in membership order`() {
         val first = process()
-        accept(first.commit(NewStudent("Ada", tags = emptyList(), courses = emptyList())))
+        accept(first.commit(NewStudent("Ada", tags = emptyList(), notes = emptyList(), courses = emptyList())))
         val ada = first.students().last()
         val courses = listOf("Logic", "Sets", "Proofs").map { title ->
             accept(first.commit(NewCourse(title, 30)))
@@ -77,15 +78,18 @@ class EnrollmentPersistenceTest {
         accept(first.commit(NewEnroll(ada, courses[2])))
         accept(first.commit(NewTag(ada, "honors")))
         accept(first.commit(NewTag(ada, "stem")))
+        for (note in listOf("late", "early", "late")) accept(first.commit(NewNote(ada, note)))
 
         assertEquals(listOf(1L, 2L, 3L), rows("""SELECT target FROM Student__courses WHERE owner = 1 ORDER BY rowid""").map { it[0] })
         assertEquals(listOf("honors", "stem"), rows("""SELECT value FROM Student__tags WHERE owner = 1 ORDER BY rowid""").map { it[0] })
+        assertEquals(listOf("late", "early", "late"), rows("""SELECT value FROM Student__notes WHERE owner = 1 ORDER BY rowid""").map { it[0] })
 
         val second = process()
         val ada2 = second.read.student(1L)
         val (logic, sets, proofs) = listOf(1L, 2L, 3L).map { second.read.course(it) }
         assertEquals(listOf(logic, sets, proofs), second.read(ada2).courses, "membership order is the junction's insertion order")
         assertEquals(listOf("honors", "stem"), second.read(ada2).tags)
+        assertEquals(listOf("late", "early", "late"), second.read(ada2).notes, "a collection tolerating duplication reads back in the order written, duplicates kept")
         assertTrue(second.overloadeds().any { it.key == ada2.key }, "count(courses) > 2 over the junction rows")
         assertTrue(second.untaggeds().none { it.key == ada2.key })
         assertEquals(listOf(ada2), second.read(sets).students, "the m2m inverse scans the declared side's junction")
@@ -104,7 +108,7 @@ class EnrollmentPersistenceTest {
         accept(first.commit(NewAdvisor("Turing")))
         val advisor = first.advisors().last()
         val students = listOf("Ada", "Grace", "Edsger").map { name ->
-            accept(first.commit(NewStudent(name, tags = emptyList(), courses = emptyList())))
+            accept(first.commit(NewStudent(name, tags = emptyList(), notes = emptyList(), courses = emptyList())))
             first.students().last()
         }
         accept(first.commit(NewAssignAdvisor(advisor, listOf(students[0], students[1]))))

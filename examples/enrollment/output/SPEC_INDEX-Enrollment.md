@@ -19,6 +19,10 @@ each case below is an executable test.
 
 - ApplyTag - a new Tag sets student.tags
 
+## NoteSpec.kt
+
+- ApplyNote - a new Note sets student.notes
+
 ## AssignAdvisorSpec.kt
 
 - ApplyAdvisor - a new AssignAdvisor sets students.advisor

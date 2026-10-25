@@ -115,7 +115,7 @@ class Evaluator(private val system: VelleSystem) {
         if (m.stored && m.type is VType.Coll)
             return system.normalizeRead(inst.fields[m.name] ?: Value.VColl(emptyList(), (m.type as VType.Coll).shape))
         if (m.stored && m.type is VType.CollS)
-            return inst.fields[m.name] ?: Value.VVals(emptyList())
+            return inst.fields[m.name] ?: Value.VVals(emptyList(), ordered = (m.type as VType.CollS).ordered)
         // the absorbing reference (OQ37-R10): a stored reference whose target was
         // deleted reads as absent — narrowing and `?.` carry it from here
         return if (m.stored) system.normalizeRead(inst.fields[m.name] ?: Value.VNone)
@@ -288,6 +288,15 @@ class Evaluator(private val system: VelleSystem) {
         }
     }
 
+    /** The values a collection expression names when it is one bare path to a
+     *  `many <scalar>` field (the only form the validator admits over values); null otherwise. */
+    private fun valueCollectionOf(c: CollectionExpr, ctx: Ctx): Value.VVals? {
+        if (c.where != null) return null
+        val src = c.bindings.singleOrNull()?.takeIf { it.alias == null }?.source as? PathExpr ?: return null
+        if (src.segs.isEmpty() && (src.root in model.shapes || src.root in model.refinements)) return null
+        return eval(src, ctx) as? Value.VVals
+    }
+
     private fun bindingCandidates(b: Binding, ctx: Ctx, where: Expr? = null): Pair<String, List<Long>> = when (val src = b.source) {
         is PathExpr ->
             if (src.root in model.shapes && src.segs.isEmpty())
@@ -367,7 +376,10 @@ class Evaluator(private val system: VelleSystem) {
     private fun anyCombination(c: CollectionExpr, ctx: Ctx): Boolean = combinations(c, ctx).any()
 
     private fun evalAgg(e: AggCall, ctx: Ctx): Value = when (e.name) {
-        "count" -> Value.VNum(BigDecimal(combinations(e.collection, ctx).count()))
+        // `count` over a `many` of values counts the values (Reference §5, "Collections
+        // of values"); over records it counts the combinations
+        "count" -> valueCollectionOf(e.collection, ctx)?.let { Value.VNum(BigDecimal(it.values.size)) }
+            ?: Value.VNum(BigDecimal(combinations(e.collection, ctx).count()))
         "sum" -> {
             // a field of an extension type sums through its declared `sum` (Reference §5; OQ65)
             val element = system.model.collectionElement(e.collection, ctx.subjectScope)
@@ -624,18 +636,26 @@ class Evaluator(private val system: VelleSystem) {
                 }
                 return Value.VColl(if (op == "+") (ids + rhs).distinct() else ids - rhs.toSet(), shape)
             }
+            // a `many` that `tolerates duplication` appends on `+` and drops every occurrence
+            // on `-` (Reference §5, "Collections of values"); a plain `many` adds once and
+            // removes what is there. `empty` on the left takes the right side's kind.
             val values = (l as? Value.VVals)?.values ?: emptyList()
+            val ordered = (l as? Value.VVals)?.ordered ?: (r as? Value.VVals)?.ordered ?: false
             val rhs = when (r) {
                 is Value.VVals -> r.values
                 Value.VEmpty -> emptyList()
                 else -> listOf(r)
             }
             return Value.VVals(
-                if (op == "+") (values + rhs).fold(mutableListOf()) { acc, v ->
-                    if (acc.none { valueEquals(it, v) }) acc.add(v)
-                    acc
-                }
-                else values.filterNot { v -> rhs.any { valueEquals(v, it) } }
+                when {
+                    op == "+" && ordered -> values + rhs
+                    op == "+" -> (values + rhs).fold(mutableListOf()) { acc, v ->
+                        if (acc.none { valueEquals(it, v) }) acc.add(v)
+                        acc
+                    }
+                    else -> values.filterNot { v -> rhs.any { valueEquals(v, it) } }
+                },
+                ordered,
             )
         }
         if (r is Value.VDuration) {
@@ -693,6 +713,11 @@ class Evaluator(private val system: VelleSystem) {
 
     private fun valueEquals(l: Value, r: Value): Boolean = when {
         l is Value.VNum && r is Value.VNum -> l.v.compareTo(r.v) == 0
+        // two plain `many` values are equal as sets; two ordered ones element by element
+        l is Value.VVals && r is Value.VVals && !l.ordered && !r.ordered ->
+            l.values.size == r.values.size && l.values.all { a -> r.values.any { b -> valueEquals(a, b) } }
+        l is Value.VVals && r is Value.VVals ->
+            l.values.size == r.values.size && l.values.indices.all { i -> valueEquals(l.values[i], r.values[i]) }
         l is Value.VRef && r is Value.VRef -> l.id == r.id // identity comparison (Reference §5)
         l is Value.VExt && r is Value.VExt -> l.type === r.type && l.type.equalAny(l.v, r.v)
         l is Value.VExt || r is Value.VExt -> { val (a, b) = unify(l, r); a == b }

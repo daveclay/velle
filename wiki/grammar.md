@@ -55,6 +55,10 @@ initializer   := valueExpr | GeneratorName          -- generator: bare name, no 
                  -- with creation-side requiredness; never-set is impossible, so `is none` means
                  -- "was present, now gone" (target deleted, or a rule assigned `none`)
 foldHazard    := "duplication" | "reordering"       -- Reference §19; "loss" is rule-position only
+                                                    -- on a `many` of values, "duplication" also makes the
+                                                    -- collection keep duplicates and order (Reference §5,
+                                                    -- "Collections of values"); on a `many` of records it is
+                                                    -- a validator error (checks catalog, F3)
 
 derivedProp   := Identifier ":" propType "=" valueExpr
               | Identifier ":" "many" (ShapeName | scalarType) "=" setExpr
@@ -228,7 +232,7 @@ The conditional is **`if p then a else b`**, always fully spelled — `else` is 
 
 Narrowing is shared with predicates and branch-sensitive ([Reference §10](Reference-10-Predicate-expressions)): inside a `then` branch, the governing predicate's `is some` / `is none` / `is Refinement` checks license `.` exactly as they do within a conjunction; `?.` remains the no-narrowing escape.
 
-Type rules ride on the Kotlin grounding ([Reference §5](Reference-05-Scalars)): arithmetic over the numeric scalars, `+`/`-` between `Date`/`DateTime` and a duration (calendar step on `Date`, exact time on `DateTime`), and `+`/`-` on a declared `many` as set union and removal (element or collection on the right; [Reference §6, "Committing and assigning collections"](Reference-06-Relationships#committing-and-assigning-collections)). `+` as text concatenation only if we ever admit it — currently **not** admitted; the duration and collection cases are the only operator overloads.
+Type rules ride on the Kotlin grounding ([Reference §5](Reference-05-Scalars)): arithmetic over the numeric scalars, `+`/`-` between `Date`/`DateTime` and a duration (calendar step on `Date`, exact time on `DateTime`), and `+`/`-` on a declared `many` as set union and removal, or as append and removal of every occurrence on a `many` of values that tolerates duplication (element or collection on the right; [Reference §6, "Committing and assigning collections"](Reference-06-Relationships#committing-and-assigning-collections), [Reference §5, "Collections of values"](Reference-05-Scalars#collections-of-values-many)). `+` as text concatenation only if we ever admit it — currently **not** admitted; the duration and collection cases are the only operator overloads.
 
 ## Predicates
 

@@ -15,8 +15,10 @@ sealed interface Value {
     data class VDateTime(val v: Instant) : Value
     data class VRef(val id: Long) : Value
     data class VColl(val ids: List<Long>, val shape: String) : Value
-    /** An owned collection of scalar values (`many text`) — a set (Reference §6). */
-    data class VVals(val values: List<Value>) : Value
+    /** An owned collection of scalar values (`many text`, Reference §5, "Collections of
+     *  values"): each value once, or, when [ordered] (`tolerates duplication`), kept as
+     *  given, duplicates and order included. The kind comes from the field's declared type. */
+    data class VVals(val values: List<Value>, val ordered: Boolean = false) : Value
     /** The `empty` literal before its collection kind is known; coerced at the write site. */
     data object VEmpty : Value
     /** A closure part's back-reference before its target exists: index into the
@@ -454,7 +456,8 @@ class VelleSystem(
         )
         is VType.CollS -> Value.VVals(
             (raw as? List<*> ?: throw VelleRuntimeError("hydrating $at: not a collection ($raw)"))
-                .map { el -> rawToValue(el ?: throw VelleRuntimeError("hydrating $at: null element"), scalarVType(t.name), at) }
+                .map { el -> rawToValue(el ?: throw VelleRuntimeError("hydrating $at: null element"), scalarVType(t.name), at) },
+            ordered = t.ordered,
         )
         else -> throw VelleRuntimeError("hydrating $at: unsupported type for $raw")
     }
@@ -827,18 +830,22 @@ class VelleSystem(
         }
     }
 
-    /** The set refusal: a duplicate reference in a committed collection is a
-     *  caller bug or a multiplicity claim `many` cannot express (Reference §6).
-     *  Inline part *values* are a bag — two identical values mint two distinct
-     *  instances — so this applies to reference collections only. */
+    /** The set refusal: a duplicate in a committed `many` is a caller bug or a
+     *  multiplicity claim a set cannot express (Reference §6; §5, "Collections of
+     *  values"). A `many` of values that `tolerates duplication` keeps them. Inline
+     *  part *values* are a bag — two identical values mint two distinct instances —
+     *  so this applies to reference collections only. */
     private fun duplicateRefusal(decl: ShapeDecl, supplied: Map<String, Any?>): String? {
         for (m in decl.members.filterIsInstance<StoredProp>()) {
-            val isMany = (m.type as? RelType)?.many == true || (m.type as? ScalarType)?.many == true
-            if (!isMany) continue
+            val t = m.type
             val raw = supplied[m.name] as? List<*> ?: continue
-            if (raw.size != raw.distinct().size)
+            if (raw.size == raw.distinct().size) continue
+            if (t is RelType && t.many)
                 return "type: duplicate in '${decl.name}.${m.name}' — a `many` is a set; " +
                     "if multiplicity is meaningful, it is data on an edge shape (Reference §6)"
+            if (t is ScalarType && t.many && !t.ordered)
+                return "type: duplicate in '${decl.name}.${m.name}' — a `many` holds each value once; " +
+                    "`tolerates duplication` on the property keeps duplicates (Reference §5)"
         }
         return null
     }
@@ -1018,7 +1025,7 @@ class VelleSystem(
                     (m.type as? RelType)?.many == true ->
                         out[m.name] = Value.VColl(emptyList(), (m.type as RelType).shape)
                     (m.type as? ScalarType)?.many == true ->
-                        out[m.name] = Value.VVals(emptyList())
+                        out[m.name] = Value.VVals(emptyList(), ordered = (m.type as ScalarType).ordered)
                     // `? initially required` (OQ37-R10): read-optional, but the
                     // creation must supply a value — absence is refused here
                     m.name !in skipRequired && m.initially == null &&
@@ -1046,7 +1053,7 @@ class VelleSystem(
         is ScalarType ->
             if (type.many) (raw as? List<*>)
                 ?.map { el -> el?.let { convertScalar(it, type.name) } ?: return null }
-                ?.let { Value.VVals(it) }
+                ?.let { Value.VVals(it, ordered = type.ordered) }
             else convertScalar(raw, type.name)
     }
 
@@ -1400,13 +1407,18 @@ class VelleSystem(
     }
 
     /** Fit a value to its declared field type: type the bare `empty` literal, dedupe a
-     *  collection (a `many` is a set, Reference §6), and read a number or text constant
-     *  as the field's extension type (Reference §5; OQ65 D2). Everything else passes through. */
+     *  `many` (a set; one that `tolerates duplication` keeps its duplicates and its
+     *  order, Reference §5), and read a number or text constant as the field's
+     *  extension type (Reference §5; OQ65 D2). Everything else passes through. */
     internal fun coerceCollection(v: Value, type: TypeRef): Value = when {
         v == Value.VEmpty && type is RelType && type.many -> Value.VColl(emptyList(), type.shape)
-        v == Value.VEmpty && type is ScalarType && type.many -> Value.VVals(emptyList())
+        v == Value.VEmpty && type is ScalarType && type.many -> Value.VVals(emptyList(), ordered = type.ordered)
         v is Value.VColl -> Value.VColl(v.ids.distinct(), v.shape)
-        v is Value.VVals -> Value.VVals(v.values.distinct().map { el -> (type as? ScalarType)?.let { evaluator.coerceLiteral(el, model.typeScope[it.name]) } ?: el })
+        v is Value.VVals -> {
+            val ordered = (type as? ScalarType)?.ordered == true
+            val values = if (ordered) v.values else v.values.distinct()
+            Value.VVals(values.map { el -> (type as? ScalarType)?.let { evaluator.coerceLiteral(el, model.typeScope[it.name]) } ?: el }, ordered)
+        }
         type is ScalarType && !type.many -> evaluator.coerceLiteral(v, model.typeScope[type.name])
         else -> v
     }

@@ -19,7 +19,7 @@ open class EnrollmentFlowTest {
     protected val sys: EnrollmentSystem by lazy { newSystem() }
 
     private fun student(name: String = "Ada"): Student {
-        assertIs<Commit.Accepted<*, *>>(sys.commit(NewStudent(name, tags = emptyList(), courses = emptyList())))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewStudent(name, tags = emptyList(), notes = emptyList(), courses = emptyList())))
         return sys.students().last()
     }
 
@@ -93,6 +93,16 @@ open class EnrollmentFlowTest {
         assertIs<Commit.Accepted<*, *>>(sys.commit(NewTag(ada, "stem")))
         assertEquals(listOf("honors", "stem"), sys.read(ada).tags)
         assertTrue(sys.untaggeds().none { it.key == ada.key })
+    }
+
+    @Test
+    fun `scalar collections - tolerates duplication keeps order and duplicates`() {
+        val ada = student()
+        assertEquals(emptyList(), sys.read(ada).notes)
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewNote(ada, "late")))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewNote(ada, "early")))
+        assertIs<Commit.Accepted<*, *>>(sys.commit(NewNote(ada, "late")))
+        assertEquals(listOf("late", "early", "late"), sys.read(ada).notes)
     }
 }
 

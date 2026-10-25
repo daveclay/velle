@@ -32,6 +32,7 @@ data class StudentRow(
     val name: String,
     val advisor: Ref.Persisted?,
     val tags: List<String>,
+    val notes: List<String>,
     val courses: List<Ref.Persisted>,
 )
 
@@ -156,6 +157,7 @@ fun Row.toStudentRow(): StudentRow = StudentRow(
     name = fields["name"] as String,
     advisor = fields["advisor"] as Ref.Persisted?,
     tags = (fields["tags"] as List<*>).map { it as String },
+    notes = (fields["notes"] as List<*>).map { it as String },
     courses = (fields["courses"] as List<*>).map { it as Ref.Persisted },
 )
 
@@ -163,5 +165,6 @@ fun StudentRow.toRow(): Row = Row("Student", key, buildMap {
     put("name", name)
     advisor?.let { put("advisor", it) }
     put("tags", tags)
+    put("notes", notes)
     put("courses", courses)
 })

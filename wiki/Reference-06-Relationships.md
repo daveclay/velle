@@ -34,7 +34,7 @@ act Student {
 ```
 
 - `courses: many Course` says a student holds a set of courses. Nothing limits how many students hold the same course, so this is many-to-many, with no join shape needed. `Course` gets an inferred `students` collection.
-- `tags: many text` is a set of values rather than links. Scalars have no identity to point at, so the shape owns the values.
+- `tags: many text` is a set of values rather than links. Scalars have no identity to point at, so the shape owns the values. A collection of values that keeps duplicates and order is the same declaration with `tolerates duplication` ([§5, "Collections of values"](Reference-05-Scalars#collections-of-values-many)).
 - `advisor: one Advisor?` is an optional link. The `?` means the student may have no advisor.
 
 A `many` set carries no data about each link. If a link needs data of its own, such as when it was made or a grade, write a shape for it with a `one` field to each end. That shape is a business fact, not ceremony.
@@ -51,7 +51,7 @@ Declaring a relationship says nothing about what happens when a linked record is
 
 On an act, `many Course` means the committer names several existing courses by reference, just as `one Course` names one. `many text` on an act means the committer supplies the values. The committer always supplies a `many` field, possibly as the empty set ([checks.md, F4](checks#f4--mapping-totality)). An empty set already means "none", so `many` never takes `?`.
 
-A collection is a set: no order, no duplicates. To order records, name a field to order by ([§10](Reference-10-Predicate-expressions), selectors). A committed collection containing the same reference twice is refused at the boundary. If how many times a link occurs matters, that count is data and belongs on a link shape.
+A collection is a set: no order, no duplicates. To order records, name a field to order by ([§10](Reference-10-Predicate-expressions), selectors). A committed collection containing the same reference twice is refused at the boundary. If how many times a link occurs matters, that count is data and belongs on a link shape. A collection of values may instead keep duplicates and order by declaring `tolerates duplication` ([§5](Reference-05-Scalars#collections-of-values-many)).
 
 A rule changes a collection in one of three ways. The rule in every case is that a statement assigns exactly the stored field it names.
 

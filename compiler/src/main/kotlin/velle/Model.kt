@@ -65,10 +65,12 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
         typeScope = scope
         ambiguousTypeNames = ambiguous
         val shapeNames = rawDecls.mapNotNull { (it as? ShapeDecl)?.name ?: (it as? RefinementDecl)?.name }.toSet()
-        fun manyOfType(t: TypeRef): TypeRef =
-            if (t is RelType && t.many && t.shape !in shapeNames && t.shape in scope) ScalarType(t.shape, optional = false, many = true) else t
+        fun manyOfType(t: TypeRef, tolerates: String? = null): TypeRef =
+            if (t is RelType && t.many && t.shape !in shapeNames && t.shape in scope)
+                ScalarType(t.shape, optional = false, many = true, ordered = tolerates == "duplication")
+            else t
         fun fix(m: Member): Member = when (m) {
-            is StoredProp -> m.copy(type = manyOfType(m.type))
+            is StoredProp -> m.copy(type = manyOfType(m.type, m.tolerates))
             is DerivedProp -> m.copy(type = manyOfType(m.type))
             else -> m
         }
@@ -586,7 +588,7 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
     }
 
     fun typeOf(t: TypeRef): VType = when (t) {
-        is ScalarType -> if (t.many) VType.CollS(t.name) else when (t.name) {
+        is ScalarType -> if (t.many) VType.CollS(t.name, ordered = t.ordered) else when (t.name) {
             "text" -> VType.Text
             "integer", "long", "decimal", "double" -> VType.Num(t.name)
             "boolean" -> VType.Bool
@@ -846,8 +848,10 @@ sealed interface VType {
     data object Id : VType
     data class Inst(val shape: String) : VType
     data class Coll(val shape: String) : VType
-    /** An owned collection of scalar values (`many text`, Reference §6). */
-    data class CollS(val name: String) : VType
+    /** An owned collection of scalar values (`many text`, Reference §5, "Collections of
+     *  values"): each value once, or, when [ordered] (`tolerates duplication`), kept as
+     *  given, duplicates and order included. */
+    data class CollS(val name: String, val ordered: Boolean = false) : VType
     data class Optional(val inner: VType) : VType
     data object Unknown : VType
 

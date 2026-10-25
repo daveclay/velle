@@ -198,7 +198,10 @@ class Parser(private val tokens: List<Token>) {
         val visible = parseFieldVisibility()
         if (refinementBody)
             fail("a refinement property is derived (= expr) or captured — stored properties belong to the base shape", peek())
-        return StoredProp(name, type, initially, tolerates, initiallyRequired, visible)
+        // `many text tolerates duplication`: the collection keeps duplicates, in the order
+        // given (Reference §5, "Collections of values"); the clause is the type's flag here
+        val typed = if (type is ScalarType && type.many && tolerates == "duplication") type.copy(ordered = true) else type
+        return StoredProp(name, typed, initially, tolerates, initiallyRequired, visible)
     }
 
     private fun parseTypeRef(): TypeRef {

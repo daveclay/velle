@@ -157,6 +157,11 @@ class Validator(private val model: Model) {
                             "never be absent (OQ37)"))
                     if (m.tolerates != null && m.tolerates !in setOf("duplication", "reordering"))
                         diags.add(Diagnostic("F3", "'$name.${m.name}' — fields tolerate 'duplication' or 'reordering', not '${m.tolerates}'"))
+                    // a `many` of records is a set of links: a link cannot arrive twice, so
+                    // there is no duplication to tolerate (Reference §5, "Collections of values")
+                    if (m.tolerates == "duplication" && t is RelType && t.many)
+                        diags.add(Diagnostic("F3", "'$name.${m.name}' — a `many ${t.shape}` holds each record once, so it cannot tolerate duplication; " +
+                            "if how many times a link occurs matters, that count is data on a link shape (Reference §6)"))
                 }
                 is DerivedProp -> checkExpr(m.expr, name)
                 is ActorProp -> checkActorClause(name, shape, m)
@@ -1188,6 +1193,14 @@ class Validator(private val model: Model) {
                     if (src.root in model.shapes || src.root in model.refinements) element = src.root
                     else {
                         resolvePath(src, scope)
+                        // a `many` of values has no members to filter, sum, or order by:
+                        // only a bare `count(values)` reads it (Reference §5)
+                        if (scalarTypeOf(src, scope) is VType.CollS &&
+                            (c.where != null || sumField != null || orderBy != null || c.bindings.size > 1 || b.alias != null)) {
+                            diags.add(Diagnostic("F2", "'${Printer.expr(src)}' is a collection of values, not of records — " +
+                                "it can be counted, run over with `for each`, or tested with `is empty`, but not filtered, summed, or ordered (Reference §5)"))
+                            return
+                        }
                         model.pathElementShape(src, scope, aliasScopes, thisScope ?: scope)?.let { element = it }
                     }
                 is ShapeForSource -> { checkExpr(src.forExpr, scope); element = src.shape }
@@ -2346,11 +2359,21 @@ class Validator(private val model: Model) {
             if ((w.owner to w.member.name) !in rhsReads.fields) continue // not self-referential
             val assignment = w.rule.body.filterIsInstance<Assignment>().first { it.target == w.target }
             // the step's two facts (Reference §19): `max`/`min` are idempotent and commute for any
-            // ordered type; `+`/`-` commute; an extension type's operator declares its own (OQ65)
+            // ordered type; `+`/`-` commute; on a `many` they are also idempotent (adding a value
+            // twice is adding it once) unless it `tolerates duplication`, where `+` appends, so
+            // the order of steps shows and a repeated step shows; an extension type's operator
+            // declares its own (OQ65)
             val facts: TypeRegistry.FoldFacts? = when (val v = assignment.value) {
                 is FunCall -> if (v.name in setOf("max", "min")) TypeRegistry.FoldFacts(commutes = true, idempotent = true) else null
                 is Binary -> extOf(w.member.type)?.let { model.registry.foldFacts(it.qualifiedName, v.op) }
-                    ?: if (v.op in setOf("+", "-")) TypeRegistry.FoldFacts(commutes = true, idempotent = false) else null
+                    ?: when {
+                        v.op !in setOf("+", "-") -> null
+                        w.member.type is VType.CollS && (w.member.type as VType.CollS).ordered ->
+                            TypeRegistry.FoldFacts(commutes = false, idempotent = false)
+                        w.member.type is VType.CollS || w.member.type is VType.Coll ->
+                            TypeRegistry.FoldFacts(commutes = true, idempotent = true)
+                        else -> TypeRegistry.FoldFacts(commutes = true, idempotent = false)
+                    }
                 else -> null
             }
             if (facts?.idempotent == true) continue

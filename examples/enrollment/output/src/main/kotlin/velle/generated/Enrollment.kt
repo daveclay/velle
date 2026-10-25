@@ -51,6 +51,12 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     fun commit(input: NewTag): Commit<NewTag, Nothing?> =
         boundary("Tag", input).carryingNoRecord(input)
 
+    /** Queue keys: [note.student], [note.student.advisor].
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
+    fun commit(input: NewNote): Commit<NewNote, Nothing?> =
+        boundary("Note", input).carryingNoRecord(input)
+
     /** Queue keys: [assignAdvisor.advisor] — plus system-wide width below.
      *  System-wide over Student — writes a Student whose 'advisor' reference the derivation cannot key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
@@ -120,6 +126,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         name = system.get(id, "name") as String,
         advisor = (system.get(id, "advisor") as Long?)?.let { system.refFor(it) },
         tags = (system.get(id, "tags") as List<*>).map { it as String },
+        notes = (system.get(id, "notes") as List<*>).map { it as String },
         courses = (system.get(id, "courses") as List<*>).map { system.refFor(it as Long) },
         isOverloaded = system.isMember(id, "Overloaded"),
         isUntagged = system.isMember(id, "Untagged"),
@@ -130,6 +137,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         name = system.get(id, "name") as String,
         advisor = (system.get(id, "advisor") as Long?)?.let { system.refFor(it) },
         tags = (system.get(id, "tags") as List<*>).map { it as String },
+        notes = (system.get(id, "notes") as List<*>).map { it as String },
         courses = (system.get(id, "courses") as List<*>).map { system.refFor(it as Long) },
         isUntagged = system.isMember(id, "Untagged"),
     )
@@ -139,6 +147,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         name = system.get(id, "name") as String,
         advisor = (system.get(id, "advisor") as Long?)?.let { system.refFor(it) },
         tags = (system.get(id, "tags") as List<*>).map { it as String },
+        notes = (system.get(id, "notes") as List<*>).map { it as String },
         courses = (system.get(id, "courses") as List<*>).map { system.refFor(it as Long) },
         isOverloaded = system.isMember(id, "Overloaded"),
     )
@@ -146,7 +155,8 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     companion object {
         private val SPEC = """
 -- enrollment.velle — the collection constructs of Reference §6 exercised end-to-end:
--- a declared m2m `many` (the owned edge set) with its inferred inverse, `many <scalar>`,
+-- a declared m2m `many` (the owned edge set) with its inferred inverse, `many <scalar>`
+-- with and without `tolerates duplication` (Reference §5, "Collections of values"),
 -- reference-set act fields, whole-set replacement, `+`/`-` union and removal, fan-out
 -- assignment through a one-to-many, derived collection views (the renamed inverse),
 -- and the boundary's duplicate refusal.
@@ -166,7 +176,9 @@ act Student {
     name: text
     advisor: one Advisor?             -- declared side of a one-to-many (child pointer)
     tags: many text                   -- owned collection of values; the committer
-                                      -- supplies the set, possibly empty (§6)
+                                      -- supplies the set, possibly empty (§5, §6)
+    notes: many text tolerates duplication
+                                      -- keeps what it is given, in order, duplicates included (§5)
     courses: many Course              -- declared side of the many-to-many: the edge set
 }
 -- inferred inverses: Course.students (from Student.courses, the m2m view) and
@@ -211,6 +223,16 @@ transient act Tag {
 
 rule ApplyTag when Tag {
     this.student.tags = this.student.tags + this.tag
+}
+
+-- a `many` that tolerates duplication appends on `+`: the same note twice is two notes
+transient act Note {
+    student: one Student
+    note: text
+}
+
+rule ApplyNote when Note {
+    this.student.notes = this.student.notes + this.note
 }
 
 -- fan-out assignment: the act's collection selects the children; one write per
@@ -265,12 +287,14 @@ data class NewCourse(
 data class NewStudent(
     val name: String,
     val tags: List<String>,
+    val notes: List<String>,
     val courses: List<Ref<Course>>,
     val advisor: Ref<Advisor>? = null,
 ) : NewValue {
     override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("name", name)
         put("tags", tags)
+        put("notes", notes)
         put("courses", courses.map { system.idOf(it) })
         advisor?.let { put("advisor", system.idOf(it)) }
     }
@@ -331,6 +355,19 @@ data class NewTag(
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Tag") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
+data class NewNote(
+    val student: Ref<Student>,
+    val note: String,
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+        put("student", system.idOf(student))
+        put("note", note)
+    }
+    override fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Note") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
+}
+
 data class NewAssignAdvisor(
     val advisor: Ref<Advisor>,
     val students: List<Ref<Student>>,
@@ -377,6 +414,7 @@ data class Student(
     val name: String,
     val advisor: Ref<Advisor>?,
     val tags: List<String>,
+    val notes: List<String>,
     val courses: List<Ref<Course>>,
     /** membership of Overloaded at the moment of the read */
     val isOverloaded: Boolean,
@@ -393,6 +431,7 @@ data class Overloaded(
     val name: String,
     val advisor: Ref<Advisor>?,
     val tags: List<String>,
+    val notes: List<String>,
     val courses: List<Ref<Course>>,
     /** membership of Untagged at the moment of the read */
     val isUntagged: Boolean,
@@ -407,6 +446,7 @@ data class Untagged(
     val name: String,
     val advisor: Ref<Advisor>?,
     val tags: List<String>,
+    val notes: List<String>,
     val courses: List<Ref<Course>>,
     /** membership of Overloaded at the moment of the read */
     val isOverloaded: Boolean,
@@ -449,7 +489,7 @@ class UntaggedFields(path: List<String> = emptyList()) : Fields(path) {
 fun main() {
     val sys = EnrollmentSystem()
     println("Velle MockHarness — Enrollment")
-    println("Commits: commit(NewAdvisor(...)), commit(NewCourse(...)), commit(NewStudent(...)), commit(NewSetEnrollment(...)), commit(NewEnroll(...)), commit(NewDrop(...)), commit(NewTag(...)), commit(NewAssignAdvisor(...))")
+    println("Commits: commit(NewAdvisor(...)), commit(NewCourse(...)), commit(NewStudent(...)), commit(NewSetEnrollment(...)), commit(NewEnroll(...)), commit(NewDrop(...)), commit(NewTag(...)), commit(NewNote(...)), commit(NewAssignAdvisor(...))")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>
