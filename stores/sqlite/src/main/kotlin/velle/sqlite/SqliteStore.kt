@@ -21,6 +21,7 @@ import velle.equalAny
 import velle.ext.VelleType
 import java.math.BigDecimal
 import java.time.Duration
+import java.time.LocalTime
 import java.util.UUID
 import java.sql.Connection
 import java.sql.PreparedStatement
@@ -196,7 +197,8 @@ class SqliteStore(
         is VType.Num -> if (t.name == "integer" || t.name == "long") "INTEGER" else "TEXT"
         VType.Bool -> "INTEGER"
         VType.DurationT -> "INTEGER" // whole seconds: orders as the value does
-        else -> "TEXT"
+        VType.BytesT -> "BLOB" // compared byte by byte, as the runtime orders bytes
+        else -> "TEXT" // Date, DateTime, time as ISO-8601 (which orders as the value does), uuid, text
     }
 
     // ── the resolver: the typed read questions (Hydration.kt, StateResolver) ──
@@ -350,10 +352,13 @@ class SqliteStore(
                     VType.Text -> c.v
                     // a text constant against a uuid column: its canonical spelling, or nothing
                     VType.UuidT -> runCatching { UUID.fromString(c.v).toString() }.getOrNull()
+                    VType.TimeT -> runCatching { LocalTime.parse(c.v).toString() }.getOrNull()
                     else -> null
                 }
                 is QConst.QUuid -> c.v.toString().takeIf { bare == VType.UuidT }
                 is QConst.QDuration -> c.v.seconds.takeIf { bare == VType.DurationT }
+                is QConst.QTime -> c.v.toString().takeIf { bare == VType.TimeT }
+                is QConst.QBytes -> c.v.takeIf { bare == VType.BytesT }
                 is QConst.QBool -> (if (c.v) 1 else 0).takeIf { bare == VType.Bool }
                 is QConst.QDate -> c.v.toString().takeIf { bare == VType.DateT }
                 is QConst.QDateTime -> null
@@ -402,6 +407,8 @@ class SqliteStore(
         VType.DateTimeT -> Instant.parse(rs.getString(name))
         VType.UuidT -> UUID.fromString(rs.getString(name))
         VType.DurationT -> Duration.ofSeconds(rs.getLong(name))
+        VType.TimeT -> LocalTime.parse(rs.getString(name))
+        VType.BytesT -> rs.getBytes(name)
         else -> rs.getString(name)
     }
 
@@ -584,7 +591,8 @@ class SqliteStore(
             else toBigDecimal(v).toPlainString()
         t == VType.Bool -> if (v as Boolean) 1 else 0
         t == VType.DurationT -> (v as Duration).seconds
-        else -> v.toString() // Date/DateTime ISO-8601, uuid canonical, text as-is
+        t == VType.BytesT -> v as ByteArray
+        else -> v.toString() // Date/DateTime/time ISO-8601, uuid canonical, text as-is
     }
 
     /** Numerics arrive as BigDecimal from the runtime, but a typed store layer

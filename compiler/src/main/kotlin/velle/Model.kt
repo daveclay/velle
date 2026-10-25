@@ -605,6 +605,8 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
             "DateTime" -> VType.DateTimeT
             "uuid" -> VType.UuidT
             "duration" -> VType.DurationT
+            "time" -> VType.TimeT
+            "bytes" -> VType.BytesT
             else -> typeScope[t.name]?.let { VType.Ext(it.qualifiedName) } ?: VType.Unknown
         }.let { if (t.optional) VType.Optional(it) else it }
         is RelType ->
@@ -860,6 +862,10 @@ sealed interface VType {
     data object UuidT : VType
     /** A `duration` (Reference §5): a span of time, `java.time.Duration` on the surface. */
     data object DurationT : VType
+    /** A `time` (Reference §5): a time of day with no date, `java.time.LocalTime`. */
+    data object TimeT : VType
+    /** `bytes` (Reference §5): opaque binary data, `ByteArray`; equal by content, ordered byte by byte. */
+    data object BytesT : VType
     data object Id : VType
     data class Inst(val shape: String) : VType
     data class Coll(val shape: String) : VType

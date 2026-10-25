@@ -16,8 +16,10 @@ A scalar is a single value a property holds: text, a number, true or false, a da
 | `DateTime` | a moment on the global timeline (`java.time.Instant`) |
 | `uuid` | an identifier the outside world can use (`java.util.UUID`); `==` and `!=` only, never ordered |
 | `duration` | a span of time, written as a duration literal such as `3 days` (`java.time.Duration`) |
+| `time` | a time of day with no date (`java.time.LocalTime`) |
+| `bytes` | binary data the system stores and hands back unchanged (`ByteArray`) |
 
-Each type behaves as its Kotlin counterpart unless the Reference says otherwise. A `DateTime` has no time zone; when the business needs one, store it as data beside the value. A `uuid` field compared to a quoted text reads the text as a uuid. A `duration` is ordered, adds to and subtracts from another `duration`, moves a `Date` or `DateTime` ([§10](Reference-10-Predicate-expressions)), and is the difference of two dates or two moments: `elapsed: duration = finished - started`. A `Date` moved by a `duration` that is not whole days is an error when the rule runs, as it is for the literal `today + 3 hours`.
+Each type behaves as its Kotlin counterpart unless the Reference says otherwise. A `DateTime` has no time zone; when the business needs one, store it as data beside the value. A `uuid` field compared to a quoted text reads the text as a uuid. A `duration` is ordered, adds to and subtracts from another `duration`, moves a `Date` or `DateTime` ([§10](Reference-10-Predicate-expressions)), and is the difference of two dates or two moments: `elapsed: duration = finished - started`. A `Date` moved by a `duration` that is not whole days is an error when the rule runs, as it is for the literal `today + 3 hours`. A `time` compared to a quoted text reads the text as a time, `"09:00"`; it moves by a `duration` as a clock does, wrapping past midnight, and two times subtract to a `duration`. `bytes` is for a document, an image, or a key another system produced: a spec stores it, reads it back, and tests `is some`; two values are equal when their contents are, and they order byte by byte, but no rule should need to say more about one.
 
 `now` is the current `DateTime`. `today` is the current `Date` in the system's one time zone, set at deployment, not in the spec.
 

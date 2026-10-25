@@ -7,6 +7,7 @@ import java.math.BigDecimal
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.util.UUID
 
 class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) : GeneratedSystem(SPEC, startTime) {
@@ -73,6 +74,7 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
     fun untaggeds(): List<Untagged> = all("Untagged") { materializeUntagged(it) }
     fun honorss(): List<Honors> = all("Honors") { materializeHonors(it) }
     fun shortCourses(): List<ShortCourse> = all("ShortCourse") { materializeShortCourse(it) }
+    fun earlyCourses(): List<EarlyCourse> = all("EarlyCourse") { materializeEarlyCourse(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -109,6 +111,10 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         val shortCourses: ShortCourseQuery get() = query("ShortCourse", ShortCourseFields()) { materializeShortCourse(it) }
         /** The record behind [ref] as a member of ShortCourse, or null when it is not one. */
         fun shortCourse(ref: Ref<Course>): ShortCourse? = member("ShortCourse", ref) { materializeShortCourse(it) }
+
+        val earlyCourses: EarlyCourseQuery get() = query("EarlyCourse", EarlyCourseFields()) { materializeEarlyCourse(it) }
+        /** The record behind [ref] as a member of EarlyCourse, or null when it is not one. */
+        fun earlyCourse(ref: Ref<Course>): EarlyCourse? = member("EarlyCourse", ref) { materializeEarlyCourse(it) }
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -132,8 +138,11 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         capacity = (system.get(id, "capacity") as BigDecimal).intValueExact(),
         term = system.get(id, "term") as Duration,
         code = system.get(id, "code") as UUID,
+        startsAt = system.get(id, "startsAt") as LocalTime?,
+        syllabus = system.get(id, "syllabus") as ByteArray?,
         students = (system.get(id, "students") as List<*>).map { system.refFor(it as Long) },
         isShortCourse = system.isMember(id, "ShortCourse"),
+        isEarlyCourse = system.isMember(id, "EarlyCourse"),
     )
 
     private fun materializeStudent(id: Long): Student = Student(
@@ -187,7 +196,22 @@ class EnrollmentSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
         capacity = (system.get(id, "capacity") as BigDecimal).intValueExact(),
         term = system.get(id, "term") as Duration,
         code = system.get(id, "code") as UUID,
+        startsAt = system.get(id, "startsAt") as LocalTime?,
+        syllabus = system.get(id, "syllabus") as ByteArray?,
         students = (system.get(id, "students") as List<*>).map { system.refFor(it as Long) },
+        isEarlyCourse = system.isMember(id, "EarlyCourse"),
+    )
+
+    private fun materializeEarlyCourse(id: Long): EarlyCourse = EarlyCourse(
+        key = system.refFor(id).key,
+        title = system.get(id, "title") as String,
+        capacity = (system.get(id, "capacity") as BigDecimal).intValueExact(),
+        term = system.get(id, "term") as Duration,
+        code = system.get(id, "code") as UUID,
+        startsAt = system.get(id, "startsAt") as LocalTime?,
+        syllabus = system.get(id, "syllabus") as ByteArray?,
+        students = (system.get(id, "students") as List<*>).map { system.refFor(it as Long) },
+        isShortCourse = system.isMember(id, "ShortCourse"),
     )
 
     companion object {
@@ -210,6 +234,8 @@ act Course {
     capacity: integer
     term: duration                    -- how long the course runs (§5, `duration`)
     code: uuid initially randomUUID   -- a key the outside world can use (§5, `uuid`)
+    startsAt: time?                   -- the daily start, when timetabled (§5, `time`)
+    syllabus: bytes?                  -- a document the system stores and hands back (§5, `bytes`)
 }
 
 act Student {
@@ -228,6 +254,7 @@ shape Overloaded = Student where count(courses) > 2
 shape Untagged = Student where tags is empty
 shape Honors = Student where tags contains "honors"      -- membership of a `many` of values (§5)
 shape ShortCourse = Course where term < 4 weeks
+shape EarlyCourse = Course where startsAt < "09:00"
 
 -- whole-set replacement: the edge set becomes exactly the committed reference set
 transient act SetEnrollment {
@@ -301,6 +328,7 @@ typealias OverloadedQuery = TypedQuery<OverloadedFields, Overloaded>
 typealias UntaggedQuery = TypedQuery<UntaggedFields, Untagged>
 typealias HonorsQuery = TypedQuery<HonorsFields, Honors>
 typealias ShortCourseQuery = TypedQuery<ShortCourseFields, ShortCourse>
+typealias EarlyCourseQuery = TypedQuery<EarlyCourseFields, EarlyCourse>
 
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
@@ -320,12 +348,16 @@ data class NewCourse(
     val capacity: Int,
     val term: Duration,
     val code: UUID? = null,
+    val startsAt: LocalTime? = null,
+    val syllabus: ByteArray? = null,
 ) : NewValue {
     override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
         put("title", title)
         put("capacity", capacity)
         put("term", term)
         code?.let { put("code", it) }
+        startsAt?.let { put("startsAt", it) }
+        syllabus?.let { put("syllabus", it) }
     }
     override fun register(reg: NewRegistry) {
     }
@@ -452,9 +484,13 @@ data class Course(
     val capacity: Int,
     val term: Duration,
     val code: UUID,
+    val startsAt: LocalTime?,
+    val syllabus: ByteArray?,
     val students: List<Ref<Student>>,
     /** membership of ShortCourse at the moment of the read */
     val isShortCourse: Boolean,
+    /** membership of EarlyCourse at the moment of the read */
+    val isEarlyCourse: Boolean,
 ) : Ref<Course> {
     override val shape: String get() = "Course"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
@@ -537,7 +573,28 @@ data class ShortCourse(
     val capacity: Int,
     val term: Duration,
     val code: UUID,
+    val startsAt: LocalTime?,
+    val syllabus: ByteArray?,
     val students: List<Ref<Student>>,
+    /** membership of EarlyCourse at the moment of the read */
+    val isEarlyCourse: Boolean,
+) : Ref<Course> {
+    override val shape: String get() = "Course"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
+data class EarlyCourse(
+    override val key: StoreKey,
+    val title: String,
+    val capacity: Int,
+    val term: Duration,
+    val code: UUID,
+    val startsAt: LocalTime?,
+    val syllabus: ByteArray?,
+    val students: List<Ref<Student>>,
+    /** membership of ShortCourse at the moment of the read */
+    val isShortCourse: Boolean,
 ) : Ref<Course> {
     override val shape: String get() = "Course"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
@@ -555,7 +612,10 @@ class CourseFields(path: List<String> = emptyList()) : Fields(path) {
     val capacity: NumField get() = NumField(fieldPath + "capacity")
     val term: DurationField get() = DurationField(fieldPath + "term")
     val code: UuidField get() = UuidField(fieldPath + "code")
+    val startsAt: TimeField get() = TimeField(fieldPath + "startsAt")
+    val syllabus: BytesField get() = BytesField(fieldPath + "syllabus")
     fun isShortCourse(): Expr = isA("ShortCourse")
+    fun isEarlyCourse(): Expr = isA("EarlyCourse")
 }
 
 class StudentFields(path: List<String> = emptyList()) : Fields(path) {
@@ -592,6 +652,19 @@ class ShortCourseFields(path: List<String> = emptyList()) : Fields(path) {
     val capacity: NumField get() = NumField(fieldPath + "capacity")
     val term: DurationField get() = DurationField(fieldPath + "term")
     val code: UuidField get() = UuidField(fieldPath + "code")
+    val startsAt: TimeField get() = TimeField(fieldPath + "startsAt")
+    val syllabus: BytesField get() = BytesField(fieldPath + "syllabus")
+    fun isEarlyCourse(): Expr = isA("EarlyCourse")
+}
+
+class EarlyCourseFields(path: List<String> = emptyList()) : Fields(path) {
+    val title: TextField get() = TextField(fieldPath + "title")
+    val capacity: NumField get() = NumField(fieldPath + "capacity")
+    val term: DurationField get() = DurationField(fieldPath + "term")
+    val code: UuidField get() = UuidField(fieldPath + "code")
+    val startsAt: TimeField get() = TimeField(fieldPath + "startsAt")
+    val syllabus: BytesField get() = BytesField(fieldPath + "syllabus")
+    fun isShortCourse(): Expr = isA("ShortCourse")
 }
 
 fun main() {

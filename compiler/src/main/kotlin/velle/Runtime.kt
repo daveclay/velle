@@ -46,6 +46,21 @@ sealed interface Value {
     }
     /** A `uuid` value (Reference §5). */
     data class VUuid(val v: UUID) : Value
+    /** A `time` value (Reference §5): a time of day. */
+    data class VTime(val v: java.time.LocalTime) : Value
+    /** A `bytes` value (Reference §5): equal by content, ordered byte by byte as SQLite orders a BLOB. */
+    class VBytes(val v: ByteArray) : Value {
+        override fun equals(other: Any?) = other is VBytes && v.contentEquals(other.v)
+        override fun hashCode() = v.contentHashCode()
+        override fun toString() = "VBytes(${v.size} bytes)"
+        fun compareTo(o: VBytes): Int {
+            for (i in 0 until minOf(v.size, o.v.size)) {
+                val c = (v[i].toInt() and 0xff).compareTo(o.v[i].toInt() and 0xff)
+                if (c != 0) return c
+            }
+            return v.size.compareTo(o.v.size)
+        }
+    }
     /** A value of a registered extension type (Reference §5; OQ65): the type's own Kotlin object. */
     data class VExt(val type: velle.ext.VelleType<*>, val v: Any) : Value {
         override fun equals(other: Any?): Boolean = other is VExt && other.type === type && type.equalAny(v, other.v)
@@ -457,6 +472,8 @@ class VelleSystem(
         VType.DateTimeT -> Value.VDateTime(raw as? Instant ?: throw VelleRuntimeError("hydrating $at: not a DateTime ($raw)"))
         VType.UuidT -> Value.VUuid(raw as? UUID ?: throw VelleRuntimeError("hydrating $at: not a uuid ($raw)"))
         VType.DurationT -> Value.VDuration.ofJava(raw as? java.time.Duration ?: throw VelleRuntimeError("hydrating $at: not a duration ($raw)"))
+        VType.TimeT -> Value.VTime(raw as? java.time.LocalTime ?: throw VelleRuntimeError("hydrating $at: not a time ($raw)"))
+        VType.BytesT -> Value.VBytes(raw as? ByteArray ?: throw VelleRuntimeError("hydrating $at: not bytes ($raw)"))
         // the Row contract: a field of an extension type holds the type's Kotlin object
         is VType.Ext -> {
             val type = model.registry[t.qualifiedName] ?: throw VelleRuntimeError("hydrating $at: no registered type '${t.qualifiedName}'")
@@ -1092,6 +1109,8 @@ class VelleSystem(
         "DateTime" -> (raw as? Instant)?.let { Value.VDateTime(it) }
         "uuid" -> (raw as? UUID)?.let { Value.VUuid(it) }
         "duration" -> (raw as? java.time.Duration)?.let { Value.VDuration.ofJava(it) }
+        "time" -> (raw as? java.time.LocalTime)?.let { Value.VTime(it) }
+        "bytes" -> (raw as? ByteArray)?.let { Value.VBytes(it) }
         in TypeRegistry.NUMBER_NAMES -> runCatching { Value.num(raw) }.getOrNull()
         else -> {
             // an extension type (Reference §5; OQ65): the value is the type's own class and
@@ -1729,6 +1748,8 @@ class VelleSystem(
             is Value.VDate -> v.v
             is Value.VDateTime -> v.v
             is Value.VUuid -> v.v
+            is Value.VTime -> v.v
+            is Value.VBytes -> v.v
             is Value.VRef -> if (instance(v.id) != null) refOf(v.id) else null
             is Value.VColl -> v.ids.filter { instance(it) != null }.map { refOf(it) }
             is Value.VVals -> v.values.map { plain(it) }
@@ -1961,6 +1982,8 @@ class VelleSystem(
         Value.VEmpty -> emptyList<Any?>()
         is Value.VDuration -> v.toJava()
         is Value.VUuid -> v.v
+        is Value.VTime -> v.v
+        is Value.VBytes -> v.v
         is Value.VExt -> v.v
         is Value.VPendingRef, is Value.VPendingColl -> throw VelleRuntimeError("pending closure reference escaped its commit")
         Value.VNone -> null

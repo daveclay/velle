@@ -13,6 +13,7 @@ import java.math.BigDecimal
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.util.UUID
 
 /** One stored Advisor row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -28,6 +29,8 @@ data class CourseRow(
     val capacity: Int,
     val term: Duration,
     val code: UUID,
+    val startsAt: LocalTime?,
+    val syllabus: ByteArray?,
 )
 
 /** One stored Student row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
@@ -161,6 +164,8 @@ fun Row.toCourseRow(): CourseRow = CourseRow(
     capacity = (fields["capacity"] as Number).toInt(),
     term = fields["term"] as Duration,
     code = fields["code"] as UUID,
+    startsAt = fields["startsAt"] as LocalTime?,
+    syllabus = fields["syllabus"] as ByteArray?,
 )
 
 fun CourseRow.toRow(): Row = Row("Course", key, buildMap {
@@ -168,6 +173,8 @@ fun CourseRow.toRow(): Row = Row("Course", key, buildMap {
     put("capacity", capacity)
     put("term", term)
     put("code", code)
+    startsAt?.let { put("startsAt", it) }
+    syllabus?.let { put("syllabus", it) }
 })
 
 fun Row.toStudentRow(): StudentRow = StudentRow(

@@ -261,6 +261,16 @@ class UuidField(path: List<String>) : Fields(path) {
     infix fun neq(v: java.util.UUID): Expr = Binary("!=", pathExpr(), ValueLit(Value.VUuid(v)))
 }
 
+/** A `time` member (Reference §5): a time of day, ordered. */
+class TimeField(path: List<String>) : ScalarField<java.time.LocalTime>(path) {
+    override fun lit(v: java.time.LocalTime): Expr = ValueLit(Value.VTime(v))
+}
+
+/** A `bytes` member (Reference §5): equal by content, ordered byte by byte. */
+class BytesField(path: List<String>) : ScalarField<ByteArray>(path) {
+    override fun lit(v: ByteArray): Expr = ValueLit(Value.VBytes(v))
+}
+
 /** A `duration` member (Reference §5): ordered, like a number. */
 class DurationField(path: List<String>) : ScalarField<java.time.Duration>(path) {
     override fun lit(v: java.time.Duration): Expr = ValueLit(Value.VDuration.ofJava(v))

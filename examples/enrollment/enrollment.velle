@@ -16,6 +16,8 @@ act Course {
     capacity: integer
     term: duration                    -- how long the course runs (§5, `duration`)
     code: uuid initially randomUUID   -- a key the outside world can use (§5, `uuid`)
+    startsAt: time?                   -- the daily start, when timetabled (§5, `time`)
+    syllabus: bytes?                  -- a document the system stores and hands back (§5, `bytes`)
 }
 
 act Student {
@@ -34,6 +36,7 @@ shape Overloaded = Student where count(courses) > 2
 shape Untagged = Student where tags is empty
 shape Honors = Student where tags contains "honors"      -- membership of a `many` of values (§5)
 shape ShortCourse = Course where term < 4 weeks
+shape EarlyCourse = Course where startsAt < "09:00"
 
 -- whole-set replacement: the edge set becomes exactly the committed reference set
 transient act SetEnrollment {

@@ -54,6 +54,11 @@ sealed interface QConst {
     data class QDateTime(val v: Instant) : QConst
     data class QUuid(val v: java.util.UUID) : QConst
     data class QDuration(val v: java.time.Duration) : QConst
+    data class QTime(val v: java.time.LocalTime) : QConst
+    class QBytes(val v: ByteArray) : QConst {
+        override fun equals(other: Any?) = other is QBytes && v.contentEquals(other.v)
+        override fun hashCode() = v.contentHashCode()
+    }
     /** An instance the store already holds — the query API's "this customer"
      *  (Reference §22) against a to-one reference column. */
     data class QRef(val ref: Ref.Persisted) : QConst
@@ -296,6 +301,8 @@ class QueryCompiler(
         is QConst.QDateTime -> t == VType.DateTimeT
         is QConst.QUuid -> t == VType.UuidT
         is QConst.QDuration -> t == VType.DurationT
+        is QConst.QTime -> t == VType.TimeT
+        is QConst.QBytes -> t == VType.BytesT
         is QConst.QRef -> t is VType.Inst && model.typeAccepts(t.shape, c.ref.shape)
         is QConst.QExt -> t is VType.Ext && t.qualifiedName == c.type.qualifiedName
     }
@@ -364,6 +371,8 @@ class QueryCompiler(
             is Value.VDateTime -> QConst.QDateTime(v.v)
             is Value.VUuid -> QConst.QUuid(v.v)
             is Value.VDuration -> QConst.QDuration(v.toJava())
+            is Value.VTime -> QConst.QTime(v.v)
+            is Value.VBytes -> QConst.QBytes(v.v)
             is Value.VRef -> keyOf(v.id)?.let { QConst.QRef(it) } // unpersisted: nothing to test in the store
             is Value.VExt -> QConst.QExt(v.type, v.v)
             else -> null

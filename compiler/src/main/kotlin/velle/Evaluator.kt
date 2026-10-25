@@ -533,7 +533,8 @@ class Evaluator(private val system: VelleSystem) {
                 val eq = valueEquals(l, r)
                 Value.VBool(if (e.op == "==") eq else !eq)
             }
-            "<", "<=", ">", ">=" -> {
+            // an absent operand satisfies no ordered comparison (Reference §10)
+            "<", "<=", ">", ">=" -> if (l == Value.VNone || r == Value.VNone) Value.VBool(false) else {
                 val c = compareValues(l, r)
                 Value.VBool(
                     when (e.op) {
@@ -676,6 +677,11 @@ class Evaluator(private val system: VelleSystem) {
             return Value.VDuration.ofSeconds(java.time.Duration.between(r.v, l.v).seconds)
         if (op == "-" && l is Value.VDate && r is Value.VDate)
             return Value.VDuration(java.time.temporal.ChronoUnit.DAYS.between(r.v, l.v), "days")
+        // a time of day moved by a span wraps past midnight, as a clock does; two times differ by a span
+        if (l is Value.VTime && r is Value.VDuration)
+            return Value.VTime(l.v.plusSeconds(if (op == "+") r.seconds() else -r.seconds()))
+        if (op == "-" && l is Value.VTime && r is Value.VTime)
+            return Value.VDuration.ofSeconds(java.time.Duration.between(r.v, l.v).seconds)
         if (r is Value.VDuration) {
             val sign = if (op == "+") 1L else -1L
             return when (l) {
@@ -734,6 +740,9 @@ class Evaluator(private val system: VelleSystem) {
         // a text constant beside a uuid reads as one (Reference §5); a malformed one is simply unequal
         l is Value.VUuid && r is Value.VText -> runCatching { UUID.fromString(r.v) }.getOrNull() == l.v
         l is Value.VText && r is Value.VUuid -> runCatching { UUID.fromString(l.v) }.getOrNull() == r.v
+        // a text constant beside a time reads as one (Reference §5)
+        l is Value.VTime && r is Value.VText -> runCatching { java.time.LocalTime.parse(r.v) }.getOrNull() == l.v
+        l is Value.VText && r is Value.VTime -> runCatching { java.time.LocalTime.parse(l.v) }.getOrNull() == r.v
         else -> l == r
     }
 
@@ -745,6 +754,10 @@ class Evaluator(private val system: VelleSystem) {
         l is Value.VDateTime && r is Value.VDateTime -> l.v.compareTo(r.v)
         l is Value.VText && r is Value.VText -> l.v.compareTo(r.v)
         l is Value.VDuration && r is Value.VDuration -> l.seconds().compareTo(r.seconds())
+        l is Value.VTime && r is Value.VTime -> l.v.compareTo(r.v)
+        l is Value.VTime && r is Value.VText -> l.v.compareTo(java.time.LocalTime.parse(r.v))
+        l is Value.VText && r is Value.VTime -> java.time.LocalTime.parse(l.v).compareTo(r.v)
+        l is Value.VBytes && r is Value.VBytes -> l.compareTo(r)
         else -> throw VelleRuntimeError("cannot order $l against $r")
     }
 

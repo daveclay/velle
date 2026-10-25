@@ -84,6 +84,7 @@ object DomainKeys {
     /** One token per distinct value: numbers by plain value, an extension type by its `canonical`. */
     private fun normalize(raw: Any, registry: TypeRegistry): String = when {
         raw is BigDecimal -> raw.stripTrailingZeros().toPlainString()
+        raw is ByteArray -> raw.joinToString("") { "%02x".format(it) }
         else -> registry.typeOfValue(raw)?.canonicalAny(raw) ?: raw.toString()
     }
 }

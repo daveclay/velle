@@ -29,7 +29,7 @@ val KEYWORDS: Set<String> = setOf(
     "timestamp", "create", "update",
     "true", "false",
     "now", "today",
-    "text", "integer", "long", "decimal", "double", "boolean", "uuid", "duration",
+    "text", "integer", "long", "decimal", "double", "boolean", "uuid", "duration", "time", "bytes",
 )
 
 /**
@@ -56,7 +56,7 @@ val FOR_EACH_WORDS = setOf("each", "in", "to")
  * a pattern with `%` (any run), `_` (any one character), and `\` escaping either.
  */
 val TEXT_OPERATORS = setOf("contains", "starts with", "ends with", "like")
-val SCALAR_KEYWORDS = setOf("text", "integer", "long", "decimal", "double", "boolean", "uuid", "duration")
+val SCALAR_KEYWORDS = setOf("text", "integer", "long", "decimal", "double", "boolean", "uuid", "duration", "time", "bytes")
 
 class VelleSyntaxError(message: String, val line: Int, val col: Int) :
     Exception("$message (at $line:$col)")

@@ -108,7 +108,7 @@ class TypeRegistry(types: List<VelleType<*>>) {
 
     companion object {
         /** The builtin scalars (Reference §5), by the name a spec writes. */
-        val BUILTIN_NAMES: Set<String> = setOf("text", "integer", "long", "decimal", "double", "boolean", "Date", "DateTime", "uuid", "duration")
+        val BUILTIN_NAMES: Set<String> = setOf("text", "integer", "long", "decimal", "double", "boolean", "Date", "DateTime", "uuid", "duration", "time", "bytes")
         val NUMBER_NAMES: Set<String> = setOf("integer", "long", "decimal", "double")
 
         private val NAME = Regex("[A-Z][A-Za-z0-9]*")
@@ -133,6 +133,8 @@ class TypeRegistry(types: List<VelleType<*>>) {
             "DateTime" -> listOf(Instant.parse("2026-01-15T00:00:00Z"), Instant.parse("2026-03-01T00:00:00Z"))
             "uuid" -> listOf(java.util.UUID.fromString("00000000-0000-4000-8000-000000000001"), java.util.UUID.fromString("00000000-0000-4000-8000-000000000002"))
             "duration" -> listOf(java.time.Duration.ofDays(1), java.time.Duration.ofDays(2))
+            "time" -> listOf(java.time.LocalTime.of(9, 30), java.time.LocalTime.of(17, 0))
+            "bytes" -> listOf(byteArrayOf(1, 2), byteArrayOf(3))
             in NUMBER_NAMES -> listOf(BigDecimal("2"), BigDecimal("3"))
             else -> registry[name]?.let { ClaimsCheck.sampleSet(it) } ?: emptyList()
         }

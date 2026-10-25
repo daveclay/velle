@@ -155,6 +155,7 @@ object StoreGen {
             if (model.usesScalar(VType.DurationT)) line("import java.time.Duration")
             line("import java.time.Instant")
             line("import java.time.LocalDate")
+            if (model.usesScalar(VType.TimeT)) line("import java.time.LocalTime")
             if (model.usesScalar(VType.UuidT)) line("import java.util.UUID")
             line()
         }
@@ -363,6 +364,8 @@ object StoreGen {
             VType.DateTimeT -> "Instant"
             VType.UuidT -> "UUID"
             VType.DurationT -> "Duration"
+            VType.TimeT -> "LocalTime"
+            VType.BytesT -> "ByteArray"
             is VType.Ext -> model.registry[t.qualifiedName]?.kotlinClass?.qualifiedName ?: "Any"
             is VType.Inst -> "Ref.Persisted"
             is VType.Coll -> "List<Ref.Persisted>"
@@ -384,6 +387,8 @@ object StoreGen {
             VType.DateTimeT -> "$expr as Instant"
             VType.UuidT -> "$expr as UUID"
             VType.DurationT -> "$expr as Duration"
+            VType.TimeT -> "$expr as LocalTime"
+            VType.BytesT -> "$expr as ByteArray"
             VType.Text -> "$expr as String"
             VType.Bool -> "$expr as Boolean"
             is VType.Ext -> "$expr as ${rowKotlin(t)}"

@@ -77,7 +77,8 @@ propType      := scalarType "?"?
                                                     -- (checks catalog, F2), not a grammar concern
               | "many" scalarType                   -- owned collection of values; no "?"
 scalarType    := "text" | "integer" | "long" | "decimal" | "double" | "boolean" | "Date" | "DateTime"
-              | "uuid" | "duration"                 -- Reference §5; a duration field holds a DurationLiteral's value
+              | "uuid" | "duration" | "time" | "bytes"
+                                                    -- Reference §5; a duration field holds a DurationLiteral's value
               | TypeName                            -- an extension type in scope (Reference §5, "Extension types"):
                                                     -- a registered type's own name, or the name a usesDecl gives it;
                                                     -- a capitalized name that is neither is a validator error (F1)
@@ -233,7 +234,7 @@ The conditional is **`if p then a else b`**, always fully spelled — `else` is 
 
 Narrowing is shared with predicates and branch-sensitive ([Reference §10](Reference-10-Predicate-expressions)): inside a `then` branch, the governing predicate's `is some` / `is none` / `is Refinement` checks license `.` exactly as they do within a conjunction; `?.` remains the no-narrowing escape.
 
-Type rules ride on the Kotlin grounding ([Reference §5](Reference-05-Scalars)): arithmetic over the numeric scalars, `+`/`-` between `Date`/`DateTime` and a duration (a literal or a `duration` field; calendar step on `Date`, exact time on `DateTime`), `+`/`-` between two durations, `-` between two `Date`s or two `DateTime`s giving a duration, and `+`/`-` on a declared `many` as set union and removal, or as append and removal of every occurrence on a `many` of values that tolerates duplication (element or collection on the right; [Reference §6, "Committing and assigning collections"](Reference-06-Relationships#committing-and-assigning-collections), [Reference §5, "Collections of values"](Reference-05-Scalars#collections-of-values-many)). `+` as text concatenation only if we ever admit it — currently **not** admitted; the duration and collection cases are the only operator overloads.
+Type rules ride on the Kotlin grounding ([Reference §5](Reference-05-Scalars)): arithmetic over the numeric scalars, `+`/`-` between `Date`/`DateTime`/`time` and a duration (a literal or a `duration` field; calendar step on `Date`, exact time on `DateTime`, wrapping on `time`), `+`/`-` between two durations, `-` between two `Date`s, two `DateTime`s, or two `time`s giving a duration, and `+`/`-` on a declared `many` as set union and removal, or as append and removal of every occurrence on a `many` of values that tolerates duplication (element or collection on the right; [Reference §6, "Committing and assigning collections"](Reference-06-Relationships#committing-and-assigning-collections), [Reference §5, "Collections of values"](Reference-05-Scalars#collections-of-values-many)). `+` as text concatenation only if we ever admit it — currently **not** admitted; the duration and collection cases are the only operator overloads.
 
 ## Predicates
 

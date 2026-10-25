@@ -960,6 +960,8 @@ class Validator(private val model: Model) {
             is Value.VDateTime -> VType.DateTimeT
             is Value.VUuid -> VType.UuidT
             is Value.VDuration -> VType.DurationT
+            is Value.VTime -> VType.TimeT
+            is Value.VBytes -> VType.BytesT
             is Value.VExt -> VType.Ext(e.value.type.qualifiedName)
             else -> null
         }
@@ -986,10 +988,11 @@ class Validator(private val model: Model) {
                 l is VType.Num && r is VType.Num -> VType.Num("decimal")
                 // durations (Reference §5): a date or moment moved by a span stays what it was;
                 // two spans make a span; the difference of two dates or two moments is a span
-                e.op in setOf("+", "-") && (l == VType.DateT || l == VType.DateTimeT) && r == VType.DurationT -> l
+                e.op in setOf("+", "-") && (l == VType.DateT || l == VType.DateTimeT || l == VType.TimeT) && r == VType.DurationT -> l
                 e.op in setOf("+", "-") && l == VType.DurationT && r == VType.DurationT -> VType.DurationT
                 e.op == "-" && l == VType.DateT && r == VType.DateT -> VType.DurationT
                 e.op == "-" && l == VType.DateTimeT && r == VType.DateTimeT -> VType.DurationT
+                e.op == "-" && l == VType.TimeT && r == VType.TimeT -> VType.DurationT
                 else -> null
             }
         }
@@ -1011,6 +1014,7 @@ class Validator(private val model: Model) {
     private fun isOrderable(t: VType): Boolean {
         val bare = (t as? VType.Optional)?.inner ?: t
         return bare is VType.Num || bare == VType.Text || bare == VType.DateT || bare == VType.DateTimeT || bare == VType.DurationT ||
+            bare == VType.TimeT || bare == VType.BytesT ||
             (bare is VType.Ext && model.registry[bare.qualifiedName]?.ordering != null)
     }
 
@@ -1035,6 +1039,8 @@ class Validator(private val model: Model) {
         VType.DateTimeT -> "DateTime"
         VType.UuidT -> "uuid"
         VType.DurationT -> "duration"
+        VType.TimeT -> "time"
+        VType.BytesT -> "bytes"
         else -> null
     }
 
@@ -1046,6 +1052,8 @@ class Validator(private val model: Model) {
         "DateTime" -> VType.DateTimeT
         "uuid" -> VType.UuidT
         "duration" -> VType.DurationT
+        "time" -> VType.TimeT
+        "bytes" -> VType.BytesT
         else -> model.registry[name]?.let { VType.Ext(it.qualifiedName) }
     }
 
