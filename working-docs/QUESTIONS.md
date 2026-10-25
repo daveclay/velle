@@ -1,6 +1,6 @@
 # Open questions and work items — the index
 
-One line per question and per work item here; the discussion lives in `questions/OQ<n>-*.md`, where each file's header states the question in plain terms before the dense part begins. OQ tags are stable — numbers are never renumbered or reused (next free: OQ68), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
+One line per question and per work item here; the discussion lives in `questions/OQ<n>-*.md`, where each file's header states the question in plain terms before the dense part begins. OQ tags are stable — numbers are never renumbered or reused (next free: OQ69), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
 
 **Questions and items.** A question (an OQ) is a design decision with discussion worth keeping. A work item is one action, verb-first, one line. An item whose whole context fits in its line stands alone; an item with context lives under the question that holds it, and the context is in that question's file, never here. Items are grouped by the part of Velle they change, not by where they were found; S-numbers, P-numbers, and B-numbers are findings of the peptides, pharmacy, and batches passes, recorded in OQ16's calibration record.
 
@@ -125,6 +125,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
 - **[OQ28](questions/OQ28-bootstrap-backfill.md)** — bootstrap/backfill: a new rule against pre-existing state · not designed
 - **[OQ59](questions/OQ59-escape-hatch.md)** — the escape hatch: open codegen · deferred, post-v0; the demands from the project's earliest notes, kept when those notes were retired
 - **[OQ66](questions/OQ66-extension-functions.md)** — extension functions and predicates: a function an engineer writes in Kotlin on OQ65's type-capability contract, and Velle's own builtins expressed the same way · opened 2026-10-24 at Dave's request; waits on OQ65 being built; a sketch and the items to settle
+- **[OQ68](questions/OQ68-builtin-types-as-registered.md)** — the eight builtin scalar types implemented through `velle.ext.VelleType`, the API the public uses, so Velle eats its own dogfood: every builtin branch in the compiler and the store becomes a registry lookup, and what the API cannot say about `decimal` or `Date` (booleans and durations as literal forms, the numeric tower, text predicates) is the hole found first · opened 2026-10-24 at Dave's direction; inventory, the holes, and D1–D5 to settle
 - **[OQ35](questions/OQ35-mixins.md)** — cross-shape structural mixins · design sketched 2026-09-13; syntax undecided
   - [ ] Restore Reference §22's mixin item, which Reference §9 still points at.
 
