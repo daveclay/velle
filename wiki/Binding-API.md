@@ -147,3 +147,4 @@ The runtime's own `commit(shape, fields, parts)` takes maps instead of classes, 
 - [§6 Relationships](Reference-06-Relationships), for the Velle side of parts and references.
 - [§22 Open / unresolved](Reference-22-Open-unresolved), "External input", for what the committer supplies and what Velle fills.
 - [Authorization](Authorization), for the actor the commit function takes.
+- [Store API](Store-API), for where a commit lands and where a read is answered from.

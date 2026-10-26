@@ -41,6 +41,7 @@
 - [[Authorization|Authorization]]
 - [[Binding API|Binding-API]]
 - [[Extension types|Extension-types]]
+- [[Store API|Store-API]]
 
 **Notes**
 

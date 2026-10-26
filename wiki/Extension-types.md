@@ -184,4 +184,5 @@ The field is the type's own class everywhere. The input class for `LineItem` tak
 - [§10 Predicate expressions](Reference-10-Predicate-expressions), where comparisons and constants are read.
 - [§19 Self-referential folds](Reference-19-Self-referential-folds-and-tolerates), what the two operator facts buy a rule.
 - [Binding API](Binding-API), the generated Kotlin the type appears in.
+- [Store API](Store-API), the whole contract a store implements, and where the binding sits in it.
 - [`evaluation.md`](evaluation), the boundary and the store contract.
