@@ -134,8 +134,69 @@ What follows from it:
 
 Cost: the capability interfaces are a public surface that grows with each builtin that needs one (`Signed` exists for `abs`). Set-aside alternative: names as strings with a `OneOf` union form, which keeps `VelleType` as it is but leaves every polymorphic body branching on the Kotlin class.
 
-### D3. `max` and `min` register as one variadic parameter over an ordered type, with the collection form `max(values)` as a second overload.
-Cost: overloading enters the interface for two builtins. Alternative: the collection form is language, beside the aggregates, so `max(values)` is not dogfooded.
+### D3. A function is a name plus a list of signatures; each signature is its parameters, its result, and its body. A parameter may be variadic, and may accept a `many` whose element type implements a capability.
+**Settled with Dave 2026-10-26.** `max` and `min` register as two signatures of one name: the variadic form over an ordered type, and the collection form returning the element type.
+
+```kotlin
+class Parameter(val name: String, val accepts: Accepts, val variadic: Boolean = false)
+
+/** One signature: a parameter list, what it returns, and the body for it. A
+ *  function may carry more than one; the compiler picks the first whose
+ *  parameters the arguments satisfy, and refuses the call naming every
+ *  signature if none fit. */
+class Signature(
+    val parameters: List<Parameter>,
+    val result: Returns,
+    val apply: (Context, List<Typed>) -> Any?,
+)
+
+interface VelleFunction {
+    val name: String
+    val namespace: String
+    val signatures: List<Signature>
+    /** V8's two facts, on the function: `x = max(x, y)` is always the variadic signature. */
+    val foldStepsCommute: Boolean
+    val foldIdempotent: Boolean
+}
+
+sealed interface Accepts {
+    data class Is(val type: KClass<*>) : Accepts
+    /** A `many` whose element type implements [type]. */
+    data class ManyOf(val type: KClass<*>) : Accepts
+    data class SameAs(val index: Int) : Accepts
+}
+```
+
+```kotlin
+object Max : VelleFunction {
+    override val name = "max"; override val namespace = "velle"
+    override val signatures = listOf(
+        // max(a, b, ...): two or more values of one ordered type, returns that type
+        Signature(
+            parameters = listOf(
+                Parameter("first", Accepts.Is(Ordered::class)),
+                Parameter("rest", Accepts.SameAs(0), variadic = true),
+            ),
+            result = Returns.SameAs(0),
+            apply = { _, args -> ... },
+        ),
+        // max(values): one `many` of an ordered type, returns the element type, absent when empty
+        Signature(
+            parameters = listOf(Parameter("values", Accepts.ManyOf(Ordered::class))),
+            result = Returns.ElementOf(0),   // optional, under D4
+            apply = { _, args -> ... },
+        ),
+    )
+    override val foldStepsCommute = true; override val foldIdempotent = true
+}
+```
+
+What follows from it:
+- A variadic parameter is the last one; the validator checks every further argument against it. `min(a)` is refused, since the variadic needs at least one argument unless the parameter says otherwise; a minimum count is a detail of the parameter, not another form.
+- `Accepts.ManyOf` is what `Returns.ElementOf` points at, and an engineer's `median(scores)` uses the same two pieces. This is the reason the collection form is not left as language: `median` could not be registered otherwise.
+- The body lives on the signature, so a body never re-decides which shape the validator already matched.
+
+Cost: one more class (`Signature`) and two more forms (`variadic`, `ManyOf`) in the public interface. Set-aside alternative: the collection form as an `AggCall` beside `count` and `sum`, which avoids overloads but makes a registered `median(scores)` impossible.
 
 ### D4. One absent rule for every function: an absent argument gives an absent result, and a function may declare an optional result for the case where present arguments still give nothing, such as an empty collection.
 Cost: `lowercase` throws on absent today and would give absent instead, which the narrowing of Reference §10 already assumes. Alternative: each function declares its own absent handling, one more member and one more thing an engineer can get wrong.
