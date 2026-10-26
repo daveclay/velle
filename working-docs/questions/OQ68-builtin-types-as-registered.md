@@ -75,6 +75,8 @@ Cost: eight small classes in `stores/sqlite`, and E4's round-trip on eight more 
 ### D4. Order of work: this question first, then OQ66's functions and predicates over the finished table, then OQ67's layers over the finished bindings.
 Cost: OQ66 waits again. Alternative: OQ66 first, with the builtin functions registering against hard-coded builtin types, which would have to be redone here.
 
+**Reversed by Dave, 2026-10-26:** custom functions outrank custom types, and a compromise or a limitation lands on the type side, so OQ66 goes first and this question follows over the finished function interface. The principle both serve is stated in OQ66 §4: Velle's own implementation codes to the interface it hands the engineer.
+
 ### D5. The typed `Value` classes stay as the runtime's representation; every fact about a value comes from the table.
 Cost: `Value.VNum` and `Value.VExt` both exist, so the runtime keeps a small conversion between "the table's `Any`" and "the typed value". Alternative: one `VExt` for everything, measured first; if the measurement is fine, D5 is moot and the simpler representation wins.
 
