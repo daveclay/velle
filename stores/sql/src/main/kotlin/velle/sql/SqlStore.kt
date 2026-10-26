@@ -23,8 +23,6 @@ import java.math.BigDecimal
 import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.ResultSet
-import java.time.LocalTime
-import java.util.UUID
 
 /**
  * A generic, model-driven store over any SQL database: the framework role in
@@ -317,7 +315,7 @@ open class SqlStore(
     override fun fetchCandidates(shape: String, filter: QF): List<Row> {
         val r = WhereRenderer()
         val where = r.render(filter, shape, "t0", positive = true)
-        if (where == "1") return fetchAll(shape)
+        if (where == "TRUE") return fetchAll(shape)
         return conn.prepareStatement("""SELECT t0.* FROM "$shape" t0 WHERE $where ORDER BY t0.id""").use { ps ->
             r.binds.forEachIndexed { i, b -> ps.setObject(i + 1, b) }
             ps.executeQuery().use { rs ->
@@ -331,8 +329,8 @@ open class SqlStore(
         private var nextAlias = 1
 
         fun render(f: QF, shape: String, alias: String, positive: Boolean): String = when (f) {
-            QF.True -> "1"
-            QF.False -> "0"
+            QF.True -> "TRUE"
+            QF.False -> "FALSE"
             is QF.And -> "(${render(f.l, shape, alias, positive)} AND ${render(f.r, shape, alias, positive)})"
             is QF.Or -> "(${render(f.l, shape, alias, positive)} OR ${render(f.r, shape, alias, positive)})"
             is QF.Not -> "NOT (${render(f.inner, shape, alias, !positive)})"
@@ -407,7 +405,7 @@ open class SqlStore(
             for (c in s) { if (c == '\\' || c == '%' || c == '_') append('\\'); append(c) }
         }
 
-        private fun degrade(positive: Boolean): String = if (positive) "1" else "0"
+        private fun degrade(positive: Boolean): String = if (positive) "TRUE" else "FALSE"
 
         /** The query constant as a value of the column's type, in [Row.fields]'
          *  vocabulary, or null where no value of that type equals the constant
@@ -418,13 +416,7 @@ open class SqlStore(
                 if (bare is VType.Num && (bare.name == "integer" || bare.name == "long")) runCatching { c.v.longValueExact() }.getOrNull()
                 else if (bare is VType.Num) c.v
                 else null
-            is QConst.QText -> when (bare) {
-                VType.Text -> c.v
-                // a text constant against a uuid or time column: its canonical value, or nothing
-                VType.UuidT -> runCatching { UUID.fromString(c.v) }.getOrNull()
-                VType.TimeT -> runCatching { LocalTime.parse(c.v) }.getOrNull()
-                else -> null
-            }
+            is QConst.QText -> c.v.takeIf { bare == VType.Text }
             is QConst.QUuid -> c.v.takeIf { bare == VType.UuidT }
             is QConst.QDuration -> c.v.takeIf { bare == VType.DurationT }
             is QConst.QTime -> c.v.takeIf { bare == VType.TimeT }

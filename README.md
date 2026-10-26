@@ -38,7 +38,7 @@ Edit the documentation in `wiki/`, not on the wiki site: the publish workflow (`
 ## Repository layout
 
 - `compiler/` is the v0 implementation: lexer and parser, validator, runtime, and code generation, in Kotlin.
-- `stores/sql/` is a model-driven store over any SQL database, and `stores/sqlite/` is its SQLite dialect, which every example's tests run their flows through.
+- `stores/sql/` is a model-driven store over any SQL database. `stores/sqlite/` is its SQLite dialect, which every example's tests run their flows through, and `stores/postgres/` its PostgreSQL dialect, which three of them also run through when Docker is available.
 - `examples/<system>/` pairs each example spec (`<system>.velle`) with its generated, developer-owned `output/` module and the tests that drive it.
 - `editors/velle/` is the editor support for `.velle` files.
 - `wiki/` is the documentation, published to the repository wiki.

@@ -10,7 +10,7 @@ The billing team's invoices live in a database the operations team runs, with ba
 
 ## Connecting a system to a store
 
-Velle ships one generic store over SQL databases in `stores/sql/`, and SQLite's part of it, its column types and key column, in `stores/sqlite/`. The store implements the contract once for every spec by reading the spec's model, so nothing is written per system. From `examples/billing/output/src/test/kotlin/velle/GeneratedApiOverSqliteTest.kt`:
+Velle ships one generic store over SQL databases in `stores/sql/`. What one database does differently, its column types and its key column, is a small part of its own: `stores/sqlite/` for SQLite and `stores/postgres/` for PostgreSQL. The store implements the contract once for every spec by reading the spec's model, so nothing is written per system. From `examples/billing/output/src/test/kotlin/velle/GeneratedApiOverSqliteTest.kt`:
 
 ```kotlin
 val conn: Connection = DriverManager.getConnection("jdbc:sqlite::memory:")
@@ -18,7 +18,7 @@ val sys = BillingSystem().also { SqliteStore.attach(it.system, conn) }
 ```
 
 - `BillingSystem()` is the generated system. Without a store it keeps every record in memory, which is how the generated tests run.
-- `SqliteStore.attach` creates one table per shape in the connection, then connects the system to the store for both halves of the contract.
+- `SqliteStore.attach` creates one table per shape in the connection, then connects the system to the store for both halves of the contract. `PostgresStore.attach` does the same over a PostgreSQL connection, as `examples/billing/output/src/test/kotlin/velle/GeneratedApiOverPostgresTest.kt` does.
 
 From then on every commit through the [Binding API](Binding-API) lands in the database, and every read through the query API is answered from it. The same system runs in memory for tests and over the store in production, and the spec does not change.
 

@@ -16,6 +16,12 @@ dependencies {
     api(project(":stores:sql"))
     implementation(project(":compiler"))
     implementation("org.xerial:sqlite-jdbc:3.47.1.0")
+    testImplementation(kotlin("test"))
+    testImplementation(testFixtures(project(":stores:sql")))
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 kotlin {

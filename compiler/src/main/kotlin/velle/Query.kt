@@ -292,13 +292,22 @@ class QueryCompiler(
         val hops = resolveHops(p, scope, wantInstance = wantInstance) ?: return null
         val colType = hops.last().second.type.strip()
         // a number or text constant against an extension-typed column reads as the type (OQ65 D2)
-        val typed = if (colType is VType.Ext && (const is QConst.QNum || const is QConst.QText)) {
-            val t = model.registry[colType.qualifiedName] ?: return null
-            when (val r = t.readLiteral((const as? QConst.QNum)?.v, (const as? QConst.QText)?.v)) {
-                is LiteralRead.Ok -> QConst.QExt(t, r.value)
-                else -> return null
+        val typed = when {
+            colType is VType.Ext && (const is QConst.QNum || const is QConst.QText) -> {
+                val t = model.registry[colType.qualifiedName] ?: return null
+                when (val r = t.readLiteral((const as? QConst.QNum)?.v, (const as? QConst.QText)?.v)) {
+                    is LiteralRead.Ok -> QConst.QExt(t, r.value)
+                    else -> return null
+                }
             }
-        } else const
+            // a quoted text against a `time` or `uuid` column reads as the type (Reference §5);
+            // one the type cannot read is left to the evaluator
+            colType == VType.TimeT && const is QConst.QText ->
+                runCatching { QConst.QTime(java.time.LocalTime.parse(const.v)) }.getOrNull() ?: return null
+            colType == VType.UuidT && const is QConst.QText ->
+                runCatching { QConst.QUuid(java.util.UUID.fromString(const.v)) }.getOrNull() ?: return null
+            else -> const
+        }
         if (!typesMatch(colType, typed)) return null
         if (op in TEXT_OPERATORS && typed !is QConst.QText) return null
         return wrapHops(hops.dropLast(1), QF.Cmp(hops.last().first, op, typed))

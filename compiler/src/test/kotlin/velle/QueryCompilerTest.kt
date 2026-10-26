@@ -109,6 +109,24 @@ class QueryCompilerTest {
         assertEquals(QF.Cmp("amount", "<=", QConst.QNum(BigDecimal(0))), f)
     }
 
+    @Test
+    fun `a quoted text against a time or uuid column compiles as the type, an unreadable one not at all`() {
+        val m = inline(
+            """
+            act Course {
+                startsAt: time?
+                code: uuid
+            }
+            shape Early = Course where startsAt < "09:00"
+            shape Known = Course where code == "123e4567-e89b-12d3-a456-426614174000"
+            shape Odd = Course where startsAt < "nine"
+            """.trimIndent()
+        )
+        assertEquals(QF.Cmp("startsAt", "<", QConst.QTime(java.time.LocalTime.of(9, 0))), compiler(m).filterFor(RefName("Early")))
+        assertEquals(QF.Cmp("code", "==", QConst.QUuid(java.util.UUID.fromString("123e4567-e89b-12d3-a456-426614174000"))), compiler(m).filterFor(RefName("Known")))
+        assertEquals(QF.True, compiler(m).filterFor(RefName("Odd")))
+    }
+
     // ── inline spec: boolean atoms and null checks ───────────────────────────
 
     @Test

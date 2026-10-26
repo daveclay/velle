@@ -17,6 +17,8 @@ dependencies {
     implementation(project(":compiler"))
     testImplementation(kotlin("test"))
     testImplementation(project(":stores:sqlite")) // the flows re-run over real storage
+    testImplementation(project(":stores:postgres")) // and over PostgreSQL, when Docker is running
+    testImplementation(testFixtures(project(":stores:postgres")))
 }
 
 tasks.test {
