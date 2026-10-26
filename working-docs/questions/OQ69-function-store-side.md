@@ -1,0 +1,37 @@
+# OQ69 — A function's store side: how a function a spec calls says what the pre-filter may render for it, per store
+
+**Status:** opened 2026-10-26 at Dave's request after `matches` landed. Nothing designed past the inventory below and the items to settle.
+**In plain terms:** OQ66 lets an engineer register a function a spec may call, and fixes what the validator and the evaluator need from it. A store needs a third thing from the same function: how to ask the database the question the function asks, so a query over a million rows does not bring every row into memory. `matches` is the first builtin with that third part done by installation rather than translation: `SqliteStore` registers a `REGEXP` function on its connection and renders `matches` as `col REGEXP ?`. It is hard-coded, as every other rendering is. The question is what the contract looks like when the function is the engineer's, the store is not SQLite, or the rendering is only an over-approximation.
+**See:** OQ66 (the spec and evaluator side of a function; this file is the store side and nothing else) · OQ67 (the store API in an agnostic and a SQL layer; a rendering is written at one of those layers) · OQ65 D5 and `stores/sqlite/src/main/kotlin/velle/sqlite/SqliteTypeBinding.kt` (the type side of the same split: a binding per type and store, with `answers` naming the comparisons the column answers faithfully) · `compiler/src/main/kotlin/velle/Query.kt` (`QF`, `compileCmp`, `tryCmp`: a column test needs a path on one side and a constant on the other, so a call is never a column test today; `QF.TextBlank`) · `stores/sqlite/src/main/kotlin/velle/sqlite/SqliteStore.kt` (`regexpRegistered`, `render`, `renderCmp`, `degrade`) · `evaluation.md` "The pre-filter" (over-returning is always legal; the predicate decides in memory) · Reference §10 (the predicate forms), §5 (the closed function list).
+
+---
+
+## 1. What exists: three ways a function reaches the store, none declared
+
+- **Rendered as SQL by the store.** `is empty` on text is `(col IS NULL OR TRIM(col) = '')`; `contains`, `starts with`, `ends with`, `like` are `LIKE ... ESCAPE '\'`. The store knows these by name in `render` and `renderCmp`.
+- **Installed on the connection and rendered as a call.** `matches` is `col REGEXP ?`, after `org.sqlite.Function.create(conn, "REGEXP", ...)` at construction. If the registration throws (a connection that is not SQLite's own, a pool's wrapper), `regexpRegistered` is false and `matches` degrades to the superset. Nothing reports the degradation.
+- **Not pushed down.** `lowercase`, `uppercase`, `trim`, `length`, `abs`, `%`, `year`, `month`, `day`, `dayOfWeek`, `hour`, `minute`, and `sum`/`max`/`min` over a `many` of values: the compiler's column test takes a path and a constant, so a call on either side falls to `fail(positive)` and the evaluator decides over every candidate row. Correct under the superset contract. `where { name.lowercase startsWith "ada" }` scans the table.
+
+The third way is the baseline every function starts from: a function with no store side works. So the question is not whether a function must push down but how one that can says so, and how a store that cannot honour it says that.
+
+## 2. The split, as stated
+
+A registered function has up to three parts. OQ66 owns the first two.
+
+1. Its signature and facts, for the validator: what it accepts, what it returns, whether fold steps commute and repeat harmlessly, whether it reads the clock.
+2. Its Kotlin body, for the evaluator.
+3. Its rendering, per store, for the pre-filter: a SQL expression over the column, or a function the store installs on connect and then calls by name; in either case with a statement of whether the rendering is faithful or a superset, as a type binding's `answers` is.
+
+Types chose a binding per type and store, written by whoever knows the store (OQ65 D5). The default expectation is that functions follow, and that the builtins' renderings move out of `SqliteStore.render` into the same mechanism, so Velle uses its own contract for `lowercase` and `matches` as OQ68 wants for `decimal` and `Date`.
+
+## 3. What has to be settled
+
+- **Where the rendering lives.** On the function object (one object, three parts, so a function library depends on every store it renders for) or beside it as a binding per function and store (a `SqlFunctionBinding` library, as `finance-sqlite` is to `finance`). The type precedent is the binding.
+- **At which OQ67 layer.** `TRIM`, `LOWER`, `LENGTH`, `ABS`, `%` are SQL-wide and belong to the SQL layer once it exists; `REGEXP`, `strftime` for the date parts, and `LIKE`'s case folding are dialect. A rendering written at the SQL layer serves every SQL store, one written at the SQLite layer only SQLite. Whether a dialect may override a SQL-layer rendering.
+- **What a rendering is.** A template over the column and the constant (`"LOWER({col})"`, `"{col} REGEXP {arg}"`), a Kotlin function from rendered operands to a SQL fragment, or a value of a small expression type the SQL layer renders. The template is the least power and the least to get wrong; the compiled pre-filter (`QF`) would need a node for "call of a registered function over a column" either way.
+- **Faithful or superset.** `evaluation.md` says over-returning is always legal and the evaluator decides in memory, so a rendering is only ever a performance claim: whether the contract stays that way, which makes "faithful" a word the binding never needs, or whether a faithful rendering may one day skip the in-memory check (the correctness side of the line, where `fetchCaptures` sits). Keeping the rendering on the performance side is the simpler contract, and the one `matches` was built under.
+- **Installation and its failure.** A function installed on a connection may be refused (a pooled connection, a read replica, a database Velle does not own). Today the refusal degrades silently to the superset. Whether the store should say what it could not install, at construction, and whether a system may insist (fail to build) on a rendering it depends on.
+- **Errors inside an installed function.** A SQL function can throw at query time. `REGEXP` compiles a pattern the validator already compiled, so it cannot fail on a checked spec, but a query from the read API (Reference §22) carries patterns the validator never saw. Where that error surfaces: as a query diagnostic before the query runs (the validator's `checkQueryPredicate` could compile it), or as a store failure.
+- **The evaluator and the store must agree.** `LOWER` in SQLite folds ASCII only; Kotlin's `lowercase()` folds Unicode. `dayOfWeek` through `strftime('%w')` counts Sunday as 0; Velle counts Monday as 1. A rendering that disagrees with the evaluator over-returns or under-returns; under-returning is a correctness bug the superset contract does not cover. Whether a binding carries sample inputs the store checks at construction, as E4 round-trips a type's samples.
+- **Aggregates over a `many` of values.** `sum(scores)` reads a junction table; pushing it down is a correlated subquery, not a function rendering, and may belong to OQ67's SQL layer rather than here.
+- **The read API's handles.** `name.lowercase`, `name matches`, `due.dayOfWeek` are generated handles over the builtin list (`Read.kt`, `TextFunction`, `PartOf`). A registered function needs a generated handle too, which is OQ66's codegen item; it is noted here only because a handle with no rendering is the scan case above, and the engineer cannot see that from the handle.

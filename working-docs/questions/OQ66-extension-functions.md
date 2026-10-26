@@ -38,4 +38,5 @@ interface VelleFunction {
 - **Predicates in refinement position.** `where isBusinessDay(due)` is an atom (`grammar.md`, `booleanAtom`); the validator's read summaries and polarity analysis need to see through a call to what it reads.
 - **Generators.** `initially nextInvoiceNumber`: a function with no arguments and a non-determinism flag, re-run on retry as `randomUUID` is (Reference §5). `initially randomUUID` has no extension-type analog today; a type cannot say how a fresh value is generated.
 - **Durations on extension types.** `deadline + 3 days` where `deadline` is an extension type is refused today. If OQ68 makes `duration` a registered type, `Deadline + duration → Deadline` is an ordinary operator line an author declares, and this item closes there.
+- **The store side.** How a function says what a store may render for it, per store, is OQ69, not this file: this file stops at the validator and the evaluator.
 - **Infix spelling.** Whether a two-argument predicate may be written infix (`a overlaps b`) the way the text operators are, and what that does to the lexer.
