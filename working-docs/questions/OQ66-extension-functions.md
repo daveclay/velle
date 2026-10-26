@@ -1,6 +1,6 @@
 # OQ66 — Extension functions and predicates: a function an engineer writes in Kotlin, registered beside the types, and Velle's own builtins expressed the same way
 
-**Status:** opened 2026-10-24 at Dave's request while settling OQ65 D4; OQ65 built 2026-10-24, so this is unblocked. 2026-10-26: Dave's direction in §4 puts this question ahead of OQ68 and states the principle behind both; §5 is the inventory of what the one interface has to carry. Nothing designed past that.
+**Status:** opened 2026-10-24 at Dave's request while settling OQ65 D4; OQ65 built 2026-10-24, so this is unblocked. 2026-10-26: Dave's direction in §4 puts this question ahead of OQ68 and states the principle behind both; §5 is the inventory of what the one interface has to carry; §6 is the four decisions the inventory forces, each with a recommendation, for Dave.
 **In plain terms:** OQ65 lets an engineer add a data type. The same engineer will want `roundToCents(amount)`, `isBusinessDay(date)`, `distanceBetween(a, b)`: a value computed from values, or a yes/no asked of them, written once in Kotlin and called from a spec. Velle already has a closed list of such functions (`count`, `sum`, `latest`, `first`, `max`, `min`, `lowercase`, and the text operators), each hard-coded in the validator and the evaluator. Dave's direction: custom functions and predicates arrive the same way custom types do, and the builtins should be implemented through the same API, so there is one way a function tells the compiler what it accepts and what the proofs may assume of it.
 **See:** the type side of the contract as built: `compiler/src/main/kotlin/velle/ext/VelleType.kt` (the KDoc states what each capability is and that an operator has no failure channel), `TypeRegistry.kt` (`foldFacts`, the operator table), `Validator.checkFunctionCall` and `Evaluator.evalFun` (`max`/`min` keyed on the *ordered* capability, the first rows of the function table), the wiki guide `Extension-types` · OQ59 ("Custom right-hand-side functions carry metadata") · Reference §5 (the closed builtin list), §10 (the functions in use), §19 (the fold whitelist), §22 "The extension framework" · `checks.md` F2, V8 · `Evaluator.evalFun`, `evalAgg`, `Validator.checkExpr` (`is FunCall`).
 
@@ -69,3 +69,19 @@ Each row is a fact the compiler knows about a builtin function today, where it i
 | The aggregates | `AggCall` (`count`, `sum`, `latest`, `first`): their own parse shape, a collection, a field, a `by` list | stay language constructs; they consume a type's `sum` and `ordering` capabilities and take no part in this interface (§3, first item, now decided this way as the working assumption) |
 
 What the inventory says about the sketch in §2: `parameters` needs capabilities, concrete types, unions of concrete types, and "same as n"; `result` needs "element type of n"; `apply` needs a context, not a bare list; the optional rule needs stating once. `readsClock` is subsumed by the context. Everything else in §2 stands.
+
+## 6. Decisions for Dave (2026-10-26)
+
+Each leads with the one-sentence decision I recommend, then what it costs and the alternative. Taking all four leaves nothing to decide before building. The infix spelling of a two-argument predicate (§3) and the store side (OQ69) stay open and do not block the build.
+
+### D1. `apply` takes a context argument: a small object carrying the system's zone, with a compile-time form that carries no zone.
+Cost: every function body takes a parameter, including an engineer's that never reads the zone. Alternative: the parts of a `DateTime` stay hard-coded in the evaluator, so six builtins are never written through the interface.
+
+### D2. A parameter is one of: a concrete type, a capability (*ordered*), a union of concrete types (`Date | DateTime`), or "same as parameter n".
+Cost: the union form is new vocabulary in the interface, and the validator's refusal text has to name it. Alternative: no union, and each builtin splits into one function per type, so `year` on a `Date` and `year` on a `DateTime` are two registrations of one name, which puts overloading into the interface anyway.
+
+### D3. `max` and `min` register as one variadic parameter over an ordered type, with the collection form `max(values)` as a second overload.
+Cost: overloading enters the interface for two builtins. Alternative: the collection form is language, beside the aggregates, so `max(values)` is not dogfooded.
+
+### D4. One absent rule for every function: an absent argument gives an absent result, and a function may declare an optional result for the case where present arguments still give nothing, such as an empty collection.
+Cost: `lowercase` throws on absent today and would give absent instead, which the narrowing of Reference §10 already assumes. Alternative: each function declares its own absent handling, one more member and one more thing an engineer can get wrong.
