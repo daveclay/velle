@@ -402,7 +402,7 @@ class Evaluator(private val system: VelleSystem) {
             val element = system.model.collectionElement(e.collection, ctx.subjectScope)
             val ext = element?.let { system.model.membersOf(it)[e.field!!]?.type }?.let { system.model.extTypeOf(it) }
             if (ext != null) {
-                val sum = ext.sum ?: throw VelleRuntimeError("'${ext.name}' declares no sum — validator gap")
+                val sum = ext.summableOrNull ?: throw VelleRuntimeError("'${ext.name}' declares no sum — validator gap")
                 var acc: Any = sum.zero
                 for (c in combinations(e.collection, ctx)) {
                     val (scope, id) = c.innermost()
@@ -484,75 +484,100 @@ class Evaluator(private val system: VelleSystem) {
         return 0
     }
 
-    private fun evalFun(e: FunCall, ctx: Ctx): Value = when (e.name) {
-        "lowercase", "uppercase", "trim", "length" -> {
-            val v = (eval(e.args.single(), ctx) as? Value.VText)?.v
-                ?: throw VelleRuntimeError("${e.name} on non-text")
-            when (e.name) {
-                "lowercase" -> Value.VText(v.lowercase())
-                "uppercase" -> Value.VText(v.uppercase())
-                "trim" -> Value.VText(v.trim())
-                else -> Value.VNum(BigDecimal(v.length))
-            }
+    private val resolver by lazy { FunctionResolver(model.registry) { c -> model.scalarOf(c.name) } }
+    private val functionContext by lazy { velle.ext.FunctionContext.of(system.zone) }
+
+    /**
+     * A call of a builtin or registered function (Reference §5; `velle.ext.VelleFunction`):
+     * the signature the arguments' types match, applied to the arguments as the function's
+     * Kotlin values. An absent argument makes the result absent without calling the body;
+     * a constant beside an extension argument reads as that type (`max(0, balance)`).
+     */
+    private fun evalFun(e: FunCall, ctx: Ctx): Value {
+        val fn = model.functionScope[e.name]
+            ?: throw VelleRuntimeError("unknown function '${e.name}' — no builtin or registered function has that name")
+        val vals = e.args.map { eval(it, ctx) }
+        if (vals.any { it == Value.VNone }) return Value.VNone
+        val args = vals.mapIndexed { i, v -> FunctionResolver.Arg(runtimeTypeOf(v, e.args[i], ctx), FunctionResolver.isConstant(e.args[i])) }
+        val ok = when (val r = resolver.resolve(fn, Printer.expr(e), args) { Printer.expr(e.args[it]) }) {
+            is FunctionResolver.Outcome.Ok -> r
+            is FunctionResolver.Outcome.NoMatch -> throw VelleRuntimeError(r.reasons.firstOrNull()?.message ?: "'${Printer.expr(e)}' matches no signature")
         }
-        "abs" -> when (val v = eval(e.args.single(), ctx)) {
-            is Value.VNum -> Value.VNum(v.v.abs())
-            is Value.VDuration -> if (v.seconds() < 0) Value.VDuration.ofSeconds(-v.seconds()) else v
-            Value.VNone -> Value.VNone
-            else -> throw VelleRuntimeError("abs on $v")
-        }
-        // the parts of a date, a moment, or a time of day (Reference §5): a moment's
-        // parts are read in the system's zone, the one `today` uses
-        "year", "month", "day", "dayOfWeek", "hour", "minute" -> {
-            val v = eval(e.args.single(), ctx)
-            if (v == Value.VNone) Value.VNone else {
-                val date: java.time.LocalDate? = when (v) {
-                    is Value.VDate -> v.v
-                    is Value.VDateTime -> v.v.atZone(system.zone).toLocalDate()
-                    else -> null
-                }
-                val time: java.time.LocalTime? = when (v) {
-                    is Value.VTime -> v.v
-                    is Value.VDateTime -> v.v.atZone(system.zone).toLocalTime()
-                    else -> null
-                }
-                val n = when (e.name) {
-                    "year" -> date?.year
-                    "month" -> date?.monthValue
-                    "day" -> date?.dayOfMonth
-                    "dayOfWeek" -> date?.dayOfWeek?.value
-                    "hour" -> time?.hour
-                    else -> time?.minute
-                } ?: throw VelleRuntimeError("${e.name} on $v")
-                Value.VNum(BigDecimal(n))
-            }
-        }
-        "max", "min" -> {
-            // `max(values)` / `min(values)` over a `many` of values (Reference §5): the
-            // greatest or least under the element's order, absent when there are none
-            val single = e.args.singleOrNull()?.let { eval(it, ctx) }
-            // the *ordered* capability (Reference §5; OQ65 D4): numbers by value, an
-            // extension type through its declared ordering, constants read as that type
-            val values = if (single is Value.VVals || single == Value.VEmpty) emptyList() else e.args.map { eval(it, ctx) }
-            val ext = values.filterIsInstance<Value.VExt>().firstOrNull()
-            if (single is Value.VVals || single == Value.VEmpty) {
-                val vals = (single as? Value.VVals)?.values ?: emptyList()
-                if (vals.isEmpty()) Value.VNone else vals.reduce { a, b ->
-                    val c = compareValues(a, b)
-                    if (e.name == "max") (if (c >= 0) a else b) else (if (c <= 0) a else b)
-                }
-            } else if (ext != null) {
-                val typed = values.map { coerceLiteral(it, ext.type) }
-                typed.reduce { a, b ->
-                    val c = compareValues(a, b)
-                    if (e.name == "max") (if (c >= 0) a else b) else (if (c <= 0) a else b)
-                }
+        val typed = vals.mapIndexed { i, v ->
+            val t = ok.argTypes[i]
+            val coll = t as? VType.CollS
+            if (coll != null) {
+                val elemType = model.registry.typeFor(model.scalarOf(coll.name)) ?: throw VelleRuntimeError("'${Printer.expr(e.args[i])}': no type for its values")
+                val items = (v as? Value.VVals)?.values ?: emptyList()
+                velle.ext.Typed(elemType, items.map { rawOf(coerceLiteral(it, elemType.takeIf { x -> x.namespace != "velle" })) })
             } else {
-                val nums = values.map { (it as? Value.VNum)?.v ?: throw VelleRuntimeError("${e.name} on non-number") }
-                Value.VNum(if (e.name == "max") nums.max() else nums.min())
+                val type = model.registry.typeFor(t) ?: throw VelleRuntimeError("'${Printer.expr(e.args[i])}': no type for $v")
+                val cv = if (type.namespace == "velle" && model.registry.builtins[type.name] === type) v else coerceLiteral(v, type)
+                velle.ext.Typed(type, rawOf(cv))
             }
         }
-        else -> throw VelleRuntimeError("unknown function '${e.name}' (the builtin list is closed)")
+        val raw = ok.signature.apply(functionContext, typed)
+        return valueOf(raw, model.registry.typeFor(ok.result))
+    }
+
+    /** The scalar type of a runtime value for signature matching: a number constant or field
+     *  is `decimal`; a `many` is typed by the member it reads when it can be, else by its first value. */
+    private fun runtimeTypeOf(v: Value, e: Expr, ctx: Ctx): VType? = when (v) {
+        is Value.VNum -> VType.Num("decimal")
+        is Value.VText -> VType.Text
+        is Value.VBool -> VType.Bool
+        is Value.VDate -> VType.DateT
+        is Value.VDateTime -> VType.DateTimeT
+        is Value.VUuid -> VType.UuidT
+        is Value.VDuration -> VType.DurationT
+        is Value.VTime -> VType.TimeT
+        is Value.VBytes -> VType.BytesT
+        is Value.VExt -> VType.Ext(v.type.qualifiedName)
+        is Value.VVals, Value.VEmpty -> ((e as? PathExpr)?.let { declaredTypeOf(it, ctx.subjectScope) } as? VType.CollS)
+            ?: (v as? Value.VVals)?.values?.firstOrNull()?.let { first -> runtimeTypeOf(first, e, ctx)?.let { registryNameOf(it) }?.let { VType.CollS(it) } }
+            ?: VType.CollS("decimal")
+        else -> null
+    }
+
+    private fun registryNameOf(t: VType): String? = when (t) {
+        is VType.Num -> t.name
+        is VType.Ext -> model.registry[t.qualifiedName]?.let { model.specNameOf(it) }
+        else -> model.registry.typeFor(t)?.name
+    }
+
+    /** A value as a function body receives it: the type's Kotlin value. */
+    private fun rawOf(v: Value): Any = when (v) {
+        is Value.VNum -> v.v
+        is Value.VText -> v.v
+        is Value.VBool -> v.v
+        is Value.VDate -> v.v
+        is Value.VDateTime -> v.v
+        is Value.VUuid -> v.v
+        is Value.VDuration -> v.toJava()
+        is Value.VTime -> v.v
+        is Value.VBytes -> v.v
+        is Value.VExt -> v.v
+        else -> throw VelleRuntimeError("$v is not a scalar a function takes")
+    }
+
+    /** A function body's result back as a runtime value, by the result's registered type. */
+    private fun valueOf(raw: Any?, type: velle.ext.VelleType<*>?): Value {
+        if (raw == null) return Value.VNone
+        if (type != null && !(type.namespace == "velle" && model.registry.builtins[type.name] === type)) return Value.VExt(type, raw)
+        return when (raw) {
+            is BigDecimal -> Value.VNum(raw)
+            is Int -> Value.VNum(BigDecimal(raw))
+            is Long -> Value.VNum(BigDecimal(raw))
+            is String -> Value.VText(raw)
+            is Boolean -> Value.VBool(raw)
+            is java.time.LocalDate -> Value.VDate(raw)
+            is java.time.Instant -> Value.VDateTime(raw)
+            is UUID -> Value.VUuid(raw)
+            is java.time.Duration -> Value.VDuration.ofJava(raw)
+            is java.time.LocalTime -> Value.VTime(raw)
+            is ByteArray -> Value.VBytes(raw)
+            else -> throw VelleRuntimeError("a function returned $raw, which is not a value of ${type?.name ?: "a builtin type"}")
+        }
     }
 
     /**
@@ -859,8 +884,10 @@ class Evaluator(private val system: VelleSystem) {
         else -> throw VelleRuntimeError("cannot order $l against $r")
     }
 
+    /** The truth of a predicate atom. An absent value is false, as an ordered comparison
+     *  over an absent operand is (Reference §10): a predicate whose argument is absent holds of nothing. */
     internal fun truthy(v: Value): Boolean =
-        (v as? Value.VBool)?.v ?: throw VelleRuntimeError("non-boolean in predicate position: $v")
+        if (v == Value.VNone) false else (v as? Value.VBool)?.v ?: throw VelleRuntimeError("non-boolean in predicate position: $v")
 
     // ── assignment targets ───────────────────────────────────────────────────
 

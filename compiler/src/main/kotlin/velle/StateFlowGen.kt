@@ -731,10 +731,10 @@ internal class FlowAnalysis(val model: Model, val catalog: KindCatalog) {
             }
         }
         is AggCall -> if ((e.name == "sum" || e.name == "count") && birthEmpty(e.collection, scope)) 0.0 else null
-        is FunCall -> when (e.name) {
-            "max" -> e.args.map { initVal(it, scope) ?: return null }.maxOrNull()
-            "min" -> e.args.map { initVal(it, scope) ?: return null }.minOrNull()
-            else -> null
+        // a registered function over constants folds at compile time through its own body
+        is FunCall -> model.functionScope[e.name]?.let { fn ->
+            val xs = e.args.map { initVal(it, scope) ?: return null }
+            FunctionResolver.foldNumbers(model.registry, fn, xs.map { java.math.BigDecimal(it) })?.toDouble()
         }
         else -> null
     }

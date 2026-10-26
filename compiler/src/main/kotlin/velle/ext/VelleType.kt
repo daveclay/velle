@@ -15,9 +15,13 @@ import kotlin.reflect.KClass
  * binding can carry the data types of diverse systems in and out of Velle
  * without the language carrying lower-level mappings itself.
  *
- * Each member is read by a named part of the compiler. A capability this type
- * does not declare is one a spec cannot use: the compiler refuses the spec and
- * names this class as where to add it (checks.md, E3).
+ * Each member is read by a named part of the compiler. The capabilities beyond
+ * these members are interfaces the class implements beside this one
+ * (`Capabilities.kt`): [Ordered] for `< <= > >=`, `max`/`min`, a selector's
+ * `by` and a query order; [Summable] for `sum`; and the ones registered
+ * functions ask for. A capability this type does not implement is one a spec
+ * cannot use: the compiler refuses the spec and names this class and the
+ * interface to add (checks.md, E3).
  *
  * Registration: name the implementing class in
  * `META-INF/services/velle.ext.VelleType` on the classpath (Java's ServiceLoader).
@@ -65,22 +69,9 @@ interface VelleType<T : Any> {
     /** How a value reads in a rejection message (Reference §21). */
     fun display(value: T): String = canonical(value)
 
-    /**
-     * The *ordered* capability, or null. Every consumer of ordering reads this
-     * one member: `< <= > >=`, a selector's `by`, `latest`/`first`, a query
-     * order, `max`/`min`, and the boundary cases the test generator derives.
-     * Without it each of those is refused for this type, with E3 naming the type.
-     * Must be a total order over every acceptable value: a type whose values are
-     * only sometimes comparable (money in two currencies) is not ordered.
-     */
-    val ordering: Comparator<T>?
-
     /** The arithmetic this type takes part in. Empty means none: `balance + amount`
      *  is refused with E3. */
     val operators: List<Operator<*, *, *>>
-
-    /** `sum(collection, field)` over a field of this type, or null (refused). */
-    val sum: Sum<T>?
 
     /** What the test generator needs to write a case that commits a value. */
     val samples: Samples<T>
@@ -144,10 +135,6 @@ class Operator<L : Any, R : Any, O : Any>(
     @Suppress("UNCHECKED_CAST")
     internal fun applyAny(l: Any, r: Any): Any = apply(l as L, r as R)
 }
-
-/** `sum` over a field of `T`: the empty collection sums to [zero]; [plus] must be
- *  associative and commutative (a collection has no order), checked on samples (E2). */
-class Sum<T : Any>(val zero: T, val plus: (T, T) -> T)
 
 /**
  * What the test generator needs (testgen.md):

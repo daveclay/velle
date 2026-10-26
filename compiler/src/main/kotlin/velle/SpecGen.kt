@@ -794,7 +794,7 @@ object SpecGen {
         fun extSampleSource(shape: String, field: String, type: VelleType<*>): String? {
             val constraints = neverComparisonsOn(shape, field)
             val sample = type.samples.sample
-            if (constraints.isEmpty() || type.ordering == null) return type.kotlinSourceAny(sample)
+            if (constraints.isEmpty() || type.orderingOrNull == null) return type.kotlinSourceAny(sample)
             val bounds = constraints.mapNotNull { c -> literalOf(c.right)?.let { extLiteral(type, it) } }
             val candidates = listOf(sample) + bounds + bounds.mapNotNull { type.belowAny(it) } + bounds.mapNotNull { type.aboveAny(it) }
             return candidates.firstOrNull { v -> constraints.none { extSatisfies(type, v, it) } }?.let { type.kotlinSourceAny(it) }
@@ -806,7 +806,7 @@ object SpecGen {
          * through the type's ordering. Null when the type is not ordered or reads no such constant.
          */
         fun pickExtValue(shape: String, field: String, type: VelleType<*>, mustSatisfy: Binary?, literal: BigDecimal): Picked? {
-            if (type.ordering == null) return null
+            if (type.orderingOrNull == null) return null
             val bound = extLiteral(type, literal) ?: return null
             val candidates = listOfNotNull(type.belowAny(bound), bound, type.aboveAny(bound), type.samples.sample)
             val constraints = neverComparisonsOn(shape, field)

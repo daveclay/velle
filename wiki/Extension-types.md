@@ -90,10 +90,10 @@ A type that is only ever equal or not, a stock-keeping code for instance, declar
 
 ## Writing a type
 
-A type is a class implementing `velle.ext.VelleType<T>`, where `T` is the Kotlin class a value has. Every capability the spec might use is a member the author writes; a member left as `null` or empty is a capability the spec cannot use, and the compiler says so. From `extensions/finance/src/main/kotlin/velle/finance/MoneyType.kt`:
+A type is a class implementing `velle.ext.VelleType<T>`, where `T` is the Kotlin class a value has, and beside it the capability interfaces the type offers: `Ordered<T>` for ordering, `Summable<T>` for `sum`, and the ones in the [Extension functions](Extension-functions) guide that functions ask for. A capability the class does not implement is one the spec cannot use, and the compiler says so. From `extensions/finance/src/main/kotlin/velle/finance/MoneyType.kt`:
 
 ```kotlin
-class MoneyType : VelleType<Money> {
+class MoneyType : VelleType<Money>, Ordered<Money>, Summable<Money> {
     override val name = "Money"
     override val namespace = "velle.finance"
     override val kotlinClass = Money::class
@@ -114,7 +114,8 @@ class MoneyType : VelleType<Money> {
         Operator<BigDecimal, Money, Money>("*", "decimal", qualifiedName, qualifiedName, { a, b -> b * a }, foldStepsCommute = false, foldIdempotent = false),
     )
 
-    override val sum = Sum(Money.ZERO) { a, b -> a + b }
+    override val zero: Money = Money.ZERO
+    override fun plus(a: Money, b: Money): Money = a + b
 
     override val samples = Samples(
         sample = Money.of("12.50"),
@@ -129,9 +130,9 @@ class MoneyType : VelleType<Money> {
 - `kotlinClass` is the class a value has everywhere Kotlin sees it: in the generated input classes, in model objects, in a store's row. A committed value of any other class is refused before any rule runs, the same way a missing required field is, with no `never` behind it.
 - `literals` says which constants a spec may write where a `Money` is expected: a number, a quoted text, both, or neither. The reader turns the constant into a value, or throws `LiteralRejected` with the reason the compiler reports at the constant. `Money` reads `12.50` and refuses `0.125`.
 - `canonical` gives one text per distinct value. The compiler uses it to tell values apart, to check the type's other claims, and as the text that stands for the value wherever the runtime needs one. `display`, which defaults to it, is how a value reads in a rejection message.
-- `ordering` is the capability behind `<`, `<=`, `>`, `>=`, `max`, `min`, a selector's `by`, and a query's order. `null` here refuses every one of those for the type.
+- `ordering`, from `Ordered<Money>`, is the capability behind `<`, `<=`, `>`, `>=`, `max`, `min`, a selector's `by`, and a query's order. A class that does not implement `Ordered` refuses every one of those for the type.
 - `operators` is the arithmetic the type takes part in, one line per combination of left type, operator, right type, and result. Types are named by qualified name: a builtin by its keyword, a registered type by `namespace.name`. Both directions of a mixed operation are separate lines, as `Money * decimal` and `decimal * Money` are above. An operator returns a value for every pair of its operands and has no way to refuse one; an exception thrown inside it fails the whole transaction and is a bug in the type. An operation that is only sometimes defined is not an operator. Each line carries two facts about folding a value into itself, `x = x + y` ([§19](Reference-19-Self-referential-folds-and-tolerates)): whether applying two steps in either order gives the same result, and whether applying one step twice changes nothing. `+` on `Money` has the first and not the second, so a rule may fold a balance at a scheduled tick, and an unguarded fold after a commit is still refused.
-- `sum` is what `sum(collection, field)` does over a field of the type: the value of an empty collection, and how two values add. `null` refuses `sum` on the type.
+- `zero` and `plus`, from `Summable<Money>`, are what `sum(collection, field)` does over a field of the type: the value of an empty collection, and how two values add. A class that does not implement `Summable` refuses `sum` on the type.
 - `samples` is what the generated tests need: a value to commit, the nearest values below and above a given one, and the Kotlin source that constructs a value in a test file. `below` and `above` return `null` at the type's edge. For a type with discrete values the step is one unit, a cent for `Money`; for a continuous one any strictly smaller or larger value serves. For a `never (LineItem where price < 0)` the generated test commits `below(0)` expecting refusal and `0` expecting acceptance.
 
 Two members have defaults: `validate` returns the reason a well-formed-looking value is still refused at the boundary, or `null`, and defaults to accepting; `equal` defaults to Kotlin `==`. A reason from `validate` is about the value's form, a blank code or an impossible date. A business rule such as "a balance is never negative" is a `never` in the spec, where the product owner can read it, never a line in `validate`.
@@ -171,9 +172,9 @@ The field is the type's own class everywhere. The input class for `LineItem` tak
 
 ## What the compiler checks
 
-- **Rejects** a registered type whose name is not a capitalized identifier or is a builtin name, two types claiming one qualified name, and a name in a spec that two registered types share or that a shape also uses, naming the `uses` line to write ([checks.md, E1](checks#e1--registered-type-names)).
+- **Rejects** a registered type whose name is not a capitalized identifier or is a builtin name, two types claiming one qualified name, and a name in a spec that two registered types share or that a shape also uses, naming the `uses` line to write ([checks.md, E1](checks#e1--registered-type-and-function-names)).
 - **Rejects** a registered type whose claims fail on its own samples: an ordering that disagrees with its below and above values, a reader that does not read its own canonical text, an operator fact its samples contradict ([checks.md, E2](checks#e2--a-types-claims-hold-on-its-samples)).
-- **Rejects** a spec that asks a type for a capability it does not declare: `<` on a type with no ordering, `+` with no such operator line, `sum` with no sum, naming the Kotlin class where the capability would be added ([checks.md, E3](checks#e3--a-capability-the-type-does-not-declare)).
+- **Rejects** a spec that asks a type for a capability it does not implement: `<` on a type with no ordering, `+` with no such operator line, `sum` with no sum, a function whose parameter asks for an interface the type lacks, naming the Kotlin class and the interface to implement ([checks.md, E3](checks#e3--a-capability-the-type-does-not-declare)).
 - **Refuses to start** a store that holds a type it has no binding for, or whose binding does not round-trip the type's samples ([checks.md, E4](checks#e4--a-store-holds-every-type-it-stores)).
 - **Rejects** a constant the type's reader refuses, a constant of a form the type does not read, a comparison between two different types, and a value of a builtin type assigned to a field of an extension type ([checks.md, F2](checks#f2--type-checking)).
 - **Rejects** a name in type position that is neither a builtin, nor a shape after `one` or `many`, nor a registered type in scope ([checks.md, F1](checks#f1--name-resolution-and-casing)).
@@ -183,6 +184,7 @@ The field is the type's own class everywhere. The input class for `LineItem` tak
 - [§5 Scalars](Reference-05-Scalars), the builtin types an extension type stands beside.
 - [§10 Predicate expressions](Reference-10-Predicate-expressions), where comparisons and constants are read.
 - [§19 Self-referential folds](Reference-19-Self-referential-folds-and-tolerates), what the two operator facts buy a rule.
+- [Extension functions](Extension-functions), a function written against the capabilities a type implements.
 - [Binding API](Binding-API), the generated Kotlin the type appears in.
 - [Store API](Store-API), the whole contract a store implements, and where the binding sits in it.
 - [`evaluation.md`](evaluation), the boundary and the store contract.

@@ -1,5 +1,6 @@
 package velle
 
+import velle.ext.VelleFunction
 import velle.ext.VelleType
 
 /**
@@ -30,6 +31,11 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
 
     /** Names two registered types share with no `uses` line picking one: naming one is E1. */
     private val ambiguousTypeNames: Map<String, List<VelleType<*>>>
+
+    /** The function each name a spec calls resolves to, built as [typeScope] is: `uses` first,
+     *  then every builtin and registered function under its own name. */
+    val functionScope: Map<String, VelleFunction>
+    private val ambiguousFunctionNames: Map<String, List<VelleFunction>>
 
     /** The spec's name for a registered type, for diagnostics and generated prose. */
     fun specNameOf(type: VelleType<*>): String =
@@ -64,6 +70,9 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
         val (scope, ambiguous) = resolveTypeScope()
         typeScope = scope
         ambiguousTypeNames = ambiguous
+        val (fscope, fambiguous) = resolveFunctionScope()
+        functionScope = fscope
+        ambiguousFunctionNames = fambiguous
         val shapeNames = rawDecls.mapNotNull { (it as? ShapeDecl)?.name ?: (it as? RefinementDecl)?.name }.toSet()
         fun manyOfType(t: TypeRef, tolerates: String? = null): TypeRef =
             if (t is RelType && t.many && t.shape !in shapeNames && t.shape in scope)
@@ -182,7 +191,8 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
         for (u in uses) {
             val t = registry[u.qualified]
             if (t == null) {
-                error("F1", "`uses ${u.qualified}`: no registered type has that name" +
+                if (registry.function(u.qualified) != null) continue // a function; resolveFunctionScope reads it
+                error("F1", "`uses ${u.qualified}`: no registered type or function has that name" +
                     (registry.named(u.qualified.substringAfterLast('.')).takeIf { it.isNotEmpty() }
                         ?.let { c -> "; the registry has ${c.joinToString { "'${it.qualifiedName}'" }}" } ?: ""))
                 continue
@@ -201,6 +211,40 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
             else ambiguous[name] = types
         }
         return scope to ambiguous
+    }
+
+    private fun resolveFunctionScope(): Pair<Map<String, VelleFunction>, Map<String, List<VelleFunction>>> {
+        val scope = linkedMapOf<String, VelleFunction>()
+        val picked = mutableSetOf<String>()
+        for (u in uses) {
+            val f = registry.function(u.qualified) ?: continue
+            if (u.name in TypeRegistry.BUILTIN_FUNCTION_NAMES)
+                error("E1", "`uses ${u.qualified} as ${u.name}`: '${u.name}' is a builtin function name (Reference §5)")
+            val prior = scope.put(u.name, f)
+            if (prior != null && prior !== f)
+                error("E1", "two `uses` lines bring '${prior.qualifiedName}' and '${f.qualifiedName}' into scope as '${u.name}'")
+            picked.add(f.qualifiedName)
+        }
+        val ambiguous = linkedMapOf<String, List<VelleFunction>>()
+        for ((name, fns) in registry.functions.values.filter { it.qualifiedName !in picked }.groupBy { it.name }) {
+            if (name in scope) continue
+            if (fns.size == 1) scope[name] = fns.single()
+            else ambiguous[name] = fns
+        }
+        return scope to ambiguous
+    }
+
+    /** Resolves the name a call uses (Reference §5): a builtin or registered function, with
+     *  F2/E1 and null when nothing in scope has the name. */
+    fun resolveFunctionName(name: String, at: String): VelleFunction? {
+        functionScope[name]?.let { return it }
+        ambiguousFunctionNames[name]?.let { fns ->
+            error("E1", "$at: '$name' names ${fns.size} registered functions (${fns.joinToString { "'${it.qualifiedName}'" }}); " +
+                "add `uses <one of them>` to pick one")
+            return null
+        }
+        error("F2", "$at: no builtin or registered function is named '$name' (Reference §5)")
+        return null
     }
 
     /** Resolves a name in type position that is not a builtin (Reference §5): a registered

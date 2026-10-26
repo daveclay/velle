@@ -3,8 +3,9 @@ package velle.finance
 import velle.ext.LiteralRejected
 import velle.ext.Literals
 import velle.ext.Operator
+import velle.ext.Ordered
 import velle.ext.Samples
-import velle.ext.Sum
+import velle.ext.Summable
 import velle.ext.VelleType
 import java.math.BigDecimal
 
@@ -17,15 +18,15 @@ import java.math.BigDecimal
  * - **Constants.** A number constant where a `Money` is expected (`balance < 0`,
  *   `initially 0`, `amount <= 0`) reads as an amount; more than two decimal places
  *   is refused at compile time.
- * - **Ordered**, so `< <= > >=`, `max`/`min`, a selector's `by`, and a query order
- *   all apply.
+ * - **Ordered** (`velle.ext.Ordered`), so `< <= > >=`, `max`/`min`, a selector's `by`,
+ *   and a query order all apply.
  * - **Arithmetic**: `Money + Money`, `Money - Money`, `Money * decimal`, and
  *   `decimal * Money`. The two additive steps commute, so a rule may fold a balance
  *   on a tick cadence; neither is idempotent, so an unguarded `after commit` fold
  *   is still refused (Reference §19).
- * - **Summable**: `sum(lineItems, amount)` is a `Money`.
+ * - **Summable** (`velle.ext.Summable`): `sum(lineItems, amount)` is a `Money`.
  */
-class MoneyType : VelleType<Money> {
+class MoneyType : VelleType<Money>, Ordered<Money>, Summable<Money> {
     override val name = "Money"
     override val namespace = "velle.finance"
     override val kotlinClass = Money::class
@@ -46,7 +47,8 @@ class MoneyType : VelleType<Money> {
         Operator<BigDecimal, Money, Money>("*", "decimal", qualifiedName, qualifiedName, { a, b -> b * a }, foldStepsCommute = false, foldIdempotent = false),
     )
 
-    override val sum = Sum(Money.ZERO) { a, b -> a + b }
+    override val zero: Money = Money.ZERO
+    override fun plus(a: Money, b: Money): Money = a + b
 
     override val samples = Samples(
         sample = Money.of("12.50"),

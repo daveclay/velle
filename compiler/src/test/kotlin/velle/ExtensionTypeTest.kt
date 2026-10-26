@@ -4,8 +4,9 @@ import velle.ext.AltCents
 import velle.ext.Cents
 import velle.ext.Literals
 import velle.ext.Operator
+import velle.ext.Ordered
 import velle.ext.Samples
-import velle.ext.Sum
+import velle.ext.Summable
 import velle.ext.Badge
 import velle.ext.TestMoney
 import velle.ext.TestBadge
@@ -55,7 +56,7 @@ class ExtensionTypeTest {
         assertTrue(e1.any { "'velle.nowhere.Thing', which is neither a builtin nor a registered type" in it }, e1.toString())
     }
 
-    private class LyingOrder : VelleType<Cents> by TestMoney() {
+    private class LyingOrder : VelleType<Cents> by TestMoney(), Ordered<Cents> {
         override val name = "Price"
         override val operators = emptyList<Operator<*, *, *>>()
         override val ordering: Comparator<Cents> = compareByDescending { it.cents } // below(v) now orders above v
@@ -64,10 +65,11 @@ class ExtensionTypeTest {
         override val name = "Price"
         override val operators = listOf(Operator<Cents, Cents, Cents>("+", qualifiedName, qualifiedName, qualifiedName, { a, b -> Cents(a.cents + b.cents) }, foldStepsCommute = true, foldIdempotent = true))
     }
-    private class LyingSum : VelleType<Cents> by TestMoney() {
+    private class LyingSum : VelleType<Cents> by TestMoney(), Summable<Cents> {
         override val name = "Price"
         override val operators = emptyList<Operator<*, *, *>>()
-        override val sum = Sum(Cents(1)) { a, b -> Cents(a.cents + b.cents) } // zero is not a zero
+        override val zero = Cents(1) // not a zero
+        override fun plus(a: Cents, b: Cents) = Cents(a.cents + b.cents)
     }
     private class LyingLiteral : VelleType<Cents> by TestMoney() {
         override val name = "Price"
@@ -88,7 +90,7 @@ class ExtensionTypeTest {
     @Test
     fun `the default registry carries the test fixtures and passes its own checks`() {
         assertEquals(emptyList(), TypeRegistry.default.diagnostics)
-        assertEquals(setOf("velle.test.Price", "velle.testalt.Price", "velle.test.Badge", "velle.finance.Money"), TypeRegistry.default.byQualifiedName.keys)
+        assertEquals(setOf("velle.test.Price", "velle.testalt.Price", "velle.test.Badge", "velle.test.Day", "velle.finance.Money"), TypeRegistry.default.byQualifiedName.keys)
     }
 
     // ── naming a type (D1: `uses`) ───────────────────────────────────────────
@@ -143,7 +145,7 @@ class ExtensionTypeTest {
         val m3 = messages("act Account { label: one Badge }")
         assertTrue("'Badge' is a registered type, not a shape; a field of it is `label: Badge`" in m3, m3)
         val m4 = messages("uses velle.finance.Price\nact Account { balance: Price }")
-        assertTrue("`uses velle.finance.Price`: no registered type has that name; the registry has 'velle.test.Price', 'velle.testalt.Price'" in m4, m4)
+        assertTrue("`uses velle.finance.Price`: no registered type or function has that name; the registry has 'velle.test.Price', 'velle.testalt.Price'" in m4, m4)
     }
 
     // ── capabilities (D2, D4; E3) ────────────────────────────────────────────

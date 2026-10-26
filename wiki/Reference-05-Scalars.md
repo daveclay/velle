@@ -49,7 +49,7 @@ uses velle.finance.Money              -- this library's Money, when two librarie
 uses velle.finance.Money as Cash      -- the same type, written Cash in this spec
 ```
 
-An extension type is one value, never a business concept with parts. An amount and its currency are two fields of a shape, where the product owner reads the rules about them. A path never reaches into a value of the type: `price.currency` is a field of a shape or nothing. A field may hold several of the type's values with `many` (below), compared by the type's own equality; `one` takes a shape only. Duration arithmetic stays on `Date` and `DateTime`. Writing a type, and the piece that lets a store hold it, is the [Extension types](Extension-types) guide.
+An extension type is one value, never a business concept with parts. An amount and its currency are two fields of a shape, where the product owner reads the rules about them. A path never reaches into a value of the type: `price.currency` is a field of a shape or nothing. A field may hold several of the type's values with `many` (below), compared by the type's own equality; `one` takes a shape only. Duration arithmetic stays on `Date` and `DateTime`. Writing a type, and the piece that lets a store hold it, is the [Extension types](Extension-types) guide. A `uses` line picks or renames a registered function the same way, with a lowercase name: `uses velle.finance.roundToCents as cents` ([Extension functions](Extension-functions)).
 
 ## Collections of values (`many`)
 
@@ -95,12 +95,12 @@ A collection of values has no members to reach into, so it cannot be filtered wi
 
 ## The built-in functions
 
-The list is fixed. A spec may call only these:
+A spec may call these, and any function a library on the classpath registers ([Extension functions](Extension-functions)). The functions below that take parentheses are registered functions Velle ships, written the way an engineer writes one, so a registered type that implements the capability a function asks for is accepted by it.
 
 - `count`, `sum`, `latest`, `first`, for collections ([§10](Reference-10-Predicate-expressions)). `sum` applies to a number, a duration, and to an extension type that declares how its values add.
 - `contains`, `starts with`, `ends with`, `like`, `matches`, for text ([§10](Reference-10-Predicate-expressions)). `contains` also tests whether a `many` of values holds a value (above, "Collections of values"), as `in` does the other way round.
-- `lowercase`, `uppercase`, `trim`, `length`, each taking one text. `length` is a whole number.
-- `max`, `min`. They apply to numbers, to any extension type that declares an ordering, and to a `many` of values of any ordered type.
+- `lowercase`, `uppercase`, `trim`, `length`, each taking one text. `length` is a whole number. A function called on an absent value is absent.
+- `max`, `min`. They apply to two or more values of one ordered type, numbers, dates, text, or any extension type that implements `Ordered`, and to a `many` of values of any ordered type, where the result is absent when the `many` is empty.
 - `abs`, taking one number or one duration, gives it without its sign: `abs(due - today)` is how far a date is from today either way.
 - `year`, `month`, `day`, `dayOfWeek`, each taking one `Date` or one `DateTime`, and `hour`, `minute`, each taking one `time` or one `DateTime`. Each is a whole number. `dayOfWeek` counts Monday as 1 and Sunday as 7, so `dayOfWeek(due) >= 6` is a weekend. The parts of a `DateTime` are read in the zone the system runs in, the same zone that gives `today` its date.
 - `%`, the remainder after division, between two numbers: `n % 2 == 0` is even. The result keeps the sign of the left side.
@@ -162,9 +162,9 @@ An act declared `by` carries one more system-filled property: the actor who comm
 
 ## What the compiler checks
 
-- **Rejects** a call to a function outside the list above, a text function with anything but one text argument, `abs` on anything but a number or a duration, a date part on anything but a `Date` or a `DateTime`, `hour` or `minute` on anything but a `time` or a `DateTime`, `%` on anything but numbers, an operator or comparison on mismatched types, an ordered comparison on a `uuid` or a `boolean`, and duration arithmetic on anything but a `Date`, a `DateTime`, or a `duration` ([checks.md, F2](checks#f2--type-checking)).
-- **Rejects** a name in type position that is neither a builtin, nor a shape after `one` or `many`, nor an extension type in scope; a name two registered types share with no `uses` line picking one; and a shape named like an extension type in scope, naming the `uses` line to write ([checks.md, F1](checks#f1--name-resolution-and-casing), [E1](checks#e1--registered-type-names)).
-- **Rejects** an operator, comparison, `sum`, `max`, `min`, or selector `by` on an extension type that does not declare the capability, naming the Kotlin class ([checks.md, E3](checks#e3--a-capability-the-type-does-not-declare)).
+- **Rejects** a call to a name no builtin or registered function has, a call that none of the function's signatures accepts (a text function with anything but one text argument, `abs` on anything but a number or a duration, a date part on anything but a value with a calendar date, `hour` or `minute` on anything but a value with a time of day, `max` or `min` on values of two types), `%` on anything but numbers, an operator or comparison on mismatched types, an ordered comparison on a `uuid` or a `boolean`, and duration arithmetic on anything but a `Date`, a `DateTime`, or a `duration` ([checks.md, F2](checks#f2--type-checking)).
+- **Rejects** a name in type position that is neither a builtin, nor a shape after `one` or `many`, nor an extension type in scope; a name two registered types share with no `uses` line picking one; and a shape named like an extension type in scope, naming the `uses` line to write ([checks.md, F1](checks#f1--name-resolution-and-casing), [E1](checks#e1--registered-type-and-function-names)).
+- **Rejects** an operator, comparison, `sum`, `max`, `min`, selector `by`, or registered function on an extension type that does not implement the capability it asks for, naming the Kotlin class and the interface ([checks.md, E3](checks#e3--a-capability-the-type-does-not-declare)).
 - **Rejects** a `where`, a `sum` by field, or a `by` over a collection of values; `sum` with no field over anything but a `many` of numbers or durations; and `max` or `min` over a `many` of values with no order ([checks.md, F2](checks#f2--type-checking)).
 - **Rejects** `tolerates duplication` on a `many` of records ([checks.md, F3](checks#f3--position-rules)).
 - **Rejects** a rule that appends to a collection tolerating duplication on a schedule, unless the property also tolerates reordering ([checks.md, V8](checks#v8--fold-obligations-and-tolerance-coverage)).

@@ -643,7 +643,7 @@ object Codegen {
             is VType.Num -> "NumField"
             // an extension type (Reference §5): ordered comparisons only when the type declares an ordering
             is VType.Ext -> model.registry[t.qualifiedName]?.let { x ->
-                (if (x.ordering != null) "OrderedExtField" else "ExtField") + "<${x.kotlinClass.qualifiedName}>"
+                (if (x.orderingOrNull != null) "OrderedExtField" else "ExtField") + "<${x.kotlinClass.qualifiedName}>"
             }
             VType.Text -> "TextField"
             VType.Bool -> "BoolField"

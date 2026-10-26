@@ -19,7 +19,7 @@ data class Cents(val cents: Long) {
     }
 }
 
-class TestMoney : VelleType<Cents> {
+class TestMoney : VelleType<Cents>, Ordered<Cents>, Summable<Cents> {
     override val name = "Price"
     override val namespace = "velle.test"
     override val kotlinClass = Cents::class
@@ -35,7 +35,8 @@ class TestMoney : VelleType<Cents> {
         Operator<Cents, BigDecimal, Cents>("*", qualifiedName, "decimal", qualifiedName,
             { a, b -> Cents(BigDecimal(a.cents).multiply(b).setScale(0, RoundingMode.HALF_EVEN).longValueExact()) }, foldStepsCommute = false, foldIdempotent = false),
     )
-    override val sum = Sum(Cents(0)) { a, b -> Cents(a.cents + b.cents) }
+    override val zero = Cents(0)
+    override fun plus(a: Cents, b: Cents) = Cents(a.cents + b.cents)
     override val samples = Samples(
         sample = Cents(1250),
         below = { Cents(it.cents - 1) },
@@ -46,7 +47,7 @@ class TestMoney : VelleType<Cents> {
 
 data class AltCents(val cents: Long)
 
-class OtherMoney : VelleType<AltCents> {
+class OtherMoney : VelleType<AltCents>, Ordered<AltCents> {
     override val name = "Price"
     override val namespace = "velle.testalt"
     override val kotlinClass = AltCents::class
@@ -54,7 +55,6 @@ class OtherMoney : VelleType<AltCents> {
     override fun canonical(value: AltCents) = BigDecimal(value.cents).movePointLeft(2).toPlainString()
     override val ordering: Comparator<AltCents> = compareBy { it.cents }
     override val operators: List<Operator<*, *, *>> = emptyList()
-    override val sum: Sum<AltCents>? = null
     override val samples = Samples(sample = AltCents(100), kotlinSource = { "velle.ext.AltCents(${it.cents})" })
 }
 
@@ -70,8 +70,6 @@ class TestBadge : VelleType<Badge> {
     })
     override fun validate(value: Badge): String? = if (value.text.isBlank()) "a badge is never blank" else null
     override fun canonical(value: Badge) = value.text
-    override val ordering: Comparator<Badge>? = null
     override val operators: List<Operator<*, *, *>> = emptyList()
-    override val sum: Sum<Badge>? = null
     override val samples = Samples(sample = Badge("urgent"), kotlinSource = { "velle.ext.Badge(\"${it.text}\")" })
 }

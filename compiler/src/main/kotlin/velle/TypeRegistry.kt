@@ -2,34 +2,47 @@ package velle
 
 import velle.ext.LiteralRejected
 import velle.ext.Operator
+import velle.ext.Ordered
+import velle.ext.Summable
+import velle.ext.VelleFunction
 import velle.ext.VelleType
+import velle.ext.builtin.BuiltinFunctions
+import velle.ext.builtin.BuiltinTypes
 import java.math.BigDecimal
-import java.time.Instant
-import java.time.LocalDate
 import java.util.ServiceLoader
+import kotlin.reflect.KClass
 
 /**
- * The extension types a process knows (OQ65): every `velle.ext.VelleType` named
- * in `META-INF/services/velle.ext.VelleType` on the classpath, loaded once and
- * handed to every [Model]. A registry with no extensions is the builtin
- * behaviour exactly.
+ * The types and functions a process knows: Velle's own builtins
+ * (`velle.ext.builtin`), then every `velle.ext.VelleType` and
+ * `velle.ext.VelleFunction` named in `META-INF/services` on the classpath,
+ * loaded once and handed to every [Model]. The builtins are implementations of
+ * the same two interfaces, registered first; a registry with no extensions is
+ * the builtin behaviour exactly.
  *
  * The registry is checked before any spec is (checks.md, E-series):
- * - E1: each type's name is a capitalized identifier and not a builtin, its
- *   namespace is a dotted lowercase path, and `namespace.name` is unique; no
- *   two types declare the same operator line.
- * - E2: each type's claims hold on its own samples.
+ * - E1: each type's name is a capitalized identifier and not a builtin, each
+ *   function's a lowercase identifier and not a builtin, every namespace is a
+ *   dotted lowercase path, and `namespace.name` is unique; no two types declare
+ *   the same operator line.
+ * - E2: each type's claims hold on its own samples, the builtins' included.
  *
- * The builtin scalars are rows of the same tables where the compiler consults
- * them generically: [foldFacts] answers V8 for `decimal + ...` and `Money + ...`
- * alike; [isBuiltin] and [BUILTIN_NAMES] are the closed list Reference §5 gives.
+ * [byQualifiedName] holds the extensions only, since a spec names a builtin by
+ * its keyword and never by `uses`; [builtins] holds the builtins by keyword;
+ * [typeFor] answers for both from a [VType].
  */
-class TypeRegistry(types: List<VelleType<*>>) {
+class TypeRegistry(types: List<VelleType<*>>, functions: List<VelleFunction> = emptyList()) {
 
     val diagnostics: List<Diagnostic>
 
-    /** Every registered type, by `namespace.name`. */
+    /** Every registered extension type, by `namespace.name`. */
     val byQualifiedName: Map<String, VelleType<*>>
+
+    /** The builtin types, by the keyword a spec writes. */
+    val builtins: Map<String, VelleType<*>> = BuiltinTypes.byName
+
+    /** Every function, builtin and registered, by `namespace.name`. */
+    val functions: Map<String, VelleFunction>
 
     /** The operator table across every registered type, keyed (left, op, right). */
     private val operators: Map<Triple<String, String, String>, Operator<*, *, *>>
@@ -38,6 +51,7 @@ class TypeRegistry(types: List<VelleType<*>>) {
         val diags = mutableListOf<Diagnostic>()
         val byQ = linkedMapOf<String, VelleType<*>>()
         for (t in types) {
+            if (t in BuiltinTypes.all) continue
             if (!NAME.matches(t.name))
                 diags.add(Diagnostic("E1", "registered type '${t.qualifiedName}' (${t::class.qualifiedName}): " +
                     "its name '${t.name}' is not a capitalized identifier"))
@@ -53,6 +67,35 @@ class TypeRegistry(types: List<VelleType<*>>) {
                     "${prior::class.qualifiedName} and ${t::class.qualifiedName}"))
         }
         byQualifiedName = byQ
+        val fns = linkedMapOf<String, VelleFunction>()
+        for (f in BuiltinFunctions.all) fns[f.qualifiedName] = f
+        for (f in functions) {
+            val where = "registered function '${f.qualifiedName}' (${f::class.qualifiedName})"
+            if (!FUNCTION_NAME.matches(f.name))
+                diags.add(Diagnostic("E1", "$where: its name '${f.name}' is not a lowercase identifier"))
+            else if (f.name in BUILTIN_FUNCTION_NAMES)
+                diags.add(Diagnostic("E1", "$where: '${f.name}' is a builtin function name (Reference §5)"))
+            else if (f.name in RESERVED_FUNCTION_NAMES)
+                diags.add(Diagnostic("E1", "$where: '${f.name}' is a language construct with its own syntax (Reference §10)"))
+            if (!NAMESPACE.matches(f.namespace))
+                diags.add(Diagnostic("E1", "$where: its namespace '${f.namespace}' is not a dotted lowercase path such as 'velle.finance'"))
+            if (f.signatures.isEmpty())
+                diags.add(Diagnostic("E1", "$where: declares no signature"))
+            for (sig in f.signatures) {
+                sig.parameters.forEachIndexed { i, prm ->
+                    if (prm.variadic && i != sig.parameters.lastIndex)
+                        diags.add(Diagnostic("E1", "$where: parameter '${prm.name}' is variadic but not last"))
+                    (prm.accepts as? velle.ext.Accepts.SameAs)?.let { sa ->
+                        if (sa.index >= i) diags.add(Diagnostic("E1", "$where: parameter '${prm.name}' is the same type as parameter ${sa.index}, which is not before it"))
+                    }
+                }
+            }
+            val prior = fns.put(f.qualifiedName, f)
+            if (prior != null)
+                diags.add(Diagnostic("E1", "two registered functions claim '${f.qualifiedName}': " +
+                    "${prior::class.qualifiedName} and ${f::class.qualifiedName}"))
+        }
+        this.functions = fns
         val ops = linkedMapOf<Triple<String, String, String>, Operator<*, *, *>>()
         for (t in byQ.values) for (o in t.operators) {
             val key = Triple(o.left, o.op, o.right)
@@ -65,9 +108,44 @@ class TypeRegistry(types: List<VelleType<*>>) {
                         "'${o.left} ${o.op} ${o.right} -> ${o.result}' over '$operand', which is neither a builtin nor a registered type"))
         }
         operators = ops
-        if (diags.isEmpty()) for (t in byQ.values) diags.addAll(ClaimsCheck(t, this).run())
+        if (diags.isEmpty()) for (t in BuiltinTypes.all + byQ.values) diags.addAll(ClaimsCheck(t, this).run())
         diagnostics = diags
     }
+
+    /** The one function with this `namespace.name`, or null. */
+    fun function(qualifiedName: String): VelleFunction? = functions[qualifiedName]
+
+    /** The functions that share the unqualified [name], the builtin among them. */
+    fun functionsNamed(name: String): List<VelleFunction> = functions.values.filter { it.name == name }
+
+    /** The type object behind a scalar [VType]: a builtin by keyword or an extension by
+     *  qualified name; null for anything that is not a scalar. An optional is its inner type. */
+    fun typeFor(t: VType?): VelleType<*>? = when (t) {
+        is VType.Optional -> typeFor(t.inner)
+        is VType.Num -> builtins[t.name]
+        is VType.Ext -> byQualifiedName[t.qualifiedName]
+        VType.Text -> builtins["text"]
+        VType.Bool -> builtins["boolean"]
+        VType.DateT -> builtins["Date"]
+        VType.DateTimeT -> builtins["DateTime"]
+        VType.UuidT -> builtins["uuid"]
+        VType.DurationT -> builtins["duration"]
+        VType.TimeT -> builtins["time"]
+        VType.BytesT -> builtins["bytes"]
+        else -> null
+    }
+
+    /** The [VType] of a type object: a builtin's keyword type or [VType.Ext]. */
+    fun vtypeOf(type: VelleType<*>): VType =
+        if (type.namespace == "velle" && builtins[type.name] === type) typeNamed(type.name)!! else VType.Ext(type.qualifiedName)
+
+    /** The type whose class is exactly [k], builtin or extension; null when none is registered. */
+    fun typeOfClass(k: KClass<*>): VelleType<*>? =
+        (BuiltinTypes.all + byQualifiedName.values).firstOrNull { it::class == k }
+
+    /** Every type, builtin first, that is an instance of [k]: a type's own class or a capability interface. */
+    fun typesSatisfying(k: KClass<*>): List<VelleType<*>> =
+        (BuiltinTypes.all + byQualifiedName.values).filter { k.isInstance(it) }
 
     operator fun get(qualifiedName: String): VelleType<*>? = byQualifiedName[qualifiedName]
 
@@ -108,36 +186,48 @@ class TypeRegistry(types: List<VelleType<*>>) {
 
     companion object {
         /** The builtin scalars (Reference §5), by the name a spec writes. */
-        val BUILTIN_NAMES: Set<String> = setOf("text", "integer", "long", "decimal", "double", "boolean", "Date", "DateTime", "uuid", "duration", "time", "bytes")
+        val BUILTIN_NAMES: Set<String> = BuiltinTypes.byName.keys
         val NUMBER_NAMES: Set<String> = setOf("integer", "long", "decimal", "double")
+        /** The builtin functions (Reference §5), by the name a spec calls. */
+        val BUILTIN_FUNCTION_NAMES: Set<String> = BuiltinFunctions.all.map { it.name }.toSet()
+        /** Names the parser reads as constructs with their own syntax, never as a function call. */
+        val RESERVED_FUNCTION_NAMES: Set<String> = setOf("count", "sum", "latest", "first", "exists", "randomUUID")
 
         private val NAME = Regex("[A-Z][A-Za-z0-9]*")
+        private val FUNCTION_NAME = Regex("[a-z][A-Za-z0-9]*")
         private val NAMESPACE = Regex("[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*")
 
         fun isBuiltin(name: String) = name in BUILTIN_NAMES
 
+        /** The [VType] a builtin keyword names, or null. */
+        fun typeNamed(name: String): VType? = when (name) {
+            in NUMBER_NAMES -> VType.Num(name)
+            "text" -> VType.Text
+            "boolean" -> VType.Bool
+            "Date" -> VType.DateT
+            "DateTime" -> VType.DateTimeT
+            "uuid" -> VType.UuidT
+            "duration" -> VType.DurationT
+            "time" -> VType.TimeT
+            "bytes" -> VType.BytesT
+            else -> null
+        }
+
         /** A registry with no extensions: the builtin behaviour. */
         val EMPTY = TypeRegistry(emptyList())
 
-        /** Every type on the classpath, loaded once per process. */
+        /** Every type and function on the classpath, loaded once per process. */
         val default: TypeRegistry by lazy { load() }
 
         fun load(loader: ClassLoader = TypeRegistry::class.java.classLoader): TypeRegistry =
-            TypeRegistry(ServiceLoader.load(VelleType::class.java, loader).toList())
+            TypeRegistry(
+                ServiceLoader.load(VelleType::class.java, loader).toList(),
+                ServiceLoader.load(VelleFunction::class.java, loader).toList(),
+            )
 
         /** Sample values of a builtin or registered type, for E2's checks over mixed operators. */
-        internal fun samplesOf(name: String, registry: TypeRegistry): List<Any> = when (name) {
-            "text" -> listOf("a", "b")
-            "boolean" -> listOf(true, false)
-            "Date" -> listOf(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 3, 1))
-            "DateTime" -> listOf(Instant.parse("2026-01-15T00:00:00Z"), Instant.parse("2026-03-01T00:00:00Z"))
-            "uuid" -> listOf(java.util.UUID.fromString("00000000-0000-4000-8000-000000000001"), java.util.UUID.fromString("00000000-0000-4000-8000-000000000002"))
-            "duration" -> listOf(java.time.Duration.ofDays(1), java.time.Duration.ofDays(2))
-            "time" -> listOf(java.time.LocalTime.of(9, 30), java.time.LocalTime.of(17, 0))
-            "bytes" -> listOf(byteArrayOf(1, 2), byteArrayOf(3))
-            in NUMBER_NAMES -> listOf(BigDecimal("2"), BigDecimal("3"))
-            else -> registry[name]?.let { ClaimsCheck.sampleSet(it) } ?: emptyList()
-        }
+        internal fun samplesOf(name: String, registry: TypeRegistry): List<Any> =
+            (registry.builtins[name] ?: registry[name])?.let { ClaimsCheck.sampleSet(it) } ?: emptyList()
     }
 }
 
@@ -167,9 +257,17 @@ fun VelleType<*>.readLiteral(number: BigDecimal?, text: String?): LiteralRead {
 @Suppress("UNCHECKED_CAST")
 fun <T : Any> VelleType<T>.equalAny(a: Any, b: Any): Boolean = equal(a as T, b as T)
 
+/** The type's ordering when it implements [Ordered], else null. */
+@Suppress("UNCHECKED_CAST")
+val <T : Any> VelleType<T>.orderingOrNull: Comparator<T>? get() = (this as? Ordered<T>)?.ordering
+
+/** The type as [Summable] when it implements it, else null. */
+@Suppress("UNCHECKED_CAST")
+val <T : Any> VelleType<T>.summableOrNull: Summable<T>? get() = this as? Summable<T>
+
 @Suppress("UNCHECKED_CAST")
 fun <T : Any> VelleType<T>.compareAny(a: Any, b: Any): Int =
-    (ordering ?: throw VelleRuntimeError("'$name' declares no ordering")).compare(a as T, b as T)
+    (orderingOrNull ?: throw VelleRuntimeError("'$name' declares no ordering")).compare(a as T, b as T)
 
 @Suppress("UNCHECKED_CAST")
 fun <T : Any> VelleType<T>.canonicalAny(v: Any): String = canonical(v as T)
@@ -191,7 +289,7 @@ fun <T : Any> VelleType<T>.aboveAny(v: Any): Any? = samples.above?.invoke(v as T
 
 @Suppress("UNCHECKED_CAST")
 fun <T : Any> VelleType<T>.sumAny(a: Any, b: Any): Any =
-    (sum ?: throw VelleRuntimeError("'$name' declares no sum")).plus(a as T, b as T)
+    (summableOrNull ?: throw VelleRuntimeError("'$name' declares no sum")).plus(a as T, b as T)
 
 /**
  * E2: a type's claims checked on the values the type itself hands over. The
@@ -215,7 +313,7 @@ private class ClaimsCheck<T : Any>(private val type: VelleType<T>, private val r
         if (type.canonical(sample).isEmpty()) fail("canonical(sample) is empty")
 
         val values = sampleSet(type) as List<T>
-        val ordering = type.ordering
+        val ordering = type.orderingOrNull
         if (ordering != null) {
             if (ordering.compare(sample, sample) != 0) fail("ordering.compare(sample, sample) is not 0")
             s.below?.invoke(sample)?.let { b ->
@@ -255,7 +353,7 @@ private class ClaimsCheck<T : Any>(private val type: VelleType<T>, private val r
             }
         }
 
-        type.sum?.let { sum ->
+        type.summableOrNull?.let { sum ->
             if (!type.equal(sum.plus(sum.zero, sample), sample)) fail("sum: zero + sample is not the sample")
             for (a in values) for (b in values)
                 if (!type.equal(sum.plus(a, b), sum.plus(b, a)))
@@ -286,7 +384,7 @@ private class ClaimsCheck<T : Any>(private val type: VelleType<T>, private val r
         /** The sample, its neighbours when the type gives them, and the sum's zero: the values E2 checks on. */
         fun <T : Any> sampleSet(type: VelleType<T>): List<T> {
             val s = type.samples
-            return listOfNotNull(s.sample, s.below?.invoke(s.sample), s.above?.invoke(s.sample), type.sum?.zero)
+            return listOfNotNull(s.sample, s.below?.invoke(s.sample), s.above?.invoke(s.sample), type.summableOrNull?.zero)
                 .distinctBy { type.canonical(it) }
         }
     }

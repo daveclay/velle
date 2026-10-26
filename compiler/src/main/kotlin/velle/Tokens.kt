@@ -62,11 +62,6 @@ val FOR_EACH_WORDS = setOf("each", "in", "to")
  */
 val TEXT_OPERATORS = setOf("contains", "starts with", "ends with", "like", "matches")
 
-/** The closed list of builtin functions (Reference §5). */
-val BUILTIN_FUNCTIONS = setOf(
-    "lowercase", "uppercase", "trim", "length", "max", "min",
-    "abs", "year", "month", "day", "dayOfWeek", "hour", "minute",
-)
 val SCALAR_KEYWORDS = setOf("text", "integer", "long", "decimal", "double", "boolean", "uuid", "duration", "time", "bytes")
 
 class VelleSyntaxError(message: String, val line: Int, val col: Int) :

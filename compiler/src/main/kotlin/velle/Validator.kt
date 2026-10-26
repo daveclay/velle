@@ -1,5 +1,7 @@
 package velle
 
+import velle.ext.Ordered
+import velle.ext.Summable
 import velle.ext.VelleType
 import java.math.BigDecimal
 
@@ -961,8 +963,6 @@ class Validator(private val model: Model) {
                 }
             }
             is FunCall -> {
-                if (e.name !in BUILTIN_FUNCTIONS)
-                    diags.add(Diagnostic("F2", "unknown function '${e.name}' — the builtin list is closed (Reference §5)"))
                 e.args.forEach { checkExpr(it, scope) }
                 checkFunctionCall(e, scope)
             }
@@ -1001,17 +1001,8 @@ class Validator(private val model: Model) {
             else -> null
         }
         is UnaryMinus -> scalarTypeOf(e.inner, scope)
-        is FunCall -> when (e.name) {
-            "lowercase", "uppercase", "trim" -> VType.Text
-            "length", "year", "month", "day", "dayOfWeek", "hour", "minute" -> VType.Num("integer")
-            "abs" -> e.args.singleOrNull()?.let { scalarTypeOf(it, scope) }
-            // max/min over one `many` of values have the element's type; otherwise the type of
-            // their arguments: the first typed one that is not a bare constant
-            "max", "min" -> (e.args.singleOrNull()?.let { scalarTypeOf(it, scope) } as? VType.CollS)?.let { model.scalarOf(it.name) }
-                ?: e.args.firstNotNullOfOrNull { a -> scalarTypeOf(a, scope)?.takeIf { it is VType.Ext || constantOf(a) == null } }
-                ?: e.args.firstNotNullOfOrNull { scalarTypeOf(it, scope) }
-            else -> null
-        }
+        // a registered function's result, from the signature its arguments match (Reference §5)
+        is FunCall -> (resolveCall(e, scope) as? FunctionResolver.Outcome.Ok)?.result?.takeIf { it != VType.Unknown }
         is AggCall -> when (e.name) {
             "count" -> VType.Num("integer")
             "sum" -> if (e.field == null) valueCollectionType(e.collection, scope)?.let { model.scalarOf(it.name) }
@@ -1084,7 +1075,7 @@ class Validator(private val model: Model) {
         val bare = (t as? VType.Optional)?.inner ?: t
         return bare is VType.Num || bare == VType.Text || bare == VType.DateT || bare == VType.DateTimeT || bare == VType.DurationT ||
             bare == VType.TimeT || bare == VType.BytesT ||
-            (bare is VType.Ext && model.registry[bare.qualifiedName]?.ordering != null)
+            (bare is VType.Ext && model.registry[bare.qualifiedName] is Ordered<*>)
     }
 
     // ── extension types in expressions (Reference §5; OQ65 D2, D4; checks E3) ─────────
@@ -1204,9 +1195,9 @@ class Validator(private val model: Model) {
         if (lext == null && rext == null) return
         val ordered = e.op in setOf("<", "<=", ">", ">=")
         for (t in listOfNotNull(lext, rext).distinct())
-            if (ordered && t.ordering == null)
+            if (ordered && t !is Ordered<*>)
                 diags.add(Diagnostic("E3", "'${Printer.expr(e)}' — ${describe(t)} declares no ordering, so '${e.op}' is not defined on it; " +
-                    "declare `ordering` on the type, or compare a field that is ordered"))
+                    "implement `Ordered` on the type, or compare a field that is ordered"))
         when {
             lext != null && rext != null -> if (lext !== rext)
                 diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — compares a ${describe(lext)} with a ${describe(rext)}, two different types"))
@@ -1234,67 +1225,33 @@ class Validator(private val model: Model) {
      * argument, with constants read as that type. The dispatch Custom functions (OQ66)
      * will register into.
      */
+    private val resolver by lazy { FunctionResolver(model.registry) { c -> model.scalarOf(c.name) } }
+
+    /** The signature a call matches, or why none does; null when the name resolves to no function
+     *  (reported once, by [checkFunctionCall]). */
+    private fun resolveCall(e: FunCall, scope: String): FunctionResolver.Outcome? {
+        val fn = model.functionScope[e.name] ?: return null
+        val args = e.args.map { FunctionResolver.Arg(scalarTypeOf(it, scope), FunctionResolver.isConstant(it)) }
+        return resolver.resolve(fn, Printer.expr(e), args) { Printer.expr(e.args[it]) }
+    }
+
+    /**
+     * A call of a builtin or registered function (Reference §5; `velle.ext.VelleFunction`):
+     * the name resolves, one signature accepts the arguments' types, and a constant beside
+     * an extension argument reads as that type. E3 when an extension type lacks the
+     * capability a parameter asks for; F2 otherwise.
+     */
     private fun checkFunctionCall(e: FunCall, scope: String) {
-        when (e.name) {
-            "max", "min" -> {
-                // over one `many` of values (Reference §5): the element must have an order
-                (e.args.singleOrNull()?.let { scalarTypeOf(it, scope) } as? VType.CollS)?.let { coll ->
-                    val elem = model.scalarOf(coll.name)
-                    if (elem != null && !isOrderable(elem)) {
-                        val ext = extOf(elem)
-                        if (ext != null)
-                            diags.add(Diagnostic("E3", "'${Printer.expr(e)}' — ${describe(ext)} declares no ordering, so '${e.name}' is not defined on it; declare `ordering` on the type"))
-                        else
-                            diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${coll.name}' values have no order, so '${e.name}' is not defined on them (Reference §5)"))
-                    }
-                    return
-                }
-                val types = e.args.map { scalarTypeOf(it, scope) }
-                val ext = types.firstNotNullOfOrNull { extOf(it) } ?: return
-                if (ext.ordering == null)
-                    diags.add(Diagnostic("E3", "'${Printer.expr(e)}' — ${describe(ext)} declares no ordering, so '${e.name}' is not defined on it; " +
-                        "declare `ordering` on the type"))
-                for ((a, t) in e.args.zip(types)) {
-                    val c = constantOf(a)
-                    when {
-                        c != null -> checkConstantAs(c, ext, a)
-                        t == null -> {}
-                        extOf(t) !== ext -> diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.name}' takes one type; " +
-                            "'${Printer.expr(a)}' is not a ${describe(ext)}"))
-                    }
-                }
+        val fn = model.resolveFunctionName(e.name, "'${Printer.expr(e)}'")
+        if (fn == null) { diags.addAll(model.diagnostics.filter { it !in diags }); return }
+        when (val r = resolveCall(e, scope)) {
+            is FunctionResolver.Outcome.NoMatch -> r.reasons.firstOrNull()?.let { diags.add(Diagnostic(it.code, it.message)) }
+            is FunctionResolver.Outcome.Ok -> e.args.forEachIndexed { i, a ->
+                val c = constantOf(a) ?: return@forEachIndexed
+                val t = r.argTypes.getOrNull(i) ?: return@forEachIndexed
+                extOf(t)?.let { checkConstantAs(c, it, a) }
             }
-            "abs", "year", "month", "day", "dayOfWeek", "hour", "minute" -> {
-                val takes = when (e.name) {
-                    "abs" -> "a number or a duration"
-                    "hour", "minute" -> "a time or a DateTime"
-                    else -> "a Date or a DateTime"
-                }
-                if (e.args.size != 1)
-                    diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.name}' takes one argument, $takes"))
-                e.args.firstOrNull()?.let { a ->
-                    val t = scalarTypeOf(a, scope)?.let { (it as? VType.Optional)?.inner ?: it } ?: return
-                    val ok = when (e.name) {
-                        "abs" -> t is VType.Num || t == VType.DurationT
-                        "hour", "minute" -> t == VType.TimeT || t == VType.DateTimeT
-                        else -> t == VType.DateT || t == VType.DateTimeT
-                    }
-                    if (!ok)
-                        diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.name}' takes $takes, but '${Printer.expr(a)}' is a ${registryName(t) ?: "value of another type"}"))
-                }
-            }
-            "lowercase", "uppercase", "trim", "length" -> {
-                if (e.args.size != 1)
-                    diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.name}' takes one text argument"))
-                e.args.firstOrNull()?.let { a ->
-                    val t = scalarTypeOf(a, scope)
-                    val ext = extOf(t)
-                    if (ext != null)
-                        diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.name}' takes text, not a ${describe(ext)}"))
-                    else if (t != null && t != VType.Text)
-                        diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.name}' takes text, but '${Printer.expr(a)}' is not text"))
-                }
-            }
+            null -> {}
         }
     }
 
@@ -1363,8 +1320,8 @@ class Validator(private val model: Model) {
             val m = model.membersOf(element)[it]
             if (m == null)
                 diags.add(Diagnostic("F1", "sum(..., $it) — '$element' has no member '$it'"))
-            else extOf(m.type)?.let { t -> if (t.sum == null)
-                diags.add(Diagnostic("E3", "sum(..., $it) — ${describe(t)} declares no sum, so '$element.$it' cannot be summed; declare `sum` on the type")) }
+            else extOf(m.type)?.let { t -> if (t !is Summable<*>)
+                diags.add(Diagnostic("E3", "sum(..., $it) — ${describe(t)} declares no sum, so '$element.$it' cannot be summed; implement `Summable` on the type")) }
         }
         // selectors' `by` datums: each must be an orderable member of the
         // element — the author's ordering statement, typechecked (F2, Reference §10)
@@ -2512,7 +2469,8 @@ class Validator(private val model: Model) {
             // the order of steps shows and a repeated step shows; an extension type's operator
             // declares its own (OQ65)
             val facts: TypeRegistry.FoldFacts? = when (val v = assignment.value) {
-                is FunCall -> if (v.name in setOf("max", "min")) TypeRegistry.FoldFacts(commutes = true, idempotent = true) else null
+                // a function's own two claims (`velle.ext.VelleFunction`): `max`/`min` commute and repeat harmlessly
+                is FunCall -> model.functionScope[v.name]?.let { TypeRegistry.FoldFacts(commutes = it.foldStepsCommute, idempotent = it.foldIdempotent) }
                 is Binary -> extOf(w.member.type)?.let { model.registry.foldFacts(it.qualifiedName, v.op) }
                     ?: when {
                         v.op !in setOf("+", "-") -> null

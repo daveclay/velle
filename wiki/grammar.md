@@ -36,8 +36,11 @@ spec        := declaration*
 declaration := usesDecl | shapeDecl | actDecl | refinementDecl | ruleDecl | neverDecl | requiresDecl | visibleClause
 
 usesDecl    := "uses" qualifiedType ("as" TypeName)?    -- Reference §5, "Extension types": picks one of two
+            | "uses" qualifiedFunction ("as" FunctionName)?  -- registered functions sharing a name, or renames one
 qualifiedType := Identifier ("." Identifier)* "." TypeName   -- registered types sharing a name, or renames one
+qualifiedFunction := Identifier ("." Identifier)* "." FunctionName
 TypeName    := UppercaseLetter (Letter | Digit)*         -- an extension type's name: its library's `name`, or the `as` name
+FunctionName := LowercaseLetter (Letter | Digit)*        -- a function's name: its library's `name`, or the `as` name
 ```
 
 File boundaries carry no meaning. A spec may span any number of `.velle` files; declarations appear in any order, and forward references are always legal — the compiler validates the whole spec as one unit ([Reference §1](Reference-01-Principles)), so there is nothing an ordering could add.
@@ -227,9 +230,10 @@ primary     := IntegerLiteral | DecimalLiteral | TextLiteral | BooleanLiteral | 
             | funcCall
             | "(" valueExpr ")"
 
-funcCall    := BuiltinName "(" valueExpr ("," valueExpr)* ")"      -- closed list: lowercase, uppercase, trim, length, max, min,
-                                                                   -- abs, year, month, day, dayOfWeek, hour, minute (Reference §5);
-                                                                   -- max/min over one `many` of values read the collection
+funcCall    := FunctionName "(" valueExpr ("," valueExpr)* ")"     -- a builtin (lowercase, uppercase, trim, length, max, min,
+                                                                   -- abs, year, month, day, dayOfWeek, hour, minute; Reference §5)
+                                                                   -- or a registered function (the Extension functions guide);
+                                                                   -- the arguments must match one of its signatures
 ```
 
 The conditional is **`if p then a else b`**, always fully spelled — `else` is mandatory (a conditional that can produce no value would need an implicit `none`, and optionality should be visible in the type, not manufactured by a branch). [Reference §7](Reference-07-Derived-properties)'s former postfix spelling (`none if parent is none else ...`) is normalized to this form; [§12](Reference-12-Assignment)'s ledger example already used it.

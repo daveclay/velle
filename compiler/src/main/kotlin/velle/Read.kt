@@ -162,7 +162,7 @@ internal class QueryEngine(private val system: VelleSystem) {
         val ext = bare?.let { model.extTypeOf(it) }
         val extra = when {
             m == null -> listOf(Diagnostic("F1", "sum of '$member' — '${q.root}' has no member '$member'"))
-            ext != null -> if (ext.sum == null)
+            ext != null -> if (ext.summableOrNull == null)
                 listOf(Diagnostic("E3", "sum of '$member' — '${model.specNameOf(ext)}' (${ext::class.qualifiedName}) declares no sum"))
                 else emptyList()
             bare !is VType.Num ->
@@ -171,7 +171,7 @@ internal class QueryEngine(private val system: VelleSystem) {
         }
         checkedUnordered(q, extra)
         if (ext != null) {
-            var acc: Any = ext.sum!!.zero
+            var acc: Any = ext.summableOrNull!!.zero
             for (id in matching(q)) {
                 val v = system.evaluator.readMember(id, q.root, member)
                 if (v is Value.VExt) acc = ext.sumAny(acc, v.v)

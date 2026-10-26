@@ -47,21 +47,27 @@ class Parser(private val tokens: List<Token>) {
 
     // ── uses ─────────────────────────────────────────────────────────────────
 
-    /** `uses velle.finance.Money [as Cash]`: a dotted lowercase path ending in the type's
-     *  capitalized name (Reference §5, extension types). */
+    /** `uses velle.finance.Money [as Cash]` or `uses velle.finance.roundToCents [as round]`: a
+     *  dotted lowercase path ending in a type's capitalized name or a function's lowercase
+     *  one (Reference §5, extension types and functions). The alias matches the case. */
     private fun parseUses(): UsesDecl {
         expectKw("uses")
         val parts = mutableListOf<String>()
         val first = peek()
-        if (!at(TokType.LIDENT)) fail("'uses' takes a qualified type name such as velle.finance.Money", first)
+        if (!at(TokType.LIDENT)) fail("'uses' takes a qualified type or function name such as velle.finance.Money", first)
         parts.add(next().text)
         while (consumeIf(TokType.DOT)) {
             val t = peek()
-            if (!at(TokType.LIDENT) && !at(TokType.UIDENT)) fail("'uses' takes a qualified type name such as velle.finance.Money", t)
+            if (!at(TokType.LIDENT) && !at(TokType.UIDENT)) fail("'uses' takes a qualified type or function name such as velle.finance.Money", t)
             parts.add(next().text)
         }
-        if (!parts.last().first().isUpperCase()) fail("'uses' names a type: the last part is its capitalized name (velle.finance.Money)", first)
-        val alias = if (peek().isKw("as")) { next(); expect(TokType.UIDENT).text } else null
+        if (parts.size < 2) fail("'uses' names a type or a function by its library: velle.finance.Money, velle.finance.roundToCents", first)
+        val isType = parts.last().first().isUpperCase()
+        val alias = if (peek().isKw("as")) {
+            next()
+            if (isType) expect(TokType.UIDENT).text
+            else { val t = peek(); if (!at(TokType.LIDENT)) fail("a function's alias is a lowercase identifier", t); next().text }
+        } else null
         return UsesDecl(parts.joinToString("."), alias)
     }
 
