@@ -257,6 +257,22 @@ fun VelleType<*>.readLiteral(number: BigDecimal?, text: String?): LiteralRead {
 @Suppress("UNCHECKED_CAST")
 fun <T : Any> VelleType<T>.equalAny(a: Any, b: Any): Boolean = equal(a as T, b as T)
 
+/**
+ * A value of this type read back from a text, as a wire carries one: the type's own
+ * `canonical` form, or any text its literal readers accept — the text reader first,
+ * then the number reader on a numeric text. Throws [IllegalArgumentException] when
+ * the type reads neither or its reader refuses.
+ */
+fun VelleType<*>.fromCanonical(text: String): Any {
+    val asText = if (literals.fromText != null) readLiteral(null, text) else LiteralRead.NoReader("text")
+    if (asText is LiteralRead.Ok) return asText.value
+    val number = text.toBigDecimalOrNull()
+    val asNumber = if (number != null && literals.fromNumber != null) readLiteral(number, null) else LiteralRead.NoReader("number")
+    if (asNumber is LiteralRead.Ok) return asNumber.value
+    val reason = (asText as? LiteralRead.Rejected)?.reason ?: (asNumber as? LiteralRead.Rejected)?.reason
+    throw IllegalArgumentException(reason?.let { "$name: $it" } ?: "'$text' is not a $name")
+}
+
 /** The type's ordering when it implements [Ordered], else null. */
 @Suppress("UNCHECKED_CAST")
 val <T : Any> VelleType<T>.orderingOrNull: Comparator<T>? get() = (this as? Ordered<T>)?.ordering

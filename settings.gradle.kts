@@ -10,8 +10,13 @@ rootProject.name = "velle"
 // :stores:postgres            — the same store over PostgreSQL; its tests need Docker
 // :extensions:<lib>           — an extension type library (Reference §5): Alice's `Money`
 // :extensions:<lib>-sql       — a store binding library for it: Bob's SQL binding for `Money`
+// :apis:json                  — the API layer: a system's operations in wire terms (JSON-shaped
+//                               values), model-driven, naming no transport
+// :apis:graphql               — a GraphQL schema built from the model, over that layer
 include(
     "compiler",
+    "apis:json",
+    "apis:graphql",
     "stores:sql",
     "stores:sqlite",
     "stores:postgres",

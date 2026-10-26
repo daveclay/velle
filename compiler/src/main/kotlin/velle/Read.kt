@@ -47,6 +47,92 @@ data class Page(val size: Int, val after: Cursor? = null) {
  */
 class Cursor internal constructor(internal val datums: List<Value>, internal val key: Comparable<Any>) {
     override fun toString() = "Cursor(${datums.joinToString()}; key=$key)"
+
+    /** The cursor as one opaque text a caller can hand back across a wire; [decode] reads it. */
+    fun encode(): String = CursorCodec.encode(this)
+
+    companion object {
+        /** The cursor [encode] produced, or an [IllegalArgumentException] when the text is not one. */
+        fun decode(text: String, model: Model): Cursor = CursorCodec.decode(text, model)
+    }
+}
+
+/**
+ * The text form of a [Cursor]: each order datum and the hidden key, typed, so the
+ * next page starts exactly where the last one ended whichever process answers it.
+ * Opaque to callers; nothing in it is for reading.
+ */
+internal object CursorCodec {
+    private const val SEP = '\u001f'
+
+    fun encode(c: Cursor): String {
+        val parts = c.datums.map { datum(it) } + key(c.key)
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(parts.joinToString(SEP.toString()).toByteArray())
+    }
+
+    fun decode(text: String, model: Model): Cursor {
+        val raw = try {
+            String(java.util.Base64.getUrlDecoder().decode(text))
+        } catch (e: IllegalArgumentException) {
+            throw IllegalArgumentException("not a cursor")
+        }
+        val parts = raw.split(SEP)
+        require(parts.isNotEmpty()) { "not a cursor" }
+        val datums = parts.dropLast(1).map { datum(it, model) }
+        return Cursor(datums, key(parts.last()))
+    }
+
+    private fun datum(v: Value): String = when (v) {
+        is Value.VNum -> "n:" + v.v.toPlainString()
+        is Value.VText -> "t:" + v.v
+        is Value.VBool -> "b:" + v.v
+        is Value.VDate -> "d:" + v.v
+        is Value.VDateTime -> "i:" + v.v
+        is Value.VTime -> "h:" + v.v
+        is Value.VDuration -> "s:" + v.seconds()
+        is Value.VUuid -> "u:" + v.v
+        is Value.VBytes -> "y:" + java.util.Base64.getEncoder().encodeToString(v.v)
+        is Value.VExt -> "x:" + v.type.qualifiedName + ":" + v.type.canonicalAny(v.v)
+        Value.VNone -> "_"
+        else -> throw IllegalArgumentException("a cursor cannot carry $v")
+    }
+
+    private fun datum(s: String, model: Model): Value {
+        if (s == "_") return Value.VNone
+        require(s.length >= 2 && s[1] == ':') { "not a cursor" }
+        val body = s.substring(2)
+        return when (s[0]) {
+            'n' -> Value.VNum(java.math.BigDecimal(body))
+            't' -> Value.VText(body)
+            'b' -> Value.VBool(body.toBoolean())
+            'd' -> Value.VDate(LocalDate.parse(body))
+            'i' -> Value.VDateTime(Instant.parse(body))
+            'h' -> Value.VTime(java.time.LocalTime.parse(body))
+            's' -> Value.VDuration.ofSeconds(body.toLong())
+            'u' -> Value.VUuid(java.util.UUID.fromString(body))
+            'y' -> Value.VBytes(java.util.Base64.getDecoder().decode(body))
+            'x' -> {
+                val qualified = body.substringBefore(':')
+                val type = model.registry[qualified] ?: throw IllegalArgumentException("not a cursor: unknown type '$qualified'")
+                Value.VExt(type, type.fromCanonical(body.substringAfter(':')))
+            }
+            else -> throw IllegalArgumentException("not a cursor")
+        }
+    }
+
+    private fun key(k: Comparable<Any>): String = when (k) {
+        is Long -> "l:$k"
+        is Int -> "l:$k"
+        is String -> "t:$k"
+        else -> throw IllegalArgumentException("a cursor cannot carry a key of ${k::class.simpleName}")
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun key(s: String): Comparable<Any> = when {
+        s.startsWith("l:") -> s.substring(2).toLong() as Comparable<Any>
+        s.startsWith("t:") -> s.substring(2) as Comparable<Any>
+        else -> throw IllegalArgumentException("not a cursor")
+    }
 }
 
 /** The generic answer: handles in order, and the cursor for the next page when more rows follow. */
