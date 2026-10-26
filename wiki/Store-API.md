@@ -1,6 +1,6 @@
 # Store API
 
-The store API is the contract between a running Velle system and the database that holds its records. Velle keeps no records of its own. Every record lives in a store the engineer owns, the runtime reads records from it when a commit or a read needs them, and the runtime hands each commit's writes back to it. After this page you can connect a system to a store, write a store of your own, and tell apart the part of the contract a store must get right from the part it may use to make reads faster.
+The store API is the contract between a running Velle system and whatever holds its records. Velle keeps no records of its own. Every record lives in a store the engineer owns, the runtime reads records from it when a commit or a read needs them, and the runtime hands each commit's writes back to it. The contract says nothing about how or where the records are kept. A store may be a relational database, a key-value store, a REST API the store calls, an event queue it publishes to, an email it sends, a file it writes to disk, or any combination of these behind the one interface. After this page you can connect a system to a store, write a store of your own, and tell apart the part of the contract a store must get right from the part it may use to make reads faster.
 
 The contract has two halves. The read half is a small set of questions the runtime asks: one row by its key, all rows of a shape, the rows that reference one record, and the values remembered for a refinement membership. The write half is one call per commit carrying everything the commit changed. Every decision about what a record means is made inside Velle, in memory, by the evaluator. A store never decides whether a predicate holds. It only hands rows over and writes rows back.
 
@@ -145,15 +145,15 @@ sys.system.connect(BillingStoreResolver(store, sys.system.model), backend)
 
 Each typed row class, such as `InvoiceRow`, has every stored field as a Kotlin property of the field's type, and `toInvoiceRow()` and `toRow()` convert between it and the generic `Row`.
 
-## Writing a store for another database
+## Writing a store of your own
 
-A store for another database implements `StateResolver` and `CommitCallback` in that database's own vocabulary. In order of what has to be right:
+A store implements `StateResolver` and `CommitCallback` in the vocabulary of whatever it stores into. The contract names no mechanism. A store may answer the reads from a relational database and, in the same commit, publish each created row to an event queue, send an email for each one, call a REST API, or write a file. All of that is the store's business, as long as the reads come back exact and the commit lands whole. In order of what has to be right:
 
-1. **One table, document, or collection per shape, keyed by something the store assigns and never reuses.** A `one` field holds the target's key and, when the field's type is a union of shapes ([§9](Reference-09-Composing-refinements)), the target's shape beside it, since keys are unique only within one shape.
+1. **One table, document, collection, or resource per shape, keyed by something the store assigns and never reuses.** A `one` field holds the target's key and, when the field's type is a union of shapes ([§9](Reference-09-Composing-refinements)), the target's shape beside it, since keys are unique only within one shape.
 2. **The exact reads**: by key, all of a shape, by referencing field, and captures.
 3. **The commit**: one database transaction per `onCommit`, every entry written, keys returned in creation order, rollback on any exception. Deletions apply after creations and assignments.
 4. **The transaction guarantees**: one snapshot per commit, serializable commits over the same records, durable once accepted, no writes around the side.
-5. **A binding per extension type** the spec stores, in the store's own vocabulary. A column type means something to a database and nothing to a wire protocol, so a store over a binary protocol would ask for an encoding instead.
+5. **A binding per extension type** the spec stores, in the store's own vocabulary. A column type means something to a database and nothing to a wire protocol or a file, so a store over either would ask for an encoding instead.
 
 Only then, and only where measurement asks for it:
 
