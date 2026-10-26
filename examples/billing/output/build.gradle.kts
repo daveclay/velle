@@ -19,7 +19,7 @@ dependencies {
     // billing's amounts are `Money` (Reference §5, extension types): Alice's type
     // library, and Bob's binding so the SQLite store can hold it
     implementation(project(":extensions:finance"))
-    runtimeOnly(project(":extensions:finance-sqlite"))
+    runtimeOnly(project(":extensions:finance-sql"))
     testImplementation(kotlin("test"))
 }
 

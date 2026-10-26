@@ -6,7 +6,7 @@ import kotlin.reflect.KClass
 /**
  * One scalar type a spec may name in type position, as it names `Date`.
  * Nothing here is about storage: how a store holds a value of this type is a
- * store binding (`velle.sqlite.SqliteTypeBinding` for the SQLite store),
+ * store binding (`velle.sql.SqlTypeBinding` for the SQL stores),
  * written by whoever knows the store.
  *
  * A type is one value and a mapping for it, never a business concept: business

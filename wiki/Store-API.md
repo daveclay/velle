@@ -10,7 +10,7 @@ The billing team's invoices live in a database the operations team runs, with ba
 
 ## Connecting a system to a store
 
-Velle ships one generic store over SQLite in `stores/sqlite/`. It implements the contract once for every spec by reading the spec's model, so nothing is written per system. From `examples/billing/output/src/test/kotlin/velle/GeneratedApiOverSqliteTest.kt`:
+Velle ships one generic store over SQL databases in `stores/sql/`, and SQLite's part of it, its column types and key column, in `stores/sqlite/`. The store implements the contract once for every spec by reading the spec's model, so nothing is written per system. From `examples/billing/output/src/test/kotlin/velle/GeneratedApiOverSqliteTest.kt`:
 
 ```kotlin
 val conn: Connection = DriverManager.getConnection("jdbc:sqlite::memory:")

@@ -27,7 +27,7 @@
 | `sum` | `Evaluator.evalAgg` folds `BigDecimal`; `Read.sum` returns `BigDecimal` | `sum` |
 | `max`/`min` | `Evaluator.evalFun`, `Validator.checkFunctionCall`: numbers, or the *ordered* capability for an extension | follows from `ordering` (already so for extensions) |
 | Test samples and boundaries | `SpecGen.pickValue` (literal ± 1, 1, 0), act-field samples `"sample"`, `false`, `2026-01-15`, `Instant.parse(...)` | `samples` (`sample`, `below`, `above`, `kotlinSource`) |
-| Storage | `SqliteStore.sqlType` (`INTEGER` for `integer`/`long`/`boolean`, `TEXT` otherwise), `readColumn`/`writeColumn`, `encode` (degrading what TEXT cannot order) | a `SqliteTypeBinding` per builtin, shipped by `stores/sqlite` (§4 D3) |
+| Storage | `SqliteStore.sqlType` (`INTEGER` for `integer`/`long`/`boolean`, `TEXT` otherwise), `readColumn`/`writeColumn`, `encode` (degrading what TEXT cannot order) | a `StorageClass` per builtin in the SQL layer and a `StorageColumn` per class in each dialect, one path with extension types (built by OQ67 2026-10-26; §4 D3) |
 | Query field handles | `TextField` (with `contains`/`startsWith`/`endsWith`/`like`), `NumField`, `BoolField`, `DateField`, `DateTimeField` | `ExtField`/`OrderedExtField`; the text predicates are OQ66's (§3.5) |
 | Rejection text | `Rejection.show`, `plain()` | `display` |
 
@@ -70,6 +70,8 @@ Cost: §3's API growth, and the `Value` representation question (§3.8). Alterna
 Cost: three additions to a public API a week old. Alternative: per-pair operator lines generated for the numeric tower (no new capability, sixteen lines per operator) and booleans/durations kept in the language outside the API, which leaves two builtins undogfooded.
 
 ### D3. The SQLite store ships one `SqliteTypeBinding` per builtin and `sqlType`/`readColumn`/`writeColumn` lose their builtin branches; E4 runs on Velle's own bindings at every store construction.
+
+**Overtaken by OQ67, 2026-10-26:** the SQL layer gives each builtin a `StorageClass` and each dialect a `StorageColumn` per class, and `SqlStore.scalarColumn` is the one path for builtins and extension types; `sqlType`/`readColumn`/`writeColumn` have no builtin branches. What remains of D3 is whether the builtin's *type object* (OQ66) should carry its storage class instead of the layer's `builtinStorage` table, and whether E4 should round-trip the builtins too.
 Cost: eight small classes in `stores/sqlite`, and E4's round-trip on eight more types at startup (a temp table, milliseconds). Alternative: keep `sqlType` for builtins and bindings for extensions, which is the asymmetry the stance removes. This also decides how OQ67's SQL layer ships its builtin bindings: once, dialect-independent, with dialect overrides.
 
 ### D4. Order of work: this question first, then OQ66's functions and predicates over the finished table, then OQ67's layers over the finished bindings.

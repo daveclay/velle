@@ -1,4 +1,4 @@
-package velle.finance.sqlite
+package velle.finance.sql
 
 import velle.CommitResult
 import velle.Model
@@ -7,10 +7,12 @@ import velle.Validator
 import velle.VelleSystem
 import velle.finance.Money
 import velle.sqlite.SqliteStore
-import velle.sqlite.SqliteTypeBinding
+import velle.sql.ALL_COMPARISONS
+import velle.sql.EQUALITY_ONLY
+import velle.sql.SqlTypeBinding
+import velle.sql.StorageClass
 import java.sql.Connection
 import java.sql.DriverManager
-import java.sql.ResultSet
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -88,12 +90,12 @@ class MoneyOverSqliteTest {
     }
 
     /** A TEXT column of the decimal: faithful for equality, not for order, so it claims only `==`/`!=`. */
-    private class TextMoneyBinding : SqliteTypeBinding<Money> {
+    private class TextMoneyBinding : SqlTypeBinding<Money> {
         override val type = "velle.finance.Money"
-        override val columnType = "TEXT"
-        override fun bind(value: Money): Any = value.toString()
-        override fun read(rs: ResultSet, column: String): Money = Money.of(rs.getString(column))
-        override val answers = setOf("==", "!=")
+        override val storage = StorageClass.TEXT
+        override fun encode(value: Money): Any = value.toString()
+        override fun decode(stored: Any): Money = Money.of(stored as String)
+        override val answers = EQUALITY_ONLY
     }
 
     @Test
@@ -108,16 +110,16 @@ class MoneyOverSqliteTest {
     fun `the store refuses to start without a binding for a stored type`() {
         val sys = system()
         val e = assertFailsWith<IllegalStateException> { SqliteStore(sys.model, conn, bindings = emptyList()) }
-        assertTrue("SqliteStore has no binding for 'Money' (velle.finance.Money)" in e.message!!, e.message)
-        assertTrue("SqliteTypeBinding<Money>" in e.message!!, e.message)
+        assertTrue("SQLite store has no binding for 'Money' (velle.finance.Money)" in e.message!!, e.message)
+        assertTrue("SqlTypeBinding<Money>" in e.message!!, e.message)
     }
 
-    private class LyingBinding : SqliteTypeBinding<Money> {
+    private class LyingBinding : SqlTypeBinding<Money> {
         override val type = "velle.finance.Money"
-        override val columnType = "INTEGER"
-        override fun bind(value: Money): Any = value.cents / 100 // drops the cents
-        override fun read(rs: ResultSet, column: String): Money = Money.ofCents(rs.getLong(column) * 100)
-        override val answers = setOf("==", "!=")
+        override val storage = StorageClass.INTEGER
+        override fun encode(value: Money): Any = value.cents / 100 // drops the cents
+        override fun decode(stored: Any): Money = Money.ofCents(stored as Long * 100)
+        override val answers = EQUALITY_ONLY
     }
 
     @Test

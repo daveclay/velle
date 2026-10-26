@@ -1,6 +1,6 @@
 // Alice's library: the `Money` extension type (Reference §5), registered with Velle
 // through META-INF/services/velle.ext.VelleType. It knows nothing about storage;
-// a store's binding for Money is a library of its own (extensions/finance-sqlite).
+// a store's binding for Money is a library of its own (extensions/finance-sql).
 plugins {
     kotlin("jvm")
 }

@@ -143,24 +143,24 @@ The compiler checks the type before any spec: the name and namespace are well fo
 
 ## Holding a type in a store
 
-A type says nothing about storage. How a store holds it is a separate piece, written by whoever knows the store, in the store's own vocabulary. For the SQLite store the piece is a `velle.sqlite.SqliteTypeBinding<T>`. From `extensions/finance-sqlite/src/main/kotlin/velle/finance/sqlite/SqliteMoneyBinding.kt`:
+A type says nothing about storage. How a store holds it is a separate piece, written by whoever knows the store, in the store's own vocabulary. For the SQL stores the piece is a `velle.sql.SqlTypeBinding<T>`, written once for every SQL database Velle has a store for. From `extensions/finance-sql/src/main/kotlin/velle/finance/sql/SqlMoneyBinding.kt`:
 
 ```kotlin
-class SqliteMoneyBinding : SqliteTypeBinding<Money> {
+class SqlMoneyBinding : SqlTypeBinding<Money> {
     override val type = "velle.finance.Money"
-    override val columnType = "INTEGER"
-    override fun bind(value: Money): Any = value.cents
-    override fun read(rs: ResultSet, column: String): Money = Money.ofCents(rs.getLong(column))
-    override val answers = setOf("==", "!=", "<", "<=", ">", ">=")
+    override val storage = StorageClass.INTEGER
+    override fun encode(value: Money): Any = value.cents
+    override fun decode(stored: Any): Money = Money.ofCents(stored as Long)
+    override val answers = ALL_COMPARISONS
 }
 ```
 
 - `type` names the registered type by qualified name.
-- `columnType` is the SQL type of the column the store creates for a field of this type.
-- `bind` hands the value to JDBC as the column holds it. `read` reads it back.
-- `answers` lists the comparisons the column answers with the value's own meaning. An integer of cents orders as amounts order, so this column answers all six. A column that holds a decimal as text would list `==` and `!=` only, and the store would decide `<` in memory instead of asking the database.
+- `storage` is the kind of column a field of this type is held in: text, integer, decimal, double, boolean, date, datetime, time, duration, uuid, or bytes. The binding never names a database's own column type. Each SQL store maps the kind to its column, so an integer is `INTEGER` on SQLite.
+- `encode` turns a value into the plain value that kind of column holds, here a `Long` of cents. `decode` turns it back.
+- `answers` lists the comparisons the encoding answers with the value's own meaning. An integer of cents orders as amounts order, so this column answers all six. A binding that holds a decimal as text would list `==` and `!=` only, and the store would decide `<` in memory instead of asking the database.
 
-The binding is registered in `META-INF/services/velle.sqlite.SqliteTypeBinding`. The SQLite store loads every binding on the classpath when it is built, or takes a list. It refuses to start when the spec stores a type it has no binding for, and when a binding does not read back the type's own sample values unchanged.
+The binding is registered in `META-INF/services/velle.sql.SqlTypeBinding`. A SQL store loads every binding on the classpath when it is built, or takes a list. It refuses to start when the spec stores a type it has no binding for, and when a binding does not read back the type's own sample values unchanged through the database's column.
 
 A `many` field of the type is a membership table whose value column uses the same binding. The in-memory runtime needs no binding, so a spec runs, and its generated tests pass, before anyone has written one. Another store defines its own binding interface in its own vocabulary: a column type means something to a database and nothing to a wire protocol, so a store over a binary protocol would ask for an encoding and never for a column.
 

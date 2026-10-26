@@ -80,9 +80,9 @@ class EnrollmentPersistenceTest {
         accept(first.commit(NewTag(ada, "stem")))
         for (note in listOf("late", "early", "late")) accept(first.commit(NewNote(ada, note)))
 
-        assertEquals(listOf(1L, 2L, 3L), rows("""SELECT target FROM Student__courses WHERE owner = 1 ORDER BY rowid""").map { it[0] })
-        assertEquals(listOf("honors", "stem"), rows("""SELECT value FROM Student__tags WHERE owner = 1 ORDER BY rowid""").map { it[0] })
-        assertEquals(listOf("late", "early", "late"), rows("""SELECT value FROM Student__notes WHERE owner = 1 ORDER BY rowid""").map { it[0] })
+        assertEquals(listOf(1L, 2L, 3L), rows("""SELECT target FROM Student__courses WHERE owner = 1 ORDER BY pos""").map { it[0] })
+        assertEquals(listOf("honors", "stem"), rows("""SELECT value FROM Student__tags WHERE owner = 1 ORDER BY pos""").map { it[0] })
+        assertEquals(listOf("late", "early", "late"), rows("""SELECT value FROM Student__notes WHERE owner = 1 ORDER BY pos""").map { it[0] })
 
         val second = process()
         val ada2 = second.read.student(1L)
@@ -111,7 +111,7 @@ class EnrollmentPersistenceTest {
 
         // removal rewrites the edge set whole
         accept(second.commit(NewDrop(ada2, logic)))
-        assertEquals(listOf(2L, 3L), rows("""SELECT target FROM Student__courses WHERE owner = 1 ORDER BY rowid""").map { it[0] })
+        assertEquals(listOf(2L, 3L), rows("""SELECT target FROM Student__courses WHERE owner = 1 ORDER BY pos""").map { it[0] })
         assertEquals(listOf(sets, proofs), second.read(ada2).courses)
         assertTrue(second.overloadeds().none { it.key == ada2.key })
         assertEquals(emptyList(), second.read(logic).students)
