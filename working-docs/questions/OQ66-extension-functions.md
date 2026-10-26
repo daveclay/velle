@@ -75,6 +75,7 @@ What the inventory says about the sketch in §2: `parameters` needs capabilities
 Each leads with the one-sentence decision I recommend, then what it costs and the alternative. Taking all four leaves nothing to decide before building. The infix spelling of a two-argument predicate (§3) and the store side (OQ69) stay open and do not block the build.
 
 ### D1. `apply` takes a context argument: a small object carrying the system's zone, with a compile-time form that carries no zone.
+**Settled with Dave 2026-10-26: yes.**
 Cost: every function body takes a parameter, including an engineer's that never reads the zone. Alternative: the parts of a `DateTime` stay hard-coded in the evaluator, so six builtins are never written through the interface.
 
 ### D2. A parameter is one of: a concrete type, a capability (*ordered*), a union of concrete types (`Date | DateTime`), or "same as parameter n".
