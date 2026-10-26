@@ -22,6 +22,8 @@ val sys = BillingSystem().also { SqliteStore.attach(it.system, conn) }
 
 From then on every commit through the [Binding API](Binding-API) lands in the database, and every read through the query API is answered from it. The same system runs in memory for tests and over the store in production, and the spec does not change.
 
+A Spring Boot application does not call `attach` itself. The starter in `apis/spring/` reads the database's name from the application's `DataSource`, picks the dialect, creates the tables, and connects the system before the first request ([Serving a system](Serving-a-system)).
+
 ## What the runtime asks and what it hands back
 
 A store implements two Kotlin interfaces from `compiler/src/main/kotlin/velle/Hydration.kt`. The read half:

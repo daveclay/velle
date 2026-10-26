@@ -116,6 +116,20 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
   - [ ] Make ordering by the store key an advisory warning, not an error; the cursor's hidden tie-break is the sanctioned use.
   - [ ] Decide whether "a deleted row's key is never reissued" joins `evaluation.md`'s universal-transaction contract (stated today in `Hydration.kt`'s kdoc).
 
+## Serving: the API layer, REST, GraphQL, the Spring Boot starter
+
+Built 2026-10-26 as the end state Dave stated at OQ51's settling (a framework library, a real spec, PostgreSQL, Spring Boot binding framework to database, REST and GraphQL wiring reads and acts from the model): `apis/json` (`VelleApi`, `Wire`, `Describe`), `apis/graphql` (`VelleGraphQL`), `apis/spring` (the starter), `examples/billing/app` (the application over PostgreSQL); the wiki guide Serving-a-system. Residue, each a line; Dave decides whether any deserves an OQ.
+
+- [ ] Replace the API layer's one lock with the serialization domains `evaluation.md` U3 derives: today every commit, tick, and read takes turns on the whole system, which is a superset of "commits that touch the same records take turns" and the right default until measured; the generated queue keys are the partition to move to.
+- [ ] Decide how the Spring Boot starter should hold its store connection: today one connection is borrowed from the `DataSource` for the system's life, which is what `SqlStore` takes; a connection per commit, or a pool-aware store, needs the store contract to say where a transaction begins.
+- [ ] Expose a cross-base refinement's own declared members over GraphQL: a static union is a GraphQL union, which carries no fields, so a member declared on the union (`Origin.peptideBatches`) is reachable over REST and not over GraphQL.
+- [ ] Decide whether GraphQL should offer a typed filter input per shape beside `where` as a predicate string, or whether the predicate string is the one query language on every transport (today: the string, by OQ51's ruling that the caller composes in the spec's own language).
+- [ ] Serve a registered query (OQ57's registry) as a named endpoint and a named GraphQL field, with its parameters typed.
+- [ ] Decide whether the console belongs in the starter for good, grows into the declarative UI `Velle-UI.md` sketches, or stays a developer tool; and whether its request-header box is the right stand-in for a login.
+- [ ] Decide whether the model description (`GET /api`) should be an OpenAPI document, and the GraphQL schema printed as SDL, for client generators.
+- [ ] Build the unstored actor (`transient shape Staff`, the item under Acts) and let the actor resolver return it: today the resolver returns a reference to a stored record only.
+- [ ] Decide whether the starter should run the generated `SpecSupport` scenarios against the live store at startup as a smoke test (the item under Spec generation about `newSystem()`).
+
 ## Runtime and clock
 
 - **[OQ58](questions/OQ58-runtime-follow-ons.md)** — candidate narrowing, the production clock, timestamp ties · the runtime's leftovers plus peptides S4

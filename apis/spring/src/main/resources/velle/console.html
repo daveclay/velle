@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Velle console</title>
+<style>
+  :root { --bg: #fafaf7; --fg: #1c1c1a; --muted: #6b6b66; --line: #dddcd6; --panel: #ffffff; --accent: #2b5fb3; --ok: #2d7a3a; --bad: #b3362b; --chip: #eeede8; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #16171a; --fg: #e8e7e2; --muted: #9a9a94; --line: #33343a; --panel: #1e1f24; --accent: #7fa7e8; --ok: #6fc07c; --bad: #e07a70; --chip: #2a2b31; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 -apple-system, system-ui, "Segoe UI", sans-serif; background: var(--bg); color: var(--fg); display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+  nav { border-right: 1px solid var(--line); padding: 16px; overflow: auto; }
+  nav h1 { font-size: 15px; margin: 0 0 12px; letter-spacing: .02em; }
+  nav h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 18px 0 6px; }
+  nav a { display: block; padding: 3px 6px; border-radius: 4px; color: var(--fg); text-decoration: none; }
+  nav a:hover, nav a.active { background: var(--chip); }
+  nav a .k { color: var(--muted); font-size: 11px; margin-left: 4px; }
+  main { padding: 20px 28px; overflow: auto; }
+  h2.title { margin: 0 0 4px; font-size: 20px; }
+  .sub { color: var(--muted); margin: 0 0 16px; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  input, select, textarea, button { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px; }
+  input.where { flex: 1; min-width: 220px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  button { cursor: pointer; } button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  table { border-collapse: collapse; width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  td.num { font-variant-numeric: tabular-nums; }
+  a.ref { color: var(--accent); text-decoration: none; } a.ref:hover { text-decoration: underline; }
+  .chip { display: inline-block; background: var(--chip); border-radius: 10px; padding: 0 8px; font-size: 12px; margin: 0 4px 4px 0; }
+  .chip.on { background: var(--ok); color: #fff; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; }
+  dt { color: var(--muted); } dd { margin: 0; }
+  form.act { display: grid; grid-template-columns: max-content 1fr; gap: 10px 16px; align-items: center; max-width: 720px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+  form.act label { color: var(--muted); } form.act textarea { font-family: ui-monospace, Menlo, monospace; min-height: 70px; }
+  form.act .hint { grid-column: 2; color: var(--muted); font-size: 12px; margin-top: -6px; }
+  pre.out { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; white-space: pre-wrap; word-break: break-word; font: 12px/1.4 ui-monospace, Menlo, monospace; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  .empty { color: var(--muted); padding: 24px; text-align: center; }
+  .headerbox { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .headerbox input { width: 100%; margin-bottom: 6px; font-size: 12px; }
+  @media (max-width: 760px) { body { grid-template-columns: 1fr; } nav { border-right: 0; border-bottom: 1px solid var(--line); } }
+</style>
+</head>
+<body>
+<nav>
+  <h1>Velle</h1>
+  <div id="nav"></div>
+  <div class="headerbox">
+    <h2>Request header</h2>
+    <input id="hname" placeholder="Header name, e.g. X-Velle-Actor">
+    <input id="hvalue" placeholder="Value, e.g. Staff:1">
+    <div class="sub" style="font-size:12px">Sent with every request, for the application's actor resolver.</div>
+  </div>
+</nav>
+<main id="main"><div class="empty">Loading the model…</div></main>
+<script>
+const API = "__API__";
+const TICKS = __TICKS__ === true;
+let model = null;
+const byName = {};
+
+function headers(extra) {
+  const h = Object.assign({}, extra || {});
+  const n = localStorage.getItem('velle.hname'), v = localStorage.getItem('velle.hvalue');
+  if (n && v) h[n] = v;
+  return h;
+}
+async function call(path, opts) {
+  const r = await fetch(API + path, Object.assign({ headers: headers(opts && opts.body ? {'Content-Type': 'application/json'} : {}) }, opts || {}));
+  const text = await r.text();
+  let body; try { body = text ? JSON.parse(text) : null; } catch (e) { body = text; }
+  return { ok: r.ok, status: r.status, body };
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function refLink(r) { return `<a class="ref" href="#record/${encodeURIComponent(r.shape)}/${encodeURIComponent(r.key)}">${esc(r.shape)}#${esc(r.key)}</a>`; }
+function isRef(v) { return v && typeof v === 'object' && !Array.isArray(v) && 'shape' in v && 'key' in v; }
+function cell(v) {
+  if (v === null || v === undefined) return '<span class="sub">—</span>';
+  if (isRef(v)) return refLink(v);
+  if (Array.isArray(v)) return v.length === 0 ? '<span class="sub">none</span>' : (isRef(v[0]) ? v.map(refLink).join(', ') : esc(v.join(', ')));
+  if (typeof v === 'boolean') return v ? 'yes' : 'no';
+  return esc(v);
+}
+function isUnion(typeName) { const s = byName[typeName]; return s && s.kind === 'refinement' && s.bases && s.bases.length > 1; }
+const ORDERABLE = new Set(['text','integer','long','decimal','double','Date','DateTime','time','duration']);
+function defaultOrder(shape) {
+  const m = shape.members.find(m => m.kind !== 'inverse' && m.kind !== 'actor' && (ORDERABLE.has(m.type) || !byName[m.type] && !['boolean','bytes','uuid'].includes(m.type)));
+  return m ? m.name : '';
+}
+
+// ── navigation ──
+function nav() {
+  const shapes = model.shapes.filter(s => s.kind === 'shape'), refinements = model.shapes.filter(s => s.kind === 'refinement');
+  let h = '<h2>Shapes</h2>' + shapes.map(s => `<a href="#shape/${s.name}" data-nav="shape/${s.name}">${esc(s.name)}${s.act ? '<span class="k">act</span>' : ''}</a>`).join('');
+  if (refinements.length) h += '<h2>Refinements</h2>' + refinements.map(s => `<a href="#shape/${s.name}" data-nav="shape/${s.name}">${esc(s.name)}</a>`).join('');
+  h += '<h2>Acts</h2>' + model.acts.map(a => `<a href="#act/${a.name}" data-nav="act/${a.name}">${esc(a.name)}${a.transient ? '<span class="k">transient</span>' : ''}${a.actor ? '<span class="k">by ' + esc(a.actor.shape) + '</span>' : ''}</a>`).join('');
+  if (TICKS && model.schedules.length) h += '<h2>Schedules</h2>' + model.schedules.map(s => `<a href="#tick/${s}" data-nav="tick/${s}">${esc(s)}</a>`).join('');
+  document.getElementById('nav').innerHTML = h;
+}
+function route() {
+  const hash = location.hash.slice(1) || (model.shapes[0] ? 'shape/' + model.shapes[0].name : '');
+  document.querySelectorAll('nav a').forEach(a => a.classList.toggle('active', hash.startsWith(a.dataset.nav || '\u0000')));
+  const [kind, a, b] = hash.split('/').map(decodeURIComponent);
+  if (kind === 'shape') showShape(a);
+  else if (kind === 'record') showRecord(a, b);
+  else if (kind === 'act') showAct(a);
+  else if (kind === 'tick') showTick(a);
+}
+
+// ── a shape: the table ──
+const queryState = {};
+async function showShape(name, more) {
+  const shape = byName[name]; if (!shape) return;
+  const st = queryState[name] || (queryState[name] = { where: '', orderBy: defaultOrder(shape), size: 25, after: null, items: [] });
+  const main = document.getElementById('main');
+  if (!more) {
+    main.innerHTML = `<h2 class="title">${esc(name)}</h2><p class="sub">${shape.kind === 'refinement' ? 'Refinement of ' + esc(shape.bases.join(' or ')) : 'Shape'}${shape.act ? ', committed as an act' : ''}.</p>
+      <form class="bar" id="qf"><input class="where" id="where" placeholder="where, in the spec's language: balance > 0 and due < today" value="${esc(st.where)}">
+      <label>order by <input id="orderBy" value="${esc(st.orderBy)}" style="width:160px"></label>
+      <button class="primary">Query</button> <span id="count" class="sub"></span></form>
+      <div id="table"></div><div class="bar" id="pager"></div>`;
+    document.getElementById('qf').onsubmit = e => { e.preventDefault(); st.where = document.getElementById('where').value; st.orderBy = document.getElementById('orderBy').value; st.after = null; st.items = []; showShape(name, true); };
+    st.after = null; st.items = [];
+  }
+  const params = new URLSearchParams(); if (st.where) params.set('where', st.where); if (st.orderBy) params.set('orderBy', st.orderBy); params.set('size', st.size); if (st.after) params.set('after', st.after);
+  const r = await call(`/shapes/${encodeURIComponent(name)}?` + params);
+  const table = document.getElementById('table'), pager = document.getElementById('pager');
+  if (!r.ok) { table.innerHTML = `<pre class="out bad">${esc(r.body && r.body.error ? r.body.error + '\n' + (r.body.details || []).join('\n') : JSON.stringify(r.body))}</pre>`; pager.innerHTML = ''; return; }
+  st.items = st.items.concat(r.body.items); st.after = r.body.next;
+  const cols = shape.members.filter(m => m.kind !== 'inverse');
+  const inverses = shape.members.filter(m => m.kind === 'inverse');
+  const flags = shape.flags || [];
+  if (st.items.length === 0) table.innerHTML = '<div class="empty">No records.</div>';
+  else table.innerHTML = `<table><thead><tr><th>key</th>${cols.map(c => `<th>${esc(c.name)}</th>`).join('')}${inverses.map(c => `<th>${esc(c.name)}</th>`).join('')}${flags.length ? '<th>is</th>' : ''}</tr></thead><tbody>` +
+    st.items.map(it => `<tr><td>${refLink(it)}</td>${cols.map(c => `<td class="${typeof it[c.name] === 'number' ? 'num' : ''}">${cell(it[c.name])}</td>`).join('')}${inverses.map(c => `<td class="num">${Array.isArray(it[c.name]) ? it[c.name].length : '—'}</td>`).join('')}${flags.length ? '<td>' + flags.filter(f => it[f]).map(f => `<span class="chip on">${esc(f.slice(2))}</span>`).join('') + '</td>' : ''}</tr>`).join('') + '</tbody></table>';
+  pager.innerHTML = `<span class="sub">${st.items.length} shown</span>` + (st.after ? ` <button id="more">More</button>` : '');
+  if (st.after) document.getElementById('more').onclick = () => showShape(name, true);
+  const c = await call(`/shapes/${encodeURIComponent(name)}/count?` + (st.where ? 'where=' + encodeURIComponent(st.where) : ''));
+  if (c.ok) document.getElementById('count').textContent = c.body.count + ' in all';
+}
+
+// ── one record ──
+async function showRecord(shape, key) {
+  const main = document.getElementById('main');
+  const r = await call(`/shapes/${encodeURIComponent(shape)}/${encodeURIComponent(key)}`);
+  if (!r.ok) { main.innerHTML = `<h2 class="title">${esc(shape)} #${esc(key)}</h2><pre class="out bad">${esc(r.body && r.body.error || r.status)}</pre>`; return; }
+  const rec = r.body, s = byName[shape] || { members: [], flags: [] };
+  const flags = (s.flags || []).filter(f => rec[f]);
+  const refinements = model.shapes.filter(x => x.kind === 'refinement' && x.bases && x.bases.length === 1 && x.bases[0] === shape && rec['is' + x.name]);
+  main.innerHTML = `<h2 class="title">${esc(shape)} #${esc(key)}</h2><p class="sub">${flags.map(f => `<span class="chip on">${esc(f.slice(2))}</span>`).join('') || 'A record.'}</p>
+    <dl>${s.members.map(m => `<dt>${esc(m.name)} <span class="sub" style="font-size:11px">${esc(m.type)}${m.kind !== 'stored' ? ' · ' + esc(m.kind) : ''}</span></dt><dd>${cell(rec[m.name])}</dd>`).join('')}</dl>
+    ${refinements.length ? '<p class="sub">Read as a member of: ' + refinements.map(x => `<a class="ref" href="#record/${encodeURIComponent(x.name)}/${encodeURIComponent(key)}">${esc(x.name)}</a>`).join(', ') + '</p>' : ''}`;
+}
+
+// ── an act: the form ──
+function inputFor(f, id) {
+  if (f.kind === 'reference') return `<input id="${id}" placeholder="${isUnion(f.type) ? 'Shape#key, one of ' + esc(byName[f.type].bases.join(', ')) : 'key of a ' + esc(f.type)}">`;
+  if (f.kind === 'references') return `<input id="${id}" placeholder="keys, comma-separated">`;
+  if (f.kind === 'values') return `<input id="${id}" placeholder="${esc(f.type)} values, comma-separated">`;
+  switch (f.type) {
+    case 'boolean': return `<select id="${id}"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>`;
+    case 'integer': case 'long': return `<input id="${id}" type="number" step="1">`;
+    case 'decimal': case 'double': return `<input id="${id}" type="number" step="any">`;
+    case 'Date': return `<input id="${id}" type="date">`;
+    case 'DateTime': return `<input id="${id}" type="datetime-local" step="1">`;
+    case 'time': return `<input id="${id}" type="time" step="1">`;
+    default: return `<input id="${id}" placeholder="${esc(f.type)}">`;
+  }
+}
+function valueOf(f, el) {
+  const v = el.value.trim(); if (v === '') return undefined;
+  const scalar = (t, x) => (t === 'integer' || t === 'long' || t === 'decimal' || t === 'double') ? Number(x) : t === 'boolean' ? x === 'true' : t === 'DateTime' && !x.endsWith('Z') ? new Date(x).toISOString() : x;
+  const ref = x => { const m = x.match(/^(\w+)#(.+)$/); return m ? { shape: m[1], key: m[2] } : (/^\d+$/.test(x) ? Number(x) : x); };
+  if (f.kind === 'reference') return ref(v);
+  if (f.kind === 'references') return v.split(',').map(x => ref(x.trim()));
+  if (f.kind === 'values') return v.split(',').map(x => scalar(f.type, x.trim()));
+  return scalar(f.type, v);
+}
+function showAct(name) {
+  const act = model.acts.find(a => a.name === name); if (!act) return;
+  const main = document.getElementById('main');
+  const parts = act.parts || [], byValue = act.fields.filter(f => f.newValue);
+  main.innerHTML = `<h2 class="title">${esc(name)}</h2><p class="sub">${act.transient ? 'A transient act: it leaves no record of its own.' : 'A durable act: the commit becomes a ' + esc(name) + ' record.'}${act.actor ? ' Committed by a ' + esc(act.actor.shape) + ', resolved from the request.' : ''}</p>
+    <form class="act" id="af">${act.fields.map((f, i) => `<label for="f${i}">${esc(f.name)}${f.optional ? '' : ' *'}</label>${f.newValue ? `<textarea id="f${i}" placeholder='a key, or a new ${esc(f.type)} as JSON: {"@shape": "${esc(f.newValue[0].shape)}", ...}'></textarea>` : inputFor(f, 'f' + i)}<div class="hint">${esc(f.type)}${f.kind !== 'value' ? ' · ' + esc(f.kind) : ''}${f.mayBeNew ? ' · may be {"new": n}' : ''}</div>`).join('')}
+    ${parts.map((p, i) => `<label for="p${i}">${esc(p.field)}</label><textarea id="p${i}" placeholder='new ${esc(p.shape)} values as JSON: [{${p.fields.map(f => '"' + f.name + '": …').join(', ')}}]'></textarea><div class="hint">parts: ${esc(p.shape)} · ${p.fields.map(f => esc(f.name)).join(', ')}</div>`).join('')}
+    <span></span><div><button class="primary">Commit</button></div></form><pre class="out" id="outcome" hidden></pre>`;
+  document.getElementById('af').onsubmit = async e => {
+    e.preventDefault();
+    const body = {};
+    try {
+      act.fields.forEach((f, i) => { const el = document.getElementById('f' + i); if (f.newValue) { const v = el.value.trim(); if (v) body[f.name] = v.startsWith('{') ? JSON.parse(v) : (/^\d+$/.test(v) ? Number(v) : v); } else { const v = valueOf(f, el); if (v !== undefined) body[f.name] = v; } });
+      parts.forEach((p, i) => { const v = document.getElementById('p' + i).value.trim(); if (v) body[p.field] = JSON.parse(v); });
+    } catch (err) { show(false, 'The JSON in a field does not parse: ' + err.message); return; }
+    const r = await call(`/acts/${encodeURIComponent(name)}`, { method: 'POST', body: JSON.stringify(body) });
+    const b = r.body || {};
+    if (r.ok) show(true, 'Accepted' + (b.ref ? ': ' + b.ref.shape + '#' + b.ref.key : ' (no record: a transient act)'), b.ref);
+    else if (r.status === 422) show(false, 'Refused: ' + (b.rejection ? b.rejection.message : b.reason));
+    else show(false, (b.error || r.status) + (b.details && b.details.length ? '\n' + b.details.join('\n') : ''));
+  };
+  function show(ok, text, ref) { const o = document.getElementById('outcome'); o.hidden = false; o.className = 'out ' + (ok ? 'ok' : 'bad'); o.innerHTML = esc(text) + (ref ? ' · ' + refLink(ref) : ''); }
+}
+
+// ── a tick ──
+async function showTick(schedule) {
+  const main = document.getElementById('main');
+  main.innerHTML = `<h2 class="title">${esc(schedule)}</h2><p class="sub">Run every rule on this schedule now.</p><button class="primary" id="go">Tick ${esc(schedule)}</button><pre class="out" id="outcome" hidden></pre>`;
+  document.getElementById('go').onclick = async () => {
+    const r = await call(`/ticks/${encodeURIComponent(schedule)}`, { method: 'POST' });
+    const o = document.getElementById('outcome'); o.hidden = false;
+    if (r.ok) { const rej = r.body.rejections || []; o.className = 'out ' + (rej.length ? 'bad' : 'ok'); o.textContent = `Ran at ${r.body.at}` + (rej.length ? `\n${rej.length} firing(s) rejected:\n\n` + rej.map(x => x.message).join('\n\n') : ', nothing rejected.'); }
+    else { o.className = 'out bad'; o.textContent = r.body && r.body.error || r.status; }
+  };
+}
+
+// ── start ──
+(async () => {
+  const hn = document.getElementById('hname'), hv = document.getElementById('hvalue');
+  hn.value = localStorage.getItem('velle.hname') || ''; hv.value = localStorage.getItem('velle.hvalue') || '';
+  hn.oninput = () => localStorage.setItem('velle.hname', hn.value.trim()); hv.oninput = () => localStorage.setItem('velle.hvalue', hv.value.trim());
+  const r = await call('');
+  if (!r.ok) { document.getElementById('main').innerHTML = `<pre class="out bad">The API at ${esc(API)} answered ${r.status}.</pre>`; return; }
+  model = r.body; model.shapes.forEach(s => byName[s.name] = s);
+  nav(); route(); window.onhashchange = route;
+})();
+</script>
+</body>
+</html>

@@ -43,6 +43,7 @@
 - [[Extension types|Extension-types]]
 - [[Extension functions|Extension-functions]]
 - [[Store API|Store-API]]
+- [[Serving a system|Serving-a-system]]
 
 **Notes**
 

@@ -2,7 +2,7 @@
 
 The binding API is the Kotlin the compiler generates from a spec for an engineer's own code to call. This page describes the part that commits an act: the input class for each act, the nested values for its parts, the reference types a `one` field takes, the commit function, and what the boundary refuses before the runtime runs. After reading it an engineer can build an act's input, including records that arrive with it, and commit it.
 
-An engineer's transport code, whatever it is, maps a request onto one input object and calls one commit function. Velle owns the shape of that object and the function. Everything before the call, such as authentication or rate limits, is the engineer's code ([§22](Reference-22-Open-unresolved), "External input").
+An engineer's transport code, whatever it is, maps a request onto one input object and calls one commit function. Velle owns the shape of that object and the function. Everything before the call, such as authentication or rate limits, is the engineer's code ([§22](Reference-22-Open-unresolved), "External input"). An application that wants every act and shape served over HTTP without writing that mapping declares the system as a Spring Boot bean instead ([Serving a system](Serving-a-system)); the JSON an act takes there mirrors the input class this page describes.
 
 ## The input class
 
