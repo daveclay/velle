@@ -92,6 +92,7 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
   - [ ] Teach SpecGen to generate refinement specs over rule-materialized shapes (PaidInvoice, SettledOrder, Delinquent, ClosedTicket, LockedNote, and kin; OQ31's residue).
   - [ ] Make the generated specs name an ordering datum instead of `last(shape)` over the runtime's scan order.
   - [ ] Give the generated `SpecSupport` a `newSystem()` hook so the generated specs run over a store as the flow tests do.
+  - [ ] Make store-versus-evaluator disagreement a generated use case: a store rendering stricter than the evaluator drops records silently and no generated test fails today (the suite runs in memory, and its synthesised data never sits where a rendering drifts). Run each generated refinement and read case over every attached store with the in-memory membership as the oracle, and synthesise the records a rendering is most likely to get wrong per operator (absent under `!=`, whitespace under `is empty`, non-ASCII under `lowercase`, the bounds under `between`, Sunday under `dayOfWeek`, a substring match under `matches`); OQ69's agreement items read as test inputs.
   - [ ] Spec-generation phase 2 (boundary synthesis, scenario DSL, no-refire cases) and phase 3 (the `example` construct) — `testgen.md`.
 
 ## Reads: the query API and stores (Reference §22)
