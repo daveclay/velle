@@ -78,8 +78,61 @@ Each leads with the one-sentence decision I recommend, then what it costs and th
 **Settled with Dave 2026-10-26: yes.**
 Cost: every function body takes a parameter, including an engineer's that never reads the zone. Alternative: the parts of a `DateTime` stay hard-coded in the evaluator, so six builtins are never written through the interface.
 
-### D2. A parameter is one of: a concrete type, a capability (*ordered*), a union of concrete types (`Date | DateTime`), or "same as parameter n".
-Cost: the union form is new vocabulary in the interface, and the validator's refusal text has to name it. Alternative: no union, and each builtin splits into one function per type, so `year` on a `Date` and `year` on a `DateTime` are two registrations of one name, which puts overloading into the interface anyway.
+### D2. A parameter accepts a Kotlin class, either a type or a capability interface, or is "same as parameter n". Capabilities are interfaces a type implements, each carrying the operation a function needs, and the builtin types become registered objects first.
+**Settled with Dave 2026-10-26**, after Dave asked whether types as Kotlin interfaces with a hierarchy would be cleaner than names as strings. Yes, and for a specific reason: with strings, a body over a `Date` or a `DateTime` still branches on which Kotlin class arrived; with an interface, the body is written once against it.
+
+The shape:
+
+```kotlin
+package velle.ext
+
+/** A capability a type declares by implementing the interface. Each carries the
+ *  operation a function needs, so a function body is written against the
+ *  interface, never against a concrete type. */
+interface Ordered<T : Any>         { val ordering: Comparator<T> }
+interface Summable<T : Any>        { val zero: T; fun plus(a: T, b: T): T }
+interface Numeric<T : Any>         { fun toDecimal(v: T): BigDecimal; fun fromDecimal(d: BigDecimal): T }
+interface HasCalendarDate<T : Any> { fun calendarDate(v: T, zone: ZoneId): LocalDate }
+interface HasTimeOfDay<T : Any>    { fun timeOfDay(v: T, zone: ZoneId): LocalTime }
+interface Signed<T : Any>          { fun abs(v: T): T }
+
+object DateType : VelleType<LocalDate>, Ordered<LocalDate>, HasCalendarDate<LocalDate> { ... }
+object DateTimeType : VelleType<Instant>, Ordered<Instant>, HasCalendarDate<Instant>, HasTimeOfDay<Instant> { ... }
+object DurationType : VelleType<Duration>, Ordered<Duration>, Signed<Duration> { ... }
+
+sealed interface Accepts {
+    /** The argument's type implements this interface, or is this type. */
+    data class Is(val type: KClass<*>) : Accepts
+    /** The type the argument in position [index] turned out to have. */
+    data class SameAs(val index: Int) : Accepts
+}
+class Parameter(val name: String, val accepts: Accepts)
+
+sealed interface Returns {
+    data class Is(val type: KClass<*>) : Returns
+    data class SameAs(val index: Int) : Returns
+    data class ElementOf(val index: Int) : Returns
+}
+```
+
+```kotlin
+// year: any type that can give a calendar date; an engineer's BusinessDate joins by implementing the interface
+parameters = listOf(Parameter("value", Accepts.Is(HasCalendarDate::class)))
+apply = { ctx, args -> val t = args[0].type as HasCalendarDate<Any>; t.calendarDate(args[0].value, ctx.zone).year }
+// abs: anything signed, returns what it was given
+parameters = listOf(Parameter("value", Accepts.Is(Signed::class))); result = Returns.SameAs(0)
+// max: anything ordered, all the same type (the variadic and collection forms are D3)
+parameters = listOf(Parameter("first", Accepts.Is(Ordered::class)), Parameter("rest", Accepts.SameAs(0)))
+```
+
+What follows from it:
+- The union form ("`Date` or `DateTime`") is gone. It was a closed list of names; it becomes an interface both types implement, and a third type joins by implementing it. That is the difference between a function over two builtins and a function over a capability, which OQ65 D4 asked for.
+- `VelleType`'s nullable members `ordering` and `sum` become the interfaces `Ordered<T>` and `Summable<T>`; the validator's check is `type is Ordered<*>`, and E3 reads "does not implement Ordered".
+- `Operator` lines, which name operands by string for the same reason parameters would have, can reference type objects once the builtins are objects; "operand not in the registry" becomes a Kotlin compile error.
+- The builtin types exist as eight registered `object`s before anything else is built: the first step of OQ68 pulled forward, and only that step. The runtime's `Value` classes and the hard-coded branches stay for now (OQ68 D5). Functions first still holds; it needs the type objects to point at.
+- Positional forms stay: `SameAs(n)` and `ElementOf(n)` cannot be said by a class alone, so `Accepts` is a small sealed type, not a bare `KClass`. The body receives a list of typed values and casts each type to the interface it declared, because Kotlin cannot check a variadic, heterogeneous signature against the parameters at compile time.
+
+Cost: the capability interfaces are a public surface that grows with each builtin that needs one (`Signed` exists for `abs`). Set-aside alternative: names as strings with a `OneOf` union form, which keeps `VelleType` as it is but leaves every polymorphic body branching on the Kotlin class.
 
 ### D3. `max` and `min` register as one variadic parameter over an ordered type, with the collection form `max(values)` as a second overload.
 Cost: overloading enters the interface for two builtins. Alternative: the collection form is language, beside the aggregates, so `max(values)` is not dogfooded.
