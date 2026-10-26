@@ -293,6 +293,8 @@ data object TodayLit : Expr
 /** The empty collection — the one collection literal (Reference §6); types only where a `many` is expected. */
 data object EmptyLit : Expr
 data class DurationLit(val amount: Long, val unit: String) : Expr
+/** `[a, b, c]`: the values on the right of `in` (Reference §10). Legal only there. */
+data class ListLit(val items: List<Expr>) : Expr
 
 /** A constant the parser never produces: a value the query API (Reference §22,
  *  the composed query) supplies at the moment of asking — a date, a decimal,
@@ -328,7 +330,8 @@ data class ExistsExpr(
     val collection: CollectionExpr? = null,
 ) : Expr
 
-/** count/sum/latest/first. `field` is sum's second argument; `orderBy` is the
+/** count/sum/latest/first. `field` is sum's second argument (absent when the
+ *  collection is a `many` of values summed directly, Reference §5); `orderBy` is the
  *  selectors' mandatory `by` list — the author's ordering statement (Reference §10):
  *  no implicit ordering source exists. */
 data class AggCall(
@@ -338,7 +341,8 @@ data class AggCall(
     val orderBy: List<String> = emptyList(),
 ) : Expr
 
-/** Builtin function call from the closed list: lowercase, uppercase, trim, length, max, min. */
+/** Builtin function call from the closed list: lowercase, uppercase, trim, length, max, min,
+ *  abs, year, month, day, dayOfWeek, hour, minute. */
 data class FunCall(val name: String, val args: List<Expr>) : Expr
 
 /** `(Shape for expr)` — the singular query form. */

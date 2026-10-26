@@ -145,6 +145,7 @@ object Printer {
         NowLit -> "now"
         TodayLit -> "today"
         is DurationLit -> "${e.amount} ${e.unit}"
+        is ListLit -> "[${e.items.joinToString(", ") { expr(it) }}]"
         is PathExpr -> e.root + e.segs.joinToString("") { (if (it.viaQdot) "?." else ".") + it.name }
         is UnaryMinus -> "-${operand(e.inner)}"
         is Binary -> "${operand(e.left)} ${e.op} ${operand(e.right)}"

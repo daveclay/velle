@@ -609,11 +609,33 @@ class Parser(private val tokens: List<Token>) {
                 Binary(op, left, parseValue())
             }
             // the text operators are contextual words (Tokens.kt, TEXT_OPERATORS):
-            // `contains` / `like`, and `starts with` / `ends with` as two words
-            t.type == TokType.LIDENT && (t.text == "contains" || t.text == "like") -> {
+            // `contains` / `like` / `matches`, and `starts with` / `ends with` as two words
+            t.type == TokType.LIDENT && (t.text == "contains" || t.text == "like" || t.text == "matches") -> {
                 val op = next().text
                 skipNewlines()
                 Binary(op, left, parseValue())
+            }
+            // `x in [a, b]` and `x not in [a, b]` (Reference §10): membership of a listed set of values
+            t.type == TokType.LIDENT && t.text == "in" -> {
+                next()
+                skipNewlines()
+                Binary("in", left, parseValue())
+            }
+            t.isKw("not") && peekAhead(1).let { it.type == TokType.LIDENT && it.text == "in" } -> {
+                next(); next()
+                skipNewlines()
+                NotExpr(Binary("in", left, parseValue()))
+            }
+            // `x between a and b` (Reference §10) is `x >= a and x <= b`, both bounds included
+            t.type == TokType.LIDENT && t.text == "between" -> {
+                next()
+                skipNewlines()
+                val lo = parseValue()
+                skipNewlines()
+                expectKw("and")
+                skipNewlines()
+                val hi = parseValue()
+                Binary("and", Binary(">=", left, lo), Binary("<=", left, hi))
             }
             t.type == TokType.LIDENT && (t.text == "starts" || t.text == "ends") &&
                 peekAhead(1).let { it.type == TokType.LIDENT && it.text == "with" } -> {
@@ -696,7 +718,7 @@ class Parser(private val tokens: List<Token>) {
 
     private fun parseMultiplicative(): Expr {
         var left = parseUnary()
-        while (at(TokType.STAR) || at(TokType.SLASH)) {
+        while (at(TokType.STAR) || at(TokType.SLASH) || at(TokType.PERCENT)) {
             val op = next().text
             skipNewlines()
             left = Binary(op, left, parseUnary())
@@ -747,8 +769,27 @@ class Parser(private val tokens: List<Token>) {
             t.type == TokType.LIDENT -> parseNameOrCall()
             t.type == TokType.UIDENT -> { next(); PathExpr(t.text) }
             t.type == TokType.LPAREN -> parseParenPrimary()
+            t.type == TokType.LBRACK -> parseListLit()
             else -> fail("expected an expression", t)
         }
+    }
+
+    /** `[a, b, c]` — the listed values on the right of `in` (Reference §10). */
+    private fun parseListLit(): Expr {
+        expect(TokType.LBRACK)
+        skipNewlines()
+        val items = mutableListOf<Expr>()
+        if (!at(TokType.RBRACK)) {
+            items.add(parseValue())
+            skipNewlines()
+            while (at(TokType.COMMA)) {
+                next(); skipNewlines()
+                items.add(parseValue())
+                skipNewlines()
+            }
+        }
+        expect(TokType.RBRACK)
+        return ListLit(items)
     }
 
     private fun parseNameOrCall(): Expr {
@@ -770,10 +811,11 @@ class Parser(private val tokens: List<Token>) {
             }
             "sum" -> {
                 // sum's collection is the single-binding form; its second argument
-                // is the summed field (grammar.md, aggregateCall)
+                // is the summed field (grammar.md, aggregateCall) — absent when the
+                // collection is a `many` of values summed directly (Reference §5)
                 val coll = parseCollectionExpr(singleBinding = true)
-                expect(TokType.COMMA)
-                AggCall(name, coll, expect(TokType.LIDENT).text)
+                if (at(TokType.COMMA)) { next(); AggCall(name, coll, expect(TokType.LIDENT).text) }
+                else AggCall(name, coll)
             }
             else -> {
                 val args = mutableListOf<Expr>()

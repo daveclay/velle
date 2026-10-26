@@ -138,6 +138,7 @@ class Evaluator(private val system: VelleSystem) {
         NowLit -> Value.VDateTime(system.effectiveNow)
         TodayLit -> Value.VDate(system.effectiveToday)
         is DurationLit -> Value.VDuration(e.amount, e.unit)
+        is ListLit -> Value.VVals(e.items.map { eval(it, ctx) }, ordered = true)
         is ValueLit -> e.value
         is RefLit -> Value.VRef(system.idOf(e.ref))
         is PathExpr -> evalPath(e, ctx)
@@ -223,15 +224,22 @@ class Evaluator(private val system: VelleSystem) {
         throw VelleRuntimeError("'$name' is not readable on '$shape' instance $id")
     }
 
+    private fun textBlank(v: Value): Boolean? = when (v) {
+        is Value.VText -> v.v.isBlank()
+        Value.VNone -> true
+        else -> null
+    }
+
     private fun evalIs(e: IsExpr, ctx: Ctx): Value {
         val v = eval(e.subject, ctx)
         return Value.VBool(
             when (e.kind) {
                 "none" -> v == Value.VNone
                 "some" -> v != Value.VNone
-                "empty" -> collectionSize(v)?.let { it == 0 }
+                // text `is empty` (Reference §10): absent, or nothing but whitespace
+                "empty" -> textBlank(v) ?: collectionSize(v)?.let { it == 0 }
                     ?: throw VelleRuntimeError("'is empty' on non-collection")
-                "notEmpty" -> collectionSize(v)?.let { it > 0 }
+                "notEmpty" -> textBlank(v)?.not() ?: collectionSize(v)?.let { it > 0 }
                     ?: throw VelleRuntimeError("'is not empty' on non-collection")
                 "refinement" -> {
                     val ref = v as? Value.VRef ?: return Value.VBool(false)
@@ -381,7 +389,15 @@ class Evaluator(private val system: VelleSystem) {
         // of values"); over records it counts the combinations
         "count" -> valueCollectionOf(e.collection, ctx)?.let { Value.VNum(BigDecimal(it.values.size)) }
             ?: Value.VNum(BigDecimal(combinations(e.collection, ctx).count()))
-        "sum" -> {
+        // `sum(values)` over a `many` of numbers or durations (Reference §5)
+        "sum" -> if (e.field == null) {
+            val vals = valueCollectionOf(e.collection, ctx)?.values
+                ?: throw VelleRuntimeError("sum over records names the field to sum")
+            // an empty `many duration` sums to no time, not to the number zero
+            val src = e.collection.bindings.single().source as PathExpr
+            val elem = (declaredTypeOf(src, ctx.subjectScope) as? VType.CollS)?.let { system.model.scalarOf(it.name) }
+            if (vals.isEmpty() && elem == VType.DurationT) Value.VDuration.ofSeconds(0) else sumValues(vals)
+        } else {
             // a field of an extension type sums through its declared `sum` (Reference §5; OQ65)
             val element = system.model.collectionElement(e.collection, ctx.subjectScope)
             val ext = element?.let { system.model.membersOf(it)[e.field!!]?.type }?.let { system.model.extTypeOf(it) }
@@ -431,6 +447,35 @@ class Evaluator(private val system: VelleSystem) {
         else -> throw VelleRuntimeError("unknown aggregate '${e.name}'")
     }
 
+    /** The declared type at the end of a member path from [scope]; null when it is not a plain member path. */
+    private fun declaredTypeOf(p: PathExpr, scope: String): VType? {
+        val names = if (p.root == "this") p.segs.map { it.name } else listOf(p.root) + p.segs.map { it.name }
+        var sc: String? = scope
+        var t: VType? = null
+        for (n in names) {
+            val m = system.model.membersOf(sc ?: return null)[n] ?: return null
+            t = m.type
+            sc = m.type.instanceShape()
+        }
+        return t
+    }
+
+    private fun sumValues(vals: List<Value>): Value {
+        if (vals.any { it is Value.VDuration })
+            return Value.VDuration.ofSeconds(vals.sumOf { (it as? Value.VDuration)?.seconds() ?: throw VelleRuntimeError("sum over mixed values") })
+        var acc = BigDecimal.ZERO
+        for (v in vals) acc = acc.add((v as? Value.VNum)?.v ?: throw VelleRuntimeError("sum over non-numeric value $v"))
+        return Value.VNum(acc)
+    }
+
+    private val regexCache = HashMap<String, Regex>()
+
+    private fun regexOf(pattern: String): Regex = regexCache.getOrPut(pattern) {
+        try { Regex(pattern) } catch (x: java.util.regex.PatternSyntaxException) {
+            throw VelleRuntimeError("'matches' pattern is not a regular expression: ${x.description}")
+        }
+    }
+
     private fun compareDatums(a: List<Value>, b: List<Value>): Int {
         for (i in a.indices) {
             val c = compareValues(a[i], b[i])
@@ -450,12 +495,53 @@ class Evaluator(private val system: VelleSystem) {
                 else -> Value.VNum(BigDecimal(v.length))
             }
         }
+        "abs" -> when (val v = eval(e.args.single(), ctx)) {
+            is Value.VNum -> Value.VNum(v.v.abs())
+            is Value.VDuration -> if (v.seconds() < 0) Value.VDuration.ofSeconds(-v.seconds()) else v
+            Value.VNone -> Value.VNone
+            else -> throw VelleRuntimeError("abs on $v")
+        }
+        // the parts of a date, a moment, or a time of day (Reference §5): a moment's
+        // parts are read in the system's zone, the one `today` uses
+        "year", "month", "day", "dayOfWeek", "hour", "minute" -> {
+            val v = eval(e.args.single(), ctx)
+            if (v == Value.VNone) Value.VNone else {
+                val date: java.time.LocalDate? = when (v) {
+                    is Value.VDate -> v.v
+                    is Value.VDateTime -> v.v.atZone(system.zone).toLocalDate()
+                    else -> null
+                }
+                val time: java.time.LocalTime? = when (v) {
+                    is Value.VTime -> v.v
+                    is Value.VDateTime -> v.v.atZone(system.zone).toLocalTime()
+                    else -> null
+                }
+                val n = when (e.name) {
+                    "year" -> date?.year
+                    "month" -> date?.monthValue
+                    "day" -> date?.dayOfMonth
+                    "dayOfWeek" -> date?.dayOfWeek?.value
+                    "hour" -> time?.hour
+                    else -> time?.minute
+                } ?: throw VelleRuntimeError("${e.name} on $v")
+                Value.VNum(BigDecimal(n))
+            }
+        }
         "max", "min" -> {
+            // `max(values)` / `min(values)` over a `many` of values (Reference §5): the
+            // greatest or least under the element's order, absent when there are none
+            val single = e.args.singleOrNull()?.let { eval(it, ctx) }
             // the *ordered* capability (Reference §5; OQ65 D4): numbers by value, an
             // extension type through its declared ordering, constants read as that type
-            val values = e.args.map { eval(it, ctx) }
+            val values = if (single is Value.VVals || single == Value.VEmpty) emptyList() else e.args.map { eval(it, ctx) }
             val ext = values.filterIsInstance<Value.VExt>().firstOrNull()
-            if (ext != null) {
+            if (single is Value.VVals || single == Value.VEmpty) {
+                val vals = (single as? Value.VVals)?.values ?: emptyList()
+                if (vals.isEmpty()) Value.VNone else vals.reduce { a, b ->
+                    val c = compareValues(a, b)
+                    if (e.name == "max") (if (c >= 0) a else b) else (if (c <= 0) a else b)
+                }
+            } else if (ext != null) {
                 val typed = values.map { coerceLiteral(it, ext.type) }
                 typed.reduce { a, b ->
                     val c = compareValues(a, b)
@@ -524,10 +610,21 @@ class Evaluator(private val system: VelleSystem) {
         val (l, r) = if (e.op in setOf("==", "!=", "<", "<=", ">", ">=")) unify(l0, r0) else l0 to r0
         return when (e.op) {
             "+", "-" -> arith(e.op, l, r)
-            "*", "/" -> {
+            "*", "/", "%" -> {
                 val a = (l as? Value.VNum)?.v ?: throw VelleRuntimeError("'${e.op}' on non-number")
                 val b = (r as? Value.VNum)?.v ?: throw VelleRuntimeError("'${e.op}' on non-number")
-                Value.VNum(if (e.op == "*") a.multiply(b) else a.divide(b, java.math.MathContext.DECIMAL64))
+                Value.VNum(when (e.op) {
+                    "*" -> a.multiply(b)
+                    "/" -> a.divide(b, java.math.MathContext.DECIMAL64)
+                    // the remainder keeps the sign of the left operand, as in Kotlin and SQL
+                    else -> a.remainder(b)
+                })
+            }
+            // `x in [a, b]` / `x in values` (Reference §10): membership under the element's
+            // equality; an absent left side is in nothing
+            "in" -> {
+                val set = (r as? Value.VVals)?.values ?: if (r == Value.VEmpty) emptyList() else throw VelleRuntimeError("'in' on $r")
+                Value.VBool(l != Value.VNone && set.any { valueEquals(l, it) })
             }
             "==", "!=" -> {
                 val eq = valueEquals(l, r)
@@ -560,6 +657,7 @@ class Evaluator(private val system: VelleSystem) {
                         "contains" -> a.contains(b)
                         "starts with" -> a.startsWith(b)
                         "ends with" -> a.endsWith(b)
+                        "matches" -> regexOf(b).matches(a)
                         else -> likePattern(b).matches(a)
                     }
                 )

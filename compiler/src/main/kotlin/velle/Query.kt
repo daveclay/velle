@@ -35,6 +35,9 @@ sealed interface QF {
     /** `is none` / `is some` on an optional column ([isNull] = the `none` side). */
     data class NullCheck(val field: String, val isNull: Boolean) : QF
 
+    /** `is empty` on a text column (Reference §10): NULL, or nothing but whitespace. */
+    data class TextBlank(val field: String) : QF
+
     /** Some instance of [shape] (rows of that table) references the subject row
      *  through its to-one [refField] and satisfies [inner]; [refField] null means
      *  an uncorrelated existence test over the whole table. */
@@ -128,6 +131,11 @@ class QueryCompiler(
                 "or" -> QF.Or(compileExpr(e.left, scope, positive, depth), compileExpr(e.right, scope, positive, depth))
                 "==", "!=", "<", "<=", ">", ">=" -> compileCmp(e, scope, positive)
                 in TEXT_OPERATORS -> compileCmp(e, scope, positive)
+                // `x in [a, b]` is `x == a or x == b`; an empty list holds nothing
+                "in" -> (e.right as? ListLit)?.items
+                    ?.map { tryCmp(e.left, "==", it, scope) ?: return fail(positive) }
+                    ?.fold(QF.False as QF) { acc, f -> if (acc == QF.False) f else QF.Or(acc, f) }
+                    ?: fail(positive)
                 else -> fail(positive)
             }
             is NotExpr -> QF.Not(compileExpr(e.inner, scope, !positive, depth))
@@ -146,6 +154,7 @@ class QueryCompiler(
         is NotExpr -> containsThis(e.inner)
         is IfExpr -> containsThis(e.condition) || containsThis(e.thenExpr) || containsThis(e.elseExpr)
         is IsExpr -> containsThis(e.subject)
+        is ListLit -> e.items.any { containsThis(it) }
         is ExistsExpr -> (e.forExpr?.let { containsThis(it) } ?: false) ||
             (e.collection?.let { c -> c.bindings.any { containsThis(it.source) } || (c.where?.let { containsThis(it) } ?: false) } ?: false)
         is AggCall -> e.collection.bindings.any { containsThis(it.source) } ||
@@ -179,6 +188,12 @@ class QueryCompiler(
             }
             "empty", "notEmpty" -> {
                 val p = e.subject as? PathExpr ?: return fail(positive)
+                // a text column: blank or absent (Reference §10)
+                resolveHops(p, scope)?.let { hops ->
+                    if (hops.last().second.type.strip() != VType.Text) return@let
+                    val blank = wrapHops(hops.dropLast(1), QF.TextBlank(hops.last().first))
+                    return if (e.kind == "empty") blank else QF.Not(blank)
+                }
                 if (p.segs.isNotEmpty()) return fail(positive)
                 val m = model.membersOf(scope)[p.root] ?: return fail(positive)
                 val coll = m.type as? VType.Coll ?: return fail(positive)
@@ -403,6 +418,7 @@ class QueryCompiler(
             "-" -> QConst.QNum(l.v.subtract(rv.v))
             "*" -> QConst.QNum(l.v.multiply(rv.v))
             "/" -> QConst.QNum(l.v.divide(rv.v, java.math.MathContext.DECIMAL64))
+            "%" -> QConst.QNum(l.v.remainder(rv.v))
             else -> null
         }
     }

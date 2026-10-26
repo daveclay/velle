@@ -9,7 +9,11 @@ The comparison operators are `==`, `!=`, `<`, `<=`, `>`, and `>=`.
 - `==` is the only spelling of equality. `=` is for defining a shape (`shape X = Y where ...`) and for [assignment](Reference-12-Assignment).
 - Comparing two records with `==` asks whether they are the same record, by their `id` ([§5](Reference-05-Scalars)). It never compares them field by field.
 
-Text values also support `contains`, `starts with`, `ends with`, and `like`, all case-sensitive. In a `like` pattern, `%` matches any run of characters, including none, `_` matches one character, and `\` escapes either.
+`qty between 2 and 5` is `qty >= 2 and qty <= 5`, both bounds included. It works on any ordered value: `due between today and today + 7 days`.
+
+`status in ["open", "pending"]` asks whether the value equals one of the listed values, and `status not in ["open", "pending"]` whether it equals none. The values are written between square brackets, separated by commas, and are of the left side's type. The right side may also be a `many` of values ([§5](Reference-05-Scalars)): `qty in scores`. An absent value is in nothing.
+
+Text values also support `contains`, `starts with`, `ends with`, `like`, and `matches`, all case-sensitive. In a `like` pattern, `%` matches any run of characters, including none, `_` matches one character, and `\` escapes either. `matches` takes a regular expression, in the Java dialect, that the whole text must match: `email matches "[^@ ]+@[^@ ]+\\.[a-z]+"`. A backslash in a text literal is written twice, so the regular expression `\.` is spelled `"\\."` in a spec. The compiler reads the expression when the spec compiles, so a malformed one is an error there, never at run time.
 
 ## Testing presence, emptiness, and membership with `is`
 
@@ -18,6 +22,8 @@ Text values also support `contains`, `starts with`, `ends with`, and `like`, all
 **Presence of an optional value.** `assignee is none` and `response is some` test whether an optional field or an optional to-one relationship holds a value.
 
 **Emptiness of a collection.** `corrections is empty` and `corrections is not empty` test a `many` relationship or any collection expression.
+
+**Emptiness of a text.** `note is empty` holds when a text field is absent or holds nothing but spaces, tabs, and line breaks, and `note is not empty` when it holds anything else. A product owner means the same thing by a missing note and a blank one, and this test treats them alike.
 
 **Membership of a refinement.** `alert is UnacknowledgedAlert` asks whether the record is currently in that refinement. `invoice is not IssuedInvoice` is the negation, the same as `not (invoice is IssuedInvoice)` and the spelling Velle's diagnostics use. Inside a `requires` declaration, and only there, membership may also be written `pharmacist to be LicensedPharmacist` ([§21](Reference-21-never)).
 
@@ -47,9 +53,10 @@ A boolean field is a complete condition on its own. `where applied` means `appli
 ```
 count(<collection-expr>)
 sum(<collection-expr>, <field>)
+sum(<many of values>)
 ```
 
-The first argument is any collection expression. A relationship filtered with `where`, such as `invoices where OverdueInvoice`, is one, so `count(invoices where OverdueInvoice)` needs no further syntax.
+The first argument is any collection expression. A relationship filtered with `where`, such as `invoices where OverdueInvoice`, is one, so `count(invoices where OverdueInvoice)` needs no further syntax. A `many` of numbers or durations ([§5](Reference-05-Scalars)) is summed directly, with no field, as `sum(scores)`; `max(scores)` and `min(scores)` read its greatest and least value, and are absent when it is empty.
 
 ## Reaching through relationships
 
@@ -112,11 +119,12 @@ latest(Referral where referrer == this by referredOn).referee
 
 A number or a quoted text compared with a field of an [extension type](Reference-05-Scalars#extension-types) reads as that type: in `balance < 0` with `balance: Money`, the `0` is a `Money`, read once when the spec compiles. The type's author decides which constants it reads and what arithmetic it takes part in; `balance * 2` and `balance + 10` are legal when the author declared `Money * decimal` and `Money + Money`.
 
-`today - 7 days` and `now + 14 days` add or subtract a duration from a `Date` or `DateTime`. A duration is an integer followed by `seconds`, `minutes`, `hours`, `days`, or `weeks`, or a field of type `duration` ([§5](Reference-05-Scalars)): `received + sla`. On a `Date` the step is a calendar step: `+ 1 days` is the next calendar date. On a `DateTime` it is exact clock time: `3 days` is seventy-two hours. Two durations add and subtract, `finished - started` on two `DateTime` values is the duration between them, and `done - planned` on two `Date` values is a whole number of days. A `time` moves by a duration as a clock does, `closes - 30 minutes`, and `closes - opens` on two times is a duration.
+`today - 7 days` and `now + 14 days` add or subtract a duration from a `Date` or `DateTime`. A duration is an integer followed by `seconds`, `minutes`, `hours`, `days`, or `weeks`, or a field of type `duration` ([§5](Reference-05-Scalars)): `received + sla`. On a `Date` the step is a calendar step: `+ 1 days` is the next calendar date. On a `DateTime` it is exact clock time: `3 days` is seventy-two hours. Two durations add and subtract, `finished - started` on two `DateTime` values is the duration between them, and `done - planned` on two `Date` values is a whole number of days. A `time` moves by a duration as a clock does, `closes - 30 minutes`, and `closes - opens` on two times is a duration. `abs(due - today)` is the distance between two dates whichever comes first, and `dayOfWeek(due)`, `month(due)`, `hour(startsAt)` read one part of a date, a moment, or a time as a whole number ([§5](Reference-05-Scalars#the-built-in-functions)): `dayOfWeek(due) >= 6` is a weekend due date.
 
 ## What the compiler checks
 
 - The compiler rejects a comparison between values of different types, a text operator on a non-text value (except `contains` on a `many` of values, [§5](Reference-05-Scalars)), duration arithmetic on anything but a `Date`, `DateTime`, `time`, or `duration`, a `by` property that is not orderable, and `x is R` when `x` and `R` share no base shape ([checks.md, F2](checks#f2--type-checking)).
+- The compiler rejects a listed value after `in` that is not of the left side's type, a right side of `in` that is neither a list nor a `many` of values, a list of values anywhere but after `in`, a `matches` whose right side is not a quoted text or is not a regular expression, `is empty` on a value that is neither a collection nor a text, and a `sum` with no field over anything but a `many` of numbers or durations ([checks.md, F2](checks#f2--type-checking)).
 - The compiler rejects a constant an extension type's reader refuses or does not read, and an operator, comparison, or `sum` the type does not declare, naming the Kotlin class to extend ([checks.md, E3](checks#e3--a-capability-the-type-does-not-declare)).
 - The compiler rejects plain `.` through an optional value with no earlier presence test, and names `?.` as the alternative ([checks.md, V11](checks#v11--narrowing-analysis)).
 - The compiler rejects `(Shape for expr)` and `exists Shape for expr` when more than one field matches the subject's type, or when it cannot prove at most one record exists. The diagnostic asks for `latest` or `first` over a filtered collection ([checks.md, V12](checks#v12--singular-reference-proofs)).
@@ -132,13 +140,19 @@ negation       := "not"? atom
 atom           := comparison | isExpr | existsExpr | booleanAtom | "(" predicate ")"
 
 comparison     := expr ("==" | "!=" | "<" | "<=" | ">" | ">=") expr
-               | expr ("contains" | "starts" "with" | "ends" "with" | "like") expr
+               | expr "between" expr "and" expr            -- both bounds included: x >= a and x <= b
+               | expr "not"? "in" (listLiteral | expr)     -- equal to one of the listed values, or to a member
+                                                           -- of a `many` of values
+               | expr ("contains" | "starts" "with" | "ends" "with" | "like" | "matches") expr
                                                            -- text operands only, exact and case-sensitive:
                                                            -- the right operand occurs within / begins / ends the left;
                                                            -- `like` takes a pattern where `%` matches any run of
                                                            -- characters (empty included), `_` any one character,
-                                                           -- and `\` escapes either
+                                                           -- and `\` escapes either; `matches` takes a regular
+                                                           -- expression (a text literal) the whole left must match
+listLiteral    := "[" (expr ("," expr)*)? "]"
 isExpr         := expr "is" ("none" | "some" | "empty" | "not empty" | ShapeName | "not" ShapeName)
+                                                           -- `empty` on a text: absent or whitespace only
 existsExpr     := "exists" ShapeName "for" expr           -- sugar; legal only when exactly one field matches expr's type
                | "exists" "(" collectionExpr ")"          -- general form; required when more than one field
                                                            -- matches, or more than one condition is needed
@@ -159,6 +173,7 @@ accessor       := "." | "?."   -- "." requires the left side provably non-absent
 
 aggregateCall  := "count" "(" collectionExpr ")"
                | "sum" "(" collectionExpr "," Identifier ")"
+               | "sum" "(" path ")"                        -- a `many` of numbers or durations, summed directly
 selectorCall   := ("latest" | "first") "(" collectionExpr
                       "by" Identifier ("," Identifier)* ")"      -- ordering is explicit and mandatory: the author's
                                                                  -- named orderable datums; an undiscriminated winning

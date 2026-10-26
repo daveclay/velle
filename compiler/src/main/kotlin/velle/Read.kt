@@ -210,6 +210,10 @@ abstract class ScalarField<T : Any>(path: List<String>) : Fields(path) {
     infix fun lte(v: T): Expr = Binary("<=", pathExpr(), lit(v))
     infix fun gt(v: T): Expr = Binary(">", pathExpr(), lit(v))
     infix fun gte(v: T): Expr = Binary(">=", pathExpr(), lit(v))
+    /** `member in [a, b]` (Reference §10): equal to one of the listed values. */
+    fun oneOf(vararg v: T): Expr = Binary("in", pathExpr(), ListLit(v.map { lit(it) }))
+    /** `member between a and b` (Reference §10): both bounds included. */
+    fun between(lo: T, hi: T): Expr = Binary("and", Binary(">=", pathExpr(), lit(lo)), Binary("<=", pathExpr(), lit(hi)))
     val ascending: OrderDatum get() = OrderDatum(fieldPath.single(), descending = false)
     val descending: OrderDatum get() = OrderDatum(fieldPath.single(), descending = true)
 }
@@ -222,12 +226,17 @@ class TextField(path: List<String>) : ScalarField<String>(path) {
     infix fun endsWith(v: String): Expr = Binary("ends with", pathExpr(), TextLit(v))
     /** `like`: `%` any run, `_` any one character, `\` escapes either. */
     infix fun like(pattern: String): Expr = Binary("like", pathExpr(), TextLit(pattern))
+    /** `matches`: a regular expression the whole text must match. */
+    infix fun matches(regex: String): Expr = Binary("matches", pathExpr(), TextLit(regex))
+    /** `member is empty` (Reference §10): absent, or nothing but whitespace. */
+    fun isEmpty(): Expr = IsExpr(pathExpr(), "empty")
+    fun isNotEmpty(): Expr = IsExpr(pathExpr(), "notEmpty")
     /** `lowercase(member)`, for case-folded comparison the author spells visibly. */
     val lowercase: TextFunction get() = TextFunction("lowercase", fieldPath)
     val uppercase: TextFunction get() = TextFunction("uppercase", fieldPath)
     val trim: TextFunction get() = TextFunction("trim", fieldPath)
     /** `length(member)`, compared as a whole number. */
-    val length: LengthOf get() = LengthOf(fieldPath)
+    val length: PartOf get() = PartOf("length", fieldPath)
 }
 
 /** A text function of a member (`lowercase(member)`, `uppercase`, `trim`) as the left operand of a text comparison. */
@@ -238,17 +247,20 @@ class TextFunction internal constructor(private val name: String, private val pa
     infix fun startsWith(v: String): Expr = Binary("starts with", call(), TextLit(v))
     infix fun endsWith(v: String): Expr = Binary("ends with", call(), TextLit(v))
     infix fun like(pattern: String): Expr = Binary("like", call(), TextLit(pattern))
+    infix fun matches(regex: String): Expr = Binary("matches", call(), TextLit(regex))
 }
 
-/** `length(member)` as the left operand of a numeric comparison. */
-class LengthOf internal constructor(private val path: List<String>) {
-    private fun call(): Expr = FunCall("length", listOf(PathExpr("this", path.map { Seg(it, false) })))
+/** A whole-number part of a member (`year(member)`, `length(member)`, ...) as the left operand of a comparison. */
+class PartOf internal constructor(private val name: String, private val path: List<String>) {
+    private fun call(): Expr = FunCall(name, listOf(PathExpr("this", path.map { Seg(it, false) })))
     infix fun eq(v: Int): Expr = Binary("==", call(), ValueLit(Value.num(v)))
     infix fun neq(v: Int): Expr = Binary("!=", call(), ValueLit(Value.num(v)))
     infix fun lt(v: Int): Expr = Binary("<", call(), ValueLit(Value.num(v)))
     infix fun lte(v: Int): Expr = Binary("<=", call(), ValueLit(Value.num(v)))
     infix fun gt(v: Int): Expr = Binary(">", call(), ValueLit(Value.num(v)))
     infix fun gte(v: Int): Expr = Binary(">=", call(), ValueLit(Value.num(v)))
+    fun oneOf(vararg v: Int): Expr = Binary("in", call(), ListLit(v.map { ValueLit(Value.num(it)) }))
+    fun between(lo: Int, hi: Int): Expr = Binary("and", Binary(">=", call(), ValueLit(Value.num(lo))), Binary("<=", call(), ValueLit(Value.num(hi))))
 }
 
 class NumField(path: List<String>) : ScalarField<Number>(path) {
@@ -264,6 +276,8 @@ class UuidField(path: List<String>) : Fields(path) {
 /** A `time` member (Reference §5): a time of day, ordered. */
 class TimeField(path: List<String>) : ScalarField<java.time.LocalTime>(path) {
     override fun lit(v: java.time.LocalTime): Expr = ValueLit(Value.VTime(v))
+    val hour: PartOf get() = PartOf("hour", fieldPath)
+    val minute: PartOf get() = PartOf("minute", fieldPath)
 }
 
 /** A `bytes` member (Reference §5): equal by content, ordered byte by byte. */
@@ -284,10 +298,22 @@ class BoolField(path: List<String>) : Fields(path) {
 
 class DateField(path: List<String>) : ScalarField<LocalDate>(path) {
     override fun lit(v: LocalDate): Expr = ValueLit(Value.VDate(v))
+    /** The parts of the date (Reference §5); `dayOfWeek` counts Monday as 1 and Sunday as 7. */
+    val year: PartOf get() = PartOf("year", fieldPath)
+    val month: PartOf get() = PartOf("month", fieldPath)
+    val day: PartOf get() = PartOf("day", fieldPath)
+    val dayOfWeek: PartOf get() = PartOf("dayOfWeek", fieldPath)
 }
 
 class DateTimeField(path: List<String>) : ScalarField<Instant>(path) {
     override fun lit(v: Instant): Expr = ValueLit(Value.VDateTime(v))
+    /** The parts of the moment, read in the system's zone (Reference §5). */
+    val year: PartOf get() = PartOf("year", fieldPath)
+    val month: PartOf get() = PartOf("month", fieldPath)
+    val day: PartOf get() = PartOf("day", fieldPath)
+    val dayOfWeek: PartOf get() = PartOf("dayOfWeek", fieldPath)
+    val hour: PartOf get() = PartOf("hour", fieldPath)
+    val minute: PartOf get() = PartOf("minute", fieldPath)
 }
 
 /**

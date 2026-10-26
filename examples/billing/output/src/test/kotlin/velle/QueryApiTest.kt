@@ -121,6 +121,33 @@ open class QueryApiTest {
     }
 
     @Test
+    fun `in, matches, is empty, between, and the parts of a date`() {
+        val sys = newSystem()
+        listOf("Ada Lovelace", "Alan Turing", "Grace Hopper").forEach { sys.customer(it, "${it.replace(" ", ".")}@example.com") }
+        sys.customer("   ", "blank@example.com")
+        fun names(q: TypedQuery<*, velle.generated.Customer>) = q.list().map { it.name }
+
+        // `in`: equal to one of the listed values; `not` of it is the complement
+        assertEquals(listOf("Ada Lovelace", "Grace Hopper"), names(sys.read.customers.where { name.oneOf("Ada Lovelace", "Grace Hopper") }.orderBy { name.ascending }))
+        assertEquals(listOf("   ", "Alan Turing"), names(sys.read.customers.where { not(name.oneOf("Ada Lovelace", "Grace Hopper")) }.orderBy { name.ascending }))
+        // `matches`: the whole text matches the regular expression; a part of it is not enough
+        assertEquals(listOf("Ada Lovelace", "Alan Turing"), names(sys.read.customers.where { email matches "A[a-z]+\\.[A-Za-z]+@example\\.com" }.orderBy { name.ascending }))
+        assertEquals(emptyList(), names(sys.read.customers.where { email matches "Lovelace" }.orderBy { name.ascending }))
+        // `is empty` on text: nothing but whitespace counts as empty
+        assertEquals(listOf("   "), names(sys.read.customers.where { name.isEmpty() }.orderBy { name.ascending }))
+        assertEquals(3, sys.read.customers.where { name.isNotEmpty() }.count())
+        // `between` includes both bounds; `length` and the parts of a date compare as whole numbers
+        assertEquals(listOf("Ada Lovelace", "Grace Hopper"), names(sys.read.customers.where { name.length.between(12, 13) }.orderBy { name.ascending }))
+        val ada = sys.customers().first()
+        sys.invoice(ada, LocalDate.of(2026, 2, 7)) // a Saturday
+        sys.invoice(ada, LocalDate.of(2026, 2, 9)) // a Monday
+        sys.invoice(ada, LocalDate.of(2026, 3, 9))
+        assertEquals(listOf(LocalDate.of(2026, 2, 7)), sys.read.invoices.where { due.dayOfWeek gte 6 }.orderBy { due.ascending }.list().map { it.due })
+        assertEquals(listOf(LocalDate.of(2026, 2, 7), LocalDate.of(2026, 2, 9)), sys.read.invoices.where { due.month eq 2 }.orderBy { due.ascending }.list().map { it.due })
+        assertEquals(2, sys.read.invoices.where { due.between(LocalDate.of(2026, 2, 9), LocalDate.of(2026, 3, 9)) }.count())
+    }
+
+    @Test
     fun `every query names its order, and the order is checked against the spec`() {
         val sys = newSystem()
         sys.customer("Ada")
@@ -261,6 +288,18 @@ class QueryApiOverSqliteTest : QueryApiTest() {
     fun close() = conn.close()
 
     override fun newSystem(): BillingSystem = BillingSystem().also { SqliteStore.attach(it.system, conn) }
+
+    @Test
+    fun `the store registers REGEXP on its connection, so matches runs in SQLite`() {
+        newSystem()
+        conn.createStatement().use { st ->
+            st.executeQuery("SELECT 'ada@example.com' REGEXP '[a-z]+@example\\.com', 'see ada@example.com' REGEXP '[a-z]+@example\\.com'").use { rs ->
+                rs.next()
+                assertEquals(1, rs.getInt(1))
+                assertEquals(0, rs.getInt(2), "the whole text must match")
+            }
+        }
+    }
 }
 
 class QueryApiOverTypedStoreTest : QueryApiTest() {

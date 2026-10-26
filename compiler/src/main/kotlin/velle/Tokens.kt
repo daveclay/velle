@@ -6,7 +6,8 @@ enum class TokType {
     NEWLINE, EOF,
     LBRACE, RBRACE, LPAREN, RPAREN, COLON, COMMA,
     ASSIGN, EQ, NEQ, LT, LE, GT, GE,
-    PLUS, MINUS, STAR, SLASH,
+    PLUS, MINUS, STAR, SLASH, PERCENT,
+    LBRACK, RBRACK,
     QMARK, DOT, QDOT,
 }
 
@@ -51,11 +52,21 @@ val FOR_EACH_WORDS = setOf("each", "in", "to")
 /**
  * The text comparison operators (Reference §10; OQ51 R1): contextual words that
  * read as an operator only between two value expressions — `contains`, `like`,
- * and the pairs `starts with` / `ends with`. The operator's name in the AST is
- * the spelling, space included. All are exact and case-sensitive; `like` takes
- * a pattern with `%` (any run), `_` (any one character), and `\` escaping either.
+ * `matches`, and the pairs `starts with` / `ends with`. The operator's name in
+ * the AST is the spelling, space included. All are exact and case-sensitive;
+ * `like` takes a pattern with `%` (any run), `_` (any one character), and `\`
+ * escaping either; `matches` takes a regular expression the whole text must match.
+ *
+ * `in` and `between` are contextual the same way: `x in [a, b]` and
+ * `x between a and b` read as comparisons only between value expressions.
  */
-val TEXT_OPERATORS = setOf("contains", "starts with", "ends with", "like")
+val TEXT_OPERATORS = setOf("contains", "starts with", "ends with", "like", "matches")
+
+/** The closed list of builtin functions (Reference §5). */
+val BUILTIN_FUNCTIONS = setOf(
+    "lowercase", "uppercase", "trim", "length", "max", "min",
+    "abs", "year", "month", "day", "dayOfWeek", "hour", "minute",
+)
 val SCALAR_KEYWORDS = setOf("text", "integer", "long", "decimal", "double", "boolean", "uuid", "duration", "time", "bytes")
 
 class VelleSyntaxError(message: String, val line: Int, val col: Int) :

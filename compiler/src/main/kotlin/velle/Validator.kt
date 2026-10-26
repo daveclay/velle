@@ -854,6 +854,7 @@ class Validator(private val model: Model) {
                 resolvePath(e, scope)
             }
             is UnaryMinus -> checkExpr(e.inner, scope)
+            is ListLit -> e.items.forEach { checkExpr(it, scope) }
             is Binary -> {
                 checkExpr(e.left, scope)
                 // a conjunction narrows what follows it (Reference §10)
@@ -875,7 +876,18 @@ class Validator(private val model: Model) {
                         if (t != VType.Text)
                             diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.op}' compares text, but '${Printer.expr(side)}' is not text"))
                     }
-                }
+                    // `matches` takes a written regular expression, checked here so a malformed one never reaches a rule
+                    if (e.op == "matches") {
+                        val pattern = (e.right as? TextLit)?.value
+                        if (pattern == null)
+                            diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — 'matches' takes a quoted regular expression on the right"))
+                        else try { Regex(pattern) } catch (x: java.util.regex.PatternSyntaxException) {
+                            diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — the pattern is not a regular expression: ${x.description}"))
+                        }
+                    }
+                } else if (e.op == "in") checkIn(e, scope)
+                if (e.op != "in" && (e.left is ListLit || e.right is ListLit))
+                    diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — a list of values `[a, b]` belongs only on the right of `in` (Reference §10)"))
                 // an extension type takes part only through what it declares (Reference §5; OQ65)
                 // a `uuid` and a `boolean` have no order (Reference §5): `==` and `!=` only
                 if (e.op in setOf("<", "<=", ">", ">="))
@@ -886,9 +898,14 @@ class Validator(private val model: Model) {
                     }
                 when (e.op) {
                     "==", "!=", "<", "<=", ">", ">=" -> checkExtComparison(e, scope)
-                    "+", "-", "*", "/" -> {
+                    "+", "-", "*", "/", "%" -> {
                         val l = scalarTypeOf(e.left, scope); val r = scalarTypeOf(e.right, scope)
                         if (l is VType.Ext || r is VType.Ext) operatorLine(e, l, r, scope)
+                        else if (e.op == "%") for (side in listOf(e.left, e.right)) {
+                            val t = scalarTypeOf(side, scope)
+                            if (t != null && t !is VType.Num)
+                                diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '%' takes numbers, but '${Printer.expr(side)}' is not a number"))
+                        }
                     }
                 }
             }
@@ -901,6 +918,13 @@ class Validator(private val model: Model) {
             }
             is IsExpr -> {
                 checkExpr(e.subject, scope)
+                // `is empty` reads a collection or a text (Reference §10)
+                if (e.kind == "empty" || e.kind == "notEmpty") {
+                    val t = scalarTypeOf(e.subject, scope)?.let { (it as? VType.Optional)?.inner ?: it }
+                    if (t != null && t != VType.Text && t !is VType.Coll && t !is VType.CollS)
+                        diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — 'is ${if (e.kind == "empty") "empty" else "not empty"}' tests a collection or a text, " +
+                            "but '${Printer.expr(e.subject)}' is a ${registryName(t) ?: "value of another type"}"))
+                }
                 e.refinement?.let { r ->
                     val rb = model.basesOf(r)
                     val subjectType = (e.subject as? PathExpr)?.let { pathTypeName(it, scope) }
@@ -921,12 +945,23 @@ class Validator(private val model: Model) {
                 }
                 e.collection?.let { checkCollection(it, scope) }
             }
-            is AggCall -> checkCollection(
-                e.collection, scope, sumField = e.field,
-                orderBy = e.orderBy.takeIf { e.name == "latest" || e.name == "first" }
-            )
+            is AggCall -> {
+                checkCollection(
+                    e.collection, scope, sumField = e.field,
+                    orderBy = e.orderBy.takeIf { e.name == "latest" || e.name == "first" }
+                )
+                // `sum(values)` with no field reads a `many` of numbers or durations (Reference §5)
+                if (e.name == "sum" && e.field == null) {
+                    val coll = valueCollectionType(e.collection, scope)
+                    val elem = coll?.let { model.scalarOf(it.name) }
+                    if (coll == null)
+                        diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — a sum over records names the field to sum: sum(items, amount) (Reference §10)"))
+                    else if (elem !is VType.Num && elem != VType.DurationT)
+                        diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — a sum adds numbers or durations, but these values are ${coll.name}"))
+                }
+            }
             is FunCall -> {
-                if (e.name !in setOf("lowercase", "uppercase", "trim", "length", "max", "min"))
+                if (e.name !in BUILTIN_FUNCTIONS)
                     diags.add(Diagnostic("F2", "unknown function '${e.name}' — the builtin list is closed (Reference §5)"))
                 e.args.forEach { checkExpr(it, scope) }
                 checkFunctionCall(e, scope)
@@ -968,20 +1003,24 @@ class Validator(private val model: Model) {
         is UnaryMinus -> scalarTypeOf(e.inner, scope)
         is FunCall -> when (e.name) {
             "lowercase", "uppercase", "trim" -> VType.Text
-            "length" -> VType.Num("integer")
-            // max/min have the type of their arguments: the first typed one that is not a bare constant
-            "max", "min" -> e.args.firstNotNullOfOrNull { a -> scalarTypeOf(a, scope)?.takeIf { it is VType.Ext || constantOf(a) == null } }
+            "length", "year", "month", "day", "dayOfWeek", "hour", "minute" -> VType.Num("integer")
+            "abs" -> e.args.singleOrNull()?.let { scalarTypeOf(it, scope) }
+            // max/min over one `many` of values have the element's type; otherwise the type of
+            // their arguments: the first typed one that is not a bare constant
+            "max", "min" -> (e.args.singleOrNull()?.let { scalarTypeOf(it, scope) } as? VType.CollS)?.let { model.scalarOf(it.name) }
+                ?: e.args.firstNotNullOfOrNull { a -> scalarTypeOf(a, scope)?.takeIf { it is VType.Ext || constantOf(a) == null } }
                 ?: e.args.firstNotNullOfOrNull { scalarTypeOf(it, scope) }
             else -> null
         }
         is AggCall -> when (e.name) {
             "count" -> VType.Num("integer")
-            "sum" -> e.field?.let { f -> model.collectionElement(e.collection, scope, aliasScopes)?.let { el -> model.membersOf(el)[f]?.type } }
-                ?.let { (it as? VType.Optional)?.inner ?: it }
+            "sum" -> if (e.field == null) valueCollectionType(e.collection, scope)?.let { model.scalarOf(it.name) }
+                else model.collectionElement(e.collection, scope, aliasScopes)?.let { el -> model.membersOf(el)[e.field]?.type }
+                    ?.let { (it as? VType.Optional)?.inner ?: it }
             else -> null
         }
         // arithmetic: numbers stay numbers; an extension type's line names its result
-        is Binary -> if (e.op !in setOf("+", "-", "*", "/")) null else {
+        is Binary -> if (e.op !in setOf("+", "-", "*", "/", "%")) null else {
             val l = scalarTypeOf(e.left, scope); val r = scalarTypeOf(e.right, scope)
             when {
                 l is VType.Ext || r is VType.Ext -> operatorLine(e, l, r, scope)?.let { typeNamed(it.result) }
@@ -1009,6 +1048,36 @@ class Validator(private val model: Model) {
             t
         }
         else -> null
+    }
+
+    /** The `many` of values a collection expression names when it is one bare path to one
+     *  (Reference §5), the one form the validator admits over values; null otherwise. */
+    private fun valueCollectionType(c: CollectionExpr, scope: String): VType.CollS? {
+        if (c.where != null) return null
+        val src = c.bindings.singleOrNull()?.takeIf { it.alias == null }?.source as? PathExpr ?: return null
+        if (src.segs.isEmpty() && (src.root in model.shapes || src.root in model.refinements)) return null
+        return scalarTypeOf(src, scope) as? VType.CollS
+    }
+
+    /** `x in [a, b]` / `x in values` (Reference §10): the right side lists values of the left side's type. */
+    private fun checkIn(e: Binary, scope: String) {
+        val lt = scalarTypeOf(e.left, scope)?.let { (it as? VType.Optional)?.inner ?: it }
+        fun agrees(rt: VType?, side: Expr): Boolean =
+            lt == null || rt == null || rt == lt || (rt is VType.Num && lt is VType.Num) || (lt is VType.Ext && constantOf(side) != null)
+        when (val r = e.right) {
+            is ListLit -> for (item in r.items) {
+                val rt = scalarTypeOf(item, scope)
+                if (!agrees(rt, item))
+                    diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${Printer.expr(item)}' is not a ${registryName(lt) ?: "value of the left side's type"}"))
+            }
+            else -> {
+                val coll = scalarTypeOf(r, scope) as? VType.CollS
+                if (coll == null)
+                    diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — 'in' takes a list of values `[a, b]` or a `many` of values on the right (Reference §10)"))
+                else if (!agrees(model.scalarOf(coll.name), r))
+                    diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${Printer.expr(r)}' holds '${coll.name}' values, but '${Printer.expr(e.left)}' is not one"))
+            }
+        }
     }
 
     private fun isOrderable(t: VType): Boolean {
@@ -1168,6 +1237,18 @@ class Validator(private val model: Model) {
     private fun checkFunctionCall(e: FunCall, scope: String) {
         when (e.name) {
             "max", "min" -> {
+                // over one `many` of values (Reference §5): the element must have an order
+                (e.args.singleOrNull()?.let { scalarTypeOf(it, scope) } as? VType.CollS)?.let { coll ->
+                    val elem = model.scalarOf(coll.name)
+                    if (elem != null && !isOrderable(elem)) {
+                        val ext = extOf(elem)
+                        if (ext != null)
+                            diags.add(Diagnostic("E3", "'${Printer.expr(e)}' — ${describe(ext)} declares no ordering, so '${e.name}' is not defined on it; declare `ordering` on the type"))
+                        else
+                            diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${coll.name}' values have no order, so '${e.name}' is not defined on them (Reference §5)"))
+                    }
+                    return
+                }
                 val types = e.args.map { scalarTypeOf(it, scope) }
                 val ext = types.firstNotNullOfOrNull { extOf(it) } ?: return
                 if (ext.ordering == null)
@@ -1181,6 +1262,25 @@ class Validator(private val model: Model) {
                         extOf(t) !== ext -> diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.name}' takes one type; " +
                             "'${Printer.expr(a)}' is not a ${describe(ext)}"))
                     }
+                }
+            }
+            "abs", "year", "month", "day", "dayOfWeek", "hour", "minute" -> {
+                val takes = when (e.name) {
+                    "abs" -> "a number or a duration"
+                    "hour", "minute" -> "a time or a DateTime"
+                    else -> "a Date or a DateTime"
+                }
+                if (e.args.size != 1)
+                    diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.name}' takes one argument, $takes"))
+                e.args.firstOrNull()?.let { a ->
+                    val t = scalarTypeOf(a, scope)?.let { (it as? VType.Optional)?.inner ?: it } ?: return
+                    val ok = when (e.name) {
+                        "abs" -> t is VType.Num || t == VType.DurationT
+                        "hour", "minute" -> t == VType.TimeT || t == VType.DateTimeT
+                        else -> t == VType.DateT || t == VType.DateTimeT
+                    }
+                    if (!ok)
+                        diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.name}' takes $takes, but '${Printer.expr(a)}' is a ${registryName(t) ?: "value of another type"}"))
                 }
             }
             "lowercase", "uppercase", "trim", "length" -> {

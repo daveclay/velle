@@ -87,19 +87,23 @@ What a rule or predicate can do with either form:
 
 - Assign it whole: `this.student.tags = this.tags` replaces every value.
 - Start it empty: `tags: many text initially empty`. A `many` never takes `?`, because the empty collection already means "none".
-- Count it with `count(tags)`, test it with `tags is empty` or `tags contains "honors"`, and run over it with `for each tag in tags` ([§14](Reference-14-for)), in the kept order when there is one. `shape Honors = Student where tags contains "honors"` is in `examples/enrollment/enrollment.velle`.
+- Count it with `count(tags)`, test it with `tags is empty`, `tags contains "honors"`, or `"honors" in tags`, and run over it with `for each tag in tags` ([§14](Reference-14-for)), in the kept order when there is one. `shape Honors = Student where tags contains "honors"` is in `examples/enrollment/enrollment.velle`.
+- Add it up or pick from it: `sum(scores)` over a `many` of numbers or durations, `max(scores)` and `min(scores)` over a `many` of any ordered type. The sum of an empty collection is zero, and `max` and `min` of one are absent.
 - Read it as a derived property of another record: `tagsSeen: many text = student.tags`.
 
-A collection of values has no members to reach into, so it cannot be filtered with `where`, summed, or ordered with `by`; those belong to collections of records ([§10](Reference-10-Predicate-expressions)).
+A collection of values has no members to reach into, so it cannot be filtered with `where`, summed by a field, or ordered with `by`; those belong to collections of records ([§10](Reference-10-Predicate-expressions)).
 
 ## The built-in functions
 
 The list is fixed. A spec may call only these:
 
-- `count`, `sum`, `latest`, `first`, for collections ([§10](Reference-10-Predicate-expressions)). `sum` applies to a number and to an extension type that declares how its values add.
-- `contains`, `starts with`, `ends with`, `like`, for text ([§10](Reference-10-Predicate-expressions)). `contains` also tests whether a `many` of values holds a value (below, "Collections of values").
+- `count`, `sum`, `latest`, `first`, for collections ([§10](Reference-10-Predicate-expressions)). `sum` applies to a number, a duration, and to an extension type that declares how its values add.
+- `contains`, `starts with`, `ends with`, `like`, `matches`, for text ([§10](Reference-10-Predicate-expressions)). `contains` also tests whether a `many` of values holds a value (above, "Collections of values"), as `in` does the other way round.
 - `lowercase`, `uppercase`, `trim`, `length`, each taking one text. `length` is a whole number.
-- `max`, `min`. They apply to numbers and to any extension type that declares an ordering.
+- `max`, `min`. They apply to numbers, to any extension type that declares an ordering, and to a `many` of values of any ordered type.
+- `abs`, taking one number or one duration, gives it without its sign: `abs(due - today)` is how far a date is from today either way.
+- `year`, `month`, `day`, `dayOfWeek`, each taking one `Date` or one `DateTime`, and `hour`, `minute`, each taking one `time` or one `DateTime`. Each is a whole number. `dayOfWeek` counts Monday as 1 and Sunday as 7, so `dayOfWeek(due) >= 6` is a weekend. The parts of a `DateTime` are read in the zone the system runs in, the same zone that gives `today` its date.
+- `%`, the remainder after division, between two numbers: `n % 2 == 0` is even. The result keeps the sign of the left side.
 - Duration literals such as `3 days`, in `seconds`, `minutes`, `hours`, `days`, or `weeks` ([§10](Reference-10-Predicate-expressions)).
 - `randomUUID`, only after `initially`.
 
@@ -158,10 +162,10 @@ An act declared `by` carries one more system-filled property: the actor who comm
 
 ## What the compiler checks
 
-- **Rejects** a call to a function outside the list above, a text function with anything but one text argument, an operator or comparison on mismatched types, an ordered comparison on a `uuid` or a `boolean`, and duration arithmetic on anything but a `Date`, a `DateTime`, or a `duration` ([checks.md, F2](checks#f2--type-checking)).
+- **Rejects** a call to a function outside the list above, a text function with anything but one text argument, `abs` on anything but a number or a duration, a date part on anything but a `Date` or a `DateTime`, `hour` or `minute` on anything but a `time` or a `DateTime`, `%` on anything but numbers, an operator or comparison on mismatched types, an ordered comparison on a `uuid` or a `boolean`, and duration arithmetic on anything but a `Date`, a `DateTime`, or a `duration` ([checks.md, F2](checks#f2--type-checking)).
 - **Rejects** a name in type position that is neither a builtin, nor a shape after `one` or `many`, nor an extension type in scope; a name two registered types share with no `uses` line picking one; and a shape named like an extension type in scope, naming the `uses` line to write ([checks.md, F1](checks#f1--name-resolution-and-casing), [E1](checks#e1--registered-type-names)).
 - **Rejects** an operator, comparison, `sum`, `max`, `min`, or selector `by` on an extension type that does not declare the capability, naming the Kotlin class ([checks.md, E3](checks#e3--a-capability-the-type-does-not-declare)).
-- **Rejects** a `where`, `sum`, or `by` over a collection of values ([checks.md, F2](checks#f2--type-checking)).
+- **Rejects** a `where`, a `sum` by field, or a `by` over a collection of values; `sum` with no field over anything but a `many` of numbers or durations; and `max` or `min` over a `many` of values with no order ([checks.md, F2](checks#f2--type-checking)).
 - **Rejects** `tolerates duplication` on a `many` of records ([checks.md, F3](checks#f3--position-rules)).
 - **Rejects** a rule that appends to a collection tolerating duplication on a schedule, unless the property also tolerates reordering ([checks.md, V8](checks#v8--fold-obligations-and-tolerance-coverage)).
 - **Refuses** at the boundary a committed `many` of values that holds the same value twice, unless the property tolerates duplication ([checks.md, V21](checks#v21--act-field-forms)).

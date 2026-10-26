@@ -87,6 +87,22 @@ class SqliteStore(
 
     private val bindings: Map<String, SqliteTypeBinding<*>> = bindings.associateBy { it.type }
 
+    /** Whether `matches` (Reference §10) can run in the store: SQLite has no regular
+     *  expressions of its own, so a `REGEXP` function is registered on the connection;
+     *  a connection that refuses one (a pool's wrapper) leaves `matches` to the evaluator. */
+    private val regexpRegistered: Boolean = runCatching {
+        org.sqlite.Function.create(conn, "REGEXP", object : org.sqlite.Function() {
+            private val cache = HashMap<String, java.util.regex.Pattern>()
+            override fun xFunc() {
+                // SQLite calls `regexp(pattern, text)` for `text REGEXP pattern`; the whole text must match
+                val pattern = value_text(0); val text = value_text(1)
+                if (pattern == null || text == null) { result(); return }
+                val p = cache.getOrPut(pattern) { java.util.regex.Pattern.compile(pattern) }
+                result(if (p.matcher(text).matches()) 1 else 0)
+            }
+        })
+    }.isSuccess
+
     init {
         // E4: a binding for every extension type a stored field holds, and the binding
         // round-trips the type's own samples through a column of its declared type
@@ -277,6 +293,7 @@ class SqliteStore(
             is QF.Or -> "(${render(f.l, shape, alias, positive)} OR ${render(f.r, shape, alias, positive)})"
             is QF.Not -> "NOT (${render(f.inner, shape, alias, !positive)})"
             is QF.NullCheck -> """$alias."${f.field}" IS ${if (f.isNull) "" else "NOT "}NULL"""
+            is QF.TextBlank -> """($alias."${f.field}" IS NULL OR TRIM($alias."${f.field}") = '')"""
             is QF.Cmp -> renderCmp(f, shape, alias, positive)
             is QF.Exists -> {
                 val a = "t${nextAlias++}"
@@ -315,6 +332,12 @@ class SqliteStore(
             // superset contract, and the evaluator decides in memory
             if (f.op in TEXT_OPERATORS) {
                 val text = encoded as? String ?: return degrade(positive)
+                // `matches` runs through the registered REGEXP function (whole-text match)
+                if (f.op == "matches") {
+                    if (!regexpRegistered) return degrade(positive)
+                    binds.add(text)
+                    return "$col REGEXP ?"
+                }
                 val pattern = when (f.op) {
                     "contains" -> "%" + likeEscape(text) + "%"
                     "starts with" -> likeEscape(text) + "%"
