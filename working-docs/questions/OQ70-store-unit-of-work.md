@@ -45,6 +45,23 @@ Each decision is one section: the decision in a sentence, then the recommendatio
 
 Pooled connections, reconnection, and a consistent read per request come from the store side alone, which is built. Letting two non-conflicting units run at once also needs the runtime's working set (`instances`, `byShape`, the fetch caches, `captures`, and the handle tables `idShape`, `keyOf`, `handleOf`) moved off `VelleSystem`'s fields into an object created at `begin` and dropped at `end`. That is a refactor inside `Runtime.kt` with no new imports; `SqlStore.current` is already a `ThreadLocal`, so the store side needs no change for it. The wiki `API-layer` ("The layers", "One request, end to end") and `Serving-a-system` (the `api.locked` bullet) describe the lock and follow it out.
 
+**Context: a read inside an envelope against a read outside one** (as built 2026-10-27; Dave asked for this comparison 2026-10-28).
+
+| | inside an act or firing (`txn != null`) | outside one: a query, `get`, `exists`, `currentShapeOf` |
+|---|---|---|
+| unit of work | the envelope's write unit, opened in `inTransaction` before the keys are valued; one connection, read-committed transaction | a read unit, opened lazily at the first fetch (`reader()`); one connection, read-only snapshot transaction |
+| when it ends | with the envelope: `Committed` after `onCommit`, `Refused` on a `never`, `Failed` on an exception | at the outermost `scope`'s exit, or the moment an envelope opens in the same scope (`endUnit` before `begin(WRITE)`) |
+| what it sees in the store | the state behind the envelope's key locks: `beginSnapshot()` after `serialize` drops what the key valuation read | one snapshot taken at the first statement; a commit landing on another connection meanwhile is not seen until the next read unit |
+| its own writes | in memory, in the working set: an assign mutates the `Instance` in place (old value kept in `Txn.oldValues` for rollback), a create adds to `instances`/`byShape`; the store sees none of it until `onCommit` | none; a read writes nothing |
+| the working set | hydrated on demand from the unit's connection, each fetch once per envelope (`fetchedAll`, `fetchedRefs`, `fetchedFilters`, `fetchMisses`) | `openReadSnapshot()` calls `beginSnapshot()` at each read entry while `txn == null`, so the cache is dropped per entry and rows are refetched; the snapshot transaction makes every refetch agree |
+| a `scope` opened inside it | opens no unit, reads the envelope's state; a query from engineer code mid-commit reads in-progress writes (`openReadSnapshot` is a no-op) | nested scopes share the one read unit; handles live until the outermost exit |
+| queue keys | valued at admission and locked through `serialize`; another envelope sharing a key waits (PostgreSQL), fails after the lock timeout, or is serialized by the single writer (SQLite) | none: a read takes no key and waits for no envelope (U3 orders writers only) and blocks no writer |
+| what follows | `finalizeDeletes`, then the after-commit queue: each firing is its own envelope with its own unit and keys | nothing |
+
+Why the global lock is still needed: both columns use the same fields on `VelleSystem` for the working set and the handle tables. A read on another thread would see the envelope's in-progress writes (its `openReadSnapshot` skips the clear while `txn != null`) or clear the maps the envelope is using. The store already keeps them apart at the database, one connection each; the runtime does not. After D1's second half each unit owns its working set, so the two columns no longer share anything but the store, and the store's locks (D4) order the envelopes that must be ordered.
+
+In memory, with no store, the two columns differ less: the working set is the state, there is no snapshot connection, and a read sees whatever the maps hold. Per-unit working sets give an envelope nothing to copy from, so in memory a read must still be kept out while an envelope runs (a read-write lock: reads together, an envelope alone), while envelopes with disjoint keys may run together only if the state itself is safe to mutate from two threads, which `HashMap`s are not. D7 should be answered with this in view: in memory the honest unit is "envelopes one at a time on the keys, and reads either alongside each other or alone," not the SQL store's picture.
+
 ### D2 — A write unit is two calls: open it, then take the keys once their values are known.
 
 **Dave (2026-10-27):** ratified. Built: `inTransaction` calls `begin(WRITE)`, values the keys (`actKeys`, `firingKeys`), calls `serialize`, then `beginSnapshot()`.
