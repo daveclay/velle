@@ -68,20 +68,22 @@ class TextOperatorsTest {
     @Test
     fun `evaluation is exact and case-sensitive, and like's wildcards and escapes hold`() {
         val sys = VelleSystem(model())
-        fun customer(name: String, email: String): Long =
-            assertIs<CommitResult.Accepted>(sys.commit("Customer", mapOf("name" to name, "email" to email, "tier" to 1))).id
-        val acme = customer("Acme Ltd", "a@example.com")
-        val lower = customer("acme corp", "b@example.bot")
-        val widgets = customer("Widgets Corp", "c@example.co")
-        val under = customer("Under_score", "d@examplexcom")
+        sys.scope {
+            fun customer(name: String, email: String): Long =
+                assertIs<CommitResult.Accepted>(sys.commit("Customer", mapOf("name" to name, "email" to email, "tier" to 1))).id
+            val acme = customer("Acme Ltd", "a@example.com")
+            val lower = customer("acme corp", "b@example.bot")
+            val widgets = customer("Widgets Corp", "c@example.co")
+            val under = customer("Under_score", "d@examplexcom")
 
-        assertEquals(listOf(acme), sys.instancesOf("AcmeCustomer"))
-        assertEquals(listOf(widgets), sys.instancesOf("CorpCustomer")) // "acme corp" is lowercase: no match
-        assertEquals(listOf(acme), sys.instancesOf("MentionsLtd"))
-        assertEquals(listOf(acme, lower), sys.instancesOf("LowerAcme"))
-        // `%@example._o_`: "example.com", "example.bot" match; "example.co" is too short; "examplexcom" has no dot
-        assertEquals(listOf(acme, lower), sys.instancesOf("ExampleMailbox"))
-        assertTrue(under !in sys.instancesOf("ExampleMailbox"))
+            assertEquals(listOf(acme), sys.instancesOf("AcmeCustomer"))
+            assertEquals(listOf(widgets), sys.instancesOf("CorpCustomer")) // "acme corp" is lowercase: no match
+            assertEquals(listOf(acme), sys.instancesOf("MentionsLtd"))
+            assertEquals(listOf(acme, lower), sys.instancesOf("LowerAcme"))
+            // `%@example._o_`: "example.com", "example.bot" match; "example.co" is too short; "examplexcom" has no dot
+            assertEquals(listOf(acme, lower), sys.instancesOf("ExampleMailbox"))
+            assertTrue(under !in sys.instancesOf("ExampleMailbox"))
+        }
     }
 
     @Test

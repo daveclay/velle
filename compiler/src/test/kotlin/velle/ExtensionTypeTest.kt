@@ -250,41 +250,45 @@ class ExtensionTypeTest {
     @Test
     fun `the worked spec validates and runs the deposit flow with the type's own values`() {
         val sys = system(bank)
-        val owner = accepted(sys.commit("Customer", mapOf("name" to "Ada")))
-        val dup = sys.commit("Account", mapOf("owner" to owner, "tags" to listOf(Badge("urgent"), Badge("urgent"))))
-        assertIs<CommitResult.Refused>(dup)                             // a `many` is a set, under the type's `equal`
-        val acct = accepted(sys.commit("Account", mapOf("owner" to owner, "tags" to listOf(Badge("urgent"), Badge("vip")))))
-        assertEquals(Cents(0), sys.get(acct, "balance"))              // `initially 0` read as Price
-        assertEquals(listOf(Badge("urgent"), Badge("vip")), sys.get(acct, "tags"))
-        assertIs<CommitResult.Accepted>(sys.commit("Deposit", mapOf("account" to acct, "amount" to Cents.of("12.50"))))
-        assertEquals(Cents(1250), sys.get(acct, "balance"))
+        sys.scope {
+            val owner = accepted(sys.commit("Customer", mapOf("name" to "Ada")))
+            val dup = sys.commit("Account", mapOf("owner" to owner, "tags" to listOf(Badge("urgent"), Badge("urgent"))))
+            assertIs<CommitResult.Refused>(dup)                             // a `many` is a set, under the type's `equal`
+            val acct = accepted(sys.commit("Account", mapOf("owner" to owner, "tags" to listOf(Badge("urgent"), Badge("vip")))))
+            assertEquals(Cents(0), sys.get(acct, "balance"))              // `initially 0` read as Price
+            assertEquals(listOf(Badge("urgent"), Badge("vip")), sys.get(acct, "tags"))
+            assertIs<CommitResult.Accepted>(sys.commit("Deposit", mapOf("account" to acct, "amount" to Cents.of("12.50"))))
+            assertEquals(Cents(1250), sys.get(acct, "balance"))
 
-        val zero = sys.commit("Deposit", mapOf("account" to acct, "amount" to Cents(0)))
-        assertIs<CommitResult.Refused>(zero)
-        assertTrue("0.00" in zero.reason, zero.reason) // the value reads as the type displays it
-        assertEquals(false, sys.isMember(acct, "Overdrawn"))
-        assertIs<CommitResult.Accepted>(sys.commit("Withdrawal", mapOf("account" to acct, "amount" to Cents.of("20.00"))))
-        assertEquals(Cents(-750), sys.get(acct, "balance"))
-        assertEquals(true, sys.isMember(acct, "Overdrawn"))            // `balance < 0` read 0 as Price
-        assertIs<CommitResult.Accepted>(sys.commit("Deposit", mapOf("account" to acct, "amount" to Cents.of("20.00"))))
+            val zero = sys.commit("Deposit", mapOf("account" to acct, "amount" to Cents(0)))
+            assertIs<CommitResult.Refused>(zero)
+            assertTrue("0.00" in zero.reason, zero.reason) // the value reads as the type displays it
+            assertEquals(false, sys.isMember(acct, "Overdrawn"))
+            assertIs<CommitResult.Accepted>(sys.commit("Withdrawal", mapOf("account" to acct, "amount" to Cents.of("20.00"))))
+            assertEquals(Cents(-750), sys.get(acct, "balance"))
+            assertEquals(true, sys.isMember(acct, "Overdrawn"))            // `balance < 0` read 0 as Price
+            assertIs<CommitResult.Accepted>(sys.commit("Deposit", mapOf("account" to acct, "amount" to Cents.of("20.00"))))
 
-        val statement = accepted(sys.commit("Statement", mapOf("customer" to owner)))
-        assertEquals(Cents(1250), sys.get(statement, "total"))
-        assertEquals(Cents(1250), sys.get(statement, "largest"))
+            val statement = accepted(sys.commit("Statement", mapOf("customer" to owner)))
+            assertEquals(Cents(1250), sys.get(statement, "total"))
+            assertEquals(Cents(1250), sys.get(statement, "largest"))
+        }
     }
 
     @Test
     fun `the boundary refuses a value of another class and one the type's own validate refuses`() {
         val sys = system(bank)
-        val owner = accepted(sys.commit("Customer", mapOf("name" to "Ada")))
-        val acct = accepted(sys.commit("Account", mapOf("owner" to owner)))
-        val wrongClass = sys.commit("Deposit", mapOf("account" to acct, "amount" to BigDecimal("12.50")))
-        assertIs<CommitResult.Refused>(wrongClass)
-        assertTrue(wrongClass.reason.startsWith("type:"), wrongClass.reason)
-        val otherMoney = sys.commit("Deposit", mapOf("account" to acct, "amount" to AltCents(1250)))
-        assertIs<CommitResult.Refused>(otherMoney)
-        val blank = sys.commit("Account", mapOf("owner" to owner, "tags" to listOf(Badge("  "))))
-        assertIs<CommitResult.Refused>(blank)
-        assertEquals("type: Badge — a badge is never blank", blank.reason)
+        sys.scope {
+            val owner = accepted(sys.commit("Customer", mapOf("name" to "Ada")))
+            val acct = accepted(sys.commit("Account", mapOf("owner" to owner)))
+            val wrongClass = sys.commit("Deposit", mapOf("account" to acct, "amount" to BigDecimal("12.50")))
+            assertIs<CommitResult.Refused>(wrongClass)
+            assertTrue(wrongClass.reason.startsWith("type:"), wrongClass.reason)
+            val otherMoney = sys.commit("Deposit", mapOf("account" to acct, "amount" to AltCents(1250)))
+            assertIs<CommitResult.Refused>(otherMoney)
+            val blank = sys.commit("Account", mapOf("owner" to owner, "tags" to listOf(Badge("  "))))
+            assertIs<CommitResult.Refused>(blank)
+            assertEquals("type: Badge — a badge is never blank", blank.reason)
+        }
     }
 }

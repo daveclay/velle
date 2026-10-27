@@ -211,15 +211,18 @@ class CommutationSweepTest {
     private fun checkPair(model: Model, pools: Map<String, List<String>>, a: Candidate, b: Candidate, report: Report) {
         fun run(first: Candidate, second: Candidate): Map<String, List<String>>? {
             val sys = grown(model, pools)
-            // both field maps resolve against the setup state — the state the
-            // verdict was computed on; a refusal mid-pair is state too, and
-            // the fingerprint decides whether it was order-dependent
-            val fa = resolve(sys, first) ?: return null
-            val fb = resolve(sys, second) ?: return null
-            runCatching { sys.commit(first.act, fa); sys.commit(second.act, fb) }
-                .onFailure { report.runtimeErrors.add("${first.label}, ${second.label}: ${it.message}"); return null }
-            if (sys.failures.isNotEmpty()) return null
-            return fingerprint(sys, model)
+            // one scope for the pair: the handles both field maps hold live until it exits
+            return sys.scope {
+                // both field maps resolve against the setup state — the state the
+                // verdict was computed on; a refusal mid-pair is state too, and
+                // the fingerprint decides whether it was order-dependent
+                val fa = resolve(sys, first) ?: return@scope null
+                val fb = resolve(sys, second) ?: return@scope null
+                runCatching { sys.commit(first.act, fa); sys.commit(second.act, fb) }
+                    .onFailure { report.runtimeErrors.add("${first.label}, ${second.label}: ${it.message}"); return@scope null }
+                if (sys.failures.isNotEmpty()) return@scope null
+                fingerprint(sys, model)
+            }
         }
         val ab = run(a, b)
         val ba = run(b, a)
@@ -391,13 +394,15 @@ class CommutationSweepTest {
             s.members.filterIsInstance<StoredProp>()
                 .filter { it.initially == PathExpr("randomUUID") }.map { s.name to it.name }
         }.toSet()
-        return sys.model.shapes.keys.filterNot { it in sys.model.transients }.associateWith { shape ->
-            sys.instancesOf(shape).map { canonical(sys, it, depth = 4, masked) }.sorted()
+        return sys.scope {
+            sys.model.shapes.keys.filterNot { it in sys.model.transients }.associateWith { shape ->
+                sys.instancesOf(shape).map { canonical(sys, it, depth = 4, masked) }.sorted()
+            }
         }
     }
 
     private fun canonical(sys: VelleSystem, id: Long, depth: Int, masked: Set<Pair<String, String>>): String {
-        val inst = sys.instances[id] ?: return "missing"
+        val inst = sys.instance(id) ?: return "missing"
         if (depth == 0) return inst.shape
         val fields = inst.fields.entries.sortedBy { it.key }.joinToString(",") { (k, v) ->
             "$k=" + when {

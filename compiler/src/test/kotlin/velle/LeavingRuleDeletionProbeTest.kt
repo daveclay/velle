@@ -136,25 +136,29 @@ class LeavingRuleDeletionProbeTest {
     @Test
     fun `the intended firing - publishing a draft announces it`() {
         val sys = system()
-        val listing = accepted(sys.commit("Listing", mapOf("title" to "Old bike")))
+        sys.scope {
+            val listing = accepted(sys.commit("Listing", mapOf("title" to "Old bike")))
 
-        accepted(sys.commit("Publish", mapOf("listing" to listing)))
+            accepted(sys.commit("Publish", mapOf("listing" to listing)))
 
-        assertEquals("Old bike", sys.get(sys.instancesOf("PublicationNotice").single(), "title"))
+            assertEquals("Old bike", sys.get(sys.instancesOf("PublicationNotice").single(), "title"))
+        }
     }
 
     @Test
     fun `no counterfeit - discarding a draft announces nothing`() {
         val sys = system()
-        val listing = accepted(sys.commit("Listing", mapOf("title" to "Old bike")))
+        sys.scope {
+            val listing = accepted(sys.commit("Listing", mapOf("title" to "Old bike")))
 
-        accepted(sys.commit("DiscardDraft", mapOf("listing" to listing)))
+            accepted(sys.commit("DiscardDraft", mapOf("listing" to listing)))
 
-        // the listing is gone, and AnnouncePublication did not fire: bare
-        // `when leaving` reacts to the predicate flipping, never to deletion
-        // (OQ37-R12) — no notice for a listing that was never published
-        assertEquals(emptyList(), sys.instancesOf("Listing"))
-        assertEquals(emptyList(), sys.instancesOf("PublicationNotice"))
+            // the listing is gone, and AnnouncePublication did not fire: bare
+            // `when leaving` reacts to the predicate flipping, never to deletion
+            // (OQ37-R12) — no notice for a listing that was never published
+            assertEquals(emptyList(), sys.instancesOf("Listing"))
+            assertEquals(emptyList(), sys.instancesOf("PublicationNotice"))
+        }
     }
 
     // ── Face 3: a rule meant as "for any reason" — the settled semantics' gap ─
@@ -202,28 +206,32 @@ class LeavingRuleDeletionProbeTest {
     @Test
     fun `the gap spec - winning a lead stops the follow-up`() {
         val sys = leadSystem()
-        val lead = accepted(sys.commit("Lead", mapOf("company" to "Acme")))
+        sys.scope {
+            val lead = accepted(sys.commit("Lead", mapOf("company" to "Acme")))
 
-        accepted(sys.commit("MarkWon", mapOf("lead" to lead)))
+            accepted(sys.commit("MarkWon", mapOf("lead" to lead)))
 
-        assertEquals("Acme", sys.get(sys.instancesOf("FollowUpStop").single(), "company"))
+            assertEquals("Acme", sys.get(sys.instancesOf("FollowUpStop").single(), "company"))
+        }
     }
 
     @Test
     fun `the gap spec - a purge no longer stops the follow-up, and the advisory says so`() {
         val sys = leadSystem()
-        val lead = accepted(sys.commit("Lead", mapOf("company" to "Acme")))
+        sys.scope {
+            val lead = accepted(sys.commit("Lead", mapOf("company" to "Acme")))
 
-        accepted(sys.commit("PurgeLead", mapOf("lead" to lead)))
+            accepted(sys.commit("PurgeLead", mapOf("lead" to lead)))
 
-        // The author wanted the purge to stop the follow-up too; bare `when
-        // leaving` does not fire at deletion (OQ37-R12), so nothing lands —
-        // and the spec validates with the A6 advisory (OQ37-R18) naming the
-        // reaching deleter and the explicit forms that state the cause. The
-        // fix is `when leaving or deleted OpenLead` (TriggerFamilyTest).
-        assertEquals(emptyList(), sys.instancesOf("Lead"))
-        assertEquals(emptyList(), sys.instancesOf("FollowUpStop"))
-        val advisories = Validator.advisories(forAnyReasonSpec)
-        assertTrue(advisories.any { it.code == "A6" && "NoteFollowUpStop" in it.message }, "expected A6, got: $advisories")
+            // The author wanted the purge to stop the follow-up too; bare `when
+            // leaving` does not fire at deletion (OQ37-R12), so nothing lands —
+            // and the spec validates with the A6 advisory (OQ37-R18) naming the
+            // reaching deleter and the explicit forms that state the cause. The
+            // fix is `when leaving or deleted OpenLead` (TriggerFamilyTest).
+            assertEquals(emptyList(), sys.instancesOf("Lead"))
+            assertEquals(emptyList(), sys.instancesOf("FollowUpStop"))
+            val advisories = Validator.advisories(forAnyReasonSpec)
+            assertTrue(advisories.any { it.code == "A6" && "NoteFollowUpStop" in it.message }, "expected A6, got: $advisories")
+        }
     }
 }

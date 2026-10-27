@@ -102,48 +102,56 @@ class ExtensionFunctionTest {
     @Test
     fun `a registered predicate over a capability reaches a Date, a DateTime, and a registered type alike`() {
         val sys = system(spec)
-        val monday = sys.order(placed = LocalDate.of(2026, 1, 5))
-        val saturday = sys.order(placed = LocalDate.of(2026, 1, 3))
-        assertTrue(sys.isMember(monday, "Weekday"))
-        assertTrue(!sys.isMember(saturday, "Weekday"))
-        // a moment's date is read in the system's zone (UTC here): late Friday UTC is a weekday
-        assertTrue(sys.isMember(sys.order(placedAt = Instant.parse("2026-01-02T23:30:00Z")), "WeekdayMoment"))
-        assertTrue(!sys.isMember(sys.order(placedAt = Instant.parse("2026-01-03T00:30:00Z")), "WeekdayMoment"))
-        // a registered type with a calendar date and nothing else
-        val d = sys.order(day = Day(LocalDate.of(2026, 1, 7)))
-        assertTrue(sys.isMember(d, "WeekdayDay"))
-        assertTrue(sys.isMember(d, "In2026"))
-        assertTrue(!sys.isMember(sys.order(day = Day(LocalDate.of(2025, 12, 31))), "In2026"))
+        sys.scope {
+            val monday = sys.order(placed = LocalDate.of(2026, 1, 5))
+            val saturday = sys.order(placed = LocalDate.of(2026, 1, 3))
+            assertTrue(sys.isMember(monday, "Weekday"))
+            assertTrue(!sys.isMember(saturday, "Weekday"))
+            // a moment's date is read in the system's zone (UTC here): late Friday UTC is a weekday
+            assertTrue(sys.isMember(sys.order(placedAt = Instant.parse("2026-01-02T23:30:00Z")), "WeekdayMoment"))
+            assertTrue(!sys.isMember(sys.order(placedAt = Instant.parse("2026-01-03T00:30:00Z")), "WeekdayMoment"))
+            // a registered type with a calendar date and nothing else
+            val d = sys.order(day = Day(LocalDate.of(2026, 1, 7)))
+            assertTrue(sys.isMember(d, "WeekdayDay"))
+            assertTrue(sys.isMember(d, "In2026"))
+            assertTrue(!sys.isMember(sys.order(day = Day(LocalDate.of(2025, 12, 31))), "In2026"))
+        }
     }
 
     @Test
     fun `an absent argument gives an absent result, and a predicate over it is false`() {
         val sys = system(spec)
-        val o = sys.order()
-        assertTrue(!sys.isMember(o, "WeekdayMoment"), "no moment: not a member")
-        assertTrue(!sys.isMember(o, "WeekdayDay"))
-        assertTrue(!sys.isMember(o, "In2026"))
-        assertTrue(!sys.isMember(o, "Lowered"), "lowercase of an absent text is absent, never an error")
-        assertTrue(sys.isMember(sys.order(note = "X"), "Lowered"))
+        sys.scope {
+            val o = sys.order()
+            assertTrue(!sys.isMember(o, "WeekdayMoment"), "no moment: not a member")
+            assertTrue(!sys.isMember(o, "WeekdayDay"))
+            assertTrue(!sys.isMember(o, "In2026"))
+            assertTrue(!sys.isMember(o, "Lowered"), "lowercase of an absent text is absent, never an error")
+            assertTrue(sys.isMember(sys.order(note = "X"), "Lowered"))
+        }
     }
 
     @Test
     fun `a function over a many of an ordered type, absent when the many is empty`() {
         val sys = system(spec)
-        assertEquals(null, sys.get(sys.order(), "median"))
-        assertEquals(java.math.BigDecimal(5), sys.get(sys.order(scores = listOf(9, 1, 5)), "median"))
-        assertTrue(sys.isMember(sys.order(scores = listOf(3, 12)), "Topped"))
-        assertTrue(!sys.isMember(sys.order(), "Topped"))
+        sys.scope {
+            assertEquals(null, sys.get(sys.order(), "median"))
+            assertEquals(java.math.BigDecimal(5), sys.get(sys.order(scores = listOf(9, 1, 5)), "median"))
+            assertTrue(sys.isMember(sys.order(scores = listOf(3, 12)), "Topped"))
+            assertTrue(!sys.isMember(sys.order(), "Topped"))
+        }
     }
 
     @Test
     fun `a numeric function and a same-type function with constants`() {
         val sys = system(spec)
-        val o = sys.order(amount = "12.345")
-        assertEquals(0, java.math.BigDecimal("12.3").compareTo(sys.get(o, "rounded") as java.math.BigDecimal))
-        assertEquals(0, java.math.BigDecimal("12.345").compareTo(sys.get(o, "clamped") as java.math.BigDecimal))
-        assertEquals(0, java.math.BigDecimal("100").compareTo(sys.get(sys.order(amount = "250"), "clamped") as java.math.BigDecimal))
-        assertEquals(0, java.math.BigDecimal("0").compareTo(sys.get(sys.order(amount = "-3"), "clamped") as java.math.BigDecimal))
+        sys.scope {
+            val o = sys.order(amount = "12.345")
+            assertEquals(0, java.math.BigDecimal("12.3").compareTo(sys.get(o, "rounded") as java.math.BigDecimal))
+            assertEquals(0, java.math.BigDecimal("12.345").compareTo(sys.get(o, "clamped") as java.math.BigDecimal))
+            assertEquals(0, java.math.BigDecimal("100").compareTo(sys.get(sys.order(amount = "250"), "clamped") as java.math.BigDecimal))
+            assertEquals(0, java.math.BigDecimal("0").compareTo(sys.get(sys.order(amount = "-3"), "clamped") as java.math.BigDecimal))
+        }
     }
 
     @Test
@@ -153,8 +161,10 @@ class ExtensionFunctionTest {
         val m = messages(money + "act Account { balance: Price, capped: Price = clamp(balance, 0, 1.005) }")
         assertTrue("has more than two decimal places" in m, m)
         val sys = system(money + "act Account { balance: Price, capped: Price = clamp(balance, 0, 100) }")
-        val id = assertIs<CommitResult.Accepted>(sys.commit("Account", mapOf("balance" to velle.ext.Cents.of("250.00")))).id
-        assertEquals(velle.ext.Cents.of("100.00"), sys.get(id, "capped"))
+        sys.scope {
+            val id = assertIs<CommitResult.Accepted>(sys.commit("Account", mapOf("balance" to velle.ext.Cents.of("250.00")))).id
+            assertEquals(velle.ext.Cents.of("100.00"), sys.get(id, "capped"))
+        }
     }
 
     // ── what the compiler refuses (F2, E3, E1) ───────────────────────────────
@@ -182,7 +192,9 @@ class ExtensionFunctionTest {
         assertEquals(emptyList(), diags("uses velle.testalt.isBusinessDay\nact Order { placed: Date }\nshape X = Order where isBusinessDay(placed)"))
         assertEquals(emptyList(), diags("uses velle.testalt.isBusinessDay as open\nact Order { placed: Date }\nshape X = Order where open(placed)"))
         val sys = system("uses velle.testalt.isBusinessDay as open\nact Order { placed: Date }\nshape X = Order where open(placed)")
-        assertTrue(sys.isMember(assertIs<CommitResult.Accepted>(sys.commit("Order", mapOf("placed" to LocalDate.of(2026, 1, 3)))).id, "X"), "the alt library says every day is open")
+        sys.scope {
+            assertTrue(sys.isMember(assertIs<CommitResult.Accepted>(sys.commit("Order", mapOf("placed" to LocalDate.of(2026, 1, 3)))).id, "X"), "the alt library says every day is open")
+        }
     }
 
     @Test

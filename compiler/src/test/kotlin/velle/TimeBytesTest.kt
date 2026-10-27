@@ -42,25 +42,29 @@ class TimeBytesTest {
     @Test
     fun `a time orders, reads a text constant, and moves by a duration`() {
         val sys = system()
-        val s = assertIs<CommitResult.Accepted>(sys.shift(LocalTime.of(9, 0), LocalTime.of(17, 30))).id
-        assertEquals(LocalTime.of(9, 0), sys.get(s, "opens"))
-        assertEquals(Duration.ofHours(8).plusMinutes(30), sys.get(s, "length"))
-        assertEquals(LocalTime.of(17, 0), sys.get(s, "lastEntry"))
-        assertTrue(sys.isMember(s, "Morning"))
-        assertTrue(sys.isMember(s, "Late"))
-        val short = assertIs<CommitResult.Accepted>(sys.shift(LocalTime.of(13, 0), LocalTime.of(15, 0))).id
-        assertTrue(!sys.isMember(short, "Morning") && !sys.isMember(short, "Late"))
-        assertIs<CommitResult.Refused>(sys.shift(LocalTime.of(17, 0), LocalTime.of(9, 0)), "a never over two times")
+        sys.scope {
+            val s = assertIs<CommitResult.Accepted>(sys.shift(LocalTime.of(9, 0), LocalTime.of(17, 30))).id
+            assertEquals(LocalTime.of(9, 0), sys.get(s, "opens"))
+            assertEquals(Duration.ofHours(8).plusMinutes(30), sys.get(s, "length"))
+            assertEquals(LocalTime.of(17, 0), sys.get(s, "lastEntry"))
+            assertTrue(sys.isMember(s, "Morning"))
+            assertTrue(sys.isMember(s, "Late"))
+            val short = assertIs<CommitResult.Accepted>(sys.shift(LocalTime.of(13, 0), LocalTime.of(15, 0))).id
+            assertTrue(!sys.isMember(short, "Morning") && !sys.isMember(short, "Late"))
+            assertIs<CommitResult.Refused>(sys.shift(LocalTime.of(17, 0), LocalTime.of(9, 0)), "a never over two times")
+        }
     }
 
     @Test
     fun `bytes pass through by content`() {
         val sys = system()
-        val s = assertIs<CommitResult.Accepted>(sys.shift(LocalTime.of(9, 0), LocalTime.of(17, 0), photo = byteArrayOf(9, 8))).id
-        assertContentEquals(byteArrayOf(1, 2, 3), sys.get(s, "badge") as ByteArray)
-        assertContentEquals(byteArrayOf(9, 8), sys.get(s, "photo") as ByteArray)
-        assertTrue(sys.isMember(s, "Badged"))
-        assertIs<CommitResult.Refused>(sys.commit("Shift", mapOf("name" to "x", "opens" to LocalTime.NOON, "closes" to LocalTime.MIDNIGHT.minusSeconds(1), "badge" to "not bytes")))
+        sys.scope {
+            val s = assertIs<CommitResult.Accepted>(sys.shift(LocalTime.of(9, 0), LocalTime.of(17, 0), photo = byteArrayOf(9, 8))).id
+            assertContentEquals(byteArrayOf(1, 2, 3), sys.get(s, "badge") as ByteArray)
+            assertContentEquals(byteArrayOf(9, 8), sys.get(s, "photo") as ByteArray)
+            assertTrue(sys.isMember(s, "Badged"))
+            assertIs<CommitResult.Refused>(sys.commit("Shift", mapOf("name" to "x", "opens" to LocalTime.NOON, "closes" to LocalTime.MIDNIGHT.minusSeconds(1), "badge" to "not bytes")))
+        }
     }
 
     @Test
@@ -73,12 +77,14 @@ class TimeBytesTest {
         """
         check(Validator.validate(src).isEmpty()) { Validator.validate(src).toString() }
         val sys = VelleSystem(Model(Parser.parse(src)))
-        fun blob(vararg b: Byte) = assertIs<CommitResult.Accepted>(sys.commit("Blob", mapOf("data" to b))).id
-        val x = blob(1, 2); val y = blob(1, 2); val z = blob(1, 2, 0); val w = blob(-1)
-        fun pair(a: Long, b: Long) = assertIs<CommitResult.Accepted>(sys.commit("Pair", mapOf("a" to a, "b" to b))).id
-        assertTrue(sys.isMember(pair(x, y), "Same"))
-        assertTrue(!sys.isMember(pair(x, z), "Same"))
-        assertTrue(sys.isMember(pair(x, z), "Less"), "a prefix orders first")
-        assertTrue(sys.isMember(pair(x, w), "Less"), "bytes order unsigned, as a BLOB does")
+        sys.scope {
+            fun blob(vararg b: Byte) = assertIs<CommitResult.Accepted>(sys.commit("Blob", mapOf("data" to b))).id
+            val x = blob(1, 2); val y = blob(1, 2); val z = blob(1, 2, 0); val w = blob(-1)
+            fun pair(a: Long, b: Long) = assertIs<CommitResult.Accepted>(sys.commit("Pair", mapOf("a" to a, "b" to b))).id
+            assertTrue(sys.isMember(pair(x, y), "Same"))
+            assertTrue(!sys.isMember(pair(x, z), "Same"))
+            assertTrue(sys.isMember(pair(x, z), "Less"), "a prefix orders first")
+            assertTrue(sys.isMember(pair(x, w), "Less"), "bytes order unsigned, as a BLOB does")
+        }
     }
 }

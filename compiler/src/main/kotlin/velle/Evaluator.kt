@@ -22,7 +22,10 @@ class Evaluator(private val system: VelleSystem) {
 
     /** When set, every member read and refinement test is appended; the runtime
      *  sets it only while re-evaluating a violated `never` to build its rejection. */
-    var trace: MutableList<Trace>? = null
+    var trace: MutableList<Trace>?
+        get() = traceOf.get()
+        set(v) = traceOf.set(v)
+    private val traceOf = ThreadLocal<MutableList<Trace>?>()
 
     private fun traced(id: Long, member: String, v: Value): Value {
         trace?.add(Trace.Read(id, member, v))
@@ -104,12 +107,12 @@ class Evaluator(private val system: VelleSystem) {
                 // one-to-many: children whose stored pointer references this instance
                 system.ensureReferencing(inv.shape, inv.field, id)
                 val ids = system.liveIds(inv.shape)
-                    .filter { (system.instances.getValue(it).fields[inv.field] as? Value.VRef)?.id == id }
+                    .filter { (system.instance(it)?.fields?.get(inv.field) as? Value.VRef)?.id == id }
                 Value.VColl(ids, inv.shape)
             } else {
                 // many-to-many: owners whose declared edge set contains this instance
                 val ids = system.idsOf(inv.shape)
-                    .filter { (system.instances.getValue(it).fields[inv.field] as? Value.VColl)?.ids?.contains(id) == true }
+                    .filter { (system.instance(it)?.fields?.get(inv.field) as? Value.VColl)?.ids?.contains(id) == true }
                 Value.VColl(ids, inv.shape)
             }
         }
@@ -275,7 +278,7 @@ class Evaluator(private val system: VelleSystem) {
                 .single { (it.type as? RelType)?.let { t -> !t.many && model.typeAccepts(t.shape, targetShape) } == true }
             system.ensureReferencing(base, field.name, id)
             system.liveIds(base).filter {
-                (system.instances.getValue(it).fields[field.name] as? Value.VRef)?.id == id
+                (system.instance(it)?.fields?.get(field.name) as? Value.VRef)?.id == id
             }
         }
         val found = if (shape in model.refinements) referencing.filter { memberOfRefExpr(it, RefName(shape)) }
@@ -358,7 +361,7 @@ class Evaluator(private val system: VelleSystem) {
                 if (system.instance(target.id)?.shape != fieldShape) continue
                 system.ensureReferencing(base, p.root, target.id)
                 return system.liveIds(base).filter {
-                    (system.instances.getValue(it).fields[p.root] as? Value.VRef)?.id == target.id
+                    (system.instance(it)?.fields?.get(p.root) as? Value.VRef)?.id == target.id
                 }
             }
         }
@@ -468,7 +471,7 @@ class Evaluator(private val system: VelleSystem) {
         return Value.VNum(acc)
     }
 
-    private val regexCache = HashMap<String, Regex>()
+    private val regexCache = java.util.concurrent.ConcurrentHashMap<String, Regex>()
 
     private fun regexOf(pattern: String): Regex = regexCache.getOrPut(pattern) {
         try { Regex(pattern) } catch (x: java.util.regex.PatternSyntaxException) {

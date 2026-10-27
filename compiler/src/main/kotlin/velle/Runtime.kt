@@ -4,7 +4,10 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.Collections
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 /** Runtime values. All numerics normalize to BigDecimal — a spike simplification. */
 sealed interface Value {
@@ -181,31 +184,70 @@ class NewRegistry {
 private class NeverViolation(val rejection: Rejection) : Exception(rejection.message)
 
 /**
- * The v0 runtime: evaluation.md executed over in-memory state [S1].
- * The harness surface: [commit], [tick], [advance]/[setTime], and the query
- * methods — the engine under the typed accessors codegen will wrap.
+ * The v0 runtime: evaluation.md executed over a store (Hydration.kt). The
+ * harness surface: [commit], [tick], [advance]/[setTime], and the query
+ * methods — the engine under the typed accessors codegen will wrap. A system
+ * is connected to a store from birth, a [MemoryStore] until [connect] says
+ * otherwise; the state is always the store's, and what the runtime holds is
+ * one unit of work's working set per thread ([Session]).
  */
 class VelleSystem(
     val model: Model,
     startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"),
     val zone: ZoneId = ZoneId.of("UTC"),
 ) {
+    @Volatile
     var now: Instant = startTime
         private set
 
     /** membershipAt() briefly evaluates against a past clock (tick-exit detection) */
-    internal var evalTime: Instant? = null
-    internal val effectiveNow: Instant get() = evalTime ?: now
+    internal var evalTime: Instant?
+        get() = s.evalTime
+        set(v) { s.evalTime = v }
+    /** The clock as the outermost [scope] found it, or as this thread set it since ([setTime]), so `today` and `now` hold still for one call. */
+    internal val effectiveNow: Instant get() = evalTime ?: s.clock ?: now
     internal val effectiveToday: LocalDate get() = effectiveNow.atZone(zone).toLocalDate()
 
-    internal val instances = LinkedHashMap<Long, Instance>()
-    internal val byShape = HashMap<String, MutableList<Long>>()
+    /**
+     * What one thread holds between entering the runtime and leaving it: the
+     * working set of the unit of work in progress (the rows faulted in, the
+     * captures read, the fetches already made), the transaction, and the
+     * handle tables that translate the store's keys to this thread's session
+     * handles. One per thread, created at first use and dropped when the
+     * outermost [scope] exits, so two callers on two threads share nothing but
+     * the store, and memory is bounded by one call's work.
+     */
+    private class Session {
+        val instances = LinkedHashMap<Long, Instance>()
+        val byShape = HashMap<String, MutableList<Long>>()
+        /** Instances deleted by the current transaction (OQ37): no longer members of
+         *  the state — every existence/collection read excludes them from the delete
+         *  commit on — but still directly readable by id (the last-reader contract).
+         *  Physically removed at transaction close; cleared on rollback. */
+        val pendingDeleted = mutableSetOf<Long>()
+        /** (instance id, refinement name) → captured values for the current membership */
+        val captures = HashMap<Pair<Long, String>, Map<String, Value>>()
+        val captureMisses = mutableSetOf<Pair<Long, String>>()
+        val fetchedAll = mutableSetOf<String>()
+        val fetchedRefs = mutableSetOf<Triple<String, String, Long>>()
+        val fetchedFilters = mutableSetOf<Pair<String, QF>>()
+        val fetchMisses = mutableSetOf<Long>()
+        val idShape = HashMap<Long, String>()
+        val keyOf = HashMap<Long, StoreKey>()
+        val handleOf = HashMap<Ref.Persisted, Long>()
+        var unit: UnitOfWork? = null
+        var txn: Txn? = null
+        var depth = 0
+        var clock: Instant? = null
+        var evalTime: Instant? = null
+    }
 
-    /** Instances deleted by the current transaction (OQ37): no longer members of
-     *  the state — every existence/collection read excludes them from the delete
-     *  commit on — but still directly readable by id (the last-reader contract).
-     *  Physically removed at transaction close; cleared on rollback. */
-    internal val pendingDeleted = mutableSetOf<Long>()
+    private val sessions = ThreadLocal<Session?>()
+    private val s: Session get() = sessions.get() ?: Session().also { sessions.set(it) }
+
+    internal val instances: MutableMap<Long, Instance> get() = s.instances
+    internal val byShape: MutableMap<String, MutableList<Long>> get() = s.byShape
+    internal val pendingDeleted: MutableSet<Long> get() = s.pendingDeleted
 
     /** Membership-facing instance list: [byShape] minus the current transaction's
      *  deletions. Every scan/exists/aggregate read goes through this. */
@@ -226,36 +268,36 @@ class VelleSystem(
         }
         else -> v
     }
-    /** (instance id, refinement name) → captured values for the current membership */
-    internal val captures = HashMap<Pair<Long, String>, Map<String, Value>>()
+    internal val captures: MutableMap<Pair<Long, String>, Map<String, Value>> get() = s.captures
 
-    private var nextId = 1L
+    /** Never reset: a handle that leaks past its scope fails as "no instance" instead of naming a stranger. */
+    private val nextId = AtomicLong(1)
 
     // ── hydration (Hydration.kt; evaluation.md "The universal transaction") ──
-    // With a resolver connected, [instances]/[byShape] become the per-envelope
-    // working set over engineer-owned storage: each transaction opens a fresh
-    // snapshot, faults state in on demand (memoized for the envelope), and hands
-    // its mutation set to [onCommit] inside the envelope. Without one, they are
-    // the whole state, as before [S1].
+    // [instances]/[byShape] are the unit of work's working set over the store:
+    // each transaction opens a fresh snapshot, faults state in on demand
+    // (memoized for the envelope), and hands its mutation set to [onCommit]
+    // inside the envelope.
 
-    private var resolver: StateResolver? = null
-    private var onCommit: CommitCallback? = null
+    private val memory = MemoryStore(model)
+    private var resolver: StateResolver = memory
+    private var onCommit: CommitCallback = memory
 
     /**
      * The unit of work open against the store (Hydration.kt, [UnitOfWork]): a read
      * unit, opened at the first fetch of a read and closed when the outermost
      * [scope] exits or an envelope opens; or the write unit of the envelope in
      * progress, opened in [inTransaction] before the queue keys are valued and
-     * closed with the envelope's outcome. Null between units, and always null
-     * in memory with no store.
+     * closed with the envelope's outcome. Null between units.
      */
-    private var unit: UnitOfWork? = null
+    private var unit: UnitOfWork?
+        get() = s.unit
+        set(v) { s.unit = v }
 
     /** The resolver, with a read unit open when no unit is: every fetch goes through here. */
-    private fun reader(): StateResolver? {
-        val r = resolver ?: return null
-        if (unit == null) unit = r.begin(WorkKind.READ)
-        return r
+    private fun reader(): StateResolver {
+        if (unit == null) unit = resolver.begin(WorkKind.READ)
+        return resolver
     }
 
     private fun endUnit(outcome: Outcome) {
@@ -269,7 +311,7 @@ class VelleSystem(
     /** id → shape, so a bare VRef id can be fetched from per-shape storage.
      *  An index, not state: populated at creation, hydration, and reference
      *  conversion; survives snapshot clears. */
-    private val idShape = HashMap<Long, String>()
+    private val idShape: MutableMap<Long, String> get() = s.idShape
 
     // Identity is the store's (Hydration.kt, Ref/StoreKey): rows are keyed by
     // whatever the store assigned, and the runtime's instance ids are
@@ -277,54 +319,50 @@ class VelleSystem(
     // at the boundary; like idShape it is an index, surviving snapshot clears.
     // Keys are only unique per shape (a table's rowids restart at 1), so the
     // handle side keys on the full typed ref, never the bare key.
-    private val keyOf = HashMap<Long, StoreKey>()
-    private val handleOf = HashMap<Ref.Persisted, Long>()
+    private val keyOf: MutableMap<Long, StoreKey> get() = s.keyOf
+    private val handleOf: MutableMap<Ref.Persisted, Long> get() = s.handleOf
 
-    private val fetchedAll = mutableSetOf<String>()
-    private val fetchedRefs = mutableSetOf<Triple<String, String, Long>>()
-    private val fetchedFilters = mutableSetOf<Pair<String, QF>>()
+    private val fetchedAll: MutableSet<String> get() = s.fetchedAll
+    private val fetchedRefs: MutableSet<Triple<String, String, Long>> get() = s.fetchedRefs
+    private val fetchedFilters: MutableSet<Pair<String, QF>> get() = s.fetchedFilters
     /** Handles whose by-key fetch found no row this envelope — a reference at a
      *  deleted row (Reference §12) is read as absent every time, and one snapshot
      *  answers it once. */
-    private val fetchMisses = mutableSetOf<Long>()
+    private val fetchMisses: MutableSet<Long> get() = s.fetchMisses
 
+    /** Run over [resolver] and [onCommit] instead of the in-memory store, both halves of one store (Hydration.kt). */
     fun connect(resolver: StateResolver, onCommit: CommitCallback) {
         this.resolver = resolver
         this.onCommit = onCommit
     }
 
-    private var scopeDepth = 0
-
     /**
      * One entry into the runtime from outside: a commit with its after-commit
      * drain, a tick, a read. Handles minted inside it, or in the gap before it
      * (the generated input converts its references with [idOf] before calling
-     * [commit]), are valid until the outermost scope exits; then, over a store,
-     * the handle maps and the hydrated working set are dropped, so memory is
-     * bounded by one unit of work and nothing outside ever holds a handle.
-     * [commit], [tick], and [seed] open one themselves; the generated read
-     * surface and [TypedQuery] open one around each read. In memory, with no
-     * store, the handles are the state and nothing is dropped. [nextId] is
-     * never reset: a handle that leaks past its scope fails as "no instance"
-     * instead of silently naming a stranger.
+     * [commit]), are valid until the outermost scope exits; then the thread's
+     * [Session], handle maps and hydrated working set with it, is dropped, so
+     * memory is bounded by one unit of work and nothing outside ever holds a
+     * handle. [commit], [tick], and [seed] open one themselves; the generated
+     * read surface and [TypedQuery] open one around each read. A read made
+     * outside any scope keeps its unit open until the next outermost scope on
+     * its thread exits.
      */
-    /** Diagnostic: how many handles the runtime currently holds. Zero between units of work over a store. */
-    val liveHandles: Int get() = keyOf.size
-
     fun <T> scope(body: () -> T): T {
-        scopeDepth++
+        val session = s
+        if (session.depth++ == 0) session.clock = now
         try {
             return body()
         } finally {
-            if (--scopeDepth == 0 && resolver != null && txn == null) {
+            if (--session.depth == 0 && session.txn == null) {
                 endUnit(Outcome.Committed)
-                beginSnapshot()
-                idShape.clear()
-                keyOf.clear()
-                handleOf.clear()
+                sessions.remove()
             }
         }
     }
+
+    /** Diagnostic: how many handles this thread holds. Zero between units of work. */
+    val liveHandles: Int get() = sessions.get()?.keyOf?.size ?: 0
 
     /** The session-local handle for a store row — how an application enters
      *  Velle from its own storage side (a key it read with its own SQL). */
@@ -332,7 +370,7 @@ class VelleSystem(
 
     private fun handleForRef(ref: Ref.Persisted): Long {
         handleOf[ref]?.let { return it }
-        val h = nextId++
+        val h = nextId.getAndIncrement()
         handleOf[ref] = h
         keyOf[h] = ref.key
         idShape[h] = ref.shape
@@ -341,11 +379,9 @@ class VelleSystem(
 
     /** Each transaction evaluates against one consistent snapshot: drop the
      *  previous envelope's hydrated state so storage is re-consulted. Captures
-     *  included — with a resolver connected they are a cache over the store's
-     *  capture channel (Hydration.kt, CommitSet), hydrated on demand like
-     *  rows; without one, the map is the store and survives. */
+     *  included: they are a cache over the store's capture channel
+     *  (Hydration.kt, CommitSet), hydrated on demand like rows. */
     private fun beginSnapshot() {
-        if (resolver == null) return
         instances.clear()
         byShape.clear()
         fetchedAll.clear()
@@ -356,7 +392,7 @@ class VelleSystem(
         captureMisses.clear()
     }
 
-    private val captureMisses = mutableSetOf<Pair<Long, String>>()
+    private val captureMisses: MutableSet<Pair<Long, String>> get() = s.captureMisses
 
     /**
      * Capture read, faulting in from the resolver's capture channel when the
@@ -365,11 +401,10 @@ class VelleSystem(
      */
     internal fun captureValues(id: Long, refinement: String): Map<String, Value>? {
         captures[id to refinement]?.let { return it }
-        if (resolver == null) return null
         if ((id to refinement) in captureMisses) return null
         val key = keyOf[id] ?: return null // unpersisted: no membership storage could hold
         val shape = idShape[id] ?: model.baseOf(refinement) ?: return null
-        val raw = reader()!!.fetchCaptures(Ref.Persisted(shape, key), refinement)
+        val raw = reader().fetchCaptures(Ref.Persisted(shape, key), refinement)
         if (raw == null) {
             captureMisses.add(id to refinement)
             return null
@@ -388,11 +423,10 @@ class VelleSystem(
     /** By-handle read, faulting in from the resolver via the store's key. */
     internal fun instance(id: Long): Instance? {
         instances[id]?.let { return it }
-        if (resolver == null) return null
         val shape = idShape[id] ?: return null
         val key = keyOf[id] ?: return null // no key: never persisted (rolled back, or another session's handle)
         if (id in fetchMisses) return null
-        val row = reader()!!.fetchByKey(shape, key) ?: return null.also { fetchMisses.add(id) }
+        val row = reader().fetchByKey(shape, key) ?: return null.also { fetchMisses.add(id) }
         return hydrateIfAbsent(row)
     }
 
@@ -405,8 +439,8 @@ class VelleSystem(
      * for a store whose scan order is insertion order).
      */
     internal fun idsOf(shape: String): List<Long> {
-        if (resolver != null && shape !in model.transients && fetchedAll.add(shape)) {
-            val fetched = reader()!!.fetchAll(shape).map { hydrateIfAbsent(it).id }
+        if (shape !in model.transients && fetchedAll.add(shape)) {
+            val fetched = reader().fetchAll(shape).map { hydrateIfAbsent(it).id }
             val list = byShape.getOrPut(shape) { mutableListOf() }
             val fetchedSet = fetched.toSet()
             val (persisted, unpersisted) = list.filter { it !in fetchedSet }.partition { keyOf[it] != null }
@@ -427,10 +461,10 @@ class VelleSystem(
      * pre-filter under the superset contract, never the evaluation).
      */
     internal fun idsOfCandidates(shape: String, filter: QF): List<Long> {
-        if (resolver == null || shape in model.transients || shape in fetchedAll || filter == QF.True)
+        if (shape in model.transients || shape in fetchedAll || filter == QF.True)
             return idsOf(shape)
         if (fetchedFilters.add(shape to filter))
-            reader()!!.fetchCandidates(shape, filter).forEach { hydrateIfAbsent(it) }
+            reader().fetchCandidates(shape, filter).forEach { hydrateIfAbsent(it) }
         return liveIds(shape)
     }
 
@@ -441,14 +475,13 @@ class VelleSystem(
 
     /** Join read: fault in the instances of [shape] whose [field] references [targetId]. */
     internal fun ensureReferencing(shape: String, field: String, targetId: Long) {
-        if (resolver == null) return
         if (shape in model.transients || shape in fetchedAll) return
         // an unpersisted target (created this envelope) can't be referenced by
         // anything storage holds — nothing to fetch
         val key = keyOf[targetId] ?: return
         val targetShape = idShape[targetId] ?: return
         if (fetchedRefs.add(Triple(shape, field, targetId)))
-            reader()!!.fetchReferencing(shape, field, Ref.Persisted(targetShape, key)).forEach { hydrateIfAbsent(it) }
+            reader().fetchReferencing(shape, field, Ref.Persisted(targetShape, key)).forEach { hydrateIfAbsent(it) }
     }
 
     private fun hydrateIfAbsent(row: Row): Instance {
@@ -524,22 +557,26 @@ class VelleSystem(
     }
 
     private fun scalarVType(name: String): VType = model.scalarOf(name)
-    private val lastTick = HashMap<String, Instant>()
+    private val lastTick = ConcurrentHashMap<String, Instant>()
     private val startInstant = startTime
     val evaluator = Evaluator(this)
     /** failures of after-commit / tick firings — the act stands, the gap is recorded [S4] */
-    val failures = mutableListOf<String>()
+    val failures: MutableList<String> = Collections.synchronizedList(mutableListOf())
     /** A `never` rejection of an after-commit firing, carried as the same data a
      *  tick's rejection is thrown with (`evaluation.md`, "Ticks"): the act stood,
      *  the firing rolled back, and nobody was asking. Reachable only through the
      *  runtime backstop, since V29 and V30 refuse the spec-visible cases. */
-    val afterCommitRejections = mutableListOf<Rejection>()
+    val afterCommitRejections: MutableList<Rejection> = Collections.synchronizedList(mutableListOf())
 
     private val maxDepth = 500 // [S3] backstop behind the static quiescence proof
 
-    fun advance(seconds: Long) { now = now.plusSeconds(seconds) }
-    fun advanceDays(days: Long) { now = now.plusSeconds(days * 86_400) }
-    fun setTime(t: Instant) { now = t }
+    fun advance(seconds: Long) = setTime(now.plusSeconds(seconds))
+    fun advanceDays(days: Long) = setTime(now.plusSeconds(days * 86_400))
+    /** Move the clock: for every call from now on, and for this thread's open scope at once. */
+    fun setTime(t: Instant) {
+        now = t
+        sessions.get()?.let { if (it.depth > 0) it.clock = t }
+    }
 
     // ── transactions ─────────────────────────────────────────────────────────
 
@@ -579,7 +616,9 @@ class VelleSystem(
         captureMisses.remove(key)
     }
 
-    private var txn: Txn? = null
+    private var txn: Txn?
+        get() = s.txn
+        set(v) { s.txn = v }
 
     /**
      * One envelope (evaluation.md, "The universal transaction"). Over a store it is
@@ -594,15 +633,14 @@ class VelleSystem(
         check(txn == null) { "nested harness transaction" }
         beginSnapshot()
         endUnit(Outcome.Committed)
-        unit = resolver?.begin(WorkKind.WRITE)
+        val u = resolver.begin(WorkKind.WRITE)
+        unit = u
         val t = Txn()
         t.actor = actor
         txn = t
         return try {
-            unit?.let { u ->
-                u.serialize(keys())
-                beginSnapshot() // the keys were valued against pre-lock state; the envelope reads post-lock state
-            }
+            u.serialize(keys())
+            beginSnapshot() // the keys were valued against pre-lock state; the envelope reads post-lock state
             val out = body()
             checkNevers(t)
             // the commit callback runs inside the envelope: its writes join the
@@ -610,22 +648,20 @@ class VelleSystem(
             // commit back (evaluation.md U2, in-envelope failure).
             // The store assigns row identity and reports it back — the
             // returned keys bind this session's handles to storage.
-            onCommit?.let { cb ->
-                val pending = buildCommitSet(t)
-                val set = pending.set
-                if (set.created.isNotEmpty() || set.assigned.isNotEmpty() ||
-                    set.captured.isNotEmpty() || set.retracted.isNotEmpty() ||
-                    set.deleted.isNotEmpty()
-                ) {
-                    val keys = cb.onCommit(set)
-                    if (keys.size != set.created.size)
-                        throw VelleRuntimeError(
-                            "commit callback returned ${keys.size} keys for ${set.created.size} created rows"
-                        )
-                    pending.createdHandles.forEachIndexed { i, h ->
-                        keyOf[h] = keys[i]
-                        handleOf[Ref.Persisted(idShape.getValue(h), keys[i])] = h
-                    }
+            val pending = buildCommitSet(t)
+            val set = pending.set
+            if (set.created.isNotEmpty() || set.assigned.isNotEmpty() ||
+                set.captured.isNotEmpty() || set.retracted.isNotEmpty() ||
+                set.deleted.isNotEmpty()
+            ) {
+                val keys = onCommit.onCommit(set)
+                if (keys.size != set.created.size)
+                    throw VelleRuntimeError(
+                        "commit callback returned ${keys.size} keys for ${set.created.size} created rows"
+                    )
+                pending.createdHandles.forEachIndexed { i, h ->
+                    keyOf[h] = keys[i]
+                    handleOf[Ref.Persisted(idShape.getValue(h), keys[i])] = h
                 }
             }
             txn = null
@@ -975,20 +1011,20 @@ class VelleSystem(
         check(txn == null) { "nested harness transaction" }
         beginSnapshot()
         endUnit(Outcome.Committed)
-        unit = resolver?.begin(WorkKind.WRITE)
+        val u = resolver.begin(WorkKind.WRITE)
+        unit = u
         val t = Txn()
         txn = t
         try {
             // a seed bypasses the rules, so no domain was derived for it: it takes the shape's width
-            unit?.serialize(setOf(AdmissionKey.Shape(shape)))
+            u.serialize(setOf(AdmissionKey.Shape(shape)))
+            beginSnapshot()
             val id = applyCreate(Mutation.Create(shape, converted), t)
-            onCommit?.let { cb ->
-                val pending = buildCommitSet(t)
-                val keys = cb.onCommit(pending.set)
-                pending.createdHandles.forEachIndexed { i, h ->
-                    keyOf[h] = keys[i]
-                    handleOf[Ref.Persisted(idShape.getValue(h), keys[i])] = h
-                }
+            val pending = buildCommitSet(t)
+            val keys = onCommit.onCommit(pending.set)
+            pending.createdHandles.forEachIndexed { i, h ->
+                keyOf[h] = keys[i]
+                handleOf[Ref.Persisted(idShape.getValue(h), keys[i])] = h
             }
             txn = null
             endUnit(Outcome.Committed)
@@ -1499,7 +1535,7 @@ class VelleSystem(
 
     private fun applyCreate(m: Mutation.Create, t: Txn): Long {
         val decl = model.shapes[m.shape] ?: throw VelleRuntimeError("unknown shape '${m.shape}'")
-        val id = nextId++
+        val id = nextId.getAndIncrement()
         val inst = Instance(id, m.shape, id, m.fields.toMutableMap())
         instances[id] = inst
         byShape.getOrPut(m.shape) { mutableListOf() }.add(id)
@@ -2027,18 +2063,17 @@ class VelleSystem(
         (keyOf[id]?.value as? Comparable<Any>) ?: (id as Comparable<Any>)
 
     /**
-     * The reference an engineer holds for [id] (Reference §22): the row's store key
-     * when it has one; in memory, with no store, the handle itself is the key.
+     * The reference an engineer holds for [id] (Reference §22): the row's store key.
+     * A row the open envelope is still creating has no key yet; its handle stands
+     * in, which only a rejection's own rendering ever reads.
      */
     fun refFor(id: Long): Ref.Persisted {
         val shape = idShape[id] ?: instance(id)?.shape ?: throw IllegalArgumentException("no instance $id")
         return Ref.Persisted(shape, keyOf[id] ?: StoreKey(id))
     }
 
-    /** The session handle behind a reference: the row's handle over a store; the key itself in memory. */
-    fun idOf(ref: Keyed): Long =
-        if (resolver == null) (ref.key.value as? Long ?: throw IllegalArgumentException("not an in-memory reference: $ref"))
-        else handleForRef(Ref.Persisted(ref.shape, ref.key))
+    /** The session handle behind a reference, minted for this thread's session. */
+    fun idOf(ref: Keyed): Long = handleForRef(Ref.Persisted(ref.shape, ref.key))
 
     /** The concrete shape of a current instance, from a fresh snapshot outside a transaction; null when gone. */
     fun currentShapeOf(id: Long): String? {

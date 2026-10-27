@@ -103,19 +103,21 @@ class TransientActTest {
         val model = Model(Parser.parse(neverSpec))
         check(Validator.validate(neverSpec).isEmpty())
         val sys = VelleSystem(model)
-        val acct = (sys.commit("Account", mapOf("openingBalance" to BigDecimal("10"))) as CommitResult.Accepted).id
-        assertIs<CommitResult.Accepted>(sys.commit("WithdrawRequest", mapOf("account" to acct, "amount" to BigDecimal("5"))))
-        assertEquals(1, sys.instancesOf("Withdrawal").size)
+        sys.scope {
+            val acct = (sys.commit("Account", mapOf("openingBalance" to BigDecimal("10"))) as CommitResult.Accepted).id
+            assertIs<CommitResult.Accepted>(sys.commit("WithdrawRequest", mapOf("account" to acct, "amount" to BigDecimal("5"))))
+            assertEquals(1, sys.instancesOf("Withdrawal").size)
 
-        // a `never` constrains the SETTLED transaction (§21): the rule's C0
-        // partition let this request through, its withdrawal overdrew the
-        // account, and the whole transaction — act, withdrawal, everything —
-        // was refused. Stronger than the record-refusal spelling: the act
-        // that would create the forbidden configuration is refused too.
-        val refused = sys.commit("WithdrawRequest", mapOf("account" to acct, "amount" to BigDecimal("50")))
-        assertIs<CommitResult.Refused>(refused) // the message is the response
-        assertEquals(1, sys.instancesOf("Withdrawal").size) // nothing else moved
-        assertEquals(0, sys.instancesOf("WithdrawRequest").size)
+            // a `never` constrains the SETTLED transaction (§21): the rule's C0
+            // partition let this request through, its withdrawal overdrew the
+            // account, and the whole transaction — act, withdrawal, everything —
+            // was refused. Stronger than the record-refusal spelling: the act
+            // that would create the forbidden configuration is refused too.
+            val refused = sys.commit("WithdrawRequest", mapOf("account" to acct, "amount" to BigDecimal("50")))
+            assertIs<CommitResult.Refused>(refused) // the message is the response
+            assertEquals(1, sys.instancesOf("Withdrawal").size) // nothing else moved
+            assertEquals(0, sys.instancesOf("WithdrawRequest").size)
+        }
     }
 
     // ── runtime ───────────────────────────────────────────────────────────────
@@ -129,34 +131,38 @@ class TransientActTest {
     @Test
     fun `the act's consequences persist - the act does not`() {
         val sys = newSystem()
-        val acct = (sys.commit("Account", mapOf("openingBalance" to BigDecimal("100"))) as CommitResult.Accepted).id
+        sys.scope {
+            val acct = (sys.commit("Account", mapOf("openingBalance" to BigDecimal("100"))) as CommitResult.Accepted).id
 
-        val r = sys.commit("WithdrawRequest", mapOf("account" to acct, "amount" to BigDecimal("30")))
-        assertIs<CommitResult.Accepted>(r)
-        assertEquals(1, sys.instancesOf("Withdrawal").size)
-        assertEquals(0, BigDecimal("70").compareTo(sys.get(acct, "balance") as BigDecimal))
-        assertEquals(0, sys.instancesOf("WithdrawRequest").size) // an input, not a member
+            val r = sys.commit("WithdrawRequest", mapOf("account" to acct, "amount" to BigDecimal("30")))
+            assertIs<CommitResult.Accepted>(r)
+            assertEquals(1, sys.instancesOf("Withdrawal").size)
+            assertEquals(0, BigDecimal("70").compareTo(sys.get(acct, "balance") as BigDecimal))
+            assertEquals(0, sys.instancesOf("WithdrawRequest").size) // an input, not a member
 
-        // drive the account overdrawn (the 80 is applied — at ITS commit the
-        // account was still fine, and its own consequence flipping the state
-        // does not re-partition it), then a refused request: the refusal
-        // (with copied payload) persists; the request still doesn't
-        sys.commit("WithdrawRequest", mapOf("account" to acct, "amount" to BigDecimal("80")))
-        assertEquals(2, sys.instancesOf("Withdrawal").size)
-        assertEquals(0, sys.instancesOf("WithdrawalRefusal").size)
-        sys.commit("WithdrawRequest", mapOf("account" to acct, "amount" to BigDecimal("5")))
-        assertEquals(1, sys.instancesOf("WithdrawalRefusal").size)
-        val refusal = sys.instancesOf("WithdrawalRefusal").single()
-        assertEquals(0, BigDecimal("5").compareTo(sys.get(refusal, "requestedAmount") as BigDecimal))
-        assertEquals(0, sys.instancesOf("WithdrawRequest").size)
+            // drive the account overdrawn (the 80 is applied — at ITS commit the
+            // account was still fine, and its own consequence flipping the state
+            // does not re-partition it), then a refused request: the refusal
+            // (with copied payload) persists; the request still doesn't
+            sys.commit("WithdrawRequest", mapOf("account" to acct, "amount" to BigDecimal("80")))
+            assertEquals(2, sys.instancesOf("Withdrawal").size)
+            assertEquals(0, sys.instancesOf("WithdrawalRefusal").size)
+            sys.commit("WithdrawRequest", mapOf("account" to acct, "amount" to BigDecimal("5")))
+            assertEquals(1, sys.instancesOf("WithdrawalRefusal").size)
+            val refusal = sys.instancesOf("WithdrawalRefusal").single()
+            assertEquals(0, BigDecimal("5").compareTo(sys.get(refusal, "requestedAmount") as BigDecimal))
+            assertEquals(0, sys.instancesOf("WithdrawRequest").size)
+        }
     }
 
     @Test
     fun `a refused act commits nothing - never enforcement still sees it`() {
         val sys = newSystem()
-        val acct = (sys.commit("Account", mapOf("openingBalance" to BigDecimal("100"))) as CommitResult.Accepted).id
-        val refused = sys.commit("WithdrawRequest", mapOf("account" to acct, "amount" to BigDecimal.ZERO))
-        assertIs<CommitResult.Refused>(refused)
-        assertEquals(0, sys.instancesOf("Withdrawal").size)
+        sys.scope {
+            val acct = (sys.commit("Account", mapOf("openingBalance" to BigDecimal("100"))) as CommitResult.Accepted).id
+            val refused = sys.commit("WithdrawRequest", mapOf("account" to acct, "amount" to BigDecimal.ZERO))
+            assertIs<CommitResult.Refused>(refused)
+            assertEquals(0, sys.instancesOf("Withdrawal").size)
+        }
     }
 }

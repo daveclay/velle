@@ -199,7 +199,7 @@ The generic endpoints do not replace the engineer's code; they sit beside it. `e
 
 ```kotlin
 @GetMapping("/overdue")
-fun overdue(): List<Overdue> = api.locked {
+fun overdue(): List<Overdue> = api.scope {
     val today = LocalDate.ofInstant(billing.now, ZoneOffset.UTC)
     billing.read.overdueInvoices.orderBy { due.ascending }.list().map { inv ->
         Overdue(inv.key.value as Long, billing.read(inv.customer).name, inv.due, inv.balance.toString(),
@@ -209,7 +209,7 @@ fun overdue(): List<Overdue> = api.locked {
 ```
 
 - `billing.read.overdueInvoices` is the generated typed query ([Binding API](Binding-API)); the result is the generated model object with `Money` as `Money`.
-- `api.locked { }` runs the read under the same lock the generic endpoints use. Every operation on the system takes turns: the runtime keeps one working set of records, and the lock keeps two callers out of it at once. A hand-written endpoint that reads inside `locked` never sees a commit half landed, and its reads run in one database transaction of their own.
+- `api.scope { }` runs the read as the generic endpoints run theirs: in one scope of the runtime, with a working set of records of its own and one read unit of work on the store, so it never sees a commit half landed. Other requests run at the same time; two commits that revolve around one record take turns on the store's queue keys ([Store API](Store-API), "The unit of work").
 - The system's clock is the wall clock. Before each operation the starter sets it, so `today` and `now` in the spec mean today and now.
 
 ## The console
@@ -218,7 +218,7 @@ fun overdue(): List<Overdue> = api.locked {
 
 ## In memory and over SQLite
 
-An application with no `DataSource` runs the system in memory, which is how the starter's own tests run the vendors spec (`apis/spring/src/test/kotlin/velle/api/spring/VendorsOverHttpTest.kt`). A `DataSource` whose URL is `jdbc:sqlite:...` runs it over SQLite through the same store (`apis/spring/src/test/kotlin/velle/api/spring/BillingOverSqliteTest.kt`). The whole stack over PostgreSQL in a container is `examples/billing/app/src/test/kotlin/velle/billing/BillingApplicationTest.kt`, which runs when Docker is available.
+An application with no `DataSource` runs the system over its in-memory store, which is how the starter's own tests run the vendors spec (`apis/spring/src/test/kotlin/velle/api/spring/VendorsOverHttpTest.kt`). A `DataSource` whose URL is `jdbc:sqlite:...` runs it over SQLite through the same store (`apis/spring/src/test/kotlin/velle/api/spring/BillingOverSqliteTest.kt`). The whole stack over PostgreSQL in a container is `examples/billing/app/src/test/kotlin/velle/billing/BillingApplicationTest.kt`, which runs when Docker is available.
 
 A system with no generated code is served the same way: declare a `VelleSystem` built from the spec text as the bean, as `VendorsApp.kt` does. The API layer works from the model alone.
 

@@ -39,87 +39,103 @@ class CollectionsTest {
     @Test
     fun `a committed reference set lands as the edge set, and the inverse is inferred`() {
         val sys = newSystem()
-        val c1 = sys.mustCommit("Course", "title" to "Logic", "capacity" to 30, "term" to java.time.Duration.ofDays(84))
-        val c2 = sys.mustCommit("Course", "title" to "Sets", "capacity" to 30, "term" to java.time.Duration.ofDays(84))
-        val s = sys.mustCommit("Student", "name" to "Ada", "courses" to listOf(c1, c2))
-        assertEquals(setOf(c1, c2), coll(sys.get(s, "courses")).toSet())
-        // Course.students is the inferred inverse of the declared many (Reference §6)
-        assertEquals(listOf(s), coll(sys.get(c1, "students")))
-        assertTrue(sys.isMember(s, "Untagged")) // initially empty scalar collection
+        sys.scope {
+            val c1 = sys.mustCommit("Course", "title" to "Logic", "capacity" to 30, "term" to java.time.Duration.ofDays(84))
+            val c2 = sys.mustCommit("Course", "title" to "Sets", "capacity" to 30, "term" to java.time.Duration.ofDays(84))
+            val s = sys.mustCommit("Student", "name" to "Ada", "courses" to listOf(c1, c2))
+            assertEquals(setOf(c1, c2), coll(sys.get(s, "courses")).toSet())
+            // Course.students is the inferred inverse of the declared many (Reference §6)
+            assertEquals(listOf(s), coll(sys.get(c1, "students")))
+            assertTrue(sys.isMember(s, "Untagged")) // initially empty scalar collection
+        }
     }
 
     @Test
     fun `an absent many is the empty collection`() {
         val sys = newSystem()
-        val s = sys.mustCommit("Student", "name" to "Ada")
-        assertEquals(emptyList<Long>(), coll(sys.get(s, "courses")))
-        assertEquals(emptyList<Any?>(), coll(sys.get(s, "tags")))
+        sys.scope {
+            val s = sys.mustCommit("Student", "name" to "Ada")
+            assertEquals(emptyList<Long>(), coll(sys.get(s, "courses")))
+            assertEquals(emptyList<Any?>(), coll(sys.get(s, "tags")))
+        }
     }
 
     @Test
     fun `a duplicate reference is refused at the boundary`() {
         val sys = newSystem()
-        val c1 = sys.mustCommit("Course", "title" to "Logic", "capacity" to 30, "term" to java.time.Duration.ofDays(84))
-        val before = sys.instancesOf("Student").size
-        val r = sys.commit("Student", mapOf("name" to "Ada", "courses" to listOf(c1, c1)))
-        val refused = assertIs<CommitResult.Refused>(r)
-        assertTrue("duplicate" in refused.reason, refused.reason)
-        assertEquals(before, sys.instancesOf("Student").size, "a refused act commits nothing")
+        sys.scope {
+            val c1 = sys.mustCommit("Course", "title" to "Logic", "capacity" to 30, "term" to java.time.Duration.ofDays(84))
+            val before = sys.instancesOf("Student").size
+            val r = sys.commit("Student", mapOf("name" to "Ada", "courses" to listOf(c1, c1)))
+            val refused = assertIs<CommitResult.Refused>(r)
+            assertTrue("duplicate" in refused.reason, refused.reason)
+            assertEquals(before, sys.instancesOf("Student").size, "a refused act commits nothing")
+        }
     }
 
     @Test
     fun `whole-set replacement makes the edge set exactly the committed set`() {
         val sys = newSystem()
-        val (s, c1, c2) = sys.freshStudentAndCourses()
-        sys.mustCommit("SetEnrollment", "student" to s, "courses" to listOf(c1))
-        assertEquals(listOf(c1), coll(sys.get(s, "courses")))
-        sys.mustCommit("SetEnrollment", "student" to s, "courses" to listOf(c2))
-        assertEquals(listOf(c2), coll(sys.get(s, "courses")), "replacement, not accumulation")
-        assertEquals(emptyList<Long>(), coll(sys.get(c1, "students")), "the inverse view followed")
+        sys.scope {
+            val (s, c1, c2) = sys.freshStudentAndCourses()
+            sys.mustCommit("SetEnrollment", "student" to s, "courses" to listOf(c1))
+            assertEquals(listOf(c1), coll(sys.get(s, "courses")))
+            sys.mustCommit("SetEnrollment", "student" to s, "courses" to listOf(c2))
+            assertEquals(listOf(c2), coll(sys.get(s, "courses")), "replacement, not accumulation")
+            assertEquals(emptyList<Long>(), coll(sys.get(c1, "students")), "the inverse view followed")
+        }
     }
 
     @Test
     fun `plus is union and idempotent, minus is removal and quiet on absence`() {
         val sys = newSystem()
-        val (s, c1, c2) = sys.freshStudentAndCourses()
-        sys.mustCommit("Enroll", "student" to s, "course" to c1)
-        sys.mustCommit("Enroll", "student" to s, "course" to c2)
-        sys.mustCommit("Enroll", "student" to s, "course" to c1) // present: a no-op
-        assertEquals(setOf(c1, c2), coll(sys.get(s, "courses")).toSet())
-        sys.mustCommit("Drop", "student" to s, "course" to c1)
-        assertEquals(listOf(c2), coll(sys.get(s, "courses")))
-        sys.mustCommit("Drop", "student" to s, "course" to c1) // absent: a no-op
-        assertEquals(listOf(c2), coll(sys.get(s, "courses")))
+        sys.scope {
+            val (s, c1, c2) = sys.freshStudentAndCourses()
+            sys.mustCommit("Enroll", "student" to s, "course" to c1)
+            sys.mustCommit("Enroll", "student" to s, "course" to c2)
+            sys.mustCommit("Enroll", "student" to s, "course" to c1) // present: a no-op
+            assertEquals(setOf(c1, c2), coll(sys.get(s, "courses")).toSet())
+            sys.mustCommit("Drop", "student" to s, "course" to c1)
+            assertEquals(listOf(c2), coll(sys.get(s, "courses")))
+            sys.mustCommit("Drop", "student" to s, "course" to c1) // absent: a no-op
+            assertEquals(listOf(c2), coll(sys.get(s, "courses")))
+        }
     }
 
     @Test
     fun `many scalar accumulates as a set`() {
         val sys = newSystem()
-        val s = sys.mustCommit("Student", "name" to "Ada", "tags" to listOf("honors"))
-        sys.mustCommit("Tag", "student" to s, "tag" to "stem")
-        sys.mustCommit("Tag", "student" to s, "tag" to "stem") // set semantics
-        assertEquals(listOf("honors", "stem"), coll(sys.get(s, "tags")))
-        assertTrue(!sys.isMember(s, "Untagged"))
+        sys.scope {
+            val s = sys.mustCommit("Student", "name" to "Ada", "tags" to listOf("honors"))
+            sys.mustCommit("Tag", "student" to s, "tag" to "stem")
+            sys.mustCommit("Tag", "student" to s, "tag" to "stem") // set semantics
+            assertEquals(listOf("honors", "stem"), coll(sys.get(s, "tags")))
+            assertTrue(!sys.isMember(s, "Untagged"))
+        }
     }
 
     @Test
     fun `a committed many with a duplicate is refused, one tolerating duplication keeps them in order`() {
         val sys = newSystem()
-        val dup = sys.commit("Student", mapOf("name" to "Ada", "tags" to listOf("stem", "honors", "stem")))
-        assertTrue("`tolerates duplication`" in assertIs<CommitResult.Refused>(dup).reason)
-        val s = sys.mustCommit("Student", "name" to "Ada", "notes" to listOf("late", "early", "late"))
-        assertEquals(listOf("late", "early", "late"), coll(sys.get(s, "notes")))
+        sys.scope {
+            val dup = sys.commit("Student", mapOf("name" to "Ada", "tags" to listOf("stem", "honors", "stem")))
+            assertTrue("`tolerates duplication`" in assertIs<CommitResult.Refused>(dup).reason)
+            val s = sys.mustCommit("Student", "name" to "Ada", "notes" to listOf("late", "early", "late"))
+            assertEquals(listOf("late", "early", "late"), coll(sys.get(s, "notes")))
+        }
     }
 
     @Test
     fun `a many tolerating duplication appends on plus, in order, duplicates kept`() {
         val sys = newSystem()
-        val s = sys.mustCommit("Student", "name" to "Ada")
-        assertEquals(emptyList<Any>(), coll(sys.get(s, "notes")), "an absent many is the empty collection")
-        sys.mustCommit("Note", "student" to s, "note" to "late")
-        sys.mustCommit("Note", "student" to s, "note" to "early")
-        sys.mustCommit("Note", "student" to s, "note" to "late")
-        assertEquals(listOf("late", "early", "late"), coll(sys.get(s, "notes")))
+        sys.scope {
+            val s = sys.mustCommit("Student", "name" to "Ada")
+            assertEquals(emptyList<Any>(), coll(sys.get(s, "notes")), "an absent many is the empty collection")
+            sys.mustCommit("Note", "student" to s, "note" to "late")
+            sys.mustCommit("Note", "student" to s, "note" to "early")
+            sys.mustCommit("Note", "student" to s, "note" to "late")
+            assertEquals(listOf("late", "early", "late"), coll(sys.get(s, "notes")))
+        }
     }
 
     @Test
@@ -136,11 +152,13 @@ class CollectionsTest {
         val diags = Validator.validate(source)
         check(diags.isEmpty()) { diags.toString() }
         val sys = VelleSystem(Model(Parser.parse(source)))
-        val s = sys.mustCommit("Student", "name" to "Ada", "notes" to listOf("late", "early", "late"))
-        sys.mustCommit("Strike", "student" to s, "note" to "late")
-        assertEquals(listOf("early"), coll(sys.get(s, "notes")))
-        sys.mustCommit("Strike", "student" to s, "note" to "late") // absent: nothing changes
-        assertEquals(listOf("early"), coll(sys.get(s, "notes")))
+        sys.scope {
+            val s = sys.mustCommit("Student", "name" to "Ada", "notes" to listOf("late", "early", "late"))
+            sys.mustCommit("Strike", "student" to s, "note" to "late")
+            assertEquals(listOf("early"), coll(sys.get(s, "notes")))
+            sys.mustCommit("Strike", "student" to s, "note" to "late") // absent: nothing changes
+            assertEquals(listOf("early"), coll(sys.get(s, "notes")))
+        }
     }
 
     @Test
@@ -159,25 +177,29 @@ class CollectionsTest {
         val diags = Validator.validate(source)
         check(diags.isEmpty()) { diags.toString() }
         val sys = VelleSystem(Model(Parser.parse(source)))
-        val s = sys.mustCommit("Student", "name" to "Ada", "tags" to listOf("x"), "notes" to listOf("a", "b", "a"))
-        val e = sys.mustCommit("Enrollment", "student" to s)
-        assertEquals(listOf("x"), coll(sys.get(e, "tagsSeen")))
-        assertEquals(listOf("a", "b", "a"), coll(sys.get(e, "notesSeen")))
-        assertEquals(3, (sys.get(e, "noteCount") as Number).toInt())
-        assertEquals(1, (sys.get(e, "tagCount") as Number).toInt())
-        assertTrue(sys.isMember(e, "Noted"))
+        sys.scope {
+            val s = sys.mustCommit("Student", "name" to "Ada", "tags" to listOf("x"), "notes" to listOf("a", "b", "a"))
+            val e = sys.mustCommit("Enrollment", "student" to s)
+            assertEquals(listOf("x"), coll(sys.get(e, "tagsSeen")))
+            assertEquals(listOf("a", "b", "a"), coll(sys.get(e, "notesSeen")))
+            assertEquals(3, (sys.get(e, "noteCount") as Number).toInt())
+            assertEquals(1, (sys.get(e, "tagCount") as Number).toInt())
+            assertTrue(sys.isMember(e, "Noted"))
+        }
     }
 
     @Test
     fun `contains over a many of values is membership under the element's equality`() {
         val sys = newSystem()
-        val s = sys.mustCommit("Student", "name" to "Ada", "tags" to listOf("stem"))
-        assertTrue(!sys.isMember(s, "Honors"))
-        sys.mustCommit("Tag", "student" to s, "tag" to "honors")
-        assertTrue(sys.isMember(s, "Honors"))
-        val diags = Validator.validate("act S { scores: many integer }\nshape X = S where scores contains \"a\"")
-        assertTrue(diags.any { it.code == "F2" }, diags.toString())
-        assertTrue(Validator.validate("act S { scores: many integer, n: integer }\nshape X = S where scores contains n").none { it.code == "F2" })
+        sys.scope {
+            val s = sys.mustCommit("Student", "name" to "Ada", "tags" to listOf("stem"))
+            assertTrue(!sys.isMember(s, "Honors"))
+            sys.mustCommit("Tag", "student" to s, "tag" to "honors")
+            assertTrue(sys.isMember(s, "Honors"))
+            val diags = Validator.validate("act S { scores: many integer }\nshape X = S where scores contains \"a\"")
+            assertTrue(diags.any { it.code == "F2" }, diags.toString())
+            assertTrue(Validator.validate("act S { scores: many integer, n: integer }\nshape X = S where scores contains n").none { it.code == "F2" })
+        }
     }
 
     @Test
@@ -220,27 +242,31 @@ class CollectionsTest {
     @Test
     fun `fan-out assignment writes the stored pointer of every named child`() {
         val sys = newSystem()
-        val a = sys.mustCommit("Advisor", "name" to "Turing")
-        val s1 = sys.mustCommit("Student", "name" to "Ada")
-        val s2 = sys.mustCommit("Student", "name" to "Grace")
-        val s3 = sys.mustCommit("Student", "name" to "Edsger")
-        sys.mustCommit("AssignAdvisor", "advisor" to a, "students" to listOf(s1, s2))
-        assertEquals(a, sys.get(s1, "advisor"))
-        assertEquals(a, sys.get(s2, "advisor"))
-        assertEquals(null, sys.get(s3, "advisor"), "only the named children were written")
-        // both views over the declared side agree: the inferred inverse and the renamed derived view
-        assertEquals(setOf(s1, s2), coll(sys.get(a, "students")).toSet())
-        assertEquals(setOf(s1, s2), coll(sys.get(a, "advisees")).toSet())
+        sys.scope {
+            val a = sys.mustCommit("Advisor", "name" to "Turing")
+            val s1 = sys.mustCommit("Student", "name" to "Ada")
+            val s2 = sys.mustCommit("Student", "name" to "Grace")
+            val s3 = sys.mustCommit("Student", "name" to "Edsger")
+            sys.mustCommit("AssignAdvisor", "advisor" to a, "students" to listOf(s1, s2))
+            assertEquals(a, sys.get(s1, "advisor"))
+            assertEquals(a, sys.get(s2, "advisor"))
+            assertEquals(null, sys.get(s3, "advisor"), "only the named children were written")
+            // both views over the declared side agree: the inferred inverse and the renamed derived view
+            assertEquals(setOf(s1, s2), coll(sys.get(a, "students")).toSet())
+            assertEquals(setOf(s1, s2), coll(sys.get(a, "advisees")).toSet())
+        }
     }
 
     @Test
     fun `a refinement reads the declared many`() {
         val sys = newSystem()
-        val s = sys.mustCommit("Student", "name" to "Ada")
-        val courses = (1..3).map { sys.mustCommit("Course", "title" to "C$it", "capacity" to 10, "term" to java.time.Duration.ofDays(84)) }
-        assertTrue(!sys.isMember(s, "Overloaded"))
-        sys.mustCommit("SetEnrollment", "student" to s, "courses" to courses)
-        assertTrue(sys.isMember(s, "Overloaded"))
+        sys.scope {
+            val s = sys.mustCommit("Student", "name" to "Ada")
+            val courses = (1..3).map { sys.mustCommit("Course", "title" to "C$it", "capacity" to 10, "term" to java.time.Duration.ofDays(84)) }
+            assertTrue(!sys.isMember(s, "Overloaded"))
+            sys.mustCommit("SetEnrollment", "student" to s, "courses" to courses)
+            assertTrue(sys.isMember(s, "Overloaded"))
+        }
     }
 
     // ── validator: V19/V20 (Reference §6; checks.md) ────────────────────────────

@@ -52,46 +52,48 @@ class TickRejectionTest {
     @Test
     fun `the backstop - a constraint that reads the clock rejects the nightly firing once the permit lapses`() {
         val sys = newSystem()
-        val site = sys.mustCommit("Site", "name" to "north field")
-        sys.mustCommit("Permit", "site" to site, "expiresOn" to LocalDate.of(2026, 10, 5))
-        val planting = sys.mustCommit("Planting", "site" to site, "plantedOn" to LocalDate.of(2026, 10, 2))
+        sys.scope {
+            val site = sys.mustCommit("Site", "name" to "north field")
+            sys.mustCommit("Permit", "site" to site, "expiresOn" to LocalDate.of(2026, 10, 5))
+            val planting = sys.mustCommit("Planting", "site" to site, "plantedOn" to LocalDate.of(2026, 10, 2))
 
-        sys.setTime(Instant.parse("2026-10-07T02:00:00Z"))
-        val e = assertFailsWith<TickRejected> { sys.tick("Nightly") }
+            sys.setTime(Instant.parse("2026-10-07T02:00:00Z"))
+            val e = assertFailsWith<TickRejected> { sys.tick("Nightly") }
 
-        assertEquals(emptyList(), sys.instancesOf("ScoutingReminder"), "the firing rolled back")
-        assertEquals("Nightly", e.schedule)
-        val r = e.rejections.single()
-        assertEquals(e.message, r.message)
-        assertNull(r.act)
-        assertEquals("RemindScouting", r.rule)
-        assertEquals("Nightly", r.schedule)
-        assertEquals(RecordRef("Planting", StoreKey(planting)), r.subject?.ref)
-        assertEquals(listOf("ScoutingReminder"), r.produced.map { it.shape })
-        assertEquals(listOf(RecordRef("Planting", StoreKey(planting))), r.violating.map { it.ref })
-        assertEquals("2026-10-07", r.today)
-        assertEquals(
-            """
-            Nightly tick rejected: Planting#3 would be a Planting where site is not PermittedSite.
-              never #1: Planting where site is not PermittedSite
-              rule RemindScouting for Planting#3: site = Site#1, plantedOn = 2026-10-02
-              produced ScoutingReminder#4: planting = Planting#3, sentOn = 2026-10-07
-              through Site#1: name = "north field"
-              also Permit#2: site = Site#1, expiresOn = 2026-10-05
-              evaluation:
-                Planting#3.site = Site#1
-                Permit#2.site = Site#1
-                Permit#2.expiresOn = 2026-10-05
-                Site#1 is not PermittedSite
-              today: 2026-10-07
-            """.trimIndent(),
-            r.message,
-        )
+            assertEquals(emptyList(), sys.instancesOf("ScoutingReminder"), "the firing rolled back")
+            assertEquals("Nightly", e.schedule)
+            val r = e.rejections.single()
+            assertEquals(e.message, r.message)
+            assertNull(r.act)
+            assertEquals("RemindScouting", r.rule)
+            assertEquals("Nightly", r.schedule)
+            assertEquals(RecordRef("Planting", StoreKey(planting)), r.subject?.ref)
+            assertEquals(listOf("ScoutingReminder"), r.produced.map { it.shape })
+            assertEquals(listOf(RecordRef("Planting", StoreKey(planting))), r.violating.map { it.ref })
+            assertEquals("2026-10-07", r.today)
+            assertEquals(
+                """
+                Nightly tick rejected: Planting#3 would be a Planting where site is not PermittedSite.
+                  never #1: Planting where site is not PermittedSite
+                  rule RemindScouting for Planting#3: site = Site#1, plantedOn = 2026-10-02
+                  produced ScoutingReminder#4: planting = Planting#3, sentOn = 2026-10-07
+                  through Site#1: name = "north field"
+                  also Permit#2: site = Site#1, expiresOn = 2026-10-05
+                  evaluation:
+                    Planting#3.site = Site#1
+                    Permit#2.site = Site#1
+                    Permit#2.expiresOn = 2026-10-05
+                    Site#1 is not PermittedSite
+                  today: 2026-10-07
+                """.trimIndent(),
+                r.message,
+            )
 
-        // The next tick is refused the same way: the condition stands until the permit is renewed.
-        assertFailsWith<TickRejected> { sys.tick("Nightly") }
-        sys.mustCommit("Permit", "site" to site, "expiresOn" to LocalDate.of(2027, 10, 5))
-        sys.tick("Nightly")
-        assertEquals(1, sys.instancesOf("ScoutingReminder").size, "renewed, the firing lands")
+            // The next tick is refused the same way: the condition stands until the permit is renewed.
+            assertFailsWith<TickRejected> { sys.tick("Nightly") }
+            sys.mustCommit("Permit", "site" to site, "expiresOn" to LocalDate.of(2027, 10, 5))
+            sys.tick("Nightly")
+            assertEquals(1, sys.instancesOf("ScoutingReminder").size, "renewed, the firing lands")
+        }
     }
 }

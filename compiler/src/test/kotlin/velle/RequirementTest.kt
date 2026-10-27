@@ -90,13 +90,15 @@ class RequirementTest {
         val src = pharmacy.replace("VerifyFill requires pharmacist is Pharmacist", "VerifyFill requires pharmacist to be Pharmacist")
         assertEquals(emptyList(), Validator.validate(src))
         val sys = VelleSystem(Model(Parser.parse(src)), startTime = Instant.parse("2026-10-11T09:00:00Z"))
-        val tech = assertIs<CommitResult.Accepted>(sys.commit("Staff", mapOf("name" to "Ana", "role" to "technician"))).id
-        val fill = assertIs<CommitResult.Accepted>(sys.commit("Fill", mapOf("quantity" to 30))).id
-        val rejection = assertIs<CommitResult.Refused>(sys.commit("VerifyFill", mapOf("fill" to fill, "pharmacist" to tech))).rejection!!
-        assertEquals("VerifyFill requires pharmacist to be Pharmacist", rejection.declaration)
-        assertEquals("pharmacist to be Pharmacist", rejection.requirement)
-        assertEquals("VerifyFill where pharmacist is not Pharmacist", rejection.prohibition)
-        assertTrue(rejection.message.startsWith("VerifyFill refused: VerifyFill requires pharmacist to be Pharmacist, and this VerifyFill does not.\n  requires #1: VerifyFill requires pharmacist to be Pharmacist\n"), rejection.message)
+        sys.scope {
+            val tech = assertIs<CommitResult.Accepted>(sys.commit("Staff", mapOf("name" to "Ana", "role" to "technician"))).id
+            val fill = assertIs<CommitResult.Accepted>(sys.commit("Fill", mapOf("quantity" to 30))).id
+            val rejection = assertIs<CommitResult.Refused>(sys.commit("VerifyFill", mapOf("fill" to fill, "pharmacist" to tech))).rejection!!
+            assertEquals("VerifyFill requires pharmacist to be Pharmacist", rejection.declaration)
+            assertEquals("pharmacist to be Pharmacist", rejection.requirement)
+            assertEquals("VerifyFill where pharmacist is not Pharmacist", rejection.prohibition)
+            assertTrue(rejection.message.startsWith("VerifyFill refused: VerifyFill requires pharmacist to be Pharmacist, and this VerifyFill does not.\n  requires #1: VerifyFill requires pharmacist to be Pharmacist\n"), rejection.message)
+        }
     }
 
     @Test
@@ -121,38 +123,42 @@ class RequirementTest {
     fun `a refusal renders as the requirement unmet`() {
         assertEquals(emptyList(), Validator.validate(pharmacy))
         val sys = VelleSystem(Model(Parser.parse(pharmacy)), startTime = Instant.parse("2026-10-11T09:00:00Z"))
-        val tech = assertIs<CommitResult.Accepted>(sys.commit("Staff", mapOf("name" to "Ana", "role" to "technician"))).id
-        val fill = assertIs<CommitResult.Accepted>(sys.commit("Fill", mapOf("quantity" to 30))).id
-        val r = assertIs<CommitResult.Refused>(sys.commit("VerifyFill", mapOf("fill" to fill, "pharmacist" to tech)))
-        val rejection = r.rejection!!
-        assertEquals("VerifyFill requires pharmacist is Pharmacist", rejection.declaration)
-        assertEquals("pharmacist is Pharmacist", rejection.requirement)
-        assertEquals("VerifyFill where pharmacist is not Pharmacist", rejection.prohibition)
-        assertEquals(
-            """
-            VerifyFill refused: VerifyFill requires pharmacist is Pharmacist, and this VerifyFill does not.
-              requires #1: VerifyFill requires pharmacist is Pharmacist
-              this VerifyFill: fill = Fill#2, pharmacist = Staff#1
-              through Staff#1: name = "Ana", role = "technician"
-              evaluation:
-                this VerifyFill.pharmacist = Staff#1
-                Staff#1.role = "technician"
-                Staff#1 is not Pharmacist
-            """.trimIndent(),
-            rejection.message,
-        )
-        assertNull(rejection.rule)
+        sys.scope {
+            val tech = assertIs<CommitResult.Accepted>(sys.commit("Staff", mapOf("name" to "Ana", "role" to "technician"))).id
+            val fill = assertIs<CommitResult.Accepted>(sys.commit("Fill", mapOf("quantity" to 30))).id
+            val r = assertIs<CommitResult.Refused>(sys.commit("VerifyFill", mapOf("fill" to fill, "pharmacist" to tech)))
+            val rejection = r.rejection!!
+            assertEquals("VerifyFill requires pharmacist is Pharmacist", rejection.declaration)
+            assertEquals("pharmacist is Pharmacist", rejection.requirement)
+            assertEquals("VerifyFill where pharmacist is not Pharmacist", rejection.prohibition)
+            assertEquals(
+                """
+                VerifyFill refused: VerifyFill requires pharmacist is Pharmacist, and this VerifyFill does not.
+                  requires #1: VerifyFill requires pharmacist is Pharmacist
+                  this VerifyFill: fill = Fill#2, pharmacist = Staff#1
+                  through Staff#1: name = "Ana", role = "technician"
+                  evaluation:
+                    this VerifyFill.pharmacist = Staff#1
+                    Staff#1.role = "technician"
+                    Staff#1 is not Pharmacist
+                """.trimIndent(),
+                rejection.message,
+            )
+            assertNull(rejection.rule)
+        }
     }
 
     @Test
     fun `a never still renders as the forbidden configuration`() {
         val src = pharmacy.replace("VerifyFill requires pharmacist is Pharmacist", "never (VerifyFill where pharmacist is not Pharmacist)")
         val sys = VelleSystem(Model(Parser.parse(src)), startTime = Instant.parse("2026-10-11T09:00:00Z"))
-        val tech = assertIs<CommitResult.Accepted>(sys.commit("Staff", mapOf("name" to "Ana", "role" to "technician"))).id
-        val fill = assertIs<CommitResult.Accepted>(sys.commit("Fill", mapOf("quantity" to 30))).id
-        val r = assertIs<CommitResult.Refused>(sys.commit("VerifyFill", mapOf("fill" to fill, "pharmacist" to tech)))
-        assertTrue(r.rejection!!.message.startsWith("VerifyFill refused: this VerifyFill would be a VerifyFill where pharmacist is not Pharmacist."), r.rejection!!.message)
-        assertNull(r.rejection!!.requirement)
+        sys.scope {
+            val tech = assertIs<CommitResult.Accepted>(sys.commit("Staff", mapOf("name" to "Ana", "role" to "technician"))).id
+            val fill = assertIs<CommitResult.Accepted>(sys.commit("Fill", mapOf("quantity" to 30))).id
+            val r = assertIs<CommitResult.Refused>(sys.commit("VerifyFill", mapOf("fill" to fill, "pharmacist" to tech)))
+            assertTrue(r.rejection!!.message.startsWith("VerifyFill refused: this VerifyFill would be a VerifyFill where pharmacist is not Pharmacist."), r.rejection!!.message)
+            assertNull(r.rejection!!.requirement)
+        }
     }
 
     @Test

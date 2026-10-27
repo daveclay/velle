@@ -74,9 +74,11 @@ class BatchesProbesTest {
         // and the runtime then resolves the name against each concrete
         // instance — the by-coincidence sharing Reference §9 rejects
         val sys = system(src)
-        val pep = sys.accept("Peptide", "code" to "P")
-        assertIs<CommitResult.Refused>(sys.commit("Fermented", mapOf("peptide" to pep, "quantityMg" to BigDecimal.ZERO, "strain" to "x")))
-        sys.accept("Fermented", "peptide" to pep, "quantityMg" to BigDecimal.ONE, "strain" to "x")
+        sys.scope {
+            val pep = sys.accept("Peptide", "code" to "P")
+            assertIs<CommitResult.Refused>(sys.commit("Fermented", mapOf("peptide" to pep, "quantityMg" to BigDecimal.ZERO, "strain" to "x")))
+            sys.accept("Fermented", "peptide" to pep, "quantityMg" to BigDecimal.ONE, "strain" to "x")
+        }
     }
 
     @Test
@@ -107,15 +109,17 @@ class BatchesProbesTest {
             .replace("origin: one Origin\n}", "origin: one Origin\n} with origin")
         assertEquals(emptyList(), codes(src), messages(src))
         val sys = system(src)
-        val strain = sys.accept("Strain", "name" to "s")
-        val pep = sys.accept("Peptide", "code" to "P")
-        // an origin on its own is still refused: the batch cannot exist yet
-        assertIs<CommitResult.Refused>(sys.commit("Fermentation", mapOf("strain" to strain)))
-        // arriving with its batch, it is accepted, and the two land together
-        val batch = sys.accept("PeptideBatch", "peptide" to pep, "quantityMg" to BigDecimal.ONE,
-            parts = mapOf("origin" to listOf(mapOf(VelleSystem.SHAPE_KEY to "Fermentation", "strain" to strain))))
-        val ferm = sys.instancesOf("Fermentation").single()
-        assertEquals(ferm, sys.get(batch, "origin"))
+        sys.scope {
+            val strain = sys.accept("Strain", "name" to "s")
+            val pep = sys.accept("Peptide", "code" to "P")
+            // an origin on its own is still refused: the batch cannot exist yet
+            assertIs<CommitResult.Refused>(sys.commit("Fermentation", mapOf("strain" to strain)))
+            // arriving with its batch, it is accepted, and the two land together
+            val batch = sys.accept("PeptideBatch", "peptide" to pep, "quantityMg" to BigDecimal.ONE,
+                parts = mapOf("origin" to listOf(mapOf(VelleSystem.SHAPE_KEY to "Fermentation", "strain" to strain))))
+            val ferm = sys.instancesOf("Fermentation").single()
+            assertEquals(ferm, sys.get(batch, "origin"))
+        }
     }
 
     // ── B3: the inferred inverse is pluralized with a literal `s` ──
@@ -161,15 +165,17 @@ class BatchesProbesTest {
         for (src in listOf(filtered, narrowed)) {
             assertEquals(emptyList(), codes(src), messages(src))
             val sys = system(src)
-            val pep = sys.accept("Peptide", "code" to "P")
-            val strain = sys.accept("Strain", "name" to "s")
-            val ferm = sys.accept("Fermentation", "strain" to strain)
-            val b1 = sys.accept("PeptideBatch", "peptide" to pep, "quantityMg" to BigDecimal.TEN, "origin" to ferm)
-            val mix = sys.accept("Composition", "mixedOn" to LocalDate.of(2026, 4, 1),
-                parts = mapOf("components" to listOf(mapOf("source" to b1, "amountMg" to BigDecimal.ONE))))
-            val b2 = sys.accept("PeptideBatch", "peptide" to pep, "quantityMg" to BigDecimal.ONE, "origin" to mix)
-            assertFailsWith<VelleRuntimeError> { sys.get(b2, "inputs") }
-        }
+            sys.scope {
+                val pep = sys.accept("Peptide", "code" to "P")
+                val strain = sys.accept("Strain", "name" to "s")
+                val ferm = sys.accept("Fermentation", "strain" to strain)
+                val b1 = sys.accept("PeptideBatch", "peptide" to pep, "quantityMg" to BigDecimal.TEN, "origin" to ferm)
+                val mix = sys.accept("Composition", "mixedOn" to LocalDate.of(2026, 4, 1),
+                    parts = mapOf("components" to listOf(mapOf("source" to b1, "amountMg" to BigDecimal.ONE))))
+                val b2 = sys.accept("PeptideBatch", "peptide" to pep, "quantityMg" to BigDecimal.ONE, "origin" to mix)
+                assertFailsWith<VelleRuntimeError> { sys.get(b2, "inputs") }
+            }
+            }
     }
 
     // ── B6: V14 does not see a derived collection that reads itself ──

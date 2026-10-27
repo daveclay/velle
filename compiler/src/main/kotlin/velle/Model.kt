@@ -273,7 +273,7 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
 
     // ── refinement → base shape ──────────────────────────────────────────────
 
-    private val basesCache = mutableMapOf<String, Set<String>>()
+    private val basesCache = java.util.concurrent.ConcurrentHashMap<String, Set<String>>()
 
     /**
      * The base shapes a shape-or-refinement's members are drawn from. One for a
@@ -281,16 +281,14 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
      * `or` composed across unrelated shapes (Reference §9). Empty,
      * with F1, when a name is unknown.
      */
-    fun basesOf(name: String): Set<String> = basesCache.getOrPut(name) {
-        when {
-            name in shapes -> setOf(name)
-            name in refinements -> {
-                basesCache[name] = emptySet() // break cycles; V14 reports them
-                basesOfExpr(refinements.getValue(name).expr)
-            }
-            else -> { error("F1", "unknown shape or refinement '$name'"); emptySet() }
+    fun basesOf(name: String): Set<String> = basesCache[name] ?: when {
+        name in shapes -> setOf(name)
+        name in refinements -> {
+            basesCache[name] = emptySet() // break cycles; V14 reports them
+            basesOfExpr(refinements.getValue(name).expr)
         }
-    }
+        else -> { error("F1", "unknown shape or refinement '$name'"); emptySet() }
+    }.also { basesCache[name] = it } // a plain put: the cycle guard above must not win
 
     fun basesOfExpr(expr: RefExpr): Set<String> = when (expr) {
         is RefName -> basesOf(expr.name)
@@ -369,9 +367,9 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
     }
 
     fun membersOf(scope: String): Map<String, MemberInfo> =
-        memberCache.getOrPut(scope) { computeMembers(scope) }
+        memberCache[scope] ?: computeMembers(scope).also { memberCache[scope] = it }
 
-    private val memberCache = mutableMapOf<String, Map<String, MemberInfo>>()
+    private val memberCache = java.util.concurrent.ConcurrentHashMap<String, Map<String, MemberInfo>>()
 
     private fun computeMembers(scope: String): Map<String, MemberInfo> {
         val out = linkedMapOf<String, MemberInfo>()
@@ -673,7 +671,7 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
             s
         }
 
-    private val summaryCache = mutableMapOf<String, ReadSummary>()
+    private val summaryCache = java.util.concurrent.ConcurrentHashMap<String, ReadSummary>()
 
     /** Read summary of an arbitrary refinement expression (a rule's condition, a
      *  never's target) — [predicateSummary]'s sibling for unnamed expressions. */

@@ -114,58 +114,64 @@ class ForEachTest {
     @Test
     fun `one firing lays out containers x replicates containers and wells under each`() {
         val sys = system(PLATES)
-        val d = design(sys, containers = 3, replicates = 2, conditions = 4)
-        val containers = sys.instancesOf("Container")
-        assertEquals(6, containers.size)
-        assertEquals(setOf(1L to 1L, 1L to 2L, 1L to 3L, 2L to 1L, 2L to 2L, 2L to 3L),
-            containers.map { (sys.get(it, "replicate") as Number).toLong() to (sys.get(it, "position") as Number).toLong() }.toSet())
-        containers.forEach { assertEquals(d, sys.get(it, "design")) }
-        val wells = sys.instancesOf("Well")
-        assertEquals(576, wells.size)
-        // every container holds 96 wells at positions 1 to 96, 24 per condition
-        for (c in containers) {
-            val own = wells.filter { sys.get(it, "container") == c }
-            assertEquals((1..96).map { it.toLong() }.toSet(), own.map { (sys.get(it, "position") as Number).toLong() }.toSet())
-            assertEquals(4, own.groupBy { sys.get(it, "condition") }.size)
-            own.groupBy { sys.get(it, "condition") }.values.forEach { assertEquals(24, it.size) }
+        sys.scope {
+            val d = design(sys, containers = 3, replicates = 2, conditions = 4)
+            val containers = sys.instancesOf("Container")
+            assertEquals(6, containers.size)
+            assertEquals(setOf(1L to 1L, 1L to 2L, 1L to 3L, 2L to 1L, 2L to 2L, 2L to 3L),
+                containers.map { (sys.get(it, "replicate") as Number).toLong() to (sys.get(it, "position") as Number).toLong() }.toSet())
+            containers.forEach { assertEquals(d, sys.get(it, "design")) }
+            val wells = sys.instancesOf("Well")
+            assertEquals(576, wells.size)
+            // every container holds 96 wells at positions 1 to 96, 24 per condition
+            for (c in containers) {
+                val own = wells.filter { sys.get(it, "container") == c }
+                assertEquals((1..96).map { it.toLong() }.toSet(), own.map { (sys.get(it, "position") as Number).toLong() }.toSet())
+                assertEquals(4, own.groupBy { sys.get(it, "condition") }.size)
+                own.groupBy { sys.get(it, "condition") }.values.forEach { assertEquals(24, it.size) }
+            }
+            // the well's condition is the design's own part
+            val conditions = sys.instancesOf("Condition").toSet()
+            assertTrue(wells.all { sys.get(it, "condition") in conditions })
         }
-        // the well's condition is the design's own part
-        val conditions = sys.instancesOf("Condition").toSet()
-        assertTrue(wells.all { sys.get(it, "condition") in conditions })
     }
 
     @Test
     fun `an empty range creates nothing, and a later source may read an earlier name`() {
         val sys = system(PLATES)
-        design(sys, containers = 3, replicates = 0, conditions = 2)
-        assertEquals(0, sys.instancesOf("Container").size)
-        assertEquals(0, sys.instancesOf("Well").size)
+        sys.scope {
+            design(sys, containers = 3, replicates = 0, conditions = 2)
+            assertEquals(0, sys.instancesOf("Container").size)
+            assertEquals(0, sys.instancesOf("Well").size)
 
-        val chained = system("""
-            act Order { lines: integer }
-            shape Line { order: one Order, n: integer, copy: integer }
-            rule R when Order {
-                for each n from 1 to lines, copy from 1 to n {
-                    Line from { order: this, n: n, copy: copy }
+            val chained = system("""
+                act Order { lines: integer }
+                shape Line { order: one Order, n: integer, copy: integer }
+                rule R when Order {
+                    for each n from 1 to lines, copy from 1 to n {
+                        Line from { order: this, n: n, copy: copy }
+                    }
                 }
-            }
-        """.trimIndent())
-        chained.accept("Order", "lines" to num(3))
-        assertEquals(6, chained.instancesOf("Line").size) // 1 + 2 + 3
+            """.trimIndent())
+            chained.accept("Order", "lines" to num(3))
+            assertEquals(6, chained.instancesOf("Line").size) // 1 + 2 + 3
+        }
     }
 
     @Test
     fun `the whole layout lands or is refused as one`() {
         val sys = system(PLATES + "\n\nnever (Well where position > container.design.containerType.wellsPerContainer)")
-        // 5 conditions × 24 wells = 120 positions on a 96-well plate: one well is refused, so the design is
-        val type = sys.accept("ContainerType", "name" to "96-well", "wellsPerContainer" to num(96))
-        val r = sys.commit("ExperimentDesign",
-            mapOf("containerType" to type, "containerCount" to num(1), "replicates" to num(1), "wellsPerCondition" to num(24)),
-            parts = mapOf("conditions" to (1..5).map { mapOf("block" to num(it), "value" to num(it)) }))
-        assertIs<CommitResult.Refused>(r)
-        assertEquals(0, sys.instancesOf("ExperimentDesign").size)
-        assertEquals(0, sys.instancesOf("Container").size)
-        assertEquals(0, sys.instancesOf("Well").size)
+        sys.scope {
+            // 5 conditions × 24 wells = 120 positions on a 96-well plate: one well is refused, so the design is
+            val type = sys.accept("ContainerType", "name" to "96-well", "wellsPerContainer" to num(96))
+            val r = sys.commit("ExperimentDesign",
+                mapOf("containerType" to type, "containerCount" to num(1), "replicates" to num(1), "wellsPerCondition" to num(24)),
+                parts = mapOf("conditions" to (1..5).map { mapOf("block" to num(it), "value" to num(it)) }))
+            assertIs<CommitResult.Refused>(r)
+            assertEquals(0, sys.instancesOf("ExperimentDesign").size)
+            assertEquals(0, sys.instancesOf("Container").size)
+            assertEquals(0, sys.instancesOf("Well").size)
+        }
     }
 
     @Test
@@ -187,11 +193,13 @@ class ForEachTest {
                 }
             }
         """.trimIndent())
-        val d = sys.accept("Design", "name" to "A", parts = mapOf("items" to listOf(mapOf("position" to num(3)), mapOf("position" to num(7)))))
-        sys.accept("Design", "name" to "B")
-        sys.accept("Plate", "design" to d)
-        assertEquals(setOf(3L, 7L), sys.instancesOf("Well").map { (sys.get(it, "position") as Number).toLong() }.toSet())
-        assertEquals(2, sys.instancesOf("Tally").size)
+        sys.scope {
+            val d = sys.accept("Design", "name" to "A", parts = mapOf("items" to listOf(mapOf("position" to num(3)), mapOf("position" to num(7)))))
+            sys.accept("Design", "name" to "B")
+            sys.accept("Plate", "design" to d)
+            assertEquals(setOf(3L, 7L), sys.instancesOf("Well").map { (sys.get(it, "position") as Number).toLong() }.toSet())
+            assertEquals(2, sys.instancesOf("Tally").size)
+        }
     }
 
     // ── V34 ──────────────────────────────────────────────────────────────────

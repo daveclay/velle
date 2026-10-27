@@ -14,8 +14,6 @@ import velle.TickRejected
 import velle.VelleSyntaxError
 import velle.VelleSystem
 import java.time.Clock
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
 
 /**
  * A running system's operations for a caller who speaks JSON: commit an act,
@@ -24,10 +22,11 @@ import kotlin.concurrent.withLock
  * transport, and a transport (REST, GraphQL, a message queue) maps its requests
  * onto these calls and the answers back.
  *
- * Every call takes the system's lock, so commits, ticks, and reads take turns:
- * the runtime evaluates one transaction at a time against one snapshot, and the
- * working set of records it keeps is one. Two callers never interleave. The store
- * underneath takes a connection per read and per commit and holds none between.
+ * Calls run side by side: each one is a scope of its own on the runtime, with a
+ * working set of records no other call shares, and the store underneath takes a
+ * unit of work per read and per commit ([Store API]). Two commits that revolve
+ * around one record take turns on the store's queue keys; everything else runs
+ * together.
  *
  * The clock: before each call the system's clock is set from [clock], so `today`
  * and `now` in the spec are the wall clock of the machine the system runs on.
@@ -42,7 +41,6 @@ import kotlin.concurrent.withLock
 class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.systemUTC()) {
 
     val model get() = system.model
-    private val lock = ReentrantLock()
     /** The value codec this layer speaks: a transport that has to read or write a value itself uses the same one. */
     val wire = Wire(system)
     private val describe = Describe(model)
@@ -68,10 +66,10 @@ class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.system
         return Ref.Persisted(shape, StoreKey(wire.key(key)))
     }
 
-    /** One operation under the lock, on the current clock, in one read scope. */
-    fun <T> locked(body: () -> T): T = lock.withLock {
+    /** One operation on the current clock, in one scope of the runtime: what every call on this class, and the application's own code, runs inside. */
+    fun <T> scope(body: () -> T): T {
         clock?.let { system.setTime(it.instant()) }
-        system.scope(body)
+        return system.scope(body)
     }
 
     // ── commit ──────────────────────────────────────────────────────────────────
@@ -87,7 +85,7 @@ class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.system
         val actorProp = model.shapes.getValue(act).actor
         if (actorProp != null && actor == null)
             throw ApiException.unauthorized("'$act' is committed by a ${actorProp.shape}; the request names no actor")
-        return locked {
+        return scope {
             val input = wire.input(act, body)
             val actorId = if (actorProp != null) system.idOf(actor!!) else null
             when (val r = system.commit(act, input.fields, input.parts, actorId)) {
@@ -105,7 +103,7 @@ class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.system
         val base = if (root in model.shapes) root else model.baseOf(root)
             ?: throw ApiException.badRequest("'$root' is a union of several shapes; read a record by its own shape")
         val k = wire.key(key)
-        return locked {
+        return scope {
             val viewerId = viewerId(viewer)
             val id = try {
                 system.idOf(Ref.Persisted(base, StoreKey(k)))
@@ -128,7 +126,7 @@ class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.system
      */
     fun readEach(refs: List<Ref<*>>, viewer: Ref<*>?): List<Map<String, Any?>?> {
         if (refs.isEmpty()) return emptyList()
-        return locked {
+        return scope {
             val viewerId = viewerId(viewer)
             refs.map { ref ->
                 if (ref.shape !in model.shapes) null
@@ -150,7 +148,7 @@ class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.system
     fun query(root: String, where: String?, orderBy: List<String>, size: Int?, after: String?, viewer: Ref<*>?): Map<String, Any?> {
         checkRoot(root)
         val q = build(root, where, orderBy, size, after, viewer)
-        return locked {
+        return scope {
             val viewerId = viewerId(viewer)
             val result = try { system.query(q) } catch (e: QueryRefused) { throw refused(e) }
             linkedMapOf(
@@ -164,7 +162,7 @@ class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.system
     fun count(root: String, where: String?, viewer: Ref<*>?): Int {
         checkRoot(root)
         val q = build(root, where, emptyList(), null, null, viewer)
-        return locked {
+        return scope {
             viewerId(viewer)
             try { system.count(q) } catch (e: QueryRefused) { throw refused(e) }
         }
@@ -217,7 +215,7 @@ class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.system
     /** Run every rule on [schedule] now. The answer names the schedule, the moment, and each firing a `never` rejected. */
     fun tick(schedule: String): Map<String, Any?> {
         if (schedule !in schedules) throw ApiException.notFound("no schedule '$schedule'; this system has ${schedules}")
-        return locked {
+        return scope {
             val rejections = try {
                 system.tick(schedule); emptyList()
             } catch (e: TickRejected) {

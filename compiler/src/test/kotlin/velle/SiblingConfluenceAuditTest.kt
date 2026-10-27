@@ -37,8 +37,11 @@ class SiblingConfluenceAuditTest {
         check(model.diagnostics.isEmpty()) { "probe spec broken: ${model.diagnostics}" }
         val sys = VelleSystem(model)
         sys.firingOrder = strategy
-        scenario(sys)
-        return fingerprint(sys, model)
+        // one scope for the scenario and its fingerprint: the handles the scenario holds live until it exits
+        return sys.scope {
+            scenario(sys)
+            fingerprint(sys, model)
+        }
     }
 
     private fun bothOrders(src: String, scenario: (VelleSystem) -> Unit) =
@@ -49,16 +52,20 @@ class SiblingConfluenceAuditTest {
         val shapes = model.shapes.keys.filterNot { it in model.transients }.associateWith { shape ->
             sys.instancesOf(shape).map { canonical(sys, it, depth = 4) }.sorted()
         }
-        val captures = sys.captures.entries.map { (key, values) ->
-            val (id, refinement) = key
-            "$refinement@${canonical(sys, id, depth = 2)}: " +
-                values.entries.sortedBy { it.key }.joinToString(",") { "${it.key}=${render(sys, it.value)}" }
-        }.sorted()
+        // every current membership of a capture-carrying refinement holds a capture
+        val captures = model.refinements.filter { (_, r) -> r.members.any { it is DerivedProp && it.captured } }
+            .keys.flatMap { refinement ->
+                sys.instancesOf(refinement).map { id ->
+                    val values = sys.captureValues(id, refinement) ?: error("$refinement@$id: member without a capture")
+                    "$refinement@${canonical(sys, id, depth = 2)}: " +
+                        values.entries.sortedBy { it.key }.joinToString(",") { "${it.key}=${render(sys, it.value)}" }
+                }
+            }.sorted()
         return shapes + mapOf("«captures»" to captures, "«failures»" to sys.failures.sorted())
     }
 
     private fun canonical(sys: VelleSystem, id: Long, depth: Int): String {
-        val inst = sys.instances[id] ?: return "missing"
+        val inst = sys.instance(id) ?: return "missing"
         if (depth == 0) return inst.shape
         val fields = inst.fields.entries.sortedBy { it.key }.joinToString(",") { (k, v) ->
             "$k=" + when (v) {

@@ -69,30 +69,32 @@ class SingularForTest {
     @Test
     fun `episodes open, close via the singular reference, and reopen`() {
         val sys = newSystem()
-        val acct = sys.mustCommit("Account", "balance" to BigDecimal("100"))
-        assertEquals(0, sys.instancesOf("DelinquencyFlag").size)
+        sys.scope {
+            val acct = sys.mustCommit("Account", "balance" to BigDecimal("100"))
+            assertEquals(0, sys.instancesOf("DelinquencyFlag").size)
 
-        // going delinquent opens exactly one flag
-        sys.report(acct, "-50")
-        val flags = sys.instancesOf("DelinquencyFlag")
-        assertEquals(1, flags.size)
-        assertTrue(sys.isMember(flags.single(), "OpenDelinquencyFlag"))
+            // going delinquent opens exactly one flag
+            sys.report(acct, "-50")
+            val flags = sys.instancesOf("DelinquencyFlag")
+            assertEquals(1, flags.size)
+            assertTrue(sys.isMember(flags.single(), "OpenDelinquencyFlag"))
 
-        // deeper delinquency is the same episode — the guard holds
-        sys.report(acct, "-80")
-        assertEquals(1, sys.instancesOf("DelinquencyFlag").size)
+            // deeper delinquency is the same episode — the guard holds
+            sys.report(acct, "-80")
+            assertEquals(1, sys.instancesOf("DelinquencyFlag").size)
 
-        // recovery closes the episode: `(OpenDelinquencyFlag for this)`
-        // selects the one open flag and the resolution retires it
-        sys.report(acct, "50")
-        val resolutions = sys.instancesOf("DelinquencyResolution")
-        assertEquals(1, resolutions.size)
-        assertEquals(flags.single(), sys.get(resolutions.single(), "flag"))
-        assertEquals(0, sys.instancesOf("OpenDelinquencyFlag").size)
+            // recovery closes the episode: `(OpenDelinquencyFlag for this)`
+            // selects the one open flag and the resolution retires it
+            sys.report(acct, "50")
+            val resolutions = sys.instancesOf("DelinquencyResolution")
+            assertEquals(1, resolutions.size)
+            assertEquals(flags.single(), sys.get(resolutions.single(), "flag"))
+            assertEquals(0, sys.instancesOf("OpenDelinquencyFlag").size)
 
-        // a second delinquency is a new episode: a second flag, first stays resolved
-        sys.report(acct, "-30")
-        assertEquals(2, sys.instancesOf("DelinquencyFlag").size)
-        assertEquals(1, sys.instancesOf("OpenDelinquencyFlag").size)
+            // a second delinquency is a new episode: a second flag, first stays resolved
+            sys.report(acct, "-30")
+            assertEquals(2, sys.instancesOf("DelinquencyFlag").size)
+            assertEquals(1, sys.instancesOf("OpenDelinquencyFlag").size)
+        }
     }
 }

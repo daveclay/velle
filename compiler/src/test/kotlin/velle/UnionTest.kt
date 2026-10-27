@@ -145,35 +145,37 @@ class UnionTest {
     @Test
     fun `gallery - union membership, the shared inverse, narrowing, and the boundary`() {
         val sys = newSystem()
-        val ada = sys.mustCommit("Member", "name" to "Ada")
-        val grace = sys.mustCommit("Member", "name" to "Grace")
-        val post = sys.mustCommit("Post", "author" to ada, "body" to "hello")
-        val photo = sys.mustCommit("Photo", "author" to ada, "caption" to "sunset")
+        sys.scope {
+            val ada = sys.mustCommit("Member", "name" to "Ada")
+            val grace = sys.mustCommit("Member", "name" to "Grace")
+            val post = sys.mustCommit("Post", "author" to ada, "body" to "hello")
+            val photo = sys.mustCommit("Photo", "author" to ada, "caption" to "sunset")
 
-        assertTrue(sys.isMember(post, "Content"))
-        assertTrue(sys.isMember(photo, "Content"))
-        assertEquals(setOf(post, photo), sys.instancesOf("Content").toSet())
+            assertTrue(sys.isMember(post, "Content"))
+            assertTrue(sys.isMember(photo, "Content"))
+            assertEquals(setOf(post, photo), sys.instancesOf("Content").toSet())
 
-        val c1 = sys.mustCommit("Comment", "target" to post, "author" to grace, "body" to "hi")
-        val c2 = sys.mustCommit("Comment", "target" to photo, "author" to grace, "body" to "lovely")
-        assertEquals(listOf(c1), sys.get(post, "comments"))
-        assertEquals(listOf(c2), sys.get(photo, "comments"))
-        assertEquals(java.math.BigDecimal(1), sys.getAs(photo, "Content", "commentCount"))
-        assertTrue(sys.isMember(c1, "PostComment"))
-        assertTrue(sys.isMember(c2, "PhotoComment"))
+            val c1 = sys.mustCommit("Comment", "target" to post, "author" to grace, "body" to "hi")
+            val c2 = sys.mustCommit("Comment", "target" to photo, "author" to grace, "body" to "lovely")
+            assertEquals(listOf(c1), sys.get(post, "comments"))
+            assertEquals(listOf(c2), sys.get(photo, "comments"))
+            assertEquals(java.math.BigDecimal(1), sys.getAs(photo, "Content", "commentCount"))
+            assertTrue(sys.isMember(c1, "PostComment"))
+            assertTrue(sys.isMember(c2, "PhotoComment"))
 
-        // per-operand narrowing in the rule body
-        val notices = sys.instancesOf("CommentNotice")
-        assertEquals("hello", sys.get(notices[0], "excerpt"))
-        assertEquals("sunset", sys.get(notices[1], "excerpt"))
+            // per-operand narrowing in the rule body
+            val notices = sys.instancesOf("CommentNotice")
+            assertEquals("hello", sys.get(notices[0], "excerpt"))
+            assertEquals("sunset", sys.get(notices[1], "excerpt"))
 
-        // the never's narrowed conjunction: only a post's own author is refused
-        assertIs<CommitResult.Refused>(sys.commit("Comment", mapOf("target" to post, "author" to ada, "body" to "me")))
-        sys.mustCommit("Comment", "target" to photo, "author" to ada, "body" to "mine")
-        assertEquals(listOf(photo), sys.instancesOf("PopularityNotice").map { sys.get(it, "content") })
+            // the never's narrowed conjunction: only a post's own author is refused
+            assertIs<CommitResult.Refused>(sys.commit("Comment", mapOf("target" to post, "author" to ada, "body" to "me")))
+            sys.mustCommit("Comment", "target" to photo, "author" to ada, "body" to "mine")
+            assertEquals(listOf(photo), sys.instancesOf("PopularityNotice").map { sys.get(it, "content") })
 
-        // a handle outside the union cannot inhabit the field's type
-        val r = sys.commit("Comment", mapOf("target" to ada, "author" to grace, "body" to "?"))
-        assertTrue(assertIs<CommitResult.Refused>(r).reason.startsWith("type:"))
+            // a handle outside the union cannot inhabit the field's type
+            val r = sys.commit("Comment", mapOf("target" to ada, "author" to grace, "body" to "?"))
+            assertTrue(assertIs<CommitResult.Refused>(r).reason.startsWith("type:"))
+        }
     }
 }

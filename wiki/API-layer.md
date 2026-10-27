@@ -22,25 +22,24 @@ compiler               VelleSystem, Model, Parser, Cursor            the runtime
 
 ## apis/json: the operations
 
-`VelleApi` in `apis/json/src/main/kotlin/velle/api/VelleApi.kt` is the whole surface. Its constructor and its one locking primitive:
+`VelleApi` in `apis/json/src/main/kotlin/velle/api/VelleApi.kt` is the whole surface. Its constructor and the one primitive every operation runs inside:
 
 ```kotlin
 class VelleApi(val system: VelleSystem, private val clock: Clock? = Clock.systemUTC()) {
 
-    private val lock = ReentrantLock()
     val wire = Wire(system)
     val description: Map<String, Any?> by lazy { describe.describe() }
 
-    fun <T> locked(body: () -> T): T = lock.withLock {
+    fun <T> scope(body: () -> T): T {
         clock?.let { system.setTime(it.instant()) }
-        system.scope(body)
+        return system.scope(body)
     }
 ```
 
-- `system` is the runtime: the compiled model and the records, in memory or behind a store ([Store API](Store-API)).
-- `lock` is one lock for the whole system. Every operation on this page runs inside `locked`, so commits, ticks, and reads take turns. The runtime keeps one working set of records, so two callers in it at once would read each other's half-done work. Under the lock they never do.
+- `system` is the runtime: the compiled model over a store ([Store API](Store-API)), the in-memory one until another is connected.
+- `scope` runs one operation. Operations run side by side: each one holds a working set of records of its own on its thread, and the store underneath opens one unit of work per read and per commit. Two commits that revolve around one record take turns on that record's queue key ([evaluation](evaluation), "serialization domain"); everything else runs together. Nothing in this class locks.
 - `clock` sets the system's time before each operation, so `today` and `now` in the spec mean the wall clock. A test passes null and sets the time itself.
-- `system.scope` opens one read scope for the operation. Records are read through handles that are valid inside a scope and die with it, which is why every operation finishes building its JSON before `locked` returns.
+- `system.scope` opens one scope for the operation. Records are read through handles that are valid inside a scope and die with it, which is why every operation finishes building its JSON before `scope` returns.
 - `description` is the model as data, computed once. `wire` is public because a transport that must read or write a value itself, as the GraphQL scalars do, uses the same codec.
 
 The operations, each a public function on `VelleApi`:
@@ -55,9 +54,9 @@ The operations, each a public function on `VelleApi`:
 | `tick(schedule)` | `system.tick`; answers the time and the rejections |
 | `refTo(shape, key)` | a reference from a shape name and a key, for a resolver building the actor |
 
-Three things are checked before the lock is taken: the act or shape exists (not found), the act's actor is present when `by` demands one (unauthorized), the body and the query parse (bad request). Each is an `ApiException` with a `Kind`, and a transport maps the kind onto its own status. A `never` refusing a commit is not an exception; it is the answer.
+Three things are checked before the scope opens: the act or shape exists (not found), the act's actor is present when `by` demands one (unauthorized), the body and the query parse (bad request). Each is an `ApiException` with a `Kind`, and a transport maps the kind onto its own status. A `never` refusing a commit is not an exception; it is the answer.
 
-Reads and the viewer: once a spec has any `by` or `visible to` clause, `model.hasAuthorization` is true and every read with no viewer is unauthorized. A spec with no authorization serves the engineer's own view, which sees everything. The viewer is a `Ref<*>`; `locked` resolves it to the runtime's handle with `system.idOf`.
+Reads and the viewer: once a spec has any `by` or `visible to` clause, `model.hasAuthorization` is true and every read with no viewer is unauthorized. A spec with no authorization serves the engineer's own view, which sees everything. The viewer is a `Ref<*>`; the operation resolves it to the runtime's handle with `system.idOf` inside its scope.
 
 `Wire` in `apis/json/src/main/kotlin/velle/api/Wire.kt` is the value codec. Outbound, `record(id, scope, viewer)` builds a record's map: `shape` and `key` first, then every member of the scope from `system.get` and `system.getAs`, a hidden field as null, and on a shape one `is<Refinement>` flag per refinement. `out(value, type)` turns a runtime value into a JSON value: dates to ISO text, an extension type's value to its canonical text, an `integer` to a whole number. Inbound, `input(act, body)` splits the body into the runtime's `fields` and `parts` by the act's closure edges from `model.closures`, reads each scalar by the declared type through `scalar`, each reference through `reference`, and each nested object through `nested`, which handles `"@shape"` on a union operand, `"@new"` and `{"new": n}` for a sibling, and the part lists. It refuses a body that names the actor, a part's back-reference, or an unknown field.
 
@@ -124,7 +123,7 @@ fun velleApi(system: VelleSystem, props: VelleProperties, dataSource: ObjectProv
 - `velleSystem` unwraps the runtime from a generated system, so the rest of the starter works on `VelleSystem` alone.
 - `velleApi` connects the store and makes the one `VelleApi`. The store is connected here, while the bean is being made, so no request ever reaches a system that is half connected. The private `attach` reads `databaseProductName` from one connection and returns it, picks `PostgresStore` or `SqliteStore` over the `DataSource`, creates the tables when `velle.store.create-schema` is on, and calls `system.connect(store, store)`. The store holds no connection of its own: each read and each commit takes one from the pool for exactly as long as it runs ([Store API](Store-API), "The unit of work"). Any other database stops the application with a message naming it.
 - Three things in it are overridable by declaring a bean: a `SqlStore` of the application's own, already connected, which makes `attach` skip; a `Clock`, which a test fixes; and a `VelleApi` itself.
-- With no `DataSource` and no `SqlStore`, the system runs in memory. The starter keeps JDBC as a compile-time dependency only, so an application without a database does not pull one in.
+- With no `DataSource` and no `SqlStore`, the system runs over its in-memory store. The starter keeps JDBC as a compile-time dependency only, so an application without a database does not pull one in.
 
 ```kotlin
 @Bean @ConditionalOnBean(ActorResolver::class)
@@ -170,7 +169,7 @@ fun velleTicker(api: VelleApi, props: VelleProperties): SmartInitializingSinglet
 }
 ```
 
-- The ticker starts after every singleton exists, so the store is connected before the first tick. One scheduler thread runs every schedule, and each tick is `api.tick`, under the same lock as a request.
+- The ticker starts after every singleton exists, so the store is connected before the first tick. One scheduler thread runs every schedule, and each tick is `api.tick`, in a scope of its own beside the requests.
 - A schedule named in `velle.schedules` that the spec does not have stops the application at startup. A `never` that rejects a firing is logged with the rejection's message, so a tick's refusals reach a human ([§21](Reference-21-never)).
 
 `VelleRestController` in `apis/spring/src/main/kotlin/velle/api/spring/VelleRestController.kt` is thin on purpose. Each endpoint is one line that reads the actor from the request attribute and calls the matching `VelleApi` function; `commit` sets 200 or 422 from the outcome's `accepted`; one `@ExceptionHandler` maps `ApiException.Kind` onto 400, 404, and 401. Nothing about any spec is in it.
@@ -185,10 +184,10 @@ fun velleTicker(api: VelleApi, props: VelleProperties): SmartInitializingSinglet
 
 1. The servlet filter chain runs the application's security filters, then `velleActorFilter`. The resolver returns a reference to `Staff` 1, and the filter sets it as the request attribute.
 2. Spring MVC routes to `VelleRestController.commit`, which reads the attribute and calls `api.commit("SubmitPayment", body, actor)`.
-3. `VelleApi.commit` checks the act is exposed and that an actor is present if the act is declared `by`. Then it takes the lock, sets the clock, and opens a scope.
+3. `VelleApi.commit` checks the act is exposed and that an actor is present if the act is declared `by`. Then it sets the clock and opens a scope.
 4. `Wire.input` reads the body against the act's declaration: `invoice` is a `one Invoice`, so the number becomes a reference; `amount` is `Money`, so the text is read by the extension type's reader.
-5. `system.commit` runs the transaction: the door check, every `never`, the rules on `commit`, the store's write ([evaluation](evaluation)).
-6. The result is accepted with a reference, or refused with a rejection. `Wire.rejection` projects the rejection for the actor. The lock is released.
+5. `system.commit` runs the transaction: the store opens a write unit of work and takes the envelope's queue keys, so a second payment on the same invoice waits here; then the door check, every `never`, the rules on `commit`, the store's write ([evaluation](evaluation)).
+6. The result is accepted with a reference, or refused with a rejection. `Wire.rejection` projects the rejection for the actor. The scope closes, the unit of work ends, and the queue keys are released.
 7. The controller answers 200 or 422 with the map as JSON.
 
 The same request as the GraphQL mutation `submitPayment(input: {invoice: "1", amount: "1200.00"})` differs only in steps 2 and 4: the interceptor copies the actor into the GraphQL context, graphql-java coerces the `Money` scalar through `api.wire.scalar`, and the mutation's fetcher rebuilds the JSON map and calls the same `api.commit`.
@@ -211,6 +210,6 @@ The same request as the GraphQL mutation `submitPayment(input: {invoice: "1", am
 
 - [Serving a system](Serving-a-system), the same code from the caller's side: the endpoints, the JSON, the schema, the console.
 - [Store API](Store-API), the contract `attach` connects: `SqlStore` and its dialects.
-- [Binding API](Binding-API), the generated typed surface the application's own endpoints call under `api.locked`.
+- [Binding API](Binding-API), the generated typed surface the application's own endpoints call inside `api.scope`.
 - [Authorization](Authorization), what the actor and the viewer mean once resolved.
-- [evaluation](evaluation), what `system.commit` and `system.tick` do inside the lock.
+- [evaluation](evaluation), what `system.commit` and `system.tick` do inside the scope.

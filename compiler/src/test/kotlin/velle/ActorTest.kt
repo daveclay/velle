@@ -184,79 +184,89 @@ class ActorTest {
     @Test
     fun `an act declared by takes an actor, and one without refuses one`() {
         val sys = newSystem()
-        val lot = sys.lot()
-        val r = sys.commit("Recall", mapOf("lot" to lot, "reference" to "R1"))
-        assertIs<CommitResult.Refused>(r)
-        assertTrue("committed by a Staff" in r.reason, r.reason)
-        val r2 = sys.commit("ExpireLot", mapOf("lot" to lot), actor = sys.pharmacist())
-        assertIs<CommitResult.Refused>(r2)
-        assertTrue("declares no actor" in r2.reason, r2.reason)
-        val r3 = sys.commit("Recall", mapOf("lot" to lot, "reference" to "R1"), actor = lot)
-        assertIs<CommitResult.Refused>(r3)
-        assertTrue("is not a Staff" in r3.reason, r3.reason)
-        val r4 = sys.commit("Recall", mapOf("lot" to lot, "reference" to "R1", "actor" to sys.pharmacist()), actor = sys.pharmacist())
-        assertIs<CommitResult.Refused>(r4)
-        assertTrue("cannot claim" in r4.reason, r4.reason)
+        sys.scope {
+            val lot = sys.lot()
+            val r = sys.commit("Recall", mapOf("lot" to lot, "reference" to "R1"))
+            assertIs<CommitResult.Refused>(r)
+            assertTrue("committed by a Staff" in r.reason, r.reason)
+            val r2 = sys.commit("ExpireLot", mapOf("lot" to lot), actor = sys.pharmacist())
+            assertIs<CommitResult.Refused>(r2)
+            assertTrue("declares no actor" in r2.reason, r2.reason)
+            val r3 = sys.commit("Recall", mapOf("lot" to lot, "reference" to "R1"), actor = lot)
+            assertIs<CommitResult.Refused>(r3)
+            assertTrue("is not a Staff" in r3.reason, r3.reason)
+            val r4 = sys.commit("Recall", mapOf("lot" to lot, "reference" to "R1", "actor" to sys.pharmacist()), actor = sys.pharmacist())
+            assertIs<CommitResult.Refused>(r4)
+            assertTrue("cannot claim" in r4.reason, r4.reason)
+        }
     }
 
     @Test
     fun `the gate in the header refuses the wrong role as a requirement, with the actor's record in the rejection`() {
         val sys = newSystem()
-        val priya = sys.pharmacist()
-        val r = sys.commit("HireStaff", mapOf("name" to "Tom", "role" to "pharmacist"), actor = priya)
-        assertIs<CommitResult.Refused>(r)
-        val rejection = r.rejection!!
-        assertEquals("HireStaff requires actor to be Administrator", rejection.declaration)
-        assertTrue(r.reason.startsWith("HireStaff refused: HireStaff requires actor to be Administrator, and this HireStaff does not."), r.reason)
-        assertTrue(rejection.evaluation.any { it is EvalStep.Membership && it.refinement == "Administrator" && !it.member }, rejection.evaluation.toString())
-        assertEquals(1, sys.instancesOf("Staff").size, "nothing committed")
+        sys.scope {
+            val priya = sys.pharmacist()
+            val r = sys.commit("HireStaff", mapOf("name" to "Tom", "role" to "pharmacist"), actor = priya)
+            assertIs<CommitResult.Refused>(r)
+            val rejection = r.rejection!!
+            assertEquals("HireStaff requires actor to be Administrator", rejection.declaration)
+            assertTrue(r.reason.startsWith("HireStaff refused: HireStaff requires actor to be Administrator, and this HireStaff does not."), r.reason)
+            assertTrue(rejection.evaluation.any { it is EvalStep.Membership && it.refinement == "Administrator" && !it.member }, rejection.evaluation.toString())
+            assertEquals(1, sys.instancesOf("Staff").size, "nothing committed")
 
-        val ada = sys.admin()
-        assertIs<CommitResult.Accepted>(sys.commit("HireStaff", mapOf("name" to "Tom", "role" to "pharmacist"), actor = ada))
-        assertEquals(3, sys.instancesOf("Staff").size)
+            val ada = sys.admin()
+            assertIs<CommitResult.Accepted>(sys.commit("HireStaff", mapOf("name" to "Tom", "role" to "pharmacist"), actor = ada))
+            assertEquals(3, sys.instancesOf("Staff").size)
+        }
     }
 
     @Test
     fun `a durable act stores its actor under the bound name, read by a prohibition and a scheduled rule`() {
         val sys = newSystem()
-        val ada = sys.admin()
-        val priya = sys.pharmacist()
-        val refused = sys.commit("Renewal", mapOf("pharmacist" to ada, "expiresOn" to LocalDate.of(2027, 1, 1)), actor = ada)
-        assertIs<CommitResult.Refused>(refused)
-        val r = sys.commit("Renewal", mapOf("pharmacist" to priya, "expiresOn" to LocalDate.of(2027, 1, 1)), actor = ada)
-        val id = assertIs<CommitResult.Accepted>(r).id
-        assertEquals(ada, sys.get(id, "admin"))
-        sys.tick("Daily")
-        val reminder = sys.instancesOf("Reminder").single()
-        assertEquals(ada, sys.get(reminder, "sentTo"), "the daily sweep read the renewal's stored actor")
-        // never again: the own-renewal prohibition reads the actor in the act's scope
-        val own = sys.commit("Renewal", mapOf("pharmacist" to priya, "expiresOn" to LocalDate.of(2028, 1, 1)), actor = priya)
-        assertIs<CommitResult.Refused>(own)
+        sys.scope {
+            val ada = sys.admin()
+            val priya = sys.pharmacist()
+            val refused = sys.commit("Renewal", mapOf("pharmacist" to ada, "expiresOn" to LocalDate.of(2027, 1, 1)), actor = ada)
+            assertIs<CommitResult.Refused>(refused)
+            val r = sys.commit("Renewal", mapOf("pharmacist" to priya, "expiresOn" to LocalDate.of(2027, 1, 1)), actor = ada)
+            val id = assertIs<CommitResult.Accepted>(r).id
+            assertEquals(ada, sys.get(id, "admin"))
+            sys.tick("Daily")
+            val reminder = sys.instancesOf("Reminder").single()
+            assertEquals(ada, sys.get(reminder, "sentTo"), "the daily sweep read the renewal's stored actor")
+            // never again: the own-renewal prohibition reads the actor in the act's scope
+            val own = sys.commit("Renewal", mapOf("pharmacist" to priya, "expiresOn" to LocalDate.of(2028, 1, 1)), actor = priya)
+            assertIs<CommitResult.Refused>(own)
+        }
     }
 
     @Test
     fun `a rule on a product reads the transaction's actor, absent where nobody asked`() {
         val sys = newSystem()
-        val priya = sys.pharmacist("Priya")
-        val lot = sys.lot()
-        assertIs<CommitResult.Accepted>(sys.commit("Recall", mapOf("lot" to lot, "reference" to "R1"), actor = priya))
-        val recalled = sys.instancesOf("Quarantine").single()
-        assertEquals(priya, sys.get(recalled, "quarantinedBy"))
-        assertEquals("Priya", sys.get(sys.instancesOf("QuarantineLog").single(), "actorName"))
+        sys.scope {
+            val priya = sys.pharmacist("Priya")
+            val lot = sys.lot()
+            assertIs<CommitResult.Accepted>(sys.commit("Recall", mapOf("lot" to lot, "reference" to "R1"), actor = priya))
+            val recalled = sys.instancesOf("Quarantine").single()
+            assertEquals(priya, sys.get(recalled, "quarantinedBy"))
+            assertEquals("Priya", sys.get(sys.instancesOf("QuarantineLog").single(), "actorName"))
 
-        val lot2 = sys.lot()
-        assertIs<CommitResult.Accepted>(sys.commit("ExpireLot", mapOf("lot" to lot2)))
-        val logs = sys.instancesOf("QuarantineLog")
-        assertEquals(2, logs.size)
-        assertEquals("system", sys.get(logs.last(), "actorName"), "no actor on the path from an act without `by`")
+            val lot2 = sys.lot()
+            assertIs<CommitResult.Accepted>(sys.commit("ExpireLot", mapOf("lot" to lot2)))
+            val logs = sys.instancesOf("QuarantineLog")
+            assertEquals(2, logs.size)
+            assertEquals("system", sys.get(logs.last(), "actorName"), "no actor on the path from an act without `by`")
+        }
     }
 
     @Test
     fun `a seeded record fires no rule and passes no door`() {
         val sys = newSystem()
-        val ada = sys.admin()
-        assertEquals("admin", sys.get(ada, "role"))
-        assertTrue(sys.isMember(ada, "Administrator"))
-        assertFailsWith<VelleRuntimeError> { sys.seed("HireStaff", mapOf("name" to "x", "role" to "admin")) }
+        sys.scope {
+            val ada = sys.admin()
+            assertEquals("admin", sys.get(ada, "role"))
+            assertTrue(sys.isMember(ada, "Administrator"))
+            assertFailsWith<VelleRuntimeError> { sys.seed("HireStaff", mapOf("name" to "x", "role" to "admin")) }
+        }
     }
 }

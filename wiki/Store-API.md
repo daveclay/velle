@@ -17,10 +17,10 @@ val conn: Connection = DriverManager.getConnection("jdbc:sqlite::memory:")
 val sys = BillingSystem().also { SqliteStore.attach(it.system, conn) }
 ```
 
-- `BillingSystem()` is the generated system. Without a store it keeps every record in memory, which is how the generated tests run.
+- `BillingSystem()` is the generated system. Until another store is connected it runs over `MemoryStore` (`compiler/src/main/kotlin/velle/MemoryStore.kt`), rows in maps with nothing durable, which is how the generated tests run. The in-memory store is a store like any other: it implements both halves of this contract, and the runtime treats it no differently.
 - `SqliteStore.attach` creates one table per shape in the connection, then connects the system to the store for both halves of the contract. An in-memory SQLite database lives in its one connection, so the store takes the connection itself. Over a file or a server database the store takes a `DataSource` instead and borrows a connection from it for each read and each commit: `PostgresStore.attach(system, dataSource)`, as `examples/billing/output/src/test/kotlin/velle/GeneratedApiOverPostgresTest.kt` does.
 
-From then on every commit through the [Binding API](Binding-API) lands in the database, and every read through the query API is answered from it. The same system runs in memory for tests and over the store in production, and the spec does not change.
+From then on every commit through the [Binding API](Binding-API) lands in the database, and every read through the query API is answered from it. The same system runs over the in-memory store for tests and over the database in production, and the spec does not change.
 
 A Spring Boot application does not call `attach` itself. The starter in `apis/spring/` reads the database's name from the application's `DataSource`, picks the dialect, creates the tables, and connects the system before the first request ([Serving a system](Serving-a-system)).
 
@@ -182,7 +182,7 @@ Only then, and only where measurement asks for it:
 7. **A translation of the filter** in `fetchCandidates`, as much of the tree as the database can answer, with every untranslatable part becoming "every row" by the rule above.
 8. **Hand-tuned SQL** for named questions through the generated typed store.
 
-The in-memory runtime satisfies every guarantee trivially, which is why a spec runs and its generated tests pass before any store exists.
+The in-memory store keeps every guarantee with one lock for its rows and one lock per queue key, which is why a spec runs and its generated tests pass before any database exists.
 
 ## What the compiler checks
 

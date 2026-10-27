@@ -10,9 +10,9 @@ import java.time.ZoneOffset
 /**
  * The application's own endpoint, written against the generated typed surface
  * ([Binding API]) rather than the generic one: the overdue invoices and what each
- * still owes, as the collections team's screen wants them. It runs under the same
- * lock as the generic endpoints, through the API's `locked`, so it never reads
- * mid-commit.
+ * still owes, as the collections team's screen wants them. It runs in one scope
+ * of the API, as the generic endpoints do, so its reads are one consistent read
+ * and never see a commit half landed.
  */
 @RestController
 class OverdueController(private val billing: BillingSystem, private val api: VelleApi) {
@@ -20,7 +20,7 @@ class OverdueController(private val billing: BillingSystem, private val api: Vel
     data class Overdue(val invoice: Long, val customer: String, val due: LocalDate, val balance: String, val daysLate: Long)
 
     @GetMapping("/overdue")
-    fun overdue(): List<Overdue> = api.locked {
+    fun overdue(): List<Overdue> = api.scope {
         val today = LocalDate.ofInstant(billing.now, ZoneOffset.UTC)
         billing.read.overdueInvoices.orderBy { due.ascending }.list().map { inv ->
             Overdue(

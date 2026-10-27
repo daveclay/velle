@@ -217,120 +217,134 @@ class ClosureTest {
     @Test
     fun `a closure commit lands container and parts with back-references populated`() {
         val sys = system()
-        val cust = sys.mustCommit("Customer", mapOf("name" to "Ada"))
-        val prod = sys.mustCommit("Product", mapOf("sku" to "X1"))
-        val order = sys.mustCommit(
-            "Order",
-            mapOf("customer" to cust, "placedOn" to java.time.LocalDate.parse("2026-08-21")),
-            mapOf("orderLines" to listOf(
-                mapOf("product" to prod, "quantity" to 2),
-                mapOf("product" to prod, "quantity" to 5),
-            )),
-        )
-        val lines = sys.instancesOf("OrderLine")
-        assertEquals(2, lines.size)
-        lines.forEach { assertEquals(order, sys.get(it, "order")) }
-        // the inferred inverse reads the parts
-        assertEquals(lines.toSet(), (sys.get(order, "orderLines") as List<*>).toSet())
+        sys.scope {
+            val cust = sys.mustCommit("Customer", mapOf("name" to "Ada"))
+            val prod = sys.mustCommit("Product", mapOf("sku" to "X1"))
+            val order = sys.mustCommit(
+                "Order",
+                mapOf("customer" to cust, "placedOn" to java.time.LocalDate.parse("2026-08-21")),
+                mapOf("orderLines" to listOf(
+                    mapOf("product" to prod, "quantity" to 2),
+                    mapOf("product" to prod, "quantity" to 5),
+                )),
+            )
+            val lines = sys.instancesOf("OrderLine")
+            assertEquals(2, lines.size)
+            lines.forEach { assertEquals(order, sys.get(it, "order")) }
+            // the inferred inverse reads the parts
+            assertEquals(lines.toSet(), (sys.get(order, "orderLines") as List<*>).toSet())
+        }
     }
 
     @Test
     fun `a part-triggered rule fires once per inline part in the act's transaction`() {
         val sys = system()
-        val cust = sys.mustCommit("Customer", mapOf("name" to "Ada"))
-        val prod = sys.mustCommit("Product", mapOf("sku" to "X1"))
-        sys.mustCommit(
-            "Order",
-            mapOf("customer" to cust, "placedOn" to java.time.LocalDate.parse("2026-08-21")),
-            mapOf("orderLines" to listOf(
-                mapOf("product" to prod, "quantity" to 1),
-                mapOf("product" to prod, "quantity" to 2),
-                mapOf("product" to prod, "quantity" to 3),
-            )),
-        )
-        assertEquals(3, sys.instancesOf("Reservation").size)
+        sys.scope {
+            val cust = sys.mustCommit("Customer", mapOf("name" to "Ada"))
+            val prod = sys.mustCommit("Product", mapOf("sku" to "X1"))
+            sys.mustCommit(
+                "Order",
+                mapOf("customer" to cust, "placedOn" to java.time.LocalDate.parse("2026-08-21")),
+                mapOf("orderLines" to listOf(
+                    mapOf("product" to prod, "quantity" to 1),
+                    mapOf("product" to prod, "quantity" to 2),
+                    mapOf("product" to prod, "quantity" to 3),
+                )),
+            )
+            assertEquals(3, sys.instancesOf("Reservation").size)
+        }
     }
 
     @Test
     fun `nested closure parts land pointing at their own level`() {
         val sys = system()
-        val cust = sys.mustCommit("Customer", mapOf("name" to "Ada"))
-        val prod = sys.mustCommit("Product", mapOf("sku" to "X1"))
-        sys.mustCommit(
-            "Order",
-            mapOf("customer" to cust, "placedOn" to java.time.LocalDate.parse("2026-08-21")),
-            mapOf("orderLines" to listOf(
-                mapOf("product" to prod, "quantity" to 1,
-                    "customizations" to listOf(mapOf("note" to "gift wrap"), mapOf("note" to "no logo"))),
-            )),
-        )
-        val line = sys.instancesOf("OrderLine").single()
-        val custs = sys.instancesOf("Customization")
-        assertEquals(2, custs.size)
-        custs.forEach { assertEquals(line, sys.get(it, "line")) }
+        sys.scope {
+            val cust = sys.mustCommit("Customer", mapOf("name" to "Ada"))
+            val prod = sys.mustCommit("Product", mapOf("sku" to "X1"))
+            sys.mustCommit(
+                "Order",
+                mapOf("customer" to cust, "placedOn" to java.time.LocalDate.parse("2026-08-21")),
+                mapOf("orderLines" to listOf(
+                    mapOf("product" to prod, "quantity" to 1,
+                        "customizations" to listOf(mapOf("note" to "gift wrap"), mapOf("note" to "no logo"))),
+                )),
+            )
+            val line = sys.instancesOf("OrderLine").single()
+            val custs = sys.instancesOf("Customization")
+            assertEquals(2, custs.size)
+            custs.forEach { assertEquals(line, sys.get(it, "line")) }
+        }
     }
 
     @Test
     fun `identical inline part values are a bag - two distinct instances`() {
         val sys = system()
-        val cust = sys.mustCommit("Customer", mapOf("name" to "Ada"))
-        val prod = sys.mustCommit("Product", mapOf("sku" to "X1"))
-        sys.mustCommit(
-            "Order",
-            mapOf("customer" to cust, "placedOn" to java.time.LocalDate.parse("2026-08-21")),
-            mapOf("orderLines" to listOf(
-                mapOf("product" to prod, "quantity" to 1),
-                mapOf("product" to prod, "quantity" to 1), // quantity 1 twice ≠ quantity 2 once
-            )),
-        )
-        assertEquals(2, sys.instancesOf("OrderLine").size)
+        sys.scope {
+            val cust = sys.mustCommit("Customer", mapOf("name" to "Ada"))
+            val prod = sys.mustCommit("Product", mapOf("sku" to "X1"))
+            sys.mustCommit(
+                "Order",
+                mapOf("customer" to cust, "placedOn" to java.time.LocalDate.parse("2026-08-21")),
+                mapOf("orderLines" to listOf(
+                    mapOf("product" to prod, "quantity" to 1),
+                    mapOf("product" to prod, "quantity" to 1), // quantity 1 twice ≠ quantity 2 once
+                )),
+            )
+            assertEquals(2, sys.instancesOf("OrderLine").size)
+        }
     }
 
     @Test
     fun `a committer-supplied back-reference is refused`() {
         val sys = system()
-        val cust = sys.mustCommit("Customer", mapOf("name" to "Ada"))
-        val prod = sys.mustCommit("Product", mapOf("sku" to "X1"))
-        val r = sys.commit(
-            "Order",
-            mapOf("customer" to cust, "placedOn" to java.time.LocalDate.parse("2026-08-21")),
-            mapOf("orderLines" to listOf(mapOf("order" to 999L, "product" to prod, "quantity" to 1))),
-        )
-        assertIs<CommitResult.Refused>(r)
-        assertTrue("language-populated" in r.reason, r.reason)
+        sys.scope {
+            val cust = sys.mustCommit("Customer", mapOf("name" to "Ada"))
+            val prod = sys.mustCommit("Product", mapOf("sku" to "X1"))
+            val r = sys.commit(
+                "Order",
+                mapOf("customer" to cust, "placedOn" to java.time.LocalDate.parse("2026-08-21")),
+                mapOf("orderLines" to listOf(mapOf("order" to 999L, "product" to prod, "quantity" to 1))),
+            )
+            assertIs<CommitResult.Refused>(r)
+            assertTrue("language-populated" in r.reason, r.reason)
+        }
     }
 
     @Test
     fun `parts on an undeclared edge are refused`() {
         val sys = system()
-        val cust = sys.mustCommit("Customer", mapOf("name" to "Ada"))
-        val r = sys.commit(
-            "Customer",
-            mapOf("name" to "Bob"),
-            mapOf("orders" to listOf(mapOf("placedOn" to java.time.LocalDate.now()))),
-        )
-        assertIs<CommitResult.Refused>(r)
-        assertTrue("no closure edge" in r.reason, r.reason)
-        assertEquals(1, sys.instancesOf("Customer").size) // Bob never landed
+        sys.scope {
+            val cust = sys.mustCommit("Customer", mapOf("name" to "Ada"))
+            val r = sys.commit(
+                "Customer",
+                mapOf("name" to "Bob"),
+                mapOf("orders" to listOf(mapOf("placedOn" to java.time.LocalDate.now()))),
+            )
+            assertIs<CommitResult.Refused>(r)
+            assertTrue("no closure edge" in r.reason, r.reason)
+            assertEquals(1, sys.instancesOf("Customer").size) // Bob never landed
+        }
     }
 
     @Test
     fun `a refused closure rolls back whole - no partial landing`() {
         val sys = system()
-        val cust = sys.mustCommit("Customer", mapOf("name" to "Ada"))
-        val prod = sys.mustCommit("Product", mapOf("sku" to "X1"))
-        val r = sys.commit(
-            "Order",
-            mapOf("customer" to cust, "placedOn" to java.time.LocalDate.parse("2026-08-21")),
-            mapOf("orderLines" to listOf(
-                mapOf("product" to prod, "quantity" to 1),
-                mapOf("product" to prod), // missing quantity — type refusal
-            )),
-        )
-        assertIs<CommitResult.Refused>(r)
-        assertEquals(0, sys.instancesOf("Order").size)
-        assertEquals(0, sys.instancesOf("OrderLine").size)
-        assertEquals(0, sys.instancesOf("Reservation").size)
+        sys.scope {
+            val cust = sys.mustCommit("Customer", mapOf("name" to "Ada"))
+            val prod = sys.mustCommit("Product", mapOf("sku" to "X1"))
+            val r = sys.commit(
+                "Order",
+                mapOf("customer" to cust, "placedOn" to java.time.LocalDate.parse("2026-08-21")),
+                mapOf("orderLines" to listOf(
+                    mapOf("product" to prod, "quantity" to 1),
+                    mapOf("product" to prod), // missing quantity — type refusal
+                )),
+            )
+            assertIs<CommitResult.Refused>(r)
+            assertEquals(0, sys.instancesOf("Order").size)
+            assertEquals(0, sys.instancesOf("OrderLine").size)
+            assertEquals(0, sys.instancesOf("Reservation").size)
+        }
     }
 
     // ── the generated surface ────────────────────────────────────────────────
@@ -418,73 +432,81 @@ class ClosureTest {
     @Test
     fun `a batch and its new origin land as one commit, the origin first`() {
         val sys = system(BATCHES)
-        val strain = sys.strain()
-        val pep = sys.peptide()
-        val batch = sys.mustCommit(
-            "PeptideBatch",
-            mapOf("peptide" to pep, "quantityMg" to java.math.BigDecimal("100")),
-            mapOf("origin" to listOf(mapOf(VelleSystem.SHAPE_KEY to "Fermentation", "strain" to strain))),
-        )
-        val ferm = sys.instancesOf("Fermentation").single()
-        assertEquals(ferm, sys.get(batch, "origin"))
-        assertEquals(listOf(batch), sys.get(ferm, "peptideBatches"))
-        // `never (Fermentation where peptideBatchs is empty)` held at the door: both were in
-        // the rule on the nested record fired once, in the batch's transaction
-        assertEquals(ferm, sys.get(sys.instancesOf("FermentationNote").single(), "fermentation"))
+        sys.scope {
+            val strain = sys.strain()
+            val pep = sys.peptide()
+            val batch = sys.mustCommit(
+                "PeptideBatch",
+                mapOf("peptide" to pep, "quantityMg" to java.math.BigDecimal("100")),
+                mapOf("origin" to listOf(mapOf(VelleSystem.SHAPE_KEY to "Fermentation", "strain" to strain))),
+            )
+            val ferm = sys.instancesOf("Fermentation").single()
+            assertEquals(ferm, sys.get(batch, "origin"))
+            assertEquals(listOf(batch), sys.get(ferm, "peptideBatches"))
+            // `never (Fermentation where peptideBatchs is empty)` held at the door: both were in
+            // the rule on the nested record fired once, in the batch's transaction
+            assertEquals(ferm, sys.get(sys.instancesOf("FermentationNote").single(), "fermentation"))
+        }
     }
 
     @Test
     fun `the reference may still be supplied by handle, and the books rule refuses a second claim`() {
         val sys = system(BATCHES)
-        val strain = sys.strain()
-        val pep = sys.peptide()
-        val batch = sys.mustCommit(
-            "PeptideBatch", mapOf("peptide" to pep, "quantityMg" to java.math.BigDecimal("100")),
-            mapOf("origin" to listOf(mapOf(VelleSystem.SHAPE_KEY to "Fermentation", "strain" to strain))),
-        )
-        val ferm = sys.get(batch, "origin") as Long
-        val second = sys.commit("PeptideBatch", mapOf("peptide" to pep, "quantityMg" to java.math.BigDecimal("5"), "origin" to ferm))
-        assertIs<CommitResult.Refused>(second, "one origin, one batch")
-        assertEquals(1, sys.instancesOf("PeptideBatch").size)
+        sys.scope {
+            val strain = sys.strain()
+            val pep = sys.peptide()
+            val batch = sys.mustCommit(
+                "PeptideBatch", mapOf("peptide" to pep, "quantityMg" to java.math.BigDecimal("100")),
+                mapOf("origin" to listOf(mapOf(VelleSystem.SHAPE_KEY to "Fermentation", "strain" to strain))),
+            )
+            val ferm = sys.get(batch, "origin") as Long
+            val second = sys.commit("PeptideBatch", mapOf("peptide" to pep, "quantityMg" to java.math.BigDecimal("5"), "origin" to ferm))
+            assertIs<CommitResult.Refused>(second, "one origin, one batch")
+            assertEquals(1, sys.instancesOf("PeptideBatch").size)
+        }
     }
 
     @Test
     fun `a nested value carries its own parts, resolved on the operand that declares them`() {
         val sys = system(BATCHES)
-        val pep = sys.peptide()
-        val batch = sys.mustCommit(
-            "PeptideBatch", mapOf("peptide" to pep, "quantityMg" to java.math.BigDecimal("30")),
-            mapOf("origin" to listOf(mapOf(
-                VelleSystem.SHAPE_KEY to "Composition",
-                "mixedOn" to java.time.LocalDate.parse("2026-04-01"),
-                "components" to listOf(mapOf("amountMg" to java.math.BigDecimal("10")), mapOf("amountMg" to java.math.BigDecimal("20"))),
-            ))),
-        )
-        val comp = sys.instancesOf("Composition").single()
-        assertEquals(comp, sys.get(batch, "origin"))
-        val parts = sys.instancesOf("Component")
-        assertEquals(2, parts.size)
-        parts.forEach { assertEquals(comp, sys.get(it, "composition")) }
+        sys.scope {
+            val pep = sys.peptide()
+            val batch = sys.mustCommit(
+                "PeptideBatch", mapOf("peptide" to pep, "quantityMg" to java.math.BigDecimal("30")),
+                mapOf("origin" to listOf(mapOf(
+                    VelleSystem.SHAPE_KEY to "Composition",
+                    "mixedOn" to java.time.LocalDate.parse("2026-04-01"),
+                    "components" to listOf(mapOf("amountMg" to java.math.BigDecimal("10")), mapOf("amountMg" to java.math.BigDecimal("20"))),
+                ))),
+            )
+            val comp = sys.instancesOf("Composition").single()
+            assertEquals(comp, sys.get(batch, "origin"))
+            val parts = sys.instancesOf("Component")
+            assertEquals(2, parts.size)
+            parts.forEach { assertEquals(comp, sys.get(it, "composition")) }
+        }
     }
 
     @Test
     fun `type refusals - both ways at once, two values, a shape outside the union, neither way`() {
         val sys = system(BATCHES)
-        val strain = sys.strain()
-        val pep = sys.peptide()
-        val fields = mapOf("peptide" to pep, "quantityMg" to java.math.BigDecimal("1"))
-        val ferm = mapOf(VelleSystem.SHAPE_KEY to "Fermentation", "strain" to strain)
-        val existing = sys.idOf(sys.seed("Fermentation", mapOf("strain" to strain)))
-        val both = sys.commit("PeptideBatch", fields + ("origin" to existing), mapOf("origin" to listOf(ferm)))
-        assertTrue(assertIs<CommitResult.Refused>(both).reason.contains("both"), both.toString())
-        val two = sys.commit("PeptideBatch", fields, mapOf("origin" to listOf(ferm, ferm)))
-        assertTrue(assertIs<CommitResult.Refused>(two).reason.contains("one value"), two.toString())
-        val outside = sys.commit("PeptideBatch", fields, mapOf("origin" to listOf(mapOf(VelleSystem.SHAPE_KEY to "Peptide", "code" to "x"))))
-        assertTrue(assertIs<CommitResult.Refused>(outside).reason.contains("cannot arrive"), outside.toString())
-        val neither = sys.commit("PeptideBatch", fields)
-        assertTrue(assertIs<CommitResult.Refused>(neither).reason.contains("requires"), neither.toString())
-        assertEquals(0, sys.instancesOf("PeptideBatch").size)
-        assertEquals(listOf(existing), sys.instancesOf("Fermentation"))
+        sys.scope {
+            val strain = sys.strain()
+            val pep = sys.peptide()
+            val fields = mapOf("peptide" to pep, "quantityMg" to java.math.BigDecimal("1"))
+            val ferm = mapOf(VelleSystem.SHAPE_KEY to "Fermentation", "strain" to strain)
+            val existing = sys.idOf(sys.seed("Fermentation", mapOf("strain" to strain)))
+            val both = sys.commit("PeptideBatch", fields + ("origin" to existing), mapOf("origin" to listOf(ferm)))
+            assertTrue(assertIs<CommitResult.Refused>(both).reason.contains("both"), both.toString())
+            val two = sys.commit("PeptideBatch", fields, mapOf("origin" to listOf(ferm, ferm)))
+            assertTrue(assertIs<CommitResult.Refused>(two).reason.contains("one value"), two.toString())
+            val outside = sys.commit("PeptideBatch", fields, mapOf("origin" to listOf(mapOf(VelleSystem.SHAPE_KEY to "Peptide", "code" to "x"))))
+            assertTrue(assertIs<CommitResult.Refused>(outside).reason.contains("cannot arrive"), outside.toString())
+            val neither = sys.commit("PeptideBatch", fields)
+            assertTrue(assertIs<CommitResult.Refused>(neither).reason.contains("requires"), neither.toString())
+            assertEquals(0, sys.instancesOf("PeptideBatch").size)
+            assertEquals(listOf(existing), sys.instancesOf("Fermentation"))
+        }
     }
 
     @Test
@@ -496,15 +518,17 @@ class ClosureTest {
             shape Memo { note: text }
         """.trimIndent()
         val sys = system(spec)
-        val vendor = sys.mustCommit("Vendor", mapOf("name" to "Bachem"))
-        val r = sys.mustCommit("Receipt", emptyMap(), mapOf("order" to listOf(mapOf("vendor" to vendor, "item" to "PO-1"))))
-        assertEquals(sys.instancesOf("Order").single(), sys.get(r, "order"))
-        assertEquals(0, sys.instancesOf("Memo").size)
-        val r2 = sys.mustCommit("Receipt", emptyMap(), mapOf(
-            "order" to listOf(mapOf("vendor" to vendor, "item" to "PO-2")),
-            "memo" to listOf(mapOf("note" to "rush")),
-        ))
-        assertEquals(sys.instancesOf("Memo").single(), sys.get(r2, "memo"))
+        sys.scope {
+            val vendor = sys.mustCommit("Vendor", mapOf("name" to "Bachem"))
+            val r = sys.mustCommit("Receipt", emptyMap(), mapOf("order" to listOf(mapOf("vendor" to vendor, "item" to "PO-1"))))
+            assertEquals(sys.instancesOf("Order").single(), sys.get(r, "order"))
+            assertEquals(0, sys.instancesOf("Memo").size)
+            val r2 = sys.mustCommit("Receipt", emptyMap(), mapOf(
+                "order" to listOf(mapOf("vendor" to vendor, "item" to "PO-2")),
+                "memo" to listOf(mapOf("note" to "rush")),
+            ))
+            assertEquals(sys.instancesOf("Memo").single(), sys.get(r2, "memo"))
+        }
     }
 
     @Test
@@ -553,74 +577,80 @@ class ClosureTest {
     @Test
     fun `a well points at a condition in another branch, whatever the order of the branches`() {
         val sys = system(PLATE)
-        val type = sys.plateType()
-        val low = mapOf(VelleSystem.NEW_KEY to 1, "block" to 1, "value" to java.math.BigDecimal("0.1"))
-        val high = mapOf(VelleSystem.NEW_KEY to 2, "block" to 2, "value" to java.math.BigDecimal("1.0"))
-        // the containers branch is declared first and references the conditions branch: a forward reference
-        val design = sys.mustCommit(
-            "ExperimentDesign", mapOf("containerType" to type, "containerCount" to 1, "replicates" to 1),
-            mapOf(
-                "containers" to listOf(mapOf("replicate" to 1, "position" to 1, "wells" to listOf(
-                    mapOf("position" to 1, "condition" to NewRef(1)),
-                    mapOf("position" to 2, "condition" to NewRef(2)),
-                    mapOf("position" to 3, "condition" to NewRef(1)),
-                ))),
-                "conditions" to listOf(low, high),
-            ),
-        )
-        val conditions = sys.instancesOf("Condition").sortedBy { (sys.get(it, "block") as Number).toLong() }
-        assertEquals(2, conditions.size)
-        val wells = sys.instancesOf("Well").sortedBy { (sys.get(it, "position") as Number).toLong() }
-        assertEquals(listOf(conditions[0], conditions[1], conditions[0]), wells.map { sys.get(it, "condition") })
-        assertEquals(design, sys.get(conditions[0], "design"))
-        assertEquals(sys.instancesOf("Container").single(), sys.get(wells[0], "container"))
+        sys.scope {
+            val type = sys.plateType()
+            val low = mapOf(VelleSystem.NEW_KEY to 1, "block" to 1, "value" to java.math.BigDecimal("0.1"))
+            val high = mapOf(VelleSystem.NEW_KEY to 2, "block" to 2, "value" to java.math.BigDecimal("1.0"))
+            // the containers branch is declared first and references the conditions branch: a forward reference
+            val design = sys.mustCommit(
+                "ExperimentDesign", mapOf("containerType" to type, "containerCount" to 1, "replicates" to 1),
+                mapOf(
+                    "containers" to listOf(mapOf("replicate" to 1, "position" to 1, "wells" to listOf(
+                        mapOf("position" to 1, "condition" to NewRef(1)),
+                        mapOf("position" to 2, "condition" to NewRef(2)),
+                        mapOf("position" to 3, "condition" to NewRef(1)),
+                    ))),
+                    "conditions" to listOf(low, high),
+                ),
+            )
+            val conditions = sys.instancesOf("Condition").sortedBy { (sys.get(it, "block") as Number).toLong() }
+            assertEquals(2, conditions.size)
+            val wells = sys.instancesOf("Well").sortedBy { (sys.get(it, "position") as Number).toLong() }
+            assertEquals(listOf(conditions[0], conditions[1], conditions[0]), wells.map { sys.get(it, "condition") })
+            assertEquals(design, sys.get(conditions[0], "design"))
+            assertEquals(sys.instancesOf("Container").single(), sys.get(wells[0], "container"))
+        }
     }
 
     @Test
     fun `a sibling reference may also be supplied by handle`() {
         val sys = system(PLATE)
-        val type = sys.plateType()
-        val first = sys.mustCommit("ExperimentDesign", mapOf("containerType" to type, "containerCount" to 1, "replicates" to 1),
-            mapOf("conditions" to listOf(mapOf("block" to 1, "value" to java.math.BigDecimal("0.1")))))
-        val existing = sys.instancesOf("Condition").single()
-        sys.mustCommit("ExperimentDesign", mapOf("containerType" to type, "containerCount" to 1, "replicates" to 1),
-            mapOf("containers" to listOf(mapOf("replicate" to 1, "position" to 1, "wells" to listOf(mapOf("position" to 1, "condition" to existing))))))
-        assertEquals(existing, sys.get(sys.instancesOf("Well").single(), "condition"))
-        first.hashCode()
+        sys.scope {
+            val type = sys.plateType()
+            val first = sys.mustCommit("ExperimentDesign", mapOf("containerType" to type, "containerCount" to 1, "replicates" to 1),
+                mapOf("conditions" to listOf(mapOf("block" to 1, "value" to java.math.BigDecimal("0.1")))))
+            val existing = sys.instancesOf("Condition").single()
+            sys.mustCommit("ExperimentDesign", mapOf("containerType" to type, "containerCount" to 1, "replicates" to 1),
+                mapOf("containers" to listOf(mapOf("replicate" to 1, "position" to 1, "wells" to listOf(mapOf("position" to 1, "condition" to existing))))))
+            assertEquals(existing, sys.get(sys.instancesOf("Well").single(), "condition"))
+            first.hashCode()
+        }
     }
 
     @Test
     fun `refusals - a reference to no value, a value created twice, a wrong shape, a cycle`() {
         val sys = system(PLATE)
-        val type = sys.plateType()
-        val fields = mapOf("containerType" to type, "containerCount" to 1, "replicates" to 1)
-        val nowhere = sys.commit("ExperimentDesign", fields, mapOf("containers" to listOf(mapOf("replicate" to 1, "position" to 1,
-            "wells" to listOf(mapOf("position" to 1, "condition" to NewRef(7)))))))
-        assertTrue(assertIs<CommitResult.Refused>(nowhere).reason.contains("not among this act's values"), nowhere.toString())
-        val twice = sys.commit("ExperimentDesign", fields, mapOf("conditions" to listOf(
-            mapOf(VelleSystem.NEW_KEY to 1, "block" to 1, "value" to java.math.BigDecimal("0.1")),
-            mapOf(VelleSystem.NEW_KEY to 1, "block" to 2, "value" to java.math.BigDecimal("0.2")))))
-        assertTrue(assertIs<CommitResult.Refused>(twice).reason.contains("two creating positions"), twice.toString())
-        val wrong = sys.commit("ExperimentDesign", fields, mapOf(
-            "containers" to listOf(mapOf(VelleSystem.NEW_KEY to 1, "replicate" to 1, "position" to 1,
-                "wells" to listOf(mapOf("position" to 1, "condition" to NewRef(1)))))))
-        assertTrue(assertIs<CommitResult.Refused>(wrong).reason.contains("not a new Container"), wrong.toString())
-        assertEquals(0, sys.instancesOf("Well").size)
+        sys.scope {
+            val type = sys.plateType()
+            val fields = mapOf("containerType" to type, "containerCount" to 1, "replicates" to 1)
+            val nowhere = sys.commit("ExperimentDesign", fields, mapOf("containers" to listOf(mapOf("replicate" to 1, "position" to 1,
+                "wells" to listOf(mapOf("position" to 1, "condition" to NewRef(7)))))))
+            assertTrue(assertIs<CommitResult.Refused>(nowhere).reason.contains("not among this act's values"), nowhere.toString())
+            val twice = sys.commit("ExperimentDesign", fields, mapOf("conditions" to listOf(
+                mapOf(VelleSystem.NEW_KEY to 1, "block" to 1, "value" to java.math.BigDecimal("0.1")),
+                mapOf(VelleSystem.NEW_KEY to 1, "block" to 2, "value" to java.math.BigDecimal("0.2")))))
+            assertTrue(assertIs<CommitResult.Refused>(twice).reason.contains("two creating positions"), twice.toString())
+            val wrong = sys.commit("ExperimentDesign", fields, mapOf(
+                "containers" to listOf(mapOf(VelleSystem.NEW_KEY to 1, "replicate" to 1, "position" to 1,
+                    "wells" to listOf(mapOf("position" to 1, "condition" to NewRef(1)))))))
+            assertTrue(assertIs<CommitResult.Refused>(wrong).reason.contains("not a new Container"), wrong.toString())
+            assertEquals(0, sys.instancesOf("Well").size)
 
-        val cyclic = system("""
-            act Pairing { note: text } with { lefts, rights }
-            shape Left { pairing: one Pairing, partner: one Right? }
-            shape Right { pairing: one Pairing, partner: one Left? }
-        """.trimIndent())
-        val cycle = cyclic.commit("Pairing", mapOf("note" to "n"), mapOf(
-            "lefts" to listOf(mapOf(VelleSystem.NEW_KEY to 1, "partner" to NewRef(2))),
-            "rights" to listOf(mapOf(VelleSystem.NEW_KEY to 2, "partner" to NewRef(1)))))
-        assertTrue(assertIs<CommitResult.Refused>(cycle).reason.contains("cycle"), cycle.toString())
-        // one way round is fine
-        cyclic.mustCommit("Pairing", mapOf("note" to "n"), mapOf(
-            "lefts" to listOf(mapOf(VelleSystem.NEW_KEY to 1)),
-            "rights" to listOf(mapOf("partner" to NewRef(1)))))
-        assertEquals(cyclic.instancesOf("Left").single(), cyclic.get(cyclic.instancesOf("Right").single(), "partner"))
+            val cyclic = system("""
+                act Pairing { note: text } with { lefts, rights }
+                shape Left { pairing: one Pairing, partner: one Right? }
+                shape Right { pairing: one Pairing, partner: one Left? }
+            """.trimIndent())
+            val cycle = cyclic.commit("Pairing", mapOf("note" to "n"), mapOf(
+                "lefts" to listOf(mapOf(VelleSystem.NEW_KEY to 1, "partner" to NewRef(2))),
+                "rights" to listOf(mapOf(VelleSystem.NEW_KEY to 2, "partner" to NewRef(1)))))
+            assertTrue(assertIs<CommitResult.Refused>(cycle).reason.contains("cycle"), cycle.toString())
+            // one way round is fine
+            cyclic.mustCommit("Pairing", mapOf("note" to "n"), mapOf(
+                "lefts" to listOf(mapOf(VelleSystem.NEW_KEY to 1)),
+                "rights" to listOf(mapOf("partner" to NewRef(1)))))
+            assertEquals(cyclic.instancesOf("Left").single(), cyclic.get(cyclic.instancesOf("Right").single(), "partner"))
+        }
     }
 
     @Test
@@ -645,31 +675,33 @@ class ClosureTest {
     @Test
     fun `a many field mixes handles and the act's own new values, and stays a set`() {
         val sys = system(PLATE_MANY)
-        val type = sys.plateType()
-        val fields = mapOf("containerType" to type, "containerCount" to 1, "replicates" to 1)
-        sys.mustCommit("ExperimentDesign", fields, mapOf("conditions" to listOf(mapOf("block" to 1, "value" to java.math.BigDecimal("0.1")))))
-        val existing = sys.instancesOf("Condition").single()
-        val design = sys.mustCommit("ExperimentDesign", fields, mapOf(
-            "containers" to listOf(mapOf("replicate" to 1, "position" to 1, "wells" to listOf(
-                mapOf("position" to 1, "conditions" to listOf(NewRef(1), existing, NewRef(2))),
-                mapOf("position" to 2, "conditions" to listOf(NewRef(2))),
-                mapOf("position" to 3, "conditions" to emptyList<Any>()),
-            ))),
-            "conditions" to listOf(
-                mapOf(VelleSystem.NEW_KEY to 1, "block" to 1, "value" to java.math.BigDecimal("0.5")),
-                mapOf(VelleSystem.NEW_KEY to 2, "block" to 2, "value" to java.math.BigDecimal("1.0"))),
-        ))
-        val mine = sys.instancesOf("Condition").filter { sys.get(it, "design") == design }.sortedBy { (sys.get(it, "block") as Number).toLong() }
-        assertEquals(2, mine.size)
-        val wells = sys.instancesOf("Well").sortedBy { (sys.get(it, "position") as Number).toLong() }
-        assertEquals(setOf(mine[0], existing, mine[1]), (sys.get(wells[0], "conditions") as List<*>).toSet())
-        assertEquals(listOf(mine[1]), sys.get(wells[1], "conditions"))
-        assertEquals(emptyList<Long>(), sys.get(wells[2], "conditions"))
+        sys.scope {
+            val type = sys.plateType()
+            val fields = mapOf("containerType" to type, "containerCount" to 1, "replicates" to 1)
+            sys.mustCommit("ExperimentDesign", fields, mapOf("conditions" to listOf(mapOf("block" to 1, "value" to java.math.BigDecimal("0.1")))))
+            val existing = sys.instancesOf("Condition").single()
+            val design = sys.mustCommit("ExperimentDesign", fields, mapOf(
+                "containers" to listOf(mapOf("replicate" to 1, "position" to 1, "wells" to listOf(
+                    mapOf("position" to 1, "conditions" to listOf(NewRef(1), existing, NewRef(2))),
+                    mapOf("position" to 2, "conditions" to listOf(NewRef(2))),
+                    mapOf("position" to 3, "conditions" to emptyList<Any>()),
+                ))),
+                "conditions" to listOf(
+                    mapOf(VelleSystem.NEW_KEY to 1, "block" to 1, "value" to java.math.BigDecimal("0.5")),
+                    mapOf(VelleSystem.NEW_KEY to 2, "block" to 2, "value" to java.math.BigDecimal("1.0"))),
+            ))
+            val mine = sys.instancesOf("Condition").filter { sys.get(it, "design") == design }.sortedBy { (sys.get(it, "block") as Number).toLong() }
+            assertEquals(2, mine.size)
+            val wells = sys.instancesOf("Well").sortedBy { (sys.get(it, "position") as Number).toLong() }
+            assertEquals(setOf(mine[0], existing, mine[1]), (sys.get(wells[0], "conditions") as List<*>).toSet())
+            assertEquals(listOf(mine[1]), sys.get(wells[1], "conditions"))
+            assertEquals(emptyList<Long>(), sys.get(wells[2], "conditions"))
 
-        val dup = sys.commit("ExperimentDesign", fields, mapOf(
-            "containers" to listOf(mapOf("replicate" to 1, "position" to 1, "wells" to listOf(mapOf("position" to 1, "conditions" to listOf(NewRef(1), NewRef(1)))))),
-            "conditions" to listOf(mapOf(VelleSystem.NEW_KEY to 1, "block" to 1, "value" to java.math.BigDecimal("0.5")))))
-        assertTrue(assertIs<CommitResult.Refused>(dup).reason.contains("duplicate"), dup.toString())
+            val dup = sys.commit("ExperimentDesign", fields, mapOf(
+                "containers" to listOf(mapOf("replicate" to 1, "position" to 1, "wells" to listOf(mapOf("position" to 1, "conditions" to listOf(NewRef(1), NewRef(1)))))),
+                "conditions" to listOf(mapOf(VelleSystem.NEW_KEY to 1, "block" to 1, "value" to java.math.BigDecimal("0.5")))))
+            assertTrue(assertIs<CommitResult.Refused>(dup).reason.contains("duplicate"), dup.toString())
+        }
     }
 
     @Test

@@ -79,13 +79,15 @@ class TriggerFamilyTest {
         """.trimIndent()
         assertEquals(emptyList(), Validator.validate(src))
         val sys = VelleSystem(Model(Parser.parse(src)))
-        val seller = accepted(sys.commit("Seller", mapOf("name" to "Ann")))
-        val withSeller = accepted(sys.commit("Listing", mapOf("title" to "Bike", "seller" to seller)))
-        val orphan = accepted(sys.commit("Listing", mapOf("title" to "Lamp")))
-        accepted(sys.commit("DiscardDraft", mapOf("listing" to orphan)))
-        assertEquals(emptyList(), sys.instancesOf("SellerNotice")) // no seller — outside the inline condition
-        accepted(sys.commit("DiscardDraft", mapOf("listing" to withSeller)))
-        assertEquals("Bike", sys.get(sys.instancesOf("SellerNotice").single(), "listingTitle"))
+        sys.scope {
+            val seller = accepted(sys.commit("Seller", mapOf("name" to "Ann")))
+            val withSeller = accepted(sys.commit("Listing", mapOf("title" to "Bike", "seller" to seller)))
+            val orphan = accepted(sys.commit("Listing", mapOf("title" to "Lamp")))
+            accepted(sys.commit("DiscardDraft", mapOf("listing" to orphan)))
+            assertEquals(emptyList(), sys.instancesOf("SellerNotice")) // no seller — outside the inline condition
+            accepted(sys.commit("DiscardDraft", mapOf("listing" to withSeller)))
+            assertEquals("Bike", sys.get(sys.instancesOf("SellerNotice").single(), "listingTitle"))
+        }
     }
 
     // ── the Reference's worked case ─────────────────────────────────────────────
@@ -110,30 +112,37 @@ class TriggerFamilyTest {
         shape Refusal { title: text }
     """.trimIndent()
 
-    private fun worked(): Triple<VelleSystem, Long, Long> {
+    /** The worked case's system and its listing, as a reference: a handle dies with the scope that minted it. */
+    private fun worked(): Pair<VelleSystem, Ref.Persisted> {
         assertEquals(emptyList(), Validator.validate(workedCase))
         assertEquals(emptyList(), Validator.advisories(workedCase))
         val sys = VelleSystem(Model(Parser.parse(workedCase)))
-        val seller = accepted(sys.commit("Seller", mapOf("name" to "Ann")))
-        val listing = accepted(sys.commit("Listing", mapOf("title" to "Bike", "seller" to seller)))
-        return Triple(sys, seller, listing)
+        val listing = sys.scope {
+            val seller = accepted(sys.commit("Seller", mapOf("name" to "Ann")))
+            sys.refFor(accepted(sys.commit("Listing", mapOf("title" to "Bike", "seller" to seller))))
+        }
+        return sys to listing
     }
 
     @Test
     fun `publishing fires the stated predicate-exit rule and not the deletion rule`() {
-        val (sys, _, listing) = worked()
-        accepted(sys.commit("Publish", mapOf("listing" to listing)))
-        assertEquals("Bike", sys.get(sys.instancesOf("PublicationNotice").single(), "title"))
-        assertEquals(emptyList(), sys.instancesOf("SellerNotice"))
+        val (sys, listing) = worked()
+        sys.scope {
+            accepted(sys.commit("Publish", mapOf("listing" to sys.idOf(listing))))
+            assertEquals("Bike", sys.get(sys.instancesOf("PublicationNotice").single(), "title"))
+            assertEquals(emptyList(), sys.instancesOf("SellerNotice"))
+        }
     }
 
     @Test
     fun `discarding fires the deletion rule as a last reader and not the predicate-exit rule`() {
-        val (sys, _, listing) = worked()
-        accepted(sys.commit("DiscardDraft", mapOf("listing" to listing)))
-        assertEquals(emptyList(), sys.instancesOf("Listing"))
-        assertEquals(emptyList(), sys.instancesOf("PublicationNotice"))
-        assertEquals("Bike", sys.get(sys.instancesOf("SellerNotice").single(), "listingTitle"))
+        val (sys, listing) = worked()
+        sys.scope {
+            accepted(sys.commit("DiscardDraft", mapOf("listing" to sys.idOf(listing))))
+            assertEquals(emptyList(), sys.instancesOf("Listing"))
+            assertEquals(emptyList(), sys.instancesOf("PublicationNotice"))
+            assertEquals("Bike", sys.get(sys.instancesOf("SellerNotice").single(), "listingTitle"))
+        }
     }
 
     @Test
@@ -151,11 +160,13 @@ class TriggerFamilyTest {
         assertEquals(emptyList(), Validator.validate(src))
         assertEquals(emptyList(), Validator.advisories(src))
         val sys = VelleSystem(Model(Parser.parse(src)))
-        val a = accepted(sys.commit("Lead", mapOf("company" to "Acme")))
-        val b = accepted(sys.commit("Lead", mapOf("company" to "Bolt")))
-        accepted(sys.commit("MarkWon", mapOf("lead" to a)))
-        accepted(sys.commit("PurgeLead", mapOf("lead" to b)))
-        assertEquals(setOf("Acme", "Bolt"), sys.instancesOf("FollowUpStop").map { sys.get(it, "company") }.toSet())
+        sys.scope {
+            val a = accepted(sys.commit("Lead", mapOf("company" to "Acme")))
+            val b = accepted(sys.commit("Lead", mapOf("company" to "Bolt")))
+            accepted(sys.commit("MarkWon", mapOf("lead" to a)))
+            accepted(sys.commit("PurgeLead", mapOf("lead" to b)))
+            assertEquals(setOf("Acme", "Bolt"), sys.instancesOf("FollowUpStop").map { sys.get(it, "company") }.toSet())
+        }
     }
 
     @Test
@@ -176,12 +187,14 @@ class TriggerFamilyTest {
         """.trimIndent()
         assertEquals(emptyList(), Validator.validate(src))
         val sys = VelleSystem(Model(Parser.parse(src)))
-        val acct = accepted(sys.commit("Account", mapOf("owner" to "Ann", "balance" to java.math.BigDecimal("10"))))
-        accepted(sys.commit("Overdraw", mapOf("account" to acct, "amount" to java.math.BigDecimal("25"))))
-        accepted(sys.commit("Close", mapOf("account" to acct)))
-        val note = sys.instancesOf("ClosureNote").single()
-        assertEquals("Ann", sys.get(note, "owner"))
-        assertEquals(0, java.math.BigDecimal("-15").compareTo(sys.get(note, "owed") as java.math.BigDecimal))
+        sys.scope {
+            val acct = accepted(sys.commit("Account", mapOf("owner" to "Ann", "balance" to java.math.BigDecimal("10"))))
+            accepted(sys.commit("Overdraw", mapOf("account" to acct, "amount" to java.math.BigDecimal("25"))))
+            accepted(sys.commit("Close", mapOf("account" to acct)))
+            val note = sys.instancesOf("ClosureNote").single()
+            assertEquals("Ann", sys.get(note, "owner"))
+            assertEquals(0, java.math.BigDecimal("-15").compareTo(sys.get(note, "owed") as java.math.BigDecimal))
+        }
     }
 
     @Test
@@ -203,13 +216,15 @@ class TriggerFamilyTest {
         assertEquals(emptyList(), Validator.validate(src))
         assertEquals(emptyList(), Validator.advisories(src))
         val sys = VelleSystem(Model(Parser.parse(src)))
-        val lead = accepted(sys.commit("Lead", mapOf("company" to "Acme")))
-        accepted(sys.commit("MarkWon", mapOf("lead" to lead)))
-        assertEquals("Acme", sys.get(sys.instancesOf("FollowUpStop").single(), "company"))
-        // purging the won lead deletes it and fires nothing further
-        accepted(sys.commit("PurgeWon", mapOf("lead" to lead)))
-        assertEquals(emptyList(), sys.instancesOf("Lead"))
-        assertEquals(1, sys.instancesOf("FollowUpStop").size)
+        sys.scope {
+            val lead = accepted(sys.commit("Lead", mapOf("company" to "Acme")))
+            accepted(sys.commit("MarkWon", mapOf("lead" to lead)))
+            assertEquals("Acme", sys.get(sys.instancesOf("FollowUpStop").single(), "company"))
+            // purging the won lead deletes it and fires nothing further
+            accepted(sys.commit("PurgeWon", mapOf("lead" to lead)))
+            assertEquals(emptyList(), sys.instancesOf("Lead"))
+            assertEquals(1, sys.instancesOf("FollowUpStop").size)
+        }
     }
 
     @Test
@@ -232,16 +247,18 @@ class TriggerFamilyTest {
         assertEquals(emptyList(), Validator.validate(src))
         assertEquals(emptyList(), Validator.advisories(src))
         val sys = VelleSystem(Model(Parser.parse(src)))
-        val seller = accepted(sys.commit("Seller", mapOf("name" to "Ann")))
-        val published = accepted(sys.commit("Listing", mapOf("title" to "Bike", "seller" to seller)))
-        val discarded = accepted(sys.commit("Listing", mapOf("title" to "Lamp", "seller" to seller)))
-        val orphan = accepted(sys.commit("Listing", mapOf("title" to "Rug")))
-        accepted(sys.commit("DiscardDraft", mapOf("listing" to discarded)))
-        assertEquals(emptyList(), sys.instancesOf("SellerNotice")) // deletion is not this rule's cause
-        accepted(sys.commit("Publish", mapOf("listing" to orphan)))
-        assertEquals(emptyList(), sys.instancesOf("SellerNotice")) // no seller — outside the inline condition
-        accepted(sys.commit("Publish", mapOf("listing" to published)))
-        assertEquals("Bike", sys.get(sys.instancesOf("SellerNotice").single(), "listingTitle"))
+        sys.scope {
+            val seller = accepted(sys.commit("Seller", mapOf("name" to "Ann")))
+            val published = accepted(sys.commit("Listing", mapOf("title" to "Bike", "seller" to seller)))
+            val discarded = accepted(sys.commit("Listing", mapOf("title" to "Lamp", "seller" to seller)))
+            val orphan = accepted(sys.commit("Listing", mapOf("title" to "Rug")))
+            accepted(sys.commit("DiscardDraft", mapOf("listing" to discarded)))
+            assertEquals(emptyList(), sys.instancesOf("SellerNotice")) // deletion is not this rule's cause
+            accepted(sys.commit("Publish", mapOf("listing" to orphan)))
+            assertEquals(emptyList(), sys.instancesOf("SellerNotice")) // no seller — outside the inline condition
+            accepted(sys.commit("Publish", mapOf("listing" to published)))
+            assertEquals("Bike", sys.get(sys.instancesOf("SellerNotice").single(), "listingTitle"))
+        }
     }
 
     // ── the checks the family adds ───────────────────────────────────────────

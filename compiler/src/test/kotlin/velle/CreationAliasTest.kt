@@ -70,17 +70,19 @@ class CreationAliasTest {
     @Test
     fun `the named record is created first and the other points at it, whatever the written order`() {
         val sys = system(REVIEWS)
-        val m = sys.accept("Member", "name" to "Ada")
-        sys.accept("Flag", "member" to m)
-        assertEquals(0, sys.instancesOf("AccountReview").size)
-        sys.accept("Flag", "member" to m)
-        val review = sys.instancesOf("AccountReview").single()
-        val entry = sys.instancesOf("AuditEntry").single()
-        assertEquals(review, sys.get(entry, "review"))
-        assertEquals(m, sys.get(review, "member"))
-        // once, ever: the third flag re-fires nothing
-        sys.accept("Flag", "member" to m)
-        assertEquals(1, sys.instancesOf("AccountReview").size)
+        sys.scope {
+            val m = sys.accept("Member", "name" to "Ada")
+            sys.accept("Flag", "member" to m)
+            assertEquals(0, sys.instancesOf("AccountReview").size)
+            sys.accept("Flag", "member" to m)
+            val review = sys.instancesOf("AccountReview").single()
+            val entry = sys.instancesOf("AuditEntry").single()
+            assertEquals(review, sys.get(entry, "review"))
+            assertEquals(m, sys.get(review, "member"))
+            // once, ever: the third flag re-fires nothing
+            sys.accept("Flag", "member" to m)
+            assertEquals(1, sys.instancesOf("AccountReview").size)
+        }
     }
 
     @Test
@@ -95,11 +97,13 @@ class CreationAliasTest {
             }
         """.trimIndent()
         val sys = system(spec)
-        val a = sys.accept("A", "t" to "x")
-        val b = sys.instancesOf("B").single()
-        val c = sys.instancesOf("C").single()
-        assertEquals(b, sys.get(c, "b"))
-        assertEquals(a, sys.get(b, "a"))
+        sys.scope {
+            val a = sys.accept("A", "t" to "x")
+            val b = sys.instancesOf("B").single()
+            val c = sys.instancesOf("C").single()
+            assertEquals(b, sys.get(c, "b"))
+            assertEquals(a, sys.get(b, "a"))
+        }
     }
 
     @Test

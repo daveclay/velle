@@ -39,13 +39,14 @@ class CommutationTest {
     }
 
     /** Id-insensitive state fingerprint: shape → sorted structural instance forms. */
-    private fun fingerprint(sys: VelleSystem): Map<String, List<String>> =
+    private fun fingerprint(sys: VelleSystem): Map<String, List<String>> = sys.scope {
         sys.model.shapes.keys.filterNot { it in sys.model.transients }.associateWith { shape ->
             sys.instancesOf(shape).map { canonical(sys, it, depth = 4) }.sorted()
         }
+    }
 
     private fun canonical(sys: VelleSystem, id: Long, depth: Int): String {
-        val inst = sys.instances[id] ?: return "missing"
+        val inst = sys.instance(id) ?: return "missing"
         if (depth == 0) return inst.shape
         val fields = inst.fields.entries.sortedBy { it.key }.joinToString(",") { (k, v) ->
             "$k=" + when (v) {
@@ -66,8 +67,9 @@ class CommutationTest {
         a: (VelleSystem) -> Unit,
         b: (VelleSystem) -> Unit,
     ): Pair<Map<String, List<String>>, Map<String, List<String>>> {
-        val ab = system(spec).also { setup(it); a(it); b(it) }
-        val ba = system(spec).also { setup(it); b(it); a(it) }
+        // one scope per run: the handles setup hands to a and b live until it exits
+        val ab = system(spec).also { sys -> sys.scope { setup(sys); a(sys); b(sys) } }
+        val ba = system(spec).also { sys -> sys.scope { setup(sys); b(sys); a(sys) } }
         assertTrue(ab.failures.isEmpty() && ba.failures.isEmpty(),
             "firings failed: ${ab.failures + ba.failures}")
         return fingerprint(ab) to fingerprint(ba)
@@ -300,13 +302,15 @@ class CommutationTest {
         // contend on the same derived keys (the deposit row and its account),
         // which is what forces them to take turns instead of double-applying
         val sys = system(deposits)
-        val acct = sys.mustCommit("Account")
-        sys.mustCommit("Deposit", "account" to acct, "amount" to BigDecimal("100"))
-        assertEquals(0, BigDecimal("100").compareTo(sys.get(acct, "balance") as BigDecimal))
-        sys.advance(3600)
-        sys.tick("Hourly")
-        assertEquals(0, BigDecimal("100").compareTo(sys.get(acct, "balance") as BigDecimal),
-            "the sweep must not re-apply an applied deposit")
-        assertEquals(1, sys.instancesOf("DepositApplication").size)
+        sys.scope {
+            val acct = sys.mustCommit("Account")
+            sys.mustCommit("Deposit", "account" to acct, "amount" to BigDecimal("100"))
+            assertEquals(0, BigDecimal("100").compareTo(sys.get(acct, "balance") as BigDecimal))
+            sys.advance(3600)
+            sys.tick("Hourly")
+            assertEquals(0, BigDecimal("100").compareTo(sys.get(acct, "balance") as BigDecimal),
+                "the sweep must not re-apply an applied deposit")
+            assertEquals(1, sys.instancesOf("DepositApplication").size)
+        }
     }
 }

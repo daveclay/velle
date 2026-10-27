@@ -109,46 +109,55 @@ class VisibilityTest {
 
     @Test
     fun `the read surface admits what the clauses admit, and the engineer's view sees everything`() {
-        val sys = newSystem(); val w = World(sys)
-        fun products(viewer: Long?) = sys.query(Query("Product", orderBy = listOf(OrderDatum("name")), viewer = viewer?.let { sys.refFor(it) })).ids
-        assertEquals(listOf(w.widget), products(null))
-        assertEquals(listOf(w.widget), products(w.assigned), "assigned to Acme: sees Acme's product")
-        assertEquals(emptyList(), products(w.other), "not assigned: sees nothing")
-        assertEquals(emptyList(), products(w.admin), "an administrator with no assignment sees no product either")
-        assertTrue(sys.visibleTo(w.other, w.acme), "a vendor is visible to anyone")
-        assertTrue(sys.visibleTo(w.other, w.other) && sys.visibleTo(w.other, w.admin), "staff records take the spec-wide default")
-        assertFalse(sys.visibleCurrent(w.other, w.widget))
-        assertTrue(sys.visibleCurrent(w.assigned, w.widget))
+        val sys = newSystem()
+        sys.scope {
+            val w = World(sys) // inside the scope: the handles the world holds live until it exits
+            fun products(viewer: Long?) = sys.query(Query("Product", orderBy = listOf(OrderDatum("name")), viewer = viewer?.let { sys.refFor(it) })).ids
+            assertEquals(listOf(w.widget), products(null))
+            assertEquals(listOf(w.widget), products(w.assigned), "assigned to Acme: sees Acme's product")
+            assertEquals(emptyList(), products(w.other), "not assigned: sees nothing")
+            assertEquals(emptyList(), products(w.admin), "an administrator with no assignment sees no product either")
+            assertTrue(sys.visibleTo(w.other, w.acme), "a vendor is visible to anyone")
+            assertTrue(sys.visibleTo(w.other, w.other) && sys.visibleTo(w.other, w.admin), "staff records take the spec-wide default")
+            assertFalse(sys.visibleCurrent(w.other, w.widget))
+            assertTrue(sys.visibleCurrent(w.assigned, w.widget))
+        }
     }
 
     @Test
     fun `a gated field is hidden from a viewer the clause does not admit, and nothing changes what is calculated`() {
-        val sys = newSystem(); val w = World(sys)
-        assertEquals(setOf("cost"), sys.hiddenFields(w.assigned, w.widget))
-        assertEquals(emptySet(), sys.hiddenFields(null, w.widget))
-        assertIs<CommitResult.Accepted>(sys.commit("AssignVendor", mapOf("staff" to w.admin, "vendor" to w.acme), actor = w.admin))
-        assertEquals(emptySet(), sys.hiddenFields(w.admin, w.widget), "an administrator assigned to the vendor sees the cost")
-        // margin is price - cost for everyone: a read for the assigned staff member still gets 6
-        assertEquals(0, (sys.get(w.widget, "margin") as BigDecimal).compareTo(BigDecimal("6")))
-        assertIs<CommitResult.Accepted>(sys.commit("ChangePrice", mapOf("product" to w.widget, "price" to BigDecimal("4.5")), actor = w.assigned))
-        assertEquals(1, sys.instancesOf("MarginAlert").size, "the rule read the cost through margin, whoever asked")
+        val sys = newSystem()
+        sys.scope {
+            val w = World(sys) // inside the scope: the handles the world holds live until it exits
+            assertEquals(setOf("cost"), sys.hiddenFields(w.assigned, w.widget))
+            assertEquals(emptySet(), sys.hiddenFields(null, w.widget))
+            assertIs<CommitResult.Accepted>(sys.commit("AssignVendor", mapOf("staff" to w.admin, "vendor" to w.acme), actor = w.admin))
+            assertEquals(emptySet(), sys.hiddenFields(w.admin, w.widget), "an administrator assigned to the vendor sees the cost")
+            // margin is price - cost for everyone: a read for the assigned staff member still gets 6
+            assertEquals(0, (sys.get(w.widget, "margin") as BigDecimal).compareTo(BigDecimal("6")))
+            assertIs<CommitResult.Accepted>(sys.commit("ChangePrice", mapOf("product" to w.widget, "price" to BigDecimal("4.5")), actor = w.assigned))
+            assertEquals(1, sys.instancesOf("MarginAlert").size, "the rule read the cost through margin, whoever asked")
+        }
     }
 
     @Test
     fun `a refusal is projected for the actor like a read`() {
-        val sys = newSystem(); val w = World(sys)
-        val r = sys.commit("ChangePrice", mapOf("product" to w.widget, "price" to BigDecimal("3")), actor = w.assigned)
-        assertIs<CommitResult.Refused>(r)
-        val rej = r.rejection!!
-        val product = (rej.pivots + rej.witnesses).single { it.shape == "Product" }
-        assertFalse("cost" in product.fields, "the staff member learns the price was refused, not the cost: $rej")
-        assertTrue(rej.evaluation.none { it is EvalStep.Read && it.member == "cost" }, rej.evaluation.toString())
-        assertTrue("cost = " !in rej.message, rej.message) // the prohibition's text names the field; the data never shows its value
-        // the same refusal for an administrator assigned to the vendor carries the cost
-        assertIs<CommitResult.Accepted>(sys.commit("AssignVendor", mapOf("staff" to w.admin, "vendor" to w.acme), actor = w.admin))
-        val r2 = sys.commit("ChangePrice", mapOf("product" to w.widget, "price" to BigDecimal("3")), actor = w.admin)
-        val rej2 = assertIs<CommitResult.Refused>(r2).rejection!!
-        assertTrue((rej2.pivots + rej2.witnesses).single { it.shape == "Product" }.fields.containsKey("cost"))
+        val sys = newSystem()
+        sys.scope {
+            val w = World(sys) // inside the scope: the handles the world holds live until it exits
+            val r = sys.commit("ChangePrice", mapOf("product" to w.widget, "price" to BigDecimal("3")), actor = w.assigned)
+            assertIs<CommitResult.Refused>(r)
+            val rej = r.rejection!!
+            val product = (rej.pivots + rej.witnesses).single { it.shape == "Product" }
+            assertFalse("cost" in product.fields, "the staff member learns the price was refused, not the cost: $rej")
+            assertTrue(rej.evaluation.none { it is EvalStep.Read && it.member == "cost" }, rej.evaluation.toString())
+            assertTrue("cost = " !in rej.message, rej.message) // the prohibition's text names the field; the data never shows its value
+            // the same refusal for an administrator assigned to the vendor carries the cost
+            assertIs<CommitResult.Accepted>(sys.commit("AssignVendor", mapOf("staff" to w.admin, "vendor" to w.acme), actor = w.admin))
+            val r2 = sys.commit("ChangePrice", mapOf("product" to w.widget, "price" to BigDecimal("3")), actor = w.admin)
+            val rej2 = assertIs<CommitResult.Refused>(r2).rejection!!
+            assertTrue((rej2.pivots + rej2.witnesses).single { it.shape == "Product" }.fields.containsKey("cost"))
+        }
     }
 
     @Test
