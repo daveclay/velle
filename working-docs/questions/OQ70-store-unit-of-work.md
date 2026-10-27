@@ -35,19 +35,84 @@ interface StateResolver {
 - The in-memory runtime (no resolver) implements the same moments with in-process locks per key, or nothing until D1's second half lands.
 - A store that is a REST call, a queue, or a file does what is honest for it, which may be nothing. The contract names the moments; the store decides what a moment costs. That is the rule `evaluation.md` already states for serialization, given a place in the contract.
 
-## 3. Decisions (proposed and ratified 2026-10-27)
+## 3. Decisions
 
-- **D1 — Scope: the store unit of work first, the global lock stays.** Pooled connections, reconnection, and a consistent read per request come from the store side alone. Letting two non-conflicting units run at once also needs the runtime's working set (`instances`, `byShape`, the caches, the handle tables) moved off `VelleSystem`'s fields into an object created at `begin` and dropped at `end`. That is a refactor inside `Runtime.kt` with no new imports, separable, and second.
-- **D2 — Two calls for a write: open the unit, then take the keys.** A key's value is computed at admission against pre-commit state and may hop through a captured member (`reopenTicket.ticket.closedBy`), so the unit must be open before the keys exist. Hence `begin`, then `serialize(keys)` once computed, then `onCommit`, then `end`. After `serialize` returns the runtime clears its working set, so everything it evaluates was read after the locks were held. **This decision carries new runtime work:** evaluating `QueueKey.Path` and `QueueKey.ValueOf` to concrete values at admission does not exist today (§1); the compile-time derivation is in place, the runtime side is not.
-- **D3 — Isolation: a read is a snapshot, a write is read committed.** A read unit opens a read-only snapshot transaction (REPEATABLE READ in PostgreSQL; SQLite's deferred transaction), which is what "one consistent state" in U1 means for a read. A write cannot be a snapshot taken before its locks, since what it then reads could be stale, so it runs read committed and relies on D2 for freshness.
-- **D4 — Keys are locked in the database, in sorted order, waiting with a timeout.** Advisory locks per key in PostgreSQL, so two processes serialize correctly. Sorting the keys before taking them avoids deadlock between two commits with overlapping sets. A timeout turns a stuck lock into a failed commit (a `Failed` outcome, U2's in-envelope failure) rather than a hung request; the number is a store setting, never a spec concern. A `Widening` locks the shape's name. The in-memory store mirrors this with in-process locks.
-- **D5 — `SqlStore` takes a `DataSource`; the `Connection` constructor goes.** One construction path means the conformance suite tests the real one. Tests build a `DataSource` over their SQLite URL. The starter's `attach` passes the application's `DataSource` through and reads the product name once to pick the dialect.
-- **D6 — This is an OQ**, absorbing the first two residue items under QUESTIONS.md "Serving" (the one lock; the one connection). It stays open until D1's second half lands; Dave wants that done right after the store side, so it is not split out.
+Each decision is one section: the decision in a sentence, then the recommendation and its costs, then the context. Dave answers under **Dave:**. D1 to D6 were ratified 2026-10-27 and are built except the second half of D1; D7 to D9 are open.
+
+### D1 — Build the store's unit of work first and keep the global lock in `VelleApi` until the runtime's working set is per unit.
+
+**Dave (2026-10-27):** ratified; "I'll want to tackle the single-lock-read right after."
+
+Pooled connections, reconnection, and a consistent read per request come from the store side alone, which is built. Letting two non-conflicting units run at once also needs the runtime's working set (`instances`, `byShape`, the fetch caches, `captures`, and the handle tables `idShape`, `keyOf`, `handleOf`) moved off `VelleSystem`'s fields into an object created at `begin` and dropped at `end`. That is a refactor inside `Runtime.kt` with no new imports; `SqlStore.current` is already a `ThreadLocal`, so the store side needs no change for it. The wiki `API-layer` ("The layers", "One request, end to end") and `Serving-a-system` (the `api.locked` bullet) describe the lock and follow it out.
+
+### D2 — A write unit is two calls: open it, then take the keys once their values are known.
+
+**Dave (2026-10-27):** ratified. Built: `inTransaction` calls `begin(WRITE)`, values the keys (`actKeys`, `firingKeys`), calls `serialize`, then `beginSnapshot()`.
+
+A key's value is computed at admission against pre-commit state and may hop through a captured member (`reopenTicket.ticket.closedBy`), so the unit must be open before the keys exist. Hence `begin`, then `serialize(keys)`, then `onCommit`, then `end`. After `serialize` returns the runtime drops its working set, so everything the envelope evaluates was read after the locks were held. Valuing `QueueKey.Path` and `QueueKey.ValueOf` at runtime did not exist before this (§1); the compile-time derivation did.
+
+### D3 — A read is a snapshot; a write is read committed.
+
+**Dave (2026-10-27):** ratified. Built in `PostgresDialect.beginRead` / `beginWrite` and `SqliteDialect`'s deferred and immediate transactions.
+
+A read unit opens a read-only snapshot transaction (REPEATABLE READ in PostgreSQL; a deferred transaction in SQLite, which is a snapshot once the first statement runs), which is what "one consistent state" in U1 means for a read. A write cannot be a snapshot taken before its locks, since what it then read could be stale, so it runs read committed and relies on D2 for freshness.
+
+### D4 — Keys are locked in the database, in sorted order, each waiting at most a store-configured timeout.
+
+**Dave (2026-10-27):** ratified. Built: `PostgresDialect.lock` (`SET LOCAL lock_timeout`, `pg_advisory_xact_lock(hashtext(key))` per sorted key); `SqlStore.lockTimeout` defaults to ten seconds; SQLite locks nothing (`serializesKeys` false).
+
+Advisory locks per key, so two processes serialize correctly. Sorting avoids deadlock between two commits with overlapping sets. A timeout turns a stuck lock into a failed envelope (`Outcome.Failed`, U2's in-envelope failure) rather than a hung request; the number is a store setting, never a spec concern. A `Widening` locks the shape's name.
+
+### D5 — `SqlStore` takes a `DataSource`; the layer has no connection constructor.
+
+**Dave (2026-10-27):** ratified. Built. `SqliteStore` keeps a `Connection` convenience that wraps the connection in `OneConnection`, because an in-memory SQLite database lives in its one connection; `PostgresStore` takes a `DataSource` only.
+
+One construction path means the conformance suite tests the real one. The SQLite conformance run uses a temporary file in WAL mode so that every unit really takes a connection; the PostgreSQL run an unpooled `PGSimpleDataSource` per schema. The starter's `attach` reads the product name from one connection, returns it, and passes the `DataSource` through.
+
+### D6 — This is one OQ, open until the lock is replaced.
+
+**Dave (2026-10-27):** ratified.
+
+It absorbed the two residue lines under QUESTIONS.md "Serving" (the one lock; the one connection). The lock's replacement is the second half of D1 and stays here rather than splitting out.
+
+### D7 — In memory, with no store, the runtime serializes envelopes on their keys itself.
+
+**Dave:**
+
+Recommendation: yes. When the global lock goes (D1's second half), a system with no store has no `serialize` to lean on, since `UnitOfWork.None` does nothing, yet two commits over one account must still take turns (U3). The runtime keeps a lock per key text of its own and takes them, sorted, in `inTransaction` when `resolver == null`. Cost: a second implementation of "take these keys", small, inside `Runtime.kt`; the SQL store's conformance scenario for two envelopes on one key gets a twin in `RuntimeTest`. The alternative is to leave `VelleApi`'s global lock in place for in-memory systems only, which keeps two code paths in the API layer and makes the in-memory system behave differently from the stored one under load.
+
+Context, from `examples/billing/billing.velle`: two `SubmitPayment` commits for one invoice carry the key `Invoice#<key>` (the compiler's "Queue key: [submitPayment.invoice]"); in memory today they are serialized by `VelleApi`'s one lock, which also serializes two payments for two different invoices.
+
+### D8 — A read issued outside any `scope`, over a store, closes its unit when the call returns.
+
+**Dave:**
+
+Recommendation: yes. Today such a read opens a read unit at its first fetch and the unit stays open, holding a pooled connection, until the next scope exit or envelope. Closing at the end of the call means each outside-a-scope call is its own snapshot and holds nothing afterwards; the generated read surface and `VelleApi.locked` already wrap every read in a scope, so this only affects a direct call on `VelleSystem` such as `sys.get(id, field)` from a test or the raw surface. Cost: handles minted outside a scope die at the call's end, which `scope`'s KDoc already says of handles in general. The alternative is to refuse a fetch outside a scope over a store with an error naming `scope`, which is stricter and breaks any test that reads bare.
+
+Context: `SqlStoreConformance` reads inside `b.sys.scope { }` throughout; `RuntimeTest` (in memory, no unit) reads bare, which is unaffected either way.
+
+### D9 — A firing's value key takes the committed value when the rule body states it, and the shape's width otherwise.
+
+**Dave:**
+
+Recommendation: yes. A `QueueKey.ValueOf(shape, field)` on a scheduled or after-commit firing is the uniqueness case: the firing creates a record whose `field` another envelope may also commit. The value is not known before the firing runs, so today the firing takes `AdmissionKey.Shape(shape)`, which serializes it against every envelope touching the shape. Where the rule's creation literal spells the field from the subject's stored members (`Reminder from { invoice: this, sentOn: today }`), the value is readable at admission and the narrow key can be taken; where it depends on the firing's own computation, the width stays. Cost: the key valuation has to evaluate a creation literal's field expression outside the firing, with the evaluator's existing expression evaluation over the subject; one more conformance-style test per case. The alternative is to leave the width, which is correct and coarse.
+
+Context, from `examples/billing/billing.velle`:
+
+```
+rule RemindOverdue
+    when (ActionableOverdue where
+          not exists (Reminder where invoice == this and sentOn > today - 7 days))
+    on Weekly {
+    Reminder from { invoice: this, sentOn: today }   -- the firing creates a Reminder; its fields are the subject and the clock
+}
+```
 
 Two things need no decision because the current behavior is right: a `scope` inside an envelope reads the envelope, so `begin` fires at depth zero only; a refused commit ends its unit with a rollback, and any refusal record it writes (a `never` that records rather than refuses, Reference §21) goes through `onCommit` as today.
 
 ## 4. Items
 
-- [ ] The second half of D1: the working set (`instances`, `byShape`, the fetch caches, `captures`, and the handle tables) per unit of work inside `Runtime.kt`, held by an object created at `begin` and dropped at `end`, so two units run at once on two threads; then replace `VelleApi`'s one lock with admission through the store's `serialize` (in memory: a lock per key in the runtime, since `UnitOfWork.None` serializes nothing); `SqlStore.current` is already a `ThreadLocal`, so the store side needs no change; update the wiki `API-layer` page's "The layers" and "One request, end to end" sections and `Serving-a-system`'s `api.locked` bullet, which describe the lock.
-- [ ] Decide what a read issued outside any `scope` does over a store: today it opens a read unit that the next scope exit or envelope closes, which holds a pooled connection until then; refusing it, or closing the unit at the end of the call, are the alternatives.
-- [ ] A value key (`QueueKey.ValueOf`) on a scheduled or after-commit firing takes the shape's width today, because the committed value is not known before the firing runs; evaluate the firing's creation values at admission instead where the rule body allows it.
+- [ ] D1's second half: the working set per unit of work inside `Runtime.kt`, then `VelleApi`'s one lock replaced by admission through the store's `serialize`; the wiki `API-layer` and `Serving-a-system` pages follow.
+- [ ] D7: per-key serialization in the runtime for a system with no store, once D7 is answered.
+- [ ] D8: a read outside any `scope` closes its unit at the call's end, once D8 is answered.
+- [ ] D9: a firing's value key valued from the creation literal where it can be, once D9 is answered.
