@@ -8,7 +8,7 @@ import kotlin.test.assertIs
  * How long the runtime remembers a row it read: the working set lives from one
  * read entry (`openReadSnapshot`: `query`, `count`, `sum`, `exists`,
  * `currentShapeOf`, `visibleCurrent`) to the next on one thread, and never past
- * a commit. Observed from the store's side through a `MemoryStore` that counts
+ * the end of a commit, a seed, or a tick. Observed from the store's side through a `MemoryStore` that counts
  * the by-key fetches and lets the test write a row beside the runtime, as a
  * database trigger or the engineer's own SQL would.
  */
@@ -95,16 +95,15 @@ class WorkingSetTest {
     }
 
     @Test
-    fun `a bare get after a commit, with no read entry, answers from the envelope's leftover working set`() {
-        // The generic surface only: `get` makes no entry and clears nothing, so straight after a commit it reads
-        // the rows the envelope built. The generated `read(ref)` never does this, since it enters through
-        // `currentShapeOf`. Pinned so a change here is a decision, not an accident.
+    fun `a bare get after a commit, with no read entry, still starts from the store`() {
+        // The generic surface's `get` makes no entry and clears nothing itself; the commit cleared what it built
+        // on its way out, so even this path has nothing stale to answer from.
         val (sys, store) = system()
         sys.scope {
             val ada = accepted(sys.commit("Customer", mapOf("name" to "Ada")))
             store.sideWrite(ada, "name", "Adaline")
-            assertEquals("Ada", sys.get(sys.idOf(ada), "name"), "the leftover row, not the store's")
-            assertEquals(0, store.fetchedByKey.size, "nothing was fetched")
+            assertEquals("Adaline", sys.get(sys.idOf(ada), "name"), "the store's row, not the envelope's")
+            assertEquals(1, store.fetchedByKey.size, "fetched once")
         }
     }
 }

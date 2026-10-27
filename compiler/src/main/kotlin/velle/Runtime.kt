@@ -970,21 +970,14 @@ class VelleSystem(
         }
 
         val result = inTransaction(actor, keys = { actKeys(shape, mutations, rootIndex) }) { applyCommit(mutations, actCommit = true)[rootIndex] }
+        // the envelope and its after-commit firings are over: what they built in
+        // memory goes, so any read from here on starts from the store. A transient
+        // act goes with it, which is its removal (Reference §4 "Transient acts";
+        // evaluation.md): V17 bans every read of the act from anything that runs
+        // later, so removing it here is observably the same as at its close.
+        beginSnapshot()
         return result.fold(
-            onSuccess = { id ->
-                // a transient act is an input to the state, not a member of it: at
-                // the close of its transaction the instance is removed — only its
-                // consequences persist (Reference §4 "Transient acts"; evaluation.md).
-                // Removing after the transaction (nevers checked, after-queue
-                // drained) is observably equivalent to removing at its close: V17
-                // bans every read of the act from anything that runs later.
-                if (shape in model.transients) {
-                    instances.remove(id)
-                    byShape[shape]?.remove(id)
-                    captures.keys.removeIf { it.first == id }
-                }
-                CommitResult.Accepted(id, if (shape in model.transients) null else refFor(id))
-            },
+            onSuccess = { id -> CommitResult.Accepted(id, if (shape in model.transients) null else refFor(id)) },
             onFailure = { e ->
                 if (e is NeverViolation) CommitResult.Refused(e.rejection.message, e.rejection) else throw e
             }
@@ -1028,6 +1021,7 @@ class VelleSystem(
             }
             txn = null
             endUnit(Outcome.Committed)
+            beginSnapshot() // the seeded row is the store's now; a read of it starts there
             return id
         } catch (e: Exception) {
             rollback(t)
@@ -1845,6 +1839,7 @@ class VelleSystem(
             }
         }
         lastTick[schedule] = now
+        beginSnapshot() // the firings are over: a read after the tick starts from the store
         if (rejected.isNotEmpty()) throw TickRejected(schedule, now, rejected)
     }
 
