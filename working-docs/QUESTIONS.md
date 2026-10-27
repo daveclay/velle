@@ -125,6 +125,7 @@ Built 2026-10-26 as the end state Dave stated at OQ51's settling (a framework li
   - [ ] D7 (open): in memory, with no store, the runtime serializes envelopes on their keys itself.
   - [ ] D8 (open): a read issued outside any `scope`, over a store, closes its unit when the call returns.
   - [ ] D9 (open): a firing's value key takes the committed value when the rule body states it, the shape's width otherwise.
+  - [ ] D10 (open): the in-memory state becomes a store of its own (`MemoryStore`), every unit owns its working set, and the runtime has no "no store" case; the recommended way to do D1's second half.
 - [ ] Expose a cross-base refinement's own declared members over GraphQL: a static union is a GraphQL union, which carries no fields, so a member declared on the union (`Origin.peptideBatches`) is reachable over REST and not over GraphQL.
 - [ ] Decide whether GraphQL should offer a typed filter input per shape beside `where` as a predicate string, or whether the predicate string is the one query language on every transport (today: the string, by OQ51's ruling that the caller composes in the spec's own language).
 - [ ] Serve a registered query (OQ57's registry) as a named endpoint and a named GraphQL field, with its parameters typed.

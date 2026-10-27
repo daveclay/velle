@@ -125,6 +125,16 @@ rule RemindOverdue
 }
 ```
 
+### D10 — The in-memory state becomes a store of its own, and the runtime has no "no store" case.
+
+**Dave:**
+
+Recommendation: yes, as the way to do D1's second half. Over a store, a read needs no instances cached in the system between requests: the working set is a per-call memo so that one query over a thousand invoices fetches each customer once, and `scope` already drops it and the handle tables at the outermost exit. Nothing in a read wants another request's rows, and nothing in an envelope wants a read's. The only reason the working set lives on `VelleSystem` is that in memory, with no store, the same maps are the state. Nine places in `Runtime.kt` branch on `resolver == null` for that case.
+
+Make the in-memory state a `MemoryStore` implementing `StateResolver` and `CommitCallback` (rows in maps, keys minted from a counter), and connect every system to a store from birth, the in-memory one by default. Then every unit, read or write, owns its working set: an object created at `begin` holding `instances`, `byShape`, the fetch caches, `captures`, and the handle tables, dropped at `end`; two units on two threads share nothing but the store. `MemoryStore.begin(READ)` hands out a snapshot (the maps are small and copy-on-write is one `HashMap` copy per write unit, or the store keeps a version per row); `MemoryStore.serialize` takes a lock per key; its `onCommit` applies the set under a write lock. That is D7 answered inside the store, where the SQL store already answers it, and the runtime keeps one code path. Costs: a store module's worth of code in the compiler (the in-memory store must stay in `compiler`, since every spec runs there before any store exists); `seed`, `instancesOf`, and the generated tests' handles are all per scope already, so the surface does not change; `RuntimeTest` and the audits, which read bare `instances` through `internal` members, need the working set reached through the current unit. The alternative is per-unit working sets with the in-memory maps kept as a special case on `VelleSystem`, which keeps the nine branches and gives in memory no snapshot for reads.
+
+Context: `VelleSystem.scope` (`Runtime.kt`) already says what a unit is, "handles minted inside it ... are valid until the outermost scope exits; then, over a store, the handle maps and the hydrated working set are dropped, so memory is bounded by one unit of work and nothing outside ever holds a handle." D10 makes that sentence true for every system.
+
 Two things need no decision because the current behavior is right: a `scope` inside an envelope reads the envelope, so `begin` fires at depth zero only; a refused commit ends its unit with a rollback, and any refusal record it writes (a `never` that records rather than refuses, Reference §21) goes through `onCommit` as today.
 
 ## 4. Items
