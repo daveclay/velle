@@ -7,8 +7,9 @@ import kotlin.test.assertIs
 /**
  * How long the runtime remembers a row it read: the working set lives from one
  * read entry (`openReadSnapshot`: `query`, `count`, `sum`, `exists`,
- * `currentShapeOf`, `visibleCurrent`) to the next on one thread, and never past
- * the end of a commit, a seed, or a tick. Observed from the store's side through a `MemoryStore` that counts
+ * `currentShapeOf`, `visibleCurrent`) to the next on one thread, never past
+ * the end of a commit, a seed, or a tick, and never past a read made outside
+ * any scope, which is a unit of work of its own. Observed from the store's side through a `MemoryStore` that counts
  * the by-key fetches and lets the test write a row beside the runtime, as a
  * database trigger or the engineer's own SQL would.
  */
@@ -23,6 +24,16 @@ class WorkingSetTest {
     /** The in-memory store with every by-key fetch counted and a side door for writes the runtime did not make. */
     private class Counting(private val inner: MemoryStore) : StateResolver by inner, CommitCallback by inner {
         val fetchedByKey = mutableListOf<StoreKey>()
+        /** Units of work begun and not yet ended. */
+        var openUnits = 0
+        override fun begin(kind: WorkKind): UnitOfWork {
+            val u = inner.begin(kind)
+            openUnits++
+            return object : UnitOfWork {
+                override fun serialize(keys: Set<AdmissionKey>) = u.serialize(keys)
+                override fun end(outcome: Outcome) { openUnits--; u.end(outcome) }
+            }
+        }
         override fun fetchByKey(shape: String, key: StoreKey): Row? {
             fetchedByKey.add(key)
             return inner.fetchByKey(shape, key)
@@ -92,6 +103,26 @@ class WorkingSetTest {
             assertEquals("Ada", sys.readName(ada))
             assertEquals(3, store.fetchedByKey.size, "after the commit the read entry starts from an empty working set")
         }
+    }
+
+    @Test
+    fun `a read outside any scope is a unit of work of its own and holds nothing when it returns`() {
+        val (sys, store) = system()
+        val ada = sys.scope { accepted(sys.commit("Customer", mapOf("name" to "Ada"))) }
+        assertEquals(0, store.openUnits)
+        val id = sys.idOf(ada) // minted outside any scope: the generated harness does this before a commit
+        assertEquals("Ada", sys.get(id, "name"))
+        assertEquals(0, store.openUnits, "the bare read ended its unit as it returned")
+        assertEquals(1, store.fetchedByKey.size)
+        assertEquals("Ada", sys.get(id, "name"))
+        assertEquals(2, store.fetchedByKey.size, "two bare reads are two units, each starting from the store")
+        // the store's read lock went with the unit: a commit on another thread is not kept waiting
+        val other = Thread { sys.scope { accepted(sys.commit("Promote", mapOf("customer" to sys.idOf(ada)))) } }
+        other.start(); other.join(10_000)
+        assertEquals(false, other.isAlive, "a commit on another thread waited on a read that had returned")
+        // the handle minted outside the scope is still good for the commit that follows it
+        accepted(sys.commit("Promote", mapOf("customer" to id)))
+        assertEquals(0, sys.liveHandles, "the commit's scope dropped the handles")
     }
 
     @Test

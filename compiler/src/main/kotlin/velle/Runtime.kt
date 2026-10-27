@@ -345,10 +345,23 @@ class VelleSystem(
      * memory is bounded by one unit of work and nothing outside ever holds a
      * handle. [commit], [tick], and [seed] open one themselves; the generated
      * read surface and [TypedQuery] open one around each read. A read made
-     * outside any scope keeps its unit open until the next outermost scope on
-     * its thread exits.
+     * outside any scope is a unit of work of its own ([reading]): its unit ends
+     * and its rows go as the call returns, while the handles it minted stay for
+     * the scope that follows.
      */
-    fun <T> scope(body: () -> T): T {
+    fun <T> scope(body: () -> T): T = entered(drop = true, body)
+
+    /**
+     * One read on the runtime's own surface. Inside a scope or an envelope it is
+     * part of that; outside both it opens its own unit of work and closes it on
+     * the way out, dropping the rows it read, so a bare call holds no connection,
+     * snapshot, or lock after it returns and two bare calls are two snapshots.
+     * The handle tables stay: the generated harness converts a reference with
+     * [idOf] and hands the handle to the [commit] that follows.
+     */
+    private inline fun <T> reading(body: () -> T): T = entered(drop = false, body)
+
+    private inline fun <T> entered(drop: Boolean, body: () -> T): T {
         val session = s
         if (session.depth++ == 0) session.clock = now
         try {
@@ -356,7 +369,7 @@ class VelleSystem(
         } finally {
             if (--session.depth == 0 && session.txn == null) {
                 endUnit(Outcome.Committed)
-                sessions.remove()
+                if (drop) sessions.remove() else beginSnapshot()
             }
         }
     }
@@ -2013,30 +2026,30 @@ class VelleSystem(
     }
 
     /** Is the record [id] returned to [viewer]? The engineer's own view (null) sees everything. */
-    fun visibleTo(viewer: Long?, id: Long): Boolean {
+    fun visibleTo(viewer: Long?, id: Long): Boolean = reading {
         if (viewer == null) return true
         val inst = instance(id) ?: return false
         val clauses = model.recordVisibility(inst.shape)
         if (clauses.isEmpty()) return true
-        return clauses.any { admits(it, viewer, inst.shape, id) }
+        clauses.any { admits(it, viewer, inst.shape, id) }
     }
 
     /** The members of [id], read as [scope], that [viewer] may not see: a field with
      *  clauses none of which admit the viewer. Empty for the engineer's own view. */
-    fun hiddenFields(viewer: Long?, id: Long, scope: String? = null): Set<String> {
+    fun hiddenFields(viewer: Long?, id: Long, scope: String? = null): Set<String> = reading {
         if (viewer == null) return emptySet()
         val inst = instance(id) ?: return emptySet()
         val sc = scope ?: inst.shape
-        return model.membersOf(sc).values
+        model.membersOf(sc).values
             .filter { m -> m.visible.isNotEmpty() && m.visible.none { admits(it, viewer, sc, id) } }
             .map { it.name }.toSet()
     }
 
     /** The record behind [id] is current and returned to [viewer]: the fetch half of a viewer's read. */
-    fun visibleCurrent(viewer: Long?, id: Long): Boolean {
+    fun visibleCurrent(viewer: Long?, id: Long): Boolean = reading {
         openReadSnapshot()
         if (id in pendingDeleted) return false
-        return instance(id) != null && visibleTo(viewer, id)
+        instance(id) != null && visibleTo(viewer, id)
     }
 
     // ── the read protocol (Reference §22, the composed query; Read.kt) ──────────
@@ -2062,19 +2075,19 @@ class VelleSystem(
      * A row the open envelope is still creating has no key yet; its handle stands
      * in, which only a rejection's own rendering ever reads.
      */
-    fun refFor(id: Long): Ref.Persisted {
+    fun refFor(id: Long): Ref.Persisted = reading {
         val shape = idShape[id] ?: instance(id)?.shape ?: throw IllegalArgumentException("no instance $id")
-        return Ref.Persisted(shape, keyOf[id] ?: StoreKey(id))
+        Ref.Persisted(shape, keyOf[id] ?: StoreKey(id))
     }
 
     /** The session handle behind a reference, minted for this thread's session. */
     fun idOf(ref: Keyed): Long = handleForRef(Ref.Persisted(ref.shape, ref.key))
 
     /** The concrete shape of a current instance, from a fresh snapshot outside a transaction; null when gone. */
-    fun currentShapeOf(id: Long): String? {
+    fun currentShapeOf(id: Long): String? = reading {
         openReadSnapshot()
         if (id in pendingDeleted) return null
-        return instance(id)?.shape
+        instance(id)?.shape
     }
 
     /**
@@ -2083,11 +2096,11 @@ class VelleSystem(
      * snapshot outside a transaction, so the data class built next is one
      * consistent read.
      */
-    fun exists(root: String, id: Long): Boolean {
+    fun exists(root: String, id: Long): Boolean = reading {
         openReadSnapshot()
         val inst = instance(id) ?: return false
         if (id in pendingDeleted) return false
-        return when {
+        when {
             root in model.shapes -> inst.shape == root
             root in model.refinements -> evaluator.memberOfRefExpr(id, RefName(root))
             else -> throw IllegalArgumentException("unknown shape or refinement '$root'")
@@ -2098,42 +2111,47 @@ class VelleSystem(
     fun check(q: Query): List<Diagnostic> = queries.check(q)
 
     /** Answers a query: handles in the requested order, plus the next page's cursor. Throws [QueryRefused]. */
-    fun query(q: Query): QueryResult = queries.run(q)
+    fun query(q: Query): QueryResult = reading { queries.run(q) }
 
-    fun count(q: Query): Int = queries.count(q)
+    fun count(q: Query): Int = reading { queries.count(q) }
 
-    fun sum(q: Query, member: String): BigDecimal = queries.sum(q, member)
-    fun sumValue(q: Query, member: String): Value = queries.sumValue(q, member)
+    fun sum(q: Query, member: String): BigDecimal = reading { queries.sum(q, member) }
+    fun sumValue(q: Query, member: String): Value = reading { queries.sumValue(q, member) }
 
     // ── query surface (read-only; the typed-accessor codegen wraps this) ─────
 
-    fun instancesOf(name: String): List<Long> = when {
-        name in model.shapes -> idsOf(name)
-        name in model.refinements -> {
-            val bases = model.basesOf(name)
-            val ids = if (bases.size == 1) idsOfCandidates(bases.single(), queryCompiler().filterFor(RefName(name)))
-            else bases.flatMap { idsOf(it) } // a cross-base union: every operand's instances (Reference §9)
-            ids.filter { evaluator.memberOfRefExpr(it, RefName(name)) }
+    fun instancesOf(name: String): List<Long> = reading {
+        when {
+            name in model.shapes -> idsOf(name)
+            name in model.refinements -> {
+                val bases = model.basesOf(name)
+                val ids = if (bases.size == 1) idsOfCandidates(bases.single(), queryCompiler().filterFor(RefName(name)))
+                else bases.flatMap { idsOf(it) } // a cross-base union: every operand's instances (Reference §9)
+                ids.filter { evaluator.memberOfRefExpr(it, RefName(name)) }
+            }
+            else -> throw IllegalArgumentException("unknown shape or refinement '$name'")
         }
-        else -> throw IllegalArgumentException("unknown shape or refinement '$name'")
     }
 
-    fun isMember(id: Long, refinement: String): Boolean =
+    fun isMember(id: Long, refinement: String): Boolean = reading {
         evaluator.memberOfRefExpr(id, RefName(refinement))
+    }
 
     /** The concrete base shape of an instance — which operand a union-typed reference points at (Reference §9). */
-    fun shapeOf(id: Long): String =
+    fun shapeOf(id: Long): String = reading {
         instance(id)?.shape ?: throw IllegalArgumentException("no instance $id")
+    }
 
     /** Read a field — stored, derived, timestamp, capture, or inverse collection — unwrapped. */
-    fun get(id: Long, field: String): Any? {
+    fun get(id: Long, field: String): Any? = reading {
         val inst = instance(id) ?: throw IllegalArgumentException("no instance $id")
-        return unwrap(evaluator.readMember(id, inst.shape, field))
+        unwrap(evaluator.readMember(id, inst.shape, field))
     }
 
     /** Read a refinement-scoped member (a capture or refinement-derived property). */
-    fun getAs(id: Long, refinement: String, field: String): Any? =
+    fun getAs(id: Long, refinement: String, field: String): Any? = reading {
         unwrap(evaluator.readMember(id, refinement, field))
+    }
 
     private fun unwrap(v: Value): Any? = when (v) {
         is Value.VNum -> v.v
