@@ -138,9 +138,33 @@ when (val c = sys.read(comment.target)) {       // the model object of the concr
 
 A generated system also holds a numeric handle for every record it has touched. The handle is private to one running system and never reaches the engineer: it is not the store's key, two running copies of the same system give one row different handles, and a restart forgets them all. If a `Long` shows up in the generated code, it is one of these, and nothing on the surface takes or returns it.
 
+## What a read remembers
+
+A read goes to the store. The generated system keeps no copy of your records between calls: every `read(...)`, `read.<shape>(key)`, and query starts with nothing in hand, fetches the rows it needs from the store, and forgets them when the next read starts. Knowing this tells you what a read returns after your own code, or your database, has changed a row behind Velle's back.
+
+A controller commits an act and then reads the record back to answer the request. The database has a trigger that fills in a column on that row when the commit lands. The engineer wants to know whether the read shows the trigger's value or the value Velle computed. From `examples/billing/billing.velle`, inside one `api.scope { }` ([Serving a system](Serving-a-system)):
+
+```kotlin
+val result = billing.commit(NewSignUp("Ada", "ada@x.com"))
+val ref = (result as Commit.Accepted).ref
+val customer = billing.read(ref)              // fetched from the store now, trigger's value included
+val same = billing.read(ref)                  // fetched again: nothing was kept from the line above
+val invoices = billing.read.invoices.orderBy { due.ascending }.list()   // one fetch per invoice, one per distinct customer they reach
+```
+
+- `billing.commit` runs the transaction and writes the commit to the store. What it built in memory is dropped the moment a read begins.
+- `billing.read(ref)` fetches the row from the store, so a column your trigger changed reads as the trigger left it, provided the spec declares that column as a stored field. A column the spec does not name is invisible to Velle.
+- The second `read(ref)` fetches the row again. Two reads in a row cost two fetches; the generated system does not remember the first.
+- Inside one read, rows are fetched once. A query over many invoices reads each customer those invoices reach one time, however many invoices share it. The memory lasts for that one read and no longer.
+- Over a store that gives snapshots, every read inside one `api.scope { }` or one `scope { }` on the system sees the same state, even though each fetches afresh; a commit from elsewhere shows up on the next scope ([Store API](Store-API), "The unit of work").
+
+A row your trigger changes is a write Velle did not make. If the spec reads that field, the rules and prohibitions of the commit evaluated the value before the trigger ran, and the next commit sees a change no act caused ([Store API](Store-API), "What a store must do"). Keep such columns out of the spec, or put the calculation in a derived property ([§7](Reference-07-Derived-properties)) where the spec can see it.
+
+The compiler checks nothing here. The behavior is pinned by `compiler/src/test/kotlin/velle/WorkingSetTest.kt`, which runs the generic surface over an in-memory store that counts every fetch and lets the test change a row beside the runtime, as a trigger would.
+
 ## The raw surface
 
-The runtime's own `commit(shape, fields, parts)` takes maps instead of classes, and the generated specs use it. The generated functions that build model objects from handles are private to the generated class; `read` is the only way to get a model object. A generated system extends `GeneratedSystem`, and its readers extend `ReadSurface` and `ViewerReadSurface`; those hold what every spec's surface does the same way, and nothing on them beyond what this page names is for the engineer to call. A nested value is a map carrying `"@shape"` when the field's type is a union; a value others point at carries `"@new"` with a number, and the pointing field holds `NewRef(number)`. The generated classes produce these maps, so hand-written code rarely needs them.
+The runtime's own `commit(shape, fields, parts)` takes maps instead of classes, and the generated specs use it. One difference from the generated surface matters: the runtime's `get(handle, field)` starts no read, so called right after `commit` with nothing in between it answers from the rows the commit built, not from the store (`compiler/src/test/kotlin/velle/WorkingSetTest.kt`, "a bare get after a commit"). The generated `read` never does this. The generated functions that build model objects from handles are private to the generated class; `read` is the only way to get a model object. A generated system extends `GeneratedSystem`, and its readers extend `ReadSurface` and `ViewerReadSurface`; those hold what every spec's surface does the same way, and nothing on them beyond what this page names is for the engineer to call. A nested value is a map carrying `"@shape"` when the field's type is a union; a value others point at carries `"@new"` with a number, and the pointing field holds `NewRef(number)`. The generated classes produce these maps, so hand-written code rarely needs them.
 
 ## Related pages
 
