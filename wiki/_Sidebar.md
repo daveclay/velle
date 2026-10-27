@@ -44,6 +44,7 @@
 - [[Extension functions|Extension-functions]]
 - [[Store API|Store-API]]
 - [[Serving a system|Serving-a-system]]
+- [[The API layer|API-layer]]
 
 **Notes**
 

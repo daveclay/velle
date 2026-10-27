@@ -60,6 +60,7 @@ Walkthroughs that gather what the Reference and the normative documents settle, 
 - [[Extension functions|Extension-functions]] — a function an engineer adds in Kotlin and a spec calls like `abs`: calling one, writing one against the capabilities a type implements, and how Velle's own functions are written the same way
 - [[Store API|Store-API]] — the contract between a running system and the database that holds its records: connecting a store, the reads and the commit a store must get right, and the one read it may narrow to make a sweep faster
 - [[Serving a system|Serving-a-system]] — a spec behind REST and GraphQL on Spring Boot over PostgreSQL by declaring one bean: the endpoints, the schema, the JSON an act's input takes, who is calling, the schedules, and the console
+- [[The API layer|API-layer]] — how that is built, class by class: the operations in `apis/json`, the GraphQL schema from the model, the Spring Boot starter's beans, one request end to end, and how to replace a transport, a store, or the identity
 
 ## Working notes
 
