@@ -123,6 +123,11 @@ data class ArchivedInvoiceCapture(
  * predicate in memory — so a correct implementation may even return all rows.
  */
 interface BillingStore {
+    // ── the unit of work the reads below run in (Hydration.kt, StateResolver.begin) ──
+    /** Opens one read or one envelope against this store. A store over a database
+     *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
+    fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
+
     // ── keyed reads ──
     fun customer(key: StoreKey): CustomerRow?
     fun correctEmail(key: StoreKey): CorrectEmailRow?
@@ -219,6 +224,8 @@ open class BillingStoreOverGeneric(
 ) : BillingStore {
     private val questions = BillingStoreQuestions(model)
 
+    override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
+
     override fun customer(key: StoreKey): CustomerRow? = backend.fetchByKey("Customer", key)?.toCustomerRow()
     override fun correctEmail(key: StoreKey): CorrectEmailRow? = backend.fetchByKey("CorrectEmail", key)?.toCorrectEmailRow()
     override fun invoice(key: StoreKey): InvoiceRow? = backend.fetchByKey("Invoice", key)?.toInvoiceRow()
@@ -314,6 +321,8 @@ class BillingStoreResolver(
     model: Model,
 ) : StateResolver {
     private val questions = BillingStoreQuestions(model)
+
+    override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
         "Customer" -> store.customer(key)?.toRow()

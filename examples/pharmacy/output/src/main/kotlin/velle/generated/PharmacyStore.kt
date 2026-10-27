@@ -432,6 +432,11 @@ data class ReadyForPickupCapture(
  * predicate in memory — so a correct implementation may even return all rows.
  */
 interface PharmacyStore {
+    // ── the unit of work the reads below run in (Hydration.kt, StateResolver.begin) ──
+    /** Opens one read or one envelope against this store. A store over a database
+     *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
+    fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
+
     // ── keyed reads ──
     fun staff(key: StoreKey): StaffRow?
     fun licenceRenewal(key: StoreKey): LicenceRenewalRow?
@@ -798,6 +803,8 @@ open class PharmacyStoreOverGeneric(
     model: Model,
 ) : PharmacyStore {
     private val questions = PharmacyStoreQuestions(model)
+
+    override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
     override fun staff(key: StoreKey): StaffRow? = backend.fetchByKey("Staff", key)?.toStaffRow()
     override fun licenceRenewal(key: StoreKey): LicenceRenewalRow? = backend.fetchByKey("LicenceRenewal", key)?.toLicenceRenewalRow()
@@ -1210,6 +1217,8 @@ class PharmacyStoreResolver(
     model: Model,
 ) : StateResolver {
     private val questions = PharmacyStoreQuestions(model)
+
+    override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
         "Staff" -> store.staff(key)?.toRow()

@@ -93,10 +93,26 @@ data class Row(val shape: String, val key: StoreKey, val fields: Map<String, Any
 /**
  * The read half: the typed questions evaluation can ask of storage — by key,
  * by reference (the join read), by shape (the scan read, filtered or not), and
- * per-membership capture memory. Fetches are cached per envelope by the
- * runtime — one consistent snapshot per transaction, never re-issued (evaluation.md U1).
+ * per-membership capture memory — and the unit of work they run in ([begin]).
+ * Fetches are cached per envelope by the runtime — one consistent snapshot per
+ * transaction, never re-issued (evaluation.md U1).
  */
 interface StateResolver {
+    /**
+     * The runtime is about to do one unit of work against this store: a read (one
+     * query, answered from one consistent state) or a write (one commit or tick
+     * firing's envelope). The store opens whatever makes that true for it, a
+     * pooled connection and a transaction for a database, nothing for a store
+     * that needs nothing, and returns the handle the runtime will [UnitOfWork.end]
+     * when the work is over. Every fetch below, and the commit callback, runs
+     * between the two. A read unit begins at the first fetch of a query and ends
+     * when the query's scope closes; a write unit begins before the envelope
+     * computes its queue keys and ends after the commit callback has run or the
+     * envelope has been rolled back. The default does nothing, for a store with
+     * nothing to open.
+     */
+    fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
+
     /** Fetch one row by the store's own key — following a to-one reference. */
     fun fetchByKey(shape: String, key: StoreKey): Row?
 
@@ -195,6 +211,78 @@ data class CommitSet(
      *  reusing default), or the dangling reference silently points at a
      *  stranger. Capture memory keyed on the row goes with it. */
     data class Deletion(val target: Ref.Persisted)
+}
+
+/** Which of the two units of work the runtime is opening ([StateResolver.begin]). */
+enum class WorkKind {
+    /** One query: answered from one consistent state, writes nothing, takes no queue key. */
+    READ,
+    /** One envelope: a commit or a tick firing, which may write and takes the queue keys it needs. */
+    WRITE,
+}
+
+/**
+ * One unit of work the store opened ([StateResolver.begin]) and the runtime
+ * will close. For a write the runtime first says which queue keys the envelope
+ * revolves around ([serialize]), once it has computed their values against
+ * pre-commit state (`evaluation.md`, "serialization domain": a key's concrete
+ * value is fixed at admission, before the envelope's work runs); the store
+ * takes whatever locks make two envelopes sharing a key run one at a time, and
+ * returns when it holds them. The runtime then drops everything it read while
+ * computing the keys and evaluates the envelope against state read after the
+ * locks were taken. [end] closes the unit with how it went: the store commits
+ * on [Outcome.Committed] and rolls back on anything else, then releases what it
+ * opened. A failure in [serialize] (a lock the store could not take in time)
+ * fails the envelope as an in-envelope failure (U2).
+ */
+interface UnitOfWork {
+    /** The queue keys this write revolves around; the store serializes on them. A read never calls this. */
+    fun serialize(keys: Set<AdmissionKey>) {}
+
+    /** The unit is over: commit or roll back, release what was opened. Called exactly once. */
+    fun end(outcome: Outcome) {}
+
+    /** The unit of a store with nothing to open. */
+    object None : UnitOfWork
+}
+
+/** How a unit of work ended ([UnitOfWork.end]). */
+sealed interface Outcome {
+    /** A read that answered, or an envelope whose commit callback ran: the store makes it durable. */
+    data object Committed : Outcome
+    /** A `never` refused the envelope (Reference §21): nothing to make durable. */
+    data object Refused : Outcome
+    /** The envelope failed inside: the commit callback or a lock threw. Nothing to make durable. */
+    data class Failed(val cause: Throwable) : Outcome
+}
+
+/**
+ * A queue key with its value fixed at admission (`evaluation.md`, "serialization
+ * domain"): what two envelopes must not both hold at once. The compiler derives
+ * the keys per act and per schedule-fired rule; the runtime evaluates them
+ * against the act's inputs and pre-commit state as the envelope opens; the store
+ * serializes on them however it can, a lock per key in a database. [text] is
+ * the one stable spelling a store hashes or sorts by: `Account#17`,
+ * `Customer.email=ada@example.com`, `Invoice`.
+ */
+sealed interface AdmissionKey : Comparable<AdmissionKey> {
+    val text: String
+    override fun compareTo(other: AdmissionKey): Int = text.compareTo(other.text)
+
+    /** The envelope's work revolves around one row storage holds. */
+    data class Row(val shape: String, val key: StoreKey) : AdmissionKey {
+        override val text get() = "$shape#${key.value}"
+    }
+
+    /** The envelope commits a value another envelope may commit too (the uniqueness case): queue per equal value. */
+    data class Value(val shape: String, val field: String, val canonical: String) : AdmissionKey {
+        override val text get() = "$shape.$field=$canonical"
+    }
+
+    /** A whole-shape width: every envelope touching [shape] shares one queue. */
+    data class Shape(val shape: String) : AdmissionKey {
+        override val text get() = shape
+    }
 }
 
 fun interface CommitCallback {

@@ -61,6 +61,11 @@ data class ReservationRow(
  * predicate in memory — so a correct implementation may even return all rows.
  */
 interface OrdersStore {
+    // ── the unit of work the reads below run in (Hydration.kt, StateResolver.begin) ──
+    /** Opens one read or one envelope against this store. A store over a database
+     *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
+    fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
+
     // ── keyed reads ──
     fun customer(key: StoreKey): CustomerRow?
     fun product(key: StoreKey): ProductRow?
@@ -105,6 +110,8 @@ open class OrdersStoreOverGeneric(
 ) : OrdersStore {
     private val questions = OrdersStoreQuestions(model)
 
+    override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
+
     override fun customer(key: StoreKey): CustomerRow? = backend.fetchByKey("Customer", key)?.toCustomerRow()
     override fun product(key: StoreKey): ProductRow? = backend.fetchByKey("Product", key)?.toProductRow()
     override fun order(key: StoreKey): OrderRow? = backend.fetchByKey("Order", key)?.toOrderRow()
@@ -141,6 +148,8 @@ class OrdersStoreResolver(
     model: Model,
 ) : StateResolver {
     private val questions = OrdersStoreQuestions(model)
+
+    override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
         "Customer" -> store.customer(key)?.toRow()

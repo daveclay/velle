@@ -1,6 +1,9 @@
 package velle.sql
 
+import velle.AdmissionKey
+import java.sql.Connection
 import java.sql.ResultSet
+import java.time.Duration
 
 /**
  * What one SQL database contributes to [SqlStore]: a column for each
@@ -9,12 +12,49 @@ import java.sql.ResultSet
  * derived from the model, the reads, the `WHERE` rendering, the commit, is the
  * layer's and the same over every dialect.
  *
- * A dialect is built per connection, since some (SQLite) install functions on it.
+ * A dialect also says how one unit of work (Hydration.kt, [velle.UnitOfWork])
+ * maps onto the database: how a read's and a write's transaction begin, and how
+ * the queue keys an envelope revolves around become locks the database holds
+ * until the transaction ends. A dialect is stateless and shared; what it needs
+ * on a connection it installs in [prepare], which the store calls on every
+ * connection it takes.
  */
 interface SqlDialect {
 
     /** The database's name, for messages: `SQLite`, `PostgreSQL`. */
     val name: String
+
+    /**
+     * Whether [lock] serializes envelopes sharing a queue key across every
+     * connection and process on this database. False for a database with one
+     * writer at a time, where the keys add nothing.
+     */
+    val serializesKeys: Boolean get() = false
+
+    /** Installs what the dialect needs on a connection the store just took from its `DataSource`; idempotent. */
+    fun prepare(conn: Connection) {}
+
+    /**
+     * Begins a read unit's transaction on [conn]: one consistent state for every
+     * statement until the store rolls it back, a snapshot where the database has
+     * one. The default is a plain transaction at the connection's isolation.
+     */
+    fun beginRead(conn: Connection) { conn.autoCommit = false }
+
+    /**
+     * Begins a write unit's transaction on [conn]. Read committed, not a snapshot:
+     * the envelope's locks are taken after this begins, and what it then reads
+     * must be the state behind those locks.
+     */
+    fun beginWrite(conn: Connection) { conn.autoCommit = false }
+
+    /**
+     * Takes one lock per key inside the write transaction begun on [conn], in the
+     * given order, waiting at most [timeout] for each; the locks go when the
+     * transaction ends. Throws when a lock could not be taken in time. The default
+     * takes none, for a database that serializes writers itself.
+     */
+    fun lock(conn: Connection, keys: List<AdmissionKey>, timeout: Duration) {}
 
     /**
      * DDL of a shape table's key column, after `id`: the database mints the key

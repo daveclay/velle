@@ -20,7 +20,13 @@ import velle.canonicalAny
 import velle.equalAny
 import velle.ext.VelleType
 import java.math.BigDecimal
+import velle.AdmissionKey
+import velle.Outcome
+import velle.UnitOfWork
+import velle.WorkKind
 import java.sql.Connection
+import java.time.Duration
+import javax.sql.DataSource
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 
@@ -50,6 +56,13 @@ import java.sql.ResultSet
  *   ([Model.captureSchemas] states exactly what must survive).
  * - Keys are minted by the database ([SqlDialect.keyColumn]) and never reused.
  *
+ * Connections: the store holds a `DataSource`, never a connection. Each unit of
+ * work the runtime opens (Hydration.kt, [StateResolver.begin]) takes one
+ * connection and one transaction, a read's snapshot or an envelope's write, and
+ * returns the connection when the unit ends; the envelope's queue keys are
+ * locked through the dialect inside that transaction. A read the runtime did
+ * not issue runs on a connection taken for that one call.
+ *
  * Every scalar column is a [StorageClass] held as the dialect says: a builtin
  * type's own class with the value as carrier, or the class an extension type's
  * [SqlTypeBinding] names, with the binding's encoding. The store refuses to
@@ -58,21 +71,80 @@ import java.sql.ResultSet
  */
 open class SqlStore(
     private val model: Model,
-    private val conn: Connection,
+    private val dataSource: DataSource,
     val dialect: SqlDialect,
     bindings: List<SqlTypeBinding<*>> = SqlTypeBinding.load(),
+    /** How long a write unit waits for one of its queue-key locks before the envelope fails. */
+    private val lockTimeout: Duration = Duration.ofSeconds(10),
 ) : StateResolver, CommitCallback {
 
     companion object {
         /**
-         * The one-line setup: create the schema for [system]'s model in [conn]
-         * and connect the system through this store, both halves of the protocol.
+         * The one-line setup: create the schema for [system]'s model in the
+         * database behind [dataSource] and connect the system through this
+         * store, both halves of the protocol.
          */
-        fun attach(system: VelleSystem, conn: Connection, dialect: SqlDialect, bindings: List<SqlTypeBinding<*>> = SqlTypeBinding.load()): SqlStore =
-            SqlStore(system.model, conn, dialect, bindings).also {
+        fun attach(system: VelleSystem, dataSource: DataSource, dialect: SqlDialect, bindings: List<SqlTypeBinding<*>> = SqlTypeBinding.load()): SqlStore =
+            SqlStore(system.model, dataSource, dialect, bindings).also {
                 it.createSchema()
                 system.connect(it, it)
             }
+    }
+
+    // ── the unit of work: a connection and a transaction for exactly as long as the runtime works ──
+
+    /**
+     * One unit of work (Hydration.kt, [UnitOfWork]) on one connection taken from
+     * the `DataSource` at [begin] and returned at [end]. A read runs in the
+     * transaction [SqlDialect.beginRead] opens and is rolled back at the end,
+     * having written nothing; a write runs in [SqlDialect.beginWrite]'s, takes
+     * its queue-key locks through [SqlDialect.lock] in sorted order, and is
+     * committed at the end when the envelope was, rolled back otherwise.
+     */
+    private inner class SqlUnit(val conn: Connection, val kind: WorkKind) : UnitOfWork {
+        override fun serialize(keys: Set<AdmissionKey>) {
+            if (kind == WorkKind.WRITE && keys.isNotEmpty()) dialect.lock(conn, keys.sorted(), lockTimeout)
+        }
+
+        override fun end(outcome: Outcome) {
+            try {
+                if (kind == WorkKind.WRITE && outcome is Outcome.Committed) conn.commit() else conn.rollback()
+            } finally {
+                current.remove()
+                runCatching { conn.autoCommit = true }
+                conn.close()
+            }
+        }
+    }
+
+    /** The unit the calling thread is working in; a unit is one thread's from begin to end. */
+    private val current = ThreadLocal<SqlUnit?>()
+
+    override fun begin(kind: WorkKind): UnitOfWork {
+        check(current.get() == null) { "a unit of work is already open on this thread" }
+        val conn = dataSource.connection
+        try {
+            dialect.prepare(conn)
+            if (kind == WorkKind.READ) dialect.beginRead(conn) else dialect.beginWrite(conn)
+        } catch (e: Exception) {
+            runCatching { conn.close() }
+            throw e
+        }
+        return SqlUnit(conn, kind).also { current.set(it) }
+    }
+
+    /**
+     * Runs [body] on the open unit's connection, or, outside any unit (a read
+     * the runtime did not issue, such as a typed store called from the
+     * engineer's own code), on a connection taken for this one call and
+     * returned after it.
+     */
+    private fun <T> onConnection(body: (Connection) -> T): T {
+        current.get()?.let { return body(it.conn) }
+        return dataSource.connection.use { conn ->
+            dialect.prepare(conn)
+            body(conn)
+        }
     }
 
     private val bindings: Map<String, SqlTypeBinding<*>> = bindings.associateBy { it.type }
@@ -91,7 +163,7 @@ open class SqlStore(
         }
     }
 
-    private fun <T : Any> roundTrip(type: VelleType<T>, b: SqlTypeBinding<*>) {
+    private fun <T : Any> roundTrip(type: VelleType<T>, b: SqlTypeBinding<*>) = onConnection { conn ->
         val samples: List<Any> = type.samples.let { s -> listOfNotNull(s.sample, s.below?.invoke(s.sample), s.above?.invoke(s.sample)) }
         val col = extensionColumn(b)
         conn.createStatement().use { it.execute("CREATE TEMP TABLE velle_e4 (v ${col.columnType})") }
@@ -225,7 +297,7 @@ open class SqlStore(
         else -> scalarColumn(t).columnType
     }
 
-    fun createSchema() {
+    fun createSchema() = onConnection { conn ->
         conn.createStatement().use { st ->
             for (shape in persistedShapes) {
                 val cols = columnsOf(shape).joinToString("") { c ->
@@ -284,7 +356,7 @@ open class SqlStore(
 
     override fun fetchCaptures(instance: Ref.Persisted, refinement: String): Map<String, Any?>? {
         val cs = model.captureSchemas.find { it.refinement == refinement } ?: return null
-        return conn.prepareStatement("""SELECT * FROM "${captureTable(refinement)}" WHERE id = ?""").use { ps ->
+        return onConnection { conn -> conn.prepareStatement("""SELECT * FROM "${captureTable(refinement)}" WHERE id = ?""").use { ps ->
             ps.setLong(1, keyLong(instance.key))
             ps.executeQuery().use { rs ->
                 if (!rs.next()) null
@@ -295,7 +367,7 @@ open class SqlStore(
                     }
                 }
             }
-        }
+        } }
     }
 
     /**
@@ -316,12 +388,12 @@ open class SqlStore(
         val r = WhereRenderer()
         val where = r.render(filter, shape, "t0", positive = true)
         if (where == "TRUE") return fetchAll(shape)
-        return conn.prepareStatement("""SELECT t0.* FROM "$shape" t0 WHERE $where ORDER BY t0.id""").use { ps ->
+        return onConnection { conn -> conn.prepareStatement("""SELECT t0.* FROM "$shape" t0 WHERE $where ORDER BY t0.id""").use { ps ->
             r.binds.forEachIndexed { i, b -> ps.setObject(i + 1, b) }
             ps.executeQuery().use { rs ->
                 buildList { while (rs.next()) add(readRow(shape, rs)) }
             }
-        }
+        } }
     }
 
     private inner class WhereRenderer {
@@ -431,13 +503,14 @@ open class SqlStore(
         }
     }
 
-    private fun select(shape: String, where: String, bind: (PreparedStatement) -> Unit = {}): List<Row> =
+    private fun select(shape: String, where: String, bind: (PreparedStatement) -> Unit = {}): List<Row> = onConnection { conn ->
         conn.prepareStatement("""SELECT * FROM "$shape" $where ORDER BY id""").use { ps ->
             bind(ps)
             ps.executeQuery().use { rs ->
                 buildList { while (rs.next()) add(readRow(shape, rs)) }
             }
         }
+    }
 
     private fun readRow(shape: String, rs: ResultSet): Row {
         val key = rs.getLong("id")
@@ -463,7 +536,7 @@ open class SqlStore(
     }
 
     /** A collection's members in membership order (the junction's `pos` column). */
-    private fun readCollection(shape: String, coll: Coll, owner: Long): List<Any> =
+    private fun readCollection(shape: String, coll: Coll, owner: Long): List<Any> = onConnection { conn ->
         conn.prepareStatement("""SELECT * FROM "${junctionTable(shape, coll.name)}" WHERE owner = ? ORDER BY pos""").use { ps ->
             ps.setLong(1, owner)
             ps.executeQuery().use { rs ->
@@ -478,6 +551,7 @@ open class SqlStore(
                 }
             }
         }
+    }
 
     // ── the commit callback: the transaction's mutation set, atomically ──────
 
@@ -495,22 +569,36 @@ open class SqlStore(
      * place — the absorbing reference the runtime reads as absent.
      */
     override fun onCommit(commit: CommitSet): List<StoreKey> {
-        conn.autoCommit = false
-        try {
-            val minted = mutableListOf<StoreKey>()
-            for (c in commit.created) minted.add(insert(c, minted))
-            for (a in commit.assigned) update(a, minted)
-            for (c in commit.captured) upsertCapture(c, minted)
-            for (r in commit.retracted) deleteCapture(r)
-            for (d in commit.deleted) delete(d)
-            conn.commit()
-            return minted
-        } catch (e: Exception) {
-            conn.rollback()
-            throw e
-        } finally {
-            conn.autoCommit = true
+        val unit = current.get()
+        // inside the envelope's write unit the statements join its transaction, which
+        // the unit's end commits; outside one (a commit set applied by hand) they
+        // get a transaction of their own
+        if (unit != null) {
+            check(unit.kind == WorkKind.WRITE) { "a commit arrived inside a read unit of work" }
+            return write(unit.conn, commit)
         }
+        return dataSource.connection.use { conn ->
+            dialect.prepare(conn)
+            dialect.beginWrite(conn)
+            try {
+                write(conn, commit).also { conn.commit() }
+            } catch (e: Exception) {
+                conn.rollback()
+                throw e
+            } finally {
+                runCatching { conn.autoCommit = true }
+            }
+        }
+    }
+
+    private fun write(conn: Connection, commit: CommitSet): List<StoreKey> {
+        val minted = mutableListOf<StoreKey>()
+        for (c in commit.created) minted.add(insert(conn, c, minted))
+        for (a in commit.assigned) update(conn, a, minted)
+        for (c in commit.captured) upsertCapture(conn, c, minted)
+        for (r in commit.retracted) deleteCapture(conn, r)
+        for (d in commit.deleted) delete(conn, d)
+        return minted
     }
 
     /** A reference value as this store's key column: persisted refs carry
@@ -524,7 +612,7 @@ open class SqlStore(
     private fun refShape(v: Any): String =
         (v as? RowRef)?.shape ?: throw IllegalArgumentException("reference value is not a Ref: $v")
 
-    private fun insert(c: CommitSet.Creation, minted: List<StoreKey>): StoreKey {
+    private fun insert(conn: Connection, c: CommitSet.Creation, minted: List<StoreKey>): StoreKey {
         val cols = columnsOf(c.shape)
         val names = cols.flatMap { col -> listOf(col.name) + if (col.union) listOf(shapeColumn(col.name)) else emptyList() }
         // the minted key comes back with the insert (standard SQL `RETURNING`)
@@ -539,11 +627,11 @@ open class SqlStore(
             }
             ps.executeQuery().use { rs -> rs.next(); StoreKey(rs.getLong(1)) }
         }
-        for (coll in collectionsOf(c.shape)) writeCollection(c.shape, coll, keyLong(key), c.fields[coll.name], minted)
+        for (coll in collectionsOf(c.shape)) writeCollection(conn, c.shape, coll, keyLong(key), c.fields[coll.name], minted)
         return key
     }
 
-    private fun update(a: CommitSet.Assign, minted: List<StoreKey>) {
+    private fun update(conn: Connection, a: CommitSet.Assign, minted: List<StoreKey>) {
         val shape = a.target.shape
         collectionsOf(shape).find { it.name == a.field }?.let { coll ->
             // whole-set replacement: the junction rows become exactly the new set
@@ -551,7 +639,7 @@ open class SqlStore(
                 ps.setLong(1, keyLong(a.target.key))
                 ps.executeUpdate()
             }
-            writeCollection(shape, coll, keyLong(a.target.key), a.value, minted)
+            writeCollection(conn, shape, coll, keyLong(a.target.key), a.value, minted)
             return
         }
         val col = columnsOf(shape).first { it.name == a.field }
@@ -565,7 +653,7 @@ open class SqlStore(
         }
     }
 
-    private fun writeCollection(shape: String, coll: Coll, owner: Long, value: Any?, minted: List<StoreKey>) {
+    private fun writeCollection(conn: Connection, shape: String, coll: Coll, owner: Long, value: Any?, minted: List<StoreKey>) {
         val members = value as? List<*> ?: return // absent reads as the empty collection
         if (members.isEmpty()) return
         val table = junctionTable(shape, coll.name)
@@ -585,7 +673,7 @@ open class SqlStore(
         }
     }
 
-    private fun upsertCapture(c: CommitSet.Capture, minted: List<StoreKey>) {
+    private fun upsertCapture(conn: Connection, c: CommitSet.Capture, minted: List<StoreKey>) {
         val cs = model.captureSchemas.first { it.refinement == c.refinement }
         val names = listOf("id") + cs.props.map { it.name }
         // re-entry overwrites the previous membership's memory (standard SQL upsert)
@@ -601,7 +689,7 @@ open class SqlStore(
         }
     }
 
-    private fun deleteCapture(r: CommitSet.Retraction) {
+    private fun deleteCapture(conn: Connection, r: CommitSet.Retraction) {
         conn.prepareStatement("""DELETE FROM "${captureTable(r.refinement)}" WHERE id = ?""").use { ps ->
             ps.setLong(1, keyLong(r.instance.key))
             ps.executeUpdate()
@@ -616,7 +704,7 @@ open class SqlStore(
      * out could: the model names every column and junction table that can
      * point at this shape.
      */
-    private fun delete(d: CommitSet.Deletion) {
+    private fun delete(conn: Connection, d: CommitSet.Deletion) {
         val shape = d.target.shape
         val key = keyLong(d.target.key)
         conn.prepareStatement("""DELETE FROM "$shape" WHERE id = ?""").use { ps ->

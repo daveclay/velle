@@ -66,18 +66,23 @@ class DomainAnalysis(private val model: Model) {
         }
     }
 
-    /** Per schedule-fired rule: the derived domain of one firing, keys
-     *  relative to the swept subject (`this`, `this.account`, ...). */
+    /** Per rule: the derived domain of one firing of it on its own, as a
+     *  schedule or the after-commit queue runs it, keys relative to the swept
+     *  subject (`this`, `this.account`, ...). The runtime values these at
+     *  admission for every firing that is its own envelope. */
+    val firingDomains: Map<String, SerializationDomain> by lazy {
+        model.rules.values.associate { r ->
+            val acc = Acc()
+            val events = mutableListOf<Event>()
+            fireRule(r, Anchor.Reach(emptyList()), acc, events)
+            process(events, acc)
+            r.name to acc.toDomain()
+        }
+    }
+
+    /** Per schedule-fired rule: the derived domain of one firing ([firingDomains] for the rules a schedule runs). */
     val scheduledRuleDomains: Map<String, SerializationDomain> by lazy {
-        model.rules.values
-            .filter { r -> r.triggers.any { it != "commit" } }
-            .associate { r ->
-                val acc = Acc()
-                val events = mutableListOf<Event>()
-                fireRule(r, Anchor.Reach(emptyList()), acc, events)
-                process(events, acc)
-                r.name to acc.toDomain()
-            }
+        firingDomains.filterKeys { name -> model.rules.getValue(name).triggers.any { it != "commit" } }
     }
 
     /** Widenings that price per *commit* — act-envelope widths only, grouped

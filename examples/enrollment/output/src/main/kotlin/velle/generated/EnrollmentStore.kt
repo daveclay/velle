@@ -50,6 +50,11 @@ data class StudentRow(
  * predicate in memory — so a correct implementation may even return all rows.
  */
 interface EnrollmentStore {
+    // ── the unit of work the reads below run in (Hydration.kt, StateResolver.begin) ──
+    /** Opens one read or one envelope against this store. A store over a database
+     *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
+    fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
+
     // ── keyed reads ──
     fun advisor(key: StoreKey): AdvisorRow?
     fun course(key: StoreKey): CourseRow?
@@ -67,6 +72,9 @@ interface EnrollmentStore {
     /** Serves refinement ShortCourse — `ShortCourse`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun shortCourseCandidates(): List<CourseRow>
+    /** Serves refinement EarlyCourse — `EarlyCourse`.
+     *  Superset contract: any superset of the matching rows is correct. */
+    fun earlyCourseCandidates(): List<CourseRow>
     /** Serves never #1 — `Course where capacity < 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never1Candidates(): List<CourseRow>
@@ -75,6 +83,7 @@ interface EnrollmentStore {
 /** The candidate questions as recognizable templates (QTemplate). */
 class EnrollmentStoreQuestions(model: Model) {
     val shortCourseCandidates = QTemplate.of(model, "Course", RefName("ShortCourse"))
+    val earlyCourseCandidates = QTemplate.of(model, "Course", RefName("EarlyCourse"))
     val never1Candidates = QTemplate.of(model, "Course", model.nevers[0].target)
 }
 
@@ -87,6 +96,8 @@ open class EnrollmentStoreOverGeneric(
     model: Model,
 ) : EnrollmentStore {
     private val questions = EnrollmentStoreQuestions(model)
+
+    override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
     override fun advisor(key: StoreKey): AdvisorRow? = backend.fetchByKey("Advisor", key)?.toAdvisorRow()
     override fun course(key: StoreKey): CourseRow? = backend.fetchByKey("Course", key)?.toCourseRow()
@@ -103,6 +114,10 @@ open class EnrollmentStoreOverGeneric(
         backend.fetchCandidates("Course", questions.shortCourseCandidates.instantiate(listOf()))
             .map { it.toCourseRow() }
 
+    override fun earlyCourseCandidates(): List<CourseRow> =
+        backend.fetchCandidates("Course", questions.earlyCourseCandidates.instantiate(listOf()))
+            .map { it.toCourseRow() }
+
     override fun never1Candidates(): List<CourseRow> =
         backend.fetchCandidates("Course", questions.never1Candidates.instantiate(listOf()))
             .map { it.toCourseRow() }
@@ -114,6 +129,8 @@ class EnrollmentStoreResolver(
     model: Model,
 ) : StateResolver {
     private val questions = EnrollmentStoreQuestions(model)
+
+    override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
         "Advisor" -> store.advisor(key)?.toRow()
@@ -137,6 +154,8 @@ class EnrollmentStoreResolver(
     override fun fetchCandidates(shape: String, filter: QF): List<Row> {
         if (shape == "Course")
             questions.shortCourseCandidates.match(filter)?.let { h -> return store.shortCourseCandidates().map { it.toRow() } }
+        if (shape == "Course")
+            questions.earlyCourseCandidates.match(filter)?.let { h -> return store.earlyCourseCandidates().map { it.toRow() } }
         if (shape == "Course")
             questions.never1Candidates.match(filter)?.let { h -> return store.never1Candidates().map { it.toRow() } }
         return fetchAll(shape) // unrecognized filters fall back to the scan floor

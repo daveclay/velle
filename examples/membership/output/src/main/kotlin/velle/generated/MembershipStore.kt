@@ -179,6 +179,11 @@ data class ClosedTicketCapture(
  * predicate in memory — so a correct implementation may even return all rows.
  */
 interface MembershipStore {
+    // ── the unit of work the reads below run in (Hydration.kt, StateResolver.begin) ──
+    /** Opens one read or one envelope against this store. A store over a database
+     *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
+    fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
+
     // ── keyed reads ──
     fun plan(key: StoreKey): PlanRow?
     fun member(key: StoreKey): MemberRow?
@@ -336,6 +341,8 @@ open class MembershipStoreOverGeneric(
     model: Model,
 ) : MembershipStore {
     private val questions = MembershipStoreQuestions(model)
+
+    override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
     override fun plan(key: StoreKey): PlanRow? = backend.fetchByKey("Plan", key)?.toPlanRow()
     override fun member(key: StoreKey): MemberRow? = backend.fetchByKey("Member", key)?.toMemberRow()
@@ -504,6 +511,8 @@ class MembershipStoreResolver(
     model: Model,
 ) : StateResolver {
     private val questions = MembershipStoreQuestions(model)
+
+    override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
         "Plan" -> store.plan(key)?.toRow()

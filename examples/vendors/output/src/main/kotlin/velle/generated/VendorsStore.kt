@@ -56,6 +56,11 @@ data class MarginAlertRow(
  * predicate in memory — so a correct implementation may even return all rows.
  */
 interface VendorsStore {
+    // ── the unit of work the reads below run in (Hydration.kt, StateResolver.begin) ──
+    /** Opens one read or one envelope against this store. A store over a database
+     *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
+    fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
+
     // ── keyed reads ──
     fun staff(key: StoreKey): StaffRow?
     fun vendorAssignment(key: StoreKey): VendorAssignmentRow?
@@ -105,6 +110,8 @@ open class VendorsStoreOverGeneric(
 ) : VendorsStore {
     private val questions = VendorsStoreQuestions(model)
 
+    override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
+
     override fun staff(key: StoreKey): StaffRow? = backend.fetchByKey("Staff", key)?.toStaffRow()
     override fun vendorAssignment(key: StoreKey): VendorAssignmentRow? = backend.fetchByKey("VendorAssignment", key)?.toVendorAssignmentRow()
     override fun vendor(key: StoreKey): VendorRow? = backend.fetchByKey("Vendor", key)?.toVendorRow()
@@ -145,6 +152,8 @@ class VendorsStoreResolver(
     model: Model,
 ) : StateResolver {
     private val questions = VendorsStoreQuestions(model)
+
+    override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
         "Staff" -> store.staff(key)?.toRow()

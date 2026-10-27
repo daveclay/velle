@@ -4,19 +4,26 @@ import velle.Model
 import velle.VelleSystem
 import velle.sql.SqlStore
 import velle.sql.SqlTypeBinding
-import java.sql.Connection
+import java.time.Duration
+import javax.sql.DataSource
 
-/** The generic SQL store ([SqlStore]) over PostgreSQL: the layer's mapping and protocol with [PostgresDialect]'s columns. */
+/**
+ * The generic SQL store ([SqlStore]) over PostgreSQL: the layer's mapping and
+ * protocol with [PostgresDialect]'s columns, transactions, and advisory locks.
+ * Each unit of work takes a connection from [dataSource], a pool in a
+ * deployment, and returns it when the unit ends.
+ */
 class PostgresStore(
     model: Model,
-    conn: Connection,
+    dataSource: DataSource,
     bindings: List<SqlTypeBinding<*>> = SqlTypeBinding.load(),
-) : SqlStore(model, conn, PostgresDialect, bindings) {
+    lockTimeout: Duration = Duration.ofSeconds(10),
+) : SqlStore(model, dataSource, PostgresDialect, bindings, lockTimeout) {
 
     companion object {
-        /** Create the schema for [system]'s model in [conn] and connect the system through this store, both halves of the protocol. */
-        fun attach(system: VelleSystem, conn: Connection, bindings: List<SqlTypeBinding<*>> = SqlTypeBinding.load()): PostgresStore =
-            PostgresStore(system.model, conn, bindings).also {
+        /** Create the schema for [system]'s model in the database behind [dataSource] and connect the system through this store, both halves of the protocol. */
+        fun attach(system: VelleSystem, dataSource: DataSource, bindings: List<SqlTypeBinding<*>> = SqlTypeBinding.load()): PostgresStore =
+            PostgresStore(system.model, dataSource, bindings).also {
                 it.createSchema()
                 system.connect(it, it)
             }

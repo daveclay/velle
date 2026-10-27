@@ -92,6 +92,11 @@ data class TransientEditRefusalRow(
  * predicate in memory — so a correct implementation may even return all rows.
  */
 interface PartitionDriftStore {
+    // ── the unit of work the reads below run in (Hydration.kt, StateResolver.begin) ──
+    /** Opens one read or one envelope against this store. A store over a database
+     *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
+    fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
+
     // ── keyed reads ──
     fun note(key: StoreKey): NoteRow?
     fun lockNote(key: StoreKey): LockNoteRow?
@@ -168,6 +173,8 @@ open class PartitionDriftStoreOverGeneric(
 ) : PartitionDriftStore {
     private val questions = PartitionDriftStoreQuestions(model)
 
+    override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
+
     override fun note(key: StoreKey): NoteRow? = backend.fetchByKey("Note", key)?.toNoteRow()
     override fun lockNote(key: StoreKey): LockNoteRow? = backend.fetchByKey("LockNote", key)?.toLockNoteRow()
     override fun unlockNote(key: StoreKey): UnlockNoteRow? = backend.fetchByKey("UnlockNote", key)?.toUnlockNoteRow()
@@ -240,6 +247,8 @@ class PartitionDriftStoreResolver(
     model: Model,
 ) : StateResolver {
     private val questions = PartitionDriftStoreQuestions(model)
+
+    override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
         "Note" -> store.note(key)?.toRow()

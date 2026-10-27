@@ -240,6 +240,32 @@ class VelleSystem(
 
     private var resolver: StateResolver? = null
     private var onCommit: CommitCallback? = null
+
+    /**
+     * The unit of work open against the store (Hydration.kt, [UnitOfWork]): a read
+     * unit, opened at the first fetch of a read and closed when the outermost
+     * [scope] exits or an envelope opens; or the write unit of the envelope in
+     * progress, opened in [inTransaction] before the queue keys are valued and
+     * closed with the envelope's outcome. Null between units, and always null
+     * in memory with no store.
+     */
+    private var unit: UnitOfWork? = null
+
+    /** The resolver, with a read unit open when no unit is: every fetch goes through here. */
+    private fun reader(): StateResolver? {
+        val r = resolver ?: return null
+        if (unit == null) unit = r.begin(WorkKind.READ)
+        return r
+    }
+
+    private fun endUnit(outcome: Outcome) {
+        val u = unit ?: return
+        unit = null
+        u.end(outcome)
+    }
+
+    /** The serialization domains (OQ40, `evaluation.md`): the compiler's derivation, valued here at admission. */
+    private val domains: DomainAnalysis by lazy { DomainAnalysis(model) }
     /** id → shape, so a bare VRef id can be fetched from per-shape storage.
      *  An index, not state: populated at creation, hydration, and reference
      *  conversion; survives snapshot clears. */
@@ -291,6 +317,7 @@ class VelleSystem(
             return body()
         } finally {
             if (--scopeDepth == 0 && resolver != null && txn == null) {
+                endUnit(Outcome.Committed)
                 beginSnapshot()
                 idShape.clear()
                 keyOf.clear()
@@ -338,11 +365,11 @@ class VelleSystem(
      */
     internal fun captureValues(id: Long, refinement: String): Map<String, Value>? {
         captures[id to refinement]?.let { return it }
-        val r = resolver ?: return null
+        if (resolver == null) return null
         if ((id to refinement) in captureMisses) return null
         val key = keyOf[id] ?: return null // unpersisted: no membership storage could hold
         val shape = idShape[id] ?: model.baseOf(refinement) ?: return null
-        val raw = r.fetchCaptures(Ref.Persisted(shape, key), refinement)
+        val raw = reader()!!.fetchCaptures(Ref.Persisted(shape, key), refinement)
         if (raw == null) {
             captureMisses.add(id to refinement)
             return null
@@ -361,11 +388,11 @@ class VelleSystem(
     /** By-handle read, faulting in from the resolver via the store's key. */
     internal fun instance(id: Long): Instance? {
         instances[id]?.let { return it }
-        val r = resolver ?: return null
+        if (resolver == null) return null
         val shape = idShape[id] ?: return null
         val key = keyOf[id] ?: return null // no key: never persisted (rolled back, or another session's handle)
         if (id in fetchMisses) return null
-        val row = r.fetchByKey(shape, key) ?: return null.also { fetchMisses.add(id) }
+        val row = reader()!!.fetchByKey(shape, key) ?: return null.also { fetchMisses.add(id) }
         return hydrateIfAbsent(row)
     }
 
@@ -378,9 +405,8 @@ class VelleSystem(
      * for a store whose scan order is insertion order).
      */
     internal fun idsOf(shape: String): List<Long> {
-        val r = resolver
-        if (r != null && shape !in model.transients && fetchedAll.add(shape)) {
-            val fetched = r.fetchAll(shape).map { hydrateIfAbsent(it).id }
+        if (resolver != null && shape !in model.transients && fetchedAll.add(shape)) {
+            val fetched = reader()!!.fetchAll(shape).map { hydrateIfAbsent(it).id }
             val list = byShape.getOrPut(shape) { mutableListOf() }
             val fetchedSet = fetched.toSet()
             val (persisted, unpersisted) = list.filter { it !in fetchedSet }.partition { keyOf[it] != null }
@@ -401,11 +427,10 @@ class VelleSystem(
      * pre-filter under the superset contract, never the evaluation).
      */
     internal fun idsOfCandidates(shape: String, filter: QF): List<Long> {
-        val r = resolver
-        if (r == null || shape in model.transients || shape in fetchedAll || filter == QF.True)
+        if (resolver == null || shape in model.transients || shape in fetchedAll || filter == QF.True)
             return idsOf(shape)
         if (fetchedFilters.add(shape to filter))
-            r.fetchCandidates(shape, filter).forEach { hydrateIfAbsent(it) }
+            reader()!!.fetchCandidates(shape, filter).forEach { hydrateIfAbsent(it) }
         return liveIds(shape)
     }
 
@@ -416,14 +441,14 @@ class VelleSystem(
 
     /** Join read: fault in the instances of [shape] whose [field] references [targetId]. */
     internal fun ensureReferencing(shape: String, field: String, targetId: Long) {
-        val r = resolver ?: return
+        if (resolver == null) return
         if (shape in model.transients || shape in fetchedAll) return
         // an unpersisted target (created this envelope) can't be referenced by
         // anything storage holds — nothing to fetch
         val key = keyOf[targetId] ?: return
         val targetShape = idShape[targetId] ?: return
         if (fetchedRefs.add(Triple(shape, field, targetId)))
-            r.fetchReferencing(shape, field, Ref.Persisted(targetShape, key)).forEach { hydrateIfAbsent(it) }
+            reader()!!.fetchReferencing(shape, field, Ref.Persisted(targetShape, key)).forEach { hydrateIfAbsent(it) }
     }
 
     private fun hydrateIfAbsent(row: Row): Instance {
@@ -556,13 +581,28 @@ class VelleSystem(
 
     private var txn: Txn? = null
 
-    private fun <T> inTransaction(actor: Long? = null, body: () -> T): Result<T> {
+    /**
+     * One envelope (evaluation.md, "The universal transaction"). Over a store it is
+     * one write unit of work ([StateResolver.begin]): any read unit open in this
+     * scope is closed first, the write unit opens, the envelope's queue keys are
+     * valued against pre-commit state and handed to the store ([UnitOfWork.serialize]),
+     * the working set is dropped so everything the envelope evaluates is read after
+     * the locks were taken, and the unit ends with the outcome once the commit
+     * callback has run, or on the way out of a refusal or a failure.
+     */
+    private fun <T> inTransaction(actor: Long? = null, keys: () -> Set<AdmissionKey> = { emptySet() }, body: () -> T): Result<T> {
         check(txn == null) { "nested harness transaction" }
         beginSnapshot()
+        endUnit(Outcome.Committed)
+        unit = resolver?.begin(WorkKind.WRITE)
         val t = Txn()
         t.actor = actor
         txn = t
         return try {
+            unit?.let { u ->
+                u.serialize(keys())
+                beginSnapshot() // the keys were valued against pre-lock state; the envelope reads post-lock state
+            }
             val out = body()
             checkNevers(t)
             // the commit callback runs inside the envelope: its writes join the
@@ -589,6 +629,7 @@ class VelleSystem(
                 }
             }
             txn = null
+            endUnit(Outcome.Committed)
             // deletions land now: the store already saw them in the commit set;
             // after-commit firings are separate transactions and never see the
             // instance (OQ37 — the transaction close is the removal)
@@ -598,6 +639,7 @@ class VelleSystem(
         } catch (e: Exception) {
             rollback(t)
             txn = null
+            endUnit(if (e is NeverViolation) Outcome.Refused else Outcome.Failed(e))
             Result.failure(e)
         }
     }
@@ -717,12 +759,99 @@ class VelleSystem(
         for ((rule, subject) in ordered(t.afterQueue)) {
             if (instance(subject) == null) continue
             if (!evaluator.memberOfRefExpr(subject, rule.condition)) continue
-            val result = inTransaction { txn!!.firing = rule to subject; fire(rule, subject) }
+            val result = inTransaction(keys = { firingKeys(rule, subject) }) { txn!!.firing = rule to subject; fire(rule, subject) }
             result.exceptionOrNull()?.let {
                 if (it is NeverViolation) afterCommitRejections.add(it.rejection)
                 failures.add("after-commit firing of '${rule.name}' failed: ${it.message}")
             }
         }
+    }
+
+    // ── queue keys valued at admission (evaluation.md, "serialization domain") ──
+
+    /**
+     * The queue keys of an act's envelope, valued against the act's own inputs
+     * and pre-commit state: a path key is the row the act's stored to-one path
+     * reaches, hopping through stored and captured members; a value key is the
+     * value the envelope commits; a widening is the shape. A path that reaches
+     * no row contributes no key. Valued before the envelope's work runs, inside
+     * the write unit, so the reads it needs happen on the unit's connection.
+     */
+    private fun actKeys(act: String, mutations: List<Mutation>, rootIndex: Int): Set<AdmissionKey> {
+        val domain = domains.actDomains[act] ?: return emptySet()
+        val root = mutations.getOrNull(rootIndex) as? Mutation.Create
+        val keys = linkedSetOf<AdmissionKey>()
+        for (path in domain.paths) {
+            val first = path.segs.firstOrNull() ?: continue // the act's own row is fresh and conflict-free
+            var id = (root?.fields?.get(first) as? Value.VRef)?.id ?: continue
+            var reached = true
+            for (seg in path.segs.drop(1)) {
+                id = hop(id, seg) ?: run { reached = false; -1L }
+                if (!reached) break
+            }
+            if (reached) rowKey(id)?.let(keys::add)
+        }
+        for (vk in domain.valueKeys) {
+            for (m in mutations) {
+                if (m !is Mutation.Create || m.shape != vk.shape) continue
+                val v = m.fields[vk.field] ?: continue
+                canonical(v)?.let { keys.add(AdmissionKey.Value(vk.shape, vk.field, it)) }
+            }
+        }
+        for (w in domain.widenings) keys.add(AdmissionKey.Shape(w.shape))
+        return keys
+    }
+
+    /**
+     * The queue keys of one rule firing that is its own envelope (a tick's or the
+     * after-commit queue's), valued from the swept subject: an empty path is the
+     * subject's own row, a longer one hops from it. A value key's value is not
+     * known until the firing runs, so it takes the shape's width instead.
+     */
+    private fun firingKeys(rule: RuleDecl, subject: Long): Set<AdmissionKey> {
+        val domain = domains.firingDomains[rule.name] ?: return emptySet()
+        val keys = linkedSetOf<AdmissionKey>()
+        for (path in domain.paths) {
+            var id: Long? = subject
+            for (seg in path.segs) { id = id?.let { hop(it, seg) } ?: break }
+            id?.let { rowKey(it) }?.let(keys::add)
+        }
+        for (vk in domain.valueKeys) keys.add(AdmissionKey.Shape(vk.shape))
+        for (w in domain.widenings) keys.add(AdmissionKey.Shape(w.shape))
+        return keys
+    }
+
+    /** One hop of a key path: the row [id]'s stored to-one member [seg], or the captured member of that name (Reference §13). */
+    private fun hop(id: Long, seg: String): Long? {
+        val inst = instance(id) ?: return null
+        (inst.fields[seg] as? Value.VRef)?.let { return it.id }
+        for (cs in model.captureSchemas) {
+            if (cs.base != inst.shape || cs.props.none { it.name == seg }) continue
+            (captureValues(id, cs.refinement)?.get(seg) as? Value.VRef)?.let { return it.id }
+        }
+        return null
+    }
+
+    /** The row key for a persisted handle; null for a row this envelope is creating, which nothing else can hold yet. */
+    private fun rowKey(id: Long): AdmissionKey? {
+        val key = keyOf[id] ?: return null
+        val shape = idShape[id] ?: return null
+        return AdmissionKey.Row(shape, key)
+    }
+
+    /** The one spelling of a committed value a store can queue on; null for a value no envelope correlates on. */
+    private fun canonical(v: Value): String? = when (v) {
+        is Value.VNum -> v.v.stripTrailingZeros().toPlainString()
+        is Value.VText -> v.v
+        is Value.VBool -> v.v.toString()
+        is Value.VDate -> v.v.toString()
+        is Value.VDateTime -> v.v.toString()
+        is Value.VTime -> v.v.toString()
+        is Value.VUuid -> v.v.toString()
+        is Value.VDuration -> v.seconds().toString()
+        is Value.VExt -> v.type.canonicalAny(v.v)
+        is Value.VRef -> rowKey(v.id)?.text
+        else -> null
     }
 
     // ── the exposed commit surface ────────────────────────────────────────────
@@ -804,7 +933,7 @@ class VelleSystem(
             return CommitResult.Refused(e.reason)
         }
 
-        val result = inTransaction(actor) { applyCommit(mutations, actCommit = true)[rootIndex] }
+        val result = inTransaction(actor, keys = { actKeys(shape, mutations, rootIndex) }) { applyCommit(mutations, actCommit = true)[rootIndex] }
         return result.fold(
             onSuccess = { id ->
                 // a transient act is an input to the state, not a member of it: at
@@ -845,9 +974,13 @@ class VelleSystem(
         val converted = convertFields(decl, fields) ?: throw VelleRuntimeError("seed: " + typeFailure(decl, fields))
         check(txn == null) { "nested harness transaction" }
         beginSnapshot()
+        endUnit(Outcome.Committed)
+        unit = resolver?.begin(WorkKind.WRITE)
         val t = Txn()
         txn = t
         try {
+            // a seed bypasses the rules, so no domain was derived for it: it takes the shape's width
+            unit?.serialize(setOf(AdmissionKey.Shape(shape)))
             val id = applyCreate(Mutation.Create(shape, converted), t)
             onCommit?.let { cb ->
                 val pending = buildCommitSet(t)
@@ -858,10 +991,12 @@ class VelleSystem(
                 }
             }
             txn = null
+            endUnit(Outcome.Committed)
             return id
         } catch (e: Exception) {
             rollback(t)
             txn = null
+            endUnit(Outcome.Failed(e))
             throw e
         }
     }
@@ -1662,7 +1797,7 @@ class VelleSystem(
             for (subject in subjects) {
                 // each firing is its own transaction; a straggler blocks only itself
                 if (!rule.leaving && !evaluator.memberOfRefExpr(subject, rule.condition)) continue
-                val result = inTransaction {
+                val result = inTransaction(keys = { firingKeys(rule, subject) }) {
                     txn!!.firing = rule to subject
                     txn!!.schedule = schedule
                     fire(rule, subject)

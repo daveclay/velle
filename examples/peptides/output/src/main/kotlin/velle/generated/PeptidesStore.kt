@@ -389,6 +389,11 @@ data class CancelRefusalRow(
  * predicate in memory — so a correct implementation may even return all rows.
  */
 interface PeptidesStore {
+    // ── the unit of work the reads below run in (Hydration.kt, StateResolver.begin) ──
+    /** Opens one read or one envelope against this store. A store over a database
+     *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
+    fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
+
     // ── keyed reads ──
     fun crop(key: StoreKey): CropRow?
     fun pathogen(key: StoreKey): PathogenRow?
@@ -669,6 +674,8 @@ open class PeptidesStoreOverGeneric(
     model: Model,
 ) : PeptidesStore {
     private val questions = PeptidesStoreQuestions(model)
+
+    override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
     override fun crop(key: StoreKey): CropRow? = backend.fetchByKey("Crop", key)?.toCropRow()
     override fun pathogen(key: StoreKey): PathogenRow? = backend.fetchByKey("Pathogen", key)?.toPathogenRow()
@@ -982,6 +989,8 @@ class PeptidesStoreResolver(
     model: Model,
 ) : StateResolver {
     private val questions = PeptidesStoreQuestions(model)
+
+    override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
         "Crop" -> store.crop(key)?.toRow()

@@ -74,6 +74,11 @@ data class KeycardRow(
  * predicate in memory — so a correct implementation may even return all rows.
  */
 interface LoyaltyStore {
+    // ── the unit of work the reads below run in (Hydration.kt, StateResolver.begin) ──
+    /** Opens one read or one envelope against this store. A store over a database
+     *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
+    fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
+
     // ── keyed reads ──
     fun member(key: StoreKey): MemberRow?
     fun duesPayment(key: StoreKey): DuesPaymentRow?
@@ -145,6 +150,8 @@ open class LoyaltyStoreOverGeneric(
 ) : LoyaltyStore {
     private val questions = LoyaltyStoreQuestions(model)
 
+    override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
+
     override fun member(key: StoreKey): MemberRow? = backend.fetchByKey("Member", key)?.toMemberRow()
     override fun duesPayment(key: StoreKey): DuesPaymentRow? = backend.fetchByKey("DuesPayment", key)?.toDuesPaymentRow()
     override fun purchase(key: StoreKey): PurchaseRow? = backend.fetchByKey("Purchase", key)?.toPurchaseRow()
@@ -211,6 +218,8 @@ class LoyaltyStoreResolver(
     model: Model,
 ) : StateResolver {
     private val questions = LoyaltyStoreQuestions(model)
+
+    override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
         "Member" -> store.member(key)?.toRow()

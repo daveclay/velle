@@ -12,7 +12,11 @@ import velle.Validator
 import velle.VelleSystem
 import velle.finance.Money
 import java.math.BigDecimal
+import velle.AdmissionKey
+import velle.Outcome
+import velle.WorkKind
 import java.sql.Connection
+import javax.sql.DataSource
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -34,27 +38,46 @@ import kotlin.test.assertTrue
  * references and their join reads; the pre-filter pushed down where the
  * dialect's column answers the comparison and left to the evaluator where it
  * does not, with the same answer either way; capture memory across processes
- * and its upsert on re-entry; deletion with the absorbing reference; and E4
- * on an extension type's binding.
+ * and its upsert on re-entry; deletion with the absorbing reference; E4 on an
+ * extension type's binding; and the unit of work: a connection per read or
+ * envelope, returned at its end, a read's snapshot, a refusal writing nothing,
+ * and, where the dialect serializes keys, two envelopes on one key taking turns.
  *
- * A dialect module subclasses this with its connection and store.
+ * A dialect module subclasses this with its `DataSource` and store.
  */
 abstract class SqlStoreConformance {
 
-    /** A connection to a fresh, empty database (or schema) of its own. */
-    protected abstract fun connect(): Connection
+    /** A `DataSource` over a fresh, empty database (or schema) of its own, handing out real connections: a unit of work takes one and returns it. */
+    protected abstract fun dataSource(): DataSource
 
-    protected abstract fun store(model: Model, conn: Connection, bindings: List<SqlTypeBinding<*>>): SqlStore
+    protected abstract fun store(model: Model, dataSource: DataSource, bindings: List<SqlTypeBinding<*>>, lockTimeout: Duration = Duration.ofSeconds(10)): SqlStore
 
-    private val open = mutableListOf<Connection>()
+    /** Releases what [dataSource] created, a temporary file for one database; nothing by default. */
+    protected open fun release(dataSource: DataSource) {}
+
+    private val open = mutableListOf<DataSource>()
 
     @AfterTest
-    fun closeConnections() {
-        for (c in open) runCatching { c.close() }
+    fun releaseDataSources() {
+        for (ds in open) runCatching { release(ds) }
         open.clear()
     }
 
-    protected fun conn(): Connection = connect().also { open += it }
+    protected fun ds(): DataSource = dataSource().also { open += it }
+
+    /** Counts the connections a store takes and returns: every unit of work takes one and gives it back. */
+    protected class Leases(private val inner: DataSource) : DataSource by inner {
+        var taken = 0
+        var open = 0
+        override fun getConnection(): Connection {
+            val c = inner.connection
+            taken++; open++
+            return java.lang.reflect.Proxy.newProxyInstance(Connection::class.java.classLoader, arrayOf(Connection::class.java)) { _, m, args ->
+                if (m.name == "close") { open--; c.close(); null }
+                else try { if (args == null) m.invoke(c) else m.invoke(c, *args) } catch (e: java.lang.reflect.InvocationTargetException) { throw e.targetException }
+            } as Connection
+        }
+    }
 
     // ── a spec touching every column kind and every store path ──────────────
 
@@ -153,14 +176,14 @@ abstract class SqlStoreConformance {
         fun reset() { fetchAlls.clear(); candidates.clear() }
     }
 
-    protected class Attached(val sys: VelleSystem, val store: SqlStore, val counting: Counting, val conn: Connection)
+    protected class Attached(val sys: VelleSystem, val store: SqlStore, val counting: Counting, val ds: DataSource)
 
-    protected fun attach(conn: Connection = conn(), spec: String = this.spec, bindings: List<SqlTypeBinding<*>> = emptyList()): Attached {
+    protected fun attach(ds: DataSource = ds(), spec: String = this.spec, bindings: List<SqlTypeBinding<*>> = emptyList()): Attached {
         val sys = system(spec)
-        val store = store(sys.model, conn, bindings).apply { createSchema() }
+        val store = store(sys.model, ds, bindings).apply { createSchema() }
         val counting = Counting(store)
         sys.connect(counting, store)
-        return Attached(sys, store, counting, conn)
+        return Attached(sys, store, counting, ds)
     }
 
     /** The record a commit made. A handle dies with the commit that minted it, so tests hold the reference and mint a handle per use. */
@@ -183,8 +206,12 @@ abstract class SqlStoreConformance {
         "tags" to tags, "notes" to notes,
     ).filterValues { it != null }))!!
 
-    protected fun Attached.scalar(sql: String): Any? =
-        conn.createStatement().use { st -> st.executeQuery(sql).use { rs -> if (rs.next()) rs.getObject(1) else null } }
+    /** The engineer's own SQL beside the store, on a connection of its own. */
+    protected fun Attached.scalar(sql: String): Any? = ds.connection.use { c ->
+        c.createStatement().use { st -> st.executeQuery(sql).use { rs -> if (rs.next()) rs.getObject(1) else null } }
+    }
+
+    protected fun Attached.execute(sql: String) = ds.connection.use { c -> c.createStatement().use { st -> st.execute(sql) } }
 
     protected fun Attached.count(table: String): Long = (scalar("""SELECT COUNT(*) FROM "$table"""") as Number).toLong()
 
@@ -200,7 +227,7 @@ abstract class SqlStoreConformance {
             tags = listOf("vip", "beta"), notes = listOf("late", "early", "late"))
         val key = (a.scalar("""SELECT id FROM "Customer"""") as Number).toLong()
 
-        val b = attach(a.conn)
+        val b = attach(a.ds)
         b.sys.scope {
             val ada = b.sys.handleFor("Customer", key)
             assertEquals("Ada", b.sys.get(ada, "name"))
@@ -227,7 +254,7 @@ abstract class SqlStoreConformance {
         val a = attach()
         a.customer("Bea", email = null, lastSeen = null, opensAt = null, avatar = null)
         val key = (a.scalar("""SELECT id FROM "Customer"""") as Number).toLong()
-        val b = attach(a.conn)
+        val b = attach(a.ds)
         b.sys.scope {
             val bea = b.sys.handleFor("Customer", key)
             assertNull(b.sys.get(bea, "email"))
@@ -279,7 +306,7 @@ abstract class SqlStoreConformance {
         val keys = a.sys.scope { a.sys.instancesOf("Customer").map { a.sys.get(it, "name") as String } }
         assertEquals(listOf("Ada", "Bea", "Cyd", "Adela"), keys, "the scan read comes back in creation order")
         // a second process, so every read is a hydration from the store
-        val b = attach(a.conn)
+        val b = attach(a.ds)
         val n = 4
         b.check("Gold", setOf("Ada", "Cyd"), pushed = answers(StorageClass.INTEGER, ">=", b), n)
         b.check("NotGold", setOf("Bea", "Adela"), pushed = answers(StorageClass.INTEGER, ">=", b), n)
@@ -315,7 +342,7 @@ abstract class SqlStoreConformance {
         accepted(a.sys.commit("Comment", mapOf("target" to a.id(photo), "body" to "very")))
         assertEquals("Photo", a.scalar("""SELECT "target__shape" FROM "Comment" WHERE body = 'nice'"""))
 
-        val b = attach(a.conn)
+        val b = attach(a.ds)
         b.sys.scope {
             val p = b.sys.handleFor("Post", 1L)
             val ph = b.sys.handleFor("Photo", 1L)
@@ -338,7 +365,7 @@ abstract class SqlStoreConformance {
         assertEquals(5L, (a.scalar("""SELECT "flaggedTier" FROM "capture_Flagged"""") as Number).toLong())
 
         // the next process raises the tier again while still flagged: the memory is untouched
-        val b = attach(a.conn)
+        val b = attach(a.ds)
         val adaB = Ref.Persisted("Customer", StoreKey((a.scalar("""SELECT id FROM "Customer"""") as Number).toLong()))
         accepted(b.sys.commit("SetTier", mapOf("customer" to b.id(adaB), "tier" to 7)))
         assertEquals(5L, (b.scalar("""SELECT "flaggedTier" FROM "capture_Flagged"""") as Number).toLong())
@@ -375,7 +402,7 @@ abstract class SqlStoreConformance {
         assertEquals(0L, a.count("capture_Flagged"))
         assertEquals(key, (a.scalar("""SELECT customer FROM "Order"""") as Number).toLong(), "the surviving row still holds the dead key")
 
-        val b = attach(a.conn)
+        val b = attach(a.ds)
         b.sys.scope {
             val o = b.sys.instancesOf("Order").single()
             assertNull(b.sys.get(o, "customer"), "a reference at a deleted row reads as absent")
@@ -397,6 +424,111 @@ abstract class SqlStoreConformance {
         shape Funded = Account where balance >= 10
     """.trimIndent()
 
+    // ── the unit of work: a connection and a transaction per read or envelope ──
+
+    @Test
+    fun `every unit of work takes one connection and returns it when the unit ends`() {
+        val leases = Leases(ds())
+        val a = attach(leases)
+        val afterSchema = leases.taken
+        val ada = a.customer("Ada")
+        assertEquals(0, leases.open, "the commit's write unit returned its connection")
+        a.sys.scope { assertEquals("Ada", a.sys.get(a.id(ada), "name")) }
+        assertEquals(0, leases.open, "the read's unit returned its connection when the scope closed")
+        assertTrue(leases.taken >= afterSchema + 2, "one connection per unit: a commit and a read took at least two (${leases.taken - afterSchema})")
+        a.sys.scope {
+            a.sys.get(a.id(ada), "name")
+            assertEquals(1, leases.open, "inside the scope the read unit holds exactly one connection")
+            a.sys.instancesOf("Gold")
+            assertEquals(1, leases.open, "every fetch of one read shares that connection")
+        }
+        assertEquals(0, leases.open)
+    }
+
+    @Test
+    fun `a read answers from one snapshot while a writer commits on another connection`() {
+        val a = attach()
+        val ada = a.customer("Ada")
+        val bea = a.customer("Bea")
+        a.sys.scope {
+            assertEquals("Ada", a.sys.get(a.id(ada), "name")) // the read unit's snapshot is taken here
+            a.execute("""UPDATE "Customer" SET "name" = 'Beatrix' WHERE "name" = 'Bea'""") // another connection, committed
+            assertEquals("Bea", a.sys.get(a.id(bea), "name"), "the read sees the state it started from, not the write landed since")
+        }
+        a.sys.scope { assertEquals("Beatrix", a.sys.get(a.id(bea), "name"), "the next read sees it") }
+    }
+
+    @Test
+    fun `a refused envelope writes nothing and returns its connection`() {
+        val leases = Leases(ds())
+        val a = attach(leases, spec = spec + "\nnever (Customer where visits > 1000)")
+        val r = a.sys.commit("Customer", mapOf("name" to "Zed", "tier" to 1, "balance" to BigDecimal.ONE, "score" to 0.1, "visits" to 5000L,
+            "active" to true, "since" to LocalDate.of(2024, 1, 1), "window" to Duration.ofDays(1), "tags" to emptyList<String>(), "notes" to emptyList<String>()))
+        assertIs<CommitResult.Refused>(r)
+        assertEquals(0L, a.count("Customer"))
+        assertEquals(0, leases.open)
+    }
+
+    @Test
+    fun `two envelopes sharing a queue key run one at a time and disjoint keys do not wait`() {
+        val a = attach()
+        if (!a.store.dialect.serializesKeys) return // one writer at a time is this database's own rule
+        val held = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val shared = AdmissionKey.Row("Customer", StoreKey(1L))
+        val holder = Thread {
+            val u = a.store.begin(WorkKind.WRITE)
+            u.serialize(setOf(shared))
+            held.countDown()
+            release.await()
+            u.end(Outcome.Committed)
+        }.apply { start() }
+        held.await()
+        val disjointStarted = System.nanoTime()
+        Thread {
+            val u = a.store.begin(WorkKind.WRITE)
+            u.serialize(setOf(AdmissionKey.Row("Customer", StoreKey(2L))))
+            u.end(Outcome.Committed)
+        }.apply { start(); join() }
+        assertTrue(System.nanoTime() - disjointStarted < 2_000_000_000L, "a disjoint key does not wait for the held one")
+        var waited = -1L
+        val waiter = Thread {
+            val u = a.store.begin(WorkKind.WRITE)
+            val t0 = System.nanoTime()
+            u.serialize(setOf(shared))
+            waited = System.nanoTime() - t0
+            u.end(Outcome.Committed)
+        }.apply { start() }
+        Thread.sleep(300)
+        release.countDown()
+        holder.join(); waiter.join()
+        assertTrue(waited >= 200_000_000L, "the second envelope on the key waited for the first (${waited / 1_000_000} ms)")
+    }
+
+    @Test
+    fun `a queue key that cannot be taken in time fails the envelope`() {
+        val a = attach()
+        if (!a.store.dialect.serializesKeys) return
+        val impatient = store(a.sys.model, a.ds, emptyList(), lockTimeout = Duration.ofMillis(200))
+        val held = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val key = AdmissionKey.Shape("Customer")
+        val holder = Thread {
+            val u = a.store.begin(WorkKind.WRITE)
+            u.serialize(setOf(key))
+            held.countDown(); release.await()
+            u.end(Outcome.Committed)
+        }.apply { start() }
+        held.await()
+        var failure: Throwable? = null
+        Thread {
+            val u = impatient.begin(WorkKind.WRITE)
+            try { u.serialize(setOf(key)) } catch (e: Exception) { failure = e; u.end(Outcome.Failed(e)) }
+        }.apply { start(); join() }
+        release.countDown(); holder.join()
+        assertNotNull(failure, "the lock timed out")
+    }
+
     protected class CentsBinding : SqlTypeBinding<Money> {
         override val type = "velle.finance.Money"
         override val storage = StorageClass.INTEGER
@@ -411,7 +543,7 @@ abstract class SqlStoreConformance {
         val acct = accepted(a.sys.commit("Account", emptyMap()))!!
         accepted(a.sys.commit("Deposit", mapOf("account" to a.id(acct), "amount" to Money.of("12.50"))))
         assertEquals(1250L, (a.scalar("""SELECT balance FROM "Account"""") as Number).toLong())
-        val b = attach(a.conn, spec = moneySpec, bindings = listOf(CentsBinding()))
+        val b = attach(a.ds, spec = moneySpec, bindings = listOf(CentsBinding()))
         b.counting.reset()
         assertEquals(1, b.sys.scope { b.sys.instancesOf("Funded") }.size)
         assertEquals(1, b.counting.candidates.single().third, "the binding answers >=, so the store returns only the funded account")
@@ -421,7 +553,7 @@ abstract class SqlStoreConformance {
     @Test
     fun `the store refuses to start without a binding for a stored type`() {
         val sys = system(moneySpec)
-        val e = assertFailsWith<IllegalStateException> { store(sys.model, conn(), emptyList()) }
+        val e = assertFailsWith<IllegalStateException> { store(sys.model, ds(), emptyList()) }
         assertTrue("has no binding for 'Money' (velle.finance.Money)" in e.message!!, e.message)
         assertTrue("SqlTypeBinding<Money>" in e.message!!, e.message)
     }
@@ -436,7 +568,7 @@ abstract class SqlStoreConformance {
             override val answers = EQUALITY_ONLY
         }
         val sys = system(moneySpec)
-        val e = assertFailsWith<IllegalStateException> { store(sys.model, conn(), listOf(Lying())) }
+        val e = assertFailsWith<IllegalStateException> { store(sys.model, ds(), listOf(Lying())) }
         assertTrue("does not round-trip 12.50" in e.message!!, e.message)
     }
 
@@ -450,7 +582,7 @@ abstract class SqlStoreConformance {
             override val answers = EQUALITY_ONLY
         }
         val sys = system(moneySpec)
-        val e = assertFailsWith<IllegalStateException> { store(sys.model, conn(), listOf(WrongCarrier())) }
+        val e = assertFailsWith<IllegalStateException> { store(sys.model, ds(), listOf(WrongCarrier())) }
         assertTrue("names INTEGER storage but encodes 12.50 as String, not Long" in e.message!!, e.message)
     }
 }

@@ -5,7 +5,10 @@ import velle.sql.EQUALITY_ONLY
 import velle.sql.SqlDialect
 import velle.sql.StorageClass
 import velle.sql.StorageColumn
+import velle.AdmissionKey
+import java.sql.Connection
 import java.sql.ResultSet
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -26,6 +29,13 @@ import java.util.UUID
  *
  * A datetime is held as `TIMESTAMPTZ`, which keeps microseconds: an instant
  * with finer precision comes back rounded to the microsecond.
+ *
+ * Units of work: a read is a read-only `REPEATABLE READ` transaction, one
+ * snapshot for every statement in it; a write is `READ COMMITTED`, and its queue
+ * keys become transaction-scoped advisory locks (`pg_advisory_xact_lock` on the
+ * key's hash), taken in sorted order under a `lock_timeout`, so two envelopes
+ * sharing a key run one at a time across every connection and process on the
+ * database, and a stuck lock fails the envelope instead of hanging it.
  */
 object PostgresDialect : SqlDialect {
 
@@ -33,6 +43,31 @@ object PostgresDialect : SqlDialect {
 
     /** An identity column never hands out a deleted row's key again. */
     override val keyColumn = "BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY"
+
+    override val serializesKeys: Boolean get() = true
+
+    override fun beginRead(conn: Connection) {
+        conn.autoCommit = false
+        conn.isReadOnly = true
+        conn.transactionIsolation = Connection.TRANSACTION_REPEATABLE_READ
+    }
+
+    override fun beginWrite(conn: Connection) {
+        conn.autoCommit = false
+        conn.isReadOnly = false
+        conn.transactionIsolation = Connection.TRANSACTION_READ_COMMITTED
+    }
+
+    /** One advisory lock per key on the key text's hash; a collision only serializes two envelopes that need not be. */
+    override fun lock(conn: Connection, keys: List<AdmissionKey>, timeout: Duration) {
+        conn.createStatement().use { it.execute("SET LOCAL lock_timeout = '${timeout.toMillis()}ms'") }
+        conn.prepareStatement("SELECT pg_advisory_xact_lock(hashtext(?))").use { ps ->
+            for (k in keys) {
+                ps.setString(1, k.text)
+                ps.executeQuery().close()
+            }
+        }
+    }
 
     override fun regexMatch(column: String): String? = null
 

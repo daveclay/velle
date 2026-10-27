@@ -26,7 +26,8 @@ import kotlin.concurrent.withLock
  *
  * Every call takes the system's lock, so commits, ticks, and reads take turns:
  * the runtime evaluates one transaction at a time against one snapshot, and the
- * store it is connected to holds one connection. Two callers never interleave.
+ * working set of records it keeps is one. Two callers never interleave. The store
+ * underneath takes a connection per read and per commit and holds none between.
  *
  * The clock: before each call the system's clock is set from [clock], so `today`
  * and `now` in the spec are the wall clock of the machine the system runs on.

@@ -209,7 +209,7 @@ fun overdue(): List<Overdue> = api.locked {
 ```
 
 - `billing.read.overdueInvoices` is the generated typed query ([Binding API](Binding-API)); the result is the generated model object with `Money` as `Money`.
-- `api.locked { }` runs the read under the same lock the generic endpoints use. Every operation on the system takes turns: the runtime evaluates one transaction at a time against one snapshot, and the store holds one connection. A hand-written endpoint that reads inside `locked` never sees a commit half landed.
+- `api.locked { }` runs the read under the same lock the generic endpoints use. Every operation on the system takes turns: the runtime keeps one working set of records, and the lock keeps two callers out of it at once. A hand-written endpoint that reads inside `locked` never sees a commit half landed, and its reads run in one database transaction of their own.
 - The system's clock is the wall clock. Before each operation the starter sets it, so `today` and `now` in the spec mean today and now.
 
 ## The console
@@ -235,6 +235,7 @@ The API layer runs no spec that did not validate. What it refuses at the boundar
 
 ## Related pages
 
+- [The API layer](API-layer), how the endpoints on this page are built: the operations, the schema builder, the starter's beans, and one request end to end.
 - [Binding API](Binding-API), the generated Kotlin the application's own code calls, and the shape of an act's input the JSON mirrors.
 - [Store API](Store-API), the store the starter connects from the `DataSource`, and the guarantees it keeps.
 - [Authorization](Authorization), the actor and the viewer the resolver supplies.

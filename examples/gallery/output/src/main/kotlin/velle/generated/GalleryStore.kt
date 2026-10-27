@@ -63,6 +63,11 @@ data class CommentNoticeRow(
  * predicate in memory — so a correct implementation may even return all rows.
  */
 interface GalleryStore {
+    // ── the unit of work the reads below run in (Hydration.kt, StateResolver.begin) ──
+    /** Opens one read or one envelope against this store. A store over a database
+     *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
+    fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
+
     // ── keyed reads ──
     fun member(key: StoreKey): MemberRow?
     fun post(key: StoreKey): PostRow?
@@ -97,6 +102,8 @@ open class GalleryStoreOverGeneric(
     private val backend: StateResolver,
     @Suppress("UNUSED_PARAMETER") model: Model,
 ) : GalleryStore {
+
+    override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
     override fun member(key: StoreKey): MemberRow? = backend.fetchByKey("Member", key)?.toMemberRow()
     override fun post(key: StoreKey): PostRow? = backend.fetchByKey("Post", key)?.toPostRow()
@@ -133,6 +140,8 @@ class GalleryStoreResolver(
     private val store: GalleryStore,
     @Suppress("UNUSED_PARAMETER") model: Model,
 ) : StateResolver {
+
+    override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
         "Member" -> store.member(key)?.toRow()

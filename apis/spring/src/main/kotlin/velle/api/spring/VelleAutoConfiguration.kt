@@ -71,7 +71,7 @@ class VelleAutoConfiguration {
     /**
      * The one API over the system. Connecting the store happens here, before the first
      * request, so the API never serves a system half connected: the DataSource's
-     * database names the dialect, and one connection is held for the system's life.
+     * database names the dialect, and every unit of work takes a connection from it.
      */
     @Bean
     @ConditionalOnMissingBean
@@ -82,12 +82,12 @@ class VelleAutoConfiguration {
         return VelleApi(system, clock.getIfAvailable { Clock.systemUTC() })
     }
 
+    /** The database names the dialect; the store takes a connection from [dataSource] per unit of work and holds none between. */
     private fun attach(system: VelleSystem, dataSource: DataSource, createSchema: Boolean) {
-        val conn = dataSource.connection
-        val product = conn.metaData.databaseProductName
+        val product = dataSource.connection.use { it.metaData.databaseProductName }
         val store = when {
-            product.contains("PostgreSQL", ignoreCase = true) -> PostgresStore(system.model, conn)
-            product.contains("SQLite", ignoreCase = true) -> SqliteStore(system.model, conn)
+            product.contains("PostgreSQL", ignoreCase = true) -> PostgresStore(system.model, dataSource)
+            product.contains("SQLite", ignoreCase = true) -> SqliteStore(system.model, dataSource)
             else -> throw IllegalStateException("Velle has no SQL dialect for '$product'; declare a velle.sql.SqlStore bean of your own, connected to the system")
         }
         if (createSchema) store.createSchema()

@@ -40,6 +40,11 @@ data class ShipmentRow(
  * predicate in memory — so a correct implementation may even return all rows.
  */
 interface ShippingStore {
+    // ── the unit of work the reads below run in (Hydration.kt, StateResolver.begin) ──
+    /** Opens one read or one envelope against this store. A store over a database
+     *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
+    fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
+
     // ── keyed reads ──
     fun order(key: StoreKey): OrderRow?
     fun cancellation(key: StoreKey): CancellationRow?
@@ -75,6 +80,8 @@ open class ShippingStoreOverGeneric(
 ) : ShippingStore {
     private val questions = ShippingStoreQuestions(model)
 
+    override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
+
     override fun order(key: StoreKey): OrderRow? = backend.fetchByKey("Order", key)?.toOrderRow()
     override fun cancellation(key: StoreKey): CancellationRow? = backend.fetchByKey("Cancellation", key)?.toCancellationRow()
     override fun shipment(key: StoreKey): ShipmentRow? = backend.fetchByKey("Shipment", key)?.toShipmentRow()
@@ -99,6 +106,8 @@ class ShippingStoreResolver(
     model: Model,
 ) : StateResolver {
     private val questions = ShippingStoreQuestions(model)
+
+    override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
         "Order" -> store.order(key)?.toRow()

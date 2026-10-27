@@ -185,6 +185,11 @@ object StoreGen {
             line(" * predicate in memory — so a correct implementation may even return all rows.")
             line(" */")
             line("interface ${name}Store {")
+            line("    // ── the unit of work the reads below run in (Hydration.kt, StateResolver.begin) ──")
+            line("    /** Opens one read or one envelope against this store. A store over a database")
+            line("     *  takes a connection and a transaction here; a store with nothing to open keeps the default. */")
+            line("    fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None")
+            line()
             line("    // ── keyed reads ──")
             shapes.forEach { line("    fun ${decap(it)}(key: StoreKey): ${it}Row?") }
             line()
@@ -238,6 +243,8 @@ object StoreGen {
             line(") : ${name}Store {")
             if (questions.isNotEmpty()) line("    private val questions = ${name}StoreQuestions(model)")
             line()
+            line("    override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)")
+            line()
             shapes.forEach {
                 line("    override fun ${decap(it)}(key: StoreKey): ${it}Row? = backend.fetchByKey(\"$it\", key)?.to${it}Row()")
             }
@@ -273,6 +280,8 @@ object StoreGen {
             if (questions.isNotEmpty()) line("    model: Model,") else line("    @Suppress(\"UNUSED_PARAMETER\") model: Model,")
             line(") : StateResolver {")
             if (questions.isNotEmpty()) line("    private val questions = ${name}StoreQuestions(model)")
+            line()
+            line("    override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)")
             line()
             line("    override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {")
             shapes.forEach { line("        \"$it\" -> store.${decap(it)}(key)?.toRow()") }

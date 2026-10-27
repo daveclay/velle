@@ -89,6 +89,11 @@ data class DepletionNoticeRow(
  * predicate in memory — so a correct implementation may even return all rows.
  */
 interface BatchesStore {
+    // ── the unit of work the reads below run in (Hydration.kt, StateResolver.begin) ──
+    /** Opens one read or one envelope against this store. A store over a database
+     *  takes a connection and a transaction here; a store with nothing to open keeps the default. */
+    fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
+
     // ── keyed reads ──
     fun peptide(key: StoreKey): PeptideRow?
     fun bacteriaStrain(key: StoreKey): BacteriaStrainRow?
@@ -152,6 +157,8 @@ open class BatchesStoreOverGeneric(
 ) : BatchesStore {
     private val questions = BatchesStoreQuestions(model)
 
+    override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
+
     override fun peptide(key: StoreKey): PeptideRow? = backend.fetchByKey("Peptide", key)?.toPeptideRow()
     override fun bacteriaStrain(key: StoreKey): BacteriaStrainRow? = backend.fetchByKey("BacteriaStrain", key)?.toBacteriaStrainRow()
     override fun fermenterRun(key: StoreKey): FermenterRunRow? = backend.fetchByKey("FermenterRun", key)?.toFermenterRunRow()
@@ -210,6 +217,8 @@ class BatchesStoreResolver(
     model: Model,
 ) : StateResolver {
     private val questions = BatchesStoreQuestions(model)
+
+    override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
         "Peptide" -> store.peptide(key)?.toRow()
