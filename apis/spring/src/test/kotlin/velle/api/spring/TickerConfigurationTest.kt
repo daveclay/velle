@@ -1,8 +1,10 @@
 package velle.api.spring
 
+import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.autoconfigure.task.TaskSchedulingAutoConfiguration
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner
+import org.springframework.mock.env.MockEnvironment
 import org.springframework.scheduling.TaskScheduler
 import velle.Model
 import velle.Parser
@@ -91,5 +93,20 @@ class TickerConfigurationTest {
             val failure = assertNotNull(ctx.startupFailure)
             assertTrue("velle.schedules.Weekly" in failure.messages(), failure.messages())
         }
+    }
+
+    @Test
+    fun `with a schedule a shutdown waits for a sweep in flight, unless the application says otherwise`() {
+        fun env(vararg props: Pair<String, String>): MockEnvironment = MockEnvironment().also { e ->
+            props.forEach { (k, v) -> e.setProperty(k, v) }
+            TickerShutdownDefaults().postProcessEnvironment(e, SpringApplication())
+        }
+        assertEquals(null, env().getProperty("spring.task.scheduling.shutdown.await-termination"), "no schedules: Boot's own default stands")
+        val defaulted = env("velle.schedules.Hourly" to "@hourly")
+        assertEquals("true", defaulted.getProperty("spring.task.scheduling.shutdown.await-termination"))
+        assertEquals("30s", defaulted.getProperty("spring.task.scheduling.shutdown.await-termination-period"))
+        val own = env("velle.schedules.Hourly" to "@hourly", "spring.task.scheduling.shutdown.await-termination" to "false")
+        assertEquals("false", own.getProperty("spring.task.scheduling.shutdown.await-termination"), "the application's setting sits above the default")
+        assertEquals("30s", own.getProperty("spring.task.scheduling.shutdown.await-termination-period"))
     }
 }

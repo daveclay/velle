@@ -53,6 +53,7 @@ velle:
 - `spring-boot-starter-jdbc` and the PostgreSQL driver are the application's: they decide which database it talks to. The starter reads the database's name from the connection and picks the SQLite or PostgreSQL dialect.
 - `velle.schedules` says when each schedule the spec names ticks: a cron expression, alone or with the time zone it is read in. `Hourly` runs at the top of every hour in the server's own zone. `Weekly` runs at 06:00 on Monday in New York. A schedule with no entry never ticks on its own.
 - The ticks are tasks on Spring's task scheduler. The `spring.task.scheduling` settings apply to them, and the Actuator `scheduledtasks` endpoint lists them beside the application's own scheduled tasks.
+- A shutdown waits up to thirty seconds for a sweep that is running, so a restart does not cut a firing off under a closing database. The starter sets Boot's `spring.task.scheduling.shutdown` properties for that when it has schedules. Your own setting of them wins.
 - `velle.ticker.enabled: false` keeps one copy of the application from running the schedules, and changes nothing else: the ticks endpoint and the console's buttons still work on it. Two copies ticking the same schedule change the data once ([Concurrency, "Scheduled rules"](Concurrency#scheduled-rules)), but each runs the whole sweep, so when the application runs as several copies, turn the ticker off on all but one.
 - `velle.api.ticks` lets a caller fire a tick over HTTP. It is for a console or a test, and off by default.
 

@@ -24,6 +24,8 @@ dependencies {
     api("org.springframework.boot:spring-boot-starter-webmvc")
     api("org.springframework.boot:spring-boot-starter-graphql")
     implementation("org.springframework.boot:spring-boot-autoconfigure")
+    // Spring instantiates a Kotlin class named in spring.factories through its Kotlin support, which needs kotlin-reflect
+    implementation(kotlin("reflect"))
     // the DataSource is the application's: it brings spring-boot-starter-jdbc and its driver;
     // without one the system runs in memory. The compile needs Boot's DataSource auto-configuration class.
     compileOnly("org.springframework.boot:spring-boot-jdbc")

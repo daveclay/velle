@@ -3,6 +3,7 @@ package velle.api.spring
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.SpringBootConfiguration
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
+import org.springframework.boot.autoconfigure.task.TaskSchedulingProperties
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.context.annotation.Bean
@@ -19,6 +20,7 @@ import velle.Model
 import velle.Parser
 import velle.VelleSystem
 import java.io.File
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -29,7 +31,8 @@ import kotlin.test.assertTrue
 /**
  * A system without authorization over a DataSource: the starter picks the SQLite dialect
  * from the connection, creates the schema, the ticks endpoint is on, and the two schedules,
- * one written as the cron alone and one with its zone, are tasks on Spring's scheduler.
+ * one written as the cron alone and one with its zone, are tasks on Spring's scheduler whose
+ * shutdown waits for a running sweep.
  */
 @SpringBootTest(classes = [BillingOverSqliteTest.App::class], properties = [
     "spring.datasource.url=jdbc:sqlite:file:velle_starter_test?mode=memory&cache=shared",
@@ -53,6 +56,7 @@ class BillingOverSqliteTest {
     @Autowired lateinit var mvc: MockMvc
     @Autowired lateinit var json: ObjectMapper
     @Autowired lateinit var scheduled: ScheduledTaskHolder
+    @Autowired lateinit var scheduling: TaskSchedulingProperties
 
     @Suppress("UNCHECKED_CAST")
     private fun parse(body: String): Map<String, Any?> = json.readValue(body, Map::class.java) as Map<String, Any?>
@@ -89,5 +93,12 @@ class BillingOverSqliteTest {
 
         // the task's body is api.tick: it runs against the same system the endpoint ticks
         byCron.getValue("0 0 6 * * MON").runnable.run()
+    }
+
+    @Test
+    fun `with schedules a shutdown waits up to thirty seconds for a sweep in flight`() {
+        // TickerShutdownDefaults, found through META-INF/spring.factories, bound by Boot's own properties
+        assertTrue(scheduling.shutdown.isAwaitTermination)
+        assertEquals(Duration.ofSeconds(30), scheduling.shutdown.awaitTerminationPeriod)
     }
 }
