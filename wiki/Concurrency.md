@@ -86,6 +86,7 @@ For this spec the compiler reports the keys in `examples/bookings/output/DIAGRAM
 | `Cancel` of booking 1 | `Booking#1`, `Booking.slot=2026-01-05T10:00:00Z` | the booking given back, and its slot |
 | `Waitlist` | `Waitlist` | every waitlist entry there is |
 | `TellWaitlist`, one hourly firing | `Waitlist#2`, `Booking.slot=2026-01-05T11:00:00Z` | the entry being told, and the slot it waits for |
+| the hourly tick's own record | `Tick` | the row that says the tick ran ([§17, "What Velle records about a tick"](Reference-17-Schedule-triggers#what-velle-records-about-a-tick)) |
 
 So two requests for ten o'clock take turns, and the second finds the first's booking and is refused. A request for eleven o'clock runs beside either of them. A cancellation waits only for work on that booking or that slot. The hourly firing for one entry waits only for a booking of the slot that entry wants.
 
@@ -108,6 +109,8 @@ The worked spelling of each answer is in [`patterns.md`, "A wide domain: the two
 ## Scheduled rules
 
 A tick does not stop the system. Each record a scheduled rule fires for is handled in a commit of its own, with its own keys, worked out from that record. The hourly `TellWaitlist` firing for one entry queues on that entry and on the slot it waits for. A booking of another slot arriving during the sweep does not wait, and a booking of that very slot takes its turn against this one firing. The rows for scheduled rules in the contention map read `this`, meaning the record the firing is for.
+
+Once a firing has its turn, it checks the rule's condition again. Two copies of the application that tick at the same moment therefore write one `Notice` per entry, not two: the second to take an entry's turn sees the first one's notice and does nothing. That holds because the rule's own result takes the entry out of `Untold`, which is how a scheduled rule is written ([§18](Reference-18-Run-once-guards)).
 
 ## Reads
 

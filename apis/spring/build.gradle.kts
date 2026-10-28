@@ -27,6 +27,9 @@ dependencies {
     // the DataSource is the application's: it brings spring-boot-starter-jdbc and its driver;
     // without one the system runs in memory. The compile needs Boot's DataSource auto-configuration class.
     compileOnly("org.springframework.boot:spring-boot-jdbc")
+    // metrics are the application's choice: with a MeterRegistry present the ticks are counted
+    compileOnly("io.micrometer:micrometer-core")
+    testImplementation("io.micrometer:micrometer-core")
     testImplementation(kotlin("test"))
     testImplementation("org.springframework.boot:spring-boot-starter-jdbc")
     testImplementation("org.springframework.boot:spring-boot-starter-test")

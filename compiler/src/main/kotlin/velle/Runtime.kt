@@ -97,7 +97,14 @@ sealed interface CommitResult {
      *  leaves none. [id] is the runtime's handle for it: in memory, with no
      *  store, that is the identity the raw surface works in; over a store it
      *  is dead once the commit returns (see [VelleSystem.scope]), so hold [ref]. */
-    data class Accepted(val id: Long, val ref: Ref.Persisted?) : CommitResult
+    data class Accepted(
+        val id: Long,
+        val ref: Ref.Persisted?,
+        /** Firings behind the act's `after commit` boundary that a `never` refused: carried as data, the act stands (Reference §21). */
+        val afterCommitRejections: List<Rejection> = emptyList(),
+        /** Firings behind the boundary that failed for any other reason; the act stands, the next commit that queues them retries ([S4]). */
+        val afterCommitFailures: List<FiringFailure> = emptyList(),
+    ) : CommitResult
     /** [reason] is the rendered message; [rejection] is the same as data when a
      *  `never` refused the act (Reference §21), null for a type-level refusal. */
     data class Refused(val reason: String, val rejection: Rejection? = null) : CommitResult
@@ -119,8 +126,15 @@ sealed interface CommitResult {
 sealed interface Commit<out I, out R> {
     /** The input value the caller committed, exactly as it was handed in. */
     val input: I
-    /** [ref] names the record the act became: a `Ref<Shape>` for a durable act, null for a transient one. */
-    data class Accepted<out I, out R>(override val input: I, val ref: R) : Commit<I, R>
+    /** [ref] names the record the act became: a `Ref<Shape>` for a durable act, null for a transient one.
+     *  [afterCommitRejections] and [afterCommitFailures] are what the act's `after commit` firings came to:
+     *  refused by a `never`, or failed for another reason; the act stands either way (Reference §21; `evaluation.md`). */
+    data class Accepted<out I, out R>(
+        override val input: I,
+        val ref: R,
+        val afterCommitRejections: List<Rejection> = emptyList(),
+        val afterCommitFailures: List<FiringFailure> = emptyList(),
+    ) : Commit<I, R>
     /** [reason] is the rendered message; [rejection] is the same as data when a
      *  `never` refused the act (Reference §21), null for a type-level refusal. */
     data class Refused<out I, out R>(override val input: I, val reason: String, val rejection: Rejection? = null) : Commit<I, R>
@@ -128,13 +142,13 @@ sealed interface Commit<out I, out R> {
 
 /** Attach the typed input to the runtime's untyped verdict, with the reference to the durable record it made. */
 fun <I, T> CommitResult.carrying(input: I): Commit<I, Ref<T>> = when (this) {
-    is CommitResult.Accepted -> Commit.Accepted(input, ref ?: throw VelleRuntimeError("a durable act's acceptance carries no reference"))
+    is CommitResult.Accepted -> Commit.Accepted(input, ref ?: throw VelleRuntimeError("a durable act's acceptance carries no reference"), afterCommitRejections, afterCommitFailures)
     is CommitResult.Refused -> Commit.Refused(input, reason, rejection)
 }
 
 /** Attach the typed input to the runtime's untyped verdict for a transient act, which leaves no record to refer to. */
 fun <I> CommitResult.carryingNoRecord(input: I): Commit<I, Nothing?> = when (this) {
-    is CommitResult.Accepted -> Commit.Accepted(input, null)
+    is CommitResult.Accepted -> Commit.Accepted(input, null, afterCommitRejections, afterCommitFailures)
     is CommitResult.Refused -> Commit.Refused(input, reason, rejection)
 }
 
@@ -570,16 +584,26 @@ class VelleSystem(
     }
 
     private fun scalarVType(name: String): VType = model.scalarOf(name)
-    private val lastTick = ConcurrentHashMap<String, Instant>()
     private val startInstant = startTime
     val evaluator = Evaluator(this)
-    /** failures of after-commit / tick firings — the act stands, the gap is recorded [S4] */
-    val failures: MutableList<String> = Collections.synchronizedList(mutableListOf())
+    private val listeners = java.util.concurrent.CopyOnWriteArrayList<TickListener>()
+
+    /** The listeners registered with [listen], in registration order. */
+    val tickListeners: List<TickListener> get() = listeners.toList()
+
+    /** Hear every tick, and every act whose after-commit firings were refused or failed ([TickListener]). */
+    fun listen(listener: TickListener) { listeners.add(listener) }
+
+    /** Tell every listener; the first exception any of them throws is rethrown once all have been told. */
+    private fun tell(what: (TickListener) -> Unit) {
+        var first: Throwable? = null
+        for (l in listeners) try { what(l) } catch (e: Throwable) { if (first == null) first = e }
+        first?.let { throw it }
+    }
     /** A `never` rejection of an after-commit firing, carried as the same data a
      *  tick's rejection is thrown with (`evaluation.md`, "Ticks"): the act stood,
      *  the firing rolled back, and nobody was asking. Reachable only through the
      *  runtime backstop, since V29 and V30 refuse the spec-visible cases. */
-    val afterCommitRejections: MutableList<Rejection> = Collections.synchronizedList(mutableListOf())
 
     private val maxDepth = 500 // [S3] backstop behind the static quiescence proof
 
@@ -610,6 +634,9 @@ class VelleSystem(
         var firing: Pair<RuleDecl, Long>? = null
         /** The schedule whose tick this transaction serves; null otherwise. */
         var schedule: String? = null
+        /** What the after-commit firings this envelope queued came to: refused by a `never`, or failed. */
+        val afterRejections = mutableListOf<Rejection>()
+        val afterFailures = mutableListOf<FiringFailure>()
 
         /** Cumulative footprint of every commit in the envelope (never gating). */
         val createdShapes = mutableSetOf<String>()
@@ -642,7 +669,7 @@ class VelleSystem(
      * the locks were taken, and the unit ends with the outcome once the commit
      * callback has run, or on the way out of a refusal or a failure.
      */
-    private fun <T> inTransaction(actor: Long? = null, keys: () -> Set<AdmissionKey> = { emptySet() }, body: () -> T): Result<T> {
+    private fun <T> inTransaction(actor: Long? = null, keys: () -> Set<AdmissionKey> = { emptySet() }, onAfter: (Txn) -> Unit = {}, body: () -> T): Result<T> {
         check(txn == null) { "nested harness transaction" }
         beginSnapshot()
         endUnit(Outcome.Committed)
@@ -684,6 +711,7 @@ class VelleSystem(
             // instance (OQ37 — the transaction close is the removal)
             finalizeDeletes(t)
             drainAfterQueue(t)
+            onAfter(t)
             Result.success(out)
         } catch (e: Exception) {
             rollback(t)
@@ -808,10 +836,15 @@ class VelleSystem(
         for ((rule, subject) in ordered(t.afterQueue)) {
             if (instance(subject) == null) continue
             if (!evaluator.memberOfRefExpr(subject, rule.condition)) continue
-            val result = inTransaction(keys = { firingKeys(rule, subject) }) { txn!!.firing = rule to subject; fire(rule, subject) }
+            // what this firing's own after-commit firings came to bubbles up to the root envelope
+            val result = inTransaction(keys = { firingKeys(rule, subject) }, onAfter = { inner -> t.afterRejections += inner.afterRejections; t.afterFailures += inner.afterFailures }) {
+                txn!!.firing = rule to subject
+                // under the locks, against post-lock state, as a tick's firing is (OQ71 D1)
+                if (evaluator.memberOfRefExpr(subject, rule.condition)) fire(rule, subject)
+            }
             result.exceptionOrNull()?.let {
-                if (it is NeverViolation) afterCommitRejections.add(it.rejection)
-                failures.add("after-commit firing of '${rule.name}' failed: ${it.message}")
+                if (it is NeverViolation) t.afterRejections.add(it.rejection)
+                else t.afterFailures.add(failed(rule, subject, it))
             }
         }
     }
@@ -997,7 +1030,12 @@ class VelleSystem(
             return CommitResult.Refused(e.reason)
         }
 
-        val result = inTransaction(actor, keys = { actKeys(shape, mutations, rootIndex) }) { applyCommit(mutations, actCommit = true)[rootIndex] }
+        var afterRejections: List<Rejection> = emptyList()
+        var afterFailures: List<FiringFailure> = emptyList()
+        val result = inTransaction(actor, keys = { actKeys(shape, mutations, rootIndex) },
+            onAfter = { t -> afterRejections = t.afterRejections.toList(); afterFailures = t.afterFailures.toList() }) {
+            applyCommit(mutations, actCommit = true)[rootIndex]
+        }
         // the envelope and its after-commit firings are over: what they built in
         // memory goes, so any read from here on starts from the store. A transient
         // act goes with it, which is its removal (Reference §4 "Transient acts";
@@ -1005,7 +1043,14 @@ class VelleSystem(
         // later, so removing it here is observably the same as at its close.
         beginSnapshot()
         return result.fold(
-            onSuccess = { id -> CommitResult.Accepted(id, if (shape in model.transients) null else refFor(id)) },
+            onSuccess = { id ->
+                val ref = if (shape in model.transients) null else refFor(id)
+                // the act stands and is durable; what its after-commit firings came to is told
+                // to the listeners now, since the caller's code may read it and nobody else will
+                if (afterRejections.isNotEmpty() || afterFailures.isNotEmpty())
+                    tell { it.afterCommit(ref?.let { r -> RecordRef(r.shape, r.key) }, afterRejections, afterFailures) }
+                CommitResult.Accepted(id, ref, afterRejections, afterFailures)
+            },
             onFailure = { e ->
                 if (e is NeverViolation) CommitResult.Refused(e.rejection.message, e.rejection) else throw e
             }
@@ -1821,14 +1866,16 @@ class VelleSystem(
      * function returns in [CommitResult.Refused] (`evaluation.md`, "Ticks"). The other firings
      * stand; the next tick retries the rejected ones.
      */
-    fun tick(schedule: String) = scope { tickInScope(schedule) }
+    fun tick(schedule: String): TickReport = scope { tickInScope(schedule) }
 
-    private fun tickInScope(schedule: String) {
+    private fun tickInScope(schedule: String): TickReport {
         // a tick is a new evaluation moment: select subjects against settled
         // storage, not the previous envelope's leftover working set
         beginSnapshot()
-        val previous = lastTick[schedule] ?: startInstant
+        val previous = previousTick(schedule) ?: startInstant
         val rejected = mutableListOf<Rejection>()
+        val failures = mutableListOf<FiringFailure>()
+        val firings = linkedMapOf<String, Int>()
         for (rule in model.rules.values) {
             if (schedule !in rule.triggers) continue
             // a tick deletes nothing: the deletion-side forms are transaction-bound
@@ -1853,23 +1900,63 @@ class VelleSystem(
                         .filter { evaluator.memberOfRefExpr(it, rule.condition) }
                 }
             for (subject in subjects) {
-                // each firing is its own transaction; a straggler blocks only itself
-                if (!rule.leaving && !evaluator.memberOfRefExpr(subject, rule.condition)) continue
-                val result = inTransaction(keys = { firingKeys(rule, subject) }) {
+                // each firing is its own transaction; a straggler blocks only itself.
+                // An earlier firing of this tick may have moved the subject out of the
+                // condition: skip it before taking a lock for nothing
+                if (!isSubject(rule, subject, previous)) continue
+                // what the firing's own after-commit firings came to is the tick's to report
+                val result = inTransaction(keys = { firingKeys(rule, subject) }, onAfter = { t -> rejected += t.afterRejections; failures += t.afterFailures }) {
                     txn!!.firing = rule to subject
                     txn!!.schedule = schedule
-                    fire(rule, subject)
+                    // the authoritative check, under the firing's locks and against
+                    // post-lock state: another instance's tick, or a commit, may have
+                    // fired for this subject since it was selected, and a rule that
+                    // disarms itself then finds its condition false and does nothing
+                    // (OQ71 D1; Reference §16, §18)
+                    if (isSubject(rule, subject, previous)) { fire(rule, subject); true } else false
                 }
-                result.exceptionOrNull()?.let {
-                    if (it is NeverViolation) rejected.add(it.rejection)
-                    else failures.add("tick($schedule) firing of '${rule.name}' failed: ${it.message}")
-                }
+                result.fold(
+                    onSuccess = { fired -> if (fired) firings[rule.name] = (firings[rule.name] ?: 0) + 1 },
+                    onFailure = { if (it is NeverViolation) rejected.add(it.rejection) else failures.add(failed(rule, subject, it)) },
+                )
             }
         }
-        lastTick[schedule] = now
+        // the tick on record: one `Tick` row through the ordinary commit path, after the
+        // firings, so a sweep cut off leaves the previous tick in place and the next tick
+        // covers the gap; every process over one store reads the same row (Reference §17)
+        inTransaction(keys = { setOf(AdmissionKey.Shape(Model.TICK)) }) {
+            applyCommit(listOf(Mutation.Create(Model.TICK, mapOf("schedule" to Value.VText(schedule)))))
+        }.exceptionOrNull()?.let {
+            // refused by a constraint, as any envelope is while the books stand in a state a
+            // clock-reading constraint forbids (the V30 backstop): reported with the firings
+            if (it is NeverViolation) rejected.add(it.rejection) else throw it
+        }
         beginSnapshot() // the firings are over: a read after the tick starts from the store
-        if (rejected.isNotEmpty()) throw TickRejected(schedule, now, rejected)
+        val report = TickReport(schedule, now, firings, failures)
+        // the tick is complete and on record: the listeners hear it, then the caller does.
+        // A listener's exception rides as suppressed on a rejection, which is the louder news
+        val rejection = if (rejected.isNotEmpty()) TickRejected(report, rejected) else null
+        try { tell { it.ticked(report, rejected) } } catch (e: Throwable) { if (rejection == null) throw e else rejection.addSuppressed(e) }
+        if (rejection != null) throw rejection
+        return report
     }
+
+    /** A firing of [rule] for [subject] failed with [cause]: the record for the report. */
+    private fun failed(rule: RuleDecl, subject: Long, cause: Throwable): FiringFailure =
+        FiringFailure(rule.name, keyOf[subject]?.let { RecordRef(idShape.getValue(subject), it) }, cause)
+
+    /** The moment of [schedule]'s previous tick, the latest `Tick` row the store holds for it, or null before the first. */
+    private fun previousTick(schedule: String): Instant? {
+        val latest = Query(Model.TICK, where = Parser.parsePredicate("schedule == \"$schedule\""),
+            orderBy = listOf(OrderDatum("at", descending = true)), page = Page(1))
+        val id = queries.run(latest).ids.firstOrNull() ?: return null
+        return (evaluator.readMember(id, Model.TICK, "at") as Value.VDateTime).v
+    }
+
+    /** Is [subject] one the rule fires for now: a member of the condition, or for a `leaving` rule a member at [previous] and not now. */
+    private fun isSubject(rule: RuleDecl, subject: Long, previous: Instant): Boolean =
+        if (rule.leaving) membershipAt(previous, subject, rule.condition) && !evaluator.memberOfRefExpr(subject, rule.condition)
+        else evaluator.memberOfRefExpr(subject, rule.condition)
 
     private fun membershipAt(time: Instant, id: Long, condition: RefExpr): Boolean {
         evalTime = time

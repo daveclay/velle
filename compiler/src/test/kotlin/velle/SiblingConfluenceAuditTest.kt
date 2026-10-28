@@ -37,10 +37,12 @@ class SiblingConfluenceAuditTest {
         check(model.diagnostics.isEmpty()) { "probe spec broken: ${model.diagnostics}" }
         val sys = VelleSystem(model)
         sys.firingOrder = strategy
+        val failed = FailureCollector()
+        sys.listen(failed)
         // one scope for the scenario and its fingerprint: the handles the scenario holds live until it exits
         return sys.scope {
             scenario(sys)
-            fingerprint(sys, model)
+            fingerprint(sys, model, failed.failures.map { it.message })
         }
     }
 
@@ -48,7 +50,7 @@ class SiblingConfluenceAuditTest {
         outcome(src, null, scenario) to outcome(src, { it.reversed() }, scenario)
 
     /** Id-insensitive structural fingerprint, captures and failures included. */
-    private fun fingerprint(sys: VelleSystem, model: Model): Map<String, List<String>> {
+    private fun fingerprint(sys: VelleSystem, model: Model, failed: List<String> = emptyList()): Map<String, List<String>> {
         val shapes = model.shapes.keys.filterNot { it in model.transients }.associateWith { shape ->
             sys.instancesOf(shape).map { canonical(sys, it, depth = 4) }.sorted()
         }
@@ -61,7 +63,7 @@ class SiblingConfluenceAuditTest {
                         values.entries.sortedBy { it.key }.joinToString(",") { "${it.key}=${render(sys, it.value)}" }
                 }
             }.sorted()
-        return shapes + mapOf("«captures»" to captures, "«failures»" to sys.failures.sorted())
+        return shapes + mapOf("«captures»" to captures, "«failures»" to failed.sorted())
     }
 
     private fun canonical(sys: VelleSystem, id: Long, depth: Int): String {

@@ -15,9 +15,11 @@ velle:
   api:
     path: /api
     ticks: true          # the console's schedule buttons; off in a deployment
-  schedules:
+  schedules:             # a cron expression per schedule, alone or with the zone it is read in
     Hourly: "0 0 * * * *"
-    Weekly: "0 0 6 * * MON"
+    Weekly:
+      cron: "0 0 6 * * MON"
+      zone: America/New_York
   console:
     path: /velle
 logging:

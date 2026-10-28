@@ -15,6 +15,12 @@ import velle.ext.VelleType
  */
 class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.default) {
 
+    /** The spec's declarations behind Velle's own: the prelude is parsed into every model ahead of the spec. */
+    private val allDecls: List<Decl> = PRELUDE + rawDecls
+
+    /** The shapes Velle declares for every system, written in Velle ([PRELUDE]): `Tick`, the record of a schedule's run (Reference §17). */
+    val builtin: Set<String> = PRELUDE.filterIsInstance<ShapeDecl>().map { it.name }.toSet()
+
     val diagnostics = mutableListOf<Diagnostic>()
 
     /** The spec's `uses` lines (Reference §5, extension types). */
@@ -73,7 +79,7 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
         val (fscope, fambiguous) = resolveFunctionScope()
         functionScope = fscope
         ambiguousFunctionNames = fambiguous
-        val shapeNames = rawDecls.mapNotNull { (it as? ShapeDecl)?.name ?: (it as? RefinementDecl)?.name }.toSet()
+        val shapeNames = allDecls.mapNotNull { (it as? ShapeDecl)?.name ?: (it as? RefinementDecl)?.name }.toSet()
         fun manyOfType(t: TypeRef, tolerates: String? = null): TypeRef =
             if (t is RelType && t.many && t.shape !in shapeNames && t.shape in scope)
                 ScalarType(t.shape, optional = false, many = true, ordered = tolerates == "duplication")
@@ -83,7 +89,7 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
             is DerivedProp -> m.copy(type = manyOfType(m.type))
             else -> m
         }
-        decls = rawDecls.map { d -> when (d) {
+        decls = allDecls.map { d -> when (d) {
             is ShapeDecl -> d.copy(members = d.members.map(::fix))
             is RefinementDecl -> d.copy(members = d.members.map(::fix))
             else -> d
@@ -119,6 +125,26 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
             val predicate = IsExpr(PathExpr(a.name), "refinement", a.shape, toBe = true)
             nevers.add(NeverDecl(RefName(name, complementOf(predicate)), requirement = Requirement(name, predicate),
                 fromActorClause = true))
+        }
+    }
+
+    companion object {
+        /** Velle's record of a schedule's run: one row per tick, `schedule` and the moment `at` (Reference §17). */
+        const val TICK = "Tick"
+
+        /**
+         * Velle's own declarations, in Velle, ahead of every spec's. A tick creates one
+         * [TICK] row through the ordinary commit path, and reads the latest one for its
+         * schedule as the previous tick; the engineer reads the shape as any other and
+         * commits none, since no act creates it.
+         */
+        val PRELUDE: List<Decl> by lazy {
+            Parser.parse("""
+                shape Tick {
+                    schedule: text
+                    at: timestamp on create
+                }
+            """.trimIndent())
         }
     }
 
@@ -173,7 +199,8 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
 
     private fun register(name: String): Boolean {
         if (name in shapes || name in refinements) {
-            error("F1", "duplicate shape/refinement name '$name'")
+            if (name in builtin) error("F1", "'$name' is Velle's own shape, the record of a schedule's ticks (Reference §17); choose another name")
+            else error("F1", "duplicate shape/refinement name '$name'")
             return false
         }
         typeScope[name]?.let { t ->

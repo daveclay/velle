@@ -77,14 +77,15 @@ class RuntimeTest {
             sys.mustCommit("LineItem", "invoice" to inv, "description" to "widgets",
                 "price" to BigDecimal("100"), "quantity" to 2)
 
-            sys.mustCommit("Payment", "invoice" to inv, "amount" to BigDecimal("200"))
+            val payment = assertIs<CommitResult.Accepted>(sys.commit("Payment", mapOf("invoice" to inv, "amount" to BigDecimal("200"))))
 
             assertTrue(sys.isMember(inv, "PaidInvoice"))
             assertEquals("paid", sys.get(inv, "status"))
             assertEquals(1, sys.instancesOf("Receipt").size)       // entry rule, same transaction
             assertEquals(1, sys.instancesOf("ReceiptEmail").size)  // after-commit queue drained
             assertEquals(0, num(sys.get(cust, "largestPayment")).compareTo(BigDecimal("200")))
-            assertEquals(emptyList(), sys.failures)
+            assertEquals(emptyList(), payment.afterCommitFailures) // the after-commit firing landed
+            assertEquals(emptyList(), payment.afterCommitRejections)
 
             // a second, smaller payment: no new PaidInvoice entry, fold keeps the max
             sys.mustCommit("Payment", "invoice" to inv, "amount" to BigDecimal("50"))
@@ -109,9 +110,10 @@ class RuntimeTest {
             assertEquals(1, sys.instancesOf("Reminder").size)
 
             sys.advanceDays(8)
-            sys.tick("Weekly") // the window expired: remind again
+            val report = sys.tick("Weekly") // the window expired: remind again
             assertEquals(2, sys.instancesOf("Reminder").size)
-            assertEquals(emptyList(), sys.failures)
+            assertEquals(emptyList(), report.failures)
+            assertEquals(1, report.firings.values.sum(), "one firing this tick: ${report.firings}")
         }
     }
 

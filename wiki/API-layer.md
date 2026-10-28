@@ -60,7 +60,7 @@ Reads and the viewer: once a spec has any `by` or `visible to` clause, `model.ha
 
 `Wire` in `apis/json/src/main/kotlin/velle/api/Wire.kt` is the value codec. Outbound, `record(id, scope, viewer)` builds a record's map: `shape` and `key` first, then every member of the scope from `system.get` and `system.getAs`, a hidden field as null, and on a shape one `is<Refinement>` flag per refinement. `out(value, type)` turns a runtime value into a JSON value: dates to ISO text, an extension type's value to its canonical text, an `integer` to a whole number. Inbound, `input(act, body)` splits the body into the runtime's `fields` and `parts` by the act's closure edges from `model.closures`, reads each scalar by the declared type through `scalar`, each reference through `reference`, and each nested object through `nested`, which handles `"@shape"` on a union operand, `"@new"` and `{"new": n}` for a sibling, and the part lists. It refuses a body that names the actor, a part's back-reference, or an unknown field.
 
-`Describe` in `apis/json/src/main/kotlin/velle/api/Describe.kt` walks the model once and produces the description `GET /api` answers: each exposed act with its fields, their types, whether each is a value, a reference, or a nested record, and its parts; each readable shape and refinement with its members, its flags, and its visibility; the schedules, which are every rule trigger other than `commit`; and the authorization flag. Readable means every shape and refinement whose base is not a transient act ([§4](Reference-04-State-and-commits)). The GraphQL builder and the console both read this description and nothing else about the model.
+`Describe` in `apis/json/src/main/kotlin/velle/api/Describe.kt` walks the model once and produces the description `GET /api` answers: each exposed act with its fields, their types, whether each is a value, a reference, or a nested record, and its parts; each readable shape and refinement with its members, its flags, and its visibility, and `velle: true` on `Tick`, the shape Velle declares and no act commits ([§17](Reference-17-Schedule-triggers)); the schedules, which are every rule trigger other than `commit`; and the authorization flag. Readable means every shape and refinement whose base is not a transient act ([§4](Reference-04-State-and-commits)). The GraphQL builder and the console both read this description and nothing else about the model.
 
 ## apis/graphql: a schema from the model
 
@@ -160,21 +160,27 @@ fun velleActorInterceptor(): WebGraphQlInterceptor = object : WebGraphQlIntercep
 - `velleActorInterceptor` is the bridge between the filter and the schema: it copies the request attribute into the GraphQL context under the key the fetchers read. Spring's GraphQL engine has no view of the servlet request, so this interceptor is the one place the two meet.
 
 ```kotlin
-@Bean @ConditionalOnProperty(prefix = "velle", name = ["schedules"], matchIfMissing = false)
-fun velleTicker(api: VelleApi, props: VelleProperties): SmartInitializingSingleton = SmartInitializingSingleton {
-    val unknown = props.schedules.keys - api.schedules.toSet()
-    if (unknown.isNotEmpty()) throw IllegalStateException("velle.schedules names $unknown; this system has ${api.schedules}")
-    val scheduler = ThreadPoolTaskScheduler().apply { poolSize = 1; setThreadNamePrefix("velle-tick-"); initialize() }
-    for ((schedule, cron) in props.schedules) scheduler.schedule({ ... api.tick(schedule) ... }, CronTrigger(cron))
+@Configuration(proxyBeanMethods = false) @Conditional(SchedulesConfigured::class)
+@ConditionalOnProperty(prefix = "velle.ticker", name = ["enabled"], havingValue = "true", matchIfMissing = true) @EnableScheduling
+class Ticker {
+    @Bean
+    fun velleTicks(api: VelleApi, props: VelleProperties): SchedulingConfigurer = SchedulingConfigurer { registrar ->
+        val unknown = props.schedules.keys - api.schedules.toSet()
+        if (unknown.isNotEmpty()) throw IllegalStateException("velle.schedules names $unknown; this system has ${api.schedules}")
+        for ((schedule, s) in props.schedules)
+            registrar.addTriggerTask({ tick(api, schedule) }, CronTrigger(s.cron, s.zone ?: ZoneId.systemDefault()))
+    }
 }
 ```
 
-- The ticker starts after every singleton exists, so the store is connected before the first tick. One scheduler thread runs every schedule, and each tick is `api.tick`, in a scope of its own beside the requests.
-- A schedule named in `velle.schedules` that the spec does not have stops the application at startup. A `never` that rejects a firing is logged with the rejection's message, so a tick's refusals reach a human ([§21](Reference-21-never)).
+- `Ticker` is present when `velle.schedules` has an entry. It enables Spring's scheduling and registers one cron task per schedule with Spring's `ScheduledTaskRegistrar`, so the tasks run on the application's `TaskScheduler`, the one Boot configures under `spring.task.scheduling`, and appear wherever Spring lists its scheduled tasks. Each task is `api.tick`, in a scope of its own beside the requests. Spring calls the configurer once every singleton exists, so the store is connected before the first tick.
+- `SchedulesConfigured` decides by binding the map, because a map property has no value of its own for `@ConditionalOnProperty` to see. `velle.ticker.enabled: false` skips `Ticker` on one instance and nothing else: `VelleApi.tick` still serves the endpoint, the mutation, and the generated calls there.
+- `velleTickListeners` registers on the `VelleSystem` every `TickListener` bean the application declares, or `LoggingTickListener` when it declares none, and `MetricsTickListener` beside them when a `MeterRegistry` bean exists (`apis/spring/src/main/kotlin/velle/api/spring/TickListeners.kt`). The runtime tells them after each tick and after each act whose after-commit firings were refused or failed, so every transport's tick reaches them; `Ticker.tick` itself only catches, so a throwing tick or listener never stops the scheduler. The ticks endpoint and the GraphQL mutation stay a development affordance, off by default.
+- A schedule named in `velle.schedules` that the spec does not have, or a cron expression that does not parse, stops the application at startup. A `never` that rejects a firing is logged with the rejection's message, so a tick's refusals reach a human ([§21](Reference-21-never)).
 
 `VelleRestController` in `apis/spring/src/main/kotlin/velle/api/spring/VelleRestController.kt` is thin on purpose. Each endpoint is one line that reads the actor from the request attribute and calls the matching `VelleApi` function; `commit` sets 200 or 422 from the outcome's `accepted`; one `@ExceptionHandler` maps `ApiException.Kind` onto 400, 404, and 401. Nothing about any spec is in it.
 
-`VelleProperties` in `apis/spring/src/main/kotlin/velle/api/spring/VelleProperties.kt` binds `velle.*`: `api.path` and `api.ticks`, `store.enabled` and `store.create-schema`, `schedules` as a map from schedule name to cron expression, `console.enabled` and `console.path`.
+`VelleProperties` in `apis/spring/src/main/kotlin/velle/api/spring/VelleProperties.kt` binds `velle.*`: `api.path` and `api.ticks`, `store.enabled` and `store.create-schema`, `ticker.enabled`, `schedules` as a map from schedule name to a cron expression, written alone or as `cron` and `zone`, `console.enabled` and `console.path`.
 
 `VelleConsole` in `apis/spring/src/main/kotlin/velle/api/spring/VelleConsole.kt` serves one resource, `apis/spring/src/main/resources/velle/console.html`, at `velle.console.path`, after substituting the API path and the ticks flag into two placeholders. The page is plain HTML and JavaScript with no build step. On load it fetches `GET /api` and keeps the description; every view is rendered from it: the shape list and act list from `shapes` and `acts`, a table's columns from a shape's members, a form's inputs from an act's fields and their kinds, the tick buttons from `schedules`. Every data call is one of the REST endpoints, with one optional header the developer typed, kept in the browser's local storage, added to each request. The console is a client of the REST API and has no other access.
 

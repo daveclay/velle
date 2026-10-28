@@ -93,7 +93,7 @@ Identity is what matters, not equality. Two separately built `NewCondition` obje
 
 ## The commit function
 
-Each act gets one overload of `commit`, taking the input and, for an act declared `by`, the actor ([Authorization](Authorization)). It returns a `Commit` value carrying the input: `Accepted` with a reference to the record the act became, or `Refused` with a reason, and with the `never` that refused it as data when there was one ([§21](Reference-21-never)). For `act PeptideBatch` the overload is declared as `commit(input: NewPeptideBatch): Commit<NewPeptideBatch, Ref<PeptideBatch>>`.
+Each act gets one overload of `commit`, taking the input and, for an act declared `by`, the actor ([Authorization](Authorization)). It returns a `Commit` value carrying the input: `Accepted` with a reference to the record the act became, or `Refused` with a reason, and with the `never` that refused it as data when there was one ([§21](Reference-21-never)). An `Accepted` also carries what the act's `after commit` rules came to ([§18](Reference-18-Run-once-guards)): `afterCommitRejections`, the firings a `never` refused, and `afterCommitFailures`, the firings that failed for any other reason, each naming the rule and the record it ran for. Both are usually empty; the act stands either way. For `act PeptideBatch` the overload is declared as `commit(input: NewPeptideBatch): Commit<NewPeptideBatch, Ref<PeptideBatch>>`.
 
 ```kotlin
 when (val r = sys.commit(batch)) {
@@ -111,6 +111,18 @@ Before the runtime is entered, the function walks the input once. Every value in
 - two new records pointing at each other, since no record could then be created first.
 
 The runtime then creates every record in an order where each reference points at a record already created, as one transaction, and the door check and the rules see all of them at once ([evaluation](evaluation), "Closure commits").
+
+## Ticking a schedule
+
+Each schedule the spec names gets one function, `tickWeekly()` for `Weekly`, that runs every rule on the schedule now ([§17](Reference-17-Schedule-triggers)). It returns a `TickReport`: the schedule, the moment, how many firings of each rule landed, and the firings that failed for a reason other than a `never`, as `FiringFailure` values naming the rule, the record it ran for, and the cause. When a `never` refused a firing, the function throws `TickRejected` instead, carrying each refusal as data and the same report ([§21](Reference-21-never)). The other firings stood, and the next tick retries the refused and failed ones.
+
+```kotlin
+val report = sys.tickWeekly()
+report.firings            // {"RemindOverdue": 3}
+report.failures           // empty unless the store or the runtime failed a firing
+```
+
+To hear every tick and every act whose `after commit` firings were refused or failed without being the caller, register a `TickListener` on the system, `sys.system.listen(listener)`; it is told once the work is on record ([Serving a system, "Hearing a tick"](Serving-a-system#hearing-a-tick)).
 
 ## Reading a record
 

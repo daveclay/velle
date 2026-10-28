@@ -214,9 +214,9 @@ class DeleteRuntimeTest {
             sys.advanceDays(120)
             sys.tick("Monthly")
             assertEquals(emptyList(), sys.instancesOf("Reminder"))
-            sys.tick("Daily") // due again by the field witness — one new reminder, not a re-fold
+            val daily = sys.tick("Daily") // due again by the field witness — one new reminder, not a re-fold
             assertEquals(1, sys.instancesOf("Reminder").size)
-            assertEquals(emptyList<String>(), sys.failures)
+            assertEquals(emptyList(), daily.failures)
         }
     }
 }

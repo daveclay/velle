@@ -264,6 +264,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun commit(input: NewCancelTask): Commit<NewCancelTask, Nothing?> =
         boundary("CancelTask", input).carryingNoRecord(input)
 
+    fun ticks(): List<Tick> = all("Tick") { materializeTick(it) }
     fun crops(): List<Crop> = all("Crop") { materializeCrop(it) }
     fun pathogens(): List<Pathogen> = all("Pathogen") { materializePathogen(it) }
     fun peptides(): List<Peptide> = all("Peptide") { materializePeptide(it) }
@@ -345,6 +346,11 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     val read = Read()
 
     inner class Read : ReadSurface<Read>(system, { materialize(it) }) {
+
+        val ticks: TickQuery get() = query("Tick", TickFields()) { materializeTick(it) }
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun tick(key: StoreKey): Tick = byKey("Tick", key)
+        fun tick(key: Long): Tick = tick(StoreKey(key))
 
         val crops: CropQuery get() = query("Crop", CropFields()) { materializeCrop(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
@@ -696,6 +702,7 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
     private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+        "Tick" -> materializeTick(id)
         "Crop" -> materializeCrop(id)
         "Pathogen" -> materializePathogen(id)
         "Peptide" -> materializePeptide(id)
@@ -743,6 +750,12 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         "CancelRefusal" -> materializeCancelRefusal(id)
         else -> throw IllegalStateException("no model object for '$shape'")
     }
+
+    private fun materializeTick(id: Long): Tick = Tick(
+        key = system.refFor(id).key,
+        schedule = system.get(id, "schedule") as String,
+        at = system.get(id, "at") as Instant,
+    )
 
     private fun materializeCrop(id: Long): Crop = Crop(
         key = system.refFor(id).key,
@@ -2648,6 +2661,7 @@ rule RefuseCancel when RefusedCancel {
 }
 
 // ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias TickQuery = TypedQuery<TickFields, Tick>
 typealias CropQuery = TypedQuery<CropFields, Crop>
 typealias PathogenQuery = TypedQuery<PathogenFields, Pathogen>
 typealias PeptideQuery = TypedQuery<PeptideFields, Peptide>
@@ -3199,6 +3213,16 @@ data class NewCancelTask(
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,
 // a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
 // the record's membership at the moment of the read.
+
+data class Tick(
+    override val key: StoreKey,
+    val schedule: String,
+    val at: Instant,
+) : Ref<Tick> {
+    override val shape: String get() = "Tick"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Crop(
     override val key: StoreKey,
@@ -4630,6 +4654,11 @@ data class OverdueTask(
 
 // ── the builder's vocabulary: one field handle per member, memberships per refinement ──
 
+class TickFields(path: List<String> = emptyList()) : Fields(path) {
+    val schedule: TextField get() = TextField(fieldPath + "schedule")
+    val at: DateTimeField get() = DateTimeField(fieldPath + "at")
+}
+
 class CropFields(path: List<String> = emptyList()) : Fields(path) {
     val name: TextField get() = TextField(fieldPath + "name")
 }
@@ -5371,6 +5400,7 @@ fun main() {
 
     // <your scenario here>
 
+    println("Tick: " + sys.ticks().size)
     println("Crop: " + sys.crops().size)
     println("Pathogen: " + sys.pathogens().size)
     println("Peptide: " + sys.peptides().size)

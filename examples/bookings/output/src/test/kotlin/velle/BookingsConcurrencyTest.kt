@@ -101,7 +101,7 @@ class BookingsConcurrencyTest {
         val bob = sys.waitlists().single()
         store.serialized.clear()
         sys.tickHourly()
-        assertEquals(listOf(listOf("Booking.slot=$eleven", "Waitlist#${bob.key.value}")), store.serialized,
+        assertEquals(listOf(listOf("Booking.slot=$eleven", "Waitlist#${bob.key.value}"), listOf("Tick")), store.serialized,
             "one firing: the entry it is for, and the slot it waits on")
         assertEquals(1, sys.notices().size)
     }

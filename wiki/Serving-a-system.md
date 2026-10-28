@@ -41,7 +41,9 @@ velle:
     ticks: true
   schedules:
     Hourly: "0 0 * * * *"
-    Weekly: "0 0 6 * * MON"
+    Weekly:
+      cron: "0 0 6 * * MON"
+      zone: America/New_York
   console:
     path: /velle
 ```
@@ -49,10 +51,37 @@ velle:
 - `BillingSystem()` is the generated system ([Binding API](Binding-API)). Declaring it as a bean is the one thing the application does for Velle.
 - The starter, `apis/spring`, finds that bean and does the rest: it connects the system to the application's `DataSource` through the SQL store ([Store API](Store-API)), creates the tables, serves every act and shape over REST and GraphQL, ticks the schedules, and serves the console.
 - `spring-boot-starter-jdbc` and the PostgreSQL driver are the application's: they decide which database it talks to. The starter reads the database's name from the connection and picks the SQLite or PostgreSQL dialect.
-- `velle.schedules` gives each schedule the spec names a cron expression. A schedule with none never ticks on its own.
+- `velle.schedules` says when each schedule the spec names ticks: a cron expression, alone or with the time zone it is read in. `Hourly` runs at the top of every hour in the server's own zone. `Weekly` runs at 06:00 on Monday in New York. A schedule with no entry never ticks on its own.
+- The ticks are tasks on Spring's task scheduler. The `spring.task.scheduling` settings apply to them, and the Actuator `scheduledtasks` endpoint lists them beside the application's own scheduled tasks.
+- `velle.ticker.enabled: false` keeps one copy of the application from running the schedules, and changes nothing else: the ticks endpoint and the console's buttons still work on it. Two copies ticking the same schedule change the data once ([Concurrency, "Scheduled rules"](Concurrency#scheduled-rules)), but each runs the whole sweep, so when the application runs as several copies, turn the ticker off on all but one.
 - `velle.api.ticks` lets a caller fire a tick over HTTP. It is for a console or a test, and off by default.
 
 Run it with `./gradlew :examples:billing:app:bootRun`. Spring Boot starts the PostgreSQL in `examples/billing/app/compose.yaml` and points the `DataSource` at it. The console is at `http://localhost:8090/velle`.
+
+## Hearing a tick
+
+A tick has no caller to tell when a rule's firing was refused by a `never` or failed because the database did. The same is true of a rule behind an `after commit` boundary ([§18](Reference-18-Run-once-guards)). Velle tells a listener instead, and the starter registers one for you.
+
+By default the listener is the log: a tick that ran is one info line with its firings per rule, and a refused or failed firing is a warning carrying the rendered message, so it reaches a human without any code of yours. To hear it yourself, declare a bean:
+
+```kotlin
+@Bean
+fun pager(): TickListener = object : TickListener {
+    override fun ticked(report: TickReport, rejections: List<Rejection>) {
+        if (rejections.isNotEmpty() || report.failures.isNotEmpty()) page(report, rejections)
+    }
+    override fun afterCommit(act: RecordRef?, rejections: List<Rejection>, failures: List<FiringFailure>) {
+        page(act, rejections, failures)
+    }
+}
+```
+
+- `ticked` is called after every tick, once the tick is on record, with the report and the firings a `never` refused. `report.firings` counts what landed per rule; `report.failures` names each firing that failed, with the rule, the record it ran for, and the cause.
+- `afterCommit` is called only when an act's after-commit firings were refused or failed, with the act's record and both lists. The code that committed the act has the same lists on its result; the listener is for whoever is not reading that result.
+- Your bean replaces the log. Declare several and all are told. A listener that throws undoes nothing: the tick's row and its firings stand, and the exception reaches whoever called the tick after every listener has been told.
+- With a `MeterRegistry` in the application, Actuator's for example, the starter also counts: `velle.ticks` by schedule and outcome, `velle.tick.firings`, `velle.tick.rejections`, and `velle.tick.failures` by schedule and rule, and `velle.after_commit.rejections` and `velle.after_commit.failures` by rule.
+
+The listener is told by the Velle system itself, so it hears a tick from the scheduler, from the console's button, and from your own call to the generated `tickWeekly()` alike. The ticks endpoint and the console's button exist for development; in a deployment the cadence is the scheduler's and the listener is how anyone hears of it.
 
 ## REST
 
@@ -65,7 +94,7 @@ Every endpoint hangs from `velle.api.path`, `/api` here. `{Shape}` is a shape or
 | `GET /api/shapes/{Shape}/{key}` | one record by the store's key: 404 when there is none, it is not a member of the refinement, or the caller may not see it |
 | `GET /api/shapes/{Shape}?where=&orderBy=&size=&after=` | the records that satisfy `where`, in the order `orderBy` names, a page at a time |
 | `GET /api/shapes/{Shape}/count?where=` | how many |
-| `POST /api/ticks/{Schedule}` | runs every rule on the schedule now, when `velle.api.ticks` is on |
+| `POST /api/ticks/{Schedule}` | runs every rule on the schedule now, when `velle.api.ticks` is on; for development and the console, not for a deployment's cadence |
 
 A session against the billing application:
 

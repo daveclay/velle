@@ -254,6 +254,8 @@ class Validator(private val model: Model) {
         // V32: once a spec has authorization, every readable shape declares its visibility
         for ((name, _) in model.shapes) {
             if (name in model.transients) continue
+            // Velle's own shape has no clause of its own: it takes the spec-wide default when there is one (Reference §17)
+            if (name in model.builtin) continue
             if (model.recordVisibility(name).isNotEmpty()) continue
             diags.add(Diagnostic("V32", "'$name' declares no visibility, and this spec has authorization — say who may " +
                 "see it: a `visible to <Shape> [where ...]` clause in its body, `visible to anyone` for a public one, " +

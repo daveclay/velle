@@ -13,6 +13,13 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
+/** One stored Tick row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class TickRow(
+    val key: StoreKey,
+    val schedule: String,
+    val at: Instant,
+)
+
 /** One stored ContainerType row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class ContainerTypeRow(
     val key: StoreKey,
@@ -66,6 +73,7 @@ interface PlateLayoutStore {
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
     // ── keyed reads ──
+    fun tick(key: StoreKey): TickRow?
     fun containerType(key: StoreKey): ContainerTypeRow?
     fun experimentDesign(key: StoreKey): ExperimentDesignRow?
     fun condition(key: StoreKey): ConditionRow?
@@ -73,6 +81,7 @@ interface PlateLayoutStore {
     fun well(key: StoreKey): WellRow?
 
     // ── scan floor: all rows of a shape ──
+    fun allTicks(): List<TickRow>
     fun allContainerTypes(): List<ContainerTypeRow>
     fun allExperimentDesigns(): List<ExperimentDesignRow>
     fun allConditions(): List<ConditionRow>
@@ -109,12 +118,14 @@ open class PlateLayoutStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
+    override fun tick(key: StoreKey): TickRow? = backend.fetchByKey("Tick", key)?.toTickRow()
     override fun containerType(key: StoreKey): ContainerTypeRow? = backend.fetchByKey("ContainerType", key)?.toContainerTypeRow()
     override fun experimentDesign(key: StoreKey): ExperimentDesignRow? = backend.fetchByKey("ExperimentDesign", key)?.toExperimentDesignRow()
     override fun condition(key: StoreKey): ConditionRow? = backend.fetchByKey("Condition", key)?.toConditionRow()
     override fun container(key: StoreKey): ContainerRow? = backend.fetchByKey("Container", key)?.toContainerRow()
     override fun well(key: StoreKey): WellRow? = backend.fetchByKey("Well", key)?.toWellRow()
 
+    override fun allTicks(): List<TickRow> = backend.fetchAll("Tick").map { it.toTickRow() }
     override fun allContainerTypes(): List<ContainerTypeRow> = backend.fetchAll("ContainerType").map { it.toContainerTypeRow() }
     override fun allExperimentDesigns(): List<ExperimentDesignRow> = backend.fetchAll("ExperimentDesign").map { it.toExperimentDesignRow() }
     override fun allConditions(): List<ConditionRow> = backend.fetchAll("Condition").map { it.toConditionRow() }
@@ -147,6 +158,7 @@ class PlateLayoutStoreResolver(
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
+        "Tick" -> store.tick(key)?.toRow()
         "ContainerType" -> store.containerType(key)?.toRow()
         "ExperimentDesign" -> store.experimentDesign(key)?.toRow()
         "Condition" -> store.condition(key)?.toRow()
@@ -156,6 +168,7 @@ class PlateLayoutStoreResolver(
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
+        "Tick" -> store.allTicks().map { it.toRow() }
         "ContainerType" -> store.allContainerTypes().map { it.toRow() }
         "ExperimentDesign" -> store.allExperimentDesigns().map { it.toRow() }
         "Condition" -> store.allConditions().map { it.toRow() }
@@ -185,6 +198,17 @@ class PlateLayoutStoreResolver(
 }
 
 // ── row mappers: the generic wire format <-> the typed rows ──
+
+fun Row.toTickRow(): TickRow = TickRow(
+    key = key,
+    schedule = fields["schedule"] as String,
+    at = fields["at"] as Instant,
+)
+
+fun TickRow.toRow(): Row = Row("Tick", key, buildMap {
+    put("schedule", schedule)
+    put("at", at)
+})
 
 fun Row.toContainerTypeRow(): ContainerTypeRow = ContainerTypeRow(
     key = key,

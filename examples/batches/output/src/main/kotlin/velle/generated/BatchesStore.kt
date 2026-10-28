@@ -13,6 +13,13 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
+/** One stored Tick row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class TickRow(
+    val key: StoreKey,
+    val schedule: String,
+    val at: Instant,
+)
+
 /** One stored Peptide row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class PeptideRow(
     val key: StoreKey,
@@ -95,6 +102,7 @@ interface BatchesStore {
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
     // ── keyed reads ──
+    fun tick(key: StoreKey): TickRow?
     fun peptide(key: StoreKey): PeptideRow?
     fun bacteriaStrain(key: StoreKey): BacteriaStrainRow?
     fun fermenterRun(key: StoreKey): FermenterRunRow?
@@ -107,6 +115,7 @@ interface BatchesStore {
     fun depletionNotice(key: StoreKey): DepletionNoticeRow?
 
     // ── scan floor: all rows of a shape ──
+    fun allTicks(): List<TickRow>
     fun allPeptides(): List<PeptideRow>
     fun allBacteriaStrains(): List<BacteriaStrainRow>
     fun allFermenterRuns(): List<FermenterRunRow>
@@ -159,6 +168,7 @@ open class BatchesStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
+    override fun tick(key: StoreKey): TickRow? = backend.fetchByKey("Tick", key)?.toTickRow()
     override fun peptide(key: StoreKey): PeptideRow? = backend.fetchByKey("Peptide", key)?.toPeptideRow()
     override fun bacteriaStrain(key: StoreKey): BacteriaStrainRow? = backend.fetchByKey("BacteriaStrain", key)?.toBacteriaStrainRow()
     override fun fermenterRun(key: StoreKey): FermenterRunRow? = backend.fetchByKey("FermenterRun", key)?.toFermenterRunRow()
@@ -170,6 +180,7 @@ open class BatchesStoreOverGeneric(
     override fun peptideBatch(key: StoreKey): PeptideBatchRow? = backend.fetchByKey("PeptideBatch", key)?.toPeptideBatchRow()
     override fun depletionNotice(key: StoreKey): DepletionNoticeRow? = backend.fetchByKey("DepletionNotice", key)?.toDepletionNoticeRow()
 
+    override fun allTicks(): List<TickRow> = backend.fetchAll("Tick").map { it.toTickRow() }
     override fun allPeptides(): List<PeptideRow> = backend.fetchAll("Peptide").map { it.toPeptideRow() }
     override fun allBacteriaStrains(): List<BacteriaStrainRow> = backend.fetchAll("BacteriaStrain").map { it.toBacteriaStrainRow() }
     override fun allFermenterRuns(): List<FermenterRunRow> = backend.fetchAll("FermenterRun").map { it.toFermenterRunRow() }
@@ -221,6 +232,7 @@ class BatchesStoreResolver(
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
+        "Tick" -> store.tick(key)?.toRow()
         "Peptide" -> store.peptide(key)?.toRow()
         "BacteriaStrain" -> store.bacteriaStrain(key)?.toRow()
         "FermenterRun" -> store.fermenterRun(key)?.toRow()
@@ -235,6 +247,7 @@ class BatchesStoreResolver(
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
+        "Tick" -> store.allTicks().map { it.toRow() }
         "Peptide" -> store.allPeptides().map { it.toRow() }
         "BacteriaStrain" -> store.allBacteriaStrains().map { it.toRow() }
         "FermenterRun" -> store.allFermenterRuns().map { it.toRow() }
@@ -276,6 +289,17 @@ class BatchesStoreResolver(
 }
 
 // ── row mappers: the generic wire format <-> the typed rows ──
+
+fun Row.toTickRow(): TickRow = TickRow(
+    key = key,
+    schedule = fields["schedule"] as String,
+    at = fields["at"] as Instant,
+)
+
+fun TickRow.toRow(): Row = Row("Tick", key, buildMap {
+    put("schedule", schedule)
+    put("at", at)
+})
 
 fun Row.toPeptideRow(): PeptideRow = PeptideRow(
     key = key,

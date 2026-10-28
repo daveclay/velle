@@ -29,6 +29,7 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     fun commit(input: NewShipment): Commit<NewShipment, Ref<Shipment>> =
         boundary("Shipment", input).carrying(input)
 
+    fun ticks(): List<Tick> = all("Tick") { materializeTick(it) }
     fun orders(): List<Order> = all("Order") { materializeOrder(it) }
     fun cancellations(): List<Cancellation> = all("Cancellation") { materializeCancellation(it) }
     fun shipments(): List<Shipment> = all("Shipment") { materializeShipment(it) }
@@ -39,6 +40,11 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
     val read = Read()
 
     inner class Read : ReadSurface<Read>(system, { materialize(it) }) {
+
+        val ticks: TickQuery get() = query("Tick", TickFields()) { materializeTick(it) }
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun tick(key: StoreKey): Tick = byKey("Tick", key)
+        fun tick(key: Long): Tick = tick(StoreKey(key))
 
         val orders: OrderQuery get() = query("Order", OrderFields()) { materializeOrder(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
@@ -66,11 +72,18 @@ class ShippingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
     private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+        "Tick" -> materializeTick(id)
         "Order" -> materializeOrder(id)
         "Cancellation" -> materializeCancellation(id)
         "Shipment" -> materializeShipment(id)
         else -> throw IllegalStateException("no model object for '$shape'")
     }
+
+    private fun materializeTick(id: Long): Tick = Tick(
+        key = system.refFor(id).key,
+        schedule = system.get(id, "schedule") as String,
+        at = system.get(id, "at") as Instant,
+    )
 
     private fun materializeOrder(id: Long): Order = Order(
         key = system.refFor(id).key,
@@ -183,6 +196,7 @@ never (Shipment where order is CancelledOrder)
 }
 
 // ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias TickQuery = TypedQuery<TickFields, Tick>
 typealias OrderQuery = TypedQuery<OrderFields, Order>
 typealias CancellationQuery = TypedQuery<CancellationFields, Cancellation>
 typealias ShipmentQuery = TypedQuery<ShipmentFields, Shipment>
@@ -233,6 +247,16 @@ data class NewShipment(
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,
 // a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
 // the record's membership at the moment of the read.
+
+data class Tick(
+    override val key: StoreKey,
+    val schedule: String,
+    val at: Instant,
+) : Ref<Tick> {
+    override val shape: String get() = "Tick"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Order(
     override val key: StoreKey,
@@ -297,6 +321,11 @@ data class ShippedOrder(
 
 // ── the builder's vocabulary: one field handle per member, memberships per refinement ──
 
+class TickFields(path: List<String> = emptyList()) : Fields(path) {
+    val schedule: TextField get() = TextField(fieldPath + "schedule")
+    val at: DateTimeField get() = DateTimeField(fieldPath + "at")
+}
+
 class OrderFields(path: List<String> = emptyList()) : Fields(path) {
     val reference: TextField get() = TextField(fieldPath + "reference")
     fun isCancelledOrder(): Expr = isA("CancelledOrder")
@@ -331,6 +360,7 @@ fun main() {
 
     // <your scenario here>
 
+    println("Tick: " + sys.ticks().size)
     println("Order: " + sys.orders().size)
     println("Cancellation: " + sys.cancellations().size)
     println("Shipment: " + sys.shipments().size)

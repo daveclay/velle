@@ -1,6 +1,7 @@
 package velle
 
 import java.math.BigDecimal
+import java.time.Instant
 
 /**
  * What a rejection carries (`evaluation.md`, "Errors, refusals, and retry"). A `never` refused a
@@ -59,13 +60,54 @@ data class Rejection(
 }
 
 /**
+ * A firing that failed for a reason other than a `never`: the store threw, a lock
+ * timed out, the runtime hit an error. Not the spec's meaning but the machinery's,
+ * so it is not a [Rejection], which is what a `never` says about the books. The
+ * firing's envelope rolled back; the next tick, or for an after-commit firing the
+ * next commit that queues it, retries it ([S4]).
+ */
+data class FiringFailure(val rule: String, val subject: RecordRef?, val cause: Throwable) {
+    val message: String get() = "firing of '$rule'" + (subject?.let { " for $it" } ?: "") + " failed: ${cause.message}"
+}
+
+/**
+ * What one tick did (Reference §17): the schedule, the moment, how many firings
+ * of each rule landed, and the firings that failed. A firing a `never` refused is
+ * not here but on the [TickRejected] that carries this report. The runtime keeps
+ * no report once it has returned it.
+ */
+data class TickReport(val schedule: String, val at: Instant, val firings: Map<String, Int>, val failures: List<FiringFailure>)
+
+/**
  * A tick's rejection. A tick has no caller, so a firing that a `never`
  * rejects is thrown once the sweep is done, carrying each rejected firing's
- * [Rejection] — the same object an act's refusal returns. The other firings
- * stood; the next tick retries the rejected ones.
+ * [Rejection] — the same object an act's refusal returns — and the tick's
+ * [report] of everything else it did. The other firings stood; the next tick
+ * retries the rejected ones.
  */
-class TickRejected(val schedule: String, val at: java.time.Instant, val rejections: List<Rejection>) :
-    Exception(rejections.joinToString("\n\n") { it.message })
+class TickRejected(val report: TickReport, val rejections: List<Rejection>) :
+    Exception(rejections.joinToString("\n\n") { it.message }) {
+    val schedule: String get() = report.schedule
+    val at: Instant get() = report.at
+}
+
+/**
+ * Who hears what no caller is told (OQ71 D5). Registered on a [VelleSystem] with
+ * `listen`, told on the thread that did the work, after the work is complete and
+ * durable: a listener that throws undoes nothing, and its exception reaches the
+ * caller after every listener has had its turn. A tick's outcome is [ticked]; an
+ * act's `after commit` firings that a `never` refused or that failed are
+ * [afterCommit], told only when there is something to tell. The committing code
+ * has the same lists on its result; the listener is for the people nobody's code
+ * tells: a log, an alert, a metric.
+ */
+interface TickListener {
+    /** Every tick, once its own `Tick` row has landed: the report, and the firings a `never` refused. */
+    fun ticked(report: TickReport, rejections: List<Rejection>)
+
+    /** An accepted act whose after-commit firings came to something: the act's record (null for a transient act), the refused, the failed. */
+    fun afterCommit(act: RecordRef?, rejections: List<Rejection>, failures: List<FiringFailure>) {}
+}
 
 /** A reference to a record: its shape and store key — the same pair a [Ref] carries. A record
  *  the refused transaction created has no key yet and is named by the runtime's handle instead. */

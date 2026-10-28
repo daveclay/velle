@@ -126,12 +126,13 @@ class HydrationCandidatesTest {
         billing.tickWeekly()
         assertEquals(1, sqlCount("Reminder"))
 
-        // the sweep's only scan is the compiled candidate query over Invoice;
-        // the reminder guard and archive facts hydrate as keyed joins, and the
+        // the sweep's scans are the compiled candidate queries: the latest Tick for
+        // the schedule (the previous tick, Reference §17), then the invoices; the
+        // reminder guard and archive facts hydrate as keyed joins, and the
         // firing's own envelope (a Reminder create) is relevant to no watcher
         assertEquals(emptyList(), store.fetchAlls)
-        assertEquals(listOf("Invoice"), store.candidates.map { it.first })
-        assertTrue(store.candidates.single().second != QF.True)
+        assertEquals(listOf("Tick", "Invoice"), store.candidates.map { it.first })
+        assertTrue(store.candidates.all { it.second != QF.True }, "both scans carry a filter: the schedule, the overdue predicate")
 
         // same tick again: the Reminder evidence suppresses re-nagging
         billing.tickWeekly()

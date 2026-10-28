@@ -113,7 +113,8 @@ class AdmissionKeysTest {
         store.serialized.clear()
         sys.tick("Hourly")
         val key = wed.key.value
-        assertEquals(listOf(listOf("Reservation.slot=Wed 14:00", "Waitlist#$key")), store.serialized)
+        // the firing's keys, then the tick's own record under its shape's key (Reference §17)
+        assertEquals(listOf(listOf("Reservation.slot=Wed 14:00", "Waitlist#$key"), listOf("Tick")), store.serialized)
         sys.scope { assertEquals(1, sys.instancesOf("Nagged").size) }
     }
 

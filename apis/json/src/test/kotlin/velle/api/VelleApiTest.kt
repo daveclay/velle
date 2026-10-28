@@ -74,6 +74,8 @@ class VelleApiTest {
         val shapes = (d["shapes"] as List<Map<String, Any?>>).associateBy { it["name"] }
         assertTrue("SignUp" !in shapes, "a transient act is not readable")
         assertTrue("LineItem" in shapes, "a durable act is a readable shape")
+        assertEquals(true, shapes.getValue("Tick")["velle"], "Velle's record of a tick is readable and marked as Velle's")
+        assertTrue("Tick" !in acts, "and nothing commits it")
         val invoice = shapes.getValue("Invoice")
         assertEquals(listOf("isPaidInvoice", "isOverdueInvoice", "isActionableOverdue", "isIssuedInvoice", "isArchivedInvoice"), invoice["flags"])
         val members = (invoice["members"] as List<Map<String, Any?>>).associateBy { it["name"] }

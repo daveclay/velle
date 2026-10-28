@@ -13,6 +13,13 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
+/** One stored Tick row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class TickRow(
+    val key: StoreKey,
+    val schedule: String,
+    val at: Instant,
+)
+
 /** One stored Staff row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class StaffRow(
     val key: StoreKey,
@@ -62,6 +69,7 @@ interface VendorsStore {
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
     // ── keyed reads ──
+    fun tick(key: StoreKey): TickRow?
     fun staff(key: StoreKey): StaffRow?
     fun vendorAssignment(key: StoreKey): VendorAssignmentRow?
     fun vendor(key: StoreKey): VendorRow?
@@ -69,6 +77,7 @@ interface VendorsStore {
     fun marginAlert(key: StoreKey): MarginAlertRow?
 
     // ── scan floor: all rows of a shape ──
+    fun allTicks(): List<TickRow>
     fun allStaffs(): List<StaffRow>
     fun allVendorAssignments(): List<VendorAssignmentRow>
     fun allVendors(): List<VendorRow>
@@ -112,12 +121,14 @@ open class VendorsStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
+    override fun tick(key: StoreKey): TickRow? = backend.fetchByKey("Tick", key)?.toTickRow()
     override fun staff(key: StoreKey): StaffRow? = backend.fetchByKey("Staff", key)?.toStaffRow()
     override fun vendorAssignment(key: StoreKey): VendorAssignmentRow? = backend.fetchByKey("VendorAssignment", key)?.toVendorAssignmentRow()
     override fun vendor(key: StoreKey): VendorRow? = backend.fetchByKey("Vendor", key)?.toVendorRow()
     override fun product(key: StoreKey): ProductRow? = backend.fetchByKey("Product", key)?.toProductRow()
     override fun marginAlert(key: StoreKey): MarginAlertRow? = backend.fetchByKey("MarginAlert", key)?.toMarginAlertRow()
 
+    override fun allTicks(): List<TickRow> = backend.fetchAll("Tick").map { it.toTickRow() }
     override fun allStaffs(): List<StaffRow> = backend.fetchAll("Staff").map { it.toStaffRow() }
     override fun allVendorAssignments(): List<VendorAssignmentRow> = backend.fetchAll("VendorAssignment").map { it.toVendorAssignmentRow() }
     override fun allVendors(): List<VendorRow> = backend.fetchAll("Vendor").map { it.toVendorRow() }
@@ -156,6 +167,7 @@ class VendorsStoreResolver(
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
+        "Tick" -> store.tick(key)?.toRow()
         "Staff" -> store.staff(key)?.toRow()
         "VendorAssignment" -> store.vendorAssignment(key)?.toRow()
         "Vendor" -> store.vendor(key)?.toRow()
@@ -165,6 +177,7 @@ class VendorsStoreResolver(
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
+        "Tick" -> store.allTicks().map { it.toRow() }
         "Staff" -> store.allStaffs().map { it.toRow() }
         "VendorAssignment" -> store.allVendorAssignments().map { it.toRow() }
         "Vendor" -> store.allVendors().map { it.toRow() }
@@ -197,6 +210,17 @@ class VendorsStoreResolver(
 }
 
 // ── row mappers: the generic wire format <-> the typed rows ──
+
+fun Row.toTickRow(): TickRow = TickRow(
+    key = key,
+    schedule = fields["schedule"] as String,
+    at = fields["at"] as Instant,
+)
+
+fun TickRow.toRow(): Row = Row("Tick", key, buildMap {
+    put("schedule", schedule)
+    put("at", at)
+})
 
 fun Row.toStaffRow(): StaffRow = StaffRow(
     key = key,

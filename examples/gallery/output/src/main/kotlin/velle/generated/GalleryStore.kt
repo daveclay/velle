@@ -13,6 +13,13 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
+/** One stored Tick row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class TickRow(
+    val key: StoreKey,
+    val schedule: String,
+    val at: Instant,
+)
+
 /** One stored Member row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class MemberRow(
     val key: StoreKey,
@@ -69,6 +76,7 @@ interface GalleryStore {
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
     // ── keyed reads ──
+    fun tick(key: StoreKey): TickRow?
     fun member(key: StoreKey): MemberRow?
     fun post(key: StoreKey): PostRow?
     fun photo(key: StoreKey): PhotoRow?
@@ -77,6 +85,7 @@ interface GalleryStore {
     fun commentNotice(key: StoreKey): CommentNoticeRow?
 
     // ── scan floor: all rows of a shape ──
+    fun allTicks(): List<TickRow>
     fun allMembers(): List<MemberRow>
     fun allPosts(): List<PostRow>
     fun allPhotos(): List<PhotoRow>
@@ -105,6 +114,7 @@ open class GalleryStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
+    override fun tick(key: StoreKey): TickRow? = backend.fetchByKey("Tick", key)?.toTickRow()
     override fun member(key: StoreKey): MemberRow? = backend.fetchByKey("Member", key)?.toMemberRow()
     override fun post(key: StoreKey): PostRow? = backend.fetchByKey("Post", key)?.toPostRow()
     override fun photo(key: StoreKey): PhotoRow? = backend.fetchByKey("Photo", key)?.toPhotoRow()
@@ -112,6 +122,7 @@ open class GalleryStoreOverGeneric(
     override fun popularityNotice(key: StoreKey): PopularityNoticeRow? = backend.fetchByKey("PopularityNotice", key)?.toPopularityNoticeRow()
     override fun commentNotice(key: StoreKey): CommentNoticeRow? = backend.fetchByKey("CommentNotice", key)?.toCommentNoticeRow()
 
+    override fun allTicks(): List<TickRow> = backend.fetchAll("Tick").map { it.toTickRow() }
     override fun allMembers(): List<MemberRow> = backend.fetchAll("Member").map { it.toMemberRow() }
     override fun allPosts(): List<PostRow> = backend.fetchAll("Post").map { it.toPostRow() }
     override fun allPhotos(): List<PhotoRow> = backend.fetchAll("Photo").map { it.toPhotoRow() }
@@ -144,6 +155,7 @@ class GalleryStoreResolver(
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
+        "Tick" -> store.tick(key)?.toRow()
         "Member" -> store.member(key)?.toRow()
         "Post" -> store.post(key)?.toRow()
         "Photo" -> store.photo(key)?.toRow()
@@ -154,6 +166,7 @@ class GalleryStoreResolver(
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
+        "Tick" -> store.allTicks().map { it.toRow() }
         "Member" -> store.allMembers().map { it.toRow() }
         "Post" -> store.allPosts().map { it.toRow() }
         "Photo" -> store.allPhotos().map { it.toRow() }
@@ -184,6 +197,17 @@ class GalleryStoreResolver(
 }
 
 // ── row mappers: the generic wire format <-> the typed rows ──
+
+fun Row.toTickRow(): TickRow = TickRow(
+    key = key,
+    schedule = fields["schedule"] as String,
+    at = fields["at"] as Instant,
+)
+
+fun TickRow.toRow(): Row = Row("Tick", key, buildMap {
+    put("schedule", schedule)
+    put("at", at)
+})
 
 fun Row.toMemberRow(): MemberRow = MemberRow(
     key = key,

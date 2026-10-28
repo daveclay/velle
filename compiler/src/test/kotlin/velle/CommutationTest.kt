@@ -68,10 +68,10 @@ class CommutationTest {
         b: (VelleSystem) -> Unit,
     ): Pair<Map<String, List<String>>, Map<String, List<String>>> {
         // one scope per run: the handles setup hands to a and b live until it exits
-        val ab = system(spec).also { sys -> sys.scope { setup(sys); a(sys); b(sys) } }
-        val ba = system(spec).also { sys -> sys.scope { setup(sys); b(sys); a(sys) } }
-        assertTrue(ab.failures.isEmpty() && ba.failures.isEmpty(),
-            "firings failed: ${ab.failures + ba.failures}")
+        val failed = FailureCollector()
+        val ab = system(spec).also { sys -> sys.listen(failed); sys.scope { setup(sys); a(sys); b(sys) } }
+        val ba = system(spec).also { sys -> sys.listen(failed); sys.scope { setup(sys); b(sys); a(sys) } }
+        assertTrue(failed.failures.isEmpty(), "firings failed: ${failed.failures.map { it.message }}")
         return fingerprint(ab) to fingerprint(ba)
     }
 

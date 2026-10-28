@@ -47,6 +47,8 @@ class MemoryStoreTest {
     @Test
     fun `two envelopes on one queue key take turns - no deposit is lost`() {
         val sys = system()
+        val failed = FailureCollector()
+        sys.listen(failed)
         val account = sys.scope { accepted(sys.commit("Account", mapOf("owner" to "Ada"))) }
         val threads = 8
         val perThread = 25
@@ -65,7 +67,7 @@ class MemoryStoreTest {
         start.countDown()
         futures.forEach { it.get(60, TimeUnit.SECONDS) }
         pool.shutdown()
-        assertEquals(emptyList(), sys.failures)
+        assertEquals(emptyList(), failed.failures)
         sys.scope {
             val balance = sys.get(sys.idOf(account), "balance") as BigDecimal
             assertEquals(0, BigDecimal(threads * perThread).compareTo(balance), "every deposit landed: $balance")

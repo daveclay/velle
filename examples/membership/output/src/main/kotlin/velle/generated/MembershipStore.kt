@@ -13,6 +13,13 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
+/** One stored Tick row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class TickRow(
+    val key: StoreKey,
+    val schedule: String,
+    val at: Instant,
+)
+
 /** One stored Plan row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class PlanRow(
     val key: StoreKey,
@@ -185,6 +192,7 @@ interface MembershipStore {
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
     // ── keyed reads ──
+    fun tick(key: StoreKey): TickRow?
     fun plan(key: StoreKey): PlanRow?
     fun member(key: StoreKey): MemberRow?
     fun welcomeNote(key: StoreKey): WelcomeNoteRow?
@@ -206,6 +214,7 @@ interface MembershipStore {
     fun escalation(key: StoreKey): EscalationRow?
 
     // ── scan floor: all rows of a shape ──
+    fun allTicks(): List<TickRow>
     fun allPlans(): List<PlanRow>
     fun allMembers(): List<MemberRow>
     fun allWelcomeNotes(): List<WelcomeNoteRow>
@@ -344,6 +353,7 @@ open class MembershipStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
+    override fun tick(key: StoreKey): TickRow? = backend.fetchByKey("Tick", key)?.toTickRow()
     override fun plan(key: StoreKey): PlanRow? = backend.fetchByKey("Plan", key)?.toPlanRow()
     override fun member(key: StoreKey): MemberRow? = backend.fetchByKey("Member", key)?.toMemberRow()
     override fun welcomeNote(key: StoreKey): WelcomeNoteRow? = backend.fetchByKey("WelcomeNote", key)?.toWelcomeNoteRow()
@@ -364,6 +374,7 @@ open class MembershipStoreOverGeneric(
     override fun reopenNotice(key: StoreKey): ReopenNoticeRow? = backend.fetchByKey("ReopenNotice", key)?.toReopenNoticeRow()
     override fun escalation(key: StoreKey): EscalationRow? = backend.fetchByKey("Escalation", key)?.toEscalationRow()
 
+    override fun allTicks(): List<TickRow> = backend.fetchAll("Tick").map { it.toTickRow() }
     override fun allPlans(): List<PlanRow> = backend.fetchAll("Plan").map { it.toPlanRow() }
     override fun allMembers(): List<MemberRow> = backend.fetchAll("Member").map { it.toMemberRow() }
     override fun allWelcomeNotes(): List<WelcomeNoteRow> = backend.fetchAll("WelcomeNote").map { it.toWelcomeNoteRow() }
@@ -515,6 +526,7 @@ class MembershipStoreResolver(
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
+        "Tick" -> store.tick(key)?.toRow()
         "Plan" -> store.plan(key)?.toRow()
         "Member" -> store.member(key)?.toRow()
         "WelcomeNote" -> store.welcomeNote(key)?.toRow()
@@ -538,6 +550,7 @@ class MembershipStoreResolver(
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
+        "Tick" -> store.allTicks().map { it.toRow() }
         "Plan" -> store.allPlans().map { it.toRow() }
         "Member" -> store.allMembers().map { it.toRow() }
         "WelcomeNote" -> store.allWelcomeNotes().map { it.toRow() }
@@ -636,6 +649,17 @@ private fun List<QConst>.date(i: Int): LocalDate = (this[i] as QConst.QDate).v
 private fun List<QConst>.instant(i: Int): Instant = (this[i] as QConst.QDateTime).v
 
 // ── row mappers: the generic wire format <-> the typed rows ──
+
+fun Row.toTickRow(): TickRow = TickRow(
+    key = key,
+    schedule = fields["schedule"] as String,
+    at = fields["at"] as Instant,
+)
+
+fun TickRow.toRow(): Row = Row("Tick", key, buildMap {
+    put("schedule", schedule)
+    put("at", at)
+})
 
 fun Row.toPlanRow(): PlanRow = PlanRow(
     key = key,

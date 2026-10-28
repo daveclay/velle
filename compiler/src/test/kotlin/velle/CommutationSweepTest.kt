@@ -211,6 +211,8 @@ class CommutationSweepTest {
     private fun checkPair(model: Model, pools: Map<String, List<String>>, a: Candidate, b: Candidate, report: Report) {
         fun run(first: Candidate, second: Candidate): Map<String, List<String>>? {
             val sys = grown(model, pools)
+            val failed = FailureCollector()
+            sys.listen(failed)
             // one scope for the pair: the handles both field maps hold live until it exits
             return sys.scope {
                 // both field maps resolve against the setup state — the state the
@@ -220,7 +222,7 @@ class CommutationSweepTest {
                 val fb = resolve(sys, second) ?: return@scope null
                 runCatching { sys.commit(first.act, fa); sys.commit(second.act, fb) }
                     .onFailure { report.runtimeErrors.add("${first.label}, ${second.label}: ${it.message}"); return@scope null }
-                if (sys.failures.isNotEmpty()) return@scope null
+                if (failed.failures.isNotEmpty()) return@scope null
                 fingerprint(sys, model)
             }
         }

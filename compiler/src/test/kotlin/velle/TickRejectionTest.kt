@@ -62,8 +62,16 @@ class TickRejectionTest {
 
             assertEquals(emptyList(), sys.instancesOf("ScoutingReminder"), "the firing rolled back")
             assertEquals("Nightly", e.schedule)
-            val r = e.rejections.single()
-            assertEquals(e.message, r.message)
+            assertEquals(emptyMap(), e.report.firings, "nothing landed")
+            assertEquals(emptyList(), e.report.failures, "a refusal is not a failure")
+            // the firing's rejection, then the tick's own record refused the same way: while the
+            // books stand in the forbidden state, no envelope lands, the tick's `Tick` row included
+            assertEquals(2, e.rejections.size, e.rejections.map { it.message }.toString())
+            val record = e.rejections[1]
+            assertNull(record.rule)
+            assertEquals(listOf("Tick"), record.produced.map { it.shape })
+            val r = e.rejections.first()
+            assertEquals(e.rejections.joinToString("\n\n") { it.message }, e.message)
             assertNull(r.act)
             assertEquals("RemindScouting", r.rule)
             assertEquals("Nightly", r.schedule)

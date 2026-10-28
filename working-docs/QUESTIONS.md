@@ -1,6 +1,6 @@
 # Open questions and work items — the index
 
-One line per question and per work item here; the discussion lives in `questions/OQ<n>-*.md`, where each file's header states the question in plain terms before the dense part begins. OQ tags are stable — numbers are never renumbered or reused (next free: OQ71), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
+One line per question and per work item here; the discussion lives in `questions/OQ<n>-*.md`, where each file's header states the question in plain terms before the dense part begins. OQ tags are stable — numbers are never renumbered or reused (next free: OQ72), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
 
 **Questions and items.** A question (an OQ) is a design decision with discussion worth keeping. A work item is one action, verb-first, one line. An item whose whole context fits in its line stands alone; an item with context lives under the question that holds it, and the context is in that question's file, never here. Items are grouped by the part of Velle they change, not by where they were found; S-numbers, P-numbers, and B-numbers are findings of the peptides, pharmacy, and batches passes, recorded in OQ16's calibration record.
 
@@ -52,7 +52,8 @@ The current milestone is calibrating v0 against realistic specs. Nothing here bl
   - [ ] Name-check the predicate of a refinement or `never` whose subject is a cross-base union (`Validator.walkRefExpr` skips it when `Model.baseOf` has no single base), so a field the operands declare separately is the Reference §9 error and not a per-instance read at runtime (B1).
   - [ ] Resolve the element of a refinement-filtered collection as the refinement, so an aggregate or selector over `claims where PaidClaim` can read `PaidClaim`'s own body properties (P8).
   - [ ] Add a union notation to the class and state-flow diagrams (`diagrams.md`).
-- **[OQ34](questions/OQ34-schedule-definition.md)** — schedule definition (deferred, post-v0; carries event-anchored timeouts and data-derived durations)
+- **[OQ34](questions/OQ34-schedule-definition.md)** — schedule definition (deferred, post-v0; carries event-anchored timeouts, data-derived durations, and whether a missed run is made up)
+  - [ ] Let the spec say whether a schedule's missed run is owed and made up at the next start; the starter then compares the schedule's next moment after the latest `Tick` with the clock and ticks once (from OQ71 D4, 2026-10-28).
   - [ ] Decide whether a duration may be built from a data value (`treatedAt + interval days`); today a duration takes a literal count only (S13, P12).
 - [ ] Decide: `if ... then` sharing the condition's line — language rule, or parser limitation to lift? (S10, P12)
 - [ ] Decide whether a field may be read through a `many` hop as a collection (`(Component where ...).source`, `origin.components.source`): the validator accepts both and the evaluator refuses both, so a derived set of ancestor records has no spelling that runs; either the grammar gains the collection path or the validator refuses it (B5).
@@ -127,6 +128,9 @@ Built 2026-10-26 as the end state Dave stated at OQ51's settling (a framework li
 - [ ] Decide whether the model description (`GET /api`) should be an OpenAPI document, and the GraphQL schema printed as SDL, for client generators.
 - [ ] Build the unstored actor (`transient shape Staff`, the item under Acts) and let the actor resolver return it: today the resolver returns a reference to a stored record only.
 - [ ] Decide whether the starter should run the generated `SpecSupport` scenarios against the live store at startup as a smoke test (the item under Spec generation about `newSystem()`).
+- **[OQ71](questions/OQ71-ticking-in-deployment.md)** — ticking in a deployment: more than one instance, the last tick, a missed tick, who hears a rejection, shutdown · opened 2026-10-28 when the ticker moved onto Spring's scheduler with a zone per schedule; D1 (a firing re-checks its condition under its locks, `DuplicateFiringTest`), D2 (`velle.ticker.enabled`), and D3 (the tick's own record: `Tick`, a shape declared in Velle in `Model.PRELUDE`, written by the tick's envelope and read as the previous tick, `TickRecordTest`) ratified and built the same day; D4 (a missed run) redirected to OQ34 as the schedule's meaning, not a deployment setting; D5 built in full (`TickReport`, `FiringFailure`, after-commit outcomes on the commit result; `TickListener` registered on the runtime, told after a tick and after an act whose after-commit firings were refused or failed; the starter's logging and metrics listeners; the REST and GraphQL tick kept as a development affordance; `TickReportTest`, `TickListenerTest`)
+  - [ ] Decide whether the starter sets shutdown defaults so an in-flight sweep finishes before the DataSource closes, or the example application does (D6).
+  - [ ] Document the escape hatch in Serving-a-system: the generated `tick<Schedule>()` call from the application's own `@Scheduled` method (D7).
 
 ## Runtime and clock
 

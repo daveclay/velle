@@ -13,6 +13,13 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
+/** One stored Tick row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class TickRow(
+    val key: StoreKey,
+    val schedule: String,
+    val at: Instant,
+)
+
 /** One stored Order row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class OrderRow(
     val key: StoreKey,
@@ -46,11 +53,13 @@ interface ShippingStore {
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
     // ── keyed reads ──
+    fun tick(key: StoreKey): TickRow?
     fun order(key: StoreKey): OrderRow?
     fun cancellation(key: StoreKey): CancellationRow?
     fun shipment(key: StoreKey): ShipmentRow?
 
     // ── scan floor: all rows of a shape ──
+    fun allTicks(): List<TickRow>
     fun allOrders(): List<OrderRow>
     fun allCancellations(): List<CancellationRow>
     fun allShipments(): List<ShipmentRow>
@@ -82,10 +91,12 @@ open class ShippingStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
+    override fun tick(key: StoreKey): TickRow? = backend.fetchByKey("Tick", key)?.toTickRow()
     override fun order(key: StoreKey): OrderRow? = backend.fetchByKey("Order", key)?.toOrderRow()
     override fun cancellation(key: StoreKey): CancellationRow? = backend.fetchByKey("Cancellation", key)?.toCancellationRow()
     override fun shipment(key: StoreKey): ShipmentRow? = backend.fetchByKey("Shipment", key)?.toShipmentRow()
 
+    override fun allTicks(): List<TickRow> = backend.fetchAll("Tick").map { it.toTickRow() }
     override fun allOrders(): List<OrderRow> = backend.fetchAll("Order").map { it.toOrderRow() }
     override fun allCancellations(): List<CancellationRow> = backend.fetchAll("Cancellation").map { it.toCancellationRow() }
     override fun allShipments(): List<ShipmentRow> = backend.fetchAll("Shipment").map { it.toShipmentRow() }
@@ -110,6 +121,7 @@ class ShippingStoreResolver(
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
+        "Tick" -> store.tick(key)?.toRow()
         "Order" -> store.order(key)?.toRow()
         "Cancellation" -> store.cancellation(key)?.toRow()
         "Shipment" -> store.shipment(key)?.toRow()
@@ -117,6 +129,7 @@ class ShippingStoreResolver(
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
+        "Tick" -> store.allTicks().map { it.toRow() }
         "Order" -> store.allOrders().map { it.toRow() }
         "Cancellation" -> store.allCancellations().map { it.toRow() }
         "Shipment" -> store.allShipments().map { it.toRow() }
@@ -141,6 +154,17 @@ class ShippingStoreResolver(
 }
 
 // ── row mappers: the generic wire format <-> the typed rows ──
+
+fun Row.toTickRow(): TickRow = TickRow(
+    key = key,
+    schedule = fields["schedule"] as String,
+    at = fields["at"] as Instant,
+)
+
+fun TickRow.toRow(): Row = Row("Tick", key, buildMap {
+    put("schedule", schedule)
+    put("at", at)
+})
 
 fun Row.toOrderRow(): OrderRow = OrderRow(
     key = key,

@@ -51,6 +51,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
     fun commit(input: NewTransientEdit): Commit<NewTransientEdit, Nothing?> =
         boundary("TransientEdit", input).carryingNoRecord(input)
 
+    fun ticks(): List<Tick> = all("Tick") { materializeTick(it) }
     fun notes(): List<Note> = all("Note") { materializeNote(it) }
     fun lockNotes(): List<LockNote> = all("LockNote") { materializeLockNote(it) }
     fun unlockNotes(): List<UnlockNote> = all("UnlockNote") { materializeUnlockNote(it) }
@@ -72,6 +73,11 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
     val read = Read()
 
     inner class Read : ReadSurface<Read>(system, { materialize(it) }) {
+
+        val ticks: TickQuery get() = query("Tick", TickFields()) { materializeTick(it) }
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun tick(key: StoreKey): Tick = byKey("Tick", key)
+        fun tick(key: Long): Tick = tick(StoreKey(key))
 
         val notes: NoteQuery get() = query("Note", NoteFields()) { materializeNote(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
@@ -150,6 +156,7 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
     private fun materialize(id: Long): Ref<*> = when (val shape = system.shapeOf(id)) {
+        "Tick" -> materializeTick(id)
         "Note" -> materializeNote(id)
         "LockNote" -> materializeLockNote(id)
         "UnlockNote" -> materializeUnlockNote(id)
@@ -162,6 +169,12 @@ class PartitionDriftSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:
         "TransientEditRefusal" -> materializeTransientEditRefusal(id)
         else -> throw IllegalStateException("no model object for '$shape'")
     }
+
+    private fun materializeTick(id: Long): Tick = Tick(
+        key = system.refFor(id).key,
+        schedule = system.get(id, "schedule") as String,
+        at = system.get(id, "at") as Instant,
+    )
 
     private fun materializeNote(id: Long): Note = Note(
         key = system.refFor(id).key,
@@ -490,6 +503,7 @@ rule RefuseTransientEdit when RefusedTransientEdit {
 }
 
 // ── the typed queries: one name per root, and per root a viewer sees with fields gated ──
+typealias TickQuery = TypedQuery<TickFields, Tick>
 typealias NoteQuery = TypedQuery<NoteFields, Note>
 typealias LockNoteQuery = TypedQuery<LockNoteFields, LockNote>
 typealias UnlockNoteQuery = TypedQuery<UnlockNoteFields, UnlockNote>
@@ -601,6 +615,16 @@ data class NewTransientEdit(
 // A model object is a reference to its own record (`Ref<T>`): equality is identity,
 // a reference field is a `Ref<T>` to resolve with `read(ref)`, a membership flag is
 // the record's membership at the moment of the read.
+
+data class Tick(
+    override val key: StoreKey,
+    val schedule: String,
+    val at: Instant,
+) : Ref<Tick> {
+    override val shape: String get() = "Tick"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
 
 data class Note(
     override val key: StoreKey,
@@ -818,6 +842,11 @@ data class RefusedSafeEdit(
 
 // ── the builder's vocabulary: one field handle per member, memberships per refinement ──
 
+class TickFields(path: List<String> = emptyList()) : Fields(path) {
+    val schedule: TextField get() = TextField(fieldPath + "schedule")
+    val at: DateTimeField get() = DateTimeField(fieldPath + "at")
+}
+
 class NoteFields(path: List<String> = emptyList()) : Fields(path) {
     val title: TextField get() = TextField(fieldPath + "title")
     val body: TextField get() = TextField(fieldPath + "body")
@@ -923,6 +952,7 @@ fun main() {
 
     // <your scenario here>
 
+    println("Tick: " + sys.ticks().size)
     println("Note: " + sys.notes().size)
     println("LockNote: " + sys.lockNotes().size)
     println("UnlockNote: " + sys.unlockNotes().size)

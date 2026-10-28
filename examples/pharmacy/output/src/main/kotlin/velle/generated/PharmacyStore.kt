@@ -13,6 +13,13 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
+/** One stored Tick row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class TickRow(
+    val key: StoreKey,
+    val schedule: String,
+    val at: Instant,
+)
+
 /** One stored Staff row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class StaffRow(
     val key: StoreKey,
@@ -438,6 +445,7 @@ interface PharmacyStore {
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
     // ── keyed reads ──
+    fun tick(key: StoreKey): TickRow?
     fun staff(key: StoreKey): StaffRow?
     fun licenceRenewal(key: StoreKey): LicenceRenewalRow?
     fun licenceReminder(key: StoreKey): LicenceReminderRow?
@@ -488,6 +496,7 @@ interface PharmacyStore {
     fun controlledInventorySnapshot(key: StoreKey): ControlledInventorySnapshotRow?
 
     // ── scan floor: all rows of a shape ──
+    fun allTicks(): List<TickRow>
     fun allStaffs(): List<StaffRow>
     fun allLicenceRenewals(): List<LicenceRenewalRow>
     fun allLicenceReminders(): List<LicenceReminderRow>
@@ -806,6 +815,7 @@ open class PharmacyStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
+    override fun tick(key: StoreKey): TickRow? = backend.fetchByKey("Tick", key)?.toTickRow()
     override fun staff(key: StoreKey): StaffRow? = backend.fetchByKey("Staff", key)?.toStaffRow()
     override fun licenceRenewal(key: StoreKey): LicenceRenewalRow? = backend.fetchByKey("LicenceRenewal", key)?.toLicenceRenewalRow()
     override fun licenceReminder(key: StoreKey): LicenceReminderRow? = backend.fetchByKey("LicenceReminder", key)?.toLicenceReminderRow()
@@ -855,6 +865,7 @@ open class PharmacyStoreOverGeneric(
     override fun claimFollowUp(key: StoreKey): ClaimFollowUpRow? = backend.fetchByKey("ClaimFollowUp", key)?.toClaimFollowUpRow()
     override fun controlledInventorySnapshot(key: StoreKey): ControlledInventorySnapshotRow? = backend.fetchByKey("ControlledInventorySnapshot", key)?.toControlledInventorySnapshotRow()
 
+    override fun allTicks(): List<TickRow> = backend.fetchAll("Tick").map { it.toTickRow() }
     override fun allStaffs(): List<StaffRow> = backend.fetchAll("Staff").map { it.toStaffRow() }
     override fun allLicenceRenewals(): List<LicenceRenewalRow> = backend.fetchAll("LicenceRenewal").map { it.toLicenceRenewalRow() }
     override fun allLicenceReminders(): List<LicenceReminderRow> = backend.fetchAll("LicenceReminder").map { it.toLicenceReminderRow() }
@@ -1221,6 +1232,7 @@ class PharmacyStoreResolver(
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
+        "Tick" -> store.tick(key)?.toRow()
         "Staff" -> store.staff(key)?.toRow()
         "LicenceRenewal" -> store.licenceRenewal(key)?.toRow()
         "LicenceReminder" -> store.licenceReminder(key)?.toRow()
@@ -1273,6 +1285,7 @@ class PharmacyStoreResolver(
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
+        "Tick" -> store.allTicks().map { it.toRow() }
         "Staff" -> store.allStaffs().map { it.toRow() }
         "LicenceRenewal" -> store.allLicenceRenewals().map { it.toRow() }
         "LicenceReminder" -> store.allLicenceReminders().map { it.toRow() }
@@ -1493,6 +1506,17 @@ private fun List<QConst>.date(i: Int): LocalDate = (this[i] as QConst.QDate).v
 private fun List<QConst>.instant(i: Int): Instant = (this[i] as QConst.QDateTime).v
 
 // ── row mappers: the generic wire format <-> the typed rows ──
+
+fun Row.toTickRow(): TickRow = TickRow(
+    key = key,
+    schedule = fields["schedule"] as String,
+    at = fields["at"] as Instant,
+)
+
+fun TickRow.toRow(): Row = Row("Tick", key, buildMap {
+    put("schedule", schedule)
+    put("at", at)
+})
 
 fun Row.toStaffRow(): StaffRow = StaffRow(
     key = key,

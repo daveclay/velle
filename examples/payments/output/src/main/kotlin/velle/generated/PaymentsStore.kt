@@ -13,6 +13,13 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 
+/** One stored Tick row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class TickRow(
+    val key: StoreKey,
+    val schedule: String,
+    val at: Instant,
+)
+
 /** One stored Contact row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class ContactRow(
     val key: StoreKey,
@@ -194,6 +201,7 @@ interface PaymentsStore {
     fun begin(kind: WorkKind): UnitOfWork = UnitOfWork.None
 
     // ── keyed reads ──
+    fun tick(key: StoreKey): TickRow?
     fun contact(key: StoreKey): ContactRow?
     fun card(key: StoreKey): CardRow?
     fun customer(key: StoreKey): CustomerRow?
@@ -219,6 +227,7 @@ interface PaymentsStore {
     fun dunningResolution(key: StoreKey): DunningResolutionRow?
 
     // ── scan floor: all rows of a shape ──
+    fun allTicks(): List<TickRow>
     fun allContacts(): List<ContactRow>
     fun allCards(): List<CardRow>
     fun allCustomers(): List<CustomerRow>
@@ -363,6 +372,7 @@ open class PaymentsStoreOverGeneric(
 
     override fun begin(kind: WorkKind): UnitOfWork = backend.begin(kind)
 
+    override fun tick(key: StoreKey): TickRow? = backend.fetchByKey("Tick", key)?.toTickRow()
     override fun contact(key: StoreKey): ContactRow? = backend.fetchByKey("Contact", key)?.toContactRow()
     override fun card(key: StoreKey): CardRow? = backend.fetchByKey("Card", key)?.toCardRow()
     override fun customer(key: StoreKey): CustomerRow? = backend.fetchByKey("Customer", key)?.toCustomerRow()
@@ -387,6 +397,7 @@ open class PaymentsStoreOverGeneric(
     override fun dunningFlag(key: StoreKey): DunningFlagRow? = backend.fetchByKey("DunningFlag", key)?.toDunningFlagRow()
     override fun dunningResolution(key: StoreKey): DunningResolutionRow? = backend.fetchByKey("DunningResolution", key)?.toDunningResolutionRow()
 
+    override fun allTicks(): List<TickRow> = backend.fetchAll("Tick").map { it.toTickRow() }
     override fun allContacts(): List<ContactRow> = backend.fetchAll("Contact").map { it.toContactRow() }
     override fun allCards(): List<CardRow> = backend.fetchAll("Card").map { it.toCardRow() }
     override fun allCustomers(): List<CustomerRow> = backend.fetchAll("Customer").map { it.toCustomerRow() }
@@ -545,6 +556,7 @@ class PaymentsStoreResolver(
     override fun begin(kind: WorkKind): UnitOfWork = store.begin(kind)
 
     override fun fetchByKey(shape: String, key: StoreKey): Row? = when (shape) {
+        "Tick" -> store.tick(key)?.toRow()
         "Contact" -> store.contact(key)?.toRow()
         "Card" -> store.card(key)?.toRow()
         "Customer" -> store.customer(key)?.toRow()
@@ -572,6 +584,7 @@ class PaymentsStoreResolver(
     }
 
     override fun fetchAll(shape: String): List<Row> = when (shape) {
+        "Tick" -> store.allTicks().map { it.toRow() }
         "Contact" -> store.allContacts().map { it.toRow() }
         "Card" -> store.allCards().map { it.toRow() }
         "Customer" -> store.allCustomers().map { it.toRow() }
@@ -676,6 +689,17 @@ private fun List<QConst>.date(i: Int): LocalDate = (this[i] as QConst.QDate).v
 private fun List<QConst>.instant(i: Int): Instant = (this[i] as QConst.QDateTime).v
 
 // ── row mappers: the generic wire format <-> the typed rows ──
+
+fun Row.toTickRow(): TickRow = TickRow(
+    key = key,
+    schedule = fields["schedule"] as String,
+    at = fields["at"] as Instant,
+)
+
+fun TickRow.toRow(): Row = Row("Tick", key, buildMap {
+    put("schedule", schedule)
+    put("at", at)
+})
 
 fun Row.toContactRow(): ContactRow = ContactRow(
     key = key,
