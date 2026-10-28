@@ -58,6 +58,20 @@ velle:
 
 Run it with `./gradlew :examples:billing:app:bootRun`. Spring Boot starts the PostgreSQL in `examples/billing/app/compose.yaml` and points the `DataSource` at it. The console is at `http://localhost:8090/velle`.
 
+## Your own cadence
+
+A schedule can tick when your code says instead of on a cron expression the starter reads: when a file arrives, when an operator presses a button, or on a `@Scheduled` method of your own. Leave the schedule out of `velle.schedules` and tick it yourself:
+
+```kotlin
+@Scheduled(cron = "0 0 6 * * MON", zone = "America/New_York")
+fun weekly() { billing.tickWeekly() }
+```
+
+- `billing.tickWeekly()` is the generated call for the schedule `Weekly` ([Binding API, "Ticking a schedule"](Binding-API#ticking-a-schedule)). It returns the tick's report and throws `TickRejected` when a `never` refused a firing. An application serving a spec without generated code calls `api.tick("Weekly")` on the `VelleApi` bean instead.
+- A schedule with no entry under `velle.schedules` is never ticked by the starter, so it ticks only when your code says. Keep a schedule in one place or the other: under `velle.schedules` and in your code too, it ticks twice.
+- `@Scheduled` needs `@EnableScheduling` on a configuration class of yours. The starter turns it on only when `velle.schedules` has an entry.
+- The listener in the next section hears your ticks as it hears the starter's, and the ticks endpoint and the console's buttons work as before.
+
 ## Hearing a tick
 
 A tick has no caller to tell when a rule's firing was refused by a `never` or failed because the database did. The same is true of a rule behind an `after commit` boundary ([§18](Reference-18-Run-once-guards)). Velle tells a listener instead, and the starter registers one for you.
