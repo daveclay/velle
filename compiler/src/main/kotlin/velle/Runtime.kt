@@ -841,11 +841,18 @@ class VelleSystem(
             if (reached) rowKey(id)?.let(keys::add)
         }
         for (vk in domain.valueKeys) {
+            // the value is known at admission when the act itself carries the row (a
+            // Customer committing its email); when a rule inside the envelope creates
+            // the row (a BookNow whose rule creates the Reservation), the value is not
+            // known until the rule runs, and the envelope takes the shape's width, as
+            // a firing does (OQ70 D9 is the narrowing of both)
+            var valued = false
             for (m in mutations) {
                 if (m !is Mutation.Create || m.shape != vk.shape) continue
                 val v = m.fields[vk.field] ?: continue
-                canonical(v)?.let { keys.add(AdmissionKey.Value(vk.shape, vk.field, it)) }
+                canonical(v)?.let { keys.add(AdmissionKey.Value(vk.shape, vk.field, it)); valued = true }
             }
+            if (!valued) keys.add(AdmissionKey.Shape(vk.shape))
         }
         for (w in domain.widenings) keys.add(AdmissionKey.Shape(w.shape))
         return keys

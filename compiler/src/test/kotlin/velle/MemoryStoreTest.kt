@@ -72,6 +72,31 @@ class MemoryStoreTest {
         }
     }
 
+    private val bookings = """
+        act BookNow { slot: text }
+        shape Reservation { slot: text }
+        never (Reservation where exists (Reservation as other where other.slot == this.slot and not (other == this)))
+        rule ApplyBooking when BookNow { Reservation from { slot: slot } }
+    """.trimIndent()
+
+    @Test
+    fun `acts whose rule commits one unique value take turns - the prohibition holds under contention`() {
+        // the Reservation is created by the rule, not by the act, so its value is not known at admission;
+        // the envelope takes the shape's width instead and two bookings of one slot never run together
+        val model = Model(Parser.parse(bookings))
+        check(model.diagnostics.isEmpty()) { model.diagnostics.toString() }
+        val sys = VelleSystem(model)
+        val gate = CountDownLatch(1)
+        val results = java.util.Collections.synchronizedList(mutableListOf<CommitResult>())
+        val threads = (1..8).map { Thread { gate.await(); results.add(sys.commit("BookNow", mapOf("slot" to "Fri 09:00"))) } }
+        threads.forEach { it.start() }
+        gate.countDown()
+        threads.forEach { it.join(30_000) }
+        assertEquals(1, results.count { it is CommitResult.Accepted }, "one booking of the slot is accepted: $results")
+        assertEquals(7, results.count { it is CommitResult.Refused }, "the rest are refused by the prohibition")
+        sys.scope { assertEquals(1, sys.instancesOf("Reservation").size) }
+    }
+
     @Test
     fun `reads run beside each other`() {
         val sys = system()
