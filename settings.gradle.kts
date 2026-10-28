@@ -42,4 +42,5 @@ include(
     "examples:vendors:output",
     "examples:batches:output",
     "examples:platelayout:output",
+    "examples:bookings:output",
 )

@@ -22,5 +22,6 @@ tasks.register("generate") {
         ":examples:pharmacy:output:generate",
         ":examples:batches:output:generate",
         ":examples:platelayout:output:generate",
+        ":examples:bookings:output:generate",
     )
 }
