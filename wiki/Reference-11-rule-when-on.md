@@ -135,4 +135,4 @@ When one commit matches several rules, the generated system may fire them in any
 - [§15 then](Reference-15-then), for ordering effects within a body.
 - [§16 Sweeps](Reference-16-Sweeps) and [§17 Schedule triggers](Reference-17-Schedule-triggers), for how a scheduled rule runs once per matching record.
 - [§18 Run-once guards](Reference-18-Run-once-guards), for the guard and backup an `after commit` rule needs.
-- [§19 Self-referential folds and tolerates](Reference-19-Self-referential-folds-and-tolerates), for `tolerates loss`.
+- [§19 Self-referential folds and tolerates](Reference-19-Self-referential-folds-and-tolerates), for `tolerates loss` and `tolerates contention`, the two clauses a rule header may carry.

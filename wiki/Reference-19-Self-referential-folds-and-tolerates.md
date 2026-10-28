@@ -1,6 +1,6 @@
 # 19. Self-referential folds and `tolerates`
 
-Some stored values are updated from their own previous value: a balance that grows by each deposit, a count that goes up by one, a streak that resets on a miss. Velle calls such a value a *fold*, because the stored number folds every commit so far into one value. A fold is correct only if each commit is folded in exactly once and, for some folds, in the right order. This page shows when an assignment is a fold, which folds the compiler accepts as written, and the four ways to answer when it does not.
+Some stored values are updated from their own previous value: a balance that grows by each deposit, a count that goes up by one, a streak that resets on a miss. Velle calls such a value a *fold*, because the stored number folds every commit so far into one value. A fold is correct only if each commit is folded in exactly once and, for some folds, in the right order. This page shows when an assignment is a fold, which folds the compiler accepts as written, and the four ways to answer when it does not. It also defines the fourth `tolerates` clause, `tolerates contention`, which is about commits waiting for each other rather than about folding.
 
 ## Three kinds of right-hand side
 
@@ -58,7 +58,7 @@ shape Article {
 }
 ```
 
-`tolerates duplication` and `tolerates reordering` go on the field. `tolerates loss` goes on a rule whose external effect may be dropped ([§11](Reference-11-rule-when-on#transactions-and-after-commit)). In `examples/membership/membership.velle`, `visitCount: long initially 0 tolerates duplication` is fed by a rule firing `on commit, Hourly`. Read the declaration as a business claim: `balance: Money tolerates duplication` is visibly wrong, and that is the point.
+`tolerates duplication` and `tolerates reordering` go on the field. `tolerates loss` goes on a rule whose external effect may be dropped ([§11](Reference-11-rule-when-on#transactions-and-after-commit)). `tolerates contention` goes on a rule, a `never`, or a `requires` whose read makes every commit on one shape take turns, and is defined below. In `examples/membership/membership.velle`, `visitCount: long initially 0 tolerates duplication` is fed by a rule firing `on commit, Hourly`. Read the declaration as a business claim: `balance: Money tolerates duplication` is visibly wrong, and that is the point.
 
 ## Three rules, three verdicts
 
@@ -127,10 +127,35 @@ If two records can tie on the ordering field and the result depends on which com
 
 A stored fold on an `on commit` rule folds in arrival order. Use it when arrival order is the business order.
 
+## A read over a whole shape: `tolerates contention`
+
+Two commits that are about the same record or the same value take turns, and every other pair runs at the same time ([Concurrency](Concurrency)). A rule or prohibition that reads every record of a shape, with nothing to tie the read to the commit, makes every commit touching that shape take turns. The compiler warns about such a read. `tolerates contention` is the declaration that the waiting is intended, and it silences the warning for that one read.
+
+The business asks for it when a limit is over everything at once. A waitlist holds twenty names at most, whoever they are. A sequential order number is one more than the count of all numbers given out. Neither can be decided by looking at one record.
+
+From `examples/bookings/bookings.velle`:
+
+```
+act Waitlist {
+    slot: DateTime
+    name: text
+}
+
+never (Waitlist where count(Waitlist) > 20) tolerates contention
+```
+
+- `Waitlist` is an act that stays on record: one name on the list.
+- The `never` caps the list at twenty. `count(Waitlist)` reads every entry, so two people joining at once must be decided one after the other, or both could be the twenty-first.
+- `tolerates contention` says so. Every `Waitlist` commit waits for every other `Waitlist` commit, and nothing else waits for them. Without the clause the compiler warns, naming the read and this `never`.
+
+The clause goes at the end of a `never`, at the end of a `requires` ([§21](Reference-21-never)), or in a rule's header beside `tolerates loss`, after the trigger and before the body. Write it only where the whole-shape read is the point. Where it is not, the two other answers are better: tie the read to the commit, such as `count(Waitlist where slot == this.slot)` for a cap per slot, or move the rule to a schedule so the read runs once per tick instead of inside every commit. Each answer, and the two kinds of author who meet the warning, are worked through in [patterns.md, "A wide domain: the two authors"](patterns#a-wide-domain-the-two-authors).
+
 ## What the compiler checks
 
 - **Rejects** a self-referential assignment exposed to duplication (the rule can fire twice for one commit) or reordering (a scheduled rule) when the formula is not on the safe list for that hazard, unless a guard, a periodic recompute, or the matching `tolerates` covers it ([checks.md, V8](checks#v8--fold-obligations-and-tolerance-coverage)).
 - **Rejects** a `tolerates` that covers no hazard the rule can meet, such as `tolerates reordering` on an `on commit` rule. The message names the hazard you may have meant ([checks.md, V8](checks#v8--fold-obligations-and-tolerance-coverage)).
+- **Warns** when a rule, `never`, or `requires` reads every record of a shape with nothing tying the read to the commit, so every commit on that shape takes turns, unless the declaration carries `tolerates contention`. The message names the read and the three answers ([checks.md, A5](checks#a5--contention-width)).
+- **Warns** when `tolerates contention` is written on a declaration none of whose reads makes commits take turns ([checks.md, A5](checks#a5--contention-width)).
 - **Rejects** a derived property that refers to itself through another record unless the chain provably ends: a reference that strictly descends a field fixed at creation, as `previous` does by `receivedOn`, with a base case, or a `never` that rules out the cycle ([checks.md, V14](checks#v14--well-foundedness-coarse)).
 - **Rejects** a derived property whose result depends on the order of records that can tie on the ordering field ([checks.md, V14](checks#v14--well-foundedness-coarse)).
 
@@ -138,3 +163,4 @@ A stored fold on an `on commit` rule folds in arrival order. Use it when arrival
 
 - [§18 Run-once guards](Reference-18-Run-once-guards), for making a rule fire once per record.
 - [§20 State-change patterns](Reference-20-State-change-patterns), for choosing between stored, derived, and periodically recomputed values.
+- [Concurrency](Concurrency), for what runs at the same time and what takes turns, and where `tolerates contention` fits.

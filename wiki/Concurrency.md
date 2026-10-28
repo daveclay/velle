@@ -71,7 +71,7 @@ rule TellWaitlist when Untold on Hourly {
 - A `Cancellation` is a record beside the booking it gives back. `StandingBooking` is a [refinement](Reference-08-Refinements): a booking with no cancellation.
 - The first `never` is a [prohibition](Reference-21-never): no two standing bookings hold one slot. The commit that would create the second is refused.
 - `Cancel` and `ApplyCancel` give a booking back by writing its cancellation. The second `never` says a booking is given back once at most.
-- `Waitlist` is an act that stays on record. The `never` over it caps the list at twenty names, and `tolerates contention` says the author knows what the cap costs, which the next sections explain.
+- `Waitlist` is an act that stays on record. The `never` over it caps the list at twenty names, and [`tolerates contention`](Reference-19-Self-referential-folds-and-tolerates#a-read-over-a-whole-shape-tolerates-contention) says the author knows what the cap costs, which the next sections explain.
 - `Unserved` is an entry whose slot no standing booking holds. `Untold` is one not yet told. `TellWaitlist` runs on the hourly [schedule](Reference-17-Schedule-triggers) and writes a `Notice` for each.
 
 ## What waits and what runs together

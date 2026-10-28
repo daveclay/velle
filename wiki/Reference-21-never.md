@@ -82,6 +82,8 @@ Nothing is checked twice.
 - Record the decision as a field the prohibition reads instead of the clock.
 - Retract it, when the sentence is really a state the business acts on. "An invoice is never unpaid past its due date" is an `OverdueInvoice` refinement and a scheduled rule, not a prohibition.
 
+**A prohibition that reads a whole shape makes every commit on it take turns.** `never (Waitlist where count(Waitlist) > 20)` in `examples/bookings/bookings.velle` reads every waitlist entry, so two people joining at once are decided one after the other. The compiler warns about such a read unless the `never` or `requires` ends with `tolerates contention`, which says the waiting is intended ([§19](Reference-19-Self-referential-folds-and-tolerates#a-read-over-a-whole-shape-tolerates-contention); [checks.md, A5](checks#a5--contention-width)).
+
 **A record that arrived without an act is still checked.** A seeded row that already violates a constraint, or has aged into one, is rejected at the next act that reaches it, or thrown at the next tick.
 
 **A proved prohibition is used by other proofs.** `never (Customer where referrer == this)` is what lets the compiler prove that writes to `customer.tier` and `customer.referrer.tier` from one commit can never land on the same record, which the one-writer check needs ([§12](Reference-12-Assignment); [checks.md, V1](checks#v1--one-writer-disjointness)). A prohibition is available to other proofs only once the compiler has finished enforcing it ([checks.md, V10](checks#v10--never-obligations-and-spend-tracking)).
@@ -92,4 +94,5 @@ Nothing is checked twice.
 - [§4 State and commits](Reference-04-State-and-commits), for transient acts and the request-then-record pattern.
 - [§8 Refinements](Reference-08-Refinements), for the `frozen` declaration, which follows the same declare-once model.
 - [§11 rule](Reference-11-rule-when-on), for transactions and `after commit`.
+- [§19 Self-referential folds and tolerates](Reference-19-Self-referential-folds-and-tolerates), for `tolerates contention` on a prohibition that reads a whole shape.
 - [patterns.md, "Three answers to one request"](patterns#three-answers-to-one-request), for choosing between refusing a request, recording its refusal, and constraining its result.
