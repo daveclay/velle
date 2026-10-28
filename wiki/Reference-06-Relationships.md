@@ -184,7 +184,7 @@ Each nested `with` is read against the part's shape the same way. Where no inver
 - Once committed, the order and its lines are ordinary records. They are updated, frozen, exited, and referenced like any other.
 - A `transient act` may not have a `with` clause.
 
-To require at least one line, write a `never` or a gate refinement over the committed order ([§21](Reference-21-never)). An empty part list is allowed and means no parts. What the generated Kotlin carries for an act, its parts, and the references below is on the [Binding API](Binding-API) page.
+To require at least one line, write a `never` or a gate refinement over the committed order ([§21](Reference-21-never)). An empty part list is allowed and means no parts. What the generated Kotlin carries for an act, its parts, and the references below is on the [Act API](Act-API) page.
 
 ## A reference supplied by value (`with` naming a `one` field)
 
@@ -223,7 +223,7 @@ act PeptideBatch {
 What the compiler checks:
 
 - The compiler rejects a `with` entry naming a `one` field whose target is a transient act, or is not a shape or a static union of shapes ([checks.md, V22](checks#v22--closure-declaration-legality)).
-- The compiler rejects a commit that supplies the field both as a reference and as a value, or supplies more than one value, or a value of a shape outside the field's type. These are type-level refusals at the boundary ([Binding API](Binding-API)).
+- The compiler rejects a commit that supplies the field both as a reference and as a value, or supplies more than one value, or a value of a shape outside the field's type. These are type-level refusals at the boundary ([Act API](Act-API)).
 
 ## A reference to a record arriving elsewhere in the same commit
 
@@ -251,7 +251,7 @@ shape Well { container: one Container, position: integer, condition: one Conditi
 
 What the compiler checks:
 
-- The compiler rejects, at the boundary, a reference to a new value that is not among the act's values, one value placed in two places where it would be created, and two new records pointing at each other ([checks.md, V22](checks#v22--closure-declaration-legality); [Binding API](Binding-API)).
+- The compiler rejects, at the boundary, a reference to a new value that is not among the act's values, one value placed in two places where it would be created, and two new records pointing at each other ([checks.md, V22](checks#v22--closure-declaration-legality); [Act API](Act-API)).
 
 ## Related pages
 
@@ -260,5 +260,5 @@ What the compiler checks:
 - [§7 Derived properties](Reference-07-Derived-properties), for the `=` form a renamed collection uses.
 - [§9 Composing refinements](Reference-09-Composing-refinements), for static unions.
 - [§12 Assignment](Reference-12-Assignment), for the one-writer rule and deletion.
-- [Binding API](Binding-API), for what the generated Kotlin input carries.
+- [Act API](Act-API), for what the generated Kotlin input carries.
 - [§14 for](Reference-14-for), "Naming the record a statement creates", for a rule creating two linked records.

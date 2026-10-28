@@ -40,7 +40,8 @@
 
 - [[Authorization|Authorization]]
 - [[Concurrency|Concurrency]]
-- [[Binding API|Binding-API]]
+- [[Act API|Act-API]]
+- [[Read API|Read-API]]
 - [[Extension types|Extension-types]]
 - [[Extension functions|Extension-functions]]
 - [[Store API|Store-API]]

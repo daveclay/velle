@@ -20,7 +20,7 @@ val sys = BillingSystem().also { SqliteStore.attach(it.system, conn) }
 - `BillingSystem()` is the generated system. Until another store is connected it runs over `MemoryStore` (`compiler/src/main/kotlin/velle/MemoryStore.kt`), rows in maps with nothing durable, which is how the generated tests run. The in-memory store is a store like any other: it implements both halves of this contract, and the runtime treats it no differently.
 - `SqliteStore.attach` creates one table per shape in the connection, then connects the system to the store for both halves of the contract. An in-memory SQLite database lives in its one connection, so the store takes the connection itself. Over a file or a server database the store takes a `DataSource` instead and borrows a connection from it for each read and each commit: `PostgresStore.attach(system, dataSource)`, as `examples/billing/output/src/test/kotlin/velle/GeneratedApiOverPostgresTest.kt` does.
 
-From then on every commit through the [Binding API](Binding-API) lands in the database, and every read through the query API is answered from it. The same system runs over the in-memory store for tests and over the database in production, and the spec does not change.
+From then on every commit through the [Act API](Act-API) lands in the database, and every read through the [Read API](Read-API) is answered from it. The same system runs over the in-memory store for tests and over the database in production, and the spec does not change.
 
 A Spring Boot application does not call `attach` itself. The starter in `apis/spring/` reads the database's name from the application's `DataSource`, picks the dialect, creates the tables, and connects the system before the first request ([Serving a system](Serving-a-system)).
 
@@ -192,7 +192,8 @@ The in-memory store keeps every guarantee with one lock for its rows and one loc
 ## Related pages
 
 - [`evaluation.md`, "The universal transaction"](evaluation#the-universal-transaction), the five guarantees stated one clause each, and what each one protects.
-- [Binding API](Binding-API), the generated Kotlin that commits through the store and reads from it.
+- [Act API](Act-API), the generated Kotlin that commits through the store.
+- [Read API](Read-API), the generated Kotlin that reads from it.
 - [Extension types](Extension-types), "Holding a type in a store", the binding a store needs per type.
 - [§10 Predicate expressions](Reference-10-Predicate-expressions), the conditions the filter is compiled from.
 - [§13 Exit triggers](Reference-13-Exit-triggers), the captured values a store keeps per membership.

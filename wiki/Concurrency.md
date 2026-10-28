@@ -116,7 +116,7 @@ Once a firing has its turn, it checks the rule's condition again. Two copies of 
 
 A read never waits for a commit and never makes a commit wait. It answers from one consistent state, the state some finished commit left behind, so two records read in one query agree with each other. A read holds no key and changes nothing.
 
-Inside one operation, a read after a commit sees that commit. The engineer's code wraps each operation in the API layer's `scope`, and a read inside it goes to the store for its records, so it also sees anything the database itself changed, such as a value a trigger computed. [Binding API, "What a read remembers"](Binding-API#what-a-read-remembers) says exactly how long a read keeps the records it has fetched.
+Inside one operation, a read after a commit sees that commit. The engineer's code wraps each operation in the API layer's `scope`, and a read inside it goes to the store for its records, so it also sees anything the database itself changed, such as a value a trigger computed. [Read API, "What a read remembers"](Read-API#what-a-read-remembers) says exactly how long a read keeps the records it has fetched.
 
 ## What the engineer writes
 
@@ -133,6 +133,6 @@ Nothing beyond calling the system. The generated commit functions and the API la
 - [`diagrams.md`](diagrams), the contention map the compiler emits beside the other diagrams.
 - [Store API](Store-API), the unit of work and the locks each store takes.
 - [The API layer](API-layer), `scope` and how one request runs end to end.
-- [Binding API](Binding-API), the generated commit function and the queue keys in its documentation comment.
+- [Act API](Act-API), the generated commit function and the queue keys in its documentation comment.
 - [§17 Schedule triggers](Reference-17-Schedule-triggers), the rules a tick runs.
 - [§21 `never`](Reference-21-never), the prohibitions a commit must hold.

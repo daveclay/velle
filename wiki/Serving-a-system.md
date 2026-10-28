@@ -48,7 +48,7 @@ velle:
     path: /velle
 ```
 
-- `BillingSystem()` is the generated system ([Binding API](Binding-API)). Declaring it as a bean is the one thing the application does for Velle.
+- `BillingSystem()` is the generated system ([Act API](Act-API), [Read API](Read-API)). Declaring it as a bean is the one thing the application does for Velle.
 - The starter, `apis/spring`, finds that bean and does the rest: it connects the system to the application's `DataSource` through the SQL store ([Store API](Store-API)), creates the tables, serves every act and shape over REST and GraphQL, ticks the schedules, and serves the console.
 - `spring-boot-starter-jdbc` and the PostgreSQL driver are the application's: they decide which database it talks to. The starter reads the database's name from the connection and picks the SQLite or PostgreSQL dialect.
 - `velle.schedules` says when each schedule the spec names ticks: a cron expression, alone or with the time zone it is read in. `Hourly` runs at the top of every hour in the server's own zone. `Weekly` runs at 06:00 on Monday in New York. A schedule with no entry never ticks on its own. The name is matched to the spec's schedule without regard to case, so the environment variable `VELLE_SCHEDULES_WEEKLY_CRON` names `Weekly`. An environment variable does not replace an entry a yaml file already has under its own spelling, because Boot keeps both; the starter then refuses to start, naming the schedule twice over. To override a schedule from the environment, use `SPRING_APPLICATION_JSON`.
@@ -68,7 +68,7 @@ A schedule can tick when your code says instead of on a cron expression the star
 fun weekly() { billing.tickWeekly() }
 ```
 
-- `billing.tickWeekly()` is the generated call for the schedule `Weekly` ([Binding API, "Ticking a schedule"](Binding-API#ticking-a-schedule)). It returns the tick's report and throws `TickRejected` when a `never` refused a firing. An application serving a spec without generated code calls `api.tick("Weekly")` on the `VelleApi` bean instead.
+- `billing.tickWeekly()` is the generated call for the schedule `Weekly` ([Act API, "Ticking a schedule"](Act-API#ticking-a-schedule)). It returns the tick's report and throws `TickRejected` when a `never` refused a firing. An application serving a spec without generated code calls `api.tick("Weekly")` on the `VelleApi` bean instead.
 - A schedule with no entry under `velle.schedules` is never ticked by the starter, so it ticks only when your code says. Keep a schedule in one place or the other: under `velle.schedules` and in your code too, it ticks twice.
 - `@Scheduled` needs `@EnableScheduling` on a configuration class of yours. The starter turns it on only when `velle.schedules` has an entry.
 - The listener in the next section hears your ticks as it hears the starter's, and the ticks endpoint and the console's buttons work as before.
@@ -213,7 +213,7 @@ query {
 - One object type per readable shape and refinement, with every member and flag the REST record has. A reference field resolves to the record it points at, so a query walks the data graph.
 - A static union ([§9](Reference-09-Composing-refinements)) is a GraphQL union of its operands. A field typed by one is queried with `... on Fermentation { }`.
 - `Date`, `DateTime`, `Time`, `UUID`, `Duration`, `Bytes`, `Decimal`, and `Long` are scalars carrying the same text and numbers as REST. Each extension type is a scalar under its own name, `Money` here.
-- One mutation per act, taking an input type shaped as the act's input class is ([Binding API](Binding-API)). A `one` field is an `ID`, or a `RefInput` with `shape`, `key`, and `new` where the field's type is a union or the field may point at a sibling value. A field named in `with` takes `{existing: {...}}` or exactly one `new<Operand>: {...}`. A nested value may carry `asNew: 1` for a sibling to point at with `{new: 1}`.
+- One mutation per act, taking an input type shaped as the act's input class is ([Act API](Act-API)). A `one` field is an `ID`, or a `RefInput` with `shape`, `key`, and `new` where the field's type is a union or the field may point at a sibling value. A field named in `with` takes `{existing: {...}}` or exactly one `new<Operand>: {...}`. A nested value may carry `asNew: 1` for a sibling to point at with `{new: 1}`.
 - The outcome is the acceptance or the refusal as data, with the record read back after an accepted durable act. A malformed input is a GraphQL error before anything runs, and a refused query is a GraphQL error carrying `extensions.kind`.
 
 ## Who is calling
@@ -252,7 +252,7 @@ fun overdue(): List<Overdue> = api.scope {
 }
 ```
 
-- `billing.read.overdueInvoices` is the generated typed query ([Binding API](Binding-API)); the result is the generated model object with `Money` as `Money`.
+- `billing.read.overdueInvoices` is the generated typed query ([Read API](Read-API)); the result is the generated model object with `Money` as `Money`.
 - `api.scope { }` runs the read as the generic endpoints run theirs: in one scope of the runtime, with a working set of records of its own and one read unit of work on the store, so it never sees a commit half landed. Other requests run at the same time; two commits that revolve around one record take turns on the store's queue keys ([Store API](Store-API), "The unit of work").
 - The system's clock is the wall clock. Before each operation the starter sets it, so `today` and `now` in the spec mean today and now.
 
@@ -280,7 +280,8 @@ The API layer runs no spec that did not validate. What it refuses at the boundar
 ## Related pages
 
 - [The API layer](API-layer), how the endpoints on this page are built: the operations, the schema builder, the starter's beans, and one request end to end.
-- [Binding API](Binding-API), the generated Kotlin the application's own code calls, and the shape of an act's input the JSON mirrors.
+- [Act API](Act-API), the generated commit function the application's own code calls, and the shape of an act's input the JSON mirrors.
+- [Read API](Read-API), the generated reads and typed queries the application's own endpoints call.
 - [Store API](Store-API), the store the starter connects from the `DataSource`, and the guarantees it keeps.
 - [Authorization](Authorization), the actor and the viewer the resolver supplies.
 - [§10 Predicate expressions](Reference-10-Predicate-expressions), the language `where` is written in.

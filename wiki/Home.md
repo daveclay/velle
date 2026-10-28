@@ -56,7 +56,8 @@ Walkthroughs that gather what the Reference and the normative documents settle, 
 
 - [[Authorization|Authorization]] — who may commit an act and who may see a record: the actor, role gates, data-driven constraints, visibility, the generated surface, and how it compares with role-based access control
 - [[Concurrency|Concurrency]] — what runs together and what takes turns: the queue keys the compiler derives from the spec, a value two records may not share, the warning when a commit would hold up a whole shape, scheduled rules, what a read sees, and what the store does with it
-- [[Binding API|Binding-API]] — the generated Kotlin an engineer's code calls to commit an act: the input class, nested parts, references to records on the books and to new ones, the commit function and what it refuses
+- [[Act API|Act-API]] — the generated Kotlin an engineer's code calls to commit an act: the input class, nested parts, references to records on the books and to new ones, the commit function and what it refuses, and the tick of a schedule
+- [[Read API|Read-API]] — the generated Kotlin that reads records back: references, reads by key, typed queries, and what a read remembers
 - [[Extension types|Extension-types]] — a scalar type an engineer adds in Kotlin and a spec names like `Date`: using one, writing one capability by capability, and the piece a store needs to hold it
 - [[Extension functions|Extension-functions]] — a function an engineer adds in Kotlin and a spec calls like `abs`: calling one, writing one against the capabilities a type implements, and how Velle's own functions are written the same way
 - [[Store API|Store-API]] — the contract between a running system and the database that holds its records: connecting a store, the reads and the commit a store must get right, and the one read it may narrow to make a sweep faster

@@ -168,7 +168,7 @@ The three pieces are three libraries. The type library knows nothing about store
 
 ## What the generated code looks like
 
-The field is the type's own class everywhere. The input class for `LineItem` takes a `Money` for `price`; the `Invoice` model object has `total: Money`; the query builder accepts `read.invoices.where { balance gt Money.of("10.00") }` and `orderBy { total.descending }`, and refuses `orderBy` on a type with no ordering at compile time. `read.invoices.sumOf { total }` returns a `Money`. The generated tests commit `Money.of("12.50")` for an unconstrained amount and `Money.of("-0.01")` as the value just below a `never (LineItem where price < 0)` bound. The [Binding API](Binding-API) page covers the rest of the surface.
+The field is the type's own class everywhere. The input class for `LineItem` takes a `Money` for `price`; the `Invoice` model object has `total: Money`; the query builder accepts `read.invoices.where { balance gt Money.of("10.00") }` and `orderBy { total.descending }`, and refuses `orderBy` on a type with no ordering at compile time. `read.invoices.sumOf { total }` returns a `Money`. The generated tests commit `Money.of("12.50")` for an unconstrained amount and `Money.of("-0.01")` as the value just below a `never (LineItem where price < 0)` bound. The [Act API](Act-API) and [Read API](Read-API) pages cover the rest of the surface.
 
 ## What the compiler checks
 
@@ -185,6 +185,6 @@ The field is the type's own class everywhere. The input class for `LineItem` tak
 - [§10 Predicate expressions](Reference-10-Predicate-expressions), where comparisons and constants are read.
 - [§19 Self-referential folds](Reference-19-Self-referential-folds-and-tolerates), what the two operator facts buy a rule.
 - [Extension functions](Extension-functions), a function written against the capabilities a type implements.
-- [Binding API](Binding-API), the generated Kotlin the type appears in.
+- [Act API](Act-API) and [Read API](Read-API), the generated Kotlin the type appears in.
 - [Store API](Store-API), the whole contract a store implements, and where the binding sits in it.
 - [`evaluation.md`](evaluation), the boundary and the store contract.

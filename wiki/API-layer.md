@@ -217,6 +217,6 @@ The same request as the GraphQL mutation `submitPayment(input: {invoice: "1", am
 
 - [Serving a system](Serving-a-system), the same code from the caller's side: the endpoints, the JSON, the schema, the console.
 - [Store API](Store-API), the contract `attach` connects: `SqlStore` and its dialects.
-- [Binding API](Binding-API), the generated typed surface the application's own endpoints call inside `api.scope`.
+- [Act API](Act-API) and [Read API](Read-API), the generated typed surface the application's own endpoints call inside `api.scope`.
 - [Authorization](Authorization), what the actor and the viewer mean once resolved.
 - [evaluation](evaluation), what `system.commit` and `system.tick` do inside the scope.

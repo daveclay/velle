@@ -1,7 +1,7 @@
 # OQ61 — Whether a `never` may carry an author-supplied sentence in its rejection
 
 **Status:** deferred (2026-10-14) — split out of OQ52 §4, where it had been deferred from OQ47
-**In plain terms:** a rejection today renders a readable message from its data: the declaration as the author wrote it, the act, the records in the forbidden state, the record the act was about, and the evaluation. The question is whether the author may also write the sentence a person at the counter should see ("a shipment is never on the books for a cancelled order") and have it stand above that rendering. It only matters if the generated rendering turns out not to be enough, and the alternative is already in place: the engineer builds their own message from the rejection data the binding API hands back.
+**In plain terms:** a rejection today renders a readable message from its data: the declaration as the author wrote it, the act, the records in the forbidden state, the record the act was about, and the evaluation. The question is whether the author may also write the sentence a person at the counter should see ("a shipment is never on the books for a cancelled order") and have it stand above that rendering. It only matters if the generated rendering turns out not to be enough, and the alternative is already in place: the engineer builds their own message from the rejection data the act API hands back.
 **See:** Reference §21 · `evaluation.md` "Errors, refusals, and retry" (the rejection's data and its default rendering) · `compiler/src/main/kotlin/velle/Rejection.kt`
 
 ---

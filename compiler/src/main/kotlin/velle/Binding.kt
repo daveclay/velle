@@ -2,7 +2,7 @@ package velle
 
 import java.time.Instant
 
-// ── What every generated system inherits (Binding API) ──────────────────────
+// ── What every generated system inherits (Act API) ──────────────────────
 //
 // The generator emits what is specific to a spec: the input classes, the model
 // objects, the field descriptors, the materializers, and one typed line per
@@ -10,7 +10,7 @@ import java.time.Instant
 // other lives here, so a generated file reads as its surface and nothing else.
 
 /** A generated input value: an act's input class or a nested new record. The
- *  boundary walks it once before the runtime runs (Binding API, "The commit
+ *  boundary walks it once before the runtime runs (Act API, "The commit
  *  function"): [register] puts its new values in the act's registry, [raw]
  *  flattens its fields to what the runtime takes, [parts] carries an act's
  *  inline parts beside its fields. */
