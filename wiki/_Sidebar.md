@@ -39,6 +39,7 @@
 **Guides**
 
 - [[Authorization|Authorization]]
+- [[Concurrency|Concurrency]]
 - [[Binding API|Binding-API]]
 - [[Extension types|Extension-types]]
 - [[Extension functions|Extension-functions]]
