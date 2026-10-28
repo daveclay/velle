@@ -99,14 +99,19 @@ class DomainAnalysis(private val model: Model) {
     private sealed interface Anchor {
         /** A persisted instance the subject's stored to-one path reaches; empty = the subject itself. */
         data class Reach(val segs: List<String>) : Anchor
-        /** Created inside this envelope — conflict-free; to-one fields carry their anchors. */
-        data class Fresh(val fields: Map<String, Anchor>) : Anchor
+        /** Created inside this envelope — conflict-free; to-one fields carry their
+         *  anchors, and [scalars] says where each scalar field's value can be read
+         *  before the envelope runs (a creation literal copying the act's own
+         *  field, Reference §14), for the value keys that correlate on it. */
+        data class Fresh(val fields: Map<String, Anchor>, val scalars: Map<String, ValueSource> = emptyMap()) : Anchor
         /** An element of a scan correlated to [of] — keys to [of]. When [back]
          *  names the correlating to-one field, hopping it lands exactly on
          *  [of]; every other hop is unknowable. */
         data class Corr(val of: Anchor, val back: String? = null) : Anchor
-        /** Correlated on a committed value, not a row — reads of exactly that field are covered. */
-        data class ValCorr(val shape: String, val field: String) : Anchor
+        /** Correlated on a committed value, not a row — reads of exactly that field
+         *  are covered. [source] is where the envelope reads that value before its
+         *  work runs; null when it cannot, and the key takes the shape's width. */
+        data class ValCorr(val shape: String, val field: String, val source: ValueSource?) : Anchor
         /** No attribution — every read here widens. */
         data object Unknown : Anchor
     }
@@ -117,9 +122,10 @@ class DomainAnalysis(private val model: Model) {
     private fun anchorKey(a: Anchor): String = when (a) {
         is Anchor.Reach -> "r:" + a.segs.joinToString(".")
         is Anchor.Fresh -> "f(" + a.fields.entries.sortedBy { it.key }
-            .joinToString(",") { "${it.key}=${anchorKey(it.value)}" } + ")"
+            .joinToString(",") { "${it.key}=${anchorKey(it.value)}" } +
+            a.scalars.entries.sortedBy { it.key }.joinToString("") { ";${it.key}<${it.value}" } + ")"
         is Anchor.Corr -> "c(${anchorKey(a.of)}|${a.back})"
-        is Anchor.ValCorr -> "v:${a.shape}.${a.field}"
+        is Anchor.ValCorr -> "v:${a.shape}.${a.field}<${a.source}"
         Anchor.Unknown -> "?"
     }
 
@@ -140,20 +146,21 @@ class DomainAnalysis(private val model: Model) {
     /** A created instance's anchor, with a depth cap so creation chains in
      *  rule cycles cannot mint unboundedly-nested anchors (beyond the cap the
      *  references degrade to Unknown — wide, never wrong). */
-    private fun freshOf(fields: Map<String, Anchor>): Anchor.Fresh =
+    private fun freshOf(fields: Map<String, Anchor>, scalars: Map<String, ValueSource>): Anchor.Fresh =
         if (fields.values.any { freshDepth(it) >= maxFreshDepth })
             Anchor.Fresh(fields.mapValues { Anchor.Unknown })
-        else Anchor.Fresh(fields)
+        else Anchor.Fresh(fields, scalars)
 
     /** The act's own instance: fresh, with each supplied to-one reference
-     *  anchored as the path that reads it off the input. */
+     *  anchored as the path that reads it off the input, and each supplied
+     *  scalar sourced from the input the same way. */
     private fun actAnchor(act: String): Anchor.Fresh {
-        val fields = model.shapes.getValue(act).members.filterIsInstance<StoredProp>()
-            .mapNotNull { p ->
-                (p.type as? RelType)?.takeIf { !it.many }
-                    ?.let { p.name to Anchor.Reach(listOf(p.name)) as Anchor }
-            }.toMap()
-        return Anchor.Fresh(fields)
+        val props = model.shapes.getValue(act).members.filterIsInstance<StoredProp>()
+        val fields = props.mapNotNull { p ->
+            (p.type as? RelType)?.takeIf { !it.many }?.let { p.name to Anchor.Reach(listOf(p.name)) as Anchor }
+        }.toMap()
+        val scalars = props.filter { it.type !is RelType }.associate { it.name to ValueSource.Reach(emptyList(), it.name) }
+        return Anchor.Fresh(fields, scalars)
     }
 
     // ── the cascade: events, watchers, subjects ──────────────────────────────
@@ -581,7 +588,7 @@ class DomainAnalysis(private val model: Model) {
 
     private inner class Acc {
         val paths = mutableSetOf<List<String>>()
-        val values = mutableSetOf<Pair<String, String>>()
+        val values = mutableSetOf<QueueKey.ValueOf>()
         val widenings = LinkedHashMap<Pair<String, String>, Widening>()
 
         fun key(a: Anchor, shape: String, cause: String, decl: String, tolerated: Boolean) {
@@ -589,7 +596,7 @@ class DomainAnalysis(private val model: Model) {
                 is Anchor.Reach -> paths.add(a.segs)
                 is Anchor.Fresh -> {} // in-envelope creation: conflict-free by construction
                 is Anchor.Corr -> key(a.of, shape, cause, decl, tolerated)
-                is Anchor.ValCorr -> values.add(a.shape to a.field)
+                is Anchor.ValCorr -> values.add(QueueKey.ValueOf(a.shape, a.field, a.source))
                 Anchor.Unknown -> widen(shape, cause, decl, tolerated)
             }
         }
@@ -600,7 +607,7 @@ class DomainAnalysis(private val model: Model) {
 
         fun toDomain() = SerializationDomain(
             paths = paths.sortedBy { it.joinToString(".") }.map { QueueKey.Path(it) }.toSet(),
-            valueKeys = values.map { QueueKey.ValueOf(it.first, it.second) }.toSet(),
+            valueKeys = values.sortedBy { "${it.shape}.${it.field}<${it.source}" }.toSet(),
             widenings = widenings.values.toList(),
         )
     }
@@ -867,9 +874,10 @@ class DomainAnalysis(private val model: Model) {
                             acc.key(ta, base, "consults $base correlated through '$fieldName'", decl, tolerated)
                             anchor = Anchor.Corr(ta, fieldName)
                         } else {
-                            // value correlation: conflict keys on the committed value
+                            // value correlation: conflict keys on the committed value,
+                            // read at admission from where the subject side gets it
                             walkExpr(rp, ctx)
-                            anchor = Anchor.ValCorr(base, fieldName)
+                            anchor = Anchor.ValCorr(base, fieldName, sourceOf(rp, ctx))
                             acc.key(anchor, base, "", decl, tolerated)
                         }
                         break@outer
@@ -895,6 +903,43 @@ class DomainAnalysis(private val model: Model) {
             return when {
                 p.root == alias && p.segs.size == 1 -> p.segs[0].name
                 p.segs.isEmpty() && p.root != "this" && model.membersOf(base).containsKey(p.root) -> p.root
+                else -> null
+            }
+        }
+
+        /**
+         * Where the envelope can read the value a scalar path denotes before its
+         * work runs: the stored to-one hops from the envelope's subject, then the
+         * stored scalar field (`this.account.owner.email`), or the place a fresh
+         * row's creation literal copied the value from. Null when the path reads
+         * anything else — a derived member, a correlated element, an alias of a
+         * created row's computed field — and the key takes the shape's width.
+         * Records nothing: the reads were attributed by the walk that led here.
+         */
+        private fun sourceOf(p: PathExpr, ctx: Ctx): ValueSource? {
+            val steps = p.segs.map { it.name }
+            var scope: Scope
+            var rest: List<String>
+            when {
+                p.root == "this" -> { scope = ctx.subject; rest = steps }
+                p.root in ctx.aliases -> { scope = ctx.aliases.getValue(p.root); rest = steps }
+                else -> { scope = ctx.innermost(); rest = listOf(p.root) + steps }
+            }
+            if (rest.isEmpty()) return null
+            var anchor = scope.anchor
+            var shape = scope.name
+            for (seg in rest.dropLast(1)) {
+                val m = model.membersOf(shape)[seg] ?: return null
+                val target = m.type.instanceShape() ?: return null
+                if (!m.stored) return null
+                anchor = extend(anchor, seg)
+                shape = target
+            }
+            val m = model.membersOf(shape)[rest.last()] ?: return null
+            if (!m.stored || m.type.instanceShape() != null || m.type is VType.Coll || m.type is VType.CollS) return null
+            return when (anchor) {
+                is Anchor.Reach -> ValueSource.Reach(anchor.segs, m.name)
+                is Anchor.Fresh -> anchor.scalars[m.name]
                 else -> null
             }
         }
@@ -947,6 +992,7 @@ class DomainAnalysis(private val model: Model) {
 
         fun walkCreation(cr: Creation, ctx: Ctx, events: MutableList<Event>) {
             val fresh = mutableMapOf<String, Anchor>()
+            val scalars = mutableMapOf<String, ValueSource>()
             cr.forExpr?.let { forE ->
                 val target = walkExpr(forE, ctx)
                 val anchor = target?.anchor ?: Anchor.Unknown
@@ -969,9 +1015,13 @@ class DomainAnalysis(private val model: Model) {
                     fresh[f.name] = anchor
                     acc.key(anchor, cr.shape,
                         "creates ${cr.shape} referencing an instance the derivation cannot key", decl, tolerated)
+                } else if (member != null && member.stored && f.value is PathExpr) {
+                    // the created row's scalar is a copy: a value key correlating on
+                    // it is read where the copy came from
+                    sourceOf(f.value, ctx)?.let { scalars[f.name] = it }
                 }
             }
-            events.add(Event.Create(cr.shape, freshOf(fresh)))
+            events.add(Event.Create(cr.shape, freshOf(fresh, scalars)))
         }
     }
 }
@@ -985,8 +1035,20 @@ sealed interface QueueKey {
      *  fresh and conflict-free within its commit envelope). */
     data class Path(val segs: List<String>) : QueueKey
     /** Conflict correlates on a committed value, not an existing row
-     *  (the uniqueness case): queue per equal committed value. */
-    data class ValueOf(val shape: String, val field: String) : QueueKey
+     *  (the uniqueness case): queue per equal committed value. [source] is where
+     *  the runtime reads that value at admission; null when the value is not
+     *  known until the envelope runs, and the envelope takes the shape's width. */
+    data class ValueOf(val shape: String, val field: String, val source: ValueSource? = null) : QueueKey
+}
+
+/** Where an envelope reads the value a value key correlates on, before its work runs. */
+sealed interface ValueSource {
+    /** Hop the stored to-one members [segs] from the envelope's subject (an
+     *  act's own supplied fields, or a firing's swept row), then read the stored
+     *  scalar [field]. Empty [segs] reads the subject's own field. */
+    data class Reach(val segs: List<String>, val field: String) : ValueSource {
+        override fun toString() = (segs + field).joinToString(".")
+    }
 }
 
 /** A whole-shape widening: every commit touching [shape] shares one queue. */
@@ -1019,5 +1081,5 @@ class SerializationDomain(
     /** Keys rendered against a subject noun: `deposit.account`, `this`, `email value`. */
     fun renderKeys(subjectNoun: String): List<String> =
         paths.map { p -> if (p.segs.isEmpty()) subjectNoun else "$subjectNoun.${p.segs.joinToString(".")}" } +
-            valueKeys.map { "${it.field} value" }
+            valueKeys.map { "${it.field} value" }.distinct()
 }

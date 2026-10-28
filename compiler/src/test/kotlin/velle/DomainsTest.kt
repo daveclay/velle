@@ -126,6 +126,67 @@ class DomainsTest {
         assertFalse(d.wide, "the value correlation must rescue the scan: ${d.widenings}")
     }
 
+    @Test
+    fun `a value key records where the envelope reads the value before it runs`() {
+        val a = analysis(uniqueness)
+        val d = a.actDomains.getValue("Customer")
+        assertEquals(setOf(QueueKey.ValueOf("Customer", "email", ValueSource.Reach(emptyList(), "email"))), d.valueKeys,
+            "the act's own field")
+    }
+
+    private val bookings = """
+        act BookNow { slot: text }
+        shape Reservation { slot: text }
+        never (Reservation where exists (Reservation as other where other.slot == this.slot and not (other == this)))
+        rule ApplyBooking when BookNow { Reservation from { slot: slot } }
+
+        act Waitlist { slot: text }
+        shape Unserved = Waitlist where not exists (Reservation where slot == this.slot)
+        shape Nagged { waitlist: one Waitlist }
+        rule NagWaitlist when (Unserved where not exists (Nagged where waitlist == this)) on Hourly { Nagged from { waitlist: this } }
+    """.trimIndent()
+
+    @Test
+    fun `a row a rule creates from the act's field is keyed on the act's field`() {
+        val a = analysis(bookings)
+        val d = a.actDomains.getValue("BookNow")
+        assertEquals(setOf(QueueKey.ValueOf("Reservation", "slot", ValueSource.Reach(emptyList(), "slot"))), d.valueKeys)
+        assertFalse(d.wide, d.widenings.toString())
+    }
+
+    @Test
+    fun `a firing correlating on the swept row's field is keyed on that field`() {
+        val a = analysis(bookings)
+        val d = a.firingDomains.getValue("NagWaitlist")
+        assertEquals(setOf(QueueKey.ValueOf("Reservation", "slot", ValueSource.Reach(emptyList(), "slot"))), d.valueKeys)
+        assertEquals(listOf("slot value", "this"), keys(d, "this"))
+    }
+
+    @Test
+    fun `a value copied through one of the act's references is sourced through that reference`() {
+        val a = analysis("""
+            act Account { code: text }
+            act Register { account: one Account }
+            shape Tag { code: text }
+            never (Tag where exists (Tag as other where other.code == this.code and not (other == this)))
+            rule MakeTag when Register { Tag from { code: account.code } }
+        """.trimIndent())
+        val d = a.actDomains.getValue("Register")
+        assertEquals(setOf(QueueKey.ValueOf("Tag", "code", ValueSource.Reach(listOf("account"), "code"))), d.valueKeys)
+    }
+
+    @Test
+    fun `a value the rule computes has no source - the runtime takes the shape's width`() {
+        val a = analysis("""
+            act Register { name: text }
+            shape Tag { code: text }
+            never (Tag where exists (Tag as other where other.code == this.code and not (other == this)))
+            rule MakeTag when Register { Tag from { code: "fixed" } }
+        """.trimIndent())
+        val d = a.actDomains.getValue("Register")
+        assertEquals(setOf(QueueKey.ValueOf("Tag", "code", null)), d.valueKeys)
+    }
+
     // ── the lending cap: correlated scan collapses to the branch ─────────────
 
     private val branchCap = """

@@ -822,7 +822,8 @@ class VelleSystem(
      * The queue keys of an act's envelope, valued against the act's own inputs
      * and pre-commit state: a path key is the row the act's stored to-one path
      * reaches, hopping through stored and captured members; a value key is the
-     * value the envelope commits; a widening is the shape. A path that reaches
+     * value the envelope commits, read off the act's own fields or a hop from
+     * one of its references; a widening is the shape. A path that reaches
      * no row contributes no key. Valued before the envelope's work runs, inside
      * the write unit, so the reads it needs happen on the unit's connection.
      */
@@ -841,18 +842,14 @@ class VelleSystem(
             if (reached) rowKey(id)?.let(keys::add)
         }
         for (vk in domain.valueKeys) {
-            // the value is known at admission when the act itself carries the row (a
-            // Customer committing its email); when a rule inside the envelope creates
-            // the row (a BookNow whose rule creates the Reservation), the value is not
-            // known until the rule runs, and the envelope takes the shape's width, as
-            // a firing does (OQ70 D9 is the narrowing of both)
-            var valued = false
-            for (m in mutations) {
-                if (m !is Mutation.Create || m.shape != vk.shape) continue
-                val v = m.fields[vk.field] ?: continue
-                canonical(v)?.let { keys.add(AdmissionKey.Value(vk.shape, vk.field, it)); valued = true }
-            }
-            if (!valued) keys.add(AdmissionKey.Shape(vk.shape))
+            // the value is read where the compiler found the subject side gets it:
+            // the act's own field, or a hop from one of its references; a key with
+            // no such place takes the shape's width
+            val v = (vk.source as? ValueSource.Reach)?.let { src ->
+                if (src.segs.isEmpty()) root?.fields?.get(src.field)
+                else reachFrom((root?.fields?.get(src.segs.first()) as? Value.VRef)?.id, src.segs.drop(1), src.field)
+            }?.let(::canonical)
+            keys.add(if (v != null) AdmissionKey.Value(vk.shape, vk.field, v) else AdmissionKey.Shape(vk.shape))
         }
         for (w in domain.widenings) keys.add(AdmissionKey.Shape(w.shape))
         return keys
@@ -861,8 +858,9 @@ class VelleSystem(
     /**
      * The queue keys of one rule firing that is its own envelope (a tick's or the
      * after-commit queue's), valued from the swept subject: an empty path is the
-     * subject's own row, a longer one hops from it. A value key's value is not
-     * known until the firing runs, so it takes the shape's width instead.
+     * subject's own row, a longer one hops from it; a value key reads the
+     * subject's stored field its correlation compares against, and takes the
+     * shape's width when the compiler found no such field.
      */
     private fun firingKeys(rule: RuleDecl, subject: Long): Set<AdmissionKey> {
         val domain = domains.firingDomains[rule.name] ?: return emptySet()
@@ -872,9 +870,19 @@ class VelleSystem(
             for (seg in path.segs) { id = id?.let { hop(it, seg) } ?: break }
             id?.let { rowKey(it) }?.let(keys::add)
         }
-        for (vk in domain.valueKeys) keys.add(AdmissionKey.Shape(vk.shape))
+        for (vk in domain.valueKeys) {
+            val v = (vk.source as? ValueSource.Reach)?.let { reachFrom(subject, it.segs, it.field) }?.let(::canonical)
+            keys.add(if (v != null) AdmissionKey.Value(vk.shape, vk.field, v) else AdmissionKey.Shape(vk.shape))
+        }
         for (w in domain.widenings) keys.add(AdmissionKey.Shape(w.shape))
         return keys
+    }
+
+    /** The stored value [field] of the row [segs] hops from [id]; null when a hop reaches no row or the field is unset. */
+    private fun reachFrom(id: Long?, segs: List<String>, field: String): Value? {
+        var at = id ?: return null
+        for (seg in segs) at = hop(at, seg) ?: return null
+        return instance(at)?.fields?.get(field)
     }
 
     /** One hop of a key path: the row [id]'s stored to-one member [seg], or the captured member of that name (Reference §13). */

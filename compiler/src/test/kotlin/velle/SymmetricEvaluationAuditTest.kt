@@ -74,9 +74,9 @@ class SymmetricEvaluationAuditTest {
         // audit as precision finding P2, not a hole.)
         val a = analysis(valueCorr)
         val order = a.actDomains.getValue("Order")
-        assertTrue(QueueKey.ValueOf("Customer", "email") in order.valueKeys, "order side: ${order.valueKeys}")
+        assertTrue(order.valueKeys.any { it.shape == "Customer" && it.field == "email" }, "order side: ${order.valueKeys}")
         val customer = a.actDomains.getValue("Customer")
-        assertTrue(QueueKey.ValueOf("Customer", "email") in customer.valueKeys,
+        assertTrue(customer.valueKeys.any { it.shape == "Customer" && it.field == "email" },
             "customer side must key the value it commits: ${customer.valueKeys}, wide=${customer.widenings}")
     }
 
@@ -102,7 +102,7 @@ class SymmetricEvaluationAuditTest {
             }
         """.trimIndent())
         val customer = a.actDomains.getValue("Customer")
-        assertTrue(customer.wide || QueueKey.ValueOf("Customer", "email") in customer.valueKeys,
+        assertTrue(customer.wide || customer.valueKeys.any { it.shape == "Customer" && it.field == "email" },
             "the customer commit must widen or key the value: ${customer.paths} ${customer.valueKeys} ${customer.widenings}")
     }
 

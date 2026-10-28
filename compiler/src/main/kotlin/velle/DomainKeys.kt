@@ -72,10 +72,15 @@ object DomainKeys {
         }
         val values = mutableSetOf<Pair<String, String>>()
         for (v in domain.valueKeys) {
-            // the key names the scanned shape's field; the committed value is
-            // only certainly known when the act *is* that shape
-            if (v.shape != act) return null
-            val raw = fields[v.field] ?: return null
+            // the committed value is read where the derivation found the subject
+            // side gets it: the act's own field, or a hop from one of its references
+            val src = v.source as? ValueSource.Reach ?: return null
+            val raw: Any = if (src.segs.isEmpty()) fields[src.field] ?: return null
+            else {
+                var id = fields[src.segs.first()] as? Long ?: return null
+                for (seg in src.segs.drop(1)) id = sys.get(id, seg) as? Long ?: return null
+                sys.get(id, src.field) ?: return null
+            }
             values.add("${v.shape}.${v.field}" to normalize(raw, sys.model.registry))
         }
         return Tokens(rows, values)

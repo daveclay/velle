@@ -81,8 +81,8 @@ class MemoryStoreTest {
 
     @Test
     fun `acts whose rule commits one unique value take turns - the prohibition holds under contention`() {
-        // the Reservation is created by the rule, not by the act, so its value is not known at admission;
-        // the envelope takes the shape's width instead and two bookings of one slot never run together
+        // the Reservation is created by the rule, not by the act; the envelope keys on the slot the rule
+        // will copy from the act (AdmissionKeysTest), so two bookings of one slot never run together
         val model = Model(Parser.parse(bookings))
         check(model.diagnostics.isEmpty()) { model.diagnostics.toString() }
         val sys = VelleSystem(model)
