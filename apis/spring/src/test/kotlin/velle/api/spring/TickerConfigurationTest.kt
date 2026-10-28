@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.task.TaskSchedulingAutoConfigurati
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner
 import org.springframework.mock.env.MockEnvironment
 import org.springframework.scheduling.TaskScheduler
+import org.springframework.scheduling.config.ScheduledTaskHolder
 import velle.Model
 import velle.Parser
 import velle.VelleSystem
@@ -77,6 +78,19 @@ class TickerConfigurationTest {
                 val registry = ctx.getBean(io.micrometer.core.instrument.MeterRegistry::class.java)
                 assertEquals(1.0, registry.counter("velle.ticks", "schedule", "Weekly", "outcome", "clean").count())
             }
+    }
+
+    @Test
+    fun `a schedule named in another case, as an environment variable leaves it, is the spec's schedule`() {
+        runner.withPropertyValues("velle.schedules.weekly.cron=0 0 6 * * MON").run { ctx ->
+            assertEquals(null, ctx.startupFailure)
+            val holder = ctx.getBean(ScheduledTaskHolder::class.java)
+            assertEquals(1, holder.scheduledTasks.size)
+        }
+        runner.withPropertyValues("velle.schedules.weekly=@weekly", "velle.schedules.Weekly=@weekly").run { ctx ->
+            val failure = assertNotNull(ctx.startupFailure)
+            assertTrue("more than once" in failure.messages(), failure.messages())
+        }
     }
 
     @Test

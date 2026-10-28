@@ -185,12 +185,21 @@ class VelleAutoConfiguration {
 
         private val log = LoggerFactory.getLogger(Ticker::class.java)
 
-        /** Registers one task per schedule. A schedule the spec lacks, or a cron that does not parse, stops the application at startup. */
+        /**
+         * Registers one task per schedule. A schedule the spec lacks, or a cron that does not parse,
+         * stops the application at startup. The configured name is matched to the spec's schedule
+         * without regard to case, because an environment variable (`VELLE_SCHEDULES_WEEKLY_CRON`)
+         * reaches the map as `weekly`.
+         */
         @Bean
         fun velleTicks(api: VelleApi, props: VelleProperties): SchedulingConfigurer = SchedulingConfigurer { registrar: ScheduledTaskRegistrar ->
-            val unknown = props.schedules.keys - api.schedules.toSet()
+            val named = props.schedules.keys.associateWith { key -> api.schedules.firstOrNull { it.equals(key, ignoreCase = true) } }
+            val unknown = named.filterValues { it == null }.keys
             if (unknown.isNotEmpty()) throw IllegalStateException("velle.schedules names $unknown; this system has ${api.schedules}")
-            for ((schedule, s) in props.schedules) {
+            val twice = named.values.groupBy { it }.filterValues { it.size > 1 }.keys
+            if (twice.isNotEmpty()) throw IllegalStateException("velle.schedules names $twice more than once: ${named.filterValues { it in twice }.keys}")
+            for ((key, s) in props.schedules) {
+                val schedule = named.getValue(key)!!
                 val zone = s.zone ?: ZoneId.systemDefault()
                 val trigger = try {
                     CronTrigger(s.cron, zone)
