@@ -5,225 +5,598 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Velle console</title>
 <style>
-  :root { --bg: #fafaf7; --fg: #1c1c1a; --muted: #6b6b66; --line: #dddcd6; --panel: #ffffff; --accent: #2b5fb3; --ok: #2d7a3a; --bad: #b3362b; --chip: #eeede8; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #16171a; --fg: #e8e7e2; --muted: #9a9a94; --line: #33343a; --panel: #1e1f24; --accent: #7fa7e8; --ok: #6fc07c; --bad: #e07a70; --chip: #2a2b31; } }
+  :root {
+    --bg: #fafaf7; --fg: #1c1c1a; --muted: #6b6b66; --line: #dddcd6; --panel: #ffffff;
+    --accent: #2b5fb3; --ok: #2d7a3a; --bad: #b3362b; --chip: #eeede8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16171a; --fg: #e8e7e2; --muted: #9a9a94; --line: #33343a; --panel: #1e1f24;
+      --accent: #7fa7e8; --ok: #6fc07c; --bad: #e07a70; --chip: #2a2b31;
+    }
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 14px/1.45 -apple-system, system-ui, "Segoe UI", sans-serif; background: var(--bg); color: var(--fg); display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
-  nav { border-right: 1px solid var(--line); padding: 16px; overflow: auto; }
+  body {
+    margin: 0; font: 14px/1.45 -apple-system, system-ui, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--fg);
+    /* the sidebar and the main pane each scroll on their own, so the shape list keeps its place while a long table scrolls */
+    display: grid; grid-template-columns: 240px 1fr; height: 100vh; overflow: hidden;
+  }
+
+  /* the sidebar: the model's shapes, refinements, acts, and schedules, and the request header */
+  nav { border-right: 1px solid var(--line); padding: 16px; overflow: auto; min-height: 0; }
   nav h1 { font-size: 15px; margin: 0 0 12px; letter-spacing: .02em; }
   nav h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 18px 0 6px; }
   nav a { display: block; padding: 3px 6px; border-radius: 4px; color: var(--fg); text-decoration: none; }
   nav a:hover, nav a.active { background: var(--chip); }
-  nav a .k { color: var(--muted); font-size: 11px; margin-left: 4px; }
-  main { padding: 20px 28px; overflow: auto; }
+  nav a .tag { color: var(--muted); font-size: 11px; margin-left: 4px; }
+  .request-header { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .request-header input { width: 100%; margin-bottom: 6px; font-size: 12px; }
+  .request-header .note { color: var(--muted); font-size: 12px; margin: 0; }
+
+  /* the main pane */
+  main { padding: 20px 28px; overflow: auto; min-height: 0; }
   h2.title { margin: 0 0 4px; font-size: 20px; }
-  .sub { color: var(--muted); margin: 0 0 16px; }
-  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
-  input, select, textarea, button { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px; }
+  .subtitle { color: var(--muted); margin: 0 0 16px; }
+  .muted { color: var(--muted); }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  input, select, textarea, button {
+    font: inherit; color: var(--fg); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px;
+  }
   input.where { flex: 1; min-width: 220px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  button { cursor: pointer; } button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-  table { border-collapse: collapse; width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  input.order-by { width: 160px; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .empty { color: var(--muted); padding: 24px; text-align: center; }
+
+  /* a shape's table */
+  table {
+    border-collapse: collapse; width: 100%; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+  }
   th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
   th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
   tr:last-child td { border-bottom: 0; }
-  td.num { font-variant-numeric: tabular-nums; }
-  a.ref { color: var(--accent); text-decoration: none; } a.ref:hover { text-decoration: underline; }
+  td.numeric { font-variant-numeric: tabular-nums; }
+  a.ref { color: var(--accent); text-decoration: none; }
+  a.ref:hover { text-decoration: underline; }
   .chip { display: inline-block; background: var(--chip); border-radius: 10px; padding: 0 8px; font-size: 12px; margin: 0 4px 4px 0; }
   .chip.on { background: var(--ok); color: #fff; }
-  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; }
-  dt { color: var(--muted); } dd { margin: 0; }
-  form.act { display: grid; grid-template-columns: max-content 1fr; gap: 10px 16px; align-items: center; max-width: 720px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
-  form.act label { color: var(--muted); } form.act textarea { font-family: ui-monospace, Menlo, monospace; min-height: 70px; }
-  form.act .hint { grid-column: 2; color: var(--muted); font-size: 12px; margin-top: -6px; }
-  pre.out { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; white-space: pre-wrap; word-break: break-word; font: 12px/1.4 ui-monospace, Menlo, monospace; }
-  .ok { color: var(--ok); } .bad { color: var(--bad); }
-  .empty { color: var(--muted); padding: 24px; text-align: center; }
-  .headerbox { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 12px; }
-  .headerbox input { width: 100%; margin-bottom: 6px; font-size: 12px; }
-  @media (max-width: 760px) { body { grid-template-columns: 1fr; } nav { border-right: 0; border-bottom: 1px solid var(--line); } }
+
+  /* one record */
+  dl {
+    display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px;
+  }
+  dt { color: var(--muted); }
+  dt .member-type { font-size: 11px; }
+  dd { margin: 0; }
+
+  /* an act's form */
+  form.act-form {
+    display: grid; grid-template-columns: max-content 1fr; gap: 10px 16px; align-items: center; max-width: 720px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px;
+  }
+  form.act-form label { color: var(--muted); }
+  form.act-form textarea { font-family: ui-monospace, Menlo, monospace; min-height: 70px; }
+  form.act-form .hint { grid-column: 2; color: var(--muted); font-size: 12px; margin-top: -6px; }
+
+  /* the answer to a commit or a tick */
+  pre.outcome {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px;
+    white-space: pre-wrap; word-break: break-word; font: 12px/1.4 ui-monospace, Menlo, monospace;
+  }
+  .ok { color: var(--ok); }
+  .bad { color: var(--bad); }
+
+  @media (max-width: 760px) {
+    /* stacked: the sidebar takes the top of the screen and still scrolls on its own */
+    body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    nav { border-right: 0; border-bottom: 1px solid var(--line); max-height: 40vh; }
+  }
 </style>
 </head>
 <body>
 <nav>
   <h1>Velle</h1>
-  <div id="nav"></div>
-  <div class="headerbox">
+  <div id="navigation"></div>
+  <div class="request-header">
     <h2>Request header</h2>
-    <input id="hname" placeholder="Header name, e.g. X-Velle-Actor">
-    <input id="hvalue" placeholder="Value, e.g. Staff:1">
-    <div class="sub" style="font-size:12px">Sent with every request, for the application's actor resolver.</div>
+    <input id="header-name" placeholder="Header name, e.g. X-Velle-Actor">
+    <input id="header-value" placeholder="Value, e.g. Staff:1">
+    <p class="note">Sent with every request, for the application's actor resolver.</p>
   </div>
 </nav>
 <main id="main"><div class="empty">Loading the model…</div></main>
 <script>
+// The console is a client of the REST API and nothing else: it reads the model's description from
+// GET <api> once, and renders every view from that description and the records the API answers.
+// The starter substitutes the API path and the ticks flag into the two placeholders (VelleConsole.kt).
 const API = "__API__";
-const TICKS = __TICKS__ === true;
+const TICKS_EXPOSED = __TICKS__ === true;
+
+// The description GET <api> answers, kept once loaded, and its shapes and refinements by name.
 let model = null;
-const byName = {};
+const shapesByName = {};
 
-function headers(extra) {
-  const h = Object.assign({}, extra || {});
-  const n = localStorage.getItem('velle.hname'), v = localStorage.getItem('velle.hvalue');
-  if (n && v) h[n] = v;
-  return h;
-}
-async function call(path, opts) {
-  const r = await fetch(API + path, Object.assign({ headers: headers(opts && opts.body ? {'Content-Type': 'application/json'} : {}) }, opts || {}));
-  const text = await r.text();
-  let body; try { body = text ? JSON.parse(text) : null; } catch (e) { body = text; }
-  return { ok: r.ok, status: r.status, body };
-}
-function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-function refLink(r) { return `<a class="ref" href="#record/${encodeURIComponent(r.shape)}/${encodeURIComponent(r.key)}">${esc(r.shape)}#${esc(r.key)}</a>`; }
-function isRef(v) { return v && typeof v === 'object' && !Array.isArray(v) && 'shape' in v && 'key' in v; }
-function cell(v) {
-  if (v === null || v === undefined) return '<span class="sub">—</span>';
-  if (isRef(v)) return refLink(v);
-  if (Array.isArray(v)) return v.length === 0 ? '<span class="sub">none</span>' : (isRef(v[0]) ? v.map(refLink).join(', ') : esc(v.join(', ')));
-  if (typeof v === 'boolean') return v ? 'yes' : 'no';
-  return esc(v);
-}
-function isUnion(typeName) { const s = byName[typeName]; return s && s.kind === 'refinement' && s.bases && s.bases.length > 1; }
-const ORDERABLE = new Set(['text','integer','long','decimal','double','Date','DateTime','time','duration']);
-function defaultOrder(shape) {
-  const m = shape.members.find(m => m.kind !== 'inverse' && m.kind !== 'actor' && (ORDERABLE.has(m.type) || !byName[m.type] && !['boolean','bytes','uuid'].includes(m.type)));
-  return m ? m.name : '';
+// ── talking to the API ──
+
+// The one header the developer typed in the sidebar, kept in the browser between visits.
+const STORED_HEADER_NAME = 'velle.hname';
+const STORED_HEADER_VALUE = 'velle.hvalue';
+
+function requestHeaders(extraHeaders) {
+  const headers = Object.assign({}, extraHeaders || {});
+  const headerName = localStorage.getItem(STORED_HEADER_NAME);
+  const headerValue = localStorage.getItem(STORED_HEADER_VALUE);
+  if (headerName && headerValue) headers[headerName] = headerValue;
+  return headers;
 }
 
-// ── navigation ──
-function nav() {
-  const shapes = model.shapes.filter(s => s.kind === 'shape'), refinements = model.shapes.filter(s => s.kind === 'refinement');
-  let h = '<h2>Shapes</h2>' + shapes.map(s => `<a href="#shape/${s.name}" data-nav="shape/${s.name}">${esc(s.name)}${s.act ? '<span class="k">act</span>' : ''}</a>`).join('');
-  if (refinements.length) h += '<h2>Refinements</h2>' + refinements.map(s => `<a href="#shape/${s.name}" data-nav="shape/${s.name}">${esc(s.name)}</a>`).join('');
-  h += '<h2>Acts</h2>' + model.acts.map(a => `<a href="#act/${a.name}" data-nav="act/${a.name}">${esc(a.name)}${a.transient ? '<span class="k">transient</span>' : ''}${a.actor ? '<span class="k">by ' + esc(a.actor.shape) + '</span>' : ''}</a>`).join('');
-  if (TICKS && model.schedules.length) h += '<h2>Schedules</h2>' + model.schedules.map(s => `<a href="#tick/${s}" data-nav="tick/${s}">${esc(s)}</a>`).join('');
-  document.getElementById('nav').innerHTML = h;
+// One call to the API: the answer's status and its body, parsed as JSON when it is JSON.
+async function callApi(path, options) {
+  options = options || {};
+  const headers = requestHeaders(options.body ? { 'Content-Type': 'application/json' } : {});
+  const response = await fetch(API + path, Object.assign({ headers }, options));
+  const text = await response.text();
+  let body;
+  try { body = text ? JSON.parse(text) : null; } catch (notJson) { body = text; }
+  return { ok: response.ok, status: response.status, body };
 }
+
+// What to show for a failed answer: the API's message and its details when it gave them, else the status.
+function errorText(answer) {
+  const body = answer.body;
+  if (body && body.error) {
+    const details = body.details && body.details.length ? '\n' + body.details.join('\n') : '';
+    return body.error + details;
+  }
+  const bodyText = body ? '\n' + (typeof body === 'string' ? body : JSON.stringify(body)) : '';
+  return 'The API answered ' + answer.status + bodyText;
+}
+
+// ── rendering values ──
+
+function escapeHtml(value) {
+  const replacements = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+  return String(value).replace(/[&<>"]/g, character => replacements[character]);
+}
+
+// A reference on the wire is the pair {shape, key}, wherever it appears.
+function isReference(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) && 'shape' in value && 'key' in value;
+}
+
+function recordHash(shapeName, key) {
+  return `#record/${encodeURIComponent(shapeName)}/${encodeURIComponent(key)}`;
+}
+
+function referenceLink(reference) {
+  return `<a class="ref" href="${recordHash(reference.shape, reference.key)}">${escapeHtml(reference.shape)}#${escapeHtml(reference.key)}</a>`;
+}
+
+// One value of a record: a reference as a link, a list joined, a boolean as yes or no, nothing as a dash.
+function renderValue(value) {
+  if (value === null || value === undefined) return '<span class="muted">—</span>';
+  if (isReference(value)) return referenceLink(value);
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '<span class="muted">none</span>';
+    return isReference(value[0]) ? value.map(referenceLink).join(', ') : escapeHtml(value.join(', '));
+  }
+  if (typeof value === 'boolean') return value ? 'yes' : 'no';
+  return escapeHtml(value);
+}
+
+// A record's flags are named is<Refinement>; a chip shows the refinement's name.
+function flagChips(flagNames) {
+  return flagNames.map(flagName => `<span class="chip on">${escapeHtml(flagName.slice(2))}</span>`).join('');
+}
+
+// A refinement over more than one base: a reference to it names the shape as well as the key.
+function isUnionType(typeName) {
+  const shape = shapesByName[typeName];
+  return Boolean(shape && shape.kind === 'refinement' && shape.bases && shape.bases.length > 1);
+}
+
+// The member a shape's table is ordered by until the developer picks one: the first member that is
+// neither an inverse collection nor the actor, and whose type sorts (a scalar or an extension type;
+// not another shape, not a boolean, bytes, or a uuid).
+const ORDERABLE_TYPES = new Set(['text', 'integer', 'long', 'decimal', 'double', 'Date', 'DateTime', 'time', 'duration']);
+const UNORDERABLE_SCALARS = ['boolean', 'bytes', 'uuid'];
+
+function defaultOrderBy(shape) {
+  const member = shape.members.find(candidate => {
+    if (candidate.kind === 'inverse' || candidate.kind === 'actor') return false;
+    if (ORDERABLE_TYPES.has(candidate.type)) return true;
+    const isShapeType = Boolean(shapesByName[candidate.type]);
+    return !isShapeType && !UNORDERABLE_SCALARS.includes(candidate.type);
+  });
+  return member ? member.name : '';
+}
+
+// ── the sidebar and the routes ──
+
+function navigationLink(target, label, tags) {
+  const tagMarkup = (tags || []).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('');
+  return `<a href="#${target}" data-nav="${target}">${escapeHtml(label)}${tagMarkup}</a>`;
+}
+
+function renderNavigation() {
+  const shapes = model.shapes.filter(shape => shape.kind === 'shape');
+  const refinements = model.shapes.filter(shape => shape.kind === 'refinement');
+  let html = '<h2>Shapes</h2>' + shapes.map(shape => navigationLink('shape/' + shape.name, shape.name, shape.act ? ['act'] : [])).join('');
+  if (refinements.length) {
+    html += '<h2>Refinements</h2>' + refinements.map(refinement => navigationLink('shape/' + refinement.name, refinement.name)).join('');
+  }
+  html += '<h2>Acts</h2>' + model.acts.map(act => {
+    const tags = [];
+    if (act.transient) tags.push('transient');
+    if (act.actor) tags.push('by ' + act.actor.shape);
+    return navigationLink('act/' + act.name, act.name, tags);
+  }).join('');
+  if (TICKS_EXPOSED && model.schedules.length) {
+    html += '<h2>Schedules</h2>' + model.schedules.map(schedule => navigationLink('tick/' + schedule, schedule)).join('');
+  }
+  document.getElementById('navigation').innerHTML = html;
+}
+
+// The view is in the URL's hash: shape/<Shape>, record/<Shape>/<key>, act/<Act>, or tick/<Schedule>.
+function currentHash() {
+  if (location.hash.length > 1) return location.hash.slice(1);
+  return model.shapes[0] ? 'shape/' + model.shapes[0].name : '';
+}
+
 function route() {
-  const hash = location.hash.slice(1) || (model.shapes[0] ? 'shape/' + model.shapes[0].name : '');
-  document.querySelectorAll('nav a').forEach(a => a.classList.toggle('active', hash.startsWith(a.dataset.nav || '\u0000')));
-  const [kind, a, b] = hash.split('/').map(decodeURIComponent);
-  if (kind === 'shape') showShape(a);
-  else if (kind === 'record') showRecord(a, b);
-  else if (kind === 'act') showAct(a);
-  else if (kind === 'tick') showTick(a);
+  const hash = currentHash();
+  const [view, first, second] = hash.split('/').map(decodeURIComponent);
+  // a record lights up its shape in the sidebar; every other view lights up its own link
+  const activeTarget = view === 'record' ? 'shape/' + first : hash;
+  document.querySelectorAll('nav a').forEach(link => link.classList.toggle('active', link.dataset.nav === activeTarget));
+  if (view === 'shape') showShape(first);
+  else if (view === 'record') showRecord(first, second);
+  else if (view === 'act') showAct(first);
+  else if (view === 'tick') showTick(first);
 }
 
-// ── a shape: the table ──
-const queryState = {};
-async function showShape(name, more) {
-  const shape = byName[name]; if (!shape) return;
-  const st = queryState[name] || (queryState[name] = { where: '', orderBy: defaultOrder(shape), size: 25, after: null, items: [] });
-  const main = document.getElementById('main');
-  if (!more) {
-    main.innerHTML = `<h2 class="title">${esc(name)}</h2><p class="sub">${shape.kind === 'refinement' ? 'Refinement of ' + esc(shape.bases.join(' or ')) : 'Shape'}${shape.act ? ', committed as an act' : ''}.</p>
-      <form class="bar" id="qf"><input class="where" id="where" placeholder="where, in the spec's language: balance > 0 and due < today" value="${esc(st.where)}">
-      <label>order by <input id="orderBy" value="${esc(st.orderBy)}" style="width:160px"></label>
-      <button class="primary">Query</button> <span id="count" class="sub"></span></form>
-      <div id="table"></div><div class="bar" id="pager"></div>`;
-    document.getElementById('qf').onsubmit = e => { e.preventDefault(); st.where = document.getElementById('where').value; st.orderBy = document.getElementById('orderBy').value; st.after = null; st.items = []; showShape(name, true); };
-    st.after = null; st.items = [];
+// ── a shape: its records as a table ──
+
+// What the developer last asked of each shape's table: the predicate, the order, and the pages read so far.
+const tableStates = {};
+
+function tableStateFor(shape) {
+  if (!tableStates[shape.name]) {
+    tableStates[shape.name] = { where: '', orderBy: defaultOrderBy(shape), pageSize: 25, nextCursor: null, items: [] };
   }
-  const params = new URLSearchParams(); if (st.where) params.set('where', st.where); if (st.orderBy) params.set('orderBy', st.orderBy); params.set('size', st.size); if (st.after) params.set('after', st.after);
-  const r = await call(`/shapes/${encodeURIComponent(name)}?` + params);
-  const table = document.getElementById('table'), pager = document.getElementById('pager');
-  if (!r.ok) { table.innerHTML = `<pre class="out bad">${esc(r.body && r.body.error ? r.body.error + '\n' + (r.body.details || []).join('\n') : JSON.stringify(r.body))}</pre>`; pager.innerHTML = ''; return; }
-  st.items = st.items.concat(r.body.items); st.after = r.body.next;
-  const cols = shape.members.filter(m => m.kind !== 'inverse');
-  const inverses = shape.members.filter(m => m.kind === 'inverse');
+  return tableStates[shape.name];
+}
+
+function shapeSubtitle(shape) {
+  const what = shape.kind === 'refinement' ? 'Refinement of ' + escapeHtml(shape.bases.join(' or ')) : 'Shape';
+  return what + (shape.act ? ', committed as an act' : '') + '.';
+}
+
+function renderShapeHeader(shape, state) {
+  return `<h2 class="title">${escapeHtml(shape.name)}</h2>
+    <p class="subtitle">${shapeSubtitle(shape)}</p>
+    <form class="toolbar" id="query-form">
+      <input class="where" id="where" placeholder="where, in the spec's language: balance > 0 and due < today" value="${escapeHtml(state.where)}">
+      <label>order by <input class="order-by" id="order-by" value="${escapeHtml(state.orderBy)}"></label>
+      <button class="primary">Query</button>
+      <span id="count" class="muted"></span>
+    </form>
+    <div id="table"></div>
+    <div class="toolbar" id="pager"></div>`;
+}
+
+// The table: the key, every member but the inverse collections, those collections as counts, then the flags set.
+function renderTable(shape, records) {
+  if (records.length === 0) return '<div class="empty">No records.</div>';
+  const columns = shape.members.filter(member => member.kind !== 'inverse');
+  const inverseColumns = shape.members.filter(member => member.kind === 'inverse');
   const flags = shape.flags || [];
-  if (st.items.length === 0) table.innerHTML = '<div class="empty">No records.</div>';
-  else table.innerHTML = `<table><thead><tr><th>key</th>${cols.map(c => `<th>${esc(c.name)}</th>`).join('')}${inverses.map(c => `<th>${esc(c.name)}</th>`).join('')}${flags.length ? '<th>is</th>' : ''}</tr></thead><tbody>` +
-    st.items.map(it => `<tr><td>${refLink(it)}</td>${cols.map(c => `<td class="${typeof it[c.name] === 'number' ? 'num' : ''}">${cell(it[c.name])}</td>`).join('')}${inverses.map(c => `<td class="num">${Array.isArray(it[c.name]) ? it[c.name].length : '—'}</td>`).join('')}${flags.length ? '<td>' + flags.filter(f => it[f]).map(f => `<span class="chip on">${esc(f.slice(2))}</span>`).join('') + '</td>' : ''}</tr>`).join('') + '</tbody></table>';
-  pager.innerHTML = `<span class="sub">${st.items.length} shown</span>` + (st.after ? ` <button id="more">More</button>` : '');
-  if (st.after) document.getElementById('more').onclick = () => showShape(name, true);
-  const c = await call(`/shapes/${encodeURIComponent(name)}/count?` + (st.where ? 'where=' + encodeURIComponent(st.where) : ''));
-  if (c.ok) document.getElementById('count').textContent = c.body.count + ' in all';
+
+  const headerCells = ['<th>key</th>']
+    .concat(columns.map(column => `<th>${escapeHtml(column.name)}</th>`))
+    .concat(inverseColumns.map(column => `<th>${escapeHtml(column.name)}</th>`))
+    .concat(flags.length ? ['<th>is</th>'] : []);
+
+  const rows = records.map(record => {
+    const cells = [`<td>${referenceLink(record)}</td>`]
+      .concat(columns.map(column => {
+        const value = record[column.name];
+        return `<td class="${typeof value === 'number' ? 'numeric' : ''}">${renderValue(value)}</td>`;
+      }))
+      .concat(inverseColumns.map(column => {
+        const collection = record[column.name];
+        return `<td class="numeric">${Array.isArray(collection) ? collection.length : '—'}</td>`;
+      }))
+      .concat(flags.length ? [`<td>${flagChips(flags.filter(flagName => record[flagName]))}</td>`] : []);
+    return `<tr>${cells.join('')}</tr>`;
+  });
+
+  return `<table><thead><tr>${headerCells.join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
-// ── one record ──
-async function showRecord(shape, key) {
-  const main = document.getElementById('main');
-  const r = await call(`/shapes/${encodeURIComponent(shape)}/${encodeURIComponent(key)}`);
-  if (!r.ok) { main.innerHTML = `<h2 class="title">${esc(shape)} #${esc(key)}</h2><pre class="out bad">${esc(r.body && r.body.error || r.status)}</pre>`; return; }
-  const rec = r.body, s = byName[shape] || { members: [], flags: [] };
-  const flags = (s.flags || []).filter(f => rec[f]);
-  const refinements = model.shapes.filter(x => x.kind === 'refinement' && x.bases && x.bases.length === 1 && x.bases[0] === shape && rec['is' + x.name]);
-  main.innerHTML = `<h2 class="title">${esc(shape)} #${esc(key)}</h2><p class="sub">${flags.map(f => `<span class="chip on">${esc(f.slice(2))}</span>`).join('') || 'A record.'}</p>
-    <dl>${s.members.map(m => `<dt>${esc(m.name)} <span class="sub" style="font-size:11px">${esc(m.type)}${m.kind !== 'stored' ? ' · ' + esc(m.kind) : ''}</span></dt><dd>${cell(rec[m.name])}</dd>`).join('')}</dl>
-    ${refinements.length ? '<p class="sub">Read as a member of: ' + refinements.map(x => `<a class="ref" href="#record/${encodeURIComponent(x.name)}/${encodeURIComponent(key)}">${esc(x.name)}</a>`).join(', ') + '</p>' : ''}`;
+// Shows a shape's table. Called again with loadNextPage when the developer queries or asks for more:
+// the header stays and the next page is read after the cursor the last answer gave.
+async function showShape(shapeName, loadNextPage) {
+  const shape = shapesByName[shapeName];
+  if (!shape) return;
+  const state = tableStateFor(shape);
+
+  if (!loadNextPage) {
+    document.getElementById('main').innerHTML = renderShapeHeader(shape, state);
+    document.getElementById('query-form').onsubmit = event => {
+      event.preventDefault();
+      state.where = document.getElementById('where').value;
+      state.orderBy = document.getElementById('order-by').value;
+      state.nextCursor = null;
+      state.items = [];
+      showShape(shapeName, true);
+    };
+    state.nextCursor = null;
+    state.items = [];
+  }
+
+  const query = new URLSearchParams();
+  if (state.where) query.set('where', state.where);
+  if (state.orderBy) query.set('orderBy', state.orderBy);
+  query.set('size', state.pageSize);
+  if (state.nextCursor) query.set('after', state.nextCursor);
+
+  const page = await callApi(`/shapes/${encodeURIComponent(shapeName)}?${query}`);
+  const tableElement = document.getElementById('table');
+  const pagerElement = document.getElementById('pager');
+  if (!page.ok) {
+    tableElement.innerHTML = `<pre class="outcome bad">${escapeHtml(errorText(page))}</pre>`;
+    pagerElement.innerHTML = '';
+    return;
+  }
+
+  state.items = state.items.concat(page.body.items);
+  state.nextCursor = page.body.next;
+  tableElement.innerHTML = renderTable(shape, state.items);
+  pagerElement.innerHTML = `<span class="muted">${state.items.length} shown</span>` + (state.nextCursor ? ' <button id="more">More</button>' : '');
+  if (state.nextCursor) document.getElementById('more').onclick = () => showShape(shapeName, true);
+
+  const whereQuery = state.where ? '?where=' + encodeURIComponent(state.where) : '';
+  const counted = await callApi(`/shapes/${encodeURIComponent(shapeName)}/count${whereQuery}`);
+  if (counted.ok) document.getElementById('count').textContent = counted.body.count + ' in all';
 }
 
-// ── an act: the form ──
-function inputFor(f, id) {
-  if (f.kind === 'reference') return `<input id="${id}" placeholder="${isUnion(f.type) ? 'Shape#key, one of ' + esc(byName[f.type].bases.join(', ')) : 'key of a ' + esc(f.type)}">`;
-  if (f.kind === 'references') return `<input id="${id}" placeholder="keys, comma-separated">`;
-  if (f.kind === 'values') return `<input id="${id}" placeholder="${esc(f.type)} values, comma-separated">`;
-  switch (f.type) {
-    case 'boolean': return `<select id="${id}"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>`;
-    case 'integer': case 'long': return `<input id="${id}" type="number" step="1">`;
-    case 'decimal': case 'double': return `<input id="${id}" type="number" step="any">`;
-    case 'Date': return `<input id="${id}" type="date">`;
-    case 'DateTime': return `<input id="${id}" type="datetime-local" step="1">`;
-    case 'time': return `<input id="${id}" type="time" step="1">`;
-    default: return `<input id="${id}" placeholder="${esc(f.type)}">`;
+// ── one record: its members ──
+
+function memberLabel(member) {
+  const typeNote = escapeHtml(member.type) + (member.kind !== 'stored' ? ' · ' + escapeHtml(member.kind) : '');
+  return `${escapeHtml(member.name)} <span class="muted member-type">${typeNote}</span>`;
+}
+
+// The refinements of this one shape that the record belongs to, each readable as a record of its own.
+function refinementsHolding(shapeName, record) {
+  return model.shapes.filter(candidate =>
+    candidate.kind === 'refinement'
+      && candidate.bases && candidate.bases.length === 1 && candidate.bases[0] === shapeName
+      && record['is' + candidate.name]);
+}
+
+async function showRecord(shapeName, key) {
+  const mainElement = document.getElementById('main');
+  const title = `<h2 class="title">${escapeHtml(shapeName)} #${escapeHtml(key)}</h2>`;
+  const answer = await callApi(`/shapes/${encodeURIComponent(shapeName)}/${encodeURIComponent(key)}`);
+  if (!answer.ok) {
+    mainElement.innerHTML = title + `<pre class="outcome bad">${escapeHtml(errorText(answer))}</pre>`;
+    return;
+  }
+  const record = answer.body;
+  const shape = shapesByName[shapeName] || { members: [], flags: [] };
+  const flagsSet = (shape.flags || []).filter(flagName => record[flagName]);
+  const memberRows = shape.members.map(member => `<dt>${memberLabel(member)}</dt><dd>${renderValue(record[member.name])}</dd>`).join('');
+  const refinements = refinementsHolding(shapeName, record);
+  const readableAs = refinements.length
+    ? '<p class="muted">Read as a member of: ' + refinements.map(refinement =>
+        `<a class="ref" href="${recordHash(refinement.name, key)}">${escapeHtml(refinement.name)}</a>`).join(', ') + '</p>'
+    : '';
+  mainElement.innerHTML = `${title}<p class="subtitle">${flagChips(flagsSet) || 'A record.'}</p><dl>${memberRows}</dl>${readableAs}`;
+}
+
+// ── an act: a form that commits it ──
+
+const NUMERIC_TYPES = ['integer', 'long', 'decimal', 'double'];
+
+// The input for one field of the act, from the field's kind and type.
+function inputFor(field, inputId) {
+  if (field.kind === 'reference') {
+    const placeholder = isUnionType(field.type)
+      ? 'Shape#key, one of ' + shapesByName[field.type].bases.join(', ')
+      : 'key of a ' + field.type;
+    return `<input id="${inputId}" placeholder="${escapeHtml(placeholder)}">`;
+  }
+  if (field.kind === 'references') return `<input id="${inputId}" placeholder="keys, comma-separated">`;
+  if (field.kind === 'values') return `<input id="${inputId}" placeholder="${escapeHtml(field.type)} values, comma-separated">`;
+  switch (field.type) {
+    case 'boolean': return `<select id="${inputId}"><option value="">—</option><option value="true">true</option><option value="false">false</option></select>`;
+    case 'integer': case 'long': return `<input id="${inputId}" type="number" step="1">`;
+    case 'decimal': case 'double': return `<input id="${inputId}" type="number" step="any">`;
+    case 'Date': return `<input id="${inputId}" type="date">`;
+    case 'DateTime': return `<input id="${inputId}" type="datetime-local" step="1">`;
+    case 'time': return `<input id="${inputId}" type="time" step="1">`;
+    default: return `<input id="${inputId}" placeholder="${escapeHtml(field.type)}">`;
   }
 }
-function valueOf(f, el) {
-  const v = el.value.trim(); if (v === '') return undefined;
-  const scalar = (t, x) => (t === 'integer' || t === 'long' || t === 'decimal' || t === 'double') ? Number(x) : t === 'boolean' ? x === 'true' : t === 'DateTime' && !x.endsWith('Z') ? new Date(x).toISOString() : x;
-  const ref = x => { const m = x.match(/^(\w+)#(.+)$/); return m ? { shape: m[1], key: m[2] } : (/^\d+$/.test(x) ? Number(x) : x); };
-  if (f.kind === 'reference') return ref(v);
-  if (f.kind === 'references') return v.split(',').map(x => ref(x.trim()));
-  if (f.kind === 'values') return v.split(',').map(x => scalar(f.type, x.trim()));
-  return scalar(f.type, v);
-}
-function showAct(name) {
-  const act = model.acts.find(a => a.name === name); if (!act) return;
-  const main = document.getElementById('main');
-  const parts = act.parts || [], byValue = act.fields.filter(f => f.newValue);
-  main.innerHTML = `<h2 class="title">${esc(name)}</h2><p class="sub">${act.transient ? 'A transient act: it leaves no record of its own.' : 'A durable act: the commit becomes a ' + esc(name) + ' record.'}${act.actor ? ' Committed by a ' + esc(act.actor.shape) + ', resolved from the request.' : ''}</p>
-    <form class="act" id="af">${act.fields.map((f, i) => `<label for="f${i}">${esc(f.name)}${f.optional ? '' : ' *'}</label>${f.newValue ? `<textarea id="f${i}" placeholder='a key, or a new ${esc(f.type)} as JSON: {"@shape": "${esc(f.newValue[0].shape)}", ...}'></textarea>` : inputFor(f, 'f' + i)}<div class="hint">${esc(f.type)}${f.kind !== 'value' ? ' · ' + esc(f.kind) : ''}${f.mayBeNew ? ' · may be {"new": n}' : ''}</div>`).join('')}
-    ${parts.map((p, i) => `<label for="p${i}">${esc(p.field)}</label><textarea id="p${i}" placeholder='new ${esc(p.shape)} values as JSON: [{${p.fields.map(f => '"' + f.name + '": …').join(', ')}}]'></textarea><div class="hint">parts: ${esc(p.shape)} · ${p.fields.map(f => esc(f.name)).join(', ')}</div>`).join('')}
-    <span></span><div><button class="primary">Commit</button></div></form><pre class="out" id="outcome" hidden></pre>`;
-  document.getElementById('af').onsubmit = async e => {
-    e.preventDefault();
-    const body = {};
-    try {
-      act.fields.forEach((f, i) => { const el = document.getElementById('f' + i); if (f.newValue) { const v = el.value.trim(); if (v) body[f.name] = v.startsWith('{') ? JSON.parse(v) : (/^\d+$/.test(v) ? Number(v) : v); } else { const v = valueOf(f, el); if (v !== undefined) body[f.name] = v; } });
-      parts.forEach((p, i) => { const v = document.getElementById('p' + i).value.trim(); if (v) body[p.field] = JSON.parse(v); });
-    } catch (err) { show(false, 'The JSON in a field does not parse: ' + err.message); return; }
-    const r = await call(`/acts/${encodeURIComponent(name)}`, { method: 'POST', body: JSON.stringify(body) });
-    const b = r.body || {};
-    if (r.ok) show(true, 'Accepted' + (b.ref ? ': ' + b.ref.shape + '#' + b.ref.key : ' (no record: a transient act)'), b.ref);
-    else if (r.status === 422) show(false, 'Refused: ' + (b.rejection ? b.rejection.message : b.reason));
-    else show(false, (b.error || r.status) + (b.details && b.details.length ? '\n' + b.details.join('\n') : ''));
-  };
-  function show(ok, text, ref) { const o = document.getElementById('outcome'); o.hidden = false; o.className = 'out ' + (ok ? 'ok' : 'bad'); o.innerHTML = esc(text) + (ref ? ' · ' + refLink(ref) : ''); }
+
+// What the developer typed, as the JSON value the field's type takes.
+function parseScalar(typeName, text) {
+  if (NUMERIC_TYPES.includes(typeName)) return Number(text);
+  if (typeName === 'boolean') return text === 'true';
+  // a datetime-local input gives the browser's local time; the API takes an instant
+  if (typeName === 'DateTime' && !text.endsWith('Z')) return new Date(text).toISOString();
+  return text;
 }
 
-// ── a tick ──
-async function showTick(schedule) {
-  const main = document.getElementById('main');
-  main.innerHTML = `<h2 class="title">${esc(schedule)}</h2><p class="sub">Run every rule on this schedule now.</p><button class="primary" id="go">Tick ${esc(schedule)}</button><pre class="out" id="outcome" hidden></pre>`;
-  document.getElementById('go').onclick = async () => {
-    const r = await call(`/ticks/${encodeURIComponent(schedule)}`, { method: 'POST' });
-    const o = document.getElementById('outcome'); o.hidden = false;
-    if (r.ok) { const rej = r.body.rejections || []; o.className = 'out ' + (rej.length ? 'bad' : 'ok'); o.textContent = `Ran at ${r.body.at}` + (rej.length ? `\n${rej.length} firing(s) rejected:\n\n` + rej.map(x => x.message).join('\n\n') : ', nothing rejected.'); }
-    else { o.className = 'out bad'; o.textContent = r.body && r.body.error || r.status; }
+// A reference typed as Shape#key becomes the {shape, key} pair; a bare key stays a key, numeric when it looks like one.
+function parseReference(text) {
+  const shapeAndKey = text.match(/^(\w+)#(.+)$/);
+  if (shapeAndKey) return { shape: shapeAndKey[1], key: shapeAndKey[2] };
+  return /^\d+$/.test(text) ? Number(text) : text;
+}
+
+function fieldValue(field, inputElement) {
+  const text = inputElement.value.trim();
+  if (text === '') return undefined;
+  if (field.kind === 'reference') return parseReference(text);
+  if (field.kind === 'references') return text.split(',').map(part => parseReference(part.trim()));
+  if (field.kind === 'values') return text.split(',').map(part => parseScalar(field.type, part.trim()));
+  return parseScalar(field.type, text);
+}
+
+// A field that may carry a new nested record takes a key, or the record itself as JSON.
+function parseKeyOrNewRecord(text) {
+  if (text.startsWith('{')) return JSON.parse(text);
+  return /^\d+$/.test(text) ? Number(text) : text;
+}
+
+function renderField(field, index) {
+  const inputId = 'field-' + index;
+  const requiredMark = field.optional ? '' : ' *';
+  const control = field.newValue
+    ? `<textarea id="${inputId}" placeholder='a key, or a new ${escapeHtml(field.type)} as JSON: {"@shape": "${escapeHtml(field.newValue[0].shape)}", ...}'></textarea>`
+    : inputFor(field, inputId);
+  const hint = escapeHtml(field.type)
+    + (field.kind !== 'value' ? ' · ' + escapeHtml(field.kind) : '')
+    + (field.mayBeNew ? ' · may be {"new": n}' : '');
+  return `<label for="${inputId}">${escapeHtml(field.name)}${requiredMark}</label>${control}<div class="hint">${hint}</div>`;
+}
+
+// A part is a collection of new records committed with the act, typed as a JSON list.
+function renderPart(part, index) {
+  const inputId = 'part-' + index;
+  const fieldNames = part.fields.map(partField => partField.name);
+  const placeholder = `new ${escapeHtml(part.shape)} values as JSON: [{${fieldNames.map(name => '"' + name + '": …').join(', ')}}]`;
+  return `<label for="${inputId}">${escapeHtml(part.field)}</label>`
+    + `<textarea id="${inputId}" placeholder='${placeholder}'></textarea>`
+    + `<div class="hint">parts: ${escapeHtml(part.shape)} · ${fieldNames.map(escapeHtml).join(', ')}</div>`;
+}
+
+function actSubtitle(act) {
+  const effect = act.transient
+    ? 'A transient act: it leaves no record of its own.'
+    : 'A durable act: the commit becomes a ' + escapeHtml(act.name) + ' record.';
+  const actor = act.actor ? ' Committed by a ' + escapeHtml(act.actor.shape) + ', resolved from the request.' : '';
+  return effect + actor;
+}
+
+// The request body from the form's inputs; throws when a JSON field does not parse.
+function readActForm(act) {
+  const body = {};
+  act.fields.forEach((field, index) => {
+    const inputElement = document.getElementById('field-' + index);
+    if (field.newValue) {
+      const text = inputElement.value.trim();
+      if (text) body[field.name] = parseKeyOrNewRecord(text);
+    } else {
+      const value = fieldValue(field, inputElement);
+      if (value !== undefined) body[field.name] = value;
+    }
+  });
+  (act.parts || []).forEach((part, index) => {
+    const text = document.getElementById('part-' + index).value.trim();
+    if (text) body[part.field] = JSON.parse(text);
+  });
+  return body;
+}
+
+function showOutcome(accepted, text, reference) {
+  const outcomeElement = document.getElementById('outcome');
+  outcomeElement.hidden = false;
+  outcomeElement.className = 'outcome ' + (accepted ? 'ok' : 'bad');
+  outcomeElement.innerHTML = escapeHtml(text) + (reference ? ' · ' + referenceLink(reference) : '');
+}
+
+function showAct(actName) {
+  const act = model.acts.find(candidate => candidate.name === actName);
+  if (!act) return;
+  const parts = act.parts || [];
+  document.getElementById('main').innerHTML = `<h2 class="title">${escapeHtml(actName)}</h2>
+    <p class="subtitle">${actSubtitle(act)}</p>
+    <form class="act-form" id="act-form">
+      ${act.fields.map(renderField).join('')}
+      ${parts.map(renderPart).join('')}
+      <span></span><div><button class="primary">Commit</button></div>
+    </form>
+    <pre class="outcome" id="outcome" hidden></pre>`;
+
+  document.getElementById('act-form').onsubmit = async event => {
+    event.preventDefault();
+    let body;
+    try {
+      body = readActForm(act);
+    } catch (parseError) {
+      showOutcome(false, 'The JSON in a field does not parse: ' + parseError.message);
+      return;
+    }
+    const answer = await callApi(`/acts/${encodeURIComponent(actName)}`, { method: 'POST', body: JSON.stringify(body) });
+    const outcome = answer.body || {};
+    if (answer.ok) {
+      const what = outcome.ref ? ': ' + outcome.ref.shape + '#' + outcome.ref.key : ' (no record: a transient act)';
+      showOutcome(true, 'Accepted' + what, outcome.ref);
+    } else if (answer.status === 422) {
+      // a refusal is data: the rule that refused, or the reason
+      showOutcome(false, 'Refused: ' + (outcome.rejection ? outcome.rejection.message : outcome.reason));
+    } else {
+      showOutcome(false, errorText(answer));
+    }
+  };
+}
+
+// ── a schedule: a button that ticks it ──
+
+function showTick(schedule) {
+  document.getElementById('main').innerHTML = `<h2 class="title">${escapeHtml(schedule)}</h2>
+    <p class="subtitle">Run every rule on this schedule now.</p>
+    <button class="primary" id="tick">Tick ${escapeHtml(schedule)}</button>
+    <pre class="outcome" id="outcome" hidden></pre>`;
+
+  document.getElementById('tick').onclick = async () => {
+    const answer = await callApi(`/ticks/${encodeURIComponent(schedule)}`, { method: 'POST' });
+    const outcomeElement = document.getElementById('outcome');
+    outcomeElement.hidden = false;
+    if (!answer.ok) {
+      outcomeElement.className = 'outcome bad';
+      outcomeElement.textContent = errorText(answer);
+      return;
+    }
+    const rejections = answer.body.rejections || [];
+    outcomeElement.className = 'outcome ' + (rejections.length ? 'bad' : 'ok');
+    outcomeElement.textContent = `Ran at ${answer.body.at}` + (rejections.length
+      ? `\n${rejections.length} firing(s) rejected:\n\n` + rejections.map(rejection => rejection.message).join('\n\n')
+      : ', nothing rejected.');
   };
 }
 
 // ── start ──
-(async () => {
-  const hn = document.getElementById('hname'), hv = document.getElementById('hvalue');
-  hn.value = localStorage.getItem('velle.hname') || ''; hv.value = localStorage.getItem('velle.hvalue') || '';
-  hn.oninput = () => localStorage.setItem('velle.hname', hn.value.trim()); hv.oninput = () => localStorage.setItem('velle.hvalue', hv.value.trim());
-  const r = await call('');
-  if (!r.ok) { document.getElementById('main').innerHTML = `<pre class="out bad">The API at ${esc(API)} answered ${r.status}.</pre>`; return; }
-  model = r.body; model.shapes.forEach(s => byName[s.name] = s);
-  nav(); route(); window.onhashchange = route;
-})();
+
+function bindStoredInput(inputElement, storageKey) {
+  inputElement.value = localStorage.getItem(storageKey) || '';
+  inputElement.oninput = () => localStorage.setItem(storageKey, inputElement.value.trim());
+}
+
+async function start() {
+  bindStoredInput(document.getElementById('header-name'), STORED_HEADER_NAME);
+  bindStoredInput(document.getElementById('header-value'), STORED_HEADER_VALUE);
+  const described = await callApi('');
+  if (!described.ok) {
+    document.getElementById('main').innerHTML = `<pre class="outcome bad">The API at ${escapeHtml(API)} answered ${described.status}.</pre>`;
+    return;
+  }
+  model = described.body;
+  model.shapes.forEach(shape => { shapesByName[shape.name] = shape; });
+  renderNavigation();
+  route();
+  window.onhashchange = route;
+}
+
+start();
 </script>
 </body>
 </html>
