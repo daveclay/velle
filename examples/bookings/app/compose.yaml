@@ -1,0 +1,11 @@
+# The database `gradle :examples:/Users/daveclay/code/velle/bookingspp:bootRun` starts for the bookings application.
+name: velle-bookings   # one Compose project per example, so several applications run at once
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: bookings
+      POSTGRES_USER: bookings
+      POSTGRES_PASSWORD: bookings
+    ports:
+      - "5432"

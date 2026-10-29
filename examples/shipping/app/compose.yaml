@@ -1,0 +1,11 @@
+# The database `gradle :examples:/Users/daveclay/code/velle/shippingpp:bootRun` starts for the shipping application.
+name: velle-shipping   # one Compose project per example, so several applications run at once
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: shipping
+      POSTGRES_USER: shipping
+      POSTGRES_PASSWORD: shipping
+    ports:
+      - "5432"

@@ -1,0 +1,26 @@
+# The payments application. The DataSource is PostgreSQL: under `gradle bootRun`,
+# Spring Boot's Docker Compose support starts compose.yaml's database and fills
+# in the URL, user, and password; a deployment sets them under spring.datasource.
+server:
+  port: 8091
+
+spring:
+  application:
+    name: payments
+  docker:
+    compose:
+      file: compose.yaml
+      lifecycle-management: start-only
+velle:
+  api:
+    path: /api
+    ticks: true          # the console's schedule buttons; off in a deployment
+  schedules:             # a cron expression per schedule the spec names
+    Daily: "0 0 6 * * *"
+    Nightly: "0 30 2 * * *"
+    QuarterHourly: "0 */15 * * * *"
+  console:
+    path: /velle
+logging:
+  level:
+    velle: info

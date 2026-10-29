@@ -6,7 +6,7 @@ Velle captures the conversation between a product owner and an engineer. Reading
 
 Velle has no stack, functions, variables, scope, or closures. It has shapes, relationships, refinements, and rules, and it enforces business concepts at that layer. Everything below it, such as publishing to a message bus or calling a legacy endpoint, is left to existing languages and frameworks.
 
-A spec runs as a web application by declaring its generated system as one Spring Boot bean: the starter connects it to the application's database, serves every act and shape over REST and GraphQL, runs its schedules, and serves a console ([Serving a system](https://github.com/daveclay/velle/wiki/Serving-a-system)). `examples/billing/app/` is the billing spec served that way over PostgreSQL.
+A spec runs as a web application by declaring its generated system as one Spring Boot bean: the starter connects it to the application's database, serves every act and shape over REST and GraphQL, runs its schedules, and serves a console ([Serving a system](https://github.com/daveclay/velle/wiki/Serving-a-system)). Every example spec is served that way over PostgreSQL by its `examples/<system>/app/` module.
 
 ```
 shape Invoice {
@@ -43,7 +43,7 @@ Edit the documentation in `wiki/`, not on the wiki site: the publish workflow (`
 - `compiler/` is the v0 implementation: lexer and parser, validator, runtime, and code generation, in Kotlin.
 - `stores/sql/` is a model-driven store over any SQL database. `stores/sqlite/` is its SQLite dialect, which every example's tests run their flows through, and `stores/postgres/` its PostgreSQL dialect, which three of them also run through when Docker is available.
 - `apis/json/` is the API layer: a running system's operations in JSON terms, built from the model, naming no transport. `apis/graphql/` builds a GraphQL schema from the model over it. `apis/spring/` is the Spring Boot starter: REST and GraphQL endpoints, the store connected from the application's `DataSource`, the actor resolved once per request, scheduled ticks, and the console page.
-- `examples/<system>/` pairs each example spec (`<system>.velle`) with its generated, developer-owned `output/` module and the tests that drive it. `examples/billing/app/` is the billing system as a Spring Boot application over PostgreSQL.
+- `examples/<system>/` pairs each example spec (`<system>.velle`) with its generated, developer-owned `output/` module and the tests that drive it, and an `app/` module that serves the system as a Spring Boot application over PostgreSQL. The pharmacy's application loads ninety days of test data into an empty database.
 - `editors/velle/` is the editor support for `.velle` files.
 - `wiki/` is the documentation, published to the repository wiki.
 - `working-docs/` holds the open design questions and work items (`QUESTIONS.md` and one file per question).
@@ -55,6 +55,22 @@ Edit the documentation in `wiki/`, not on the wiki site: the publish workflow (`
 ./gradlew :examples:billing:output:generate           # regenerate one example's surface and specs
 ./gradlew generate                                    # regenerate every example
 ./gradlew :examples:billing:app:bootRun               # the billing application over PostgreSQL (starts it in Docker); console at http://localhost:8090/velle
+./gradlew :examples:pharmacy:app:bootRun              # the pharmacy, with ninety days of test data; console at http://localhost:8093/velle, act as Staff:1
 ```
+
+Each example's application listens on its own port, so several run at once:
+
+| application | port | application | port |
+|---|---|---|---|
+| batches | 8081 | partition-drift | 8089 |
+| bookings | 8082 | billing | 8090 |
+| enrollment | 8083 | payments | 8091 |
+| gallery | 8084 | peptides | 8092 |
+| loyalty | 8085 | pharmacy | 8093 |
+| membership | 8086 | platelayout | 8094 |
+| moderation | 8087 | shipping | 8095 |
+| orders | 8088 | vendors | 8096 |
+
+The pharmacy and vendors specs declare who may act and who may see; their applications read the actor from an `X-Velle-Actor` header, which the console sends. `Staff:1` is the first administrator in both.
 
 The PostgreSQL tests, including the application's, run when Docker is available and are skipped otherwise.

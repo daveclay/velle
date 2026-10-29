@@ -128,6 +128,7 @@ Built 2026-10-26 as the end state Dave stated at OQ51's settling (a framework li
 - [ ] Decide whether the model description (`GET /api`) should be an OpenAPI document, and the GraphQL schema printed as SDL, for client generators.
 - [ ] Build the unstored actor (`transient shape Staff`, the item under Acts) and let the actor resolver return it: today the resolver returns a reference to a stored record only.
 - [ ] Decide whether the starter should run the generated `SpecSupport` scenarios against the live store at startup as a smoke test (the item under Spec generation about `newSystem()`).
+- [ ] Look at what a commit costs over PostgreSQL: the pharmacy seed (`examples/pharmacy/app`, 2026-10-28) replays ninety days, about 1,200 acts and 274 ticks, in 3 s per 36 days over in-memory SQLite and in 264 s over PostgreSQL in Docker, the ticks 36 s of that; the rest is the acts and the reads around them, about 200 ms per commit, which points at round trips per row (hydration, the inverse collections, the advisory locks) rather than at the sweeps.
 - [ ] Decide whether `tick` should return a `never`'s rejections on the report as data instead of throwing `TickRejected`, which would revisit OQ47's ruling that a tick's rejection must reach a human (from OQ71 D5, 2026-10-28).
 
 ## Runtime and clock

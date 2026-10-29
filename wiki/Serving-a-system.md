@@ -59,6 +59,8 @@ velle:
 
 Run it with `./gradlew :examples:billing:app:bootRun`. Spring Boot starts the PostgreSQL in `examples/billing/app/compose.yaml` and points the `DataSource` at it. The console is at `http://localhost:8090/velle`.
 
+Every other example has the same application beside its generated module, `examples/<system>/app/`, each on a port of its own. The pharmacy's, `examples/pharmacy/app/`, also loads ninety days of business into an empty database through the spec's own acts (`examples/pharmacy/app/src/main/kotlin/velle/pharmacy/PharmacySeed.kt`), walking the system's clock day by day and ticking each schedule on its day, so a developer opening its console at `http://localhost:8093/velle` finds prescriptions, fills, claims, and the records the sweeps left behind.
+
 ## Your own cadence
 
 A schedule can tick when your code says instead of on a cron expression the starter reads: when a file arrives, when an operator presses a button, or on a `@Scheduled` method of your own. Leave the schedule out of `velle.schedules` and tick it yourself:
@@ -230,7 +232,7 @@ fun actors(): ActorResolver = ActorResolver { request ->
 }
 ```
 
-This one, from `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt`, reads a header. An application behind Spring Security reads the authenticated principal instead and looks up the staff record. Velle never authenticates: the resolver is where the application's identity becomes a reference to a record on the books.
+This one, from `apis/spring/src/test/kotlin/velle/api/spring/VendorsApp.kt`, reads a header; the pharmacy and vendors applications (`examples/pharmacy/app/src/main/kotlin/velle/pharmacy/PharmacyActors.kt`) do the same. An application behind Spring Security reads the authenticated principal instead and looks up the staff record. Velle never authenticates: the resolver is where the application's identity becomes a reference to a record on the books.
 
 - The resolver runs once per request, in a filter, before the REST controller or the GraphQL engine. Both read what it found.
 - An act declared `by` with no actor resolved is refused with 401. An act without `by` ignores the actor.

@@ -1,4 +1,5 @@
 # The database `gradle :examples:billing:app:bootRun` starts for the billing application.
+name: velle-billing   # one Compose project per example, so several applications run at once
 services:
   postgres:
     image: postgres:17-alpine

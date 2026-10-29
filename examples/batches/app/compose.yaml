@@ -1,0 +1,11 @@
+# The database `gradle :examples:/Users/daveclay/code/velle/batchespp:bootRun` starts for the batches application.
+name: velle-batches   # one Compose project per example, so several applications run at once
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: batches
+      POSTGRES_USER: batches
+      POSTGRES_PASSWORD: batches
+    ports:
+      - "5432"

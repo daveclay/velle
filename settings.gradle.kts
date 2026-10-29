@@ -15,13 +15,28 @@ rootProject.name = "velle"
 // :apis:graphql               — a GraphQL schema built from the model, over that layer
 // :apis:spring                — the Spring Boot starter: REST and GraphQL endpoints, the store
 //                               from the application's DataSource, scheduled ticks, the console
-// :examples:billing:app       — the billing system as a Spring Boot application over PostgreSQL
+// :examples:<system>:app      — each example system as a Spring Boot application over PostgreSQL
 include(
     "compiler",
     "apis:json",
     "apis:graphql",
     "apis:spring",
     "examples:billing:app",
+    "examples:membership:app",
+    "examples:payments:app",
+    "examples:partition-drift:app",
+    "examples:enrollment:app",
+    "examples:loyalty:app",
+    "examples:orders:app",
+    "examples:gallery:app",
+    "examples:moderation:app",
+    "examples:peptides:app",
+    "examples:shipping:app",
+    "examples:pharmacy:app",
+    "examples:vendors:app",
+    "examples:batches:app",
+    "examples:platelayout:app",
+    "examples:bookings:app",
     "stores:sql",
     "stores:sqlite",
     "stores:postgres",

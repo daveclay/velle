@@ -1,0 +1,11 @@
+# The database `gradle :examples:/Users/daveclay/code/velle/enrollmentpp:bootRun` starts for the enrollment application.
+name: velle-enrollment   # one Compose project per example, so several applications run at once
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: enrollment
+      POSTGRES_USER: enrollment
+      POSTGRES_PASSWORD: enrollment
+    ports:
+      - "5432"

@@ -1,6 +1,6 @@
 plugins {
     kotlin("jvm") version "2.2.20" apply false
-    // the Spring Boot starter (apis/spring) and the example application (examples/billing/app)
+    // the Spring Boot starter (apis/spring) and the example applications (examples/<system>/app)
     kotlin("plugin.spring") version "2.2.20" apply false
     id("org.springframework.boot") version "4.1.2" apply false
 }

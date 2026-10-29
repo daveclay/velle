@@ -1,0 +1,11 @@
+# The database `gradle :examples:/Users/daveclay/code/velle/membershippp:bootRun` starts for the membership application.
+name: velle-membership   # one Compose project per example, so several applications run at once
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: membership
+      POSTGRES_USER: membership
+      POSTGRES_PASSWORD: membership
+    ports:
+      - "5432"

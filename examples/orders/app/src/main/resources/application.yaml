@@ -1,0 +1,22 @@
+# The orders application. The DataSource is PostgreSQL: under `gradle bootRun`,
+# Spring Boot's Docker Compose support starts compose.yaml's database and fills
+# in the URL, user, and password; a deployment sets them under spring.datasource.
+server:
+  port: 8088
+
+spring:
+  application:
+    name: orders
+  docker:
+    compose:
+      file: compose.yaml
+      lifecycle-management: start-only
+velle:
+  api:
+    path: /api
+    ticks: true          # the console's schedule buttons; off in a deployment
+  console:
+    path: /velle
+logging:
+  level:
+    velle: info
