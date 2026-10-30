@@ -1,6 +1,6 @@
 # Open questions and work items — the index
 
-One line per question and per work item here; the discussion lives in `questions/OQ<n>-*.md`, where each file's header states the question in plain terms before the dense part begins. OQ tags are stable — numbers are never renumbered or reused (next free: OQ73), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
+One line per question and per work item here; the discussion lives in `questions/OQ<n>-*.md`, where each file's header states the question in plain terms before the dense part begins. OQ tags are stable — numbers are never renumbered or reused (next free: OQ74), so references like `OQ16` stay valid forever, and gaps in the sequence are questions already settled (table at the bottom).
 
 **Questions and items.** A question (an OQ) is a design decision with discussion worth keeping. A work item is one action, verb-first, one line. An item whose whole context fits in its line stands alone; an item with context lives under the question that holds it, and the context is in that question's file, never here. Items are grouped by the part of Velle they change, not by where they were found; S-numbers, P-numbers, and B-numbers are findings of the peptides, pharmacy, and batches passes, recorded in OQ16's calibration record.
 
@@ -124,7 +124,8 @@ Built 2026-10-26 as the end state Dave stated at OQ51's settling (a framework li
 - [ ] Expose a cross-base refinement's own declared members over GraphQL: a static union is a GraphQL union, which carries no fields, so a member declared on the union (`Origin.peptideBatches`) is reachable over REST and not over GraphQL.
 - [ ] Decide whether GraphQL should offer a typed filter input per shape beside `where` as a predicate string, or whether the predicate string is the one query language on every transport (today: the string, by OQ51's ruling that the caller composes in the spec's own language).
 - [ ] Serve a registered query (OQ57's registry) as a named endpoint and a named GraphQL field, with its parameters typed.
-- [ ] Decide whether the console belongs in the starter for good, grows into the declarative UI `Velle-UI.md` sketches, or stays a developer tool; and whether its request-header box is the right stand-in for a login.
+- **[OQ73](questions/OQ73-velle-ui.md)** — Velle UI: a frontend built from the model description, the UX declared apart from the UI, door checks and derived expressions published instead of retyped, usable without Velle · opened 2026-10-29 from Dave's scratch note; eight decisions (D1–D8) for Dave in §6; `wiki/Velle-UI.md` folds into it
+  - [ ] Decide whether the console belongs in the starter for good, is replaced by the default Velle UI (OQ73 D4), or stays a developer tool; and whether its request-header box is the right stand-in for a login.
 - [ ] Decide whether the model description (`GET /api`) should be an OpenAPI document, and the GraphQL schema printed as SDL, for client generators.
 - [ ] Build the unstored actor (`transient shape Staff`, the item under Acts) and let the actor resolver return it: today the resolver returns a reference to a stored record only.
 - [ ] Decide whether the starter should run the generated `SpecSupport` scenarios against the live store at startup as a smoke test (the item under Spec generation about `newSystem()`).
