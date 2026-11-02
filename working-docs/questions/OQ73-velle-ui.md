@@ -213,9 +213,9 @@ membersClause := "all members"                          -- every member is in; `
 listClause    := membersClause
               | "order" path ("descending")?            -- the default order
               | "page" IntegerLiteral                   -- the page size
-              | "on a row:" rowAction ("," rowAction)*
-              | "on a selection:" ActName ("," ActName)*
-              | "on the list:" ActName ("," ActName)*
+              | "row actions:" rowAction ("," rowAction)*
+              | "selection actions:" ActName ("," ActName)*
+              | "list actions:" ActName ("," ActName)*
 rowAction     := ActName ("from" "{" binding ("," binding)* "}")? | "detail"
 binding       := Identifier ":" path                    -- an act field, filled from a path on the row
 detailClause  := membersClause
@@ -257,8 +257,8 @@ Customer {
     title name
     list {
         order name
-        on a row: BillCustomer, CorrectEmail, detail
-        on the list: SignUp
+        row actions: BillCustomer, CorrectEmail, detail
+        list actions: SignUp
     }
     detail { acts BillCustomer, CorrectEmail }
 
@@ -289,7 +289,7 @@ Invoice {
     }
     list Overdue of ActionableOverdue {
         order due
-        on a row: SubmitPayment, ArchiveRequest, detail
+        row actions: SubmitPayment, ArchiveRequest, detail
     }
     detail {
         all members
@@ -367,7 +367,7 @@ Receipt {
 What each declaration does:
 
 - `page Home` shows two lists: the named list `Overdue` of `Invoice`, and the default list of `Customer`. Without it the default frontend has one page per readable shape, which is the console.
-- `Customer` declares its default list and its detail, and then its five members. `title name` says a customer reads as their name wherever a customer appears in another view: the `customer` column of the overdue list, the choice in `BillCustomer`'s form. The default list says only its order and its actions; which columns it has is said by the members. `on a row` names two acts and `detail`; both acts take `one Customer`, so the default would offer them too. `on the list: SignUp` is the default as well, because `SignUp` has no reference field. The line is here to show where a whole-list act is declared.
+- `Customer` declares its default list and its detail, and then its five members. `title name` says a customer reads as their name wherever a customer appears in another view: the `customer` column of the overdue list, the choice in `BillCustomer`'s form. The default list says only its order and its actions; which columns it has is said by the members. `row actions` names two acts and `detail`; both acts take `one Customer`, so the default would offer them too. `list actions: SignUp` is the default as well, because `SignUp` has no reference field. The line is here to show where a whole-list act is declared.
 - `name` has two lines: `list: search` puts it in the default list as a column the one search box runs over, and `detail: group "Customer"` puts it in the detail under the heading "Customer". `largestPayment` has a bare `list` line, a column with no more said about it, and is a member of a second group. `signedUpOn` is in the detail only, so the default list has three columns. `invoices`, with its one `detail` line, shows the inverse member as an embedded list: the default list of `Invoice`, with the columns the `Invoice` declaration gives it.
 - `Invoice` has two lists. The default list is never shown on a page of its own: the customer detail shows it as `invoices`, and the payment form chooses from it. `Overdue` is a list of the refinement `ActionableOverdue`, which the spec already composes as overdue and not archived. The predicate lives in the spec, so the list carries none.
 - `Invoice`'s detail says `all members` (D15), so every member is on the page without a line: `issuedOn`, the two refinement flags, and the inverse members `lineItems` and `payments`, which show as embedded lists. The columns of those lists are declared where they belong: `LineItem` and `Payment` each say which members are in their default list. Only `total` and `balance` have a `detail` line, and it says their group; the members no line mentions come first under no heading, in the model's order, and "Money" follows. `Customer`'s detail says nothing and so follows D10's rule: all five members name it, so the two spellings put up the same kind of page.
@@ -410,7 +410,7 @@ Prescription { title order.patient.name, drug.name }
 RefillTask {
     list ToFill of OpenRefillTask {
         order requestedOn
-        on a row: FillPrescription from { prescription: prescription }
+        row actions: FillPrescription from { prescription: prescription }
     }
 
     prescription {
@@ -424,7 +424,7 @@ RefillTask {
 StockLot label "Lot" plural "Lots" {
     title lotNumber
     list {
-        on a row: CountLot
+        row actions: CountLot
     }
 
     drug {
@@ -448,7 +448,7 @@ Fill {
     list AwaitingVerification where verifications is empty
                               and not (filledBy == actor and lot.drug is Controlled) {
         order filledAt
-        on a row: VerifyFill
+        row actions: VerifyFill
     }
 
     prescription {
@@ -470,7 +470,7 @@ Fill {
 
 PharmacistAlert {
     list Open where prescription is not Cleared {
-        on a row: ConflictOverride from { prescription: prescription }
+        row actions: ConflictOverride from { prescription: prescription }
     }
 
     prescription {
