@@ -174,10 +174,10 @@ Written 2026-10-30, ahead of D8 and hypothetical: nothing here is built, and the
 A UX file is a set of declarations, checked against the model description and never against a spec. There are three kinds:
 
 - `workspace`: who the frontend is for, named by an actor shape. It holds pages.
-- `page`: a place the user goes. It shows lists and offers forms.
+- `page`: a place the user goes. It shows lists and names the acts the user can commit from it.
 - a shape declaration, headed by the shape's name: everything about how records of one shape are shown. It holds the shape's views, its title, and one line per member.
 
-A shape's views are its lists, its detail, and, when the shape is an act, its form. Every readable shape has a default list and a detail without declaring them; every act has a form. A shape declares a view only to say something about the whole view: a named list, a list of a refinement, a list with a filter, the order, the page size, the acts offered. The members a view shows are not listed in the view. Each member says which views it is in and how, on its own line, and the view shows the members that name it in the order they are declared. A form is the exception: it always shows every field of the act, because the act needs them, and a member's `form` line only says how the field is entered. A list or detail that no member names shows every member, which is the default.
+A shape's views are its lists, its detail, and, when the shape is an act, its form. Every readable shape has a default list and a detail without declaring them; every act has a form. A shape declares a view only to say something about the whole view: a named list, a list of a refinement, a list with a filter, the order, the page size, the acts the user can commit from it. The members a view shows are not listed in the view. Each member says which views it is in and how, on its own line, and the view shows the members that name it in the order they are declared. A form is the exception: it always shows every field of the act, because the act needs them, and a member's `form` line only says how the field is entered. A list or detail that no member names shows every member, which is the default.
 
 A member line may be a path through a reference (`customer.name`), which puts a member of a related record into this shape's views. A shape's `title` names the members that stand for a record wherever it appears inside another view: as a reference column, as a choice in a form, as the heading of its detail. Labels sit on the line of the thing they label.
 
@@ -194,7 +194,7 @@ workspaceDecl := "workspace" ShapeName "{" pageDecl* "}"
                  -- ShapeName: a shape some act is declared `by`, or a refinement of one
 pageDecl      := "page" PageName "{" pageClause* "}"
 pageClause    := "show" viewRef ("," viewRef)*          -- a list to show
-              | "offer" ActName ("," ActName)*          -- a form the user opens from the page
+              | "acts" ActName ("," ActName)*           -- the acts the user can commit from the page
 viewRef       := ShapeName ("." ListName)?              -- a shape's default list, or one of its named lists
 
 shapeDecl     := ShapeName labelClause? ("{" shapeClause* "}")?
@@ -211,7 +211,7 @@ listClause    := "order" path ("descending")?            -- the default order
               | "on the list:" ActName ("," ActName)*
 rowAction     := ActName ("from" "{" binding ("," binding)* "}")? | "detail"
 binding       := Identifier ":" path                    -- an act field, filled from a path on the row
-detailClause  := "offer" ActName ("," ActName)*
+detailClause  := "acts" ActName ("," ActName)*          -- the acts the user can commit from the record
 
 memberDecl    := path labelClause? ("{" memberView* "}")?
 memberView    := viewName (":" ux+)?                    -- one per line; naming a view puts the member in it
@@ -252,7 +252,7 @@ Customer {
         on a row: BillCustomer, CorrectEmail, detail
         on the list: SignUp
     }
-    detail { offer BillCustomer, CorrectEmail }
+    detail { acts BillCustomer, CorrectEmail }
 
     name {
         list: search
@@ -283,7 +283,7 @@ Invoice {
         order due
         on a row: SubmitPayment, ArchiveRequest, detail
     }
-    detail { offer LineItem, SubmitPayment, Issuance, ChangeDueDate, ArchiveRequest, UnarchiveRequest }
+    detail { acts LineItem, SubmitPayment, Issuance, ChangeDueDate, ArchiveRequest, UnarchiveRequest }
 
     reference {
         list
@@ -546,7 +546,7 @@ A page in `workspace Technician` that showed `PendingClaim` would be rejected: `
 
 The UX compiler reads the model description and the UX file and nothing else.
 
-- It rejects a shape declaration, `show`, `offer`, `of`, or `from` naming a shape, act, or list the description or the file does not have.
+- It rejects a shape declaration, `show`, `acts`, `of`, or `from` naming a shape, act, or list the description or the file does not have.
 - It rejects a member line whose path is not a member of the shape, or whose segments but the last are not references.
 - It rejects a member line naming a list the shape does not declare, `form` on a shape that is not an act, or `detail` on a shape that is not readable.
 - It rejects a UX word in the wrong view: `filter` or `search` outside a list, `group` or `as` outside a detail, a form word outside a form.
