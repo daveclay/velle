@@ -183,7 +183,7 @@ A member line may be a path through a reference (`customer.name`), which puts a 
 
 No declaration names a component, a position, a colour, or a size. Those are the UI and styling configurations, bound to the UX words by name (D5).
 
-The lexical conventions are Velle's (`wiki/grammar.md`). Uppercase names are shapes, acts, lists, pages, and workspaces. Lowercase names are members and fields. Comments start with `--`. Declarations are line-oriented. Inside a member's braces, a comma separates one view from the next, and the UX words after a view's colon follow one another with no separator; each starts with a keyword. A predicate or value expression is written in the spec's own grammar (Reference §10) with two names added to scope: `actor` is the viewer, and inside a `form` line the form's fields are in scope.
+The lexical conventions are Velle's (`wiki/grammar.md`). Uppercase names are shapes, acts, lists, pages, and workspaces. Lowercase names are members and fields. Comments start with `--`. Declarations are line-oriented. Inside a member's braces, each view is on its own line, and the UX words after a view's colon follow one another with no separator; each starts with a keyword. A predicate or value expression is written in the spec's own grammar (Reference §10) with two names added to scope: `actor` is the viewer, and inside a `form` line the form's fields are in scope.
 
 ### 8.2 The grammar
 
@@ -213,8 +213,8 @@ rowAction     := ActName ("from" "{" binding ("," binding)* "}")? | "detail"
 binding       := Identifier ":" path                    -- an act field, filled from a path on the row
 detailClause  := "offer" ActName ("," ActName)*
 
-memberDecl    := path labelClause? ("{" memberView ("," memberView)* "}")?
-memberView    := viewName (":" ux+)?                    -- naming a view puts the member in it
+memberDecl    := path labelClause? ("{" memberView* "}")?
+memberView    := viewName (":" ux+)?                    -- one per line; naming a view puts the member in it
 viewName      := "list" | ListName | "detail" | "form"
 ux            := listUx | detailUx | formUx
 listUx        := "filter"                               -- the user may filter on it
@@ -254,11 +254,24 @@ Customer {
     }
     detail { offer BillCustomer, CorrectEmail }
 
-    name           { list: search, detail: group "Customer" }
-    email          { list: search, detail: group "Customer" }
-    signedUpOn     { detail: group "Customer" }
-    largestPayment { list, detail: group "Payments" }
-    invoices       { detail }
+    name {
+        list: search
+        detail: group "Customer"
+    }
+    email {
+        list: search
+        detail: group "Customer"
+    }
+    signedUpOn {
+        detail: group "Customer"
+    }
+    largestPayment {
+        list
+        detail: group "Payments"
+    }
+    invoices {
+        detail
+    }
 }
 
 Invoice {
@@ -272,34 +285,84 @@ Invoice {
     }
     detail { offer LineItem, SubmitPayment, Issuance, ChangeDueDate, ArchiveRequest, UnarchiveRequest }
 
-    reference         { list, Overdue, detail: group "Invoice" }
-    customer          { Overdue, detail: group "Invoice" }
-    due               { list, Overdue, detail: group "Invoice" }
-    issuedOn          { detail: group "Invoice" }
-    status            { list: filter, detail: group "Invoice" }
-    isIssuedInvoice   { detail: group "Invoice" }
-    isArchivedInvoice { detail: group "Invoice" }
-    total             { list, detail: group "Money" }
-    balance           { list, Overdue, detail: group "Money" }
-    lineItems         { detail }
-    payments          { detail }
+    reference {
+        list
+        Overdue
+        detail: group "Invoice"
+    }
+    customer {
+        Overdue
+        detail: group "Invoice"
+    }
+    due {
+        list
+        Overdue
+        detail: group "Invoice"
+    }
+    issuedOn {
+        detail: group "Invoice"
+    }
+    status {
+        list: filter
+        detail: group "Invoice"
+    }
+    isIssuedInvoice {
+        detail: group "Invoice"
+    }
+    isArchivedInvoice {
+        detail: group "Invoice"
+    }
+    total {
+        list
+        detail: group "Money"
+    }
+    balance {
+        list
+        Overdue
+        detail: group "Money"
+    }
+    lineItems {
+        detail
+    }
+    payments {
+        detail
+    }
 }
 
 LineItem {
-    description { list, form: fill in a paragraph }
-    price       { list }
-    quantity    { list, form: initially 1 }
-    amount      { list, form: see }
+    description {
+        list
+        form: fill in a paragraph
+    }
+    price {
+        list
+    }
+    quantity {
+        list
+        form: initially 1
+    }
+    amount {
+        list
+        form: see
+    }
 }
 
 Payment {
-    receivedOn { list }
-    amount     { list }
+    receivedOn {
+        list
+    }
+    amount {
+        list
+    }
 }
 
 SubmitPayment label "Record a payment" {
-    invoice { form: choose one where balance > 0 }
-    amount  { form: initially invoice.balance }
+    invoice {
+        form: choose one where balance > 0
+    }
+    amount {
+        form: initially invoice.balance
+    }
 }
 
 Issuance label "Issue the invoice"
@@ -313,13 +376,13 @@ What each declaration does:
 
 - `page Home` shows two lists: the named list `Overdue` of `Invoice`, and the default list of `Customer`. Without it the default frontend has one page per readable shape, which is the console.
 - `Customer` declares its default list and its detail, and then its five members. `title name` says a customer reads as their name wherever a customer appears in another view: the `customer` column of the overdue list, the choice in `BillCustomer`'s form. The default list says only its order and its actions; which columns it has is said by the members. `on a row` names two acts and `detail`; both acts take `one Customer`, so the default would offer them too. `on the list: SignUp` is the default as well, because `SignUp` has no reference field. The line is here to show where a whole-list act is declared.
-- `name { list: search, detail: group "Customer" }` puts `name` in the default list as a column the one search box runs over, and in the detail under the heading "Customer". `largestPayment { list, detail: group "Payments" }` is a column with no more said about it, and a member of a second group. `signedUpOn` is in the detail only, so the default list has three columns. `invoices { detail }` shows the inverse member as an embedded list: the default list of `Invoice`, with the columns the `Invoice` declaration gives it.
+- `name` has two lines: `list: search` puts it in the default list as a column the one search box runs over, and `detail: group "Customer"` puts it in the detail under the heading "Customer". `largestPayment` has a bare `list` line, a column with no more said about it, and is a member of a second group. `signedUpOn` is in the detail only, so the default list has three columns. `invoices`, with its one `detail` line, shows the inverse member as an embedded list: the default list of `Invoice`, with the columns the `Invoice` declaration gives it.
 - `Invoice` has two lists. The default list is never shown on a page of its own: the customer detail shows it as `invoices`, and the payment form chooses from it. `Overdue` is a list of the refinement `ActionableOverdue`, which the spec already composes as overdue and not archived. The predicate lives in the spec, so the list carries none.
-- Each member of `Invoice` says which of the three views it is in. `reference` is in all three; `issuedOn` and the two refinement flags are in the detail only; `customer` is in the overdue list, where it shows as the customer's name by `Customer`'s title, and in the detail. `status { list: filter, ... }` lets the user filter the default list on a derived member. The column order of each list and the member order of each group is the order of these lines.
-- `lineItems { detail }` and `payments { detail }` show two more inverse members as embedded lists. Their columns are declared where they belong: `LineItem` and `Payment` each say which members are in their default list.
-- `LineItem` is a kept act, so it has a list and a form. `description { list, form: fill in a paragraph }` is a column in the list and a paragraph in the form, which the model cannot say about a `text`. `quantity` is prefilled with 1 and still editable. `amount { list, form: see }`: `see` is the default for a derived member and is here only to say that the amount is live once D3 publishes `price * quantity`. The field `invoice` has no line: it is left out of the list, and the form has it anyway because the act needs it. When the form is opened from an invoice's detail, it is already chosen.
+- Each member of `Invoice` says which of the three views it is in. `reference` is in all three; `issuedOn` and the two refinement flags are in the detail only; `customer` is in the overdue list, where it shows as the customer's name by `Customer`'s title, and in the detail. `status` has `list: filter`, which lets the user filter the default list on a derived member. The column order of each list and the member order of each group is the order of these lines.
+- `lineItems` and `payments`, each with one `detail` line, show two more inverse members as embedded lists. Their columns are declared where they belong: `LineItem` and `Payment` each say which members are in their default list.
+- `LineItem` is a kept act, so it has a list and a form. `description` is a column in the list and, by `form: fill in a paragraph`, a paragraph in the form, which the model cannot say about a `text`. `quantity` is prefilled with 1 and still editable. `amount` has `form: see`: `see` is the default for a derived member and is here only to say that the amount is live once D3 publishes `price * quantity`. The field `invoice` has no line: it is left out of the list, and the form has it anyway because the act needs it. When the form is opened from an invoice's detail, it is already chosen.
 - `Payment` narrows its default list to two columns, for the invoice detail that embeds it.
-- `SubmitPayment` is a transient act, so it has a form and nothing else. `invoice { form: choose one where balance > 0 }` chooses from the default list of `Invoice`, which the field's type fixes, narrowed to invoices with a balance. `amount` is prefilled from the chosen invoice's balance. The predicate and the expression read members of a record the form has chosen (see D12).
+- `SubmitPayment` is a transient act, so it has a form and nothing else. `invoice`'s line `form: choose one where balance > 0` chooses from the default list of `Invoice`, which the field's type fixes, narrowed to invoices with a balance. `amount` is prefilled from the chosen invoice's balance. The predicate and the expression read members of a record the form has chosen (see D12).
 - `SubmitPayment label ...` and `Issuance label ...` override two humanized act names. A shape with only a label needs no braces. `Receipt` overrides the label of one member. Every other name keeps its default: `largestPayment` is "Largest payment", `PaidInvoice` is "Paid invoice".
 
 ### 8.4 Pharmacy
@@ -358,8 +421,12 @@ RefillTask {
         on a row: FillPrescription from { prescription: prescription }
     }
 
-    prescription { ToFill }
-    requestedOn  { ToFill }
+    prescription {
+        ToFill
+    }
+    requestedOn {
+        ToFill
+    }
 }
 
 StockLot label "Lot" plural "Lots" {
@@ -368,11 +435,21 @@ StockLot label "Lot" plural "Lots" {
         on a row: CountLot
     }
 
-    drug        { list: filter search }
-    lotNumber   { list: search }
-    expiresOn   { list }
-    onHand      { list }
-    isUsableLot { list }
+    drug {
+        list: filter search
+    }
+    lotNumber {
+        list: search
+    }
+    expiresOn {
+        list
+    }
+    onHand {
+        list
+    }
+    isUsableLot {
+        list
+    }
 }
 
 Fill {
@@ -382,11 +459,21 @@ Fill {
         on a row: VerifyFill
     }
 
-    prescription { AwaitingVerification }
-    lot.drug     { AwaitingVerification }
-    quantity     { AwaitingVerification }
-    filledBy     { AwaitingVerification }
-    filledAt     { AwaitingVerification }
+    prescription {
+        AwaitingVerification
+    }
+    lot.drug {
+        AwaitingVerification
+    }
+    quantity {
+        AwaitingVerification
+    }
+    filledBy {
+        AwaitingVerification
+    }
+    filledAt {
+        AwaitingVerification
+    }
 }
 
 PharmacistAlert {
@@ -394,26 +481,48 @@ PharmacistAlert {
         on a row: ConflictOverride from { prescription: prescription }
     }
 
-    prescription { Open }
-    kind         { Open }
-    raisedOn     { Open }
+    prescription {
+        Open
+    }
+    kind {
+        Open
+    }
+    raisedOn {
+        Open
+    }
 }
 
 FillPrescription {
-    requestKey   { form: hidden initially randomUUID }
-    prescription { form: choose one from Fillable }
-    lot          { form: choose one from UsableLot where drug == prescription.drug }
-    quantity     { form: initially prescription.quantity }
-    fillNumber   { form: initially prescription.fillsRecorded + 1 }
+    requestKey {
+        form: hidden initially randomUUID
+    }
+    prescription {
+        form: choose one from Fillable
+    }
+    lot {
+        form: choose one from UsableLot where drug == prescription.drug
+    }
+    quantity {
+        form: initially prescription.quantity
+    }
+    fillNumber {
+        form: initially prescription.fillsRecorded + 1
+    }
 }
 
 VerifyFill {
-    outcome { form: choose one of "approved" or "rejected" }
-    note    { form: fill in a paragraph }
+    outcome {
+        form: choose one of "approved" or "rejected"
+    }
+    note {
+        form: fill in a paragraph
+    }
 }
 
 PickUp {
-    amountPaid { form: initially fill.amountDue }
+    amountPaid {
+        form: initially fill.amountDue
+    }
 }
 ```
 
@@ -423,10 +532,10 @@ What each declaration does:
 - `page Stock { show LowStock, StockLot }` shows a refinement by name, which is its default list, next to a shape whose default list is declared below.
 - The four one-line shapes say only how their records read elsewhere. `Prescription { title order.patient.name, drug.name }` means that the `prescription` column of a refill task, a fill, or an alert shows the patient and the drug, and that the choice in `FillPrescription`'s form reads the same way. The first draft of this sketch wrote `prescription.order.patient.name, prescription.drug.name` as two columns in three lists.
 - `RefillTask` declares the technician's queue. `FillPrescription` takes `one Prescription`, not a refill task, so §4's default rule finds no row action. `from { prescription: prescription }` says which field the row fills and from which path. Two members are in the queue; `fillsAtRequest` and `requestKey` are not.
-- `StockLot` says it is called a lot, and that a lot reads as its lot number. `drug { list: filter search }` lets the user filter on a reference, which is a choose-one over drugs, and runs the search box over the drug's title. `isUsableLot` shows the flag as a column.
+- `StockLot` says it is called a lot, and that a lot reads as its lot number. `drug`'s line `list: filter search` lets the user filter on a reference, which is a choose-one over drugs, and runs the search box over the drug's title. `isUsableLot` shows the flag as a column.
 - `Fill` declares a list with a predicate in the spec's grammar. `actor` is the viewer, so a pharmacist does not see their own controlled fills in the queue. The spec refuses `VerifyFill` on those anyway (line 767); the list hides what would be refused. `lot.drug` is a path member: the column shows the drug, by `Drug`'s title, rather than the lot.
 - `PharmacistAlert.Open` tests refinement membership in its predicate, `prescription is not Cleared`, and fills `ConflictOverride` from a path on the row.
-- `FillPrescription` is a transient act: a form only. `requestKey` is a text the user never sees, generated by the frontend with Velle's own generator name. `prescription { form: choose one from Fillable }` narrows the choice to a refinement the spec defines. `lot` is chosen from usable lots of the chosen prescription's drug, and the form's own field `prescription` is in scope of the predicate. `quantity` and `fillNumber` are prefilled from members of the chosen prescription, including the derived `fillsRecorded`. The spec's `Fill requires fillNumber == count(prescription.fills where fillNumber <= this.fillNumber)` (line 674) is what the prefill satisfies.
+- `FillPrescription` is a transient act: a form only. `requestKey` is a text the user never sees, generated by the frontend with Velle's own generator name. `prescription`'s line `form: choose one from Fillable` narrows the choice to a refinement the spec defines. `lot` is chosen from usable lots of the chosen prescription's drug, and the form's own field `prescription` is in scope of the predicate. `quantity` and `fillNumber` are prefilled from members of the chosen prescription, including the derived `fillsRecorded`. The spec's `Fill requires fillNumber == count(prescription.fills where fillNumber <= this.fillNumber)` (line 674) is what the prefill satisfies.
 - `VerifyFill`: `outcome` is a choice between two words. The spec says the same as `VerifyFill requires outcome == "approved" or outcome == "rejected"` (line 768). Once D3 publishes that check, the frontend can infer the choice and the line becomes the override for when it cannot.
 - `PickUp` prefills the amount from the chosen fill's `amountDue`. The spec refuses a smaller amount (line 858).
 - `filledBy` needs no label: "Filled by" is the default, and the column shows the staff member's name by `Staff`'s title.
@@ -466,7 +575,7 @@ Each of these is a view the default could not put up, or a gap in what Velle pub
 - **The columns of an embedded list belong to the embedded shape.** `show lineItems columns description, price, quantity, amount` in the first draft configured `LineItem` from inside `Invoice`. Now `LineItem` says which of its members are in its list, and the invoice detail embeds that list. The same list is then what a `LineItem` search box shows.
 - **A form is not a list.** Naming a view on a member puts it in; a list or detail with no member naming it shows everything. A form cannot work that way, because the act needs every field. The rule in §8.1 treats `form` as always full, and D14 asks whether that is the right reading.
 - **A row action filled from a path.** §4's rule, an act whose reference field takes the row's record, covers `CorrectEmail` on a customer and not `FillPrescription` on a refill task. The `from { field: path }` binding is needed, and the model fixes nothing about it.
-- **A choice filtered by another field.** `lot { form: choose one from UsableLot where drug == prescription.drug }` needs the form's fields in scope of a predicate. The spec states the same constraint as `FillPrescription requires lot.drug == prescription.drug` (line 667). A published check of the form `field.path == otherField.path` is a filter on the choice, and the UX line is only the override. That is a second thing D3 buys beyond pre-checking.
+- **A choice filtered by another field.** `lot`'s line `form: choose one from UsableLot where drug == prescription.drug` needs the form's fields in scope of a predicate. The spec states the same constraint as `FillPrescription requires lot.drug == prescription.drug` (line 667). A published check of the form `field.path == otherField.path` is a filter on the choice, and the UX line is only the override. That is a second thing D3 buys beyond pre-checking.
 - **D3's classification is too narrow.** `quantity <= lot.onHand`, `amountPaid < fill.amountDue`, and `prescription is Fillable` read members of records the form has chosen, which are loaded by the time the user types. A third class between "only the act's fields" and "the books" is needed; see D12.
 - **An enumeration is a `requires` today.** `outcome == "approved" or outcome == "rejected"` is the only way the pharmacy says that a text takes one of two words. The frontend can infer a choice from the published check. Whether Velle wants to say it as a type is a Velle question outside this file.
 - **A request key is a convention.** `requestKey: text` on `FillPrescription` and `RequestRefill` is a key the committer makes up, and the description cannot mark it. Each form says `hidden initially randomUUID` by hand.
