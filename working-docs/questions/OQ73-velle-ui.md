@@ -1,6 +1,6 @@
 # OQ73 — Velle UI: a frontend built from the model description, with the UX declared apart from the UI
 
-**Status:** opened 2026-10-29 at Dave's request, from his scratch note `velle_ui.md` (IntelliJ scratches) and the wiki's `Velle-UI.md` notes. Not designed. This file is the place the design is talked through; the decisions in §6 are for Dave to answer inline. §8, added 2026-10-30, is a hypothetical sketch of the UX language, written ahead of D8 so that D2, D5, D6, and D9 to D14 can be judged against something concrete. Dave redirected it 2026-11-02: the sketch starts from a shape, and each member says how it appears in each of the shape's views, instead of each view listing its members.
+**Status:** opened 2026-10-29 at Dave's request, from his scratch note `velle_ui.md` (IntelliJ scratches) and the wiki's `Velle-UI.md` notes. Not designed. This file is the place the design is talked through; the decisions in §6 are for Dave to answer inline. §8, added 2026-10-30, is a hypothetical sketch of the UX language, written ahead of D8 so that D2, D5, D6, and D9 to D15 can be judged against something concrete. Dave redirected it 2026-11-02: the sketch starts from a shape, and each member says how it appears in each of the shape's views, instead of each view listing its members.
 **In plain terms:** every Velle system already serves one page that builds itself from the model: the console lists every shape, shows every record, and puts up a form for every act, with no code written per spec. Dave wants that idea grown into a frontend framework in its own right. Three ideas drive it. First, a frontend engineer should describe what the user does (choose one customer, fill in a line item, see the overdue invoices) in a language that says nothing about checkboxes or dropdowns, and bind the look separately. Second, the rules the spec already states (a line item's quantity is positive, an amount is `price * quantity`) should reach the form from the spec, never typed again in the frontend. Third, the framework should work against a system that is not Velle at all: Velle generates the configuration it reads, and anyone else writes that configuration by hand.
 **See:** `wiki/Serving-a-system.md` ("The console", `GET /api`) · `apis/json/src/main/kotlin/velle/api/Describe.kt` (the model description today) · `apis/spring/src/main/resources/velle/console.html` (the one self-building page) · `wiki/Act-API.md` (a refused act's rejection as data) and `Wire.rejection` · `wiki/Velle-UI.md` (the earlier notes; they fold into this file and the wiki page goes when this settles) · Reference §21 (`never`, `requires`) · Reference §7 (derived properties) · OQ66 (extension functions), OQ65 (extension types), OQ69 (a function's store side: the same question has a client side) · the Serving residue items on the console and on an OpenAPI description.
 
@@ -132,7 +132,7 @@ TypeScript because the UI layer is React and the audience is frontend engineers;
 
 The second data point is the pharmacy, which has authorization and ninety days of seeded data. Cost: the UX language is designed last, so its first draft waits on two examples; the gain is that every word in it is drawn from a view the default got wrong.
 
-The four decisions below were added 2026-10-30 with the sketch in §8 and are judged against it. D13 and D14 were added 2026-11-02 when the sketch was turned shape-first at Dave's direction; the inversion itself is decided and is not asked here.
+The four decisions below were added 2026-10-30 with the sketch in §8 and are judged against it. D13 and D14 were added 2026-11-02 when the sketch was turned shape-first at Dave's direction; the inversion itself is decided and is not asked here. D15 was added the same day when Dave asked whether a view could say which way its default runs.
 
 ### D9. The UX language is a surface syntax of its own, with Velle's lexical conventions, the spec's predicate grammar unchanged, and only two names added to scope: `actor` for the viewer and, inside a form, the form's fields.
 
@@ -154,9 +154,13 @@ The pharmacy's three workspaces in §8.4 fall out of the spec's `by` clauses, an
 
 A customer is their name in the overdue list's `customer` column, in the choice behind `BillCustomer`, and in the heading of their detail. The description cannot supply this: the model has no notion of which member names a record, and `Prescription` has no single one, so the pharmacy says `order.patient.name, drug.name`. Cost: the default is a guess that is right for `Customer` and wrong for `Fill`, which has no text member and would be rejected until it says `title prescription.drug.name, fillNumber`, and a shape whose title is a path through a reference costs a read per row unless the read API returns it with the record.
 
-### D14. A form always shows every field of its act, and a member's `form` line says only how the field is entered; `hidden` is the one way to take a field off the screen.
+### D14. A form always shows every field of its act, and a member's `form` line says only how the field is entered; `hidden` is the one way to take a field off the screen, and a form cannot say `named members`.
 
 Naming a view on a member puts the member in it, and a list or detail with no member naming it shows every member (D10). A form cannot follow that rule, because an act with an unmentioned required field could not be committed. Cost: forms and lists read the same syntax two ways, and a reader has to know which. The alternative, a form that drops unmentioned fields and the compiler rejecting a dropped field that is required, keeps one rule and makes every form that configures one field name all of them.
+
+### D15. A view may say which way its default runs, `all members` or `named members`, and a member line may say `hidden` in any view; a view that says neither follows D10's rule.
+
+Under `all members` every member is in the view, a member line configures without narrowing, and `hidden` takes a member out. Under `named members` only the members whose lines name the view are in it, which is what D10 does on its own once any member names a view. The two words make the rule visible on the view instead of inferred from the member lines, and they let a detail that shows everything say only its groups: `Invoice`'s detail in §8.3 drops from eleven member lines to six, and the members no line mentions come first under no heading. Cost: three spellings of one idea, since a view with no clause still flips by D10's rule; dropping the flip and requiring `named members` on every narrowed list would put the clause on nine of the eleven lists in the two files, so the flip stays as the default. `hidden` now means two things: in a form, submitted but not shown; in a list or detail, not shown at all.
 
 ## 7. Out of scope until the above settles
 
@@ -177,7 +181,7 @@ A UX file is a set of declarations, checked against the model description and ne
 - `page`: a place the user goes. It shows lists and names the acts the user can commit from it.
 - a shape declaration, headed by the shape's name: everything about how records of one shape are shown. It holds the shape's views, its title, and one line per member.
 
-A shape's views are its lists, its detail, and, when the shape is an act, its form. Every readable shape has a default list and a detail without declaring them; every act has a form. A shape declares a view only to say something about the whole view: a named list, a list of a refinement, a list with a filter, the order, the page size, the acts the user can commit from it. The members a view shows are not listed in the view. Each member says which views it is in and how, on its own line, and the view shows the members that name it in the order they are declared. A form is the exception: it always shows every field of the act, because the act needs them, and a member's `form` line only says how the field is entered. A list or detail that no member names shows every member, which is the default.
+A shape's views are its lists, its detail, and, when the shape is an act, its form. Every readable shape has a default list and a detail without declaring them; every act has a form. A shape declares a view only to say something about the whole view: a named list, a list of a refinement, a list with a filter, the order, the page size, the acts the user can commit from it. The members a view shows are not listed in the view. Each member says which views it is in and how, on its own line, and the view shows the members that name it in the order they are declared. A form is the exception: it always shows every field of the act, because the act needs them, and a member's `form` line only says how the field is entered. A list or detail that no member names shows every member, which is the default. A view may say which way its default runs: `all members` puts every member in, and a member line then adds to how it appears or says `hidden` to take it out; `named members` puts in only the members whose lines name the view, which is also what happens when the view says nothing and any member names it (D15).
 
 A member line may be a path through a reference (`customer.name`), which puts a member of a related record into this shape's views. A shape's `title` names the members that stand for a record wherever it appears inside another view: as a reference column, as a choice in a form, as the heading of its detail. Labels sit on the line of the thing they label.
 
@@ -204,19 +208,24 @@ shapeClause   := viewDecl | "title" path ("," path)* | memberDecl
 viewDecl      := "list" ListName? ("of" ShapeName)? ("where" predicate)? ("{" listClause* "}")?
                  -- no ListName: the shape's default list; "of": a refinement of the shape
               | "detail" "{" detailClause* "}"
-listClause    := "order" path ("descending")?            -- the default order
+membersClause := "all members"                          -- every member is in; `hidden` takes one out
+              | "named members"                         -- only members whose lines name the view
+listClause    := membersClause
+              | "order" path ("descending")?            -- the default order
               | "page" IntegerLiteral                   -- the page size
               | "on a row:" rowAction ("," rowAction)*
               | "on a selection:" ActName ("," ActName)*
               | "on the list:" ActName ("," ActName)*
 rowAction     := ActName ("from" "{" binding ("," binding)* "}")? | "detail"
 binding       := Identifier ":" path                    -- an act field, filled from a path on the row
-detailClause  := "acts" ActName ("," ActName)*          -- the acts the user can commit from the record
+detailClause  := membersClause
+              | "acts" ActName ("," ActName)*          -- the acts the user can commit from the record
 
 memberDecl    := path labelClause? ("{" memberView* "}")?
 memberView    := viewName (":" ux+)?                    -- one per line; naming a view puts the member in it
 viewName      := "list" | ListName | "detail" | "form"
-ux            := listUx | detailUx | formUx
+ux            := "hidden" | listUx | detailUx | formUx  -- hidden: in a form, submitted but not shown;
+                                                        -- in a list or detail, not shown at all
 listUx        := "filter"                               -- the user may filter on it
               | "search"                                -- the one search box runs over it
 detailUx      := "group" TextLiteral                    -- the heading it is shown under
@@ -227,7 +236,6 @@ formUx        := "fill in" ("a paragraph" | "a secret")?
               | "choose one of" TextLiteral ("or" TextLiteral)*
               | "see"
               | "initially" (valueExpr | GeneratorName)
-              | "hidden"
 
 path          := Identifier ("." Identifier)*           -- members, read through references
 predicate, valueExpr := Reference §10, with `actor` in scope and, in a form line, the form's fields
@@ -283,34 +291,24 @@ Invoice {
         order due
         on a row: SubmitPayment, ArchiveRequest, detail
     }
-    detail { acts LineItem, SubmitPayment, Issuance, ChangeDueDate, ArchiveRequest, UnarchiveRequest }
+    detail {
+        all members
+        acts LineItem, SubmitPayment, Issuance, ChangeDueDate, ArchiveRequest, UnarchiveRequest
+    }
 
     reference {
         list
         Overdue
-        detail: group "Invoice"
     }
     customer {
         Overdue
-        detail: group "Invoice"
     }
     due {
         list
         Overdue
-        detail: group "Invoice"
-    }
-    issuedOn {
-        detail: group "Invoice"
     }
     status {
         list: filter
-        detail: group "Invoice"
-    }
-    isIssuedInvoice {
-        detail: group "Invoice"
-    }
-    isArchivedInvoice {
-        detail: group "Invoice"
     }
     total {
         list
@@ -320,12 +318,6 @@ Invoice {
         list
         Overdue
         detail: group "Money"
-    }
-    lineItems {
-        detail
-    }
-    payments {
-        detail
     }
 }
 
@@ -378,8 +370,8 @@ What each declaration does:
 - `Customer` declares its default list and its detail, and then its five members. `title name` says a customer reads as their name wherever a customer appears in another view: the `customer` column of the overdue list, the choice in `BillCustomer`'s form. The default list says only its order and its actions; which columns it has is said by the members. `on a row` names two acts and `detail`; both acts take `one Customer`, so the default would offer them too. `on the list: SignUp` is the default as well, because `SignUp` has no reference field. The line is here to show where a whole-list act is declared.
 - `name` has two lines: `list: search` puts it in the default list as a column the one search box runs over, and `detail: group "Customer"` puts it in the detail under the heading "Customer". `largestPayment` has a bare `list` line, a column with no more said about it, and is a member of a second group. `signedUpOn` is in the detail only, so the default list has three columns. `invoices`, with its one `detail` line, shows the inverse member as an embedded list: the default list of `Invoice`, with the columns the `Invoice` declaration gives it.
 - `Invoice` has two lists. The default list is never shown on a page of its own: the customer detail shows it as `invoices`, and the payment form chooses from it. `Overdue` is a list of the refinement `ActionableOverdue`, which the spec already composes as overdue and not archived. The predicate lives in the spec, so the list carries none.
-- Each member of `Invoice` says which of the three views it is in. `reference` is in all three; `issuedOn` and the two refinement flags are in the detail only; `customer` is in the overdue list, where it shows as the customer's name by `Customer`'s title, and in the detail. `status` has `list: filter`, which lets the user filter the default list on a derived member. The column order of each list and the member order of each group is the order of these lines.
-- `lineItems` and `payments`, each with one `detail` line, show two more inverse members as embedded lists. Their columns are declared where they belong: `LineItem` and `Payment` each say which members are in their default list.
+- `Invoice`'s detail says `all members` (D15), so every member is on the page without a line: `issuedOn`, the two refinement flags, and the inverse members `lineItems` and `payments`, which show as embedded lists. The columns of those lists are declared where they belong: `LineItem` and `Payment` each say which members are in their default list. Only `total` and `balance` have a `detail` line, and it says their group; the members no line mentions come first under no heading, in the model's order, and "Money" follows. `Customer`'s detail says nothing and so follows D10's rule: all five members name it, so the two spellings put up the same kind of page.
+- The two lists of `Invoice` follow D10's rule too. `reference` and `due` are in both; `customer` is in the overdue list only, where it shows as the customer's name by `Customer`'s title; `status` has `list: filter`, which lets the user filter the default list on a derived member. The column order of each list is the order of these lines.
 - `LineItem` is a kept act, so it has a list and a form. `description` is a column in the list and, by `form: fill in a paragraph`, a paragraph in the form, which the model cannot say about a `text`. `quantity` is prefilled with 1 and still editable. `amount` has `form: see`: `see` is the default for a derived member and is here only to say that the amount is live once D3 publishes `price * quantity`. The field `invoice` has no line: it is left out of the list, and the form has it anyway because the act needs it. When the form is opened from an invoice's detail, it is already chosen.
 - `Payment` narrows its default list to two columns, for the invoice detail that embeds it.
 - `SubmitPayment` is a transient act, so it has a form and nothing else. `invoice`'s line `form: choose one where balance > 0` chooses from the default list of `Invoice`, which the field's type fixes, narrowed to invoices with a balance. `amount` is prefilled from the chosen invoice's balance. The predicate and the expression read members of a record the form has chosen (see D12).
@@ -563,6 +555,8 @@ The UX compiler reads the model description and the UX file and nothing else.
 - It rejects a `workspace` naming a shape that no act is declared `by` and that refines no such shape.
 - It rejects a page in a workspace that shows a shape the workspace's actor shape may not read, per the description's `visibleTo`.
 - It rejects two declarations of one shape, page, or list, and two lines for one member.
+- It rejects `named members` on a form, and a view with both `all members` and `named members`.
+- It rejects `hidden` on a member in a view with `named members`, because leaving the line out does the same.
 - It warns when a published check (D3) over a form's fields calls a function the frontend has no client side for; that check is left to the server.
 - It warns when a `label` restates the humanized default.
 - It warns when a member names a view and no other member does, because that view then has one column.
@@ -573,7 +567,7 @@ Each of these is a view the default could not put up, or a gap in what Velle pub
 
 - **How a record reads in another view had no home.** With views at the top level, the first draft wrote `customer.name` in one list and `prescription.order.patient.name` in three, because nothing said what a customer or a prescription looks like as a single cell. Starting from the shape makes `title` an obvious clause of it, and the description cannot supply it: the model has no notion of which member names a record. See D13.
 - **The columns of an embedded list belong to the embedded shape.** `show lineItems columns description, price, quantity, amount` in the first draft configured `LineItem` from inside `Invoice`. Now `LineItem` says which of its members are in its list, and the invoice detail embeds that list. The same list is then what a `LineItem` search box shows.
-- **A form is not a list.** Naming a view on a member puts it in; a list or detail with no member naming it shows everything. A form cannot work that way, because the act needs every field. The rule in §8.1 treats `form` as always full, and D14 asks whether that is the right reading.
+- **A form is not a list.** Naming a view on a member puts it in; a list or detail with no member naming it shows everything. A form cannot work that way, because the act needs every field. The rule in §8.1 treats `form` as always full, D14 asks whether that is the right reading, and D15 gives every other view the choice.
 - **A row action filled from a path.** §4's rule, an act whose reference field takes the row's record, covers `CorrectEmail` on a customer and not `FillPrescription` on a refill task. The `from { field: path }` binding is needed, and the model fixes nothing about it.
 - **A choice filtered by another field.** `lot`'s line `form: choose one from UsableLot where drug == prescription.drug` needs the form's fields in scope of a predicate. The spec states the same constraint as `FillPrescription requires lot.drug == prescription.drug` (line 667). A published check of the form `field.path == otherField.path` is a filter on the choice, and the UX line is only the override. That is a second thing D3 buys beyond pre-checking.
 - **D3's classification is too narrow.** `quantity <= lot.onHand`, `amountPaid < fill.amountDue`, and `prescription is Fillable` read members of records the form has chosen, which are loaded by the time the user types. A third class between "only the act's fields" and "the books" is needed; see D12.
