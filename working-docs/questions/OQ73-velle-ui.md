@@ -211,7 +211,7 @@ viewDecl      := "list" ListName? ("of" ShapeName)? ("where" predicate)? ("{" li
 membersClause := "all members"                          -- every member is in; `hidden` takes one out
               | "named members"                         -- only members whose lines name the view
 listClause    := membersClause
-              | "order" path ("descending")?            -- the default order
+              | "order by:" path ("descending")?        -- the default order
               | "page" IntegerLiteral                   -- the page size
               | "row actions:" rowAction ("," rowAction)*
               | "selection actions:" ActName ("," ActName)*
@@ -256,7 +256,7 @@ page Home {
 Customer {
     title name
     list {
-        order name
+        order by: name
         row actions: BillCustomer, CorrectEmail, detail
         list actions: SignUp
     }
@@ -285,10 +285,10 @@ Customer {
 Invoice {
     title reference
     list {
-        order due descending
+        order by: due descending
     }
     list Overdue of ActionableOverdue {
-        order due
+        order by: due
         row actions: SubmitPayment, ArchiveRequest, detail
     }
     detail {
@@ -409,7 +409,7 @@ Prescription { title order.patient.name, drug.name }
 
 RefillTask {
     list ToFill of OpenRefillTask {
-        order requestedOn
+        order by: requestedOn
         row actions: FillPrescription from { prescription: prescription }
     }
 
@@ -447,7 +447,7 @@ StockLot label "Lot" plural "Lots" {
 Fill {
     list AwaitingVerification where verifications is empty
                               and not (filledBy == actor and lot.drug is Controlled) {
-        order filledAt
+        order by: filledAt
         row actions: VerifyFill
     }
 
