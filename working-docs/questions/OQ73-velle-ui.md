@@ -134,7 +134,7 @@ TypeScript because the UI layer is React and the audience is frontend engineers;
 
 The second data point is the pharmacy, which has authorization and ninety days of seeded data. Cost: the UX language is designed last, so its first draft waits on two examples; the gain is that every word in it is drawn from a view the default got wrong.
 
-The four decisions below were added 2026-10-30 with the sketch in §8 and are judged against it. D13 and D14 were added 2026-11-02 when the sketch was turned shape-first at Dave's direction; the inversion itself is decided and is not asked here. D15 was added the same day when Dave asked whether a view could say which way its default runs. §9 and D16 to D19, also 2026-11-02, work the three domains (UX, UI, styling) through one example. Later the same day Dave cut the language loose from Velle: §8 now speaks only of shapes, acts, fields, collections, and roles, which any system has, in a spelling and an expression grammar of its own, and §8.8 holds the whole mapping from a Velle spec; D3, D9, and D11 were reworded to match.
+The four decisions below were added 2026-10-30 with the sketch in §8 and are judged against it. D13 and D14 were added 2026-11-02 when the sketch was turned shape-first at Dave's direction; the inversion itself is decided and is not asked here. D15 was added the same day when Dave asked whether a view could say which way its default runs. §9 and D16 to D19, also 2026-11-02, work the three domains (UX, UI, styling) through one example. Folding acts into the shapes they are about, as one more context on each field's line, was tried the same evening and reverted at Dave's direction: acts belong apart from models, so `act` stays a top-level declaration with its own field lines, and a shape's field lines cover its lists and detail only. Later the same day Dave cut the language loose from Velle: §8 now speaks only of shapes, acts, fields, collections, and roles, which any system has, in a spelling and an expression grammar of its own, and §8.8 holds the whole mapping from a Velle spec; D3, D9, and D11 were reworded to match.
 
 ### D9. The UX language has a spelling and a small expression grammar of its own, owing nothing to Velle's; its nouns are shape, act, field, collection, and role, which any system has; a `where:` is evaluated by the frontend over what it loads, and passed through as the query to a backend that accepts the grammar.
 
@@ -605,7 +605,7 @@ Nothing in §8.1 to §8.7 knows Velle exists. Velle's part is to generate the mo
 | `is X` in a predicate | `isX`, a yes/no field |
 | a refused act's rejection (§2) | the frontend shows it against the field the validation names, once the rejection names one (§5) |
 
-What does not map, and so is a Velle question rather than a UX one: an extension shape's entry and display (§5), an extension function's client side (§5), and a predicate that the translation cannot express, which stays the backend's to evaluate.
+What does not map, and so is a Velle question rather than a UX one: an extension type's entry and display (§5), an extension function's client side (§5), and a predicate that the translation cannot express, which stays the backend's to evaluate.
 
 ## 9. The three domains against one example
 
