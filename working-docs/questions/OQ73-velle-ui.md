@@ -134,7 +134,7 @@ TypeScript because the UI layer is React and the audience is frontend engineers;
 
 The second data point is the pharmacy, which has authorization and ninety days of seeded data. Cost: the UX language is designed last, so its first draft waits on two examples; the gain is that every word in it is drawn from a view the default got wrong.
 
-The four decisions below were added 2026-10-30 with the sketch in §8 and are judged against it. D13 and D14 were added 2026-11-02 when the sketch was turned shape-first at Dave's direction; the inversion itself is decided and is not asked here. D15 was added the same day when Dave asked whether a view could say which way its default runs. Later the same day Dave cut the language loose from Velle: §8 now speaks only of shapes, acts, fields, collections, and roles, which any system has, in a spelling and an expression grammar of its own, and §8.8 holds the whole mapping from a Velle spec; D3, D9, and D11 were reworded to match.
+The four decisions below were added 2026-10-30 with the sketch in §8 and are judged against it. D13 and D14 were added 2026-11-02 when the sketch was turned shape-first at Dave's direction; the inversion itself is decided and is not asked here. D15 was added the same day when Dave asked whether a view could say which way its default runs. §9 and D16 to D19, also 2026-11-02, work the three domains (UX, UI, styling) through one example. Later the same day Dave cut the language loose from Velle: §8 now speaks only of shapes, acts, fields, collections, and roles, which any system has, in a spelling and an expression grammar of its own, and §8.8 holds the whole mapping from a Velle spec; D3, D9, and D11 were reworded to match.
 
 ### D9. The UX language has a spelling and a small expression grammar of its own, owing nothing to Velle's; its nouns are shape, act, field, collection, and role, which any system has; a `where:` is evaluated by the frontend over what it loads, and passed through as the query to a backend that accepts the grammar.
 
@@ -163,6 +163,22 @@ Naming a view on a shape's field puts the field in it, and a list or detail with
 ### D15. A view may say which way its default runs, `all fields` or `named fields`, and a field line may say `hidden` in any view; a view that says neither follows D10's rule.
 
 Under `all fields` every field is in the view, a field line configures without narrowing, and `hidden` takes a field out. Under `named fields` only the fields whose lines name the view are in it, which is what D10 does on its own once any field names a view. The two words make the rule visible on the view instead of inferred from the field lines, and they let a detail that shows everything say only its groups: `Invoice`'s detail in §8.3 drops from eleven field lines to six, and the fields no line mentions come first under no heading. Cost: three spellings of one idea, since a view with no clause still flips by D10's rule; dropping the flip and requiring `named fields` on every narrowed list would put the clause on nine of the eleven lists in the two files, so the flip stays as the default. `hidden` means two things: on an act's field, sent but not shown; in a list or detail, not shown at all.
+
+### D16. The contract between the UX domain and the UI domain is the resolved UX tree, a closed vocabulary of UX words each with one interface, and neither domain sees the other's file.
+
+The UX compiler emits the tree; the UI compiler reads it (§9.2, §9.6). Cost: the vocabulary is the framework's to grow, and a UX idea with no word cannot be rendered until the word exists, which is D5's cost restated for the whole stack.
+
+### D17. A UI binding is a selector over UX nodes, by word, enclosing word, and a condition on a measure, and the most specific match wins.
+
+`choose one when options <= 5 -> RadioGroup` is the whole decision of when a choice is a radio group, made once (§9.3). Cost: specificity rules, which stylesheets have taught everyone to distrust; the sketch keeps them to three axes and no inheritance.
+
+### D18. Styling targets components and their declared parts, states, and shown values, never HTML, and layout is styling.
+
+A component may change its markup without breaking the styling, and `cell money: align right` styles every money cell in the frontend (§9.4). Cost: each component declares its parts, which is a contract to keep, and the styling language is a second CSS that compiles to the first.
+
+### D19. Data-dependent appearance, such as "overdue" shown in red, is a styling rule bound to a value the UX exposes, and the UX language gets no word for severity until a view needs it.
+
+Cost: a value's meaning is stated where its colour is, so two projects that both want overdue red write the rule twice; a severity word in the UX would state it once and let styling bind the word.
 
 ## 7. Out of scope until the above settles
 
@@ -590,3 +606,292 @@ Nothing in §8.1 to §8.7 knows Velle exists. Velle's part is to generate the mo
 | a refused act's rejection (§2) | the frontend shows it against the field the validation names, once the rejection names one (§5) |
 
 What does not map, and so is a Velle question rather than a UX one: an extension shape's entry and display (§5), an extension function's client side (§5), and a predicate that the translation cannot express, which stays the backend's to evaluate.
+
+## 9. The three domains against one example
+
+Written 2026-11-02 at Dave's request. Workspaces and roles are set aside here. The question is what a frontend looks like when the UX, the UI, and the styling are each written in a language made for that domain, instead of in React components that fix all three at once. The example is the billing clerk's screen for overdue invoices and the form that records a payment, because §8.3 already describes them in the UX language. Everything below is hypothetical; the three languages share one spelling (§8.1) so an engineer who reads one reads the others.
+
+### 9.1 The coupling today
+
+The overdue list as it would be written now, in outline:
+
+```tsx
+export function OverdueInvoices() {
+  const [status, setStatus] = useState("all")
+  const rows = useQuery(`/api/invoices?where=status = "overdue" and not archived`)
+  return (
+    <div className="p-6">
+      <div className="flex gap-2 mb-4">
+        <select value={status} onChange={e => setStatus(e.target.value)} className="border rounded px-2">
+          <option>all</option><option>open</option><option>overdue</option>
+        </select>
+      </div>
+      <table className="min-w-full text-sm">
+        <thead><tr><th>Reference</th><th>Customer</th><th>Due</th><th>Balance</th><th/></tr></thead>
+        <tbody>{rows.map(r =>
+          <tr key={r.id} className="hover:bg-gray-50">
+            <td><Link to={`/invoices/${r.id}`}>{r.reference}</Link></td>
+            <td>{r.customer.name}</td>
+            <td>{format(r.due, "d MMM yyyy")}</td>
+            <td className={r.balance > 0 ? "text-red-600" : ""}>{money(r.balance)}</td>
+            <td><RowMenu items={[["Record a payment", () => openPayment(r)], ["Archive", () => archive(r)]]}/></td>
+          </tr>)}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+```
+
+Three domains are fixed in one place and cannot be changed apart. That the list exists, which columns it has, which acts a row offers, and that a customer reads as their name is UX. That the filter is a `select`, the actions are a menu, and the reference is a link is UI. The padding, the hover colour, the red balance, and the date format are styling. The same thirty lines are then written again for the customers list, the lots list, and every other list, each time re-deciding all three.
+
+### 9.2 The UX domain
+
+The UX file says what the screen is and nothing about how it looks (§8.3):
+
+```
+shape Invoice {
+    title: reference
+    list Overdue of ActionableOverdue {
+        order by: due
+        row actions: SubmitPayment, ArchiveRequest, open
+    }
+    field reference { Overdue }
+    field customer  { Overdue }
+    field due       { Overdue }
+    field balance   { Overdue }
+}
+
+act SubmitPayment {
+    label: "Record a payment"
+    field invoice: choose one from Invoice where balance > 0
+    field amount: default invoice.balance
+}
+```
+
+The UX compiler resolves this against the model description into a tree of **UX nodes**. Each node is a UX word, the data it stands for, and its place in the tree. This tree is the contract between the UX domain and the UI domain: the UI never sees the UX file, and the UX never sees a component.
+
+```
+list Invoice.Overdue
+  collection: Invoice.ActionableOverdue, order: due
+  column reference   text, title of Invoice, opens detail
+  column customer    reference to Customer, shown by Customer.title (name)
+  column due         date
+  column balance     money
+  row actions        SubmitPayment (invoice := row), ArchiveRequest (invoice := row), open
+form SubmitPayment
+  field invoice      choose one, from Invoice where balance > 0, required
+  field amount       money, default invoice.balance, required
+  validations        amount > 0 (published), amount <= invoice.balance (server)
+  submit             "Record a payment"
+  refusal            shown against the field the rejection names
+```
+
+The vocabulary of UX words is closed and small. The words that name structure: `page`, `list`, `detail`, `form`, `group`, `column`, `row actions`, `list actions`, `selection actions`, `filter`, `search`, `submit`, `refusal`. The words that name a field in a view: `text`, `paragraph`, `secret`, `number`, `money`, `date`, `date and time`, `yes/no`, `status`, `choose one`, `choose many`, `one of`, `read only`, `reference`, `embedded list`, `title`. Everything the frontend puts on screen is one of these, with the data from the model description attached.
+
+### 9.3 The UI domain
+
+The UI file binds UX words to components. A binding is a selector over UX nodes and the component that renders the nodes it matches, in the way a stylesheet's rule is a selector over elements and the declarations that apply. The file is hypothetical and would be `examples/billing/ui/billing.ui`.
+
+```
+# Components are implementations registered under a name. Each implements the
+# interface of the UX word it is bound to (§9.5), and nothing else about it is known here.
+component Table         from "@velle-ui/react/Table"
+component CompactTable  from "@velle-ui/react/CompactTable"
+component Link          from "@velle-ui/react/Link"
+component RowMenu       from "@velle-ui/react/RowMenu"
+component Button        from "@velle-ui/react/Button"
+component Toolbar       from "@velle-ui/react/Toolbar"
+component Select        from "@velle-ui/react/Select"
+component RadioGroup    from "@velle-ui/react/RadioGroup"
+component ComboBox      from "@velle-ui/react/ComboBox"
+component CheckboxGroup from "@velle-ui/react/CheckboxGroup"
+component MultiSelect   from "@velle-ui/react/MultiSelect"
+component Checkbox      from "@velle-ui/react/Checkbox"
+component TextInput     from "@velle-ui/react/TextInput"
+component TextArea      from "@velle-ui/react/TextArea"
+component NumberInput   from "@velle-ui/react/NumberInput"
+component DatePicker    from "@velle-ui/react/DatePicker"
+component MoneyInput    from "@acme/finance-ui/MoneyInput"      # the Money type library's own
+component Badge         from "@velle-ui/react/Badge"
+component Section       from "@velle-ui/react/Section"
+component Form          from "@velle-ui/react/Form"
+component FieldError    from "@velle-ui/react/FieldError"
+component Banner        from "@velle-ui/react/Banner"
+
+# Structure
+list                               -> Table
+list in detail                     -> CompactTable
+list in choose one                 -> ComboBox                 # the search box behind a choice
+title in list                      -> Link                     # opens the record
+row actions                        -> RowMenu
+row actions when count = 1         -> Button
+list actions, selection actions    -> Toolbar
+group                              -> Section
+form                               -> Form
+submit                             -> Button { primary: true }
+refusal on field                   -> FieldError
+refusal                            -> Banner                   # a refusal that names no field
+
+# Fields, by UX word; the most specific selector wins
+text                               -> TextInput
+paragraph                          -> TextArea { rows: 4 }
+secret                             -> TextInput { secret: true }
+number                             -> NumberInput
+money                              -> MoneyInput
+date                               -> DatePicker
+yes/no                             -> Checkbox
+status                             -> Badge
+choose one                         -> Select
+choose one when options <= 5       -> RadioGroup
+choose one when options > 50       -> ComboBox
+choose many                        -> MultiSelect
+choose many when options <= 8      -> CheckboxGroup
+one of                             -> RadioGroup
+one of when options > 5            -> Select
+read only                          -> Text
+```
+
+The grammar:
+
+```
+ui         := (componentDecl | binding)*
+componentDecl := "component" Name "from" Text
+binding    := selector ("," selector)* "->" Name ("{" option* "}")?
+selector   := uxWord ("in" uxWord)* ("when" condition)?
+             # "in": the nearest enclosing node with that word
+condition  := measure ("=" | "<" | "<=" | ">" | ">=") Number
+            | "required" | "optional" | "empty"
+measure    := "options" | "count" | "columns" | "rows"
+option     := name ":" (Text | Number | "true" | "false")  # a component's own settings
+```
+
+What the file does for the example. The overdue list matches `list` and is a `Table`. Its `reference` column is the title and matches `title in list`, so it is a `Link`. The three row actions match `row actions` and are a `RowMenu`; a list with one row action would get a `Button` instead. In the payment form, `invoice` is a `choose one` over every invoice with a balance, more than fifty of them, so it is a `ComboBox`, which searches by the invoice's title; `amount` is `money`, so it is the `MoneyInput` the Money type library ships, which knows about two decimals and a currency sign (§5). A refusal of the amount comes back naming the field and is a `FieldError` under it. No line in the file names an invoice, a payment, or any other shape: the bindings are for the whole frontend, and the billing file is twenty lines because the default bindings are the ones the framework ships, and a project writes only the lines that differ, such as the `MoneyInput` line.
+
+**Options are UI, not styling.** `rows: 4` on a text area and `primary: true` on the submit button change how the component behaves or what it is, not how it looks. Where a thing sits and what colour it is are styling (§9.4).
+
+**A custom component** is a React component that implements one UX word's interface (§9.5) and a `component` line that registers it. The UI compiler checks the implementation against the interface. Nothing else is needed, and the UX file does not change.
+
+### 9.4 The styling domain
+
+The styling file is applied to UI components. It has tokens, the layout of each structural component, and the look of each component and its parts. It targets components and their named parts, never HTML, so a component can change its markup without breaking the styling. The file is hypothetical and would be `examples/billing/style/billing.style`.
+
+```
+tokens {
+    color.surface:     #ffffff
+    color.surface.alt: #f7f7f8
+    color.text:        #1b1b1f
+    color.text.muted:  #6b6b76
+    color.primary:     #2b6cb0
+    color.danger:      #c0392b
+    color.border:      #e3e3e8
+    font.body:         "Inter" 14px / 20px
+    font.label:        "Inter" 12px / 16px 600
+    space.1: 4px  space.2: 8px  space.3: 12px  space.4: 16px  space.6: 24px
+    radius: 6px
+}
+
+Page {
+    layout: header, main
+    main: padding space.6, max-width 1200px
+}
+
+Table {
+    density: comfortable                  # row height; compact for CompactTable
+    header: font.label, color color.text.muted, border-bottom color.border
+    row: border-bottom color.border
+    row hover: background color.surface.alt
+    cell: padding space.2 space.3
+    cell money: align right
+    cell date: format "d MMM yyyy"
+}
+
+CompactTable extends Table {
+    density: compact
+    header: hidden
+}
+
+Form {
+    layout: one column, labels above, gap space.4
+    actions: align right, gap space.2
+}
+
+Section {
+    title: font.label, color color.text.muted, margin-bottom space.2
+    gap: space.3
+}
+
+Button {
+    padding space.2 space.4, radius radius, font font.body
+    primary: background color.primary, color color.surface
+    danger:  background color.danger,  color color.surface
+}
+
+Badge {
+    padding space.1 space.2, radius 999px, font font.label
+    value "overdue": background color.danger, color color.surface
+    value "paid":    background color.surface.alt, color color.text.muted
+}
+
+FieldError { color: color.danger, font: font.label }
+```
+
+The grammar:
+
+```
+style      := tokens? componentStyle*
+tokens     := "tokens" "{" (tokenName ":" value)* "}"
+componentStyle := Name ("extends" Name)? "{" rule* "}"
+rule       := part? state? ":" property ("," property)*
+             # no part: the component's root
+part       := name                          # a part the component declares: header, row, cell, title, actions
+state      := "hover" | "focus" | "disabled" | "selected"
+            | name Text                     # a cell or badge by the UX word or value it shows: `cell money`, `value "overdue"`
+property   := "layout" layoutSpec | "density" ("compact" | "comfortable")
+            | name value+                   # padding, color, background, font, border-*, radius, align, gap, format, hidden
+value      := tokenName | Number unit? | Text | color
+```
+
+What the file does for the example. The overdue list's `Table` gets comfortable rows, muted uppercase-free headers, and a hover tint. Its `balance` cell matches `cell money` and is right-aligned; its `due` cell matches `cell date` and takes the date format. The `status` badge, when its value is "overdue", is red. The payment form is one column with labels above and its button on the right. Nothing here names a shape or a field: `cell money` styles every money cell in every table, and `value "overdue"` styles every status badge showing that word.
+
+**Data-dependent look is styling, not UX.** That "overdue" is red is a decision about appearance, bound to a value the UX exposes. If the UX wanted to say that overdue is bad, independent of colour, it would need a word for severity, which it does not have (§8.7). The sketch leaves it in styling.
+
+**Layout is styling.** Where the header is, how wide the main column is, whether a form is one column or two, where the buttons sit: all of it is in the styling file under `layout:`, because none of it changes what the user can do. The UI component declares the parts a layout may place; the styling places them.
+
+### 9.5 The handful of components
+
+The UX vocabulary in §9.2 is closed, so the components a frontend needs are countable. Each UX word has one interface, which is what the UX node gives the component and what the component gives back:
+
+| UX word | the component receives | the component returns |
+|---|---|---|
+| `list` | columns (word, label, sortable), a page of rows, the order, the filters and search in effect, the row, list, and selection acts, the selection | a new order, filter, search, or page; a chosen row; a chosen act with its rows |
+| `column` | the row's value, its UX word, the label | nothing; it renders |
+| `title` | the record, its title text, whether it opens a detail | an open |
+| `row actions`, `list actions`, `selection actions` | the acts (label, enabled) | a chosen act |
+| `detail`, `group`, `embedded list` | the record, the fields and their values, the groups, the acts | a chosen act |
+| `form`, `submit`, `refusal` | the fields, their values and errors, the published validations, the submit label, the refusal | a value change, a submit |
+| `text`, `paragraph`, `secret`, `number`, `money`, `date`, `date and time`, `yes/no` | label, value, required, error, read only | a new value |
+| `choose one`, `choose many` | label, a query for the options (with the chosen shape's title), the value, required, error | a new value, a search text, a new page |
+| `one of` | label, the words, the value, required, error | a new value |
+| `status` | the value, the label | nothing; it renders |
+
+That is about twenty interfaces and, with the alternatives in §9.3 (`RadioGroup` and `Select` for one word, `Table` and `CompactTable` for another), about twenty-five components for the whole default frontend. A type library adds one per type it wants to show its own way (`MoneyInput`). A project adds one for each UX word it wants rendered differently, and that is all a project's React code is.
+
+### 9.6 The tools
+
+Each domain has a compiler and the compilers run in order, each reading the one before.
+
+- **The UX compiler** reads the model description and the UX file, checks them against each other (§8.5), and emits the resolved UX tree (§9.2), one tree per page, list, detail, and form. It can print a resolved view so the author sees what the defaults filled in (D10).
+- **The UI compiler** reads the UX tree and the UI file. It rejects a UX node no binding matches, a binding to a component that does not implement the word's interface (checked in TypeScript against the interface in §9.5), a `when` condition the word has no measure for, and a selector that matches nothing in any tree, as a warning. It emits the component tree: each UX node paired with the component that renders it and its options.
+- **The styling compiler** reads the component tree and the styling file. It rejects a token that is not declared, a part the component does not declare, a `value` state on a component that shows no value, and emits CSS: tokens as custom properties, each rule as a selector on the component's name and part, which the components render as data attributes.
+- **A gallery** renders every UX word with every bound component and every styling state, from the three files alone, so the UI and styling are seen without a backend.
+
+The React code that remains is the components, each a function of one interface, and nothing per shape, per page, or per list.
+
+### 9.7 What this changes about the earlier decisions
+
+- D5 said one component per UX word, registered by that word. §9.3 widens that to a selector: a word in a context under a condition. The closed list of UX words stays.
+- D2's question whether the UX language should begin as JSON applies to all three languages. The UX tree in §9.2 and the component tree in §9.6 are JSON already; the three files are the surface syntax over them.
+- §8.7 listed help text, a confirmation before an act, and an empty-list message as UX words the language lacks. §9.5 shows each would be one more row in the interface table and one more binding, so adding them is cheap once the word exists.
+
+The decisions this section raises are D16 to D19 in §6.
