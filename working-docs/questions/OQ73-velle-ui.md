@@ -197,16 +197,17 @@ The model description gives the language these things, and the language names no
 
 - **shapes**, each with a key and **fields**. A field is a text, a number, a date, a date and time, a yes/no, a reference to one record of a shape, a collection of records of a shape, or a computed value with its expression in the language's own expression grammar (§8.2). A yes/no field that marks a status, such as `isUsableLot`, is a field like any other.
 - **collections**: named subsets of a shape that the backend serves, such as `Invoice.ActionableOverdue`. A shape's own records are its unnamed collection.
-- **acts**: what a user can do. Each act is about one shape, the one it creates or changes, and has typed **fields**, most of which fill a field of that shape; a field that fills none is the act's own. An act carries the role allowed to do it and its **validations** as expressions over its fields.
+- **acts**: what a user can do, each with typed **fields**, the role allowed to do it, and its **validations** as expressions over the fields.
 - **roles**: the kinds of user the system knows, and which roles may read each shape.
 
-A UX file is a set of declarations, checked against the model description. There are three kinds:
+A UX file is a set of declarations, checked against the model description. There are four kinds:
 
 - `workspace`: who the frontend is for, named by a role. It holds pages.
 - `page`: a place the user goes. It shows lists and names the acts the user can start from it.
-- `shape`: everything about how records of one shape are shown and entered. It holds the shape's views, its title, and one line per field.
+- `shape`: everything about how records of one shape are shown. It holds the shape's views, its title, and one line per field.
+- `act`: how one act's form is filled in, one line per field.
 
-The shape is the top level, and a field's one line says how the field appears in every context it is used in. A shape's views are its contexts: its lists, its detail, and one form for each act that is about it. Every readable shape has a default list and a detail without declaring them, and every act is a form without declaring it. A shape declares a view only to say something about the whole view: a named list, a list of a collection, a filter, the order, the page size, the acts the user can start from it, a form's label, or a form field that is the act's own and so has no field line on the shape. The fields a view shows are not listed in the view. Each field says which views it is in and how, on its own line, one view per line, and a list or detail shows the fields that name it in the order they are declared. A list or detail that no field names shows every field, which is the default. A view may say which way its default runs: `all fields` puts every field in, and a field line then adds to how it appears or says `hidden` to take it out; `named fields` puts in only the fields whose lines name the view, which is also what happens when the view says nothing and any field names it (D15). A field line that names no view, such as one that only sets a label, leaves membership to the default. A form always has every field of its act, because the act needs them; a field's form line says only how the field is entered (D14).
+A shape's views are its lists and its detail. Every readable shape has a default list and a detail without declaring them; every act has a form. A shape declares a view only to say something about the whole view: a named list, a list of a collection, a filter, the order, the page size, the acts the user can start from it. The fields a view shows are not listed in the view. Each field says which views it is in and how, on its own line, and the view shows the fields that name it in the order they are declared. A list or detail that no field names shows every field, which is the default. A view may say which way its default runs: `all fields` puts every field in, and a field line then adds to how it appears or says `hidden` to take it out; `named fields` puts in only the fields whose lines name the view, which is also what happens when the view says nothing and any field names it (D15). A field line that names no view, such as one that only sets a label, leaves membership to the default. A form always has every field of its act, because the act needs them; a field line says only how it is entered (D14).
 
 A field line may be a path through a reference (`customer.name`), which puts a field of a related record into this shape's views. A shape's `title` names the fields that stand for a record wherever it appears inside another view: as a reference column, as a choice in a form, as the heading of its detail (D13). Labels sit on the line of the thing they label.
 
@@ -214,12 +215,12 @@ No declaration names a component, a position, a colour, or a size. Those are the
 
 **Spelling.** Comments start with `#`. A name is letters, digits, and underscores in any case, spelled exactly as the model description spells it; a path is names joined by dots. Text is in double quotes. A declaration is a keyword, a name, and a block in braces. Inside a block, each clause is on its own line and is a keyword ending in a colon followed by its items, separated by commas; a view name on a field line is followed by a colon only when words follow it. Inside a field's braces, each view is on its own line.
 
-**Expressions.** A `where:` filter, a `default`, and a computed field use one small expression grammar that belongs to the language (§8.2). It has paths, literals, comparison, `and`, `or`, `not`, `is empty`, arithmetic, `count` and `sum` over a collection, and three names: `viewer` is the signed-in user, `today` and `now` are the clock. In a form context, the act's fields are in scope. The frontend ships one evaluator for this grammar and uses it for filters over loaded data, for defaults and computed values as the user types, and for validations the model description publishes (D3). A backend that accepts the grammar receives a `where:` as the query; one that does not gets the collection, and the frontend filters what it loads (D9).
+**Expressions.** A `where:` filter, a `default`, and a computed field use one small expression grammar that belongs to the language (§8.2). It has paths, literals, comparison, `and`, `or`, `not`, `is empty`, arithmetic, `count` and `sum` over a collection, and three names: `viewer` is the signed-in user, `today` and `now` are the clock. Inside an act, the act's fields are in scope. The frontend ships one evaluator for this grammar and uses it for filters over loaded data, for defaults and computed values as the user shapes, and for validations the model description publishes (D3). A backend that accepts the grammar receives a `where:` as the query; one that does not gets the collection, and the frontend filters what it loads (D9).
 
 ### 8.2 The grammar
 
 ```
-ux            := (workspace | page | shape)*
+ux            := (workspace | page | shape | act)*
 
 workspace     := "workspace" Name "{" page* "}"            # Name: a role the model description lists
 page          := "page" Name "{" pageClause* "}"
@@ -231,7 +232,7 @@ viewRef       := ShapeName ("." Name)?                     # a shape's default l
 shape         := "shape" ShapeName "{" shapeClause* "}"
 shapeClause   := "label:" Text ("," Text)?                 # singular, plural
               | "title:" path ("," path)*
-              | list | detail | form | field
+              | list | detail | field
 
 list          := "list" Name? ("of" Name)? "{" listClause* "}"
                                                            # no Name: the shape's default list
@@ -245,33 +246,32 @@ listClause    := fieldsClause
               | "list actions:" Name ("," Name)*
 rowAction     := Name ("with" "{" binding ("," binding)* "}")? | "open"
                                                            # open: the record's detail
-binding       := name ":" path                             # a field of the act, filled from a path on the row
+binding       := name ":" path                             # a field, filled from a path on the row
 detail        := "detail" "{" detailClause* "}"
 detailClause  := fieldsClause
               | "acts:" Name ("," Name)*
 fieldsClause  := "all fields"                              # every field is in; `hidden` takes one out
               | "named fields"                             # only fields whose lines name the view
 
-form          := "form" Name "{" formClause* "}"           # Name: an act about this shape, from the model description
-formClause    := "label:" Text
-              | "field" name (":" formWord+)?              # a field of the act that fills no field of the shape
-
 field         := "field" path ("{" fieldLine* "}")?
 fieldLine     := "label:" Text
-              | viewName (":" word+)?                      # one per line; naming a view puts the field in it
-viewName      := "list" | "detail" | Name                  # Name: a list declared on this shape, or an act about it
-word          := "hidden"                                  # in a list or detail: not shown; in a form: sent, not shown
-              | listWord | detailWord | formWord
-listWord      := "filterable" | "searchable"
-detailWord    := "group" Text                              # the heading it is shown under
-              | "as" viewRef                               # a collection field shown as this list
-formWord      := "paragraph" | "secret"                    # how a text is typed
+              | viewName (":" fieldWord+)?                 # one per line; naming a view puts the field in it
+viewName      := "list" | Name | "detail"                  # Name: a list declared on this shape
+fieldWord     := "hidden"
+              | "filterable" | "searchable"                # in a list
+              | "group" Text                               # in a detail: the heading it is shown under
+              | "as" viewRef                               # in a detail: a collection field shown as this list
+
+act           := "act" Name "{" actClause* "}"
+actClause     := "label:" Text
+              | "field" name (":" actFieldWord+)?
+actFieldWord  := "paragraph" | "secret"                    # how a text is typed
               | "choose one from" viewRef ("where" expr)?
-              | "choose one where" expr                    # from the default list of the shape the field refers to
               | "choose many from" viewRef ("where" expr)?
               | "one of" Text ("," Text)*
               | "read only"
               | "default" expr
+              | "hidden"                                   # sent, not shown
               | "generated"                                # the frontend makes a unique value
 
 expr          := or
@@ -288,7 +288,7 @@ unit          := path | Text | Number | "true" | "false"
               | "(" expr ")"
 
 path          := name ("." name)*                          # fields, read through references;
-                                                           # in a form context, the act's fields
+                                                           # in an act, its fields
 Name, name    := (Letter | "_") (Letter | Digit | "_")*    # as the model description spells it
 ```
 
@@ -347,9 +347,6 @@ shape Invoice {
         all fields
         acts: LineItem, SubmitPayment, Issuance, ChangeDueDate, ArchiveRequest, UnarchiveRequest
     }
-    form Issuance {
-        label: "Issue the invoice"
-    }
 
     field reference {
         list
@@ -361,7 +358,6 @@ shape Invoice {
     field due {
         list
         Overdue
-        BillCustomer: default today + 30 days
     }
     field status {
         list: filterable
@@ -378,38 +374,31 @@ shape Invoice {
 }
 
 shape LineItem {
-    field description {
-        list
-        LineItem: paragraph
-    }
-    field price {
-        list
-    }
-    field quantity {
-        list
-        LineItem: default 1
-    }
-    field amount {
-        list
-        LineItem: read only
-    }
+    field description { list }
+    field price { list }
+    field quantity { list }
+    field amount { list }
 }
 
 shape Payment {
-    form SubmitPayment {
-        label: "Record a payment"
-    }
+    field receivedOn { list }
+    field amount { list }
+}
 
-    field invoice {
-        SubmitPayment: choose one where balance > 0
-    }
-    field amount {
-        list
-        SubmitPayment: default invoice.balance
-    }
-    field receivedOn {
-        list
-    }
+act LineItem {
+    field description: paragraph
+    field quantity: default 1
+    field amount: read only
+}
+
+act SubmitPayment {
+    label: "Record a payment"
+    field invoice: choose one from Invoice where balance > 0
+    field amount: default invoice.balance
+}
+
+act Issuance {
+    label: "Issue the invoice"
 }
 
 shape Receipt {
@@ -420,14 +409,15 @@ shape Receipt {
 What each declaration does:
 
 - `page Home` shows two lists: the list `Overdue` declared on `Invoice`, and the default list of `Customer`. Without it the default frontend has one page per readable shape.
-- `shape Customer` declares its default list and its detail, and then its five fields. `title: name` says a customer reads as their name wherever a customer appears in another view: the `customer` column of the overdue list, the choice in `BillCustomer`'s form. The default list says only its order and its actions; which columns it has is said by the fields. `row actions` names two acts and `open`; both acts are about a customer, so the default would offer them too. `list actions: SignUp` is the default as well, because `SignUp` creates a customer and takes none. The line is here to show where a whole-list action is declared. `SignUp` and `CorrectEmail` are both forms of `Customer`, and no field says anything about them, so both are the default form: `SignUp` asks for a name and an email, `CorrectEmail` for the corrected email with the customer already chosen.
+- `shape Customer` declares its default list and its detail, and then its five fields. `title: name` says a customer reads as their name wherever a customer appears in another view: the `customer` column of the overdue list, the choice in `BillCustomer`'s form. The default list says only its order and its acts; which columns it has is said by the fields. `row acts` names two acts and `open`; both acts take one customer, so the default would offer them too. `list actions: SignUp` is the default as well, because `SignUp` takes no customer. The line is here to show where a whole-list act is declared.
 - `field name` has two lines: `list: searchable` puts it in the default list as a column the one search box runs over, and `detail: group "Customer"` puts it in the detail under the heading "Customer". `largestPayment` has a bare `list` line, a column with no more said about it, and is a member of a second group. `signedUpOn` is in the detail only, so the default list has three columns. `invoices`, with its one `detail` line, shows the collection field as an embedded list.
-- `shape Invoice` has two lists, a detail, and five forms, one per act about an invoice; it declares one of the forms, `Issuance`, only to give it a label. The default list is never shown on a page of its own: the customer detail shows it as `invoices`, and the payment form chooses from it. `Overdue` is a list of the collection `ActionableOverdue`, which the backend serves as overdue and not archived. The filter lives in the backend, so the list carries none.
+- `shape Invoice` has two lists. The default list is never shown on a page of its own: the customer detail shows it as `invoices`, and the payment form chooses from it. `Overdue` is a list of the collection `ActionableOverdue`, which the backend serves as overdue and not archived. The filter lives in the backend, so the list carries none.
 - `Invoice`'s detail says `all fields` (D15), so every field is on the page without a line: `issuedOn`, the two status fields, and the collection fields `lineItems` and `payments`, which show as embedded lists. The columns of those lists are declared where they belong: `LineItem` and `Payment` each say which fields are in their default list. Only `total` and `balance` have a `detail` line, and it says their group; the fields no line mentions come first under no heading, in the model's order, and "Money" follows. `Customer`'s detail says nothing and so follows D10's rule: all five fields name it, so the two spellings put up the same kind of page.
-- `field due` is used in three contexts and says so on three lines: a column in the default list, a column in `Overdue`, and a field of the `BillCustomer` form, where it starts thirty days out. `ChangeDueDate` also fills `due`, with its own field `newDue`, and the line says nothing about that form, so it is the default date field. `reference` is in both lists; `customer` is in the overdue list only, where it shows as the customer's name by `Customer`'s title; `status` has `list: filterable`, which lets the user filter the default list on a computed field. The column order of each list is the order of these lines.
-- `shape LineItem` is a shape and the act that creates it, and the act is about the shape, so its form is one of the shape's contexts under the act's name. `description` is a column in the list and a paragraph in the form, which the model cannot say about a text. `quantity` is a column and starts at 1 in the form, still editable. `amount` is a column and read only in the form; the model description gives it as computed from `price * quantity`, and the form shows it live as the user types (D3). `invoice` has no line: it is not a column, and the form has it anyway; when the form is started from an invoice's detail, it is already chosen.
-- `shape Payment` is created by `SubmitPayment`, so that act's form is a context of `Payment`, and the shape declares the form to give it a label. `invoice` is in no list and is chosen in the form from the default list of `Invoice`, which the field refers to, narrowed to invoices with a balance. `amount` is a column in the default list, which the invoice detail embeds, and in the form starts at the chosen invoice's balance; the filter and the default read fields of a record the form has chosen (see D12). `receivedOn` is the other column and is not a field of the act, so the form does not have it.
-- `shape Receipt` overrides the label of one field and says nothing else about it. Every other name keeps its default: `largestPayment` is "Largest payment", `ActionableOverdue` is "Actionable overdue", `SubmitPayment` would be "Submit payment" had the form not said otherwise.
+- The two lists of `Invoice` follow D10's rule too. `reference` and `due` are in both; `customer` is in the overdue list only, where it shows as the customer's name by `Customer`'s title; `status` has `list: filterable`, which lets the user filter the default list on a computed field. The column order of each list is the order of these lines.
+- `shape LineItem` and `shape Payment` narrow their default lists for the invoice detail that embeds them. A field in one view fits on one line.
+- `act LineItem` says how three of the five fields are entered. `description` is a paragraph, which the model cannot say about a text. `quantity` starts at 1 and is still editable. `amount` is read only; the model description gives it as computed from `price * quantity`, and the form shows it live as the user shapes (D3). `invoice` has no line and is in the form anyway; when the form is started from an invoice's detail, it is already chosen.
+- `act SubmitPayment`: `invoice` is chosen from the default list of `Invoice`, which the field refers to, narrowed to invoices with a balance. `amount` starts at the chosen invoice's balance. The filter and the default read fields of a record the form has chosen (see D12).
+- The two `label:` lines override two humanized act names. `shape Receipt` overrides the label of one field and says nothing else about it. Every other name keeps its default: `largestPayment` is "Largest payment", `ActionableOverdue` is "Actionable overdue".
 
 ### 8.4 Pharmacy
 
@@ -489,38 +479,12 @@ shape Fill {
         order by: filledAt
         row actions: VerifyFill
     }
-    form FillPrescription {
-        field requestKey: hidden generated      # the act's own field; Fill has no requestKey
-    }
 
-    field prescription {
-        AwaitingVerification
-        FillPrescription: choose one from Prescription.Fillable
-    }
-    field lot.drug {
-        AwaitingVerification
-    }
-    field lot {
-        FillPrescription: choose one from StockLot.UsableLot where drug = prescription.drug
-    }
-    field quantity {
-        AwaitingVerification
-        FillPrescription: default prescription.quantity
-    }
-    field fillNumber {
-        FillPrescription: default prescription.fillsRecorded + 1
-    }
+    field prescription { AwaitingVerification }
+    field lot.drug { AwaitingVerification }
+    field quantity { AwaitingVerification }
     field filledBy { AwaitingVerification }
     field filledAt { AwaitingVerification }
-}
-
-shape Verification {
-    field outcome { VerifyFill: one of "approved", "rejected" }
-    field note { VerifyFill: paragraph }
-}
-
-shape Pickup {
-    field amountPaid { PickUp: default fill.amountDue }
 }
 
 shape PharmacistAlert {
@@ -533,6 +497,23 @@ shape PharmacistAlert {
     field kind { Open }
     field raisedOn { Open }
 }
+
+act FillPrescription {
+    field requestKey: hidden generated
+    field prescription: choose one from Prescription.Fillable
+    field lot: choose one from StockLot.UsableLot where drug = prescription.drug
+    field quantity: default prescription.quantity
+    field fillNumber: default prescription.fillsRecorded + 1
+}
+
+act VerifyFill {
+    field outcome: one of "approved", "rejected"
+    field note: paragraph
+}
+
+act PickUp {
+    field amountPaid: default fill.amountDue
+}
 ```
 
 What each declaration does:
@@ -540,12 +521,13 @@ What each declaration does:
 - `workspace Technician` is named by a role the model description lists. Every act the description allows that role is offered in it by default (D11).
 - `page Stock { show: Drug.LowStock, StockLot }` shows a collection of `Drug` with the drug shape's default columns, next to a shape whose default list is declared below. `Fill.CounsellingDue` and `Fill.ReadyForPickup` are collections too; `Fill.AwaitingVerification` is a list declared in this file. A name after the dot is one or the other, and a declared list may take a collection's name.
 - The four one-line shapes say only how their records read elsewhere. `shape Prescription { title: order.patient.name, drug.name }` means that the `prescription` column of a refill task, a fill, or an alert shows the patient and the drug, and that the choice in `FillPrescription`'s form reads the same way. The first draft of this sketch wrote `prescription.order.patient.name, prescription.drug.name` as two columns in three lists.
-- `shape RefillTask` declares the technician's queue. `FillPrescription` is about a fill, not a refill task, so §4's default rule finds no row action. `with { prescription: prescription }` says which field of the act the row fills and from which path. Two fields are in the queue; `fillsAtRequest` and `requestKey` are not.
+- `shape RefillTask` declares the technician's queue. `FillPrescription` takes a prescription, not a refill task, so §4's default rule finds no row act. `with { prescription: prescription }` says which field the row fills and from which path. Two fields are in the queue; `fillsAtRequest` and `requestKey` are not.
 - `shape StockLot` says it is called a lot, and that a lot reads as its lot number. `drug { list: filterable searchable }` lets the user filter on a reference, which is a choose-one over drugs, and runs the search box over the drug's title. `isUsableLot` shows a yes/no status field as a column.
-- `shape Fill` is where the model-first shape of the language shows most. The fill is created by `FillPrescription`, so that act's form is a context of `Fill`, next to the pharmacist's queue `AwaitingVerification`. `prescription` is a column in the queue and, in the form, a choice from the collection `Prescription.Fillable`: one field, two contexts, one line each. `quantity` is a column and, in the form, starts at the chosen prescription's quantity. `lot` is not in the queue, where `lot.drug` stands in for it by `Drug`'s title, and in the form is chosen from usable lots of the chosen prescription's drug; the act's own field `prescription` is in scope of the filter. `fillNumber` is in the form only. `requestKey` is a field of the act and not of the fill, so it is declared on the form: a text the user never sees, which the frontend makes unique. The queue's `where:` is in the language's own grammar: `viewer` is the signed-in user, so a pharmacist does not see their own controlled fills, and `lot.drug.isControlled` is a yes/no field of the drug. The backend refuses `VerifyFill` on those anyway; the list hides what would be refused.
-- `shape Verification` is created by `VerifyFill`, and `outcome` in that form is a choice between two words. The model description carries the same as a validation, `outcome = "approved" or outcome = "rejected"`. Once the frontend reads validations (D3), it can infer the choice and the line becomes the override for when it cannot. `fill` has no line and is already chosen when the form is started from the queue's row action.
-- `shape Pickup` is created by `PickUp`, and `amountPaid` in that form starts at the chosen fill's `amountDue`. The backend refuses a smaller amount, and the model description publishes that validation.
+- `shape Fill` declares a list with a `where:` in the language's own grammar. `viewer` is the signed-in user, so a pharmacist does not see their own controlled fills in the queue; `lot.drug.isControlled` is a yes/no field of the drug. The backend refuses `VerifyFill` on those anyway; the list hides what would be refused. `lot.drug` is a path field: the column shows the drug, by `Drug`'s title, rather than the lot.
 - `PharmacistAlert.Open` filters on a yes/no field through a reference, `not prescription.isCleared`, and fills `ConflictOverride` from a path on the row.
+- `act FillPrescription`: `requestKey` is a text the user never sees, which the frontend makes unique. `prescription` is chosen from the collection `Prescription.Fillable`. `lot` is chosen from usable lots of the chosen prescription's drug, and the act's own field `prescription` is in scope of the filter. `quantity` and `fillNumber` start from fields of the chosen prescription, including the computed `fillsRecorded`.
+- `act VerifyFill`: `outcome` is a choice between two words. The model description carries the same as a validation, `outcome = "approved" or outcome = "rejected"`. Once the frontend reads validations (D3), it can infer the choice and the line becomes the override for when it cannot.
+- `act PickUp` starts the amount at the chosen fill's `amountDue`. The backend refuses a smaller amount, and the model description publishes that validation.
 - `filledBy` needs no label: "Filled by" is the default, and the column shows the staff member's name by `Staff`'s title.
 
 A page in `workspace Technician` that showed `Claim.PendingClaim` would be rejected: the model description says `Claim` is readable by the pharmacist and administrator roles only.
