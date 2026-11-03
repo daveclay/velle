@@ -134,7 +134,7 @@ TypeScript because the UI layer is React and the audience is frontend engineers;
 
 The second data point is the pharmacy, which has authorization and ninety days of seeded data. Cost: the UX language is designed last, so its first draft waits on two examples; the gain is that every word in it is drawn from a view the default got wrong.
 
-The four decisions below were added 2026-10-30 with the sketch in §8 and are judged against it. D13 and D14 were added 2026-11-02 when the sketch was turned shape-first at Dave's direction; the inversion itself is decided and is not asked here. D15 was added the same day when Dave asked whether a view could say which way its default runs. §9 and D16 to D19, also 2026-11-02, work the three domains (UX, UI, styling) through one example. Last on 2026-11-02, Dave asked that the model stay the top level with every context a field is used in described under it, so an act's form became a context of the shape the act is about and top-level `act` declarations went. Later the same day Dave cut the language loose from Velle: §8 now speaks only of shapes, acts, fields, collections, and roles, which any system has, in a spelling and an expression grammar of its own, and §8.8 holds the whole mapping from a Velle spec; D3, D9, and D11 were reworded to match.
+The four decisions below were added 2026-10-30 with the sketch in §8 and are judged against it. D13 and D14 were added 2026-11-02 when the sketch was turned shape-first at Dave's direction; the inversion itself is decided and is not asked here. D15 was added the same day when Dave asked whether a view could say which way its default runs. §9 and D16 to D19, also 2026-11-02, work the three domains (UX, UI, styling) through one example. Later the same day Dave cut the language loose from Velle: §8 now speaks only of shapes, acts, fields, collections, and roles, which any system has, in a spelling and an expression grammar of its own, and §8.8 holds the whole mapping from a Velle spec; D3, D9, and D11 were reworded to match.
 
 ### D9. The UX language has a spelling and a small expression grammar of its own, owing nothing to Velle's; its nouns are shape, act, field, collection, and role, which any system has; a `where:` is evaluated by the frontend over what it loads, and passed through as the query to a backend that accepts the grammar.
 
@@ -156,9 +156,9 @@ The pharmacy's three workspaces in §8.4 are one line each. Velle fills the role
 
 A customer is their name in the overdue list's `customer` column, in the choice behind `BillCustomer`, and in the heading of their detail. The description cannot supply this: a model has no notion of which field names a record, and `Prescription` has no single one, so the pharmacy says `order.patient.name, drug.name`. Cost: the default is a guess that is right for `Customer` and wrong for `Fill`, which has no text field and would be rejected until it says `title: prescription.drug.name, fillNumber`, and a shape whose title is a path through a reference costs a read per row unless the backend returns it with the record.
 
-### D14. A form always shows every field of its act, and a field's form line says only how the field is entered; `hidden` is the one way to take a field off the screen, and a form cannot say `named fields`.
+### D14. A form always shows every field of its act, and an act's field line says only how the field is entered; `hidden` is the one way to take a field off the screen, and a form cannot say `named fields`.
 
-Naming a view on a field puts the field in it, and a list or detail with no field naming it shows every field (D10). A form cannot follow that rule, because an act with an unmentioned required field could not be submitted. Cost: a form line and a list line on the same field read alike and mean different things, and a reader has to know which. The alternative, a form that drops unmentioned fields and the compiler rejecting a dropped field that is required, keeps one rule and makes every form that configures one field name all of them.
+Naming a view on a shape's field puts the field in it, and a list or detail with no field naming it shows every field (D10). A form cannot follow that rule, because an act with an unmentioned required field could not be submitted. Cost: an act's field lines and a shape's field lines read alike and mean different things, and a reader has to know which. The alternative, a form that drops unmentioned fields and the compiler rejecting a dropped field that is required, keeps one rule and makes every form that configures one field name all of them.
 
 ### D15. A view may say which way its default runs, `all fields` or `named fields`, and a field line may say `hidden` in any view; a view that says neither follows D10's rule.
 
@@ -189,7 +189,7 @@ Cost: a value's meaning is stated where its colour is, so two projects that both
 
 ## 8. A sketch of the UX language
 
-Written 2026-10-30, ahead of D8 and hypothetical: nothing here is built, and the two files below are not checked in. Rewritten 2026-11-02 twice at Dave's direction. First, the sketch was turned around to start from the shape: a shape declares the contexts its records are used in, and each of its fields says, once, how it appears in each of them, instead of each view listing its fields. An act's form is one of those contexts, on the shape the act is about, so a field's line covers the lists, the detail, and the forms together. Second, the language was cut loose from Velle. Its problem is the UX of any system that has records, fields, and things a user can do, and it is written against a model description that any backend can produce. It keeps two of Velle's nouns, shape and act, because any system has shapes of data and acts a user performs, and it borrows nothing else: no spelling, no casing rule, no predicate grammar, and none of Velle's other nouns. What Velle contributes, and how its spec becomes a model description, is in §8.8 and nowhere else in this section. The sketch exists so that D2, D5, and D6 can be judged against something concrete, and so that the views the default gets wrong are found before the language is designed for real. The two example systems are billing and the pharmacy, because their model descriptions are the ones Velle can generate today; the language would read the same against a hand-written description of a REST API.
+Written 2026-10-30, ahead of D8 and hypothetical: nothing here is built, and the two files below are not checked in. Rewritten 2026-11-02 twice at Dave's direction. First, the sketch was turned around to start from a shape: a shape declares the views it has, and each of its fields says, once, how it appears in each of them, instead of each view listing its fields. Second, the language was cut loose from Velle. Its problem is the UX of any system that has records, fields, and things a user can do, and it is written against a model description that any backend can produce. It keeps two of Velle's nouns, shape and act, because any system has shapes of data and acts a user performs, and it borrows nothing else: no spelling, no casing rule, no predicate grammar, and none of Velle's other nouns. What Velle contributes, and how its spec becomes a model description, is in §8.8 and nowhere else in this section. The sketch exists so that D2, D5, and D6 can be judged against something concrete, and so that the views the default gets wrong are found before the language is designed for real. The two example systems are billing and the pharmacy, because their model descriptions are the ones Velle can generate today; the language would read the same against a hand-written description of a REST API.
 
 ### 8.1 What the language is written against, and what a declaration is
 
@@ -554,8 +554,7 @@ A page in `workspace Technician` that showed `Claim.PendingClaim` would be rejec
 
 The UX compiler reads the model description and the UX file and nothing else.
 
-- It rejects a `shape`, `form`, `show:`, `acts:`, `of`, or `from` naming a shape, act, collection, or list the description or the file does not have.
-- It rejects `form X` on a shape that X is not about, a field line naming an act that does not fill that field, and a `field` inside a `form` that the act does not have or that fills a field of the shape, because that line belongs on the shape's field.
+- It rejects a `shape`, `act`, `show:`, `acts:`, `of`, or `from` naming a shape, act, collection, or list the description or the file does not have.
 - It rejects a field line whose path is not a field of the shape, or whose segments but the last are not references.
 - It rejects a field line naming a list the shape does not declare, and a `detail` line on a shape no role may read.
 - It rejects a field word in the wrong view: `filterable` or `searchable` outside a list, `group` or `as` outside a detail.
@@ -565,14 +564,14 @@ The UX compiler reads the model description and the UX file and nothing else.
 - It rejects a `with` binding when the field is not on the act, or when the path does not lead to the shape the field refers to.
 - It rejects a selection action when no field of the act refers to the row's shape.
 - It rejects a list action when the act has a field that refers to the row's shape, because that act belongs on a row.
-- It rejects an expression that does not parse in the language's grammar, or that names anything but the shape's fields, `viewer`, `today`, `now`, and, in a form context, the act's fields.
+- It rejects an expression that does not parse in the language's grammar, or that names anything but the shape's fields, `viewer`, `today`, `now`, and, in an act, the act's fields.
 - It rejects a comparison between values of different kinds, and `is empty` on anything but a collection.
 - It rejects `choose one from X` or `choose many from X` when X is not a list or collection of the shape the field refers to.
-- It rejects a form word in a list or detail context, a list or detail word in a form context, and a form word that disagrees with the field's kind: `choose` on a value, `paragraph` on a reference, `read only` on anything but a computed field, `choose many` on a single reference, `one of` on anything but a text.
+- It rejects an act's field word that disagrees with the field's kind: `choose` on a value, `paragraph` on a reference, `read only` on anything but a computed field, `choose many` on a single reference, `one of` on anything but a text.
 - It rejects a `default` expression whose kind is not the field's.
 - It rejects a `workspace` naming a role the description does not list.
 - It rejects a page in a workspace that shows a shape the workspace's role may not read.
-- It rejects two declarations of one shape, page, list, or form, and two lines for one field in one view.
+- It rejects two declarations of one shape, act, page, or list, and two lines for one field.
 - It rejects `named fields` on a form, and a view with both `all fields` and `named fields`.
 - It rejects `hidden` on a field in a view with `named fields`, because leaving the line out does the same.
 - It warns when a published validation (D3) uses a function the frontend's evaluator does not have; that validation is left to the backend.
@@ -586,7 +585,6 @@ Each of these is a view the default could not put up, or a gap in what a model d
 
 - **How a record reads in another view had no home.** With views at the top level, the first draft wrote `customer.name` in one list and `prescription.order.patient.name` in three, because nothing said what a customer or a prescription looks like as a single cell. Starting from the shape makes `title:` an obvious clause of it, and the description cannot supply it: a model has no notion of which field names a record. See D13.
 - **The columns of an embedded list belong to the embedded shape.** The first draft configured `LineItem`'s columns from inside `Invoice`. Now `LineItem` says which of its fields are in its list, and the invoice detail embeds that list. The same list is then what a `LineItem` search box shows.
-- **An act is a context of its shape.** With acts at the top level, `Payment.amount` was a column on the shape and a default on the act, two places for one field. The model description now says which shape each act is about and which of its fields each act field fills, and the form becomes one more context on the shape's field line. The cost is on the description: a hand-written one has to state the mapping, and Velle has to derive it (§8.8); an act field that fills nothing, such as `requestKey`, is declared on the form because it has no field line to sit on.
 - **A form is not a list.** Naming a view on a field puts it in; a list or detail with no field naming it shows everything. A form cannot work that way, because the act needs every field. The rule in §8.1 treats a form as always full, D14 asks whether that is the right reading, and D15 gives every other view the choice.
 - **A row action filled from a path.** §4's rule, an act with a field that refers to the row's shape, covers `CorrectEmail` on a customer and not `FillPrescription` on a refill task. The `with { field: path }` binding is needed, and the model fixes nothing about it.
 - **A choice filtered by another field.** `lot: choose one from StockLot.UsableLot where drug = prescription.drug` needs the act's fields in scope of a filter. The model description carries the same constraint as a validation, `lot.drug = prescription.drug`. A published validation of the form `a.path = b.path` is a filter on the choice, and the UX line is only the override. That is a second thing D3 buys beyond pre-checking.
@@ -614,7 +612,7 @@ Nothing in §8.1 to §8.7 knows Velle exists. Velle's part is to generate the mo
 | in a Velle spec | in the model description |
 |---|---|
 | a `shape` and its properties | a shape and its fields, with `stored`, `derived`, `inverse`, `captured`, `actor`, and `timestamp` folded into the field kinds in §8.1 |
-| an `act` | an act about the shape its rule creates (`Payment from { ... }`) or changes (`customer.email = corrected`), with each act field mapped to the shape field the rule fills it into; an act whose rule does neither is about the shape of its one reference field (`Issuance`); a kept act with no rule is about itself (`LineItem`). An act field the rule does not use is the act's own |
+| an `act` | an act with the act's fields as fields; a kept act is also a shape |
 | a refinement `X = Shape where ...` | a collection `Shape.X`, and a yes/no field `isX` on the shape |
 | a `many` or inverse member | a collection field |
 | a derived property `= expr` | a computed field, its expression translated into the language's grammar when the translation exists, else opaque |
@@ -625,7 +623,7 @@ Nothing in §8.1 to §8.7 knows Velle exists. Velle's part is to generate the mo
 | `is X` in a predicate | `isX`, a yes/no field |
 | a refused act's rejection (§2) | the frontend shows it against the field the validation names, once the rejection names one (§5) |
 
-What does not map, and so is a Velle question rather than a UX one: an extension type's entry and display (§5), an extension function's client side (§5), a predicate that the translation cannot express, which stays the backend's to evaluate, and an act whose rules create or change more than one shape, or whose field reaches a shape field through a path (`invoice.customer.largestPayment`), for which "the shape an act is about" has no single answer and the generator must be told.
+What does not map, and so is a Velle question rather than a UX one: an extension shape's entry and display (§5), an extension function's client side (§5), and a predicate that the translation cannot express, which stays the backend's to evaluate.
 
 ## 9. The three domains against one example
 
@@ -682,14 +680,14 @@ shape Invoice {
     field balance   { Overdue }
 }
 
-shape Payment {
-    form SubmitPayment { label: "Record a payment" }
-    field invoice { SubmitPayment: choose one where balance > 0 }
-    field amount  { SubmitPayment: default invoice.balance }
+act SubmitPayment {
+    label: "Record a payment"
+    field invoice: choose one from Invoice where balance > 0
+    field amount: default invoice.balance
 }
 ```
 
-The UX compiler resolves this against the model description into a tree of **UX nodes**, one tree per screen. The author writes per shape, because a field is one thing used in many places; the UI renders per screen, because a screen is what is on the glass. The compiler turns the one into the other. Each node is a UX word, the data it stands for, and its place in the tree. This tree is the contract between the UX domain and the UI domain: the UI never sees the UX file, and the UX never sees a component.
+The UX compiler resolves this against the model description into a tree of **UX nodes**. Each node is a UX word, the data it stands for, and its place in the tree. This tree is the contract between the UX domain and the UI domain: the UI never sees the UX file, and the UX never sees a component.
 
 ```
 list Invoice.Overdue
@@ -699,7 +697,7 @@ list Invoice.Overdue
   column due         date
   column balance     money
   row actions        SubmitPayment (invoice := row), ArchiveRequest (invoice := row), open
-form Payment.SubmitPayment
+form SubmitPayment
   field invoice      choose one, from Invoice where balance > 0, required
   field amount       money, default invoice.balance, required
   validations        amount > 0 (published), amount <= invoice.balance (server)
