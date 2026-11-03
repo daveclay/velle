@@ -8,6 +8,8 @@
 
 ## 1. The goal
 
+**The philosophy** (Dave, 2026-11-02). Velle UI, like Velle, separates problem domains so that a different language and different tools can solve each one more effectively and efficiently. Each domain is then expressed in a syntax that is concise and intuitive for that domain alone. The core is a description of the UX: the models, their relationships, and the general ways humans interact with the data. Those ways are list views, forms that submit acts, detail views, and the different ways one model is presented in different contexts. Separately, the UI describes how each UX component is given a UI component: a select list, a checkbox, a radio group, a combo box. Lastly, styling is applied to the UI components and describes the unified visual design: where things sit on the screen, the colours, the fonts, the containers. §8 is the UX domain's language; the UI and styling domains have no sketch yet.
+
 Dave's note, condensed into what the framework must do:
 
 - Given a valid configuration and nothing else, put up a usable frontend: a list view for every readable shape, a detail view for every record, a form for every act. The type of a property decides how it is shown and entered. An engineer declares only where the default is wrong.
