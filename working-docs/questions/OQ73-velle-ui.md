@@ -19,12 +19,13 @@ Dave's note, condensed into what the framework must do:
 - Keep the frontend a static artifact served from a CDN, deployed apart from the backend, and tolerant of the two landing at different times.
 - Stay independent of Velle. Velle produces the configuration; a team on a REST or GraphQL API of their own writes it by hand.
 
-The four configurations the note names, in the order they are combined to build a frontend:
+The configurations, in the order they are combined to build a frontend. The note names four; the store was added 2026-11-04 when Dave asked how a view meets the backend and leaned to the store having a configuration of its own (§8.9, D20):
 
 1. the model: shapes, properties, relationships, acts (Velle generates this one);
-2. the UX: which views exist, what each shows, what the user can do from it, in UX vocabulary ("choose one", "choose many", "fill in", "see a list filtered by");
-3. the UI: one component bound to each UX word, custom components injected here;
-4. the styling, applied across all UI components.
+2. the store: each query the backend can be asked, per shape, with its parameters and how it is reached, and where each act is sent (Velle generates this one too);
+3. the UX: which views exist, what each shows, what the user can do from it, in UX vocabulary ("choose one", "choose many", "fill in", "see a list filtered by");
+4. the UI: one component bound to each UX word, custom components injected here;
+5. the styling, applied across all UI components.
 
 ## 2. What Velle serves today that the frontend would read
 
@@ -136,7 +137,7 @@ The second data point is the pharmacy, which has authorization and ninety days o
 
 The four decisions below were added 2026-10-30 with the sketch in §8 and are judged against it. D13 and D14 were added 2026-11-02 when the sketch was turned shape-first at Dave's direction; the inversion itself is decided and is not asked here. D15 was added the same day when Dave asked whether a view could say which way its default runs. §9 and D16 to D19, also 2026-11-02, work the three domains (UX, UI, styling) through one example. Folding acts into the shapes they are about, as one more context on each field's line, was tried the same evening and reverted at Dave's direction: acts belong apart from models, so `act` stays a top-level declaration with its own field lines, and a shape's field lines cover its lists and detail only. Later the same day Dave cut the language loose from Velle: §8 now speaks only of shapes, acts, fields, collections, and roles, which any system has, in a spelling and an expression grammar of its own, and §8.8 holds the whole mapping from a Velle spec; D3, D9, and D11 were reworded to match. On 2026-11-04 Dave grouped a shape's field lines under `fields:` and its views under `views:`, so neither keyword is repeated per line, and renamed `title:` to `display:`; D13 and §8 follow. §8.9 and D20, 2026-11-04, answer Dave's question of how a view meets the store, in the direction he leans: the store gets a configuration of its own that names each query, its parameters and capabilities, and how it is reached; the view names one with `of` and fills its parameters with `with { }`.
 
-### D9. The UX language has a spelling and a small expression grammar of its own, owing nothing to Velle's; its nouns are shape, act, field, collection, and role, which any system has; a `where:` is evaluated by the frontend over what it loads, and passed through as the query to a backend that accepts the grammar.
+### D9. The UX language has a spelling and a small expression grammar of its own, owing nothing to Velle's; its nouns are shape, act, field, query, and role, which any system has; a `where:` is passed to the backend when the store configuration says the query accepts it, and evaluated by the frontend over what it loads otherwise.
 
 The language's problem is the UX of any system, so its syntax is designed for a frontend engineer against a model description, and Velle is one producer of that description (§8.8). Dave's direction, 2026-11-02: shape and act stay because they are relevant abstractions on any system; nothing else of Velle's does. Cost: a Velle author reads a filter in a second grammar, close to the spec's but not it, and the translation in D3 is a piece of work the first draft did not have.
 
@@ -187,7 +188,7 @@ Dave's lean, 2026-11-04: the store gets its own config. The UX stays what the us
 ## 7. Out of scope until the above settles
 
 - Native and mobile rendering; the UX layer is written to allow it and nothing is built for it.
-- GraphQL as the frontend's transport. REST with the predicate string is enough for the default views; a detail view that walks many references may want GraphQL later.
+- GraphQL as the frontend's transport. REST is enough for the default views; the store configuration's `backend` kind is where GraphQL would go later, and a detail view that walks many references may want it.
 - Rendering the frontend on the server. Dave's note rules it out: the backend serves data, the CDN serves the frontend.
 - Login. The actor header box is the development stand-in, as the Serving residue item says.
 
@@ -200,18 +201,18 @@ Written 2026-10-30, ahead of D8 and hypothetical: nothing here is built, and the
 The model description gives the language these things, and the language names nothing else:
 
 - **shapes**, each with a key and **fields**. A field is a text, a number, a date, a date and time, a yes/no, a reference to one record of a shape, a collection of records of a shape, or a computed value with its expression in the language's own expression grammar (§8.2). A yes/no field that marks a status, such as `isUsableLot`, is a field like any other.
-- **collections**: named subsets of a shape that the backend serves, such as `Invoice.ActionableOverdue`. A shape's own records are its unnamed collection.
+- **queries**, from the store configuration (§8.9) rather than the model description: per shape, each way the backend can be asked for its records, such as `Invoice.ActionableOverdue` or `Invoice.overdueAsOf(asOf)`, with its parameters, whether it returns one record or many, and which of a filter, an order, and a page the backend accepts for it. `all` is a shape's default query and `one` its by-key query.
 - **acts**: what a user can do, each with typed **fields**, the role allowed to do it, and its **validations** as expressions over the fields.
 - **roles**: the kinds of user the system knows, and which roles may read each shape.
 
-A UX file is a set of declarations, checked against the model description. There are four kinds:
+A UX file is a set of declarations, checked against the model description and the store configuration. There are four kinds:
 
 - `workspace`: who the frontend is for, named by a role. It holds pages.
 - `page`: a place the user goes. It shows lists and names the acts the user can start from it.
 - `shape`: everything about how records of one shape are shown. It holds a `display:` clause, a `fields:` block with one line per field, and a `views:` block with the shape's lists and detail.
 - `act`: how one act's form is filled in, one line per field.
 
-A shape's views are its lists and its detail, declared inside its `views:` block; its field lines sit inside its `fields:` block, so neither word is repeated per line. Every readable shape has a default list and a detail without declaring them; every act has a form. A shape declares a view only to say something about the whole view: a named list, a list of a collection, a filter, the order, the page size, the acts the user can start from it. The fields a view shows are not listed in the view. Each field says which views it is in and how, on its own line, and the view shows the fields that name it in the order they are declared. A list or detail that no field names shows every field, which is the default. A view may say which way its default runs: `all fields` puts every field in, and a field line then adds to how it appears or says `hidden` to take it out; `named fields` puts in only the fields whose lines name the view, which is also what happens when the view says nothing and any field names it (D15). A field line that names no view, such as one that only sets a label, leaves membership to the default. A form always has every field of its act, because the act needs them; a field line says only how it is entered (D14).
+A shape's views are its lists and its detail, declared inside its `views:` block; its field lines sit inside its `fields:` block, so neither word is repeated per line. Every readable shape has a default list and a detail without declaring them; every act has a form. A shape declares a view only to say something about the whole view: a named list, the query it asks and the parameters it fills, a filter, the order, the page size, the acts the user can start from it. The fields a view shows are not listed in the view. Each field says which views it is in and how, on its own line, and the view shows the fields that name it in the order they are declared. A list or detail that no field names shows every field, which is the default. A view may say which way its default runs: `all fields` puts every field in, and a field line then adds to how it appears or says `hidden` to take it out; `named fields` puts in only the fields whose lines name the view, which is also what happens when the view says nothing and any field names it (D15). A field line that names no view, such as one that only sets a label, leaves membership to the default. A form always has every field of its act, because the act needs them; a field line says only how it is entered (D14).
 
 A field line may be a path through a reference (`customer.name`), which puts a field of a related record into this shape's views. A shape's `display:` names the fields that stand for a record wherever it appears inside another view: as a reference column, as a choice in a form, as the heading of its detail (D13). Labels sit on the line of the thing they label.
 
@@ -231,7 +232,7 @@ page          := "page" Name "{" pageClause* "}"
 pageClause    := "show:" viewRef ("," viewRef)*
               | "acts:" Name ("," Name)*                   # acts the user can start from the page
 viewRef       := ShapeName ("." Name)?                     # a shape's default list, or a list declared on it,
-                                                           # or a collection of it from the model description
+                                                           # or a query of it from the store configuration
 
 shape         := "shape" ShapeName "{" shapeClause* "}"
 shapeClause   := "label:" Text ("," Text)?                 # singular, plural
@@ -240,9 +241,10 @@ shapeClause   := "label:" Text ("," Text)?                 # singular, plural
               | "views:" "{" view* "}"                     # the shape's lists and detail; at most one block
 view          := list | detail
 
-list          := "list" Name? ("of" Name)? "{" listClause* "}"
-                                                           # no Name: the shape's default list
-                                                           # "of": a collection of the shape, from the model description
+list          := "list" Name? ("of" Name withClause?)? "{" listClause* "}"
+                                                           # no Name: the shape's default list, on the query `all`
+                                                           # "of": a query of the shape, from the store configuration
+withClause    := "with" "{" binding ("," binding)* "}"     # fills the query's parameters from the view
 listClause    := fieldsClause
               | "where:" expr                              # a filter the frontend applies, or the backend when it can
               | "order by:" path ("descending")?
@@ -250,9 +252,8 @@ listClause    := fieldsClause
               | "row actions:" rowAction ("," rowAction)*
               | "selection actions:" Name ("," Name)*
               | "list actions:" Name ("," Name)*
-rowAction     := Name ("with" "{" binding ("," binding)* "}")? | "open"
-                                                           # open: the record's detail
-binding       := name ":" path                             # a field, filled from a path on the row
+rowAction     := Name withClause? | "open"                 # open: the record's detail, on the query `one`
+binding       := name ":" expr                             # a field or parameter, filled from the row or the view
 detail        := "detail" "{" detailClause* "}"
 detailClause  := fieldsClause
               | "acts:" Name ("," Name)*
@@ -556,9 +557,12 @@ A page in `workspace Technician` that showed `Claim.PendingClaim` would be rejec
 
 ### 8.5 What the compiler checks
 
-The UX compiler reads the model description and the UX file and nothing else.
+The UX compiler reads the model description, the store configuration, and the UX file and nothing else.
 
-- It rejects a `shape`, `act`, `show:`, `acts:`, `of`, or `from` naming a shape, act, collection, or list the description or the file does not have.
+- It rejects a `shape`, `act`, `show:`, `acts:`, `of`, or `from` naming a shape, act, query, or list the description, the store configuration, or the file does not have.
+- It rejects `of X` when X is a query that returns one record, a `with` naming a parameter the query does not have or leaving a required one unfilled, and a `with` whose expression is not the parameter's kind.
+- It rejects a page showing a shape with no `all` query, and `open` or a `detail` on a shape with no `one` query.
+- It rejects a store line naming a shape, act, or parameter type the model description does not have, and two store lines for one query or act.
 - It rejects a field line whose path is not a field of the shape, or whose segments but the last are not references.
 - It rejects a field line naming a list the shape does not declare, and a `detail` line on a shape no role may read.
 - It rejects a field word in the wrong view: `filterable` or `searchable` outside a list, `group` or `as` outside a detail.
@@ -571,7 +575,7 @@ The UX compiler reads the model description and the UX file and nothing else.
 - It rejects a list action when the act has a field that refers to the row's shape, because that act belongs on a row.
 - It rejects an expression that does not parse in the language's grammar, or that names anything but the shape's fields, `viewer`, `today`, `now`, and, in an act, the act's fields.
 - It rejects a comparison between values of different kinds, and `is empty` on anything but a collection.
-- It rejects `choose one from X` or `choose many from X` when X is not a list or collection of the shape the field refers to.
+- It rejects `choose one from X` or `choose many from X` when X is not a list or query of the shape the field refers to.
 - It rejects an act's field word that disagrees with the field's kind: `choose` on a value, `paragraph` on a reference, `read only` on anything but a computed field, `choose many` on a single reference, `one of` on anything but a text.
 - It rejects a `default` expression whose kind is not the field's.
 - It rejects a `workspace` naming a role the description does not list.
@@ -583,6 +587,7 @@ The UX compiler reads the model description and the UX file and nothing else.
 - It warns when a `label:` restates the humanized default.
 - It warns when a field names a view and no other field does, because that view then has one column.
 - It warns when a list is ordered by a field it does not show.
+- It warns when a `where:`, an `order by:`, or a `filterable` or `searchable` column is on a list whose query accepts neither `where` nor that clause and pages, because the browser then filters or sorts one page.
 
 ### 8.6 What the sketch found
 
@@ -612,14 +617,16 @@ Deliberately absent, so that the line between UX and UI holds:
 
 ### 8.8 Joining Velle later
 
-Nothing in §8.1 to §8.7 knows Velle exists. Velle's part is to generate the model description from a spec, and this table is the whole of the mapping. Each row is a change to `Describe` (§3) or a reading of what it already serves (§2).
+Nothing in §8.1 to §8.7 knows Velle exists. Velle's part is to generate the model description and the store configuration (§8.9) from a spec, and this table is the whole of the mapping. Each row is a change to `Describe` (§3) or a reading of what it already serves (§2).
 
-| in a Velle spec | in the model description |
+| in a Velle spec | in the model description or the store configuration |
 |---|---|
 | a `shape` and its properties | a shape and its fields, with `stored`, `derived`, `inverse`, `captured`, `actor`, and `timestamp` folded into the field kinds in §8.1 |
 | an `act` | an act with the act's fields as fields; a kept act is also a shape |
-| a refinement `X = Shape where ...` | a collection `Shape.X`, and a yes/no field `isX` on the shape |
-| a `many` or inverse member | a collection field |
+| a readable `shape` | in the store configuration, the queries `all` (accepting `where`, `order by`, `page`) and `one(key)`, each reached by the serving layer's convention |
+| a refinement `X = Shape where ...` | a query `Shape.X` in the store configuration, accepting `order by` and `page`, and a yes/no field `isX` on the shape |
+| a `many` or inverse member | a collection field, which the store configuration says the serving layer returns with the record |
+| an `act` | in the store configuration, the act's line, reached by the serving layer's convention |
 | a derived property `= expr` | a computed field, its expression translated into the language's grammar when the translation exists, else opaque |
 | `never` and `requires` on an act | validations, translated the same way; the compiler says which read only the act's fields (D3) |
 | `by Shape` on an act, and the shapes acts are declared `by` | the act's role, and the roles list |
@@ -679,7 +686,27 @@ A collection field such as `Customer.invoices` is not mentioned in the UX at all
 
 **Which of three places runs a `where:`.** With the store configuration the answer is read off the query instead of guessed. If the query accepts `where`, the filter is the query, in the language's grammar (D9), and the backend does the work. If the query has a parameter the filter is really about, the UX fills the parameter instead of writing a `where:`: `AsOf` above says `with { asOf: today }` rather than `where: due < today`. Otherwise the frontend filters what it loaded, which is right for a short list and wrong for a paged one, and the compiler says so (below). The same three-way split holds for `order by:` and for `filterable` and `searchable` on a column, which are filters the user writes: each becomes part of the query when the query accepts `where`, and a browser-side pass when it does not.
 
-**What this changes elsewhere.** The frontend is built from five configurations, not four: the model, the store, the UX, the UI, the styling. §8.1's "collections" leave the model description; `of` resolves against the store configuration. §8.1's promise that every readable shape has a default list becomes conditional: a shape with no `all` query has no default list, and a page that shows it is rejected; a shape with no `one` query has no detail and no `open` row action. D9's "a backend that accepts the grammar" becomes per query, not per backend. §8.8's refinement row changes: a refinement maps to a query in the store configuration and a yes/no `isX` field in the model description, and an inverse or `many` member maps to a collection field the store configuration says how to read. The compiler gains these checks: it rejects `of X` when X is not a query of the shape that returns many, a `with` that names a parameter the query does not have or leaves a required one unfilled, a page showing a shape with no `all` query, `open` or a detail on a shape with no `one` query, and a store line whose shape, act, or parameter type the model description does not have; it warns when a `where:`, an `order by:`, or a `filterable` column is on a list whose query accepts neither `where` nor the clause and pages, because the browser then filters one page.
+**The store configuration's grammar.** It is small, and nothing in it is a UX word.
+
+```
+store         := backend (shapeStore | actStore)*
+backend       := "backend" Kind "at" Text                  # Kind: velle | rest | graphql | a kind a team adds
+shapeStore    := "shape" ShapeName "{" query* "}"
+query         := Name parameters? ":" returns ("," accepts)* "->" call
+parameters    := "(" Name ":" Type ("," Name ":" Type)* ")"
+returns       := "one" | "many"
+accepts       := "where" | "order by" | "page"             # what the backend takes for this query
+actStore      := "act" Name "->" call
+call          := Method Text ("{" mapping ("," mapping)* "}")?
+              | "function" Name "from" Text               # a module the frontend imports
+mapping       := ("where" | "order by" | "page") ":" "param" Text
+                                                           # how an accepted clause is sent
+Type          := "text" | "number" | "date" | "date and time" | "yes/no" | ShapeName
+```
+
+A `backend velle at "/api"` with no lines after it means every shape, refinement, and act of the model description, reached by Velle's serving convention; the generated file may spell the lines out or leave them to the convention.
+
+**Applied to the rest of this file** (2026-11-04). §1 lists five configurations. §8.1's "collections" are queries from the store configuration, and the UX file is checked against three inputs. §8.2's `list` takes `of Name with { }`, and a `binding` fills a parameter as well as a field. §8.5 has the checks above. §8.8 maps a Velle shape, refinement, and act to their store lines. §9.6's UX compiler reads the store configuration. D9's nouns say query, not collection, and its filter rule is per query. A shape with no `all` query has no default list, and one with no `one` query has no detail, which qualifies §1's first bullet: the model description alone no longer puts up a frontend, the model and the store together do.
 
 **The two alternatives, and why the proposal takes neither.** The UX file could name the function itself, `list { from: overdueInvoices(today) }`, with no store file. It is shorter, and it is close to how the question was first put. But the UX would then carry a name from one backend, and a second backend, a mock for development, or a Velle system behind the same UX would need the UX file edited. Or the queries could sit in the model description, with only the calls in a separate file, which is where the first draft of this section put them. That splits one fact, what the backend can be asked, across two files, and makes the model description describe an API rather than a model. One store file that says both what can be asked and how keeps each configuration to its own domain, which is the line §1 draws.
 
@@ -961,7 +988,7 @@ That is about twenty interfaces and, with the alternatives in §9.3 (`RadioGroup
 
 Each domain has a compiler and the compilers run in order, each reading the one before.
 
-- **The UX compiler** reads the model description and the UX file, checks them against each other (§8.5), and emits the resolved UX tree (§9.2), one tree per page, list, detail, and form. It can print a resolved view so the author sees what the defaults filled in (D10).
+- **The UX compiler** reads the model description, the store configuration, and the UX file, checks them against each other (§8.5), and emits the resolved UX tree (§9.2), one tree per page, list, detail, and form. It can print a resolved view so the author sees what the defaults filled in (D10).
 - **The UI compiler** reads the UX tree and the UI file. It rejects a UX node no binding matches, a binding to a component that does not implement the word's interface (checked in TypeScript against the interface in §9.5), a `when` condition the word has no measure for, and a selector that matches nothing in any tree, as a warning. It emits the component tree: each UX node paired with the component that renders it and its options.
 - **The styling compiler** reads the component tree and the styling file. It rejects a token that is not declared, a part the component does not declare, a `value` state on a component that shows no value, and emits CSS: tokens as custom properties, each rule as a selector on the component's name and part, which the components render as data attributes.
 - **A gallery** renders every UX word with every bound component and every styling state, from the three files alone, so the UI and styling are seen without a backend.
