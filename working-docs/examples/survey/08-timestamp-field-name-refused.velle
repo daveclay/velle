@@ -1,0 +1,5 @@
+act Reading {
+    fieldName: text
+    value: text?
+    timestamp: DateTime?
+}

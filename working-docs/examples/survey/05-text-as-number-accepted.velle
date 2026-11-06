@@ -1,0 +1,20 @@
+-- A number field declares a minimum; a reading's value is text because the
+-- field, not the shape, says what it is. The comparison as meant passes
+-- validation: the compiler checks the operands of `<` only when one is an
+-- extension type (Validator.kt `checkExtComparison`). At runtime, text
+-- against a number is "cannot order" (Evaluator.kt `compareValues`).
+act Field {
+    name: text
+    type: text
+    min: decimal?
+}
+
+shape Reading {
+    fieldName: text
+    value: text?
+    field: one Field? =
+        if exists (Field where name == this.fieldName) then first(Field where name == this.fieldName by name)
+        else none
+}
+
+never (Reading where field is some and field.min is some and value is some and value < field.min)

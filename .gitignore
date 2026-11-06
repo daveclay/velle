@@ -3,3 +3,4 @@
 build/
 billing.db
 .DS_Store
+working-docs/examples/*/out/

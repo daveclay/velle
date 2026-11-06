@@ -1,0 +1,40 @@
+-- The label is not assigned; it is read from the latest handled relabel.
+act Entry {
+    key: text
+    initialLabel: text
+
+    outcomes: many Outcome = (Outcome where entry == this)
+    label: text =
+        if outcomes is not empty then latest(outcomes by handledAt).label
+        else initialLabel
+}
+
+act Submission {
+    entryKey: text
+    newLabel: text?
+    parentLabel: text?
+
+    entry: one Entry? =
+        if exists (Entry where key == this.entryKey) then first(Entry where key == this.entryKey by key)
+        else none
+
+    parent: one Entry? =
+        if parentLabel is none then none
+        else if exists (Entry where label == this.parentLabel) then first(Entry where label == this.parentLabel by label)
+        else none
+}
+
+shape Outcome {
+    submission: one Submission
+    entry: one Entry
+    label: text
+    handledAt: timestamp on create
+}
+
+never (Submission where parentLabel is some and parent is none)
+
+shape Relabel = Submission where entry is some and newLabel is some and not exists Outcome for this
+
+rule ApplyRelabel when Relabel {
+    Outcome from { submission: this, entry: entry, label: newLabel }
+}

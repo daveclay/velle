@@ -1,0 +1,16 @@
+-- The conversion the author reaches for: there is no such function.
+act Field {
+    name: text
+    type: text
+    min: decimal?
+}
+
+shape Reading {
+    fieldName: text
+    value: text?
+    field: one Field? =
+        if exists (Field where name == this.fieldName) then first(Field where name == this.fieldName by name)
+        else none
+}
+
+never (Reading where field is some and field.min is some and value is some and number(value) < field.min)

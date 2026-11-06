@@ -1,0 +1,18 @@
+-- A quantity field stands for two readings: the number, and its unit under
+-- the name `<name>_unit`. The grammar page says `+` on text is not admitted,
+-- and the compiler does not refuse it: `scalarTypeOf` gives the sum no type
+-- and nothing checks the operands. At runtime `arith` has no text case
+-- (Evaluator.kt), so the derivation fails when first read.
+act Field {
+    name: text
+    isQuantity: boolean
+    unitName: text = name + "_unit"
+}
+
+shape Reading {
+    fieldName: text
+    value: text?
+    field: one Field? =
+        if exists (Field where name == this.fieldName or (isQuantity and unitName == this.fieldName)) then first(Field where name == this.fieldName or (isQuantity and unitName == this.fieldName) by name)
+        else none
+}

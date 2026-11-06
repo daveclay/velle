@@ -39,3 +39,8 @@ If deferred, say so at Reference §6 ("Inline part creation"), so the ephemeral-
 
 - **Can rules copy a transient container act and its parts into a durable tree?** The part-copying rules appear to have no way to name the durable container a sibling rule just created: V17 bans the reference path, and U1's snapshot hides the sibling's creation. Confirm or break the tracing; the outcome scopes this question (parked at OQ39's settling).
 - **Confirm outcome-mediated provenance satisfies `why`** (Reference §22's `why` item) when provenance lands. Under the transient-acts decision `why` walks outcomes, and the step from an outcome back to the vanished act exists only if compilation keeps its own trace, which is tooling, not state.
+
+## Evidence from the survey pass (2026-11-06)
+
+`working-docs/examples/survey/04-transient-with-parts-refused.velle`: a submission that carries a list of readings and is answered and not kept, `transient act Submission { ... readings: many Reading = (Reading where submission == this) } with readings`. Refused on three checks at once: V17 (`Reading.submission` references the transient act), V18 (nothing provably answers it), V22 (the closure on a transient act, this question). The consequence chain in a full spec: the request is made durable, so it needs an outcome record for the handled-once partition (`not exists Outcome for this`), and once the outcome record exists two more fields hang off it, the record's name and parent, which the V10 posture (OQ53) keeps off the record itself. One missing form shaped three parts of the spec. The workaround file is `04-transient-with-parts-workaround.velle`.
+

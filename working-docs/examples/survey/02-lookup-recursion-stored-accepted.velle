@@ -1,0 +1,13 @@
+-- The same walk over a stored parent reference is accepted: the
+-- `never (Kind where parent == this)` is the certificate.
+act Kind {
+    name: text
+    parent: one Kind?
+    hasLocation: boolean
+
+    locationHolder: one Kind? =
+        if hasLocation then this
+        else parent?.locationHolder
+}
+
+never (Kind where parent == this)

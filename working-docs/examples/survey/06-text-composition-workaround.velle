@@ -1,0 +1,20 @@
+act Field {
+    name: text
+    isQuantity: boolean
+}
+
+shape Reading {
+    fieldName: text
+    value: text?
+    -- `<name>_unit` recognized by prefix, suffix, and length.
+    field: one Field? =
+        if exists (Field where name == this.fieldName) then first(Field where name == this.fieldName by name)
+        else if exists (Field where isQuantity
+                        and this.fieldName starts with name
+                        and this.fieldName ends with "_unit"
+                        and length(this.fieldName) == length(name) + 5) then first(Field where isQuantity
+                        and this.fieldName starts with name
+                        and this.fieldName ends with "_unit"
+                        and length(this.fieldName) == length(name) + 5 by name)
+        else none
+}
