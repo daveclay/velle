@@ -363,6 +363,7 @@ class DomainAnalysis(private val model: Model) {
             is SingularFor -> forThis(e.shape, e.forExpr)
             is AggCall -> collection(e.collection)
             is SetExpr -> collection(e.collection)
+            is WalkExpr -> e.until?.let { corrExpr(it, scope, out, seen) }
             is FunCall -> e.args.forEach { corrExpr(it, scope, out, seen) }
             is Access -> corrExpr(e.target, scope, out, seen)
             else -> {}
@@ -472,6 +473,7 @@ class DomainAnalysis(private val model: Model) {
             is ShapeForSource -> forAny(e.shape, e.forExpr)
             is AggCall -> collection(e.collection)
             is SetExpr -> collection(e.collection)
+            is WalkExpr -> e.until?.let { bodyCorr(it, scope, out, seen) }
             is FunCall -> e.args.forEach { bodyCorr(it, scope, out, seen) }
             is Access -> bodyCorr(e.target, scope, out, seen)
             else -> {}
@@ -705,6 +707,15 @@ class DomainAnalysis(private val model: Model) {
                 }
                 is ShapeForSource -> return correlatedSource(e.shape, e.forExpr, ctx)
                 is SetExpr -> return walkCollection(e.collection, ctx)
+                // a walk reads the whole connected part of its shape: no key reaches
+                // every record it may touch, so the read widens to the shape (A5)
+                is WalkExpr -> {
+                    val at = ctx.innermost()
+                    val shape = model.baseOf(at.name) ?: at.name
+                    acc.widen(shape, "'walk ${e.rel}' reads the whole connected part of '$shape'", decl, tolerated)
+                    e.until?.let { walkExpr(it, ctxOf(at.name, Anchor.Unknown)) }
+                    return unknownScope()
+                }
                 else -> {}
             }
             return null

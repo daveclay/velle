@@ -351,8 +351,20 @@ data class SingularFor(val shape: String, val forExpr: Expr) : Expr
 /** Postfix accessor chain on a non-path primary: `latest(...).referee`. */
 data class Access(val target: Expr, val segs: List<Seg>) : Expr
 
+/**
+ * A walk (Reference §7, "Walks"): the records reached by following one
+ * relationship of the subject's own shape, [rel], step after step, each record
+ * visited once. `walk R` is every record reached in one or more steps, the start
+ * record not among them, a `many S`. `walk R for N steps` is the same set cut off
+ * at [steps]. `walk R until P` is the nearest-match form, a `one S?`: the first
+ * record, the subject itself first, at which [until] holds, `none` when it holds
+ * nowhere reached; [rel] must be a `one` there. The relationship may be stored or
+ * derived. A walk ends over any data, looping or not.
+ */
+data class WalkExpr(val rel: String, val steps: Int? = null, val until: Expr? = null) : Expr
+
 data class CollectionExpr(val bindings: List<Binding>, val where: Expr? = null)
-/** source is a PathExpr (relationship or ShapeName) or ShapeForSource. */
+/** source is a PathExpr (relationship or ShapeName), a ShapeForSource, or a WalkExpr. */
 data class Binding(val source: Expr, val alias: String? = null)
 /** `Payment for this` as a collection source inside latest/first/exists. */
 data class ShapeForSource(val shape: String, val forExpr: Expr) : Expr

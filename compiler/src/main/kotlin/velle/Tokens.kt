@@ -62,6 +62,21 @@ val FOR_EACH_WORDS = setOf("each", "in", "to")
  */
 val TEXT_OPERATORS = setOf("contains", "starts with", "ends with", "like", "matches")
 
+/**
+ * A walk's words (Reference §7, "Walks"): contextual, not reserved. `walk` reads as
+ * the walk keyword only where a value expression begins and a relationship name
+ * follows it on the same line; `until` only directly after a walk; `steps` only
+ * directly after a whole number, like a duration unit. `for`, already reserved,
+ * reads as the depth word only between a walk and its number. Everywhere else
+ * `walk`, `until`, and `steps` are ordinary identifiers (`steps: integer`).
+ */
+val WALK_WORDS = setOf("walk", "until", "steps")
+
+/** Words that may follow a property named `walk` in a value expression without
+ *  starting a walk: the contextual operators (`walk contains "x"`), `in`,
+ *  `between`, and the selector's `by`. */
+val NOT_A_WALK_TARGET = setOf("contains", "starts", "ends", "like", "matches", "in", "between", "by")
+
 val SCALAR_KEYWORDS = setOf("text", "integer", "long", "decimal", "double", "boolean", "uuid", "duration", "time", "bytes")
 
 class VelleSyntaxError(message: String, val line: Int, val col: Int) :

@@ -114,7 +114,8 @@ class PredicateFunctionsTest {
         val stray = diagsOf("shape Odd = Order where status == [\"a\"]")
         assertTrue(stray.any { "only on the right of `in`" in it.message }, stray.toString())
         val records = diagsOf("shape Odd = Order where qty in lines")
-        assertTrue(records.any { "'in' takes a list of values" in it.message }, records.toString())
+        // a collection of records on the right takes a record on the left (Reference §7, "Walks")
+        assertTrue(records.any { "holds records, but 'qty' is not one" in it.message }, records.toString())
         val bools = diagsOf("shape Odd = Order where qty in flags")
         assertTrue(bools.any { "holds 'boolean' values" in it.message }, bools.toString())
     }

@@ -165,7 +165,7 @@ class Validator(private val model: Model) {
                         diags.add(Diagnostic("F3", "'$name.${m.name}' — a `many ${t.shape}` holds each record once, so it cannot tolerate duplication; " +
                             "if how many times a link occurs matters, that count is data on a link shape (Reference §6)"))
                 }
-                is DerivedProp -> checkExpr(m.expr, name)
+                is DerivedProp -> { checkExpr(m.expr, name); checkWalkDeclaration(name, m) }
                 is ActorProp -> checkActorClause(name, shape, m)
                 else -> {}
             }
@@ -383,6 +383,7 @@ class Validator(private val model: Model) {
                         if (e.segs.isEmpty() && (e.root in model.shapes || e.root in model.refinements)) e.root
                         else model.pathElementShape(e, scope, env + out) ?: VALUE_ALIAS
                     is SetExpr -> model.collectionElement(e.collection, scope, env + out) ?: VALUE_ALIAS
+                    is WalkExpr -> model.walkTarget(e, scope) ?: VALUE_ALIAS
                     else -> VALUE_ALIAS
                 }
             }
@@ -429,7 +430,7 @@ class Validator(private val model: Model) {
             walkRefExpr(r.expr)
             if (bases.size > 1) checkCrossBaseUnion(name, r, bases)
             for (m in r.members) when (m) {
-                is DerivedProp -> checkExpr(m.expr, name)
+                is DerivedProp -> { checkExpr(m.expr, name); checkWalkDeclaration(name, m) }
                 is FrozenClause -> {
                     val base = model.baseOf(name) ?: continue
                     val stored = model.shapes[base]?.members?.filterIsInstance<StoredProp>()?.map { it.name } ?: emptyList()
@@ -607,6 +608,10 @@ class Validator(private val model: Model) {
                 checkExpr(e, scope)
                 model.collectionElement(e.collection, scope, aliasScopes)?.let { LoopElem.Records(it) }
             }
+            is WalkExpr -> {
+                checkExpr(e, scope)
+                if (e.until != null) notACollection() else model.walkTarget(e, scope)?.let { LoopElem.Records(it) }
+            }
             else -> { checkExpr(e, scope); notACollection() }
         }
     }
@@ -721,6 +726,7 @@ class Validator(private val model: Model) {
             is SingularFor -> aliasReads(x.forExpr, false, names, rule, where)
             is ShapeForSource -> aliasReads(x.forExpr, false, names, rule, where)
             is SetExpr -> aliasColl(x.collection, names, rule, where)
+            is WalkExpr -> x.until?.let { aliasReads(it, false, names, rule, where) }
             else -> {}
         }
     }
@@ -750,6 +756,7 @@ class Validator(private val model: Model) {
                 is SingularFor -> walk(x.forExpr)
                 is ShapeForSource -> walk(x.forExpr)
                 is SetExpr -> { x.collection.bindings.forEach { walk(it.source) }; x.collection.where?.let { walk(it) } }
+                is WalkExpr -> x.until?.let { walk(it) }
                 else -> {}
             }
         }
@@ -984,7 +991,67 @@ class Validator(private val model: Model) {
             is Access -> checkExpr(e.target, scope)
             is ShapeForSource -> checkExpr(e.forExpr, scope)
             is SetExpr -> checkCollection(e.collection, scope)
+            is WalkExpr -> checkWalk(e, scope)
             else -> {}
+        }
+    }
+
+    // ── walks (Reference §7, "Walks") ───────────────────────────────────────────
+    //
+    // A walk follows one relationship of its own shape back to that shape. The
+    // construct ends by what it is — each record is visited once — so V14 has
+    // nothing to prove about it; what is checked is that the relationship exists
+    // and points back, that `until` walks a `one`, and that the depth is a number
+    // that does something.
+
+    private fun checkWalk(e: WalkExpr, scope: String) {
+        val spelled = Printer.expr(e)
+        val m = model.membersOf(scope)[e.rel]
+        if (m == null) {
+            diags.add(Diagnostic("F1", "'$spelled' — '${e.rel}' is not a member of '$scope'"))
+            return
+        }
+        val target = m.type.instanceShape() ?: (m.type as? VType.Coll)?.shape
+        if (target == null) {
+            diags.add(Diagnostic("F2", "'$spelled' — a walk follows a relationship, and '$scope.${e.rel}' is not one"))
+            return
+        }
+        val own = model.baseOf(scope) ?: scope
+        val reached = model.baseOf(target) ?: target
+        if (!model.typeAccepts(reached, own) && !model.typeAccepts(own, reached)) {
+            diags.add(Diagnostic("F2", "'$spelled' — a walk follows a relationship back to its own shape, " +
+                "but '$scope.${e.rel}' points at '$target'; walk a relationship of '$own' that points at '$own'"))
+            return
+        }
+        if (e.until != null && m.type is VType.Coll) {
+            diags.add(Diagnostic("F2", "'$spelled' — 'until' walks a `one`: through the `many` '${e.rel}' two records at the same " +
+                "distance may both satisfy the condition, and \"the nearest\" has no single answer; walk a `one`, or " +
+                "declare the set with `walk ${e.rel}` and select from it with first(... by ...) (Reference §7)"))
+        }
+        e.steps?.let { n ->
+            if (n < 1) diags.add(Diagnostic("F2", "'$spelled' — a walk takes at least one step"))
+            else if (n == 1) diags.add(Diagnostic("A2", "'$spelled' — one step through '${e.rel}' is '${e.rel}' itself; " +
+                "read the relationship, or walk further", advisory = true))
+        }
+        e.until?.let { checkExpr(it, scope) }
+    }
+
+    /** A derived property spelled as a walk declares the type the walk has: a
+     *  `many` of the reached shape, or, with `until`, a `one ...?` of it. */
+    private fun checkWalkDeclaration(owner: String, m: DerivedProp) {
+        val w = m.expr as? WalkExpr ?: return
+        val target = model.walkTarget(w, owner) ?: return
+        val spelled = "'$owner.${m.name}'"
+        val t = m.type as? RelType
+        when {
+            t == null -> diags.add(Diagnostic("F2", "$spelled — a walk gives records of '$target', not a value; " +
+                "declare it `${if (w.until != null) "one $target?" else "many $target"}`"))
+            w.until != null && (t.many || !t.optional) -> diags.add(Diagnostic("F2", "$spelled — a walk with 'until' is the one record " +
+                "found or none; declare it `one $target?`"))
+            w.until == null && !t.many -> diags.add(Diagnostic("F2", "$spelled — a walk gives every record reached; " +
+                "declare it `many $target`"))
+            !model.typeAccepts(t.shape, target) -> diags.add(Diagnostic("F2", "$spelled — the walk reaches records of '$target', " +
+                "but the property is declared over '${t.shape}'"))
         }
     }
 
@@ -1054,6 +1121,7 @@ class Validator(private val model: Model) {
                 else -> null
             }
         }
+        is WalkExpr -> model.walkType(e, scope)
         is PathExpr -> if (e.root in scalarAliases) (if (e.segs.isEmpty()) scalarAliases[e.root] else null) else {
             val names = if (e.root == "this") e.segs.map { it.name } else listOf(e.root) + e.segs.map { it.name }
             var sc: String? = if (e.root in aliasScopes) aliasScopes[e.root] else (thisScope ?: scope)
@@ -1089,12 +1157,19 @@ class Validator(private val model: Model) {
                 if (!agrees(rt, item))
                     diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${Printer.expr(item)}' is not a ${registryName(lt) ?: "value of the left side's type"}"))
             }
-            else -> {
-                val coll = scalarTypeOf(r, scope) as? VType.CollS
-                if (coll == null)
-                    diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — 'in' takes a list of values `[a, b]` or a `many` of values on the right (Reference §10)"))
-                else if (!agrees(model.scalarOf(coll.name), r))
-                    diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${Printer.expr(r)}' holds '${coll.name}' values, but '${Printer.expr(e.left)}' is not one"))
+            else -> when (val coll = scalarTypeOf(r, scope)) {
+                // `record in records` (Reference §7, "Walks"): the left side is a record of the collection's shape
+                is VType.Coll -> {
+                    val leftShape = (e.left as? PathExpr)?.let { pathTypeName(it, scope) }
+                    if (lt != null && lt !is VType.Inst)
+                        diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${Printer.expr(r)}' holds records, but '${Printer.expr(e.left)}' is not one"))
+                    else if (leftShape != null && (model.basesOf(leftShape) intersect model.basesOf(coll.shape)).isEmpty())
+                        diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${Printer.expr(r)}' holds '${coll.shape}' records, but '${Printer.expr(e.left)}' is a '$leftShape'"))
+                }
+                is VType.CollS ->
+                    if (!agrees(model.scalarOf(coll.name), r))
+                        diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${Printer.expr(r)}' holds '${coll.name}' values, but '${Printer.expr(e.left)}' is not one"))
+                else -> diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — 'in' takes a list of values `[a, b]`, a `many` of values, or a collection of records on the right (Reference §10)"))
             }
         }
     }
@@ -1337,6 +1412,7 @@ class Validator(private val model: Model) {
                         model.pathElementShape(src, scope, aliasScopes, thisScope ?: scope)?.let { element = it }
                     }
                 is ShapeForSource -> { checkExpr(src.forExpr, scope); element = src.shape }
+                is WalkExpr -> { checkExpr(src, scope); model.walkTarget(src, scope)?.let { element = it } }
                 else -> checkExpr(src, scope)
             }
             // an alias names this binding's element, visible to the shared `where`
@@ -1729,7 +1805,7 @@ class Validator(private val model: Model) {
                     is IsExpr -> walk(e.subject)
                     is FunCall -> e.args.forEach { walk(it) }
                     // exists/aggregates/selectors reach other instances
-                    is ExistsExpr, is AggCall, is SingularFor, is ShapeForSource, is SetExpr, is Access -> own = false
+                    is ExistsExpr, is AggCall, is SingularFor, is ShapeForSource, is SetExpr, is Access, is WalkExpr -> own = false
                     else -> {} // literals
                 }
             }
@@ -1862,6 +1938,9 @@ class Validator(private val model: Model) {
             is ShapeForSource -> { absorb(acc, e.shape, 0, visiting, mergeName = true); signedExpr(e.forExpr, scope, 0, acc, visiting) }
             is Access -> signedExpr(e.target, scope, 0, acc, visiting)
             is SetExpr -> signedCollection(e.collection, scope, 0, acc, visiting)
+            // a walk reads its relationship on every record reached: the relationship's
+            // own consults, at sign 0, plus the condition's
+            is WalkExpr -> { followPath(PathExpr(e.rel), scope, acc, visiting); signedExpr(e.until, scope, 0, acc, visiting) }
             else -> {}
         }
     }
@@ -2611,7 +2690,7 @@ class Validator(private val model: Model) {
                     "that reads itself one hop through an optional to-one on its own shape, where the hop " +
                     "either strictly descends a creation-fixed datum (a derived `latest ... by` predecessor) " +
                     "or is proven acyclic by a spendable `never (Shape where hop == this)`; " +
-                    "restructure, or supply a certificate (checks.md V14)"))
+                    "restructure, name the walk (`walk <relationship>`, Reference §7), or supply a certificate (checks.md V14)"))
                 return
             }
             visiting.add(node)
@@ -2668,6 +2747,7 @@ class Validator(private val model: Model) {
                 is SingularFor -> walk(e.forExpr)
                 is ShapeForSource -> walk(e.forExpr)
                 is SetExpr -> { e.collection.bindings.forEach { walk(it.source) }; walk(e.collection.where) }
+                is WalkExpr -> { if (e.rel == name) ok = false; walk(e.until) }
                 else -> {}
             }
         }
@@ -2757,6 +2837,7 @@ class Validator(private val model: Model) {
             is SingularFor -> { add(e.shape); exprMentions(e.forExpr, out) }
             is ShapeForSource -> { add(e.shape); exprMentions(e.forExpr, out) }
             is SetExpr -> { e.collection.bindings.forEach { exprMentions(it.source, out) }; exprMentions(e.collection.where, out) }
+            is WalkExpr -> exprMentions(e.until, out)
             else -> {}
         }
     }
@@ -3732,6 +3813,7 @@ class Validator(private val model: Model) {
                     e.collection.bindings.forEach { walk(site, it.source) }
                     walk(site, e.collection.where)
                 }
+                is WalkExpr -> walk(site, e.until)
                 else -> {}
             }
         }

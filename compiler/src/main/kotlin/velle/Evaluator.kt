@@ -163,7 +163,51 @@ class Evaluator(private val system: VelleSystem) {
             v
         }
         is SetExpr -> evalSetExpr(e, ctx)
+        is WalkExpr -> evalWalk(e, ctx)
         is ShapeForSource -> throw VelleRuntimeError("shape-for is a collection source, not a value")
+    }
+
+    /**
+     * A walk (Reference §7, "Walks"): follow [WalkExpr.rel] from the innermost
+     * subject, each record visited once, so the walk ends over any data. The set
+     * forms gather every record reached, breadth first, the start record left out,
+     * cut off at [WalkExpr.steps] when given. The `until` form checks the condition
+     * at the subject itself first, then at each record reached, with that record as
+     * `this`, and answers the first at which it holds, or none.
+     */
+    private fun evalWalk(e: WalkExpr, ctx: Ctx): Value {
+        val (scope, start) = ctx.innermost()
+        val target = model.walkTarget(e, scope)
+            ?: throw VelleRuntimeError("'${e.rel}' is not a relationship of '$scope' (validator gap)")
+        val base = if (target in model.refinements) model.viewScopeOf(target) ?: target else target
+        fun next(id: Long): List<Long> {
+            val inst = system.instance(id) ?: return emptyList()
+            return when (val v = readMemberAnyScope(id, inst.shape, e.rel)) {
+                is Value.VRef -> listOf(v.id)
+                is Value.VColl -> v.ids
+                else -> emptyList()
+            }
+        }
+        val visited = linkedSetOf(start)
+        e.until?.let { cond ->
+            var at: Long? = start
+            while (at != null) {
+                val here = ctx.copy(subjectScope = scope, subjectId = at, elements = emptyList())
+                if (truthy(eval(cond, here))) return Value.VRef(at)
+                at = next(at).firstOrNull { visited.add(it) }
+            }
+            return Value.VNone
+        }
+        var frontier = listOf(start)
+        var depth = 0
+        val reached = mutableListOf<Long>()
+        while (frontier.isNotEmpty() && (e.steps == null || depth < e.steps)) {
+            val nextFrontier = mutableListOf<Long>()
+            for (id in frontier) for (n in next(id)) if (visited.add(n)) { nextFrontier.add(n); reached.add(n) }
+            frontier = nextFrontier
+            depth++
+        }
+        return Value.VColl(reached, base)
     }
 
     /** `(Shape where pred)` / `(path where pred)` as a collection value (Reference §6). */
@@ -329,6 +373,10 @@ class Evaluator(private val system: VelleSystem) {
             val target = eval(src.forExpr, ctx) as? Value.VRef
                 ?: throw VelleRuntimeError("'for' target is not an instance")
             src.shape to instancesReferencing(src.shape, target.id)
+        }
+        is WalkExpr -> when (val v = evalWalk(src, ctx)) {
+            is Value.VColl -> v.shape to v.ids
+            else -> throw VelleRuntimeError("a walk with 'until' is one record, not a collection (validator gap)")
         }
         else -> throw VelleRuntimeError("unsupported binding source")
     }
@@ -650,7 +698,8 @@ class Evaluator(private val system: VelleSystem) {
             }
             // `x in [a, b]` / `x in values` (Reference §10): membership under the element's
             // equality; an absent left side is in nothing
-            "in" -> {
+            // `record in records` over a collection of records (Reference §7, "Walks"): membership by identity
+            "in" -> if (r is Value.VColl) Value.VBool(l is Value.VRef && l.id in r.ids) else {
                 val set = (r as? Value.VVals)?.values ?: if (r == Value.VEmpty) emptyList() else throw VelleRuntimeError("'in' on $r")
                 Value.VBool(l != Value.VNone && set.any { valueEquals(l, it) })
             }

@@ -1854,6 +1854,7 @@ class VelleSystem(
                 is SingularFor -> walk(x.forExpr)
                 is ShapeForSource -> walk(x.forExpr)
                 is SetExpr -> { x.collection.bindings.forEach { walk(it.source) }; x.collection.where?.let { walk(it) } }
+                is WalkExpr -> x.until?.let { walk(it) }
                 else -> {}
             }
         }

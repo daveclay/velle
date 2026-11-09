@@ -753,6 +753,15 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
             }
             is ShapeForSource -> { consultShape(e.shape, s); collectExpr(e.forExpr, subject, s, aliases, root) }
             is SetExpr -> collectCollection(e.collection, subject, s, aliases, root)
+            // a walk reads its relationship on every record it reaches: the field at
+            // shape granularity, which is what the summary records; the condition is
+            // read with each reached record as its subject
+            is WalkExpr -> {
+                val m = membersOf(subject)[e.rel]
+                if (m == null) { s.opaque = true; return }
+                record(subject, m, s)
+                e.until?.let { collectExpr(it, subject, s, emptyMap(), subject) }
+            }
             else -> {}
         }
     }
@@ -798,6 +807,11 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
                     consultShape(src.shape, s)
                     collectExpr(src.forExpr, subject, s, env, root)
                     bScope = src.shape
+                }
+                is WalkExpr -> {
+                    collectExpr(src, subject, s, env, root)
+                    bScope = walkTarget(src, subject)
+                    if (bScope == null) s.opaque = true
                 }
                 else -> { collectExpr(src, subject, s, env, root); s.opaque = true }
             }
@@ -859,6 +873,16 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
 
     /** The scalar type a `many <scalar>` member's elements have. */
     fun scalarOf(name: String): VType = typeOf(ScalarType(name, optional = false))
+
+    /** The shape of the records a walk reaches: the target of the relationship it
+     *  follows on [subject]; null when [WalkExpr.rel] is not a relationship there. */
+    fun walkTarget(e: WalkExpr, subject: String): String? =
+        membersOf(subject)[e.rel]?.type?.let { it.instanceShape() ?: (it as? VType.Coll)?.shape }
+
+    /** The type a walk's value has: the reached set, or, with `until`, the one record found or none. */
+    fun walkType(e: WalkExpr, subject: String): VType? = walkTarget(e, subject)?.let {
+        if (e.until != null) VType.Optional(VType.Inst(it)) else VType.Coll(it)
+    }
 
     fun pathElementShape(p: PathExpr, subject: String, aliases: Map<String, String> = emptyMap(), root: String = subject): String? {
         var scope: String? = when {

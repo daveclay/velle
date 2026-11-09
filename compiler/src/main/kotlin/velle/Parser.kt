@@ -784,12 +784,38 @@ class Parser(private val tokens: List<Token>) {
             t.isKw("now") -> { next(); NowLit }
             t.isKw("today") -> { next(); TodayLit }
             t.isKw("this") -> { next(); PathExpr("this") }
+            // `walk` is contextual (Tokens.kt, WALK_WORDS): the walk keyword only when a
+            // relationship name follows it on the same line and that name is not an operator word
+            t.type == TokType.LIDENT && t.text == "walk" && peekAhead(1).type == TokType.LIDENT &&
+                peekAhead(1).text !in NOT_A_WALK_TARGET -> parseWalk()
             t.type == TokType.LIDENT -> parseNameOrCall()
             t.type == TokType.UIDENT -> { next(); PathExpr(t.text) }
             t.type == TokType.LPAREN -> parseParenPrimary()
             t.type == TokType.LBRACK -> parseListLit()
             else -> fail("expected an expression", t)
         }
+    }
+
+    /** `walk R`, `walk R for N steps`, `walk R until P` (Reference §7, "Walks"). */
+    private fun parseWalk(): Expr {
+        val walkTok = next() // `walk`
+        val rel = expect(TokType.LIDENT).text
+        if (peek().isKw("for")) {
+            // the depth word: `for`, then a whole number, then the contextual `steps`
+            if (peekAhead(1).type != TokType.INT || !(peekAhead(2).type == TokType.LIDENT && peekAhead(2).text == "steps"))
+                fail("a walk's depth is spelled 'for <number> steps' (Reference §7)", peekAhead(1))
+            next()
+            val n = next().text.toLong()
+            next() // steps
+            if (n > Int.MAX_VALUE) fail("a walk's depth is too large", walkTok)
+            return WalkExpr(rel, steps = n.toInt())
+        }
+        if (at(TokType.LIDENT) && peek().text == "until") {
+            next()
+            skipNewlines()
+            return WalkExpr(rel, until = parsePredicate())
+        }
+        return WalkExpr(rel)
     }
 
     /** `[a, b, c]` — the listed values on the right of `in` (Reference §10). */
@@ -859,14 +885,15 @@ class Parser(private val tokens: List<Token>) {
             return SingularFor(shape, e)
         }
         val inner = parsePredicate()
-        // set denotation: `(Shape where pred)` / `(this.invoices where Overdue)` (Reference §6)
+        // set denotation: `(Shape where pred)` / `(this.invoices where Overdue)` (Reference §6);
+        // a walk's set filters the same way, `(walk friends where verified)` (Reference §7)
         if (peek().isKw("where")) {
-            val p = inner as? PathExpr
-                ?: fail("a set denotation filters a shape name or relationship path", peek())
+            if (inner !is PathExpr && !(inner is WalkExpr && inner.until == null))
+                fail("a set denotation filters a shape name, a relationship path, or a walk", peek())
             next(); skipNewlines()
             val where = parsePredicate()
             expect(TokType.RPAREN)
-            return SetExpr(CollectionExpr(listOf(Binding(p)), where))
+            return SetExpr(CollectionExpr(listOf(Binding(inner)), where))
         }
         expect(TokType.RPAREN)
         return inner

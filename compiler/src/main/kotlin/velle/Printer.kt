@@ -178,6 +178,7 @@ object Printer {
         is FunCall -> "${e.name}(${e.args.joinToString(", ") { expr(it) }})"
         is SingularFor -> "(${e.shape} for ${expr(e.forExpr)})"
         is SetExpr -> "(${collection(e.collection)})"
+        is WalkExpr -> "walk ${e.rel}" + (e.steps?.let { " for $it steps" } ?: "") + (e.until?.let { " until ${expr(it)}" } ?: "")
         is Access -> operand(e.target) + e.segs.joinToString("") { (if (it.viaQdot) "?." else ".") + it.name }
         is ShapeForSource -> "${e.shape} for ${expr(e.forExpr)}"
     }

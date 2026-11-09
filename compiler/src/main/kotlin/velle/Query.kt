@@ -163,6 +163,7 @@ class QueryCompiler(
         is SingularFor -> containsThis(e.forExpr)
         is Access -> containsThis(e.target)
         is ShapeForSource -> containsThis(e.forExpr)
+        is WalkExpr -> true // a walk starts at the subject
         else -> false
     }
 
