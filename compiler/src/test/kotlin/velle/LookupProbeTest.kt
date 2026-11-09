@@ -3,12 +3,14 @@ package velle
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /**
- * OQ74 probes: a lookup written in a rule's `from`, finding the record an
- * act's identifying values mean. The specs are those of
+ * The lookup pattern (wiki/patterns.md, "An act that names a record by its
+ * values"): a selection written in a rule's `from`, finding the record an act's
+ * identifying values mean, run through the runtime. The specs are those of
  * `working-docs/examples/survey/09-lookup-*.velle`. Each test prints what the
- * runtime did, so the OQ can quote it.
+ * runtime did, so the survey README can quote it.
  */
 class LookupProbeTest {
 
@@ -16,6 +18,7 @@ class LookupProbeTest {
         act Entry {
             key: text
             initialLabel: text
+            arrivals: many Arrival = (Arrival where entry == this)
         }
 
         act Submission {
@@ -93,14 +96,14 @@ class LookupProbeTest {
         sys.scope {
             val r = runCatching { sys.commit("Submission", mapOf("entryKey" to "PLOT-9999")) }
             report("first/bad-key/no-existence-never", r)
-            val arrivals = sys.instancesOf("Arrival")
-            println("PROBE first/bad-key/no-existence-never -> submissions=${sys.instancesOf("Submission").size} arrivals=${arrivals.size} entry=${arrivals.map { sys.get(it, "entry") }}")
-            // The hole this probe records (OQ74 section 4): `first` over an empty selection is
-            // absent, and the `from` stores the absence in a required `one Entry`. Neither the
-            // validator nor the runtime refuses it. When this is fixed, this assertion flips.
-            assertIs<CommitResult.Accepted>(r.getOrThrow())
-            assertEquals(1, arrivals.size)
-            assertEquals(null, sys.get(arrivals.single(), "entry"))
+            // `first` over an empty selection is absent, and the `from` would store the absence
+            // in a required `one Entry`. The firing fails, the commit is undone, and the caller
+            // is told (Reference §14). The existence `never` is what keeps this case out.
+            val e = r.exceptionOrNull()
+            assertIs<VelleRuntimeError>(e)
+            assertTrue(e.message!!.contains("'Arrival.entry' is required"), e.message)
+            assertEquals(0, sys.instancesOf("Submission").size)
+            assertEquals(0, sys.instancesOf("Arrival").size)
         }
     }
 
@@ -152,19 +155,16 @@ class LookupProbeTest {
     }
 
     @Test
-    fun `the singular for query with a text subject`() {
-        val sys = system(entryAndSubmission + """
+    fun `the singular for query with a text subject is refused by the validator`() {
+        val diags = Validator.validate(entryAndSubmission + """
             never (Submission where not exists (Entry where key == this.entryKey))
             never (Entry where count(Entry where key == this.key) > 1)
             rule RecordArrival when Unpaired {
                 Arrival from { submission: this, entry: (Entry for this.entryKey) }
             }
         """)
-        sys.scope {
-            sys.commit("Entry", mapOf("key" to "PLOT-0417", "initialLabel" to "a"))
-            val r = runCatching { sys.commit("Submission", mapOf("entryKey" to "PLOT-0417")) }
-            report("for/text-subject", r)
-            println("PROBE for/text-subject -> submissions=${sys.instancesOf("Submission").size} arrivals=${sys.instancesOf("Arrival").size}")
-        }
+        println("PROBE for/text-subject -> $diags")
+        // the subject after `for` is a record; a text there is the F2 that names the selection to write
+        assertTrue(diags.any { it.code == "F2" && it.message.contains("the subject after 'for' is a record") }, "expected an F2, got: $diags")
     }
 }

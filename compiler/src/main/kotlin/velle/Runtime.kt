@@ -1764,6 +1764,17 @@ class VelleSystem(
                     fields[matched.name] = ref
                 }
                 item.fields.forEach { f -> fields[f.name] = evaluator.eval(f.value, ctx) }
+                // a required field given an absent value: the selection that fed it matched
+                // nothing (Reference §10, §14). The firing fails rather than storing a record
+                // with a hole in it, as a selection that does not single out a winner does.
+                for (p in model.shapes.getValue(item.shape).members.filterIsInstance<StoredProp>()) {
+                    if (fields[p.name] != Value.VNone) continue
+                    val rel = p.type as? RelType; val sc = p.type as? ScalarType
+                    if (rel?.optional == true || sc?.optional == true || rel?.many == true || sc?.many == true) continue
+                    val given = item.fields.firstOrNull { it.name == p.name }?.value?.let { Printer.expr(it) } ?: "the value given"
+                    throw VelleRuntimeError(
+                        "'${item.shape}.${p.name}' is required and '$given' is absent: the selection matched nothing (Reference §14)")
+                }
                 // `as name` (Reference §14): later statements reference this record by its
                 // index in the creation list; applyCommit resolves the pending reference
                 item.alias?.let { ctx = ctx.copy(pending = ctx.pending + (it to mutations.size)) }

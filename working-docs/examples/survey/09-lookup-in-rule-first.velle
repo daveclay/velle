@@ -1,8 +1,9 @@
--- OQ74 probe: the lookup in a rule's `from`, spelled with `first ... by`,
+-- Probe for the lookup pattern (wiki/patterns.md, "An act that names a record by its values"): the lookup in a rule's `from`, spelled with `first ... by`,
 -- guarded by an existence never and a uniqueness never.
 act Entry {
     key: text
     initialLabel: text
+    arrivals: many Arrival = (Arrival where entry == this)
 }
 
 act Submission {

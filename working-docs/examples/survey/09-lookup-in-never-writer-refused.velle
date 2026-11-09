@@ -1,4 +1,4 @@
--- OQ74 probe: the lookup inline in a never over standing readings,
+-- Probe for the lookup pattern (wiki/patterns.md, "An act that names a record by its values"): the lookup inline in a never over standing readings,
 -- while a rule assigns Field.name.
 act Field {
     kindName: text

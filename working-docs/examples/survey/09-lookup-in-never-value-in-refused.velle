@@ -1,4 +1,4 @@
--- OQ74 probe: the lookup as a value inside a never, with `in` over its options.
+-- Probe for the lookup pattern (wiki/patterns.md, "An act that names a record by its values"): the lookup as a value inside a never, with `in` over its options.
 act Field {
     kindName: text
     name: text

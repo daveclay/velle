@@ -2,7 +2,7 @@
 
 **Status:** opened 2026-11-08 by Dave from the OQ74 session, for the future. Not designed.
 **In plain terms:** a spec that holds a relationship by name, or that treats any field as a business key, has to say that no two records share the value. Today that is a `never` with a count in it. Dave asks for a word on the field, `unique` or `distinct`, that says the same thing in one token. The question is the spelling, whether it covers a key made of several fields, and whether the compiler may use the declaration where it today asks for a `first ... by` or a proof that a selection yields one record.
-**See:** Reference §21 (`never`), §5 (fields; `id`, `initially randomUUID`) · `singular_references.md` (V12) · OQ74 (an act's values meant to pick out an existing record; its section 4 does the lookup in a rule with `first ... by`, and the uniqueness `never`, over one field or several, is one of the two prohibitions the compiler needs to accept that selection as yielding one record) · OQ76 D1
+**See:** Reference §21 (`never`), §5 (fields; `id`, `initially randomUUID`) · `singular_references.md` (V12) · `wiki/patterns.md` "An act that names a record by its values" (the lookup in a rule with `first ... by`; the uniqueness `never`, over one field or several, is one of the two prohibitions beside it) · OQ76 D1
 
 ---
 
@@ -30,4 +30,4 @@ The same refusal the `never` is today, with the same rejection as data: nothing 
 
 ### D3. What the compiler may do with it
 
-A `unique` field is a key, so a selection by it yields at most one record. The compiler could accept `first(Kind where name == this.parentName)` without `by`, or a `(Kind for ...)`-style singular read, on the strength of the declaration (`singular_references.md`, V12), and the lookup in a rule of OQ74 section 4 needs it, together with an existence `never`, to be accepted where a `one X` is required. Whether the whole-shape read in §1 can be rendered as a store-side uniqueness constraint instead of a count at every commit is the store question (OQ69's store side).
+A `unique` field is a key, so a selection by it yields at most one record. The compiler could accept `first(Kind where name == this.parentName)` without `by`, or a `(Kind for ...)`-style singular read, on the strength of the declaration (`singular_references.md`, V12), and the lookup in a rule (`wiki/patterns.md`, "An act that names a record by its values") relies on it, together with an existence `never`, so that `first ... by` finds exactly one record. Whether the whole-shape read in §1 can be rendered as a store-side uniqueness constraint instead of a count at every commit is the store question (OQ69's store side).

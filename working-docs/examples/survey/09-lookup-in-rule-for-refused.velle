@@ -1,4 +1,4 @@
--- OQ74 probe: the lookup spelled with the singular query `(Entry for this.entryKey)`.
+-- Refused: the lookup spelled with the singular query `(Entry for this.entryKey)`.
 -- Entry has two text fields, so the type match is ambiguous.
 act Entry {
     key: text

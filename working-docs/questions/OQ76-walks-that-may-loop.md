@@ -44,7 +44,7 @@ A derived property that names the walk instead of writing it, sketched as `netwo
 
 Cost: a fixpoint in the evaluator; a rendering per store (a recursive query for SQL stores, OQ69's store side); the read is over the whole connected part of the shape, which the contention analysis (A5, `tolerates contention`) has to see; the cost on read over a large graph is the author's, as for any derived property.
 
-The walk follows a relationship, a stored `one` or `many`. A reference the human gives by the target's own field values (OQ74) is still a stored reference in the spec, so a named walk follows it with nothing more; the survey's `02-lookup-recursion-stored-accepted.velle`, with `parent: one Kind?` stored, is the ancestor walk this D1 would spell.
+The walk follows a relationship, a stored `one` or `many`. A reference the human gives by the target's own field values (`wiki/patterns.md`, "An act that names a record by its values") is still a stored reference in the spec, so a named walk follows it with nothing more; the survey's `02-lookup-recursion-stored-accepted.velle`, with `parent: one Kind?` stored, is the ancestor walk this D1 would spell.
 
 ### D2. The loop prohibition through the closure
 

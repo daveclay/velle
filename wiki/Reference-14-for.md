@@ -106,6 +106,10 @@ A block holds creations and other blocks. To write one field of every member of 
 - The compiler rejects an `as` name that is already a name in the rule, a read through the name, the name in an assignment or a `delete`, and two named creations pointing at each other ([checks.md, V33](checks#v33--a-creations-as-name)).
 - The compiler rejects a `for each` whose source is not a collection or a range, a range bound that is not a number, a name already in the rule, an assignment or `delete` inside a block, and an `as` name read outside the block that binds it ([checks.md, V34](checks#v34--a-for-each-block)).
 
+## A required field given an absent value
+
+A `from` block may fill a field with a selection, `entry: first(Entry where key == this.entryKey by key)` ([§10](Reference-10-Predicate-expressions)). When the selection matches nothing its value is absent, and a required field cannot hold an absence. The firing then fails: the commit it belongs to is undone and the committer is told, as when a selection does not single out a winner. Keep the case out at the door with a `never` on the act ([§21](Reference-21-never)). The worked spelling is [patterns, "An act that names a record by its values"](patterns#an-act-that-names-a-record-by-its-values).
+
 ## Related pages
 
 - [§10 Predicate expressions](Reference-10-Predicate-expressions): `for` inside a predicate.

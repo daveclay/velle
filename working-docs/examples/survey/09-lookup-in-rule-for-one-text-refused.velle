@@ -1,15 +1,14 @@
--- OQ74 probe: the `first ... by` lookup with no existence never,
--- so a submission may name a key no entry has.
+-- Refused: `(Entry for this.entryKey)` where Entry has exactly one text field.
 act Entry {
     key: text
-    initialLabel: text
+    size: integer
 }
 
 act Submission {
     entryKey: text
-    newLabel: text?
 }
 
+never (Submission where not exists (Entry where key == this.entryKey))
 never (Entry where count(Entry where key == this.key) > 1)
 
 shape Arrival {
@@ -20,5 +19,5 @@ shape Arrival {
 shape Unpaired = Submission where not exists Arrival for this
 
 rule RecordArrival when Unpaired {
-    Arrival from { submission: this, entry: first(Entry where key == this.entryKey by key) }
+    Arrival from { submission: this, entry: (Entry for this.entryKey) }
 }

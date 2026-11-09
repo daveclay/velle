@@ -189,6 +189,8 @@ Three distinct outcomes of an exposed call, never conflated:
 - **Rejection-as-data**: not an error at all — the act commits, the refusing fact lands, the caller reads it back (the pattern in [`patterns.md`, "Validation rejection is data"](patterns#validation-rejection-is-data)). The runtime does nothing special.
 - **Transaction error** (step 6): an unexpected failure mid-transaction — the whole envelope rolls back, the caller is told, and retry is the caller's re-invocation [`[S4]`](#v0-spike-choices), which re-evaluates generators ([§5](Reference-05-Scalars)). A firing with no caller cannot be told: a tick's failed firing is a `FiringFailure` on the tick's report, an `after commit` firing's is one on the triggering act's `Accepted` result beside the firings a `never` refused (`afterCommitFailures`, `afterCommitRejections`), and the next tick or the next commit that queues the firing retries it. Nothing accumulates between calls.
 
+A rule firing inside an act's transaction that fails for a reason other than a `never`, such as a selection that does not single out a winner or a `from` block that would fill a required field with an absence ([Reference §10](Reference-10-Predicate-expressions), [§14](Reference-14-for)), undoes the whole transaction, and the exception reaches the caller: the act does not stand. The same failure behind an `after commit` boundary or in a tick is a `FiringFailure` on the report, and the act stands.
+
 ## v0 spike choices
 
 Execution decisions for the spike — below the language, revisable without touching semantics:

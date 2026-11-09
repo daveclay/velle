@@ -972,12 +972,38 @@ class Validator(private val model: Model) {
                 checkExpr(e.forExpr, scope)
                 if (e.shape !in model.shapes && e.shape !in model.refinements)
                     diags.add(Diagnostic("F1", "unknown shape '${e.shape}'"))
+                else valueKind(scalarTypeOf(e.forExpr, scope))?.let { kind ->
+                    // the subject after `for` is a record (Reference §10); a value here means
+                    // the author wants a record found by one of its fields, which is a selection
+                    val subject = Printer.expr(e.forExpr)
+                    diags.add(Diagnostic("F2", "'(${e.shape} for $subject)' — the subject after 'for' is a record, and " +
+                        "'$subject' is $kind; to find the record by a value, select it: " +
+                        "first(${e.shape} where <field> == $subject by <field>) (Reference §10)"))
+                }
             }
             is Access -> checkExpr(e.target, scope)
             is ShapeForSource -> checkExpr(e.forExpr, scope)
             is SetExpr -> checkCollection(e.collection, scope)
             else -> {}
         }
+    }
+
+    /** The spec's name for a value type, or null when [t] is a record, a collection of
+     *  records, or unknown: what may not stand as the subject of `(Shape for expr)`. */
+    private fun valueKind(t: VType?): String? = when (t) {
+        null, VType.Unknown, VType.Id, is VType.Inst, is VType.Coll -> null
+        is VType.Optional -> valueKind(t.inner)
+        is VType.Num -> "a ${t.name}"
+        VType.Text -> "a text"
+        VType.Bool -> "a boolean"
+        VType.DateT -> "a Date"
+        VType.DateTimeT -> "a DateTime"
+        VType.UuidT -> "a uuid"
+        VType.DurationT -> "a duration"
+        VType.TimeT -> "a time"
+        VType.BytesT -> "bytes"
+        is VType.Ext -> "a ${t.qualifiedName}"
+        is VType.CollS -> "a many of ${t.name}"
     }
 
     /** The scalar type of a simple expression where it can be read off the model

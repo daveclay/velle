@@ -262,3 +262,4 @@ What the compiler checks:
 - [§12 Assignment](Reference-12-Assignment), for the one-writer rule and deletion.
 - [Act API](Act-API), for what the generated Kotlin input carries.
 - [§14 for](Reference-14-for), "Naming the record a statement creates", for a rule creating two linked records.
+- [Worked patterns, "An act that names a record by its values"](patterns#an-act-that-names-a-record-by-its-values), for a reference the committer gives as a key or a name rather than as a record.

@@ -105,6 +105,8 @@ Every binding in the list must be a relationship of the same enclosing subject. 
 
 Sometimes a predicate needs the related record itself, not just whether it exists: `(NurseVerification for this).nurse`. This form is allowed only when exactly one field on `NurseVerification` matches the subject's type and the compiler can prove at most one such record exists. The proof usually comes from a rule elsewhere in the spec whose condition prevents a second record, as in [§20, "Counting and timing the episodes"](Reference-20-State-change-patterns#counting-and-timing-the-episodes), or from the relationship being to-one from the other side. The subject may be a refinement, as in `(OpenDelinquencyFlag for this)`, since "at most one" is usually true of a state rather than a shape. The full set of cases, with examples and diagnostics, is [`singular_references.md`](singular_references).
 
+The subject after `for` is a record, never a value. To find a record by one of its values, filter with `where` and select: `first(Entry where key == this.entryKey by key)`. The worked spelling, with the two `never` declarations that make the selection safe, is [patterns, "An act that names a record by its values"](patterns#an-act-that-names-a-record-by-its-values).
+
 When at most one cannot be proved, or two fields match, pick the record with `latest` or `first` over a filtered collection:
 
 ```
@@ -113,7 +115,7 @@ first(Shape for expr by receivedOn)
 latest(Referral where referrer == this by referredOn).referee
 ```
 
-**`by` is required.** `latest` and `first` always name the property to order by, and further comma-separated properties break ties: `latest(fills by filledOn, fillNumber)`. There is no default order. To order by creation, name the shape's declared creation timestamp ([§5](Reference-05-Scalars)); `id` carries no order. If the named properties do not single out a winner, the selection fails rather than choosing silently. Two records committed in one transaction carry identical commit timestamps, so telling them apart needs a property the business supplies, such as a sequence number.
+**`by` is required.** `latest` and `first` always name the property to order by, and further comma-separated properties break ties: `latest(fills by filledOn, fillNumber)`. There is no default order. To order by creation, name the shape's declared creation timestamp ([§5](Reference-05-Scalars)); `id` carries no order. If the named properties do not single out a winner, the selection fails rather than choosing silently. A selection over an empty collection is absent; a `from` block that would store it in a required field fails the firing ([§14](Reference-14-for)). Two records committed in one transaction carry identical commit timestamps, so telling them apart needs a property the business supplies, such as a sequence number.
 
 ## Dates and durations
 
@@ -128,6 +130,7 @@ A number or a quoted text compared with a field of an [extension type](Reference
 - The compiler rejects a constant an extension type's reader refuses or does not read, and an operator, comparison, or `sum` the type does not declare, naming the Kotlin class to extend ([checks.md, E3](checks#e3--a-capability-the-type-does-not-declare)).
 - The compiler rejects plain `.` through an optional value with no earlier presence test, and names `?.` as the alternative ([checks.md, V11](checks#v11--narrowing-analysis)).
 - The compiler rejects `(Shape for expr)` and `exists Shape for expr` when more than one field matches the subject's type, or when it cannot prove at most one record exists. The diagnostic asks for `latest` or `first` over a filtered collection ([checks.md, V12](checks#v12--singular-reference-proofs)).
+- The compiler rejects `(Shape for expr)` when `expr` is a value, such as a text or a number, rather than a record. The diagnostic names the `first(Shape where field == expr by field)` spelling ([checks.md, F2](checks#f2--type-checking)).
 - When a change to a shape, such as a second `Customer` field, makes an existing `for` ambiguous, the compiler reports one diagnostic naming the declaration and every expression it broke ([checks.md, V13](checks#v13--ambiguity-is-a-connected-diagnostic)).
 
 ## Grammar
