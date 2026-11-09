@@ -39,3 +39,10 @@ what to expect:
 | `06-text-composition-workaround` | the unit reading matched by `starts with`, `ends with`, and `length(...) == length(name) + 5` | passes | OQ75 |
 | `07-boolean-derivation-refused` | `isRoot: boolean = parentName is none or parentName == "survey"` | `expected LIDENT, found KW('is')` | Expressions item |
 | `08-timestamp-field-name-refused` | a field named `timestamp` | `expected LIDENT, found KW('timestamp')` | Expressions item |
+| `09-lookup-in-rule-first` | OQ74's spelling: `Arrival from { entry: first(Entry where key == this.entryKey by key) }` in a run-once rule, with an existence `never` and a uniqueness `never` | passes; at runtime a good key pairs the submission with its entry and a bad key is refused at the door (`LookupProbeTest`) | OQ74 |
+| `09-lookup-in-rule-no-existence-accepted` | the same lookup with no existence `never` | passes validation; at runtime a key no entry has is accepted and an `Arrival` is created with its required `entry` empty (`LookupProbeTest`) | OQ74, Expressions item |
+| `09-lookup-in-rule-for-accepted` | the lookup as `(Entry for this.entryKey)`, a text subject | passes validation; at runtime `'for' target is not an instance`, thrown to the caller (`LookupProbeTest`) | OQ74, Expressions item |
+| `09-lookup-in-rule-for-one-text-accepted` | the same with one text field on `Entry` | passes validation; same runtime failure | OQ74, Expressions item |
+| `09-lookup-in-never-no-writer` | the lookup inline in a `never` over standing readings, nothing assigning `Field.name` | passes | OQ74 |
+| `09-lookup-in-never-writer-refused` | the same `never` with a rule assigning `Field.name` | `[V10] never over Field.name is a guarantee ('ApplyRename' writes the field it reads) — v0 cannot yet prove it inductively over its writers; fail closed` | OQ74, V10 |
+| `09-lookup-in-never-value-in-refused` | `value in first(Field where ... by name).options` | `[F2] ... 'in' takes a list of values [a, b] or a many of values on the right` | Expressions item |

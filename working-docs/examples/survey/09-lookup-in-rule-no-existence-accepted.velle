@@ -1,0 +1,24 @@
+-- OQ74 probe: the `first ... by` lookup with no existence never,
+-- so a submission may name a key no entry has.
+act Entry {
+    key: text
+    initialLabel: text
+}
+
+act Submission {
+    entryKey: text
+    newLabel: text?
+}
+
+never (Entry where count(Entry where key == this.key) > 1)
+
+shape Arrival {
+    submission: one Submission
+    entry: one Entry
+}
+
+shape Unpaired = Submission where not exists Arrival for this
+
+rule RecordArrival when Unpaired {
+    Arrival from { submission: this, entry: first(Entry where key == this.entryKey by key) }
+}

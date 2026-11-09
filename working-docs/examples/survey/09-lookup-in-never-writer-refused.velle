@@ -1,0 +1,32 @@
+-- OQ74 probe: the lookup inline in a never over standing readings,
+-- while a rule assigns Field.name.
+act Field {
+    kindName: text
+    name: text
+    options: many text
+}
+
+act Submission {
+    kindName: text
+}
+
+act Reading {
+    submission: one Submission
+    fieldName: text
+    value: text?
+}
+
+act RenameField {
+    field: one Field
+    newName: text
+}
+
+never (Field where count(Field where kindName == this.kindName and name == this.name) > 1)
+never (Reading where not exists (Field where kindName == this.submission.kindName and name == this.fieldName))
+never (Reading where value is some
+    and not exists (Field where kindName == this.submission.kindName and name == this.fieldName
+                    and exists (options as o where o == this.value)))
+
+rule ApplyRename when RenameField {
+    field.name = newName
+}

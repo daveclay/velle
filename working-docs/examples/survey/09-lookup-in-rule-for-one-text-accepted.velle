@@ -1,0 +1,23 @@
+-- OQ74 probe: `(Entry for this.entryKey)` where Entry has exactly one text field.
+act Entry {
+    key: text
+    size: integer
+}
+
+act Submission {
+    entryKey: text
+}
+
+never (Submission where not exists (Entry where key == this.entryKey))
+never (Entry where count(Entry where key == this.key) > 1)
+
+shape Arrival {
+    submission: one Submission
+    entry: one Entry
+}
+
+shape Unpaired = Submission where not exists Arrival for this
+
+rule RecordArrival when Unpaired {
+    Arrival from { submission: this, entry: (Entry for this.entryKey) }
+}

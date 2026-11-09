@@ -1,0 +1,22 @@
+-- OQ74 probe: the same never over readings with nothing assigning Field.name.
+act Field {
+    kindName: text
+    name: text
+    options: many text
+}
+
+act Submission {
+    kindName: text
+}
+
+act Reading {
+    submission: one Submission
+    fieldName: text
+    value: text?
+}
+
+never (Field where count(Field where kindName == this.kindName and name == this.name) > 1)
+never (Reading where not exists (Field where kindName == this.submission.kindName and name == this.fieldName))
+never (Reading where value is some
+    and not exists (Field where kindName == this.submission.kindName and name == this.fieldName
+                    and exists (options as o where o == this.value)))

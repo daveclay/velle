@@ -1,0 +1,21 @@
+-- OQ74 probe: the lookup as a value inside a never, with `in` over its options.
+act Field {
+    kindName: text
+    name: text
+    options: many text
+}
+
+act Submission {
+    kindName: text
+}
+
+act Reading {
+    submission: one Submission
+    fieldName: text
+    value: text?
+}
+
+never (Field where count(Field where kindName == this.kindName and name == this.name) > 1)
+never (Reading where not exists (Field where kindName == this.submission.kindName and name == this.fieldName))
+never (Reading where value is some
+    and not (value in first(Field where kindName == this.submission.kindName and name == this.fieldName by name).options))
