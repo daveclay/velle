@@ -1,6 +1,6 @@
 # OQ76 — Walks over records that may form a loop
 
-**Status:** opened 2026-11-07 from Dave's question in the OQ74 session: a social graph where Alice is friends with Bob, Bob with Chris, and Chris with Alice is a legal model, so could Velle allow the loop in the data, check each walk over it for whether it ends, and give the author (A) spellings that provably end and (B) a `tolerates` that halts one that may not? Decided 2026-11-09: D1 (with D1a–D1c) and D2 agreed, D3 rejected, D4 settled by D1, D5 to its own OQ later. The language is in §4; its spelling is under iteration.
+**Status:** opened 2026-11-07 from Dave's question in the OQ74 session: a social graph where Alice is friends with Bob, Bob with Chris, and Chris with Alice is a legal model, so could Velle allow the loop in the data, check each walk over it for whether it ends, and give the author (A) spellings that provably end and (B) a `tolerates` that halts one that may not? Decided 2026-11-09: D1 (with D1a–D1c) and D2 agreed, D3 rejected, D4 settled by D1, D5 to its own OQ later. The language is in §4; spelling `walk`, `walk R for N steps`, `walk R until P`. Next: build.
 **In plain terms:** a relationship that points at a record of the same shape, `one` or `many`, is legal today, and so is data that loops through it. What Velle refuses is a derived property defined by the same property on the related record, so that it follows the relationship until some record answers for itself, because over looping data that walk never stops. The compiler accepts the walk only in two forms it knows must end, and refuses every other. A social graph, an ancestor set, a chain of escalations, and "a batch never draws from itself" all want a walk the compiler refuses. There is no general test for whether a formula ends, so "check the walk" means a list of forms known to end, which is what the compiler has. The question is which forms belong on the list, and whether the author should write the walk as a formula at all or name it: a fixed number of steps, each step strictly down an ordering, or everything reached. A `tolerates` is the wrong tool for the third: a walk that may not end is not a hazard the business accepts a little of. A bound belongs in the spelling, with its result at the bound stated.
 **See:** `checks.md` V14 · Reference §6 (relationships, a path through one `many`), §7 (derived properties), §16 (no loop construct), §19 (`tolerates`) · OQ16 (owns V14's certificate list; calibration rows B5 and B6) · OQ44 §2 item 8 (the escalation chain; the creation-fixed certificate) · OQ53 (B6) · OQ74 (an act's values meant to identify an existing record; this question surfaced in its session and owns nothing here) · `working-docs/examples/survey/02-lookup-recursion-*.velle` (the parent walk: refused as a formula, accepted over a stored `parent`, unrolled by hand) · `compiler/src/main/kotlin/velle/Validator.kt` (`checkWellFoundedness`, `certifiedSelfRecursion`, `hopCertified`)
 
@@ -38,28 +38,28 @@ There is no test that takes any formula and says whether it ends. V14 is a list 
 
 ## 4. The language
 
-A **walk** is a derived property whose value is found by following one relationship from the record, step after step, until no new record turns up. The author names the walk; the author never writes the step. The relationship followed is stored or derived, `one` or `many`, on the same shape. A step through an empty `one?` stops there. Each record is visited once, so a walk ends over any data, looping or not, and the compiler has nothing to prove.
+A **walk** is a derived property whose value is found by following one relationship from the record, step after step, until no new record turns up. The author names the walk; the author never writes the step. The relationship followed is stored or derived, on the same shape; `one` or `many` for a set, `one` only for `until`. A step through an empty `one?` stops there. Each record is visited once, so a walk ends over any data, looping or not, and the compiler has nothing to prove.
 
-A relationship name on its own is one step and gives the flat list. `all through` in front of the name is every step. Nothing about the relationship changes; the keywords decide whether the collection is read or walked (Dave, 2026-11-09). `through` names the relationship followed; the word before it says how much is collected: `all`, or `nearest` with a condition.
+A relationship name on its own is one step and gives the flat list. `walk` in front of the name is every step. Nothing about the relationship changes; the keyword decides whether the collection is read or walked (Dave, 2026-11-09).
 
 ```velle
-    friends                                -- one step: the flat list
-    (friends where verified)               -- one step, filtered
-    all through friends                    -- every step: the walk
-    (all through friends where verified)   -- every step, then filtered
+    friends                          -- one step: the flat list
+    (friends where verified)         -- one step, filtered
+    walk friends                     -- every step: the walk
+    (walk friends where verified)    -- every step, then filtered
 ```
 
 Three forms, one per walk in §3:
 
-| Form | Value | Type |
-|---|---|---|
-| everything reached | every record reached in one or more steps, the start record not among them (D1a) | `many S` |
-| within a number of steps | the same set, cut off at the number; the number is a business fact and part of the meaning | `many S` |
-| the nearest match | the first record, counting from the record itself (D1b), that satisfies a condition; `none` when no record reached does | `one S?` |
+| Form | Spelling | Value | Type |
+|---|---|---|---|
+| everything reached | `walk R` | every record reached in one or more steps, the start record not among them (D1a) | `many S` |
+| a number of steps | `walk R for N steps` | the same set, cut off at the number; the number is a business fact and part of the meaning | `many S` |
+| the nearest match | `walk R until P`, `R` a `one` | the first record, counting from the record itself (D1b), at which `P` holds; `none` when it holds nowhere reached | `one S?` |
 
 A walk's value is a collection like any other: `count`, `in`, `where`, and `+` apply to it, and a `never` may read it (D2).
 
-The primary spelling below is a candidate, chosen so the words are ones a product owner says and each new word is contextual, the way `by`, `with`, and the duration units already are. Every example is complete and compiles against nothing yet. Alternatives follow each example; strike or add.
+**Spelling decided: `walk` (Dave, 2026-11-09).** Earlier candidates and the reasons they fell are kept under 4.1 for the record. Every example is complete and compiles against nothing yet.
 
 ### 4.1 Everything reached
 
@@ -70,50 +70,30 @@ act Profile {
     name: text
     friends: many Profile
 
-    network: many Profile = all through friends
+    network: many Profile = walk friends
 }
 ```
 
-`friends` is a flat `many Profile`: Alice's friends are Bob and no one else. `all through friends` walks it: Alice's `network` is Bob and Chris. Alice is not in it (D1a); `network + this` when the business wants the person included. Over a ring the walk reaches every member once and stops.
+`friends` is a flat `many Profile`: Alice's friends are Bob and no one else. `walk friends` walks it: Alice's `network` is Bob and Chris. Alice is not in it (D1a); `network + this` when the business wants the person included. Over a ring the walk reaches every member once and stops.
 
-`through` alone was tried first and dropped (Dave, 2026-11-09): it names the relationship followed but does not say that every step is taken. `all` says it. Both words are contextual: `all` reads as the walk head only directly before `through`, and `through` only directly after `all` or `nearest`; everywhere else both are ordinary identifiers, so a property named `all` or `through` stays legal.
+`walk` is contextual: it reads as the walk keyword only where a value expression begins and an identifier follows on the same line, the way `with` reads as the closure keyword only in the `act` header. Everywhere else it is an ordinary identifier, so a property named `walk` stays legal. It is the name this question uses for the construct, has no second meaning in any business domain, and brings its own stop word and depth word, `until` and `for N steps`. Its cost: an author would not say "walk" unprompted, and it is the first value in Velle that reads as a verb without parentheses (`latest`, `first`, and `count` are verbs that wear them).
 
-Alternatives for the same line:
+Candidates that fell, on the same line:
 
 ```velle
-    network: many Profile = everything through friends
-    network: many Profile = every Profile through friends
+    network: many Profile = through friends            -- names the relationship, does not say every step
+    network: many Profile = all through friends        -- says it; a noun phrase with no stop word of its own
     network: many Profile = reached through friends
-    network: many Profile = friends and theirs
-    network: many Profile = friends onward
+    network: many Profile = everything through friends
+    network: many Profile = friends and theirs         -- good for a social graph, bad for parent or drawsFrom
+    network: many Profile = follow friends             -- in a social app, follow means subscribe
+    network: many Profile = trace friends              -- the provenance verb; nobody traces friends
+    network: many Profile = keep following friends     -- "keep" says every step; chatty
+    network: many Profile = connected by friends       -- a participle, house style; no stop word
+    network: many Profile = traverse friends           -- same shape as walk, a register a product owner may not know
 ```
 
-The last two read well for a social graph and badly for `parent` or `drawsFrom`.
-
-Verb spellings (asked for by Dave, 2026-11-09). A verb brings its own stop word and depth word, `until` and `for N steps`, which read better than `nearest ... where` and `within N steps`. Each shown on the four test lines where it differs:
-
-```velle
-    network: many Profile = follow friends
-    ancestors: many Person = follow parents
-    locationHolder: one Kind? = follow parent until hasLocation
-    sources: many Batch = follow drawsFrom
-    nearby: many Profile = follow friends for 2 steps
-
-    network: many Profile = trace friends
-    locationHolder: one Kind? = trace parent until hasLocation
-
-    network: many Profile = keep following friends
-    locationHolder: one Kind? = keep following parent until hasLocation
-
-    network: many Profile = connected by friends
-    ancestors: many Person = connected by parents
-
-    network: many Profile = gather through friends
-```
-
-`follow`: the plainest verb for a chain; in a social app it also means subscribe. `trace`: the business verb for provenance and ancestry, weak for a social network. `keep following`: "keep" says every step; chatty. `connected by`: a participle, the house style of `captured` and `frozen`; no natural stop word, so the nearest form would keep `nearest through`. `gather`/`collect through`: says the walk, sounds like work being done. `climb`, `descend`, `expand`, `repeat`, `walk`: direction or mechanism, not what an author says. Style note: every value in Velle today is a noun phrase, and a bare verb to the right of `=` would be the first that reads as a command; `latest`, `first`, and `count` are verbs, but wear parentheses.
-
-### 4.2 Within a number of steps
+### 4.2 A number of steps
 
 Friends of friends is two steps, and the two is the meaning.
 
@@ -122,19 +102,13 @@ act Profile {
     name: text
     friends: many Profile
 
-    nearby: many Profile = all through friends within 2 steps
+    nearby: many Profile = walk friends for 2 steps
 }
 ```
 
-`steps` is contextual the way `days` is: a unit word only directly after a whole number. `within 1 steps` is `friends` itself, so the compiler should warn.
+`for` is already reserved and reads here as the depth word only directly after a walk and before a whole number. `steps` is contextual the way `days` is: a unit word only directly after a whole number. `walk friends for 1 steps` is `friends` itself, so the compiler should warn.
 
-Alternatives:
-
-```velle
-    nearby: many Profile = all through friends, 2 steps
-    nearby: many Profile = all within 2 steps through friends
-    nearby: many Profile = friends through 2 steps
-```
+Candidates that fell: `all through friends within 2 steps`, `all through friends, 2 steps`.
 
 ### 4.3 A criterion on the walk (D1c)
 
@@ -146,7 +120,7 @@ act Person {
     mother: one Person?
     parents: many Person
 
-    ancestors: many Person = all through parents
+    ancestors: many Person = walk parents
     maternalAncestors: many Person = mother.ancestors + mother
 }
 ```
@@ -158,11 +132,11 @@ act Profile {
     friends: many Profile
 
     verifiedFriends: many Profile = (friends where verified)
-    trustedNetwork: many Profile = all through verifiedFriends
+    trustedNetwork: many Profile = walk verifiedFriends
 }
 ```
 
-No alternative spelling: nothing here is new beyond 4.1. To check at build: `mother.ancestors` as a `one` hop into a `many`, and `+` on two collections, inside a derived `many`.
+Nothing here is new beyond 4.1.
 
 ### 4.4 The nearest match
 
@@ -174,11 +148,11 @@ act Kind {
     parent: one Kind?
     hasLocation: boolean
 
-    locationHolder: one Kind? = nearest through parent where hasLocation
+    locationHolder: one Kind? = walk parent until hasLocation
 }
 ```
 
-A root kind with no location gives `none`. The hand-written `if hasLocation then this else parent?.locationHolder` and its `never (Kind where parent == this)` certificate are replaced by this line and the D2 prohibition in 4.6.
+The value is the record at which the walk stopped: the kind itself when it has a location, else the first kind up the chain that does. A root kind with no location gives `none`. The hand-written `if hasLocation then this else parent?.locationHolder` and its `never (Kind where parent == this)` certificate are replaced by this line and the D2 prohibition in 4.6.
 
 The root of an escalation chain is the same form with the condition "has nothing above it":
 
@@ -187,21 +161,17 @@ act Queue {
     name: text
     escalatesTo: one Queue?
 
-    finalQueue: one Queue = nearest through escalatesTo where escalatesTo is none
+    finalQueue: one Queue? = walk escalatesTo until escalatesTo is none
 }
 ```
 
-`finalQueue` is `one Queue`, not `one Queue?`: the record itself satisfies the condition when nothing is above it, so the value is never `none`. Whether the compiler can see that is a build question; the first cut may require `one Queue?`.
+Every `until` walk is `one S?`, so `finalQueue` is `one Queue?`, though the record itself satisfies the condition when nothing is above it and the value is never `none` in practice. The compiler does not narrow it.
 
-Alternatives:
+`until` is contextual: the stop word only directly after a walk. The condition is read at each record walked, the record itself first, with `this` bound to the record being looked at. `where` after a walk is never a stop condition: `(walk friends where verified)` is the existing collection filter on the set the walk gives, so the two words never meet.
 
-```velle
-    locationHolder: one Kind? = first through parent where hasLocation
-    locationHolder: one Kind? = closest through parent where hasLocation
-    locationHolder: one Kind? = nearest parent where hasLocation
-```
+`until` walks a `one`. Through a `many`, two records at the same depth may both satisfy the condition and "the nearest" has no single answer, so the compiler rejects it; the message says to walk the `one`, or to declare the set with `walk R` and select from it with `first(... by ...)`.
 
-`first` already exists with a mandatory `by` and a different reading (the earliest in an ordering), so it is the weakest. `where` after a walk belongs to `nearest` only, as its stop condition. A filter on the set a walk gives is the existing parentheses form, `(network where verified)`, so the two readings of `where` never meet. Through a `many`, two records at the same depth may both satisfy the condition; the first cut allows `nearest` through a `one` only, or demands a `by` through a `many`.
+Candidates that fell: `nearest through parent where hasLocation`, `first through parent where hasLocation` (`first` already means the earliest in an ordering), `closest through parent where hasLocation`.
 
 ### 4.5 Reachability as a yes or no
 
@@ -213,7 +183,7 @@ act Profile {
     friends: many Profile
     blocked: one Profile?
 
-    network: many Profile = all through friends
+    network: many Profile = walk friends
     blockedIsNear: boolean = blocked is some and blocked in network
 }
 ```
@@ -227,7 +197,7 @@ act Batch {
     code: text
     drawsFrom: many Batch
 
-    sources: many Batch = all through drawsFrom
+    sources: many Batch = walk drawsFrom
 }
 
 never (Batch where this in sources)
@@ -241,8 +211,8 @@ act Kind {
     parent: one Kind?
     hasLocation: boolean
 
-    ancestors: many Kind = all through parent
-    locationHolder: one Kind? = nearest through parent where hasLocation
+    ancestors: many Kind = walk parent
+    locationHolder: one Kind? = walk parent until hasLocation
 }
 
 never (Kind where this in ancestors)
@@ -250,33 +220,33 @@ never (Kind where this in ancestors)
 
 The commit that would close the ring is refused at the door, including two records arriving together each naming the other.
 
-A walk written inline in the prohibition, `never (Batch where this in all through drawsFrom)`, is legal by the grammar and reads poorly. Naming the walk is the spelling to teach.
+A walk written inline in the prohibition, `never (Batch where this in walk drawsFrom)`, is legal by the grammar. Naming the walk is the spelling to teach: the author gets a word for the set, and the `never` reads as a sentence.
 
 ### 4.7 Words
 
-Candidate contextual words, none reserved: `all`, `through`, `within`, `steps`, `nearest`. `all` and `nearest` read as the walk head only directly before `through`; `through` only directly after one of them; `within N steps` only directly after a walk; `steps` only after a whole number, like a duration unit. Everywhere else all five are ordinary identifiers, so `steps: integer` and `all: boolean` stay legal properties.
+Contextual words, none reserved: `walk`, `until`, `steps`. `walk` reads as the walk keyword where a value expression begins and an identifier follows on the same line; `until` only directly after a walk; `steps` only after a whole number, like a duration unit. `for`, already reserved, reads as the depth word only directly after a walk and before a whole number. Everywhere else `walk`, `until`, and `steps` are ordinary identifiers, so `steps: integer` and `walk: text` stay legal properties.
 
-What the compiler checks, for `checks.md` when this lands: the relationship followed is on the walk's own shape and points back at it, else an error; a walk is never itself a step in a definition cycle, so V14 sees it as acyclic; `within 1 steps` warns; a condition on `nearest` that the record itself can never satisfy and that no step can reach is dead, an A-class warning.
+What the compiler checks, for `checks.md` when this lands: the relationship followed is on the walk's own shape and points back at it, else an error; a walk is never itself a step in a definition cycle, so V14 sees it as acyclic; `for 1 steps` warns; `until` through a `many` is an error; an `until` condition that the record itself can never satisfy and that no step can reach is dead, an A-class warning.
 
 ## 5. What to decide
 
 ### D1. A construct for everything reached
 
-A derived property that names the walk instead of writing it, spelled in §4 (`network: many Profile = all through friends` is the current candidate). The runtime computes it with a visited set, so it ends on any data, and V14 accepts it because the construct ends, with nothing for the author to prove. Two variants carry the other two walks: a depth, `all through friends within 2 steps`, is the fixed number of steps; a stop condition, `nearest through parent where hasLocation`, is the nearest record found, a `one`, `none` when nothing is found.
+A derived property that names the walk instead of writing it, spelled in §4 (`network: many Profile = walk friends`). The runtime computes it with a visited set, so it ends on any data, and V14 accepts it because the construct ends, with nothing for the author to prove. Two variants carry the other two walks: a depth, `walk friends for 2 steps`, is the fixed number of steps; a stop condition, `walk parent until hasLocation`, is the nearest record found, a `one`, `none` when nothing is found.
 
 Cost: a fixpoint in the evaluator; a rendering per store (a recursive query for SQL stores, OQ69's store side); the read is over the whole connected part of the shape, which the contention analysis (A5, `tolerates contention`) has to see; the cost on read over a large graph is the author's, as for any derived property.
 
 The walk follows a relationship, a stored `one` or `many`. A reference the human gives by the target's own field values (`wiki/patterns.md`, "An act that names a record by its values") is still a stored reference in the spec, so a named walk follows it with nothing more; the survey's `02-lookup-recursion-stored-accepted.velle`, with `parent: one Kind?` stored, is the ancestor walk this D1 would spell.
 
-**Decision (Dave, 2026-11-09): decided.** The walk is named, not written, and ends because of what it is. The two definitions below stand as proposed. The spelling is iterated in §4.
+**Decision (Dave, 2026-11-09): decided.** The walk is named, not written, and ends because of what it is. The two definitions below stand as proposed. The spelling is `walk`, decided the same day; §4.
 
 - **D1a. The start record is not in the set.** Alice, Bob, Chris in a ring: Alice is reached from Alice, and "my network" excludes me. Every record reached other than the start; the author adds `this` when wanted.
 - **D1b. A nearest-match search starts at the record itself.** `locationHolder` checks the record itself first, since "nearest" in business speech includes "here".
-- **D1c. The relationship followed may be derived.** Raised by Dave 2026-11-09: a walk with a criterion, "my ancestors on my mother's side". The criterion lives in an ordinary derived property, and the walk names it. A first step with a criterion: `maternalAncestors: many Person = mother.ancestors + mother` with `ancestors: many Person = all through parents`. A criterion on every step: `verifiedFriends: many Profile = (friends where verified)` and `trustedNetwork: many Profile = all through verifiedFriends`. So the construct follows a stored or derived relationship, `one` or `many`, and takes no criterion of its own. Known edge, no business sentence found for it: a filter in the derived relationship is read at each record walked, so a criterion compared against the start record is only right when the compared value is the same all along the chain. To check at build: a `one` hop to a `many` (`mother.ancestors`) and `+` on two collections are both legal in a derived `many`; the 2026-11-07 probe saw the union accepted but never ran it.
+- **D1c. The relationship followed may be derived.** Raised by Dave 2026-11-09: a walk with a criterion, "my ancestors on my mother's side". The criterion lives in an ordinary derived property, and the walk names it. A first step with a criterion: `maternalAncestors: many Person = mother.ancestors + mother` with `ancestors: many Person = walk parents`. A criterion on every step: `verifiedFriends: many Profile = (friends where verified)` and `trustedNetwork: many Profile = walk verifiedFriends`. So the construct follows a stored or derived relationship, `one` or `many`, and takes no criterion of its own. Known edge, no business sentence found for it: a filter in the derived relationship is read at each record walked, so a criterion compared against the start record is only right when the compared value is the same all along the chain. To check at build: a `one` hop to a `many` (`mother.ancestors`) and `+` on two collections are both legal in a derived `many`; the 2026-11-07 probe saw the union accepted but never ran it.
 
 ### D2. The loop prohibition through the closure
 
-`never (Kind where this in ancestors)`, with `ancestors: many Kind = all through parent` (§4.6), refuses at the door any commit that would close a loop. It replaces `never (Kind where parent == this)` as V14's certificate for a hand-written `one` walk, and it is the certificate OQ44 §2 item 8 asks for. With D1 it costs nothing more; without D1 it has no spelling.
+`never (Kind where this in ancestors)`, with `ancestors: many Kind = walk parent` (§4.6), refuses at the door any commit that would close a loop. It replaces `never (Kind where parent == this)` as V14's certificate for a hand-written `one` walk, and it is the certificate OQ44 §2 item 8 asks for. With D1 it costs nothing more; without D1 it has no spelling.
 
 D2 is for a relationship that must not loop, such as a parent chain. It does nothing for the friend graph this question opened with, which loops on purpose. The friend graph is covered by D1 alone: the named walk ends because each record is visited once, and asks nothing of the data.
 
@@ -301,5 +271,7 @@ Friendship is mutual. `friends: many Profile` on `Profile` gives the inferred in
 **Decision (Dave, 2026-11-09): a separate OQ.** Opened when this question settles, not before, so the two are not confused while this one is open. It changes what `friends` means, not how a walk over it ends.
 
 ## Housekeeping when a decision lands
+
+Before the build touches the walk: check that `mother.ancestors`, a `one` hop into a `many`, and `+` on two collections are legal inside a derived `many` today, since the maternal-ancestors example in 4.3 leans on both. The 2026-11-07 probe saw the union accepted and never ran it. If either is not legal, that is its own item, not part of the walk.
 
 The survey's `02-lookup-recursion-refused.velle` and `02-lookup-recursion-workaround.velle` are wrong spellings (a reference written as a lookup; a bound with no result defined past it) and go. `02-lookup-recursion-stored-accepted.velle` is the stored spelling of the parent, and whether its `locationHolder` stays a hand-written formula or becomes the named walk of D1 follows this question's decision. The survey README's rows for the three files change accordingly.
