@@ -5,9 +5,10 @@ where an admin defines a *kind* of surveyed thing (site, plot, specimen) and
 its *fields* at runtime; an *entry* is one surveyed thing; a *reading* is
 one field's value, held as text because the field says what it means; a
 *submission* carries a list of readings. The findings are listed in
-`QUESTIONS.md` as OQ75, OQ76, items under OQ43 and OQ53, and bug items under
+`QUESTIONS.md` as OQ75, items under OQ43 and OQ53, and bug items under
 "Expressions, refinements, and unions"; the lookup finding (OQ74, settled) became
-the worked pattern "An act that names a record by its values" in `wiki/patterns.md`.
+the worked pattern "An act that names a record by its values" in `wiki/patterns.md`,
+and the walk finding (OQ76, settled) became Reference §7 "Walks".
 
 `./check.sh` compiles every file against the compiler jar (path inside the
 script; build it with `./gradlew :compiler:jar --max-workers=1`) and prints
@@ -26,9 +27,7 @@ what to expect:
 |---|---|---|---|
 | `01-in-inside-exists-refused` | `r.value not in r.field.options` inside an `exists` over the submission's readings. The same test at the reading's own scope, in the same file, is accepted. | `[F2] 'r.value in r.field.options' — 'in' takes a list of values [a, b] or a many of values on the right` | Expressions item |
 | `01-in-inside-exists-workaround` | the options searched with `not exists (r.field.options as o where o == r.value)` | passes | |
-| `02-lookup-recursion-refused` | a kind's parent looked up by name, and `locationHolder` walking `parent?.locationHolder`; a `never (Kind where parent == this)` is present and does not help | `[V14] definition cycle: Kind.locationHolder -> Kind.locationHolder — no certificate from the whitelist applies ...` | OQ76, OQ78 |
-| `02-lookup-recursion-stored-accepted` | the same walk with `parent: one Kind?` stored and the same `never` | passes | OQ76 |
-| `02-lookup-recursion-workaround` | the walk unrolled to four levels; a fifth level is silently missed | passes | OQ76 |
+| `02-lookup-recursion-stored-accepted` | the nearest kind with a location as `walk parent until hasLocation`, the ancestor set as `walk parent`, and a prohibition reading it, over a stored `parent` | passes | Reference §7 "Walks" (OQ76, settled) |
 | `03-assigned-field-refused` | a rule assigns `entry.label`; a `never` over the submission resolves a parent by label | `[V10] never over Entry.label is a guarantee ('ApplyRelabel' writes the field it reads) — v0 cannot yet prove it inductively over its writers; fail closed` | OQ53, V10 |
 | `03-assigned-field-workaround` | the label derived from the latest `Outcome` record; nothing assigns it | passes | OQ53, V10 |
 | `04-transient-with-parts-refused` | `transient act Submission ... with readings` | `[V17] 'Reading.submission' references transient act 'Submission'`, `[V18] a 'Submission' can arrive that nothing provably answers`, `[V22] transient act 'Submission' with a closure is refused — the combination is open (OQ43)` | OQ43 |

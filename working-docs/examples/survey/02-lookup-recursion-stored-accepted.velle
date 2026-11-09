@@ -1,13 +1,16 @@
--- The same walk over a stored parent reference is accepted: the
--- `never (Kind where parent == this)` is the certificate.
+-- A kind of surveyed thing (site, plot, specimen) names its parent kind.
+-- The nearest kind up the tree that records a location is where a
+-- specimen's location comes from: a walk (Reference §7, "Walks"). A kind is
+-- never its own ancestor: a prohibition reading the named walk. `parent` is
+-- fixed when the kind is created, so the prohibition is checked at the door.
 act Kind {
     name: text
     parent: one Kind?
     hasLocation: boolean
 
-    locationHolder: one Kind? =
-        if hasLocation then this
-        else parent?.locationHolder
+    ancestors: many Kind = walk parent
+    locationHolder: one Kind? = walk parent until hasLocation
 }
 
-never (Kind where parent == this)
+never (Kind where count(Kind where name == this.name) > 1)
+never (Kind where this in ancestors) tolerates contention

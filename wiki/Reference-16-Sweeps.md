@@ -1,6 +1,6 @@
 # 16. Sweeps: rules fire per record
 
-Velle has no loop. To act on every record that meets a condition, you write one rule with that condition, and Velle runs it once per matching record. A scheduled rule that works through every record still needing attention is a *sweep*. This page shows how to write one and what happens when one firing fails.
+Velle has no loop. To act on every record that meets a condition, you write one rule with that condition, and Velle runs it once per matching record. To read along a chain of records, you name a walk ([§7](Reference-07-Derived-properties)). A scheduled rule that works through every record still needing attention is a *sweep*. This page shows how to write one and what happens when one firing fails.
 
 "Every night, suspend every delinquent member who is not suspended yet." From `examples/membership/membership.velle`:
 
