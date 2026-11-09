@@ -134,7 +134,11 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         name = system.get(id, "name") as String,
         referrer = (system.get(id, "referrer") as Long?)?.let { system.refFor(it) },
         tier = system.get(id, "tier") as String,
+        upline = (system.get(id, "upline") as List<*>).map { system.refFor(it as Long) },
         foundingReferrer = (system.get(id, "foundingReferrer") as Long?)?.let { system.refFor(it) },
+        recruits = (system.get(id, "recruits") as List<*>).map { system.refFor(it as Long) },
+        downline = (system.get(id, "downline") as List<*>).map { system.refFor(it as Long) },
+        closeDownline = (system.get(id, "closeDownline") as List<*>).map { system.refFor(it as Long) },
         streak = (system.get(id, "streak") as BigDecimal).intValueExact(),
         members = (system.get(id, "members") as List<*>).map { system.refFor(it as Long) },
         duesPayments = (system.get(id, "duesPayments") as List<*>).map { system.refFor(it as Long) },
@@ -212,7 +216,11 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         name = system.get(id, "name") as String,
         referrer = (system.get(id, "referrer") as Long?)?.let { system.refFor(it) },
         tier = system.get(id, "tier") as String,
+        upline = (system.get(id, "upline") as List<*>).map { system.refFor(it as Long) },
         foundingReferrer = (system.get(id, "foundingReferrer") as Long?)?.let { system.refFor(it) },
+        recruits = (system.get(id, "recruits") as List<*>).map { system.refFor(it as Long) },
+        downline = (system.get(id, "downline") as List<*>).map { system.refFor(it as Long) },
+        closeDownline = (system.get(id, "closeDownline") as List<*>).map { system.refFor(it as Long) },
         streak = (system.get(id, "streak") as BigDecimal).intValueExact(),
         members = (system.get(id, "members") as List<*>).map { system.refFor(it as Long) },
         duesPayments = (system.get(id, "duesPayments") as List<*>).map { system.refFor(it as Long) },
@@ -243,10 +251,9 @@ class LoyaltySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 -- Members join by referral: the join is the input, the member record is what
 -- the club keeps (its `tier` is system-maintained, so it lives on the
 -- rule-created record — V21). Nobody recruits themselves — the club says so
--- once, as a fact about the data, and the compiler spends that fact twice
--- below: it is what makes the referral chain provably finite (the
--- foundingReferrer recurrence) and what proves the two promotion rules write
--- two different people (the tier rules).
+-- once, as a fact about the data, and the compiler spends that fact below:
+-- it is what proves the two promotion rules write two different people (the
+-- tier rules).
 transient act Join {
     name: text
     referrer: one Member?
@@ -257,18 +264,20 @@ shape Member {
     referrer: one Member?
     tier: text initially "basic"
 
-    -- Who brought this whole branch in: walk the referral chain to its end.
-    -- Self-reference one hop through a relationship (Reference §7) — legal
-    -- because the walk provably bottoms out, and the proof input is the
-    -- `never` below: no member's referrer can point back at them, so the
-    -- chain descends and the base case (`referrer is none`) is reached.
-    -- velle: a definition-graph cycle (foundingReferrer -> referrer ->
-    -- foundingReferrer) certified by a spendable `never` — checks.md V14,
-    -- the acyclicity certificate
-    foundingReferrer: one Member? =
-        if referrer is none then none
-        else if referrer.foundingReferrer is none then referrer
-        else referrer.foundingReferrer
+    -- The referral chain, walked (Reference §7, "Walks"). `upline` is everyone
+    -- above this member, at any remove; `foundingReferrer` is who brought the
+    -- whole branch in: the first member up the chain with no referrer, the
+    -- member themself when they are the founder. `recruits` is one step down,
+    -- `downline` every step, `closeDownline` two steps: recruits and theirs.
+    -- A walk ends over any data, so nothing here needs a proof.
+    -- velle: a walk over a stored `one` (upline, foundingReferrer) and over a
+    -- derived `many` (downline); the depth and the stop condition are part
+    -- of the spelling
+    upline: many Member = walk referrer
+    foundingReferrer: one Member? = walk referrer until referrer is none
+    recruits: many Member = (Member where referrer == this)
+    downline: many Member = walk recruits
+    closeDownline: many Member = walk recruits for 2 steps
 
     -- The member's current on-time streak: a selector read off the dues
     -- history (the recurrence below), never a stored counter.
@@ -497,7 +506,11 @@ data class Member(
     val name: String,
     val referrer: Ref<Member>?,
     val tier: String,
+    val upline: List<Ref<Member>>,
     val foundingReferrer: Ref<Member>?,
+    val recruits: List<Ref<Member>>,
+    val downline: List<Ref<Member>>,
+    val closeDownline: List<Ref<Member>>,
     val streak: Int,
     val members: List<Ref<Member>>,
     val duesPayments: List<Ref<DuesPayment>>,
@@ -620,7 +633,11 @@ data class CertifiedMember(
     val name: String,
     val referrer: Ref<Member>?,
     val tier: String,
+    val upline: List<Ref<Member>>,
     val foundingReferrer: Ref<Member>?,
+    val recruits: List<Ref<Member>>,
+    val downline: List<Ref<Member>>,
+    val closeDownline: List<Ref<Member>>,
     val streak: Int,
     val members: List<Ref<Member>>,
     val duesPayments: List<Ref<DuesPayment>>,

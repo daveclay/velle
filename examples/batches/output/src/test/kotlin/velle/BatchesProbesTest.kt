@@ -157,9 +157,10 @@ class BatchesProbesTest {
     @Test
     fun `B5 - the batches a mixture drew from, as a derived collection, has no evaluable spelling`() {
         // Both spellings of "the source of each component" pass the validator;
-        // the evaluator reads no field through a collection. So the ancestor
-        // set — and with it the transitive "never draws from itself" — has no
-        // spelling that runs; the one-step `never` is what the example keeps.
+        // the evaluator reads no field through a collection. The spelling that
+        // runs is from the source side, `(PeptideBatch where exists (components
+        // where composition == this.origin))`, and the ancestor set is a walk
+        // over it (`lineage` in batches.velle, Reference §7).
         val filtered = chain("inputs: many PeptideBatch = (Component where composition == this.origin).source")
         val narrowed = chain("inputs: many PeptideBatch = if origin is Composition then origin.components.source else empty")
         for (src in listOf(filtered, narrowed)) {

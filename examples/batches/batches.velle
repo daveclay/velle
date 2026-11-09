@@ -36,11 +36,12 @@
 --     cross-shape mixin gap, OQ35. (The validator does not enforce the rule on
 --     a predicate over the union today, and the runtime then resolves the name
 --     per instance — the accepted-by-accident spelling Reference §9 rejects.)
---   · "a mixture never contains itself, however many steps removed". The
---     transitive sentence wants a derived set of ancestor batches, and every
---     spelling of that set reads a field through a `many` hop, which the
---     evaluator does not do. One step removed is a books rule (`never` below),
---     and the sequence of commits makes it the only reachable case.
+--   · "a mixture never contains itself, however many steps removed". Said
+--     with a walk (Reference §7): `drawnFrom` is the batches one step behind
+--     this one, `lineage` every batch behind those, and the books rule reads
+--     the name. A spelling that reads a field through a `many` hop
+--     (`origin.components.source`) still validates and cannot be evaluated
+--     (`BatchesProbesTest.kt`, B5).
 --   · the inferred inverse of `PeptideBatch.origin` is spelled `peptideBatchs`
 --     (Reference §6 pluralizes with a literal `s`), so the union declares the
 --     view under the readable name (Reference §6, "Renamed and derived
@@ -137,6 +138,12 @@ act PeptideBatch {
     -- velle: a derivation over the inverse inferred from Component.source
     consumedMg: decimal = sum(components, amountMg)
     remainingMg: decimal = quantityMg - consumedMg
+    -- the batches this one was mixed from, and every batch behind them
+    -- velle: a derived relationship from the source side (a batch one of whose
+    -- uses is in this batch's composition) and a walk over it (Reference §7,
+    -- "Walks"); a walk ends over any data, so no proof is owed
+    drawnFrom: many PeptideBatch = (PeptideBatch where exists (components where composition == this.origin))
+    lineage: many PeptideBatch = walk drawnFrom
     -- the kind, read off the origin, never stored
     -- velle: narrowing in a conditional; with three operands the final else
     -- is the third operand (Reference §10)
@@ -174,13 +181,16 @@ never (PeptideBatch where exists (Component where composition == this.origin and
 -- closure has landed, and a mixture that over-draws is refused with its batch.
 never (PeptideBatch where remainingMg < 0)
 
--- A mixture never draws from the batch it produces. One step removed is a
--- books rule over the component. The transitive sentence is not evaluable
--- (see the header and `BatchesProbesTest.kt`), and does not need to be: a
--- component's source is a batch that existed before the composition, and the
--- composition exists before the batch it becomes, so a batch can only ever
--- draw from batches older than itself.
-never (Component where source.origin == composition)
+-- A mixture never draws from the batch it produces, however many steps
+-- removed: the batch is not in its own lineage. The sequence of commits
+-- already keeps this true — a component's source is a batch that existed
+-- before the composition, and the composition exists before the batch it
+-- becomes — so the rule states the sentence rather than catching anything.
+-- velle: a prohibition reading a named walk (Reference §7, "Walks"). The walk
+-- reads the whole connected part of the shape, so nothing ties the check to
+-- one key and every batch commit takes turns; the clause says the lab
+-- accepts that (Reference §19, "A read over a whole shape")
+never (PeptideBatch where this in lineage) tolerates contention
 
 -- ── What happens as batches are used up ──────────────────────────────────────
 

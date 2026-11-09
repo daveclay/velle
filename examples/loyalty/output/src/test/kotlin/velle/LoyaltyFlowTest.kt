@@ -78,9 +78,18 @@ open class LoyaltyFlowTest {
         val founder = member("Founder")
         val scout = member("Scout", referrer = founder)
         val recruit = member("Recruit", referrer = scout)
-        assertNull(sys.read(founder).foundingReferrer)
+        val other = member("Other", referrer = scout)
+        // the walk checks the member themself first: a founder is their own founding referrer
+        assertEquals(founder, sys.read(founder).foundingReferrer)
         assertEquals(founder, sys.read(scout).foundingReferrer)
         assertEquals(founder, sys.read(recruit).foundingReferrer)
+        assertEquals(listOf(scout, founder), sys.read(recruit).upline)
+        assertEquals(emptyList(), sys.read(founder).upline)
+        assertEquals(setOf(scout, recruit, other), sys.read(founder).downline.toSet())
+        assertEquals(setOf(recruit, other), sys.read(scout).closeDownline.toSet())
+        val deep = member("Deep", referrer = recruit)
+        assertEquals(setOf(scout, recruit, other, deep), sys.read(founder).downline.toSet())
+        assertEquals(setOf(scout, recruit, other), sys.read(founder).closeDownline.toSet(), "two steps: recruits and theirs")
     }
 
     @Test

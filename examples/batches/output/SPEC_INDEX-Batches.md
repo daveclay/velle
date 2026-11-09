@@ -18,7 +18,7 @@ each case below is an executable test.
 ## Not yet generated
 
 - never #1: shape is not an act
-- never #6: shape is not an act
 - never #3: complex comparison subject
 - never #4: non-comparison predicate
 - never #5: derived comparison subject
+- never #6: derived comparison subject

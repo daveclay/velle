@@ -9,8 +9,6 @@ import velle.generated.batches.*
 /**
  * never (Component where amountMg <= 0)
  *
- * never (Component where source.origin == composition)
- *
  */
 class ComponentSpec : SpecSupport() {
 }

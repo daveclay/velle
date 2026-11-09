@@ -15,6 +15,8 @@ import velle.generated.batches.*
  *
  * never (PeptideBatch where remainingMg < 0)
  *
+ * never (PeptideBatch where this in lineage) tolerates contention
+ *
  */
 class PeptideBatchSpec : SpecSupport() {
 
