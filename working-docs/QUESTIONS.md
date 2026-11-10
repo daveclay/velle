@@ -136,13 +136,18 @@ Built 2026-10-26 as the end state Dave stated at OQ51's settling (a framework li
 - [ ] Expose a cross-base refinement's own declared members over GraphQL: a static union is a GraphQL union, which carries no fields, so a member declared on the union (`Origin.peptideBatches`) is reachable over REST and not over GraphQL.
 - [ ] Decide whether GraphQL should offer a typed filter input per shape beside `where` as a predicate string, or whether the predicate string is the one query language on every transport (today: the string, by OQ51's ruling that the caller composes in the spec's own language).
 - [ ] Serve a registered query (OQ57's registry) as a named endpoint and a named GraphQL field, with its parameters typed.
-- **[OQ73](questions/OQ73-velle-ui.md)** — Velle UI: a frontend built from the model description, the UX declared apart from the UI, door checks and derived expressions published instead of retyped, usable without Velle · opened 2026-10-29 from Dave's scratch note; eight decisions (D1–D8) for Dave in §6; `wiki/Velle-UI.md` folds into it
-  - [ ] Decide whether the console belongs in the starter for good, is replaced by the default Velle UI (OQ73 D4), or stays a developer tool; and whether its request-header box is the right stand-in for a login.
 - [ ] Decide whether the model description (`GET /api`) should be an OpenAPI document, and the GraphQL schema printed as SDL, for client generators.
 - [ ] Build the unstored actor (`transient shape Staff`, the item under Acts) and let the actor resolver return it: today the resolver returns a reference to a stored record only.
 - [ ] Decide whether the starter should run the generated `SpecSupport` scenarios against the live store at startup as a smoke test (the item under Spec generation about `newSystem()`).
 - [ ] Look at what a commit costs over PostgreSQL: the pharmacy seed (`examples/pharmacy/app`, 2026-10-28) replays ninety days, about 1,200 acts and 274 ticks, in 3 s per 36 days over in-memory SQLite and in 264 s over PostgreSQL in Docker, the ticks 36 s of that; the rest is the acts and the reads around them, about 200 ms per commit, which points at round trips per row (hydration, the inverse collections, the advisory locks) rather than at the sweeps.
 - [ ] Decide whether `tick` should return a `never`'s rejections on the report as data instead of throwing `TickRejected`, which would revisit OQ47's ruling that a tick's rejection must reach a human (from OQ71 D5, 2026-10-28).
+
+## Velle UI: a frontend sub-project
+
+A frontend framework grown from the console: given the model description and nothing else, a list view for every shape, a detail view for every record, a form for every act. Three domains, each with its own language: the UX (the shapes and how humans interact with them), the UI (UX component to widget), and styling (the visual design). Not designed; every decision awaits Dave.
+
+- **[OQ73](questions/OQ73-velle-ui.md)** — Velle UI: a frontend built from the model description, the UX declared apart from the UI, door checks and derived expressions published instead of retyped, usable without Velle · opened 2026-10-29 from Dave's scratch note; twenty decisions (D1–D20) for Dave in §6; §8 is a sketch of the UX language (shape-first, `fields:` and `views:` blocks, `display:`, a store configuration of its own per D20) and §9 the three domains against one example; `wiki/Velle-UI.md` folds into it
+  - [ ] Decide whether the console belongs in the starter for good, is replaced by the default Velle UI (OQ73 D4), or stays a developer tool; and whether its request-header box is the right stand-in for a login.
 
 ## Runtime and clock
 
