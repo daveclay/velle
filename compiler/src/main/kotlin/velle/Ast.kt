@@ -97,9 +97,17 @@ data class NeverDecl(
     /** True for the requirement an act's `by <Refinement>` clause desugars to
      *  (`Act requires actor to be Refinement`, Reference §22): the role gate in the header. */
     val fromActorClause: Boolean = false,
+    /** Non-null for the count `never` a key stands for (Reference §21, "Keys"): the key as
+     *  the author wrote it, `unique (kindName, name)` or `name: text unique`, which
+     *  rejections and diagnostics quote instead of the emitted count. */
+    val keyDeclaration: String? = null,
 ) : Decl {
-    /** The declaration's keyword, for labels: `never` or `requires`. */
-    val keyword: String get() = if (requirement == null) "never" else "requires"
+    /** The declaration's keyword, for labels: `never`, `requires`, or `unique`. */
+    val keyword: String get() = when {
+        keyDeclaration != null -> "unique"
+        requirement == null -> "never"
+        else -> "requires"
+    }
 }
 
 /** The requirement spelling of a prohibition, as written: `subject requires predicate`. */
@@ -149,7 +157,27 @@ data class StoredProp(
     val initiallyRequired: Boolean = false,
     /** Field-level visibility (Reference §22): which viewers this field is returned to. */
     val visible: List<VisibleClause> = emptyList(),
+    /** `name: text unique` (Reference §21, "Keys"): no two records share this field's value;
+     *  the one-field spelling of [UniqueKey]. */
+    val unique: Boolean = false,
 ) : Member
+
+/**
+ * A key (Reference §21, "Keys"): `unique (kindName, name)` as a body line, or
+ * `name: text unique` on the field ([onField], the one-field short form). No two
+ * records of the shape share the fields' values; absent values do not collide. The
+ * model emits the count `never` the word stands for, quoting the word.
+ */
+data class UniqueKey(val fields: List<String>, val onField: Boolean = false) : Member
+
+/** The shape's keys, both spellings gathered in declaration order. */
+fun ShapeDecl.keys(): List<UniqueKey> = members.mapNotNull { member ->
+    when (member) {
+        is StoredProp -> if (member.unique) UniqueKey(listOf(member.name), onField = true) else null
+        is UniqueKey -> member
+        else -> null
+    }
+}
 
 data class DerivedProp(
     val name: String,
@@ -339,6 +367,10 @@ data class AggCall(
     val collection: CollectionExpr,
     val field: String? = null,
     val orderBy: List<String> = emptyList(),
+    /** The author wrote `(Shape where key == value)` naming every field of a key
+     *  (Reference §10, "Reading the one related record"): one record or absent, with no
+     *  order to name, read as `first` over the filter. Printed as written. */
+    val keyLookup: Boolean = false,
 ) : Expr
 
 /** Builtin function call from the closed list: lowercase, uppercase, trim, length, max, min,

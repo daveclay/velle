@@ -1,8 +1,10 @@
 -- Probe for the lookup pattern (wiki/patterns.md, "An act that names a record by its values"): the same never over readings with nothing assigning Field.name.
+-- A field is named by its kind and its own name together: the key `unique (kindName, name)` (Reference §21, "Keys").
 act Field {
     kindName: text
     name: text
     options: many text
+    unique (kindName, name)
 }
 
 act Submission {
@@ -15,7 +17,6 @@ act Reading {
     value: text?
 }
 
-never (Field where count(Field where kindName == this.kindName and name == this.name) > 1)
 never (Reading where not exists (Field where kindName == this.submission.kindName and name == this.fieldName))
 never (Reading where value is some
     and not exists (Field where kindName == this.submission.kindName and name == this.fieldName

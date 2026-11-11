@@ -23,7 +23,7 @@ shape Booking {
 }
 
 shape Cancellation {
-    booking: one Booking
+    booking: one Booking unique
     cancelledOn: timestamp on create
 }
 
@@ -38,8 +38,6 @@ rule Book when BookNow {
 transient act Cancel {
     booking: one Booking
 }
-
-never (Booking where count(cancellations) > 1)
 
 rule ApplyCancel when Cancel {
     Cancellation from { booking: booking }
@@ -68,9 +66,9 @@ rule TellWaitlist when Untold on Hourly {
 ## What each line does
 
 - `BookNow` is a [transient act](Reference-04-State-and-commits#transient-acts-transient-act): a request decided at its own commit and not kept. `Book` is the [rule](Reference-11-rule-when-on) that turns it into a `Booking`.
-- A `Cancellation` is a record beside the booking it gives back. `StandingBooking` is a [refinement](Reference-08-Refinements): a booking with no cancellation.
-- The first `never` is a [prohibition](Reference-21-never): no two standing bookings hold one slot. The commit that would create the second is refused.
-- `Cancel` and `ApplyCancel` give a booking back by writing its cancellation. The second `never` says a booking is given back once at most.
+- A `Cancellation` is a record beside the booking it gives back. `booking: one Booking unique` is a [key](Reference-21-never#keys): a booking is given back once at most. `StandingBooking` is a [refinement](Reference-08-Refinements): a booking with no cancellation.
+- The `never` over `StandingBooking` is a [prohibition](Reference-21-never): no two standing bookings hold one slot. The commit that would create the second is refused.
+- `Cancel` and `ApplyCancel` give a booking back by writing its cancellation.
 - `Waitlist` is an act that stays on record. The `never` over it caps the list at twenty names, and [`tolerates contention`](Reference-19-Self-referential-folds-and-tolerates#a-read-over-a-whole-shape-tolerates-contention) says the author knows what the cap costs, which the next sections explain.
 - `Unserved` is an entry whose slot no standing booking holds. `Untold` is one not yet told. `TellWaitlist` runs on the hourly [schedule](Reference-17-Schedule-triggers) and writes a `Notice` for each.
 

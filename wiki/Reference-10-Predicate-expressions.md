@@ -105,7 +105,7 @@ Every binding in the list must be a relationship of the same enclosing subject. 
 
 Sometimes a predicate needs the related record itself, not just whether it exists: `(NurseVerification for this).nurse`. This form is allowed only when exactly one field on `NurseVerification` matches the subject's type and the compiler can prove at most one such record exists. The proof usually comes from a rule elsewhere in the spec whose condition prevents a second record, as in [§20, "Counting and timing the episodes"](Reference-20-State-change-patterns#counting-and-timing-the-episodes), or from the relationship being to-one from the other side. The subject may be a refinement, as in `(OpenDelinquencyFlag for this)`, since "at most one" is usually true of a state rather than a shape. The full set of cases, with examples and diagnostics, is [`singular_references.md`](singular_references).
 
-The subject after `for` is a record, never a value. To find a record by one of its values, filter with `where` and select: `first(Entry where key == this.entryKey by key)`. The worked spelling, with the two `never` declarations that make the selection safe, is [patterns, "An act that names a record by its values"](patterns#an-act-that-names-a-record-by-its-values).
+The subject after `for` is a record, never a value. To find a record by one of its values, filter with `where`. When the shape declares the value as a key ([§21, "Keys"](Reference-21-never#keys)), the filter is itself the record: `(Entry where key == this.entryKey)` is one `Entry` or absent wherever one record is expected, with no order to name, because `key: text unique` on `Entry` says no two entries share a key. The filter must name every field of one key with `==`, and each value it compares with must be present: a literal, a required field, or an optional field the enclosing refinement or `if` tests with `is some`. Two absent values compare equal, so an absent key would match every record without one. Without a key, select: `first(Entry where key == this.entryKey by key)`. The worked spelling, with the `never` that refuses a key no entry has, is [patterns, "An act that names a record by its values"](patterns#an-act-that-names-a-record-by-its-values).
 
 When at most one cannot be proved, or two fields match, pick the record with `latest` or `first` over a filtered collection:
 
@@ -131,6 +131,7 @@ A number or a quoted text compared with a field of an [extension type](Reference
 - The compiler rejects plain `.` through an optional value with no earlier presence test, and names `?.` as the alternative ([checks.md, V11](checks#v11--narrowing-analysis)).
 - The compiler rejects `(Shape for expr)` and `exists Shape for expr` when more than one field matches the subject's type, or when it cannot prove at most one record exists. The diagnostic asks for `latest` or `first` over a filtered collection ([checks.md, V12](checks#v12--singular-reference-proofs)).
 - The compiler rejects `(Shape for expr)` when `expr` is a value, such as a text or a number, rather than a record. The diagnostic names the `first(Shape where field == expr by field)` spelling ([checks.md, F2](checks#f2--type-checking)).
+- The compiler rejects a filter `(Shape where ...)` where one record is expected unless it names every field of a key of `Shape` and compares each with a value that is present. The diagnostic names the key field the filter is missing, or the value that may be absent and the `is some` test that makes it present ([checks.md, V36](checks#v36--a-filter-over-a-key-is-one-record)).
 - When a change to a shape, such as a second `Customer` field, makes an existing `for` ambiguous, the compiler reports one diagnostic naming the declaration and every expression it broke ([checks.md, V13](checks#v13--ambiguity-is-a-connected-diagnostic)).
 
 ## Grammar
@@ -177,6 +178,9 @@ accessor       := "." | "?."   -- "." requires the left side provably non-absent
 aggregateCall  := "count" "(" collectionExpr ")"
                | "sum" "(" collectionExpr "," Identifier ")"
                | "sum" "(" path ")"                        -- a `many` of numbers or durations, summed directly
+keyLookup      := "(" ShapeName "where" predicate ")"   -- one record or absent, where one record is expected,
+                                                           -- when the predicate names every field of a key of the
+                                                           -- shape with "==" (Reference §21, "Keys"; checks V36)
 selectorCall   := ("latest" | "first") "(" collectionExpr
                       "by" Identifier ("," Identifier)* ")"      -- ordering is explicit and mandatory: the author's
                                                                  -- named orderable datums; an undiscriminated winning

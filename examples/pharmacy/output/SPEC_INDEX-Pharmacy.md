@@ -162,40 +162,40 @@ each case below is an executable test.
 
 ## Not yet generated
 
-- requires #34: the role gate an act's `by` clause states
-- requires #8: multi-conjunct predicate
-- requires #23: shape is not an act
-- never #27: shape is not an act
-- never #31: shape is not an act
-- never #25: multi-conjunct predicate
-- requires #26: multi-conjunct predicate
-- requires #40: the role gate an act's `by` clause states
-- requires #28: complex comparison subject
-- never #29: non-comparison predicate
-- never #30: non-literal bound
-- requires #32: multi-conjunct predicate
-- never #33: complex comparison subject
+- requires #33: the role gate an act's `by` clause states
+- requires #7: multi-conjunct predicate
+- requires #22: shape is not an act
+- never #26: shape is not an act
+- never #30: shape is not an act
+- never #24: multi-conjunct predicate
+- requires #25: multi-conjunct predicate
+- requires #39: the role gate an act's `by` clause states
+- requires #27: complex comparison subject
+- never #28: non-comparison predicate
+- never #29: non-literal bound
+- requires #31: multi-conjunct predicate
+- never #32: complex comparison subject
 - requires #1: shape is not an act
 - requires #2: non-comparison predicate
-- requires #35: the role gate an act's `by` clause states
+- requires #34: the role gate an act's `by` clause states
 - never #3: complex comparison subject
 - never #4: non-literal bound
 - requires #5: multi-conjunct predicate
-- never #7: complex comparison subject
-- requires #11: multi-conjunct predicate
+- unique #41: a key, unique (drug, effectiveOn): no bound to cross
+- requires #10: multi-conjunct predicate
+- never #12: shape is not an act
 - never #13: shape is not an act
 - never #14: shape is not an act
 - never #15: shape is not an act
 - never #16: shape is not an act
-- never #17: shape is not an act
-- requires #18: non-literal bound
-- requires #19: multi-conjunct predicate
-- requires #20: multi-hop comparison subject
+- requires #17: non-literal bound
+- requires #18: multi-conjunct predicate
+- requires #19: multi-hop comparison subject
+- never #20: complex comparison subject
 - never #21: complex comparison subject
-- never #22: complex comparison subject
-- never #24: multi-conjunct predicate
+- never #23: multi-conjunct predicate
+- requires #35: the role gate an act's `by` clause states
 - requires #36: the role gate an act's `by` clause states
 - requires #37: the role gate an act's `by` clause states
 - requires #38: the role gate an act's `by` clause states
-- requires #39: the role gate an act's `by` clause states
-- requires #41: the role gate an act's `by` clause states
+- requires #40: the role gate an act's `by` clause states

@@ -105,6 +105,7 @@ act AssayReading {
     assay: one Assay
     hoursElapsed: integer
     inhibitionPercent: decimal
+    unique (assay, hoursElapsed)
     previous: one AssayReading? = latest(AssayReading where assay == this.assay and hoursElapsed < this.hoursElapsed by hoursElapsed)
     runningPeak: decimal = if previous is some then max(previous.runningPeak, inhibitionPercent) else inhibitionPercent
 }
@@ -114,9 +115,8 @@ never (AssayReading where hoursElapsed < 0)
 
 -- Two readings at the same hour mark would leave the series unordered, so the
 -- second is refused at the boundary.
--- velle: uniqueness within a series stated as a count over the siblings that
--- share the datum — no instance inequality needed
-never (AssayReading where count(assay.assayReadings where hoursElapsed == this.hoursElapsed) > 1)
+-- velle: the key `unique (assay, hoursElapsed)` in the body above (Reference §21,
+-- "Keys") is that refusal; it stands for a count over the readings of the assay
 
 -- A plate is complete once it has been read at or past the protocol's
 -- duration.
@@ -286,6 +286,7 @@ act PlotObservation {
     dayAfterTreatment: integer
     recordedSeverity: decimal
     observedOn: Date
+    unique (plot, dayAfterTreatment)
     diseaseSeverity: decimal = if observationCorrections is empty then recordedSeverity
                                else latest(observationCorrections by correctedOn).correctedSeverity
     previous: one PlotObservation? = latest(PlotObservation where plot == this.plot and dayAfterTreatment < this.dayAfterTreatment by dayAfterTreatment)
@@ -296,7 +297,6 @@ act PlotObservation {
 
 never (PlotObservation where recordedSeverity < 0 or recordedSeverity > 100)
 never (PlotObservation where dayAfterTreatment < 0)
-never (PlotObservation where count(plot.plotObservations where dayAfterTreatment == this.dayAfterTreatment) > 1)
 
 -- No score before the plants were treated.
 -- velle: a door-checked constraint testing refinement membership two
@@ -573,9 +573,8 @@ act WeatherObservation {
     observedOn: Date
     rainfallMm: decimal
     maxTemperature: decimal
+    unique (site, observedOn)
 }
-
-never (WeatherObservation where count(site.weatherObservations where observedOn == this.observedOn) > 1)
 
 -- A field protocol: what yield gain counts as success. When the plots are
 -- scouted is not protocol data — it is scheduled per trial, as collection
@@ -734,6 +733,7 @@ act Scouting {
     scoutedOn: Date
     incidencePercent: decimal
     severity: decimal
+    unique (plot, daysAfterPlanting)
     previous: one Scouting? = latest(Scouting where plot == this.plot and daysAfterPlanting < this.daysAfterPlanting by daysAfterPlanting)
     audpcSoFar: decimal = if previous is some then
                               previous.audpcSoFar + (severity + previous.severity) / 2 * (daysAfterPlanting - previous.daysAfterPlanting)
@@ -742,7 +742,6 @@ act Scouting {
 
 never (Scouting where severity < 0 or severity > 100)
 never (Scouting where incidencePercent < 0 or incidencePercent > 100)
-never (Scouting where count(plot.scoutings where daysAfterPlanting == this.daysAfterPlanting) > 1)
 
 -- A planted trial with a plot that has never been scouted — reported, not
 -- nagged; nagging is the collection tasks' job (below).

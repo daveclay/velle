@@ -9,8 +9,6 @@ import velle.generated.bookings.*
 /**
  * never (StandingBooking where exists (StandingBooking as other where (other.slot == this.slot) and (not (other == this))))
  *
- * never (Booking where count(cancellations) > 1)
- *
  */
 class BookingSpec : SpecSupport() {
 }

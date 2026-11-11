@@ -42,7 +42,7 @@ shape Booking {
 }
 
 shape Cancellation {
-    booking: one Booking
+    booking: one Booking unique
     cancelledOn: timestamp on create
 }
 
@@ -68,10 +68,9 @@ transient act Cancel {
 }
 
 -- A booking is given back once at most.
--- velle: a constraint on the booking, holding at the end of the cancellation's
--- commit; the second cancellation of one booking is refused with the first on
--- record.
-never (Booking where count(cancellations) > 1)
+-- velle: the key `booking: one Booking unique` on Cancellation below (Reference
+-- §21, "Keys"); the second cancellation of one booking is refused with the first
+-- on record.
 
 -- velle: the commit is keyed on the booking it cancels, so a cancellation waits
 -- only for work on that booking.

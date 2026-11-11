@@ -4,13 +4,16 @@ How a Velle spec reads "*the* one instance for this subject" — the `(Shape for
 
 ## The forms
 
-There are exactly two ways to use a single matching instance as a value:
+There are exactly three ways to use a single matching instance as a value:
 
 ```
 (Shape for expr)                       -- the singular query: proof-gated
+(Shape where key == expr)              -- the key filter: one record by a declared key (Reference §21, "Keys")
 latest(Shape where field == expr)      -- ordered selection: the general fallback
 first(Shape where field == expr)
 ```
+
+- **`(Shape where key == expr)`** is one record or absent when the filter names every field of a key of `Shape` with `==` and compares each with a value that is present ([Reference §10, "Reading the one related record"](Reference-10-Predicate-expressions#reading-the-one-related-record); check [V36](checks#v36--a-filter-over-a-key-is-one-record)). The key is the proof, declared on the shape.
 
 - **`(Shape for expr)`** claims there is *at most one* matching instance, and the compiler must be able to prove it. It matches by type: the one to-one field of `Shape` whose type matches `expr`'s type is the field compared. It is legal only when exactly one field type-matches (otherwise [V13](checks#v13--ambiguity-is-a-connected-diagnostic) — use the `where`-filtered form) *and* the at-most-one proof holds (otherwise [V12](checks#v12--singular-reference-proofs) — use `latest`/`first`).
 - **`latest(...)`/`first(...)`** make no singularity claim — they select from possibly-many by order (the element shape's `timestamp on create` by default). Whenever the proof doesn't hold, this is the honest spelling.
@@ -25,7 +28,9 @@ For a base shape, at-most-one usually comes from the relationship itself — the
 (BatchSubmission for batch)?.submittedOn     -- one submission per batch, proven
 ```
 
-*(v0 note: base-shape singularity is currently enforced at runtime — a non-singular match fails the evaluation — rather than proven at compile time.)*
+A key on the reference field, `batch: one Batch unique` on `BatchSubmission` ([Reference §21, "Keys"](Reference-21-never#keys)), is the declared form of that proof: the key's `never` refuses a second submission for the batch at the door, so the singular read never finds two.
+
+*(v0 note: base-shape singularity is currently enforced at runtime — a non-singular match fails the evaluation — rather than proven at compile time; a key makes the runtime check unreachable.)*
 
 ## Refinements: the whole-spec singularity proof
 
@@ -132,10 +137,12 @@ The failure is `ReopenFlag`'s, not the boolean's: with only `resolved = true` wr
 **The bare filter as a value.**
 
 ```
-flag: (OpenDelinquencyFlag where account == this)     -- ✘ not a value: a set expression
+flag: (OpenDelinquencyFlag where account == this)     -- ✘ not a value: a set expression (V36), unless `account` is a key
 flag: (OpenDelinquencyFlag for this)                  -- ✔ where the proof holds
 flag: latest(OpenDelinquencyFlag where account == this)  -- ✔ always
 ```
+
+With `account: one Account unique` on `DelinquencyFlag` the first line is legal: the filter names the key, so it is one flag or absent ([Reference §21, "Keys"](Reference-21-never#keys)).
 
 **A transient act as the subject.** `(TransientShape for x)` is illegal everywhere outside the act's own transaction — a transient act is not kept after its commit, so there is no instance to select (check [V17](checks#v17--transient-isolation); [Reference §4, "Transient acts"](Reference-04-State-and-commits#transient-acts-transient-act)). Read the durable outcomes its rules produced instead.
 

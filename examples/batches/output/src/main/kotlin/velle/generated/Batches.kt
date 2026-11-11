@@ -35,7 +35,7 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 
     /** Queue keys: [peptideBatch.origin], [peptideBatch.peptide] — plus system-wide width below.
      *  System-wide over PeptideBatch — reads PeptideBatch.peptide with no path back to any key (unexamined (A5)).
-     *  System-wide over PeptideBatch — 'walk drawnFrom' reads the whole connected part of 'PeptideBatch' (tolerated by never #6).
+     *  System-wide over PeptideBatch — 'walk drawnFrom' reads the whole connected part of 'PeptideBatch' (tolerated by never #5).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewPeptideBatch): Commit<NewPeptideBatch, Ref<PeptideBatch>> =
@@ -112,6 +112,8 @@ class BatchesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
         fun peptideBatch(key: StoreKey): PeptideBatch = byKey("PeptideBatch", key)
         fun peptideBatch(key: Long): PeptideBatch = peptideBatch(StoreKey(key))
+        /** The PeptideBatch whose origin this is, or null when none has it. */
+        fun peptideBatchByOrigin(origin: Ref<Origin>): PeptideBatch? = byValues("PeptideBatch", PeptideBatchFields(), { materializePeptideBatch(it) }) { (this.origin eq origin) }
 
         val depletionNotices: DepletionNoticeQuery get() = query("DepletionNotice", DepletionNoticeFields()) { materializeDepletionNotice(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
@@ -448,7 +450,7 @@ shape Origin = Fermentation or ExternalOrder or Composition {
 act PeptideBatch {
     peptide: one Peptide
     quantityMg: decimal
-    origin: one Origin
+    origin: one Origin unique
     -- what has been drawn from this batch into mixtures, and what is left
     -- velle: a derivation over the inverse inferred from Component.source
     consumedMg: decimal = sum(components, amountMg)
@@ -477,10 +479,8 @@ shape Composite = PeptideBatch where origin is Composition
 
 -- One origin, one batch: a fermentation or an order or a mixture yields one
 -- container. A batch normally arrives with its own new origin; a batch naming
--- an origin that already has one is refused at the door, by counting the
--- arriving batch among its origin's batches.
--- velle: the view declared on the union, read through the union-typed field
-never (PeptideBatch where count(origin.peptideBatches) > 1)
+-- an origin that already has one is refused at the door by the key
+-- `origin: one Origin unique` in the body above (Reference §21, "Keys").
 
 -- A mixture is of one peptide: every component was drawn from a batch of the
 -- peptide the mixture is labelled as.

@@ -9,7 +9,7 @@ import velle.generated.pharmacy.*
 /**
  * never (PriceChange where unitPrice < 0)
  *
- * never (PriceChange where count(drug.priceChanges where effectiveOn == this.effectiveOn) > 1)
+ * unique (drug, effectiveOn)
  *
  */
 class PriceChangeSpec : SpecSupport() {

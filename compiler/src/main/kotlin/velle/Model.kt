@@ -89,11 +89,13 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
             is DerivedProp -> m.copy(type = manyOfType(m.type))
             else -> m
         }
-        decls = allDecls.map { d -> when (d) {
+        val lookups = KeyLookups(allDecls.map { d -> when (d) {
             is ShapeDecl -> d.copy(members = d.members.map(::fix))
             is RefinementDecl -> d.copy(members = d.members.map(::fix))
             else -> d
-        } }
+        } })
+        diagnostics.addAll(lookups.diagnostics)
+        decls = lookups.rewritten
         for (d in decls) when (d) {
             is UsesDecl -> {}
             is ShapeDecl -> {
@@ -126,7 +128,64 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
             nevers.add(NeverDecl(RefName(name, complementOf(predicate)), requirement = Requirement(name, predicate),
                 fromActorClause = true))
         }
+        // a key (Reference §21, "Keys") is the count `never` an author wrote by hand
+        // before: one emitted per key, quoting the key, so the door, the rejection
+        // data, and every analysis see the prohibition the word stands for
+        for ((name, shape) in shapes) for (key in shape.keys()) keyNever(name, shape, key)?.let(nevers::add)
     }
+
+    /** The shape's keys (Reference §21, "Keys"), both spellings, in declaration order. */
+    fun keysOf(shape: String): List<UniqueKey> = shapes[shape]?.keys().orEmpty()
+
+    /**
+     * The count `never` a key stands for: `never (S where count(S where f == this.f and ...) > 1)`,
+     * with `f is some` guarding each optional field on both sides so absent values do not
+     * collide. Null, with a V35 diagnostic, when the key names a field that is not a stored
+     * value of the shape.
+     */
+    private fun keyNever(shapeName: String, shape: ShapeDecl, key: UniqueKey): NeverDecl? {
+        val declaration = if (key.onField)
+            Printer.member(shape.members.filterIsInstance<StoredProp>().single { it.name == key.fields.single() })
+        else Printer.member(key)
+        val stored = shape.members.filterIsInstance<StoredProp>().associateBy { it.name }
+        for (field in key.fields) {
+            val prop = stored[field]
+            val fault = when {
+                prop == null && shape.members.any { memberName(it) == field } ->
+                    "which is not a stored field: a key is over values the committer supplies"
+                prop == null -> "which $shapeName does not declare"
+                prop.type is ScalarType && prop.type.many || prop.type is RelType && prop.type.many ->
+                    "which is a collection: a key is over single values"
+                else -> null
+            } ?: continue
+            error("V35", "'$declaration' on $shapeName names '$field', $fault (Reference §21)")
+            return null
+        }
+        val optional = key.fields.filter { isOptional(stored.getValue(it).type) }
+        val sibling = PathExpr(shapeName)
+        val sameValues = key.fields.map { field ->
+            val same = Binary("==", PathExpr(field), PathExpr("this", listOf(Seg(field, viaQdot = false))))
+            if (field in optional) Binary("and", IsExpr(PathExpr(field), "some"), same) else same
+        }
+        val count = Binary(">", AggCall("count", CollectionExpr(listOf(Binding(sibling)), conjunction(sameValues))), IntLit(1))
+        val guards = optional.map { IsExpr(PathExpr(it), "some") }
+        return NeverDecl(RefName(shapeName, conjunction(guards + count)), keyDeclaration = declaration)
+    }
+
+    private fun memberName(member: Member): String? = when (member) {
+        is StoredProp -> member.name
+        is DerivedProp -> member.name
+        is TimestampProp -> member.name
+        is ActorProp -> member.name
+        else -> null
+    }
+
+    private fun isOptional(type: TypeRef): Boolean = when (type) {
+        is ScalarType -> type.optional
+        is RelType -> type.optional
+    }
+
+    private fun conjunction(terms: List<Expr>): Expr = terms.reduce { left, right -> Binary("and", left, right) }
 
     companion object {
         /** Velle's record of a schedule's run: one row per tick, `schedule` and the moment `at` (Reference §17). */
@@ -415,6 +474,7 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
                     MemberInfo(m.name, owner, VType.Inst(m.shape), stored = true, actor = true)
                 is FrozenClause -> {}
                 UndeletableClause -> {}
+                is UniqueKey -> {}
             }
         }
         shapes[scope]?.let { shape ->

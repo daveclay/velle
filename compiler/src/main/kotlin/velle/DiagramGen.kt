@@ -144,8 +144,13 @@ object DiagramGen {
             if (fizzle && noteIfQuiet) sb.appendLine("        Note over S: no rules fire inside this envelope")
             for (never in model.nevers) {
                 val reads = model.summaryOfRefExpr(never.target).touchedShapes().map { model.baseOf(it) ?: it }
-                if (reads.any { it in touched })
-                    sb.appendLine("        Note over S: transaction-end check — ${esc(if (never.requirement == null) "never " + Printer.refExpr(never.target) else Printer.prohibition(never))}")
+                if (reads.none { it in touched }) continue
+                val spelled = when {
+                    never.keyDeclaration != null -> Printer.prohibitionBody(never)
+                    never.requirement == null -> "never " + Printer.refExpr(never.target)
+                    else -> Printer.prohibition(never)
+                }
+                sb.appendLine("        Note over S: transaction-end check — ${esc(spelled)}")
             }
             sb.appendLine("    end")
         }

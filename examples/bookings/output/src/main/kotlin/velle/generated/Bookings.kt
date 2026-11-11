@@ -25,7 +25,7 @@ class BookingsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         boundary("Cancel", input).carryingNoRecord(input)
 
     /** Queue: system-wide.
-     *  System-wide over Waitlist — `Waitlist` reads every Waitlist and correlates to no key (tolerated by never #3).
+     *  System-wide over Waitlist — `Waitlist` reads every Waitlist and correlates to no key (tolerated by never #2).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewWaitlist): Commit<NewWaitlist, Ref<Waitlist>> =
@@ -59,6 +59,8 @@ class BookingsSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
         fun cancellation(key: StoreKey): Cancellation = byKey("Cancellation", key)
         fun cancellation(key: Long): Cancellation = cancellation(StoreKey(key))
+        /** The Cancellation whose booking this is, or null when none has it. */
+        fun cancellationByBooking(booking: Ref<Booking>): Cancellation? = byValues("Cancellation", CancellationFields(), { materializeCancellation(it) }) { (this.booking eq booking) }
 
         val waitlists: WaitlistQuery get() = query("Waitlist", WaitlistFields()) { materializeWaitlist(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
@@ -199,7 +201,7 @@ shape Booking {
 }
 
 shape Cancellation {
-    booking: one Booking
+    booking: one Booking unique
     cancelledOn: timestamp on create
 }
 
@@ -225,10 +227,9 @@ transient act Cancel {
 }
 
 -- A booking is given back once at most.
--- velle: a constraint on the booking, holding at the end of the cancellation's
--- commit; the second cancellation of one booking is refused with the first on
--- record.
-never (Booking where count(cancellations) > 1)
+-- velle: the key `booking: one Booking unique` on Cancellation below (Reference
+-- §21, "Keys"); the second cancellation of one booking is refused with the first
+-- on record.
 
 -- velle: the commit is keyed on the booking it cancels, so a cancellation waits
 -- only for work on that booking.

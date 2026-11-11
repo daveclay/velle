@@ -238,6 +238,15 @@ internal class QueryEngine(private val system: VelleSystem) {
         return matching(q).size
     }
 
+    /** The one record a filter over a key admits (Reference §21, "Keys"), or null: a read with
+     *  no order to name. Two matches mean the store holds what the key forbids. */
+    fun single(q: Query): Long? {
+        checkedUnordered(q)
+        val matches = matching(q)
+        check(matches.size <= 1) { "${matches.size} records of ${q.root} match a key the store should keep unique" }
+        return matches.singleOrNull()
+    }
+
     fun sum(q: Query, member: String): BigDecimal = (sumValue(q, member) as Value.VNum).v
 
     /** The sum of [member] over the matching rows: a number, or a value of the member's

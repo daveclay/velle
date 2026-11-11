@@ -584,6 +584,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
         fun priceChange(key: StoreKey): PriceChange = byKey("PriceChange", key)
         fun priceChange(key: Long): PriceChange = priceChange(StoreKey(key))
+        /** The PriceChange whose drug and effectiveOn this is, or null when none has it. */
+        fun priceChangeByDrugAndEffectiveOn(drug: Ref<Drug>, effectiveOn: LocalDate): PriceChange? = byValues("PriceChange", PriceChangeFields(), { materializePriceChange(it) }) { (this.drug eq drug) and (this.effectiveOn eq effectiveOn) }
 
         val priceWithdrawals: PriceWithdrawalQuery get() = query("PriceWithdrawal", PriceWithdrawalFields()) { materializePriceWithdrawal(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
@@ -3069,16 +3071,16 @@ Interaction requires severity == "major" or severity == "moderate"
 -- nothing is overwritten. The price in force is the latest change whose date
 -- has arrived; a change dated in the future waits its turn.
 -- velle: the ledger pattern (Reference §12) ordered by a business date rather
--- than a commit timestamp, read through `today`; the date must be unique per
--- drug so the selector discriminates
+-- than a commit timestamp, read through `today`; the date is a key per drug,
+-- `unique (drug, effectiveOn)` (Reference §21, "Keys"), so the selector discriminates
 act PriceChange {
     drug: one Drug
     effectiveOn: Date
     unitPrice: decimal
+    unique (drug, effectiveOn)
 }
 
 never (PriceChange where unitPrice < 0)
-never (PriceChange where count(drug.priceChanges where effectiveOn == this.effectiveOn) > 1)
 
 -- A change already in force is history and stays; a future-dated change
 -- entered in error may be removed before its day comes.

@@ -9,13 +9,13 @@ import velle.generated.batches.*
 /**
  * never (PeptideBatch where quantityMg <= 0)
  *
- * never (PeptideBatch where count(origin.peptideBatches) > 1)
- *
  * never (PeptideBatch where exists (Component where (composition == this.origin) and (source.peptide != this.peptide)))
  *
  * never (PeptideBatch where remainingMg < 0)
  *
  * never (PeptideBatch where this in lineage) tolerates contention
+ *
+ * origin: one Origin unique
  *
  */
 class PeptideBatchSpec : SpecSupport() {

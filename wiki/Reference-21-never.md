@@ -36,6 +36,44 @@ A requirement that only restricts who may commit an act has a third spelling, in
 
 When a prohibition rejects something, the rejection quotes the declaration as you wrote it: a requirement is reported as unmet, a `never` as reached.
 
+## Keys
+
+Many business sentences of the form "no two records share this" are about one value or one set of values: no two kinds share a name, no two readings of one assay sit at the same hour mark, one origin yields one batch. Such a sentence is a *key*, and Velle spells it with `unique` in the shape's body instead of a `never` with a count in it. From `examples/peptides/peptides.velle`, `examples/batches/batches.velle`, and `compiler/src/test/kotlin/velle/UniqueKeyTest.kt`:
+
+```
+act Kind {
+    name: text unique                     -- no two kinds share a name
+    parent: one Kind?
+}
+
+act AssayReading {
+    assay: one Assay
+    hoursElapsed: integer
+    inhibitionPercent: decimal
+    unique (assay, hoursElapsed)          -- no two readings of one assay share an hour mark
+}
+
+act PeptideBatch {
+    origin: one Origin unique             -- one batch per origin
+    quantityMg: decimal
+}
+```
+
+- `name: text unique` on a field is the one-field key. `unique (assay, hoursElapsed)` as a line of the body is a key of several fields, and the word on a field is the short form of that line with one field.
+- A key of several fields is not several keys. `unique (assay, hoursElapsed)` lets two assays each have a reading at hour 24; `assay: one Assay unique` and `hoursElapsed: integer unique` as two keys would allow one reading per assay and one reading per hour mark across every assay.
+- A key field may be optional, `key: text? unique`. Absent values do not collide: any number of records may have no value while no two present values are equal.
+- A key field is a stored value of the shape: a scalar, a reference, or the act's actor. A derived property, a timestamp, or a collection cannot be a key field.
+
+A key is a prohibition like any other, and the compiler treats it as the `never` it stands for. `unique (assay, hoursElapsed)` is `never (AssayReading where count(AssayReading where assay == this.assay and hoursElapsed == this.hoursElapsed) > 1)`, and `key: text? unique` is the same count with `key is some` guarding both sides. Everything on this page about when a prohibition is checked and what the compiler proves applies to the emitted `never`. What the word adds:
+
+- The rejection quotes the key as you wrote it: "this AssayReading, AssayReading#3 share one value of the key unique (assay, hoursElapsed)", with the records and the values read.
+- A filter that names every field of a key is one record, so a spec may write `(Entry where key == this.entryKey)` where one record is expected and leave the `by` of a selection off ([§10, "Reading the one related record"](Reference-10-Predicate-expressions#reading-the-one-related-record)).
+- A key on a reference field, `origin: one Origin unique`, is the proof that `(PeptideBatch for this)` reads at most one record from the origin's side ([`singular_references.md`](singular_references)).
+- A store that can keep a key does: the SQL store declares each key as a unique constraint on the table, so two commits racing from separate processes cannot both land ([Store API](Store-API)).
+- The generated read API has one read per key, `read.entryByKey("PLOT-0417")`, returning the record or absent ([Read API](Read-API#reading-a-record)).
+
+A key says at most one, never at least one. An act that names a record by its key still needs the `never` that refuses a key no record has, which [patterns.md, "An act that names a record by its values"](patterns#an-act-that-names-a-record-by-its-values) shows beside it.
+
 ## When a prohibition is checked
 
 A prohibition holds over the *settled* state at the end of each transaction. It is not checked after every commit inside a transaction. Suppose `never (Account where balance >= 0 and suspended)` is declared and a $50 deposit arrives for a suspended account at −$20. At the deposit's commit the account briefly has a non-negative balance and is still suspended. The rule that restores service fires as a consequence inside the same transaction and clears the flag. The transaction ends clean, so the deposit is valid. A rule that watches a transition may observe the forbidden configuration mid-transaction. The prohibition promises only what the state settles to.
@@ -69,7 +107,7 @@ A rejection is data, not just a message. A refusal carries the act, the records 
 
 **A refusal or a constraint is compiled into the generated code.** No compile-time proof can stop tomorrow's request, so the generated system evaluates the prohibition against incoming data and rejects a violating act. The check runs at one of two moments:
 
-- *At the door*, meaning at the act's own commit before any rule runs, when the predicate reads nothing any rule writes, creates, or deletes. The rules cannot change the verdict, so it is evaluated once over the state as it would stand with the act landed, and not again at the end. `never (AssayReading where count(assay.assayReadings where hoursElapsed == this.hoursElapsed) > 1)` in `examples/peptides/peptides.velle` counts the arriving reading among its siblings at the door, so no rule ever runs against a duplicate and the caller gets the refusal the author wrote.
+- *At the door*, meaning at the act's own commit before any rule runs, when the predicate reads nothing any rule writes, creates, or deletes. The rules cannot change the verdict, so it is evaluated once over the state as it would stand with the act landed, and not again at the end. The key `unique (assay, hoursElapsed)` on `AssayReading` in `examples/peptides/peptides.velle` counts the arriving reading among its assay's readings at the door, so no rule ever runs against a duplicate and the caller gets the refusal the author wrote.
 - *At the end of the transaction*, when the predicate reads something the rules move. A fill request numbered against a count that its own handling grows is checked after the handling. A sentence about the books that the request's handling makes true belongs on the record the handling produces, as a constraint ([patterns.md, "Three answers to one request"](patterns#three-answers-to-one-request)).
 
 Nothing is checked twice.
@@ -83,6 +121,8 @@ Nothing is checked twice.
 - Retract it, when the sentence is really a state the business acts on. "An invoice is never unpaid past its due date" is an `OverdueInvoice` refinement and a scheduled rule, not a prohibition.
 
 **A prohibition that reads a whole shape makes every commit on it take turns.** `never (Waitlist where count(Waitlist) > 20)` in `examples/bookings/bookings.velle` reads every waitlist entry, so two people joining at once are decided one after the other. The compiler warns about such a read unless the `never` or `requires` ends with `tolerates contention`, which says the waiting is intended ([§19](Reference-19-Self-referential-folds-and-tolerates#a-read-over-a-whole-shape-tolerates-contention); [checks.md, A5](checks#a5--contention-width)).
+
+**A key names stored fields.** The compiler rejects `unique` over a field the shape does not declare, a derived property, a timestamp, or a collection, naming the field ([checks.md, V35](checks#v35--a-key-names-stored-fields)).
 
 **A record that arrived without an act is still checked.** A seeded row that already violates a constraint, or has aged into one, is rejected at the next act that reaches it, or thrown at the next tick.
 

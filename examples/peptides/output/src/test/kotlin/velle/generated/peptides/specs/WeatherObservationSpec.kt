@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.peptides.*
 
 /**
- * never (WeatherObservation where count(site.weatherObservations where observedOn == this.observedOn) > 1)
+ * unique (site, observedOn)
  *
  */
 class WeatherObservationSpec : SpecSupport() {

@@ -250,6 +250,33 @@ abstract class SqlStoreConformance {
     }
 
     @Test
+    fun `a key is kept by the database as a unique constraint, absent values left out`() {
+        val keyed = """
+            act Field {
+                kindName: text
+                name: text
+                unique (kindName, name)
+            }
+            act Entry {
+                key: text? unique
+                label: text
+            }
+        """.trimIndent()
+        val a = attach(spec = keyed)
+        a.execute("""INSERT INTO "Field" ("kindName", "name") VALUES ('site', 'notes')""")
+        a.execute("""INSERT INTO "Field" ("kindName", "name") VALUES ('plot', 'notes')""")
+        assertFailsWith<Exception>("the second row with the key must be refused by the database") {
+            a.execute("""INSERT INTO "Field" ("kindName", "name") VALUES ('site', 'notes')""")
+        }
+        assertEquals(2L, a.count("Field"))
+        a.execute("""INSERT INTO "Entry" ("key", "label") VALUES (NULL, 'a')""")
+        a.execute("""INSERT INTO "Entry" ("key", "label") VALUES (NULL, 'b')""")
+        a.execute("""INSERT INTO "Entry" ("key", "label") VALUES ('PLOT-1', 'c')""")
+        assertFailsWith<Exception> { a.execute("""INSERT INTO "Entry" ("key", "label") VALUES ('PLOT-1', 'd')""") }
+        assertEquals(3L, a.count("Entry"))
+    }
+
+    @Test
     fun `absent optionals stay absent and an empty collection reads back empty`() {
         val a = attach()
         a.customer("Bea", email = null, lastSeen = null, opensAt = null, avatar = null)

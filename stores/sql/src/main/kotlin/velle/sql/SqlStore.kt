@@ -287,6 +287,22 @@ open class SqlStore(
 
     private val persistedShapes = model.shapes.keys.filter { it !in model.transients }
 
+    /** A key (Reference §21, "Keys") kept by the database: one `UNIQUE` per key, over the
+     *  key's columns and the shape column of a union-typed reference among them. Absent
+     *  values are left out of the constraint, as the emitted `never` leaves them out of the
+     *  count. The runtime still refuses the second record at the door, with the rejection
+     *  as data; the constraint guards against two commits racing from separate processes. */
+    private fun keyConstraints(shape: String): String {
+        val columns = columnsOf(shape).associateBy { it.name }
+        return model.keysOf(shape).joinToString("") { key ->
+            val names = key.fields.flatMap { field ->
+                val column = columns[field] ?: return@flatMap emptyList()
+                if (column.union) listOf(field, shapeColumn(field)) else listOf(field)
+            }
+            """, UNIQUE (${names.joinToString(", ") { "\"$it\"" }})"""
+        }
+    }
+
     private fun shapeColumn(field: String) = "${field}__shape"
     private fun junctionTable(shape: String, field: String) = "${shape}__$field"
     private fun captureTable(refinement: String) = "capture_$refinement"
@@ -304,7 +320,7 @@ open class SqlStore(
                     """, "${c.name}" ${columnType(c.type)}""" +
                         if (c.union) """, "${shapeColumn(c.name)}" ${dialect.column(StorageClass.TEXT).columnType}""" else ""
                 }
-                st.execute("""CREATE TABLE IF NOT EXISTS "$shape" (id ${dialect.keyColumn}$cols)""")
+                st.execute("""CREATE TABLE IF NOT EXISTS "$shape" (id ${dialect.keyColumn}$cols${keyConstraints(shape)})""")
                 for (coll in collectionsOf(shape)) {
                     val member = if (coll.elem is VType.Inst) {
                         "target ${keyStorage.columnType} NOT NULL" +

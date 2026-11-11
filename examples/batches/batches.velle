@@ -133,7 +133,7 @@ shape Origin = Fermentation or ExternalOrder or Composition {
 act PeptideBatch {
     peptide: one Peptide
     quantityMg: decimal
-    origin: one Origin
+    origin: one Origin unique
     -- what has been drawn from this batch into mixtures, and what is left
     -- velle: a derivation over the inverse inferred from Component.source
     consumedMg: decimal = sum(components, amountMg)
@@ -162,10 +162,8 @@ shape Composite = PeptideBatch where origin is Composition
 
 -- One origin, one batch: a fermentation or an order or a mixture yields one
 -- container. A batch normally arrives with its own new origin; a batch naming
--- an origin that already has one is refused at the door, by counting the
--- arriving batch among its origin's batches.
--- velle: the view declared on the union, read through the union-typed field
-never (PeptideBatch where count(origin.peptideBatches) > 1)
+-- an origin that already has one is refused at the door by the key
+-- `origin: one Origin unique` in the body above (Reference §21, "Keys").
 
 -- A mixture is of one peptide: every component was drawn from a batch of the
 -- peptide the mixture is labelled as.

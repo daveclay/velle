@@ -729,24 +729,24 @@ interface PharmacyStore {
     /** Serves never #6 — `PriceChange where unitPrice < 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never6Candidates(): List<PriceChangeRow>
-    /** Serves never #10 — `StockLot where received <= 0`.
+    /** Serves never #9 — `StockLot where received <= 0`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never10Candidates(): List<StockLotRow>
-    /** Serves never #13 — `Prescription where quantity <= 0`.
+    fun never9Candidates(): List<StockLotRow>
+    /** Serves never #12 — `Prescription where quantity <= 0`.
+     *  Superset contract: any superset of the matching rows is correct. */
+    fun never12Candidates(): List<PrescriptionRow>
+    /** Serves never #13 — `Prescription where daysSupply <= 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never13Candidates(): List<PrescriptionRow>
-    /** Serves never #14 — `Prescription where daysSupply <= 0`.
+    /** Serves never #14 — `Prescription where refillsAuthorized < 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never14Candidates(): List<PrescriptionRow>
-    /** Serves never #15 — `Prescription where refillsAuthorized < 0`.
+    /** Serves never #15 — `Prescription where (drug is ScheduleTwo) and (refillsAuthorized > 0)`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never15Candidates(): List<PrescriptionRow>
-    /** Serves never #16 — `Prescription where (drug is ScheduleTwo) and (refillsAuthorized > 0)`.
+    /** Serves never #16 — `Prescription where (drug is Controlled) and (refillsAuthorized > 5)`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never16Candidates(): List<PrescriptionRow>
-    /** Serves never #17 — `Prescription where (drug is Controlled) and (refillsAuthorized > 5)`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never17Candidates(): List<PrescriptionRow>
 
     // ── capture memory: null when no current membership (Reference §13) ──
     fun readyForPickupCapture(instance: Ref.Persisted): ReadyForPickupCapture?
@@ -795,12 +795,12 @@ class PharmacyStoreQuestions(model: Model) {
     val never3Candidates = QTemplate.of(model, "Drug", model.nevers[2].target)
     val never5Candidates = QTemplate.of(model, "Interaction", model.nevers[4].target)
     val never6Candidates = QTemplate.of(model, "PriceChange", model.nevers[5].target)
-    val never10Candidates = QTemplate.of(model, "StockLot", model.nevers[9].target)
+    val never9Candidates = QTemplate.of(model, "StockLot", model.nevers[8].target)
+    val never12Candidates = QTemplate.of(model, "Prescription", model.nevers[11].target)
     val never13Candidates = QTemplate.of(model, "Prescription", model.nevers[12].target)
     val never14Candidates = QTemplate.of(model, "Prescription", model.nevers[13].target)
     val never15Candidates = QTemplate.of(model, "Prescription", model.nevers[14].target)
     val never16Candidates = QTemplate.of(model, "Prescription", model.nevers[15].target)
-    val never17Candidates = QTemplate.of(model, "Prescription", model.nevers[16].target)
 }
 
 /**
@@ -1194,9 +1194,13 @@ open class PharmacyStoreOverGeneric(
         backend.fetchCandidates("PriceChange", questions.never6Candidates.instantiate(listOf()))
             .map { it.toPriceChangeRow() }
 
-    override fun never10Candidates(): List<StockLotRow> =
-        backend.fetchCandidates("StockLot", questions.never10Candidates.instantiate(listOf()))
+    override fun never9Candidates(): List<StockLotRow> =
+        backend.fetchCandidates("StockLot", questions.never9Candidates.instantiate(listOf()))
             .map { it.toStockLotRow() }
+
+    override fun never12Candidates(): List<PrescriptionRow> =
+        backend.fetchCandidates("Prescription", questions.never12Candidates.instantiate(listOf()))
+            .map { it.toPrescriptionRow() }
 
     override fun never13Candidates(): List<PrescriptionRow> =
         backend.fetchCandidates("Prescription", questions.never13Candidates.instantiate(listOf()))
@@ -1212,10 +1216,6 @@ open class PharmacyStoreOverGeneric(
 
     override fun never16Candidates(): List<PrescriptionRow> =
         backend.fetchCandidates("Prescription", questions.never16Candidates.instantiate(listOf()))
-            .map { it.toPrescriptionRow() }
-
-    override fun never17Candidates(): List<PrescriptionRow> =
-        backend.fetchCandidates("Prescription", questions.never17Candidates.instantiate(listOf()))
             .map { it.toPrescriptionRow() }
 
     override fun readyForPickupCapture(instance: Ref.Persisted): ReadyForPickupCapture? =
@@ -1482,7 +1482,9 @@ class PharmacyStoreResolver(
         if (shape == "PriceChange")
             questions.never6Candidates.match(filter)?.let { h -> return store.never6Candidates().map { it.toRow() } }
         if (shape == "StockLot")
-            questions.never10Candidates.match(filter)?.let { h -> return store.never10Candidates().map { it.toRow() } }
+            questions.never9Candidates.match(filter)?.let { h -> return store.never9Candidates().map { it.toRow() } }
+        if (shape == "Prescription")
+            questions.never12Candidates.match(filter)?.let { h -> return store.never12Candidates().map { it.toRow() } }
         if (shape == "Prescription")
             questions.never13Candidates.match(filter)?.let { h -> return store.never13Candidates().map { it.toRow() } }
         if (shape == "Prescription")
@@ -1491,8 +1493,6 @@ class PharmacyStoreResolver(
             questions.never15Candidates.match(filter)?.let { h -> return store.never15Candidates().map { it.toRow() } }
         if (shape == "Prescription")
             questions.never16Candidates.match(filter)?.let { h -> return store.never16Candidates().map { it.toRow() } }
-        if (shape == "Prescription")
-            questions.never17Candidates.match(filter)?.let { h -> return store.never17Candidates().map { it.toRow() } }
         return fetchAll(shape) // unrecognized filters fall back to the scan floor
     }
 

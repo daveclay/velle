@@ -74,6 +74,7 @@ internal object ClassDiagramGen {
         is VisibleClause -> Printer.visible(m)
         is FrozenClause -> "frozen " + (m.fields.takeIf { it.isNotEmpty() }?.joinToString(", ") ?: "all stored fields")
         UndeletableClause -> "undeletable"
+        is UniqueKey -> "unique (${m.fields.joinToString(", ")})"
     }
 
     private fun relEdge(model: Model, owner: String, field: String, t: RelType): String {

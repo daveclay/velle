@@ -2107,6 +2107,7 @@ class VelleSystem(
             prohibition = Printer.refExpr(n.target),
             declaration = Printer.prohibition(n),
             requirement = n.requirement?.let { Printer.expr(it.predicate) },
+            key = n.keyDeclaration,
             targetShape = w.bases.joinToString(" or "),
             act = actId?.let(::snapshot),
             rule = t.firing?.first?.name,
@@ -2228,6 +2229,9 @@ class VelleSystem(
     fun query(q: Query): QueryResult = reading { queries.run(q) }
 
     fun count(q: Query): Int = reading { queries.count(q) }
+
+    /** The one record a filter over a key admits, or null (Reference §21, "Keys"). */
+    fun single(q: Query): Long? = reading { queries.single(q) }
 
     fun sum(q: Query, member: String): BigDecimal = reading { queries.sum(q, member) }
     fun sumValue(q: Query, member: String): Value = reading { queries.sumValue(q, member) }

@@ -50,6 +50,9 @@ open class PeptidesPipelineTest {
         // the 24-hour reading arrives after the 48-hour one; it is ordered by its hour, not its arrival
         accept(sys.commit(NewAssayReading(plate, 24, dec("80"))))
         val at48 = sys.assayReadings().first { sys.read(it).assay == plate && sys.read(it).hoursElapsed == 48 }
+        // the key `unique (assay, hoursElapsed)` gives the read surface a read by it (Reference §21, "Keys")
+        assertEquals(at48.key, sys.read.assayReadingByAssayAndHoursElapsed(plate, 48)?.key)
+        assertNull(sys.read.assayReadingByAssayAndHoursElapsed(plate, 99))
         assertEquals(24, sys.read(at48).previous?.let { sys.read(it) }?.hoursElapsed, "the predecessor is the latest earlier hour mark")
         assertEquals(dec("80"), sys.read(at48).runningPeak, "the successor's running peak re-derived")
         assertEquals(dec("80"), sys.read(plate).peakInhibition)
@@ -63,7 +66,8 @@ open class PeptidesPipelineTest {
         val duplicate = sys.commit(NewAssayReading(plate, 24, dec("81")))
         val refused = assertIs<Commit.Refused<*, *>>(duplicate, "expected a refusal, got: $duplicate")
         assertTrue(refused.reason.startsWith("AssayReading refused: "), refused.reason)
-        assertTrue("this AssayReading would be an AssayReading where count(assay.assayReadings where hoursElapsed == this.hoursElapsed) > 1" in refused.reason, refused.reason)
+        assertTrue("share one value of the key unique (assay, hoursElapsed)." in refused.reason, refused.reason)
+        assertTrue("unique (assay, hoursElapsed) on AssayReading" in refused.reason, refused.reason)
         assertEquals(3, sys.read(plate).assayReadings.size, "nothing landed")
         assertEquals(dec("80"), sys.read(plate).peakInhibition)
     }

@@ -1,7 +1,9 @@
--- Probe for the lookup pattern (wiki/patterns.md, "An act that names a record by its values"): the lookup in a rule's `from`, spelled with `first ... by`,
--- guarded by an existence never and a uniqueness never.
+-- Probe for the lookup pattern (wiki/patterns.md, "An act that names a record by its values"): the lookup in a rule's `from`.
+-- `key: text unique` is the key (Reference §21, "Keys"), so `(Entry where key == this.entryKey)` is one entry or absent and
+-- needs no `by`; the existence never keeps the absent case out at the door. `first(Entry where key == this.entryKey by key)`
+-- is the spelling for a shape without a key.
 act Entry {
-    key: text
+    key: text unique
     initialLabel: text
     arrivals: many Arrival = (Arrival where entry == this)
 }
@@ -12,7 +14,6 @@ act Submission {
 }
 
 never (Submission where not exists (Entry where key == this.entryKey))
-never (Entry where count(Entry where key == this.key) > 1)
 
 shape Arrival {
     submission: one Submission
@@ -22,5 +23,5 @@ shape Arrival {
 shape Unpaired = Submission where not exists Arrival for this
 
 rule RecordArrival when Unpaired {
-    Arrival from { submission: this, entry: first(Entry where key == this.entryKey by key) }
+    Arrival from { submission: this, entry: (Entry where key == this.entryKey) }
 }

@@ -33,6 +33,9 @@ data class Rejection(
     val declaration: String,
     /** The requirement's predicate as written, when the prohibition was spelled `requires`; else null. */
     val requirement: String?,
+    /** The key as written, `unique (assay, hoursElapsed)` or `key: text unique`, when the prohibition is
+     *  a key (Reference §21, "Keys"); else null. */
+    val key: String? = null,
     /** The shape the prohibition is over. */
     val targetShape: String,
     /** The act refused, with its fields; null when a rule firing's transaction was rejected. */
@@ -154,7 +157,10 @@ object RejectionRenderer {
             r.rule != null -> append("rule ${r.rule} rejected: ")
             else -> append("Transaction rejected: ")
         }
-        if (r.requirement != null) {
+        if (r.key != null) {
+            appendLine("$subject share one value of the key ${r.key}.")
+            appendLine("  unique #${r.never}: ${r.key} on ${r.targetShape}")
+        } else if (r.requirement != null) {
             val verb = if (r.violating.size == 1) "does" else "do"
             appendLine("${r.declaration}, and $subject $verb not.")
             appendLine("  requires #${r.never}: ${r.declaration}")

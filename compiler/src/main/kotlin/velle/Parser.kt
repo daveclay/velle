@@ -187,6 +187,10 @@ class Parser(private val tokens: List<Token>) {
             val value = parseValue()
             return DerivedProp(name, type, value, captured = true, visible = parseFieldVisibility())
         }
+        if (atUnique() && peekAhead(1).type == TokType.LPAREN) {
+            if (refinementBody) fail("a key is declared on the base shape, whose records it is over (Reference §21)", t)
+            return parseUniqueKey()
+        }
         val name = expect(TokType.LIDENT).text
         expect(TokType.COLON)
         if (peek().isKw("timestamp")) {
@@ -213,13 +217,29 @@ class Parser(private val tokens: List<Token>) {
             else initially = parseValue()
         }
         if (peek().isKw("tolerates")) { next(); tolerates = expect(TokType.LIDENT).text }
+        val unique = if (atUnique()) { next(); true } else false
         val visible = parseFieldVisibility()
         if (refinementBody)
             fail("a refinement property is derived (= expr) or captured — stored properties belong to the base shape", peek())
         // `many text tolerates duplication`: the collection keeps duplicates, in the order
         // given (Reference §5, "Collections of values"); the clause is the type's flag here
         val typed = if (type is ScalarType && type.many && tolerates == "duplication") type.copy(ordered = true) else type
-        return StoredProp(name, typed, initially, tolerates, initiallyRequired, visible)
+        return StoredProp(name, typed, initially, tolerates, initiallyRequired, visible, unique)
+    }
+
+    /** `unique` is contextual (grammar.md): the key word only after a field's type and
+     *  clauses, or at the start of a body line followed by `(`. */
+    private fun atUnique() = at(TokType.LIDENT) && peek().text == "unique"
+
+    /** `unique (a, b)` — a key of one or more stored fields (Reference §21, "Keys"). */
+    private fun parseUniqueKey(): UniqueKey {
+        val word = next()
+        expect(TokType.LPAREN)
+        val fields = mutableListOf(expect(TokType.LIDENT).text)
+        while (at(TokType.COMMA)) { next(); fields.add(expect(TokType.LIDENT).text) }
+        expect(TokType.RPAREN)
+        if (fields.size != fields.distinct().size) fail("a key names each field once", word)
+        return UniqueKey(fields)
     }
 
     private fun parseTypeRef(): TypeRef {

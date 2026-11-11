@@ -116,7 +116,7 @@ Where the system can work in parallel and where work must wait its turn. Work sh
 |---|---|---|
 | commitBookNow | `slot value` | work with equal keys takes turns; different keys run at the same time |
 | commitCancel | `cancel.booking`, `slot value` | work with equal keys takes turns; different keys run at the same time |
-| commitWaitlist | one queue over `Waitlist`, system-wide | tolerated — never #3: `Waitlist` reads every Waitlist and correlates to no key |
+| commitWaitlist | one queue over `Waitlist`, system-wide | tolerated — never #2: `Waitlist` reads every Waitlist and correlates to no key |
 | TellWaitlist (each Hourly firing) | `this`, `slot value` | work with equal keys takes turns; different keys run at the same time |
 
 ## Sequence diagrams
@@ -156,7 +156,7 @@ sequenceDiagram
         Note over S: ApplyCancel — when Cancel
         S->>S: insert Cancellation
         Note over S: transaction-end check — never StandingBooking where exists (StandingBooking as other where (other.slot == this.slot) and (not (other == this)))
-        Note over S: transaction-end check — never Booking where count(cancellations) > 1
+        Note over S: transaction-end check — booking: one Booking unique on Cancellation
     end
     S-->>Caller: accepted — or an error anywhere in the frame rolled the whole envelope back
     Note right of S: at each Hourly tick — TellWaitlist sweeps current members of Untold in its own transaction per record

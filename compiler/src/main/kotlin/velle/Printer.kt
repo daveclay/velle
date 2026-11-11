@@ -59,12 +59,17 @@ object Printer {
     /** The prohibition as the author wrote it, without its tolerance clause:
      *  `never (X where P)` or `X requires P`. */
     fun prohibition(d: NeverDecl): String =
-        d.requirement?.let { "${it.subject} requires ${expr(it.predicate)}" } ?: "never ${condition(d.target)}"
+        d.keyDeclaration
+            ?: d.requirement?.let { "${it.subject} requires ${expr(it.predicate)}" }
+            ?: "never ${condition(d.target)}"
 
     /** The prohibition's body for a label: the forbidden configuration of a `never`
-     *  (`X where P`, as diagnostics have always quoted it), or a requirement as written. */
+     *  (`X where P`, as diagnostics have always quoted it), a requirement as written,
+     *  or a key as written with the shape it is on. */
     fun prohibitionBody(d: NeverDecl): String =
-        d.requirement?.let { "${it.subject} requires ${expr(it.predicate)}" } ?: refExpr(d.target)
+        d.keyDeclaration?.let { "$it on ${(d.target as RefName).name}" }
+            ?: d.requirement?.let { "${it.subject} requires ${expr(it.predicate)}" }
+            ?: refExpr(d.target)
 
     private fun condition(e: RefExpr): String =
         if (e is RefName && e.where == null) e.name else "(${refExpr(e)})"
@@ -108,8 +113,10 @@ object Printer {
             m.initially?.let { append(" initially ${expr(it)}") }
             if (m.initiallyRequired) append(" initially required")
             m.tolerates?.let { append(" tolerates $it") }
+            if (m.unique) append(" unique")
             append(fieldVisibility(m.visible))
         }
+        is UniqueKey -> "unique (${m.fields.joinToString(", ")})"
         is DerivedProp -> (if (m.captured) "captured " else "") + "${m.name}: ${type(m.type)} = ${expr(m.expr)}" + fieldVisibility(m.visible)
         is TimestampProp -> "${m.name}: timestamp on ${m.on}" + fieldVisibility(m.visible)
         is VisibleClause -> visible(m)
@@ -173,7 +180,8 @@ object Printer {
         is ExistsExpr ->
             if (e.shape != null) "exists ${e.shape} for ${expr(e.forExpr!!)}"
             else "exists (${collection(e.collection!!)})"
-        is AggCall -> "${e.name}(${collection(e.collection)}${e.field?.let { ", $it" } ?: ""}" +
+        is AggCall -> if (e.keyLookup) "(${collection(e.collection)})" else
+            "${e.name}(${collection(e.collection)}${e.field?.let { ", $it" } ?: ""}" +
             (if (e.orderBy.isEmpty()) "" else " by ${e.orderBy.joinToString(", ")}") + ")"
         is FunCall -> "${e.name}(${e.args.joinToString(", ") { expr(it) }})"
         is SingularFor -> "(${e.shape} for ${expr(e.forExpr)})"

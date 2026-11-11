@@ -11,7 +11,7 @@ import velle.generated.peptides.*
  *
  * never (Scouting where (incidencePercent < 0) or (incidencePercent > 100))
  *
- * never (Scouting where count(plot.scoutings where daysAfterPlanting == this.daysAfterPlanting) > 1)
+ * unique (plot, daysAfterPlanting)
  *
  */
 class ScoutingSpec : SpecSupport() {

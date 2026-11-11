@@ -449,6 +449,7 @@ object Codegen {
                         line("        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */")
                         line("        fun ${decap(root)}(key: StoreKey): $root = byKey(\"$root\", key)")
                         line("        fun ${decap(root)}(key: Long): $root = ${decap(root)}(StoreKey(key))")
+                        model.keysOf(root).forEach { key -> readByKey(root, key) }
                     }
                     !isUnion(root) -> {
                         line("        /** The record behind [ref] as a member of $root, or null when it is not one. */")
@@ -465,6 +466,17 @@ object Codegen {
             line("    }")
             queryRoots.forEach { root -> materializer(root) }
             viewerShapes.forEach { v -> viewerReadSurface(v) }
+        }
+
+        /** The read by a key (Reference §21, "Keys"): `read.entryByKey("PLOT-0417")`, the record or null,
+         *  one method per key named for its fields, each parameter the field's own type and never absent. */
+        fun readByKey(root: String, key: UniqueKey) {
+            val members = model.membersOf(root)
+            val name = decap(root) + "By" + key.fields.joinToString("And") { it.replaceFirstChar { c -> c.uppercase() } }
+            val params = key.fields.joinToString(", ") { field -> "$field: ${kotlinType(members.getValue(field).type).removeSuffix("?")}" }
+            val filter = key.fields.joinToString(" and ") { field -> "(this.$field eq $field)" }
+            line("        /** The $root whose ${key.fields.joinToString(" and ")} this is, or null when none has it. */")
+            line("        fun $name($params): $root? = byValues(\"$root\", ${root}Fields(), { materialize$root(it) }) { $filter }")
         }
 
         /** One name per typed query, so `read.orders` reads as an `OrderQuery` and a viewer's as an `OrderQueryForStaff`. */

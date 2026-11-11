@@ -21,8 +21,11 @@ each case below is an executable test.
 ## WaitlistSpec.kt
 
 
+## CancellationSpec.kt
+
+
 ## Not yet generated
 
 - never #1: never over a refinement
-- never #2: shape is not an act
-- never #3: complex comparison subject
+- never #2: complex comparison subject
+- unique #3: a key, booking: one Booking unique: no bound to cross

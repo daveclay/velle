@@ -11,9 +11,9 @@ import velle.generated.peptides.*
  *
  * never (PlotObservation where dayAfterTreatment < 0)
  *
- * never (PlotObservation where count(plot.plotObservations where dayAfterTreatment == this.dayAfterTreatment) > 1)
- *
  * never (PlotObservation where plot.trial is not TreatedTrial)
+ *
+ * unique (plot, dayAfterTreatment)
  *
  */
 class PlotObservationSpec : SpecSupport() {

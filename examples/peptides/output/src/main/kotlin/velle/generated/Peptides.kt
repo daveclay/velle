@@ -386,6 +386,8 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
         fun assayReading(key: StoreKey): AssayReading = byKey("AssayReading", key)
         fun assayReading(key: Long): AssayReading = assayReading(StoreKey(key))
+        /** The AssayReading whose assay and hoursElapsed this is, or null when none has it. */
+        fun assayReadingByAssayAndHoursElapsed(assay: Ref<Assay>, hoursElapsed: Int): AssayReading? = byValues("AssayReading", AssayReadingFields(), { materializeAssayReading(it) }) { (this.assay eq assay) and (this.hoursElapsed eq hoursElapsed) }
 
         val labHits: LabHitQuery get() = query("LabHit", LabHitFields()) { materializeLabHit(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
@@ -436,6 +438,8 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
         fun plotObservation(key: StoreKey): PlotObservation = byKey("PlotObservation", key)
         fun plotObservation(key: Long): PlotObservation = plotObservation(StoreKey(key))
+        /** The PlotObservation whose plot and dayAfterTreatment this is, or null when none has it. */
+        fun plotObservationByPlotAndDayAfterTreatment(plot: Ref<GreenhousePlot>, dayAfterTreatment: Int): PlotObservation? = byValues("PlotObservation", PlotObservationFields(), { materializePlotObservation(it) }) { (this.plot eq plot) and (this.dayAfterTreatment eq dayAfterTreatment) }
 
         val greenhouseResults: GreenhouseResultQuery get() = query("GreenhouseResult", GreenhouseResultFields()) { materializeGreenhouseResult(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
@@ -496,6 +500,8 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
         fun weatherObservation(key: StoreKey): WeatherObservation = byKey("WeatherObservation", key)
         fun weatherObservation(key: Long): WeatherObservation = weatherObservation(StoreKey(key))
+        /** The WeatherObservation whose site and observedOn this is, or null when none has it. */
+        fun weatherObservationBySiteAndObservedOn(site: Ref<FieldSite>, observedOn: LocalDate): WeatherObservation? = byValues("WeatherObservation", WeatherObservationFields(), { materializeWeatherObservation(it) }) { (this.site eq site) and (this.observedOn eq observedOn) }
 
         val fieldProtocols: FieldProtocolQuery get() = query("FieldProtocol", FieldProtocolFields()) { materializeFieldProtocol(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
@@ -536,6 +542,8 @@ class PeptidesSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
         fun scouting(key: StoreKey): Scouting = byKey("Scouting", key)
         fun scouting(key: Long): Scouting = scouting(StoreKey(key))
+        /** The Scouting whose plot and daysAfterPlanting this is, or null when none has it. */
+        fun scoutingByPlotAndDaysAfterPlanting(plot: Ref<FieldPlot>, daysAfterPlanting: Int): Scouting? = byValues("Scouting", ScoutingFields(), { materializeScouting(it) }) { (this.plot eq plot) and (this.daysAfterPlanting eq daysAfterPlanting) }
 
         val harvests: HarvestQuery get() = query("Harvest", HarvestFields()) { materializeHarvest(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
@@ -1852,6 +1860,7 @@ act AssayReading {
     assay: one Assay
     hoursElapsed: integer
     inhibitionPercent: decimal
+    unique (assay, hoursElapsed)
     previous: one AssayReading? = latest(AssayReading where assay == this.assay and hoursElapsed < this.hoursElapsed by hoursElapsed)
     runningPeak: decimal = if previous is some then max(previous.runningPeak, inhibitionPercent) else inhibitionPercent
 }
@@ -1861,9 +1870,8 @@ never (AssayReading where hoursElapsed < 0)
 
 -- Two readings at the same hour mark would leave the series unordered, so the
 -- second is refused at the boundary.
--- velle: uniqueness within a series stated as a count over the siblings that
--- share the datum — no instance inequality needed
-never (AssayReading where count(assay.assayReadings where hoursElapsed == this.hoursElapsed) > 1)
+-- velle: the key `unique (assay, hoursElapsed)` in the body above (Reference §21,
+-- "Keys") is that refusal; it stands for a count over the readings of the assay
 
 -- A plate is complete once it has been read at or past the protocol's
 -- duration.
@@ -2033,6 +2041,7 @@ act PlotObservation {
     dayAfterTreatment: integer
     recordedSeverity: decimal
     observedOn: Date
+    unique (plot, dayAfterTreatment)
     diseaseSeverity: decimal = if observationCorrections is empty then recordedSeverity
                                else latest(observationCorrections by correctedOn).correctedSeverity
     previous: one PlotObservation? = latest(PlotObservation where plot == this.plot and dayAfterTreatment < this.dayAfterTreatment by dayAfterTreatment)
@@ -2043,7 +2052,6 @@ act PlotObservation {
 
 never (PlotObservation where recordedSeverity < 0 or recordedSeverity > 100)
 never (PlotObservation where dayAfterTreatment < 0)
-never (PlotObservation where count(plot.plotObservations where dayAfterTreatment == this.dayAfterTreatment) > 1)
 
 -- No score before the plants were treated.
 -- velle: a door-checked constraint testing refinement membership two
@@ -2320,9 +2328,8 @@ act WeatherObservation {
     observedOn: Date
     rainfallMm: decimal
     maxTemperature: decimal
+    unique (site, observedOn)
 }
-
-never (WeatherObservation where count(site.weatherObservations where observedOn == this.observedOn) > 1)
 
 -- A field protocol: what yield gain counts as success. When the plots are
 -- scouted is not protocol data — it is scheduled per trial, as collection
@@ -2481,6 +2488,7 @@ act Scouting {
     scoutedOn: Date
     incidencePercent: decimal
     severity: decimal
+    unique (plot, daysAfterPlanting)
     previous: one Scouting? = latest(Scouting where plot == this.plot and daysAfterPlanting < this.daysAfterPlanting by daysAfterPlanting)
     audpcSoFar: decimal = if previous is some then
                               previous.audpcSoFar + (severity + previous.severity) / 2 * (daysAfterPlanting - previous.daysAfterPlanting)
@@ -2489,7 +2497,6 @@ act Scouting {
 
 never (Scouting where severity < 0 or severity > 100)
 never (Scouting where incidencePercent < 0 or incidencePercent > 100)
-never (Scouting where count(plot.scoutings where daysAfterPlanting == this.daysAfterPlanting) > 1)
 
 -- A planted trial with a plot that has never been scouted — reported, not
 -- nagged; nagging is the collection tasks' job (below).

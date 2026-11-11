@@ -144,15 +144,15 @@ The transient act *was* fully handled at its commit: its handling produced the p
 
 ## An act that names a record by its values
 
-An act often carries values a person uses to say which record they mean: the key printed on a plot's tag, or a field's name together with the name of its kind. The person filling in the act does not have the record itself. This section shows how a spec turns those values into a stored reference. Two [`never`](Reference-21-never) declarations say what the values mean, and a rule finds the record once and keeps the reference on a record of its own. Afterwards you can write any rule or prohibition that needs "the entry this submission is about" without searching for it again.
+An act often carries values a person uses to say which record they mean: the key printed on a plot's tag, or a field's name together with the name of its kind. The person filling in the act does not have the record itself. This section shows how a spec turns those values into a stored reference. A [key](Reference-21-never#keys) on the target shape and a [`never`](Reference-21-never) on the act say what the values mean, and a rule finds the record once and keeps the reference on a record of its own. Afterwards you can write any rule or prohibition that needs "the entry this submission is about" without searching for it again.
 
 A field team surveys plots. Every plot has a key printed on its tag, such as PLOT-0417, and no two tags carry the same key. A surveyor's submission says which plot it is about by that key, and may ask for the plot's label to change. The office wants a submission naming a key no plot has refused, and every accepted submission tied to its plot.
 
-The spec, from `compiler/src/test/kotlin/velle/LookupProbeTest.kt`:
+The spec, from `compiler/src/test/kotlin/velle/UniqueKeyTest.kt`:
 
 ```
 act Entry {
-    key: text
+    key: text unique
     initialLabel: text
     arrivals: many Arrival = (Arrival where entry == this)
 }
@@ -163,7 +163,6 @@ act Submission {
 }
 
 never (Submission where not exists (Entry where key == this.entryKey))
-never (Entry where count(Entry where key == this.key) > 1)
 
 shape Arrival {
     submission: one Submission
@@ -173,7 +172,7 @@ shape Arrival {
 shape Unpaired = Submission where not exists Arrival for this
 
 rule RecordArrival when Unpaired {
-    Arrival from { submission: this, entry: first(Entry where key == this.entryKey by key) }
+    Arrival from { submission: this, entry: (Entry where key == this.entryKey) }
 }
 
 shape Outcome {
@@ -190,21 +189,22 @@ rule ApplyRelabel when Relabel {
 ```
 
 - `entryKey: text` is what the surveyor wrote down. It is a plain value. The submission does not reference the entry, and the generated input takes the key as text ([Act API](Act-API)).
-- The first `never` refuses, at the door, a submission whose key no entry has. The refusal carries the reason as data.
-- The second `never` says no two entries share a key. A key therefore means one entry.
+- `key: text unique` is a [key](Reference-21-never#keys): no two entries share a key, so a key means at most one entry. A second entry with a key already on record is refused at the door.
+- The `never` refuses, at the door, a submission whose key no entry has. The refusal carries the reason as data. The key says at most one entry; this `never` says at least one.
 - `Arrival` is the record "this submission is about that entry". Its `entry` is a stored [reference](Reference-06-Relationships), so `Entry.arrivals` lists every submission about an entry, and deleting an entry that has arrivals is refused like deleting any referenced record.
-- `Unpaired` and `RecordArrival` run once per submission, in the submission's own commit ([§18](Reference-18-Run-once-guards)). `first(Entry where key == this.entryKey by key)` finds the entry ([§10](Reference-10-Predicate-expressions)). A selection always names its order, so `by key` is written even though the second `never` leaves one match.
+- `Unpaired` and `RecordArrival` run once per submission, in the submission's own commit ([§18](Reference-18-Run-once-guards)). `(Entry where key == this.entryKey)` finds the entry: a filter naming every field of a key is one record or absent, with no order to name ([§10, "Reading the one related record"](Reference-10-Predicate-expressions#reading-the-one-related-record)). For a shape with no key, select instead, `first(Entry where key == this.entryKey by key)`, naming the order as every selection does.
 - `Relabel` and `ApplyRelabel` read the entry through the arrival, `(Arrival for this).entry`. No second search.
 
-Why a record of its own and not a derived field. A derived `entry: one Entry? = first(Entry where key == this.entryKey by key)` is computed again at every read. Retire PLOT-0417 and give the key to a new plot, and every old submission points at the new plot. The arrival's reference was stored when the rule fired and stays with the plot that had the key then. A derived reference also has no inverse and no deletion check.
+Why a record of its own and not a derived field. A derived `entry: one Entry? = (Entry where key == this.entryKey)` is computed again at every read. Retire PLOT-0417 and give the key to a new plot, and every old submission points at the new plot. The arrival's reference was stored when the rule fired and stays with the plot that had the key then. A derived reference also has no inverse and no deletion check.
 
 Where one rule is the only user of the lookup, write the selection in that rule's `from` block and leave the pairing record out.
 
 What the compiler checks, and what happens at run time:
 
 - The compiler rejects `(Entry for this.entryKey)`. The subject after `for` is a record, never a value ([checks.md, F2](checks#f2--type-checking)).
-- The compiler rejects a `never` that reads a field a rule writes ([checks.md, V10](checks#v10--never-obligations-and-spend-tracking)). If a rule renames entries, a `never` that looks an entry up by its key is refused. The arrival's stored reference is the spelling that survives a rename.
-- Without the first `never`, a submission naming a key no entry has makes the selection absent. The firing fails, the commit is undone, and the committer is told ([§14](Reference-14-for)). Without the second, two entries sharing a key fail the selection the same way. The two `never` declarations keep both cases out at the door.
+- The compiler rejects a `never` that reads a field a rule writes ([checks.md, V10](checks#v10--never-obligations-and-spend-tracking)). If a rule renames entries, a `never` that looks an entry up by its key is refused, and so is the key, which is a `never` over `Entry.key`. The arrival's stored reference is the spelling that survives a rename.
+- The compiler rejects `(Entry where key == this.entryKey)` where one record is expected when the filter names only part of a key, or when `entryKey` could be absent, since two absent values compare equal ([checks.md, V36](checks#v36--a-filter-over-a-key-is-one-record)). An optional `entryKey` is tested with `entryKey is some` in the refinement the rule is declared on, as the test "a refinement's is some makes the compared value present in the rule's body" in `compiler/src/test/kotlin/velle/UniqueKeyTest.kt` shows.
+- Without the `never`, a submission naming a key no entry has makes the filter absent. The firing fails, the commit is undone, and the committer is told ([§14](Reference-14-for)). The key and the `never` together keep both the duplicate and the missing entry out at the door.
 
 ## A wide domain: the two authors
 

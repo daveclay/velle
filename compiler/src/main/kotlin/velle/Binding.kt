@@ -84,6 +84,10 @@ abstract class ReadSurface<Self : ReadSurface<Self>>(protected val system: Velle
 
     protected fun <F : Fields, T> query(shape: String, fields: F, materialize: (Long) -> T): TypedQuery<F, T> =
         TypedQuery(system, Query(shape), fields, materialize)
+
+    /** The record whose key [where] names (Reference §21, "Keys"), or null when none has it. */
+    protected fun <F : Fields, T> byValues(shape: String, fields: F, materialize: (Long) -> T, where: F.() -> Expr): T? =
+        system.scope { system.single(Query(shape, fields.where()))?.let(materialize) }
 }
 
 /** The base of a generated `<Viewer>Read` (Reference §22, "The actor"): every query

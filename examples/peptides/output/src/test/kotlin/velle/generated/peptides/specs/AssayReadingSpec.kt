@@ -11,7 +11,7 @@ import velle.generated.peptides.*
  *
  * never (AssayReading where hoursElapsed < 0)
  *
- * never (AssayReading where count(assay.assayReadings where hoursElapsed == this.hoursElapsed) > 1)
+ * unique (assay, hoursElapsed)
  *
  */
 class AssayReadingSpec : SpecSupport() {

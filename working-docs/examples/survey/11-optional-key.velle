@@ -1,0 +1,25 @@
+-- A key over an optional field (Reference §21, "Keys"): an entry whose tag has not been printed has no key, and any
+-- number of such entries may exist; no two printed keys are equal. A submission may name no entry. The lookup
+-- `(Entry where key == this.entryKey)` is one record only where `entryKey` is present, which the refinement `Keyed`
+-- says with `entryKey is some`; a rule declared `when Keyed` reads that in its body (checks V36).
+act Entry {
+    key: text? unique
+    initialLabel: text
+}
+
+act Submission {
+    entryKey: text?
+}
+
+shape Arrival {
+    submission: one Submission
+    entry: one Entry
+}
+
+shape Keyed = Submission where entryKey is some and not exists Arrival for this
+
+never (Keyed where not exists (Entry where key == this.entryKey))
+
+rule RecordArrival when Keyed {
+    Arrival from { submission: this, entry: (Entry where key == this.entryKey) }
+}

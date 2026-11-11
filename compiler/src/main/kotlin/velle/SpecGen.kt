@@ -660,6 +660,7 @@ object SpecGen {
         fun neverTests(never: NeverDecl, ordinal: Int, file: String): List<String> {
             fun skip(ordinal: Int, reason: String) = skip(ordinal, never.keyword, reason)
             if (never.fromActorClause) return skip(ordinal, "the role gate an act's `by` clause states")
+            if (never.keyDeclaration != null) return skip(ordinal, "a key, ${never.keyDeclaration}: no bound to cross")
             val target = never.target as? RefName ?: return skip(ordinal, "composite never")
             val shape = model.shapes[target.name] ?: return skip(ordinal, "never over a refinement")
             if (target.name !in model.exposed) return skip(ordinal, "shape is not an act")
