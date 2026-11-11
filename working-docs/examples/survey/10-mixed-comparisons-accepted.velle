@@ -1,0 +1,116 @@
+-- Every comparison between two builtin scalar types of different kinds that the
+-- compiler accepts today. The validator checks a comparison's operands only when an
+-- extension type takes part (Validator.kt `checkExtComparison`), and refuses an
+-- ordered comparison on a boolean or a uuid; nothing else is looked at. At runtime
+-- `valueEquals` (Evaluator.kt) is false for two kinds, except that a text beside a
+-- time or a uuid is parsed as one; `compareValues` throws "cannot order" for two
+-- kinds, except that a text beside a time is parsed, throwing when it does not parse.
+-- The table in OQ75 §1 reads from this file.
+act P {
+    textV: text
+    decimalV: decimal
+    booleanV: boolean
+    dateV: Date
+    datetimeV: DateTime
+    durationV: duration
+    timeV: time
+    uuidV: uuid
+    bytesV: bytes
+}
+
+-- field against field
+never (P where textV == decimalV)
+never (P where textV < decimalV)
+never (P where textV == booleanV)
+never (P where textV == dateV)
+never (P where textV < dateV)
+never (P where textV == datetimeV)
+never (P where textV < datetimeV)
+never (P where textV == durationV)
+never (P where textV < durationV)
+never (P where textV == timeV)
+never (P where textV < timeV)
+never (P where textV == uuidV)
+never (P where textV == bytesV)
+never (P where textV < bytesV)
+never (P where decimalV == booleanV)
+never (P where decimalV == dateV)
+never (P where decimalV < dateV)
+never (P where decimalV == datetimeV)
+never (P where decimalV < datetimeV)
+never (P where decimalV == durationV)
+never (P where decimalV < durationV)
+never (P where decimalV == timeV)
+never (P where decimalV < timeV)
+never (P where decimalV == uuidV)
+never (P where decimalV == bytesV)
+never (P where decimalV < bytesV)
+never (P where booleanV == dateV)
+never (P where booleanV == datetimeV)
+never (P where booleanV == durationV)
+never (P where booleanV == timeV)
+never (P where booleanV == uuidV)
+never (P where booleanV == bytesV)
+never (P where dateV == datetimeV)
+never (P where dateV < datetimeV)
+never (P where dateV == durationV)
+never (P where dateV < durationV)
+never (P where dateV == timeV)
+never (P where dateV < timeV)
+never (P where dateV == uuidV)
+never (P where dateV == bytesV)
+never (P where dateV < bytesV)
+never (P where datetimeV == durationV)
+never (P where datetimeV < durationV)
+never (P where datetimeV == timeV)
+never (P where datetimeV < timeV)
+never (P where datetimeV == uuidV)
+never (P where datetimeV == bytesV)
+never (P where datetimeV < bytesV)
+never (P where durationV == timeV)
+never (P where durationV < timeV)
+never (P where durationV == uuidV)
+never (P where durationV == bytesV)
+never (P where durationV < bytesV)
+never (P where timeV == uuidV)
+never (P where timeV == bytesV)
+never (P where timeV < bytesV)
+never (P where uuidV == bytesV)
+
+-- field against a constant of another kind
+never (P where textV == 5)
+never (P where textV < 5)
+never (P where textV == true)
+never (P where decimalV == "abc")
+never (P where decimalV < "abc")
+never (P where decimalV == true)
+never (P where booleanV == "abc")
+never (P where booleanV == 5)
+never (P where dateV == "abc")
+never (P where dateV < "abc")
+never (P where dateV == 5)
+never (P where dateV < 5)
+never (P where dateV == true)
+never (P where datetimeV == "abc")
+never (P where datetimeV < "abc")
+never (P where datetimeV == 5)
+never (P where datetimeV < 5)
+never (P where datetimeV == true)
+never (P where durationV == "abc")
+never (P where durationV < "abc")
+never (P where durationV == 5)
+never (P where durationV < 5)
+never (P where durationV == true)
+never (P where timeV == "abc")
+never (P where timeV < "abc")
+never (P where timeV == 5)
+never (P where timeV < 5)
+never (P where timeV == true)
+never (P where uuidV == "abc")
+never (P where uuidV == 5)
+never (P where uuidV == true)
+never (P where bytesV == "abc")
+never (P where bytesV < "abc")
+never (P where bytesV == 5)
+never (P where bytesV < 5)
+never (P where bytesV == true)
