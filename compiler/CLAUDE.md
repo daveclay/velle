@@ -6,7 +6,7 @@ for regenerating examples and running the suite.
 ## Code changes follow ub-mode
 
 Before writing or changing any code under `compiler/`, load the `ub-mode`
-skill installed at `compiler/.claude/skills/ub-mode/SKILL.md` (Dave,
+skill installed at `.claude/skills/ub-mode/SKILL.md` (Dave,
 2026-11-11) and follow it: first make it work, then make it right, then
 follow practice. Where ub-mode says to commit and push, this repo's rule
 holds instead: commit and push only when Dave asks.

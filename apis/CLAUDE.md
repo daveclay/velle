@@ -1,5 +1,17 @@
 # apis/
 
+Rules for changes under this directory.
+
+## Code changes follow ub-mode
+
+Before writing or changing any code under `apis/`, load the `ub-mode`
+skill installed at `.claude/skills/ub-mode/SKILL.md` (Dave, 2026-11-11)
+and follow it: first make it work, then make it right, then follow
+practice. Where ub-mode says to commit and push, this repo's rule holds
+instead: commit and push only when Dave asks.
+
+## The layers
+
 `json` is the spec-agnostic API over a `VelleSystem` (`VelleApi`, `Wire`,
 `Describe`), `graphql` the schema built from the model, `spring` the Spring
 Boot starter. The caller's side is `wiki/Serving-a-system.md`, the

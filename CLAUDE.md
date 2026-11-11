@@ -67,6 +67,21 @@ message, and every chat message.
   legitimate, step back to whether the construct should exist at all before
   fixing its form.
 
+## Kotlin code
+
+Dave's rules for every Kotlin file in the repo, hand-written or emitted by
+the compiler. For emitted code the rule binds the generator that writes it.
+
+- A variable is named for what it contains. The name says what the value
+  is, not what it is used for or where it came from.
+- Never a single-character variable name, including loop and lambda
+  parameters. Write `it` out as a named parameter when the body is more than
+  one expression.
+- Prefer human readability over short code. A longer spelling that reads at
+  a glance beats a shorter one that has to be worked out.
+- Keep indentation to a minimum. A nested loop or block is refactored into
+  its own named function rather than indented further.
+
 ## Design principles
 
 Dave's, stated while deciding questions. They decide new questions by
