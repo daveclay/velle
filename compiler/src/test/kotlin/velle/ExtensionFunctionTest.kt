@@ -62,7 +62,9 @@ class ExtensionFunctionTest {
     fun `the builtins are registered functions in the velle namespace, and the default registry passes its own checks`() {
         assertEquals(emptyList(), TypeRegistry.default.diagnostics)
         val builtin = BuiltinFunctions.all.map { it.qualifiedName }.toSet()
-        assertTrue(builtin.containsAll(setOf("velle.max", "velle.min", "velle.abs", "velle.lowercase", "velle.year", "velle.hour")), builtin.toString())
+        assertTrue(builtin.containsAll(setOf("velle.max", "velle.min", "velle.abs", "velle.lowercase", "velle.year", "velle.hour",
+            "velle.number", "velle.date", "velle.datetime")), builtin.toString())
+        assertTrue(TypeRegistry.BUILTIN_FUNCTION_NAMES.containsAll(setOf("number", "date", "datetime")), "the three readers' names are reserved (E1)")
         assertTrue(TypeRegistry.default.functions.keys.containsAll(builtin + setOf("velle.test.median", "velle.test.clamp", "velle.test.isBusinessDay", "velle.testalt.isBusinessDay")))
         assertEquals(emptyList(), TypeRegistry.EMPTY.diagnostics)
     }
@@ -128,6 +130,37 @@ class ExtensionFunctionTest {
             assertTrue(!sys.isMember(o, "In2026"))
             assertTrue(!sys.isMember(o, "Lowered"), "lowercase of an absent text is absent, never an error")
             assertTrue(sys.isMember(sys.order(note = "X"), "Lowered"))
+        }
+    }
+
+    @Test
+    fun `number, date, and datetime read a text where the spec calls them, absent when it does not parse or is absent`() {
+        val sys = system("""
+            act Reading {
+                value: text?
+                asNumber: decimal? = number(value)
+                asDate: Date? = date(value)
+                asMoment: DateTime? = datetime(value)
+            }
+            shape Small = Reading where number(value) < 10
+        """.trimIndent())
+        sys.scope {
+            fun reading(v: String?) = assertIs<CommitResult.Accepted>(sys.commit("Reading", if (v == null) emptyMap() else mapOf("value" to v))).id
+            val n = reading(" 12.50 ")
+            assertEquals(0, java.math.BigDecimal("12.50").compareTo(sys.get(n, "asNumber") as java.math.BigDecimal), "read as BigDecimal reads it, after trimming")
+            assertEquals(null, sys.get(n, "asDate"))
+            assertEquals(null, sys.get(n, "asMoment"))
+            val d = reading("2026-01-15")
+            assertEquals(LocalDate.of(2026, 1, 15), sys.get(d, "asDate"))
+            assertEquals(null, sys.get(d, "asNumber"))
+            val m = reading("2026-01-15T09:00:00Z")
+            assertEquals(Instant.parse("2026-01-15T09:00:00Z"), sys.get(m, "asMoment"))
+            assertEquals(null, sys.get(reading("2026-01-15T09:00:00"), "asMoment"), "a text with no offset is a local time, not a moment")
+            val absent = reading(null)
+            assertEquals(null, sys.get(absent, "asNumber"))
+            assertTrue(sys.isMember(reading("7"), "Small"))
+            assertTrue(!sys.isMember(reading("seven"), "Small"), "an unreadable text is absent, and an absent operand satisfies no comparison")
+            assertTrue(!sys.isMember(absent, "Small"))
         }
     }
 

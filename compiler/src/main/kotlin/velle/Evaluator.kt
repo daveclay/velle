@@ -574,6 +574,14 @@ class Evaluator(private val system: VelleSystem) {
     /** The scalar type of a runtime value for signature matching: a number constant or field
      *  is `decimal`; a `many` is typed by the member it reads when it can be, else by its first value. */
     private fun runtimeTypeOf(v: Value, e: Expr, ctx: Ctx): VType? = when (v) {
+        is Value.VVals, Value.VEmpty -> ((e as? PathExpr)?.let { declaredTypeOf(it, ctx.subjectScope) } as? VType.CollS)
+            ?: (v as? Value.VVals)?.values?.firstOrNull()?.let { first -> runtimeTypeOf(first, e, ctx)?.let { registryNameOf(it) }?.let { VType.CollS(it) } }
+            ?: VType.CollS("decimal")
+        else -> scalarKindOf(v)
+    }
+
+    /** The scalar type of a runtime value: a number constant or field is `decimal`; null for anything that is not a scalar. */
+    private fun scalarKindOf(v: Value): VType? = when (v) {
         is Value.VNum -> VType.Num("decimal")
         is Value.VText -> VType.Text
         is Value.VBool -> VType.Bool
@@ -584,9 +592,6 @@ class Evaluator(private val system: VelleSystem) {
         is Value.VTime -> VType.TimeT
         is Value.VBytes -> VType.BytesT
         is Value.VExt -> VType.Ext(v.type.qualifiedName)
-        is Value.VVals, Value.VEmpty -> ((e as? PathExpr)?.let { declaredTypeOf(it, ctx.subjectScope) } as? VType.CollS)
-            ?: (v as? Value.VVals)?.values?.firstOrNull()?.let { first -> runtimeTypeOf(first, e, ctx)?.let { registryNameOf(it) }?.let { VType.CollS(it) } }
-            ?: VType.CollS("decimal")
         else -> null
     }
 
@@ -646,19 +651,32 @@ class Evaluator(private val system: VelleSystem) {
             else -> return v
         }
         return when (read) {
-            is LiteralRead.Ok -> Value.VExt(type, read.value)
+            is LiteralRead.Ok -> valueOf(read.value, type)
             is LiteralRead.NoReader -> throw VelleRuntimeError("'${system.model.specNameOf(type)}' reads no ${read.form} constant — validator gap")
             is LiteralRead.Rejected -> throw VelleRuntimeError("'${system.model.specNameOf(type)}' rejects the constant: ${read.reason}")
         }
     }
 
-    /** The two operands of a binary operator with a constant on one side and an extension
-     *  value on the other: the constant takes the other side's type. */
+    /**
+     * The two operands of a comparison with a constant on one side and a value of another
+     * type on the other: the constant takes the other side's type through that type's
+     * literal reader (Reference §5). `"09:00"` beside a `time` is a time, `0` beside a
+     * `Money` is a Money. The validator has already read the constant, so a reader's
+     * refusal here is a gap, never a silent value; a text field beside a `time` is refused
+     * before any spec runs (checks.md F2), so a text here is always a constant.
+     */
     private fun unify(l: Value, r: Value): Pair<Value, Value> = when {
-        l is Value.VExt && r !is Value.VExt -> l to coerceLiteral(r, l.type)
-        r is Value.VExt && l !is Value.VExt -> coerceLiteral(l, r.type) to r
+        isConstantForm(r) && !isConstantForm(l) -> l to coerceLiteral(r, typeOfValue(l))
+        isConstantForm(l) && !isConstantForm(r) -> coerceLiteral(l, typeOfValue(r)) to r
         else -> l to r
     }
+
+    /** The two forms a spec constant takes: a number or a quoted text. */
+    private fun isConstantForm(v: Value) = v is Value.VNum || v is Value.VText
+
+    /** The registered type behind a scalar value, builtin or extension; null for anything else. */
+    private fun typeOfValue(v: Value): velle.ext.VelleType<*>? =
+        if (v is Value.VExt) v.type else model.registry.typeFor(scalarKindOf(v))
 
     private fun evalSingularFor(e: SingularFor, ctx: Ctx): Value {
         val target = eval(e.forExpr, ctx) as? Value.VRef
@@ -912,12 +930,6 @@ class Evaluator(private val system: VelleSystem) {
         l is Value.VExt && r is Value.VExt -> l.type === r.type && l.type.equalAny(l.v, r.v)
         l is Value.VExt || r is Value.VExt -> { val (a, b) = unify(l, r); a == b }
         l is Value.VDuration && r is Value.VDuration -> l.seconds() == r.seconds()
-        // a text constant beside a uuid reads as one (Reference §5); a malformed one is simply unequal
-        l is Value.VUuid && r is Value.VText -> runCatching { UUID.fromString(r.v) }.getOrNull() == l.v
-        l is Value.VText && r is Value.VUuid -> runCatching { UUID.fromString(l.v) }.getOrNull() == r.v
-        // a text constant beside a time reads as one (Reference §5)
-        l is Value.VTime && r is Value.VText -> runCatching { java.time.LocalTime.parse(r.v) }.getOrNull() == l.v
-        l is Value.VText && r is Value.VTime -> runCatching { java.time.LocalTime.parse(l.v) }.getOrNull() == r.v
         else -> l == r
     }
 
@@ -930,8 +942,6 @@ class Evaluator(private val system: VelleSystem) {
         l is Value.VText && r is Value.VText -> l.v.compareTo(r.v)
         l is Value.VDuration && r is Value.VDuration -> l.seconds().compareTo(r.seconds())
         l is Value.VTime && r is Value.VTime -> l.v.compareTo(r.v)
-        l is Value.VTime && r is Value.VText -> l.v.compareTo(java.time.LocalTime.parse(r.v))
-        l is Value.VText && r is Value.VTime -> java.time.LocalTime.parse(l.v).compareTo(r.v)
         l is Value.VBytes && r is Value.VBytes -> l.compareTo(r)
         else -> throw VelleRuntimeError("cannot order $l against $r")
     }

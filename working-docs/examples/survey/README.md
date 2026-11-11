@@ -5,10 +5,12 @@ where an admin defines a *kind* of surveyed thing (site, plot, specimen) and
 its *fields* at runtime; an *entry* is one surveyed thing; a *reading* is
 one field's value, held as text because the field says what it means; a
 *submission* carries a list of readings. The findings are listed in
-`QUESTIONS.md` as OQ75, items under OQ43 and OQ53, and bug items under
+`QUESTIONS.md` as items under OQ43 and OQ53, OQ80, and bug items under
 "Expressions, refinements, and unions"; the lookup finding (OQ74, settled) became
 the worked pattern "An act that names a record by its values" in `wiki/patterns.md`,
-and the walk finding (OQ76, settled) became Reference §7 "Walks".
+the walk finding (OQ76, settled) became Reference §7 "Walks", and the text-as-data
+finding (OQ75, settled) became the comparison rule in `wiki/checks.md` F2 and the
+`number`, `date`, and `datetime` functions in Reference §5.
 
 `./check.sh` compiles every file against the compiler jar (path inside the
 script; build it with `./gradlew :compiler:jar --max-workers=1`) and prints
@@ -32,11 +34,11 @@ what to expect:
 | `03-assigned-field-workaround` | the label derived from the latest `Outcome` record; nothing assigns it | passes | OQ53, V10 |
 | `04-transient-with-parts-refused` | `transient act Submission ... with readings` | `[V17] 'Reading.submission' references transient act 'Submission'`, `[V18] a 'Submission' can arrive that nothing provably answers`, `[V22] transient act 'Submission' with a closure is refused — the combination is open (OQ43)` | OQ43 |
 | `04-transient-with-parts-workaround` | the submission kept, an `Outcome` record, a rule on `not exists Outcome for this` | passes | OQ43 |
-| `05-text-as-number-accepted` | `value < field.min` with `value: text?` and `min: decimal?` | passes validation; `compareValues` throws "cannot order" at runtime | OQ75 (settled: refused once built), Expressions item |
-| `05-text-as-number-function-refused` | `number(value) < field.min` | `[F2] 'number(value)': no builtin or registered function is named 'number'` | OQ75 (settled: `number` becomes a builtin, the Expressions item) |
-| `05-text-as-number-workaround` | `value matches "-?[0-9]+([.][0-9]+)?"`; the minimum is not checked | passes | OQ75 (settled: the spelling becomes `number(value) is none` and `number(value) < field.min`, the Expressions items) |
-| `06-text-composition-accepted` | `unitName: text = name + "_unit"` | passes validation; `arith` has no text case and fails at runtime | OQ75 (settled: refused once built), Expressions item; the spelling is OQ80 |
-| `06-text-composition-workaround` | the unit reading matched by `starts with`, `ends with`, and `length(...) == length(name) + 5` | passes | OQ75 (settled: the unit is a field of the reading, `unit: text?`), OQ80 |
+| `05-text-as-number-refused` | `value < field.min` with `value: text?` and `min: decimal?` | `[F2] 'value < field.min' — compares the text 'value' with a decimal; a text is not compared as a decimal. Write number(value), which is absent when the text is not a number, or declare 'value' as a decimal on a shape of its own` | checks F2; Reference §5 |
+| `05-text-as-number-function` | the settled spelling for a value that is text by the business's design: `number(value) is none` as the format check and `number(value) < field.min` as the minimum | passes | Reference §5 "The built-in functions" |
+| `05-text-as-number-workaround` | the spelling for a shape that can declare the type: one optional typed field per kind (`numberValue: decimal?`, `dateValue: Date?`, `textValue: text?`) and a `never` per kind; gives up holding every value in one field | passes | Reference §5 |
+| `06-text-composition-refused` | `unitName: text = name + "_unit"` | `[F2] 'name + "_unit"' — '+' is not defined on a text; Velle does not join or compute with texts. A value made of parts is a shape with a field for each part, and a value that is a number or a date is declared as one` | checks F2; the spelling for joining texts is OQ80 |
+| `06-text-composition-workaround` | the unit reading matched by `starts with`, `ends with`, and `length(...) == length(name) + 5` | passes | OQ80 (the unit as a field of the reading, `unit: text?`, is OQ80 §1) |
 | `07-boolean-derivation-refused` | `isRoot: boolean = parentName is none or parentName == "survey"` | `expected LIDENT, found KW('is')` | Expressions item |
 | `08-timestamp-field-name-refused` | a field named `timestamp` | `expected LIDENT, found KW('timestamp')` | Expressions item |
 | `09-lookup-in-rule-first` | the served spelling: `Arrival from { entry: first(Entry where key == this.entryKey by key) }` in a run-once rule, with an existence `never` and a uniqueness `never` | passes; at runtime a good key pairs the submission with its entry and a bad key is refused at the door (`LookupProbeTest`) | patterns, "An act that names a record by its values" |
@@ -45,5 +47,5 @@ what to expect:
 | `09-lookup-in-rule-for-one-text-refused` | the same with one text field on `Entry` | the same F2 | checks F2 |
 | `09-lookup-in-never-no-writer` | the lookup inline in a `never` over standing readings, nothing assigning `Field.name` | passes | patterns, "An act that names a record by its values" |
 | `09-lookup-in-never-writer-refused` | the same `never` with a rule assigning `Field.name` | `[V10] never over Field.name is a guarantee ('ApplyRename' writes the field it reads) — v0 cannot yet prove it inductively over its writers; fail closed` | V10; the pairing record of the patterns page is the spelling |
-| `10-mixed-comparisons-accepted` | every comparison between two builtin scalar kinds the compiler accepts: field against field and field against a constant of another kind, under `==` and `<` | passes; at runtime `==` is always false except a text beside a `time` or a `uuid`, which is parsed, and `<` is "cannot order" except a text beside a `time`; the table in OQ75 §1 | OQ75 (settled: every row refused except the quoted constant beside a `time` or a `uuid`) |
+| `10-mixed-comparisons-refused` | every comparison between two builtin scalar kinds that differ, field against field and field against a constant of another kind, under `==` and `<`; and, accepted in the same file, the one reading kept: a quoted text beside a `time` or a `uuid` | one `[F2]` per prohibition, `compares the <kind> '<field>' with a <kind>; a <kind> is not compared as a <kind>`, with `Write number(...)` / `date(...)` / `datetime(...)` or `Declare ... as a time` when a text field is one side; `'time' rejects this constant: 'abc' is not a time of day` for the unreadable constant | checks F2; Reference §5; `MixedKindComparisonTest` |
 | `09-lookup-in-never-value-in-refused` | `value in first(Field where ... by name).options` | `[F2] ... 'in' takes a list of values [a, b] or a many of values on the right` | Expressions item |

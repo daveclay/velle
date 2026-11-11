@@ -104,7 +104,7 @@ A function is registered by naming its class in `META-INF/services/velle.ext.Vel
 
 ## The builtin functions
 
-`lowercase`, `uppercase`, `trim`, `length`, `abs`, `year`, `month`, `day`, `dayOfWeek`, `hour`, `minute`, `max` and `min` are registered functions in the `velle` namespace, implemented through the same interface. From `compiler/src/main/kotlin/velle/ext/builtin/BuiltinFunctions.kt`:
+`lowercase`, `uppercase`, `trim`, `length`, `number`, `date`, `datetime`, `abs`, `year`, `month`, `day`, `dayOfWeek`, `hour`, `minute`, `max` and `min` are registered functions in the `velle` namespace, implemented through the same interface, and their names are reserved: a library that reads a number written another way, `1.234,56`, registers it under a name of its own, `acme.euroNumber`. From `compiler/src/main/kotlin/velle/ext/builtin/BuiltinFunctions.kt`:
 
 ```kotlin
 object Abs : BuiltinFunction("abs") {

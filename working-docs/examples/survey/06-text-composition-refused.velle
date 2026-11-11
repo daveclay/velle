@@ -1,8 +1,10 @@
 -- A quantity field stands for two readings: the number, and its unit under
--- the name `<name>_unit`. The grammar page says `+` on text is not admitted,
--- and the compiler does not refuse it: `scalarTypeOf` gives the sum no type
--- and nothing checks the operands. At runtime `arith` has no text case
--- (Evaluator.kt), so the derivation fails when first read.
+-- the name `<name>_unit`. A text takes part in no arithmetic (Reference §5;
+-- checks.md F2):
+--   [F2] 'name + "_unit"' — '+' is not defined on a text; Velle does not join or
+--   compute with texts. A value made of parts is a shape with a field for each
+--   part, and a value that is a number or a date is declared as one
+-- The spelling for joining texts is OQ80.
 act Field {
     name: text
     isQuantity: boolean

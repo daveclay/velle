@@ -10,6 +10,10 @@ import velle.ext.Signature
 import velle.ext.Signed
 import velle.ext.VelleFunction
 import java.math.BigDecimal
+import java.time.Instant
+import java.time.LocalDate
+import java.time.format.DateTimeParseException
+import kotlin.reflect.KClass
 
 /**
  * The builtin functions (Reference §5) as implementations of the same
@@ -24,6 +28,7 @@ object BuiltinFunctions {
         Lowercase, Uppercase, Trim, Length, Abs,
         Year, Month, Day, DayOfWeek, Hour, Minute,
         Max, Min,
+        ReadNumber, ReadDate, ReadDateTime,
     )
 }
 
@@ -45,6 +50,30 @@ object Lowercase : TextFunction("lowercase", Returns.Is(TextType::class), { it.l
 object Uppercase : TextFunction("uppercase", Returns.Is(TextType::class), { it.uppercase() })
 object Trim : TextFunction("trim", Returns.Is(TextType::class), { it.trim() })
 object Length : TextFunction("length", Returns.Is(IntegerType::class), { BigDecimal(it.length) })
+
+/**
+ * A text read as a value of one type, where the spec calls it (Reference §5): absent
+ * when the text is not one. A comparison never reads a text; this is the one place a
+ * stored text becomes a number or a date. The form read is what the type's Kotlin
+ * counterpart reads and nothing else.
+ */
+sealed class TextReader(name: String, result: KClass<*>, private val read: (String) -> Any) : BuiltinFunction(name) {
+    override val signatures = listOf(Signature(
+        parameters = listOf(Parameter("text", Accepts.Is(TextType::class), takes = "text")),
+        result = Returns.Is(result),
+        optionalResult = true,
+        apply = { _, args -> readOrNull(args[0].value as String) },
+    ))
+    private fun readOrNull(text: String): Any? =
+        try { read(text) } catch (e: NumberFormatException) { null } catch (e: DateTimeParseException) { null }
+}
+
+/** `number`: `BigDecimal` of the trimmed text. */
+object ReadNumber : TextReader("number", DecimalType::class, { BigDecimal(it.trim()) })
+/** `date`: a calendar date, `2026-01-15`. */
+object ReadDate : TextReader("date", DateType::class, { LocalDate.parse(it) })
+/** `datetime`: a moment with its offset, `2026-01-15T09:00:00Z`; a text with no offset is a local time, not a moment, and is absent. */
+object ReadDateTime : TextReader("datetime", DateTimeType::class, { Instant.parse(it) })
 
 /** `abs`: anything [Signed], returned as what it was. */
 object Abs : BuiltinFunction("abs") {

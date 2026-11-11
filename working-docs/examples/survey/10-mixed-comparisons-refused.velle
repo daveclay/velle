@@ -1,11 +1,18 @@
--- Every comparison between two builtin scalar types of different kinds that the
--- compiler accepts today. The validator checks a comparison's operands only when an
--- extension type takes part (Validator.kt `checkExtComparison`), and refuses an
--- ordered comparison on a boolean or a uuid; nothing else is looked at. At runtime
--- `valueEquals` (Evaluator.kt) is false for two kinds, except that a text beside a
--- time or a uuid is parsed as one; `compareValues` throws "cannot order" for two
--- kinds, except that a text beside a time is parsed, throwing when it does not parse.
--- The table in OQ75 §1 reads from this file.
+-- Every comparison between two builtin scalar types of different kinds, field
+-- against field and field against a constant of another kind, under `==` and `<`.
+-- Each is refused (Reference §5; checks.md F2): two kinds that differ never meet,
+-- and a comparison never reads a text as another type. The one reading kept is
+-- the two refinements at the end: a quoted text beside a `time` or a `uuid` is
+-- read as one when the spec is compiled, and one the type cannot read is refused
+-- at the constant.
+--   [F2] 'textV == decimalV' — compares the text 'textV' with a decimal; a text is
+--   not compared as a decimal. Write number(textV), which is absent when the text
+--   is not a number, or declare 'textV' as a decimal on a shape of its own
+--   [F2] 'dateV == datetimeV' — compares the Date 'dateV' with a DateTime; a Date
+--   is not compared as a DateTime
+--   [F2] 'textV == 5' — compares the text 'textV' with a number; a number is not
+--   compared as a text
+--   [F2] '"abc"' — 'time' rejects this constant: 'abc' is not a time of day such as "09:30"
 act P {
     textV: text
     decimalV: decimal
@@ -114,3 +121,7 @@ never (P where bytesV < "abc")
 never (P where bytesV == 5)
 never (P where bytesV < 5)
 never (P where bytesV == true)
+
+-- the reading kept: a quoted text beside a time or a uuid, read when the spec is compiled
+shape Early = P where timeV < "09:00"
+shape Known = P where uuidV == "123e4567-e89b-12d3-a456-426614174000"

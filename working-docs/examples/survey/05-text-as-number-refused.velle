@@ -1,8 +1,9 @@
 -- A number field declares a minimum; a reading's value is text because the
--- field, not the shape, says what it is. The comparison as meant passes
--- validation: the compiler checks the operands of `<` only when one is an
--- extension type (Validator.kt `checkExtComparison`). At runtime, text
--- against a number is "cannot order" (Evaluator.kt `compareValues`).
+-- field, not the shape, says what it is. A comparison never reads a text as a
+-- number (Reference §5; checks.md F2):
+--   [F2] 'value < field.min' — compares the text 'value' with a decimal; a text is
+--   not compared as a decimal. Write number(value), which is absent when the text
+--   is not a number, or declare 'value' as a decimal on a shape of its own
 act Field {
     name: text
     type: text

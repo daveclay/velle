@@ -1,3 +1,7 @@
+-- The other spelling, for a shape that can declare the type: one optional typed
+-- field per kind, a prohibition per kind tying the filled field to the field's
+-- declared kind, and the door reads the number as it reads any decimal. Nothing
+-- is read from text. It gives up holding every value in one field.
 act Field {
     name: text
     type: text
@@ -6,12 +10,15 @@ act Field {
 
 shape Reading {
     fieldName: text
-    value: text?
+    numberValue: decimal?
+    dateValue: Date?
+    textValue: text?
     field: one Field? =
         if exists (Field where name == this.fieldName) then first(Field where name == this.fieldName by name)
         else none
 }
 
--- Only the shape of the text can be checked. The minimum is not.
-never (Reading where field is some and field.type == "number" and value is some
-       and not (value matches "-?[0-9]+([.][0-9]+)?"))
+never (Reading where field is some and field.type == "number" and numberValue is none)
+never (Reading where field is some and field.type == "date" and dateValue is none)
+never (Reading where field is some and field.type == "text" and textValue is none)
+never (Reading where field is some and field.min is some and numberValue is some and numberValue < field.min)

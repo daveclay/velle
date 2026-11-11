@@ -1,0 +1,22 @@
+-- The settled spelling for a value that is text by the business's design: the
+-- text is read where the spec says so, by `number`, which is absent when the
+-- text is not a number (Reference §5, "The built-in functions").
+act Field {
+    name: text
+    type: text
+    min: decimal?
+}
+
+shape Reading {
+    fieldName: text
+    value: text?
+    field: one Field? =
+        if exists (Field where name == this.fieldName) then first(Field where name == this.fieldName by name)
+        else none
+}
+
+-- The format check: a number field's reading must read as a number.
+never (Reading where field is some and field.type == "number" and value is some and number(value) is none)
+-- The minimum. An unreadable text is absent and satisfies no comparison, which the
+-- prohibition above has already refused.
+never (Reading where field is some and field.min is some and value is some and number(value) < field.min)

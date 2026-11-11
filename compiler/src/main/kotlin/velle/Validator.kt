@@ -908,7 +908,7 @@ class Validator(private val model: Model) {
                             diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — a ${registryName(t)} has no order; only `==` and `!=` apply"))
                     }
                 when (e.op) {
-                    "==", "!=", "<", "<=", ">", ">=" -> checkExtComparison(e, scope)
+                    "==", "!=", "<", "<=", ">", ">=" -> checkComparison(e, scope)
                     "+", "-", "*", "/", "%" -> {
                         val l = scalarTypeOf(e.left, scope); val r = scalarTypeOf(e.right, scope)
                         if (l is VType.Ext || r is VType.Ext) operatorLine(e, l, r, scope)
@@ -917,6 +917,10 @@ class Validator(private val model: Model) {
                             if (t != null && t !is VType.Num)
                                 diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '%' takes numbers, but '${Printer.expr(side)}' is not a number"))
                         }
+                        // a text takes part in no arithmetic (Reference §5): `name + "_unit"` is refused, not joined
+                        else if ((l == VType.Text && model.registry.typeFor(r) != null) || (r == VType.Text && model.registry.typeFor(l) != null))
+                            diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.op}' is not defined on a text; Velle does not join or compute with texts. " +
+                                "A value made of parts is a shape with a field for each part, and a value that is a number or a date is declared as one"))
                     }
                 }
             }
@@ -1222,15 +1226,13 @@ class Validator(private val model: Model) {
 
     private fun extOf(t: VType?): VelleType<*>? = ((t as? VType.Optional)?.inner ?: t)?.let { if (it is VType.Ext) model.registry[it.qualifiedName] else null }
 
-    /** A type's name as this spec writes it, with its Kotlin class, for an E3 sentence. */
-    private fun describe(t: VelleType<*>) = "'${model.specNameOf(t)}' (${t::class.qualifiedName})"
+    /** A type's name as this spec writes it, with its Kotlin class when it is an extension type, for an E3 sentence. */
+    private fun describe(t: VelleType<*>) =
+        if (model.registry.vtypeOf(t) is VType.Ext) "'${model.specNameOf(t)}' (${t::class.qualifiedName})" else "'${t.name}'"
 
-    /** Whether a constant of this form can be read as the type [name] names. */
-    private fun readsConstant(name: String, c: Pair<BigDecimal?, String?>): Boolean = when {
-        name in TypeRegistry.NUMBER_NAMES -> c.first != null
-        name == "text" -> c.second != null
-        else -> model.registry[name]?.let { t -> (c.first != null && t.literals.fromNumber != null) || (c.second != null && t.literals.fromText != null) } ?: false
-    }
+    /** Whether a constant of this form can be read as the type [name] names, builtin or registered. */
+    private fun readsConstant(name: String, c: Pair<BigDecimal?, String?>): Boolean =
+        (model.registry.builtins[name] ?: model.registry[name])?.let { readsForm(it, c) } ?: false
 
     /** A constant where [type] is expected: F2 when the type reads no such constant or
      *  its reader refuses this one (OQ65 D2). Returns whether it read. */
@@ -1289,13 +1291,19 @@ class Validator(private val model: Model) {
     }
 
     /**
-     * A comparison with an extension operand (OQ65 D4; E3): `==`/`!=` need the two sides
-     * to be the one type (a constant reads as it); `< <= > >=` also need the type ordered.
+     * A comparison's two sides are one type (Reference §5; checks.md F2): a constant reads
+     * as the other side's type through that type's literal reader, so `opensAt < "09:00"`
+     * reads the text as a time and `balance < 0` reads `0` as a Money, and a constant the
+     * type does not read is refused at the constant. Two values of different kinds never
+     * meet: a comparison never reads a text as a number or a date; `number(value)` is where
+     * a text is read. An extension type is named with its Kotlin class, since the fix for a
+     * missing reader or ordering is there (E3).
      */
-    private fun checkExtComparison(e: Binary, scope: String) {
-        val l = scalarTypeOf(e.left, scope); val r = scalarTypeOf(e.right, scope)
+    private fun checkComparison(e: Binary, scope: String) {
+        val l = scalarTypeOf(e.left, scope)?.let { (it as? VType.Optional)?.inner ?: it }
+        val r = scalarTypeOf(e.right, scope)?.let { (it as? VType.Optional)?.inner ?: it }
         val lext = extOf(l); val rext = extOf(r)
-        if (lext == null && rext == null) return
+        if (lext == null && rext == null) { checkBuiltinComparison(e, l, r); return }
         val ordered = e.op in setOf("<", "<=", ">", ">=")
         for (t in listOfNotNull(lext, rext).distinct())
             if (ordered && t !is Ordered<*>)
@@ -1309,6 +1317,68 @@ class Validator(private val model: Model) {
             rext != null -> constantOf(e.left)?.let { checkConstantAs(it, rext, e.left) }
                 ?: l?.let { diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — compares a ${describe(rext)} with '${Printer.expr(e.left)}', which is not one")) }
         }
+    }
+
+    /** The builtin half of [checkComparison]: the two kinds agree, the numbers being one kind,
+     *  or the one constant among them reads as the other side's type. */
+    private fun checkBuiltinComparison(e: Binary, l: VType?, r: VType?) {
+        val lt = model.registry.typeFor(l) ?: return
+        val rt = model.registry.typeFor(r) ?: return
+        if (l == r || (l is VType.Num && r is VType.Num)) return
+        val lc = constantOf(e.left); val rc = constantOf(e.right)
+        when {
+            rc != null && lc == null && readsForm(lt, rc) -> checkConstantAs(rc, lt, e.right)
+            lc != null && rc == null && readsForm(rt, lc) -> checkConstantAs(lc, rt, e.left)
+            else -> diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — ${mismatch(e.left, l, e.right, r)}"))
+        }
+    }
+
+    /** Whether [type] declares a reader for the form of constant [c] is, a number or a text. */
+    private fun readsForm(type: VelleType<*>, c: Pair<BigDecimal?, String?>): Boolean =
+        if (c.first != null) type.literals.fromNumber != null else type.literals.fromText != null
+
+    /**
+     * Why two builtin kinds do not meet, and what to write: a text field beside a number, a
+     * `Date`, or a `DateTime` is read by the function of that type, absent when the text is
+     * not one, or declared under the type; beside a `time` or a `uuid` it is declared.
+     */
+    private fun mismatch(left: Expr, l: VType?, right: Expr, r: VType?): String {
+        val lk = kindWord(left, l); val rk = kindWord(right, r)
+        // the side that would have had to be read as the other: the constant, else the text, else the left
+        val readIsRight = constantOf(right) != null || (constantOf(left) == null && r == VType.Text && l != VType.Text)
+        val sentence = "compares the $lk '${Printer.expr(left)}' with ${an(rk)}; " +
+            if (readIsRight) "${an(rk)} is not compared as ${an(lk)}" else "${an(lk)} is not compared as ${an(rk)}"
+        // what to write, when the text is a field and the other side is a value of another kind
+        if (constantOf(left) != null || constantOf(right) != null) return sentence
+        val textSide = when {
+            l == VType.Text -> left
+            r == VType.Text -> right
+            else -> return sentence
+        }
+        val other = if (textSide === left) r else l
+        val x = Printer.expr(textSide)
+        val declare = "declare '$x' as ${an(kindWord(if (textSide === left) right else left, other))}"
+        val reader = when (other) {
+            is VType.Num -> "number($x), which is absent when the text is not a number"
+            VType.DateT -> "date($x), which is absent when the text is not a date"
+            VType.DateTimeT -> "datetime($x), which is absent when the text is not a moment"
+            VType.TimeT, VType.UuidT -> return "$sentence. ${declare.replaceFirstChar { it.uppercase() }}"
+            else -> return sentence
+        }
+        return "$sentence. Write $reader, or $declare on a shape of its own"
+    }
+
+    /** The word for a side's kind: its builtin keyword, `integer` for an integer field, `number` for a number constant. */
+    private fun kindWord(e: Expr, t: VType?): String = when {
+        t is VType.Num -> if (constantOf(e) != null) "number" else t.name
+        else -> registryName(t) ?: "value of another type"
+    }
+
+    /** The word with its article: "a text", "an integer", "a uuid" (said as a word), "bytes" (no article). */
+    private fun an(word: String) = when {
+        word == "bytes" -> word
+        word.first() in "aeio" -> "an $word"
+        else -> "a $word"
     }
 
     /** A value written to a field of an extension type is of that type: a constant it reads,
