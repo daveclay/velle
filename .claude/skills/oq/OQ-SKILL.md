@@ -82,9 +82,10 @@ A decision section (Dave, 2026-11-11):
 ```
 ### D<n>. <the decision in one sentence>
 
-<The decision text: the yes-or-no as Dave would say it, the recommendation,
-the costs as a short list, the full-context Velle. Written once, when the
-decision is proposed, and not rewritten when it is answered.>
+<The decision text: the question put to Dave, phrased as a question he
+answers, then the recommendation, the costs as a short list, the
+full-context Velle. Written once, when the decision is proposed, and not
+rewritten when it is answered.>
 
 #### Proposed changes
 
@@ -179,6 +180,11 @@ Each decision section:
   where possible. The costs come after, as a short list (Dave, 2026-10-12,
   on OQ49 S7: "worded in such a complicated way, it could have simply
   asked...").
+- Asks Dave a question, explicitly and in so many words, with a question
+  mark: "Does the compiler refuse a comparison between a text and a number?"
+  A section that only describes a situation, a finding, or a recommendation
+  is not a decision, because there is nothing for Dave to answer. Describing
+  is not asking (Dave, 2026-11-11).
 - Carries a recommendation.
 - Shows full-context Velle: the `shape` and `act` declarations with their
   field types in view, the `uses` lines, a comment per line saying what the
@@ -262,4 +268,6 @@ name (`checks.md` V23).
 - Does any wiki page point into `working-docs/questions/`? It must not.
 - Does the chat message point at the file and section for each decision,
   rather than restating the decisions?
+- Does every open decision section put an explicit question to Dave, not
+  only a description?
 - Is every settled-but-unbuilt OQ still on disk?
