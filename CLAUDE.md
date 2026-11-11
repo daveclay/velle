@@ -1,71 +1,109 @@
 # Velle
 
-## Writing for the wiki
+Velle is a language that captures the discussion between a product 
+owner and an engineer. It documents a system's business rules in
+an intuitive, expressive syntax, and provides the ability to 
+validate them with proofs. It intentionally avoids traditional code
+structures and syntax. Traditional code requires the engineer to 
+translate business domain problems into the domain of running on a
+digital computer with functions, variables, stack frames and memory.
 
-`wiki/` is the documentation Velle authors read. These rules apply to every
-page in it. They do not apply to `working-docs/`, which is written for Dave.
+The 
+repo holds the compiler and runtime
+(`compiler/`), stores (`stores/`), the API layer (`apis/`), extension
+libraries (`extensions/`), the example systems (`examples/`), the
+documentation (`wiki/`), and the working documents (`working-docs/`).
 
-### The reader
+Each of `compiler/`, `wiki/`, `examples/`, and `apis/` has its own
+`CLAUDE.md` with the rules for files under it. Two skills hold the
+procedures: `oq` for opening, investigating, and deciding an open question,
+and `implement` for implementing a decided one through to the commit that
+settles it.
 
-The reader is a backend engineer or a product owner who has never seen Velle.
-They have the grammar page open in another tab and want to write a spec for
-their own system. They do not know compiler theory or programming-language
-theory. They will not read any page twice. If a sentence would not help them
-write Velle today, cut it.
+## Working documents
 
-### Page shape
+`working-docs/` holds exactly `QUESTIONS.md`, `questions/` (one file per
+open question, `OQ<n>-<slug>.md`), and `examples/` (survey specs that probe
+a gap). Nothing else: no TODO file, no investigation or audit files. An open
+question is a work item whose context does not fit on one line. See the
+`oq` skill before touching any of it.
 
-Every Reference page, in this order:
+References run one way: working documents may cite the wiki and the code;
+the wiki and the code never cite `working-docs/`, except `QUESTIONS.md` by
+name and a bare OQ tag. Reasoning that settled a question is not kept
+anywhere; history is git.
 
-1. One paragraph naming the concept the page teaches, in plain words, and
-   what the reader can do with it afterwards. The concept comes before any
-   example: a reader should be able to say what the page is about without
-   having seen the code. Do not open with a summary of the examples.
-2. The business situation that calls for it, in words a product owner would say.
-3. The Velle code, before any explanation of it.
-4. What each line does, in order.
-5. What the compiler checks, stated as "the compiler rejects X when Y" or
-   "the compiler warns when Y", with a link to the check in `checks.md`.
-6. Links to related pages.
+## Writing for Dave
 
-Write a page from an outline of what it teaches, not by editing the old
-paragraphs. The old page is source material for facts and code only.
+These rules apply to every OQ file, every working document, every commit
+message, and every chat message.
 
-### Words
+- Lead with the decision or the answer in one plain sentence Dave would
+  say, yes-or-no where possible. Costs and tradeoffs come after, as a short
+  list.
+- No shorthand, and never a term of your own invention. A term is a Velle
+  keyword, an everyday word, or a term shared among professionals that is in
+  `wiki/GLOSSARY.md` and glossed at first use. A document-local term is
+  defined in a sentence the first time it appears.
+- Every mention of example code names its file,
+  `examples/<system>/<system>.velle` or
+  `working-docs/examples/survey/<name>.velle`, and the rule or shape by name.
+- Velle code shown to Dave is full-context: the `shape` and `act`
+  declarations with field types in view, the `uses` lines, and a comment per
+  line saying what the compiler does with it. Never a bare fragment.
+- Every evidence claim points at a checked-in artifact: a test, a file, a
+  source line. Session output is not evidence. If the artifact does not
+  exist, create it.
+- A document that uses labels (D3, probe J, finding C1) holds the complete
+  roster resolving every label it uses, updated in the same edit.
+- Say "query" for one read request. "Question" is reserved for the
+  questions for Dave.
+- No em-dashes. Start a new sentence instead. Dates are absolute.
+- Every decision for Dave is written into the OQ file as its own section
+  before it is mentioned in chat; the chat message points at the file and
+  section. When Dave says "let's talk about this", stop editing and reason
+  in chat; the document is written once, afterwards.
+- When Dave calls a construct awkward while saying the use case is
+  legitimate, step back to whether the construct should exist at all before
+  fixing its form.
 
-- Every noun is a Velle keyword, an everyday English word, or a link to its
-  definition in `GLOSSARY.md` or the page that defines it. No other nouns.
-  Rewrite rather than link when the term is only used once.
-- The first use of a Velle construct on a page links to the Reference page
-  that defines it, as `[§N](Reference-NN-name)`.
-- Prefer the business word to the mechanism: "the flag is set again the next
-  night" rather than "the latch re-arms".
-- No compiler-theory vocabulary in prose: reify, discharge, witness, latch,
-  rung, sugar, desugar, obligation, monotone, idempotent. If the idea is
-  needed, say it in a sentence: "running the rule twice changes nothing."
-- Explain what Velle does for the reader, not how the compiler or runtime
-  does it inside. Internal mechanism goes in `evaluation.md` or `checks.md`.
+## Design principles
 
-### Sentences
+Dave's, stated while deciding questions. They decide new questions by
+default and are not applied back over existing choices without his say.
 
-- One idea per sentence, about 20 words. Code before abstraction.
-- No em-dashes. Start a new sentence instead.
-- Every "this", "the same", "again", "below", "as before" must point at
-  something already on the page. The first sentence of a page points at nothing.
-- Every mention of example code names the file it comes from, as
-  `examples/<dir>/<name>.velle`.
-
-### What never appears on a wiki page
-
-- Design history: what was decided, when, by whom, what was settled, what
-  survived scrutiny, what is untested, what is deferred. Move it to
-  `working-docs/` or delete it.
-- Open-question tags (OQnn) or dates of decisions.
-- Arguments for why Velle has no construct for something. State what to
-  write instead and stop.
-
-### Checking a draft
-
-Before finishing, read the page as the reader described above and list every
-sentence where a word's referent is unknown, or where the reader could not
-say what they would type. Fix each one. Only then report the page as done.
+- A system's state changes only when something external happens to it: a
+  tick of a scheduler or an incoming act. An incoming act is an input to the
+  state, not a member of it; what lasts is what the rules record.
+- A design in which a wrong state cannot be represented beats one in which
+  it is checked.
+- The compiler errors when a statement's meaning is undefined. It advises
+  when the meaning is defined but the author may not have intended it, and
+  the advisory is silenced by an explicit spelling.
+- Rejections are as much the system's information as committed state. For
+  each `never` the author chooses whether a violation is refused at the door
+  or recorded as a finding; the language never decides that. A rejection,
+  from an act or from a tick, must reach a human with what was rejected and
+  why.
+- A `never` declares a prohibition: a refusal (binds the caller, over a
+  transient act), a constraint (binds the books, over a persistent shape),
+  or a guarantee (binds the spec's own rules, proven). Use those words.
+- A text is read as another type only by a function with an absent result,
+  `number(value)`, never by a comparison that reads it silently.
+- An extension type is one value and its mapping; a value with parts is a
+  shape. A type says nothing about storage; storage is a binding per type
+  and store. Custom functions outrank custom types.
+- Velle codes to its own extension interfaces (`compiler/CLAUDE.md`).
+- The store API is agnostic to how and where records are stored
+  (`compiler/CLAUDE.md`).
+- Velle captures the product-owner and engineer conversation as a pure
+  business layer. Arbitrary input from a form or a sync is not part of
+  Velle; it is pushed to the APIs.
+- Velle UI, a separate sub-project (OQ73), separates the UX description,
+  the UI component mapping, and styling into three languages, as Velle
+  separates its domains. Nothing in a UX declaration names a widget, a
+  position, a colour, or a size.
+- The closure tree rule in Reference §6 is a limitation, not a principle.
+  Do not defend it.
+- Do not extend one stated goal into a principle that decides other
+  questions.
