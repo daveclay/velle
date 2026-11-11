@@ -2,7 +2,7 @@ package velle
 
 enum class TokType {
     UIDENT, LIDENT, KW,
-    INT, DEC, TEXT,
+    INT, DEC, TEXT, TEXT_INTERP,
     NEWLINE, EOF,
     LBRACE, RBRACE, LPAREN, RPAREN, COLON, COMMA,
     ASSIGN, EQ, NEQ, LT, LE, GT, GE,
@@ -11,9 +11,16 @@ enum class TokType {
     QMARK, DOT, QDOT,
 }
 
-data class Token(val type: TokType, val text: String, val line: Int, val col: Int) {
+data class Token(val type: TokType, val text: String, val line: Int, val col: Int, val parts: List<RawTextPart> = emptyList()) {
     fun isKw(word: String) = type == TokType.KW && text == word
     override fun toString() = "${type}(${text})@$line:$col"
+}
+
+/** One part of a text literal with pieces (Reference §5), as the lexer hands it to the
+ *  parser: a run of characters, or the source of a `${...}` piece with where it starts. */
+sealed interface RawTextPart {
+    data class Run(val text: String) : RawTextPart
+    data class Piece(val source: String, val line: Int, val col: Int) : RawTextPart
 }
 
 // Reserved words (grammar.md, lexical layer). Only lowercase-initial words can be

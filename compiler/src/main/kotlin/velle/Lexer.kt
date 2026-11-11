@@ -6,7 +6,9 @@ package velle
  * Line-orientation: a newline is a token (statement / member separator), except
  * inside parentheses, where newlines are insignificant and suppressed here.
  * Comments run from `--` to end of line. Text literals are single-line with
- * Kotlin-style escapes minus `\$`.
+ * Kotlin-style escapes, and may hold `${...}` pieces (Reference §5): a literal
+ * with pieces is one TEXT_INTERP token carrying its runs and the source of
+ * each piece; one with none is a TEXT token.
  */
 class Lexer(private val src: String) {
 
@@ -58,35 +60,92 @@ class Lexer(private val src: String) {
         val startLine = line
         val startCol = col
         advance() // opening quote
-        val sb = StringBuilder()
+        val parts = mutableListOf<RawTextPart>()
+        val run = StringBuilder()
         while (true) {
             if (pos >= src.length || src[pos] == '\n')
                 throw VelleSyntaxError("unterminated text literal", startLine, startCol)
             val c = src[pos]
             if (c == '"') { advance(); break }
-            if (c == '\\') {
-                advance()
-                if (pos >= src.length) throw VelleSyntaxError("unterminated escape", line, col)
-                when (val e = src[pos]) {
-                    '"' -> sb.append('"')
-                    '\\' -> sb.append('\\')
-                    'n' -> sb.append('\n')
-                    't' -> sb.append('\t')
-                    'r' -> sb.append('\r')
-                    'u' -> {
-                        val hex = src.substring(pos + 1, minOf(pos + 5, src.length))
-                        if (hex.length < 4) throw VelleSyntaxError("bad \\u escape", line, col)
-                        sb.append(hex.toInt(16).toChar())
-                        repeat(4) { advance() }
-                    }
-                    else -> throw VelleSyntaxError("unknown escape \\$e", line, col)
-                }
-                advance()
-            } else {
-                sb.append(c); advance()
+            if (c == '\\') { run.append(escape()); continue }
+            if (c == '$' && peek(1) == '{') {
+                if (run.isNotEmpty()) { parts.add(RawTextPart.Run(run.toString())); run.clear() }
+                parts.add(piece())
+                continue
+            }
+            run.append(c); advance()
+        }
+        if (parts.isEmpty()) { tokens.add(Token(TokType.TEXT, run.toString(), startLine, startCol)); return }
+        if (run.isNotEmpty()) parts.add(RawTextPart.Run(run.toString()))
+        tokens.add(Token(TokType.TEXT_INTERP, "", startLine, startCol, parts))
+    }
+
+    /** The character an escape stands for, with [pos] on the backslash; leaves [pos] after the escape. */
+    private fun escape(): Char {
+        advance()
+        if (pos >= src.length) throw VelleSyntaxError("unterminated escape", line, col)
+        val escaped = src[pos]
+        val result = when (escaped) {
+            '"' -> '"'
+            '\\' -> '\\'
+            '$' -> '$'
+            'n' -> '\n'
+            't' -> '\t'
+            'r' -> '\r'
+            'u' -> unicodeEscape()
+            else -> throw VelleSyntaxError("unknown escape \\$escaped", line, col)
+        }
+        advance()
+        return result
+    }
+
+    private fun unicodeEscape(): Char {
+        val hex = src.substring(pos + 1, minOf(pos + 5, src.length))
+        if (hex.length < 4) throw VelleSyntaxError("bad \\u escape", line, col)
+        repeat(4) { advance() }
+        return hex.toInt(16).toChar()
+    }
+
+    /** A `${...}` piece, with [pos] on the `$`: its source up to the matching `}`, braces and
+     *  quoted texts inside it skipped as the lexer would read them. */
+    private fun piece(): RawTextPart.Piece {
+        val pieceLine = line
+        val pieceCol = col
+        advance(); advance() // `${`
+        val start = pos
+        skipPieceBody(pieceLine, pieceCol)
+        val source = src.substring(start, pos)
+        advance() // the closing `}`
+        return RawTextPart.Piece(source, pieceLine, pieceCol + 2)
+    }
+
+    private fun skipPieceBody(pieceLine: Int, pieceCol: Int) {
+        var depth = 1
+        while (depth > 0) {
+            if (pos >= src.length || src[pos] == '\n')
+                throw VelleSyntaxError("unterminated piece in a text literal: no '}' closes the '\${' here", pieceLine, pieceCol)
+            when (src[pos]) {
+                '{' -> { depth++; advance() }
+                '}' -> { depth--; if (depth > 0) advance() }
+                '"' -> skipQuotedText(pieceLine, pieceCol)
+                else -> advance()
             }
         }
-        tokens.add(Token(TokType.TEXT, sb.toString(), startLine, startCol))
+    }
+
+    /** A quoted text inside a piece, with [pos] on its opening quote; leaves [pos] after its closing quote. */
+    private fun skipQuotedText(pieceLine: Int, pieceCol: Int) {
+        advance()
+        while (true) {
+            if (pos >= src.length || src[pos] == '\n')
+                throw VelleSyntaxError("unterminated text literal inside a piece", pieceLine, pieceCol)
+            when {
+                src[pos] == '"' -> { advance(); return }
+                src[pos] == '\\' -> { advance(); advance() }
+                src[pos] == '$' && peek(1) == '{' -> { advance(); advance(); skipPieceBody(pieceLine, pieceCol); advance() }
+                else -> advance()
+            }
+        }
     }
 
     private fun identifier() {

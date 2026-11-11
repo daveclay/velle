@@ -20,7 +20,7 @@ import velle.generated.pharmacy.*
  * }
  *
  * rule NoticeReady when ReadyForPickup {
- *     Notice from { recipient: prescription.order.patient, subject: "ready for pickup", sentOn: now }
+ *     Notice from { recipient: prescription.order.patient, subject: "${prescription.drug.name} ready for pickup", sentOn: now }
  * }
  *
  * shape Uncollected = ReadyForPickup where readyOn < (today - 10 days)

@@ -786,6 +786,7 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
             is Binary -> { collectExpr(e.left, subject, s, aliases, root); collectExpr(e.right, subject, s, aliases, root) }
             is NotExpr -> collectExpr(e.inner, subject, s, aliases, root)
             is IfExpr -> { collectExpr(e.condition, subject, s, aliases, root); collectExpr(e.thenExpr, subject, s, aliases, root); collectExpr(e.elseExpr, subject, s, aliases, root) }
+            is Interpolation -> e.pieces.forEach { piece -> collectExpr(piece, subject, s, aliases, root) }
             is IsExpr -> {
                 collectExpr(e.subject, subject, s, aliases, root)
                 e.refinement?.let { if (it in refinements) s.absorb(predicateSummary(it)) }

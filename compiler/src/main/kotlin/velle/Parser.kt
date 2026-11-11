@@ -21,6 +21,28 @@ class Parser(private val tokens: List<Token>) {
         fun parsePredicate(source: String): Expr = Parser(Lexer(source).lex()).parseWholePredicate()
     }
 
+    /** A text literal with pieces (Reference §5): each piece's source is read as one value expression. */
+    private fun interpolation(t: Token): Interpolation = Interpolation(t.parts.map { part ->
+        when (part) {
+            is RawTextPart.Run -> TextRun(part.text)
+            is RawTextPart.Piece -> TextPiece(parsePiece(part))
+        }
+    })
+
+    private fun parsePiece(piece: RawTextPart.Piece): Expr {
+        try {
+            return Parser(Lexer(piece.source).lex()).parseWholeValue()
+        } catch (error: VelleSyntaxError) {
+            throw VelleSyntaxError("in the piece '\${${piece.source}}': ${error.message}", piece.line, piece.col + error.col - 1)
+        }
+    }
+
+    private fun parseWholeValue(): Expr {
+        val e = parseValue()
+        if (!at(TokType.EOF)) fail("unexpected '${peek().text}' after the value", peek())
+        return e
+    }
+
     private fun parseWholePredicate(): Expr {
         skipNewlines()
         val e = parsePredicate()
@@ -797,6 +819,7 @@ class Parser(private val tokens: List<Token>) {
             }
             t.type == TokType.DEC -> { next(); DecLit(t.text) }
             t.type == TokType.TEXT -> { next(); TextLit(t.text) }
+            t.type == TokType.TEXT_INTERP -> { next(); interpolation(t) }
             t.isKw("true") -> { next(); BoolLit(true) }
             t.isKw("false") -> { next(); BoolLit(false) }
             t.isKw("none") -> { next(); NoneLit }

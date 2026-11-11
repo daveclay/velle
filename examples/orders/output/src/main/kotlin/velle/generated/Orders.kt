@@ -21,6 +21,12 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
     fun commit(input: NewProduct): Commit<NewProduct, Ref<Product>> =
         boundary("Product", input).carrying(input)
 
+    /** Queue keys: none — this commit contends with no other work.
+     *  Commits sharing a queue key are handled one at a time, in arrival
+     *  order (U3); commits whose keys are disjoint run in parallel. */
+    fun commit(input: NewSkuFamily): Commit<NewSkuFamily, Ref<SkuFamily>> =
+        boundary("SkuFamily", input).carrying(input)
+
     /** Queue key: [order.customer].
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
@@ -30,10 +36,13 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
     fun ticks(): List<Tick> = all("Tick") { materializeTick(it) }
     fun customers(): List<Customer> = all("Customer") { materializeCustomer(it) }
     fun products(): List<Product> = all("Product") { materializeProduct(it) }
+    fun skuFamilys(): List<SkuFamily> = all("SkuFamily") { materializeSkuFamily(it) }
     fun orders(): List<Order> = all("Order") { materializeOrder(it) }
     fun orderLines(): List<OrderLine> = all("OrderLine") { materializeOrderLine(it) }
     fun customizations(): List<Customization> = all("Customization") { materializeCustomization(it) }
     fun reservations(): List<Reservation> = all("Reservation") { materializeReservation(it) }
+    fun productInFamilys(): List<ProductInFamily> = all("ProductInFamily") { materializeProductInFamily(it) }
+    fun productOfFamilys(): List<ProductOfFamily> = all("ProductOfFamily") { materializeProductOfFamily(it) }
 
     // ── the query API: `read(ref)`, `read.<root>.where { }.orderBy { }.page(n).list()` (Reference §22) ──
     val read = Read()
@@ -55,6 +64,11 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         fun product(key: StoreKey): Product = byKey("Product", key)
         fun product(key: Long): Product = product(StoreKey(key))
 
+        val skuFamilys: SkuFamilyQuery get() = query("SkuFamily", SkuFamilyFields()) { materializeSkuFamily(it) }
+        /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
+        fun skuFamily(key: StoreKey): SkuFamily = byKey("SkuFamily", key)
+        fun skuFamily(key: Long): SkuFamily = skuFamily(StoreKey(key))
+
         val orders: OrderQuery get() = query("Order", OrderFields()) { materializeOrder(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
         fun order(key: StoreKey): Order = byKey("Order", key)
@@ -74,6 +88,14 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
         fun reservation(key: StoreKey): Reservation = byKey("Reservation", key)
         fun reservation(key: Long): Reservation = reservation(StoreKey(key))
+
+        val productInFamilys: ProductInFamilyQuery get() = query("ProductInFamily", ProductInFamilyFields()) { materializeProductInFamily(it) }
+        /** The record behind [ref] as a member of ProductInFamily, or null when it is not one. */
+        fun productInFamily(ref: Ref<Product>): ProductInFamily? = member("ProductInFamily", ref) { materializeProductInFamily(it) }
+
+        val productOfFamilys: ProductOfFamilyQuery get() = query("ProductOfFamily", ProductOfFamilyFields()) { materializeProductOfFamily(it) }
+        /** The record behind [ref] as a member of ProductOfFamily, or null when it is not one. */
+        fun productOfFamily(ref: Ref<Product>): ProductOfFamily? = member("ProductOfFamily", ref) { materializeProductOfFamily(it) }
     }
 
     /** The model object of whatever shape the instance is (a union-typed reference resolves to its operand's). */
@@ -81,6 +103,7 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         "Tick" -> materializeTick(id)
         "Customer" -> materializeCustomer(id)
         "Product" -> materializeProduct(id)
+        "SkuFamily" -> materializeSkuFamily(id)
         "Order" -> materializeOrder(id)
         "OrderLine" -> materializeOrderLine(id)
         "Customization" -> materializeCustomization(id)
@@ -104,6 +127,14 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         key = system.refFor(id).key,
         sku = system.get(id, "sku") as String,
         orderLines = (system.get(id, "orderLines") as List<*>).map { system.refFor(it as Long) },
+        isProductInFamily = system.isMember(id, "ProductInFamily"),
+        isProductOfFamily = system.isMember(id, "ProductOfFamily"),
+    )
+
+    private fun materializeSkuFamily(id: Long): SkuFamily = SkuFamily(
+        key = system.refFor(id).key,
+        prefix = system.get(id, "prefix") as String,
+        skuPattern = system.get(id, "skuPattern") as velle.ext.builtin.RegexValue,
     )
 
     private fun materializeOrder(id: Long): Order = Order(
@@ -135,6 +166,20 @@ class OrdersSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) :
         quantity = (system.get(id, "quantity") as BigDecimal).intValueExact(),
     )
 
+    private fun materializeProductInFamily(id: Long): ProductInFamily = ProductInFamily(
+        key = system.refFor(id).key,
+        sku = system.get(id, "sku") as String,
+        orderLines = (system.get(id, "orderLines") as List<*>).map { system.refFor(it as Long) },
+        isProductOfFamily = system.isMember(id, "ProductOfFamily"),
+    )
+
+    private fun materializeProductOfFamily(id: Long): ProductOfFamily = ProductOfFamily(
+        key = system.refFor(id).key,
+        sku = system.get(id, "sku") as String,
+        orderLines = (system.get(id, "orderLines") as List<*>).map { system.refFor(it as Long) },
+        isProductInFamily = system.isMember(id, "ProductInFamily"),
+    )
+
     companion object {
         private val SPEC = """
 -- The exposure closure (Reference §6, "Inline part creation"): an order arrives
@@ -153,6 +198,20 @@ act Customer {
 act Product {
     sku: text
 }
+
+-- A SKU belongs to a family when it fits the family's pattern. The pattern is
+-- data an admin supplies, and a product that fits none is a finding to read,
+-- never a refusal at the door.
+-- velle: a `Regex` field, never malformed; `matches` with a stored pattern on
+-- the right; a pattern with pieces, where a text piece is characters and a
+-- `Regex` piece is pattern (Reference §5, §10)
+act SkuFamily {
+    prefix: text
+    skuPattern: Regex
+}
+
+shape ProductInFamily = Product where exists (SkuFamily where this.sku matches skuPattern)
+shape ProductOfFamily = Product where exists (SkuFamily where this.sku matches "^${prefix}-${skuPattern}$")
 
 act Order {
     customer: one Customer
@@ -194,10 +253,13 @@ never (OrderLine where quantity <= 0)
 typealias TickQuery = TypedQuery<TickFields, Tick>
 typealias CustomerQuery = TypedQuery<CustomerFields, Customer>
 typealias ProductQuery = TypedQuery<ProductFields, Product>
+typealias SkuFamilyQuery = TypedQuery<SkuFamilyFields, SkuFamily>
 typealias OrderQuery = TypedQuery<OrderFields, Order>
 typealias OrderLineQuery = TypedQuery<OrderLineFields, OrderLine>
 typealias CustomizationQuery = TypedQuery<CustomizationFields, Customization>
 typealias ReservationQuery = TypedQuery<ReservationFields, Reservation>
+typealias ProductInFamilyQuery = TypedQuery<ProductInFamilyFields, ProductInFamily>
+typealias ProductOfFamilyQuery = TypedQuery<ProductOfFamilyFields, ProductOfFamily>
 
 // ── act inputs (Reference §22, "External input"): one typed value per act,
 // every stored field the committer supplies and nothing else ──
@@ -221,6 +283,19 @@ data class NewProduct(
     override fun register(reg: NewRegistry) {
     }
     fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "Product") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
+}
+
+data class NewSkuFamily(
+    val prefix: String,
+    val skuPattern: velle.ext.builtin.RegexValue,
+) : NewValue {
+    override fun raw(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = buildMap {
+        put("prefix", prefix)
+        put("skuPattern", skuPattern)
+    }
+    override fun register(reg: NewRegistry) {
+    }
+    fun asValue(system: VelleSystem, reg: NewRegistry): Map<String, Any?> = raw(system, reg) + ("@shape" to "SkuFamily") + (reg.tokenOrNull(this)?.let { mapOf("@new" to it) } ?: emptyMap())
 }
 
 data class NewOrder(
@@ -299,8 +374,22 @@ data class Product(
     override val key: StoreKey,
     val sku: String,
     val orderLines: List<Ref<OrderLine>>,
+    /** membership of ProductInFamily at the moment of the read */
+    val isProductInFamily: Boolean,
+    /** membership of ProductOfFamily at the moment of the read */
+    val isProductOfFamily: Boolean,
 ) : Ref<Product> {
     override val shape: String get() = "Product"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
+data class SkuFamily(
+    override val key: StoreKey,
+    val prefix: String,
+    val skuPattern: velle.ext.builtin.RegexValue,
+) : Ref<SkuFamily> {
+    override val shape: String get() = "SkuFamily"
     override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
@@ -350,6 +439,30 @@ data class Reservation(
     override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
 }
 
+data class ProductInFamily(
+    override val key: StoreKey,
+    val sku: String,
+    val orderLines: List<Ref<OrderLine>>,
+    /** membership of ProductOfFamily at the moment of the read */
+    val isProductOfFamily: Boolean,
+) : Ref<Product> {
+    override val shape: String get() = "Product"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
+data class ProductOfFamily(
+    override val key: StoreKey,
+    val sku: String,
+    val orderLines: List<Ref<OrderLine>>,
+    /** membership of ProductInFamily at the moment of the read */
+    val isProductInFamily: Boolean,
+) : Ref<Product> {
+    override val shape: String get() = "Product"
+    override fun equals(other: Any?) = other is Keyed && other.shape == shape && other.key == key
+    override fun hashCode() = 31 * shape.hashCode() + key.hashCode()
+}
+
 // ── the builder's vocabulary: one field handle per member, memberships per refinement ──
 
 class TickFields(path: List<String> = emptyList()) : Fields(path) {
@@ -363,6 +476,13 @@ class CustomerFields(path: List<String> = emptyList()) : Fields(path) {
 
 class ProductFields(path: List<String> = emptyList()) : Fields(path) {
     val sku: TextField get() = TextField(fieldPath + "sku")
+    fun isProductInFamily(): Expr = isA("ProductInFamily")
+    fun isProductOfFamily(): Expr = isA("ProductOfFamily")
+}
+
+class SkuFamilyFields(path: List<String> = emptyList()) : Fields(path) {
+    val prefix: TextField get() = TextField(fieldPath + "prefix")
+    val skuPattern: ExtField<velle.ext.builtin.RegexValue> get() = ExtField<velle.ext.builtin.RegexValue>(fieldPath + "skuPattern", "velle.Regex")
 }
 
 class OrderFields(path: List<String> = emptyList()) : Fields(path) {
@@ -387,10 +507,20 @@ class ReservationFields(path: List<String> = emptyList()) : Fields(path) {
     val quantity: NumField get() = NumField(fieldPath + "quantity")
 }
 
+class ProductInFamilyFields(path: List<String> = emptyList()) : Fields(path) {
+    val sku: TextField get() = TextField(fieldPath + "sku")
+    fun isProductOfFamily(): Expr = isA("ProductOfFamily")
+}
+
+class ProductOfFamilyFields(path: List<String> = emptyList()) : Fields(path) {
+    val sku: TextField get() = TextField(fieldPath + "sku")
+    fun isProductInFamily(): Expr = isA("ProductInFamily")
+}
+
 fun main() {
     val sys = OrdersSystem()
     println("Velle MockHarness — Orders")
-    println("Commits: commit(NewCustomer(...)), commit(NewProduct(...)), commit(NewOrder(...))")
+    println("Commits: commit(NewCustomer(...)), commit(NewProduct(...)), commit(NewSkuFamily(...)), commit(NewOrder(...))")
     println("Edit this main to drive the system; state prints below.")
 
     // <your scenario here>
@@ -398,6 +528,7 @@ fun main() {
     println("Tick: " + sys.ticks().size)
     println("Customer: " + sys.customers().size)
     println("Product: " + sys.products().size)
+    println("SkuFamily: " + sys.skuFamilys().size)
     println("Order: " + sys.orders().size)
     println("OrderLine: " + sys.orderLines().size)
     println("Customization: " + sys.customizations().size)

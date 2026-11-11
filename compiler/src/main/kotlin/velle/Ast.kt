@@ -314,6 +314,14 @@ sealed interface Expr
 data class IntLit(val value: Long) : Expr
 data class DecLit(val text: String) : Expr
 data class TextLit(val value: String) : Expr
+/** A text literal with pieces, `"INV-${number}"` (Reference §5): runs of characters and value
+ *  expressions, in order. A literal with no pieces is a [TextLit]. */
+data class Interpolation(val parts: List<TextPart>) : Expr {
+    val pieces: List<Expr> get() = parts.filterIsInstance<TextPiece>().map { it.expr }
+}
+sealed interface TextPart
+data class TextRun(val text: String) : TextPart
+data class TextPiece(val expr: Expr) : TextPart
 data class BoolLit(val value: Boolean) : Expr
 data object NoneLit : Expr
 data object NowLit : Expr

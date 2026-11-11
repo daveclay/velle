@@ -15,6 +15,20 @@ act Product {
     sku: text
 }
 
+-- A SKU belongs to a family when it fits the family's pattern. The pattern is
+-- data an admin supplies, and a product that fits none is a finding to read,
+-- never a refusal at the door.
+-- velle: a `Regex` field, never malformed; `matches` with a stored pattern on
+-- the right; a pattern with pieces, where a text piece is characters and a
+-- `Regex` piece is pattern (Reference §5, §10)
+act SkuFamily {
+    prefix: text
+    skuPattern: Regex
+}
+
+shape ProductInFamily = Product where exists (SkuFamily where this.sku matches skuPattern)
+shape ProductOfFamily = Product where exists (SkuFamily where this.sku matches "^${prefix}-${skuPattern}$")
+
 act Order {
     customer: one Customer
     placedOn: Date

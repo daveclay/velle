@@ -90,7 +90,7 @@ class ExtensionTypeTest {
     @Test
     fun `the default registry carries the test fixtures and passes its own checks`() {
         assertEquals(emptyList(), TypeRegistry.default.diagnostics)
-        assertEquals(setOf("velle.test.Price", "velle.testalt.Price", "velle.test.Badge", "velle.test.Day", "velle.finance.Money"), TypeRegistry.default.byQualifiedName.keys)
+        assertEquals(setOf("velle.test.Price", "velle.testalt.Price", "velle.test.Badge", "velle.test.Day", "velle.Regex", "velle.finance.Money"), TypeRegistry.default.byQualifiedName.keys)
     }
 
     // ── naming a type (D1: `uses`) ───────────────────────────────────────────

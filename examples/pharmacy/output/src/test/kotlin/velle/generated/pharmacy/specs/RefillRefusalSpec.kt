@@ -9,7 +9,7 @@ import velle.generated.pharmacy.*
 /**
  * rule AskPrescriber when (RefillRefusal where (reason == "no refills remaining") and (not (exists AuthorisationRequest for prescription))) {
  *     AuthorisationRequest from { prescription: prescription, requestedOn: now }
- *     Notice from { recipient: prescription.order.prescriber, subject: "refill authorisation requested", sentOn: now }
+ *     Notice from { recipient: prescription.order.prescriber, subject: "refill authorisation requested for ${prescription.drug.name}", sentOn: now }
  * }
  *
  */

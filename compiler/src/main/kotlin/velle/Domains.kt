@@ -356,6 +356,7 @@ class DomainAnalysis(private val model: Model) {
             is NotExpr -> corrExpr(e.inner, scope, out, seen)
             is UnaryMinus -> corrExpr(e.inner, scope, out, seen)
             is IfExpr -> { corrExpr(e.condition, scope, out, seen); corrExpr(e.thenExpr, scope, out, seen); corrExpr(e.elseExpr, scope, out, seen) }
+            is Interpolation -> e.pieces.forEach { piece -> corrExpr(piece, scope, out, seen) }
             is ExistsExpr -> {
                 forThis(e.shape, e.forExpr)
                 e.collection?.let { collection(it) }
@@ -464,6 +465,7 @@ class DomainAnalysis(private val model: Model) {
             is NotExpr -> bodyCorr(e.inner, scope, out, seen)
             is UnaryMinus -> bodyCorr(e.inner, scope, out, seen)
             is IfExpr -> { bodyCorr(e.condition, scope, out, seen); bodyCorr(e.thenExpr, scope, out, seen); bodyCorr(e.elseExpr, scope, out, seen) }
+            is Interpolation -> e.pieces.forEach { piece -> bodyCorr(piece, scope, out, seen) }
             is IsExpr -> { bodyCorr(e.subject, scope, out, seen); e.refinement?.let { refRoutes(it) } }
             is ExistsExpr -> {
                 if (e.shape != null) forAny(e.shape, e.forExpr)
@@ -676,6 +678,7 @@ class DomainAnalysis(private val model: Model) {
                 is Binary -> { walkExpr(e.left, ctx); walkExpr(e.right, ctx) }
                 is NotExpr -> walkExpr(e.inner, ctx)
                 is IfExpr -> { walkExpr(e.condition, ctx); walkExpr(e.thenExpr, ctx); walkExpr(e.elseExpr, ctx) }
+                is Interpolation -> e.pieces.forEach { piece -> walkExpr(piece, ctx) }
                 is IsExpr -> {
                     val subj = walkExpr(e.subject, ctx)
                     e.refinement?.let { r ->

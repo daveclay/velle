@@ -425,6 +425,7 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
      *  System-wide over Prescription — reads Prescription.order with no path back to any key (unexamined (A5)).
      *  System-wide over PrescriberOrder — reads PrescriberOrder.prescriber with no path back to any key (unexamined (A5)).
      *  System-wide over Notice — creates Notice referencing an instance the derivation cannot key (unexamined (A5)).
+     *  System-wide over Drug — reads Drug.name with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewRequestRefill): Commit<NewRequestRefill, Nothing?> =
@@ -3715,8 +3716,10 @@ shape ReadyForPickup = VerifiedFill where not exists Pickup for this and not exi
     captured readyOn: Date = today
 }
 
+-- velle: a text literal with pieces names the drug in the subject (Reference §5,
+-- "Text made from other values")
 rule NoticeReady when ReadyForPickup {
-    Notice from { recipient: prescription.order.patient, subject: "ready for pickup", sentOn: now }
+    Notice from { recipient: prescription.order.patient, subject: "${prescription.drug.name} ready for pickup", sentOn: now }
 }
 
 shape Uncollected = ReadyForPickup where readyOn < today - 10 days
@@ -3842,7 +3845,7 @@ rule AskPrescriber
     when (RefillRefusal where reason == "no refills remaining" and
           not exists AuthorisationRequest for prescription) {
     AuthorisationRequest from { prescription: prescription, requestedOn: now }
-    Notice from { recipient: prescription.order.prescriber, subject: "refill authorisation requested", sentOn: now }
+    Notice from { recipient: prescription.order.prescriber, subject: "refill authorisation requested for ${prescription.drug.name}", sentOn: now }
 }
 
 -- Open refill work is nagged daily once it is two days old.
@@ -3885,7 +3888,7 @@ rule QueueAutoRefill
 -- velle: a `when leaving` rule naming only a schedule sees the leavers at the
 -- tick itself: exits by aging, never the commit-caused ones
 rule NoticeExpiry when leaving ActivePrescription on Daily {
-    Notice from { recipient: order.patient, subject: "prescription expired", sentOn: now }
+    Notice from { recipient: order.patient, subject: "prescription for ${drug.name} expired", sentOn: now }
 }
 
 -- ── Insurance: claims and adjudication ───────────────────────────────────────

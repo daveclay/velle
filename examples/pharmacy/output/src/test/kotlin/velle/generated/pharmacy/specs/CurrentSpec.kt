@@ -36,7 +36,7 @@ import velle.generated.pharmacy.*
  * shape ActivePrescription = Current where expiresOn >= today
  *
  * rule NoticeExpiry when leaving ActivePrescription on Daily {
- *     Notice from { recipient: order.patient, subject: "prescription expired", sentOn: now }
+ *     Notice from { recipient: order.patient, subject: "prescription for ${drug.name} expired", sentOn: now }
  * }
  *
  */

@@ -142,10 +142,22 @@ object Printer {
         else if (e is RefOr || e is RefAnd) "(${refExpr(e)})"
         else refExpr(e)
 
+    /** A run of a text literal with pieces as the lexer reads it back: the quote, the backslash,
+     *  a `${` that is characters, and the line breaks escaped. */
+    private fun escapeRun(text: String): String = text
+        .replace("\\", "\\\\").replace("\"", "\\\"").replace("\${", "\\\${")
+        .replace("\n", "\\n").replace("\t", "\\t").replace("\r", "\\r")
+
     fun expr(e: Expr): String = when (e) {
         is IntLit -> e.value.toString()
         is DecLit -> e.text
         is TextLit -> "\"${e.value}\""
+        is Interpolation -> "\"" + e.parts.joinToString("") { part ->
+            when (part) {
+                is TextRun -> escapeRun(part.text)
+                is TextPiece -> "\${" + expr(part.expr) + "}"
+            }
+        } + "\""
         is BoolLit -> e.value.toString()
         NoneLit -> "none"
         EmptyLit -> "empty"

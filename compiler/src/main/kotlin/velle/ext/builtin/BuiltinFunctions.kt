@@ -3,6 +3,7 @@ package velle.ext.builtin
 import velle.ext.Accepts
 import velle.ext.HasCalendarDate
 import velle.ext.HasTimeOfDay
+import velle.ext.LiteralRejected
 import velle.ext.Ordered
 import velle.ext.Parameter
 import velle.ext.Returns
@@ -28,7 +29,7 @@ object BuiltinFunctions {
         Lowercase, Uppercase, Trim, Length, Abs,
         Year, Month, Day, DayOfWeek, Hour, Minute,
         Max, Min,
-        ReadNumber, ReadDate, ReadDateTime,
+        ReadNumber, ReadDate, ReadDateTime, ReadRegex,
     )
 }
 
@@ -65,7 +66,10 @@ sealed class TextReader(name: String, result: KClass<*>, private val read: (Stri
         apply = { _, args -> readOrNull(args[0].value as String) },
     ))
     private fun readOrNull(text: String): Any? =
-        try { read(text) } catch (e: NumberFormatException) { null } catch (e: DateTimeParseException) { null }
+        try { read(text) }
+        catch (error: NumberFormatException) { null }
+        catch (error: DateTimeParseException) { null }
+        catch (error: LiteralRejected) { null }
 }
 
 /** `number`: `BigDecimal` of the trimmed text. */
@@ -74,6 +78,8 @@ object ReadNumber : TextReader("number", DecimalType::class, { BigDecimal(it.tri
 object ReadDate : TextReader("date", DateType::class, { LocalDate.parse(it) })
 /** `datetime`: a moment with its offset, `2026-01-15T09:00:00Z`; a text with no offset is a local time, not a moment, and is absent. */
 object ReadDateTime : TextReader("datetime", DateTimeType::class, { Instant.parse(it) })
+/** `regex`: a regular expression in the Java dialect; a text that does not compile is absent. */
+object ReadRegex : TextReader("regex", RegexType::class, { RegexValue(it) })
 
 /** `abs`: anything [Signed], returned as what it was. */
 object Abs : BuiltinFunction("abs") {

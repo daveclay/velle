@@ -9,7 +9,7 @@ class MoneyTypeTest {
     @Test
     fun `the type passes the registry's checks on its own samples and is found on the classpath`() {
         assertEquals(emptyList(), TypeRegistry(listOf(MoneyType())).diagnostics)
-        assertEquals(listOf("velle.finance.Money"), TypeRegistry.default.byQualifiedName.keys.toList())
+        assertEquals(setOf("velle.finance.Money", "velle.Regex"), TypeRegistry.default.byQualifiedName.keys)
     }
 
     @Test

@@ -298,7 +298,7 @@ open class PharmacyFlowTest {
     fun `counter - the patient is told, counselling gates the first fill, payment must cover what is due, and the exit is recorded with the day it arrived`() {
         val c = s.ready()
         val notice = sys.notices().single()
-        assertEquals("ready for pickup", sys.read(notice).subject)
+        assertEquals("amoxicillin ready for pickup", sys.read(notice).subject)
         assertEquals(c.patient, (sys.read(sys.read(notice).recipient) as? Patient), "the union-typed recipient")
         assertEquals("555-0100", sys.read(notice).contact, "a patient is texted")
         assertTrue(c.fill.isA("ReadyForPickup"))
@@ -491,7 +491,7 @@ open class PharmacyFlowTest {
         assertEquals(0, sys.refillTasks().size)
         assertEquals(listOf("no refills remaining", "no refills remaining"), sys.refillRefusals().map { sys.read(it).reason })
         assertEquals(1, sys.authorisationRequests().size, "asked once however many times the patient asks")
-        val fax = sys.notices().single { sys.read(it).subject == "refill authorisation requested" }
+        val fax = sys.notices().single { sys.read(it).subject == "refill authorisation requested for amoxicillin" }
         assertEquals(c.prescriber, (sys.read(sys.read(fax).recipient) as? Prescriber))
         assertEquals("555-0199", sys.read(fax).contact, "a prescriber is faxed")
 
@@ -543,7 +543,7 @@ open class PharmacyFlowTest {
         assertFalse(aging.isA("ActivePrescription"), "expired by age")
         sys.tickDaily()
         val notice = sys.notices().single()
-        assertEquals("prescription expired", sys.read(notice).subject)
+        assertEquals("prescription for amoxicillin expired", sys.read(notice).subject)
         assertEquals(c.patient, (sys.read(sys.read(notice).recipient) as? Patient))
         sys.tickDaily()
         assertEquals(1, sys.notices().size, "a leaver leaves once")

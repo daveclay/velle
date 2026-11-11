@@ -145,6 +145,7 @@ class KeyLookups(decls: List<Decl>) {
     private fun isPresent(value: Expr, scope: String, present: Set<String>): Boolean = when (value) {
         is IntLit, is DecLit, is TextLit, is BoolLit, is DurationLit, NowLit, TodayLit -> true
         is PathExpr -> pathIsPresent(value, scope, present)
+        is Interpolation -> value.pieces.all { piece -> isPresent(piece, scope, present) }
         else -> false
     }
 

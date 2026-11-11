@@ -15,6 +15,25 @@ The comparison operators are `==`, `!=`, `<`, `<=`, `>`, and `>=`.
 
 Text values also support `contains`, `starts with`, `ends with`, `like`, and `matches`, all case-sensitive. In a `like` pattern, `%` matches any run of characters, including none, `_` matches one character, and `\` escapes either. `matches` takes a regular expression, in the Java dialect, that the whole text must match: `email matches "[^@ ]+@[^@ ]+\\.[a-z]+"`. A backslash in a text literal is written twice, so the regular expression `\.` is spelled `"\\."` in a spec. The compiler reads the expression when the spec compiles, so a malformed one is an error there, never at run time.
 
+A pattern may hold pieces, `${...}` around a value ([§5](Reference-05-Scalars), "Text made from other values"), and a `Regex` value ([§5](Reference-05-Scalars)) may stand where a pattern does. From `examples/orders/orders.velle`, shape `ProductOfFamily`:
+
+```
+act SkuFamily {
+    prefix: text
+    skuPattern: Regex
+}
+
+shape ProductInFamily = Product where exists (SkuFamily where this.sku matches skuPattern)
+shape ProductOfFamily = Product where exists (SkuFamily where this.sku matches "^${prefix}-${skuPattern}$")
+```
+
+- `this.sku matches skuPattern` tests the SKU against the family's stored pattern. A `Regex` field holds only a pattern that compiles, so the right side is never malformed.
+- In `"^${prefix}-${skuPattern}$"`, the piece's type says how it is read. `${prefix}` is a text, so it is characters: a prefix `A.B` matches `A.B` and not `AxB`. `${skuPattern}` is a `Regex`, so it is spliced in as pattern. The fixed runs, `^`, `-`, `$`, are pattern. The same reading holds for the literal as the argument of `regex(...)`, `regex("^${prefix}-\\d+$")`, and as the value of a `Regex` property.
+- To splice a text as pattern, read it as one at the piece: `"^${prefix}-${regex(suffix)}$"`. `regex(text)` is absent when the text does not compile, and an absent piece makes the pattern absent, so the comparison is false.
+- A pattern built in a `text` property and read back with `regex(...)` reads the whole text as pattern, pieces included. Build a pattern in a `Regex` property instead; the compiler warns at the `regex(...)` call ([checks.md, A7](checks#a7--a-pattern-read-from-a-text-built-from-pieces)).
+- In a `like` pattern a piece is always characters: `body like "%[${tag}]%"` with a tag of `50%` matches `[50%]` and nothing else.
+- The compiler checks the fixed runs of a pattern with pieces when the spec compiles. A pattern that still does not compile when its pieces are in, a `Regex` piece that closes a group a run opened, fails the evaluation rather than reading as false.
+
 ## Testing presence, emptiness, and membership with `is`
 
 `is` has three uses.
@@ -126,7 +145,7 @@ A number or a quoted text compared with a field of an [extension type](Reference
 ## What the compiler checks
 
 - The compiler rejects a comparison between values of different types, a text operator on a non-text value (except `contains` on a `many` of values, [§5](Reference-05-Scalars)), duration arithmetic on anything but a `Date`, `DateTime`, `time`, or `duration`, a `by` property that is not orderable, and `x is R` when `x` and `R` share no base shape ([checks.md, F2](checks#f2--type-checking)).
-- The compiler rejects a listed value after `in` that is not of the left side's type, a right side of `in` that is neither a list, a `many` of values, nor a collection of records beside a record, a list of values anywhere but after `in`, a `matches` whose right side is not a quoted text or is not a regular expression, `is empty` on a value that is neither a collection nor a text, and a `sum` with no field over anything but a `many` of numbers or durations ([checks.md, F2](checks#f2--type-checking)).
+- The compiler rejects a listed value after `in` that is not of the left side's type, a right side of `in` that is neither a list, a `many` of values, nor a collection of records beside a record, a list of values anywhere but after `in`, a `matches` whose right side is neither a quoted text, a text literal with pieces, nor a `Regex`, a quoted pattern that is not a regular expression, and a pattern with pieces whose fixed runs are not one around a placeholder for each piece, `is empty` on a value that is neither a collection nor a text, and a `sum` with no field over anything but a `many` of numbers or durations ([checks.md, F2](checks#f2--type-checking)).
 - The compiler rejects a constant an extension type's reader refuses or does not read, and an operator, comparison, or `sum` the type does not declare, naming the Kotlin class to extend ([checks.md, E3](checks#e3--a-capability-the-type-does-not-declare)).
 - The compiler rejects plain `.` through an optional value with no earlier presence test, and names `?.` as the alternative ([checks.md, V11](checks#v11--narrowing-analysis)).
 - The compiler rejects `(Shape for expr)` and `exists Shape for expr` when more than one field matches the subject's type, or when it cannot prove at most one record exists. The diagnostic asks for `latest` or `first` over a filtered collection ([checks.md, V12](checks#v12--singular-reference-proofs)).

@@ -32,6 +32,13 @@ data class ProductRow(
     val sku: String,
 )
 
+/** One stored SkuFamily row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
+data class SkuFamilyRow(
+    val key: StoreKey,
+    val prefix: String,
+    val skuPattern: velle.ext.builtin.RegexValue,
+)
+
 /** One stored Order row; references arrive as typed [Ref.Persisted], collections as lists in membership order. */
 data class OrderRow(
     val key: StoreKey,
@@ -77,6 +84,7 @@ interface OrdersStore {
     fun tick(key: StoreKey): TickRow?
     fun customer(key: StoreKey): CustomerRow?
     fun product(key: StoreKey): ProductRow?
+    fun skuFamily(key: StoreKey): SkuFamilyRow?
     fun order(key: StoreKey): OrderRow?
     fun orderLine(key: StoreKey): OrderLineRow?
     fun customization(key: StoreKey): CustomizationRow?
@@ -86,6 +94,7 @@ interface OrdersStore {
     fun allTicks(): List<TickRow>
     fun allCustomers(): List<CustomerRow>
     fun allProducts(): List<ProductRow>
+    fun allSkuFamilys(): List<SkuFamilyRow>
     fun allOrders(): List<OrderRow>
     fun allOrderLines(): List<OrderLineRow>
     fun allCustomizations(): List<CustomizationRow>
@@ -99,6 +108,9 @@ interface OrdersStore {
     fun reservationsByLine(target: Ref.Persisted): List<ReservationRow>
 
     // ── candidate reads: one per condition with a testable part ──
+    /** Serves refinement ProductInFamily; refinement ProductOfFamily — `ProductInFamily`.
+     *  Superset contract: any superset of the matching rows is correct. */
+    fun productInFamilyCandidates(): List<ProductRow>
     /** Serves never #1 — `OrderLine where quantity <= 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never1Candidates(): List<OrderLineRow>
@@ -106,6 +118,7 @@ interface OrdersStore {
 
 /** The candidate questions as recognizable templates (QTemplate). */
 class OrdersStoreQuestions(model: Model) {
+    val productInFamilyCandidates = QTemplate.of(model, "Product", RefName("ProductInFamily"))
     val never1Candidates = QTemplate.of(model, "OrderLine", model.nevers[0].target)
 }
 
@@ -124,6 +137,7 @@ open class OrdersStoreOverGeneric(
     override fun tick(key: StoreKey): TickRow? = backend.fetchByKey("Tick", key)?.toTickRow()
     override fun customer(key: StoreKey): CustomerRow? = backend.fetchByKey("Customer", key)?.toCustomerRow()
     override fun product(key: StoreKey): ProductRow? = backend.fetchByKey("Product", key)?.toProductRow()
+    override fun skuFamily(key: StoreKey): SkuFamilyRow? = backend.fetchByKey("SkuFamily", key)?.toSkuFamilyRow()
     override fun order(key: StoreKey): OrderRow? = backend.fetchByKey("Order", key)?.toOrderRow()
     override fun orderLine(key: StoreKey): OrderLineRow? = backend.fetchByKey("OrderLine", key)?.toOrderLineRow()
     override fun customization(key: StoreKey): CustomizationRow? = backend.fetchByKey("Customization", key)?.toCustomizationRow()
@@ -132,6 +146,7 @@ open class OrdersStoreOverGeneric(
     override fun allTicks(): List<TickRow> = backend.fetchAll("Tick").map { it.toTickRow() }
     override fun allCustomers(): List<CustomerRow> = backend.fetchAll("Customer").map { it.toCustomerRow() }
     override fun allProducts(): List<ProductRow> = backend.fetchAll("Product").map { it.toProductRow() }
+    override fun allSkuFamilys(): List<SkuFamilyRow> = backend.fetchAll("SkuFamily").map { it.toSkuFamilyRow() }
     override fun allOrders(): List<OrderRow> = backend.fetchAll("Order").map { it.toOrderRow() }
     override fun allOrderLines(): List<OrderLineRow> = backend.fetchAll("OrderLine").map { it.toOrderLineRow() }
     override fun allCustomizations(): List<CustomizationRow> = backend.fetchAll("Customization").map { it.toCustomizationRow() }
@@ -147,6 +162,10 @@ open class OrdersStoreOverGeneric(
         backend.fetchReferencing("Customization", "line", target).map { it.toCustomizationRow() }
     override fun reservationsByLine(target: Ref.Persisted): List<ReservationRow> =
         backend.fetchReferencing("Reservation", "line", target).map { it.toReservationRow() }
+
+    override fun productInFamilyCandidates(): List<ProductRow> =
+        backend.fetchCandidates("Product", questions.productInFamilyCandidates.instantiate(listOf()))
+            .map { it.toProductRow() }
 
     override fun never1Candidates(): List<OrderLineRow> =
         backend.fetchCandidates("OrderLine", questions.never1Candidates.instantiate(listOf()))
@@ -166,6 +185,7 @@ class OrdersStoreResolver(
         "Tick" -> store.tick(key)?.toRow()
         "Customer" -> store.customer(key)?.toRow()
         "Product" -> store.product(key)?.toRow()
+        "SkuFamily" -> store.skuFamily(key)?.toRow()
         "Order" -> store.order(key)?.toRow()
         "OrderLine" -> store.orderLine(key)?.toRow()
         "Customization" -> store.customization(key)?.toRow()
@@ -177,6 +197,7 @@ class OrdersStoreResolver(
         "Tick" -> store.allTicks().map { it.toRow() }
         "Customer" -> store.allCustomers().map { it.toRow() }
         "Product" -> store.allProducts().map { it.toRow() }
+        "SkuFamily" -> store.allSkuFamilys().map { it.toRow() }
         "Order" -> store.allOrders().map { it.toRow() }
         "OrderLine" -> store.allOrderLines().map { it.toRow() }
         "Customization" -> store.allCustomizations().map { it.toRow() }
@@ -194,6 +215,8 @@ class OrdersStoreResolver(
     }
 
     override fun fetchCandidates(shape: String, filter: QF): List<Row> {
+        if (shape == "Product")
+            questions.productInFamilyCandidates.match(filter)?.let { h -> return store.productInFamilyCandidates().map { it.toRow() } }
         if (shape == "OrderLine")
             questions.never1Candidates.match(filter)?.let { h -> return store.never1Candidates().map { it.toRow() } }
         return fetchAll(shape) // unrecognized filters fall back to the scan floor
@@ -233,6 +256,17 @@ fun Row.toProductRow(): ProductRow = ProductRow(
 
 fun ProductRow.toRow(): Row = Row("Product", key, buildMap {
     put("sku", sku)
+})
+
+fun Row.toSkuFamilyRow(): SkuFamilyRow = SkuFamilyRow(
+    key = key,
+    prefix = fields["prefix"] as String,
+    skuPattern = fields["skuPattern"] as velle.ext.builtin.RegexValue,
+)
+
+fun SkuFamilyRow.toRow(): Row = Row("SkuFamily", key, buildMap {
+    put("prefix", prefix)
+    put("skuPattern", skuPattern)
 })
 
 fun Row.toOrderRow(): OrderRow = OrderRow(

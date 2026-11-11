@@ -1,5 +1,8 @@
 package velle
 
+import velle.ext.builtin.ReadRegex
+import velle.ext.builtin.RegexType
+
 import velle.ext.Ordered
 import velle.ext.Summable
 import velle.ext.VelleType
@@ -165,7 +168,7 @@ class Validator(private val model: Model) {
                         diags.add(Diagnostic("F3", "'$name.${m.name}' — a `many ${t.shape}` holds each record once, so it cannot tolerate duplication; " +
                             "if how many times a link occurs matters, that count is data on a link shape (Reference §6)"))
                 }
-                is DerivedProp -> { checkExpr(m.expr, name); checkWalkDeclaration(name, m) }
+                is DerivedProp -> { checkExpr(m.expr, name); checkWalkDeclaration(name, m); checkInterpolationDeclaration(name, m) }
                 is ActorProp -> checkActorClause(name, shape, m)
                 else -> {}
             }
@@ -430,7 +433,7 @@ class Validator(private val model: Model) {
             walkRefExpr(r.expr)
             if (bases.size > 1) checkCrossBaseUnion(name, r, bases)
             for (m in r.members) when (m) {
-                is DerivedProp -> { checkExpr(m.expr, name); checkWalkDeclaration(name, m) }
+                is DerivedProp -> { checkExpr(m.expr, name); checkWalkDeclaration(name, m); checkInterpolationDeclaration(name, m) }
                 is FrozenClause -> {
                     val base = model.baseOf(name) ?: continue
                     val stored = model.shapes[base]?.members?.filterIsInstance<StoredProp>()?.map { it.name } ?: emptyList()
@@ -718,6 +721,7 @@ class Validator(private val model: Model) {
             is UnaryMinus -> aliasReads(x.inner, false, names, rule, where)
             is NotExpr -> aliasReads(x.inner, false, names, rule, where)
             is IfExpr -> { aliasReads(x.condition, false, names, rule, where); aliasReads(x.thenExpr, whole, names, rule, where); aliasReads(x.elseExpr, whole, names, rule, where) }
+            is Interpolation -> x.pieces.forEach { piece -> aliasReads(piece, false, names, rule, where) }
             is IsExpr -> aliasReads(x.subject, false, names, rule, where)
             is Access -> aliasReads(x.target, false, names, rule, where)
             is FunCall -> x.args.forEach { aliasReads(it, false, names, rule, where) }
@@ -748,6 +752,7 @@ class Validator(private val model: Model) {
                 is UnaryMinus -> walk(x.inner)
                 is NotExpr -> walk(x.inner)
                 is IfExpr -> { walk(x.condition); walk(x.thenExpr); walk(x.elseExpr) }
+                is Interpolation -> x.pieces.forEach { piece -> walk(piece) }
                 is IsExpr -> walk(x.subject)
                 is Access -> walk(x.target)
                 is FunCall -> x.args.forEach { walk(it) }
@@ -884,18 +889,11 @@ class Validator(private val model: Model) {
                 } else if (e.op in TEXT_OPERATORS) {
                     for (side in listOf(e.left, e.right)) {
                         val t = scalarTypeOf(side, scope) ?: continue
+                        if (e.op == "matches" && side === e.right) continue // checkMatchesPattern says what the right side may be
                         if (t != VType.Text)
                             diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.op}' compares text, but '${Printer.expr(side)}' is not text"))
                     }
-                    // `matches` takes a written regular expression, checked here so a malformed one never reaches a rule
-                    if (e.op == "matches") {
-                        val pattern = (e.right as? TextLit)?.value
-                        if (pattern == null)
-                            diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — 'matches' takes a quoted regular expression on the right"))
-                        else try { Regex(pattern) } catch (x: java.util.regex.PatternSyntaxException) {
-                            diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — the pattern is not a regular expression: ${x.description}"))
-                        }
-                    }
+                    if (e.op == "matches") checkMatchesPattern(e, scope)
                 } else if (e.op == "in") checkIn(e, scope)
                 if (e.op != "in" && (e.left is ListLit || e.right is ListLit))
                     diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — a list of values `[a, b]` belongs only on the right of `in` (Reference §10)"))
@@ -919,12 +917,13 @@ class Validator(private val model: Model) {
                         }
                         // a text takes part in no arithmetic (Reference §5): `name + "_unit"` is refused, not joined
                         else if ((l == VType.Text && model.registry.typeFor(r) != null) || (r == VType.Text && model.registry.typeFor(l) != null))
-                            diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.op}' is not defined on a text; Velle does not join or compute with texts. " +
-                                "A value made of parts is a shape with a field for each part, and a value that is a number or a date is declared as one"))
+                            diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — '${e.op}' is not defined on a text; " +
+                                "a text made from other values is a text literal with pieces, ${interpolationFor(e)}"))
                     }
                 }
             }
             is ValueLit, is RefLit -> {}
+            is Interpolation -> checkPieces(e, scope)
             is NotExpr -> checkExpr(e.inner, scope)
             is IfExpr -> {
                 checkExpr(e.condition, scope)
@@ -1040,6 +1039,93 @@ class Validator(private val model: Model) {
         e.until?.let { checkExpr(it, scope) }
     }
 
+    private fun isRegexType(t: VType?): Boolean = ((t as? VType.Optional)?.inner ?: t) == VType.Ext(RegexType.QUALIFIED_NAME)
+
+    /** The right of `matches` (Reference §10): a quoted regular expression, checked here so a malformed one
+     *  never reaches a rule; a literal with pieces, whose fixed runs are checked around a placeholder for
+     *  each piece; or a `Regex`, which is never malformed. */
+    private fun checkMatchesPattern(e: Binary, scope: String) {
+        val spelled = "'${Printer.expr(e)}'"
+        when (val right = e.right) {
+            is TextLit -> compileOrRefuse(right.value) { "$spelled — the pattern is not a regular expression: $it" }
+            is Interpolation -> {
+                val fixedRuns = right.parts.joinToString("") { part -> if (part is TextRun) part.text else "(?:x)" }
+                compileOrRefuse(fixedRuns) { "$spelled — the pattern is not a regular expression around its pieces: $it" }
+            }
+            // a path whose type the validator cannot read off the model (a bare name inside an `exists` body) is left alone, as every type check leaves it
+            else -> scalarTypeOf(right, scope)?.let { type ->
+                if (!isRegexType(type))
+                    diags.add(Diagnostic("F2", "$spelled — 'matches' takes a quoted regular expression, a text literal with pieces, or a Regex on the right"))
+            }
+        }
+    }
+
+    private fun compileOrRefuse(pattern: String, message: (String) -> String) {
+        try { Regex(pattern) } catch (error: java.util.regex.PatternSyntaxException) {
+            diags.add(Diagnostic("F2", message(error.description)))
+        }
+    }
+
+    /** `regex(expr)` over a derived text built from pieces (Reference §10): the text's pieces were characters
+     *  when it was built and are pattern when it is read; declaring the property `Regex` keeps them. */
+    private fun checkPatternRead(e: FunCall, scope: String) {
+        val path = e.args.singleOrNull() as? PathExpr ?: return
+        val member = membersAlong(path, scope)?.lastOrNull() ?: return
+        if (member.derived?.expr !is Interpolation) return
+        diags.add(Diagnostic("A7", "'${Printer.expr(e)}' — '${member.name}' is a text built from pieces, and reading it as a pattern reads its pieces " +
+            "as pattern too; declare '${member.name}' as `Regex` to keep a text piece as characters", advisory = true))
+    }
+
+    /** The members a path reads, hop by hop, from [scope]; null when a hop is not a member. */
+    private fun membersAlong(path: PathExpr, scope: String): List<MemberInfo>? {
+        val names = if (path.root == "this") path.segs.map { it.name } else listOf(path.root) + path.segs.map { it.name }
+        val members = mutableListOf<MemberInfo>()
+        var current: String? = scope
+        for (name in names) {
+            val member = current?.let { model.membersOf(it)[name] } ?: return null
+            members.add(member)
+            current = member.type.instanceShape()
+        }
+        return members
+    }
+
+    /** The spelling of `a + b` over texts as a text literal with pieces (Reference §5). */
+    private fun interpolationFor(e: Binary): String {
+        fun piece(side: Expr): String = if (side is TextLit) side.value else "\${" + Printer.expr(side) + "}"
+        return "\"" + piece(e.left) + piece(e.right) + "\""
+    }
+
+    /** The pieces of a text literal (Reference §5): each is checked as any expression, and is a value. */
+    private fun checkPieces(e: Interpolation, scope: String) {
+        for (piece in e.pieces) {
+            checkExpr(piece, scope)
+            val kind = scalarTypeOf(piece, scope)
+            when {
+                piece is SetExpr || kind is VType.Coll || kind is VType.CollS ->
+                    diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — a piece of a text is a value, but '${Printer.expr(piece)}' is a collection"))
+                kind is VType.Inst ->
+                    diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — a piece of a text is a value, but '${Printer.expr(piece)}' is a record; " +
+                        "write the field you mean, such as '${Printer.expr(piece)}.${firstTextFieldOf(kind.shape)}'"))
+            }
+        }
+    }
+
+    private fun firstTextFieldOf(shape: String): String =
+        model.membersOf(shape).values.firstOrNull { it.stored && it.type == VType.Text }?.name ?: "<field>"
+
+    /** A text literal with pieces is absent when a piece is (Reference §5): a property holding one
+     *  with an optional piece is declared `text?`. A refinement body may narrow the piece, so it is left alone. */
+    private fun checkInterpolationDeclaration(owner: String, m: DerivedProp) {
+        val literal = m.expr as? Interpolation ?: return
+        val declared = m.type as? ScalarType ?: return
+        if (declared.optional || owner in model.refinements) return
+        val absentPiece = literal.pieces.filterIsInstance<PathExpr>().firstOrNull { pathMayBeAbsent(it, owner) } ?: return
+        diags.add(Diagnostic("F2", "'$owner.${m.name}' — the text is absent when '${Printer.expr(absentPiece)}' is; declare it `text?`"))
+    }
+
+    private fun pathMayBeAbsent(path: PathExpr, scope: String): Boolean =
+        membersAlong(path, scope)?.any { member -> member.type is VType.Optional } ?: false
+
     /** A derived property spelled as a walk declares the type the walk has: a
      *  `many` of the reached shape, or, with `until`, a `one ...?` of it. */
     private fun checkWalkDeclaration(owner: String, m: DerivedProp) {
@@ -1080,7 +1166,7 @@ class Validator(private val model: Model) {
     /** The scalar type of a simple expression where it can be read off the model
      *  (a literal, `lowercase(...)`, a path to a scalar member); null when unknown. */
     private fun scalarTypeOf(e: Expr, scope: String): VType? = when (e) {
-        is TextLit -> VType.Text
+        is TextLit, is Interpolation -> VType.Text
         is IntLit, is DecLit -> VType.Num("decimal")
         is BoolLit -> VType.Bool
         is TodayLit -> VType.DateT
@@ -1417,6 +1503,7 @@ class Validator(private val model: Model) {
     private fun checkFunctionCall(e: FunCall, scope: String) {
         val fn = model.resolveFunctionName(e.name, "'${Printer.expr(e)}'")
         if (fn == null) { diags.addAll(model.diagnostics.filter { it !in diags }); return }
+        if (fn.qualifiedName == ReadRegex.qualifiedName) checkPatternRead(e, scope)
         when (val r = resolveCall(e, scope)) {
             is FunctionResolver.Outcome.NoMatch -> r.reasons.firstOrNull()?.let { diags.add(Diagnostic(it.code, it.message)) }
             is FunctionResolver.Outcome.Ok -> e.args.forEachIndexed { i, a ->
@@ -1872,6 +1959,7 @@ class Validator(private val model: Model) {
                     is Binary -> { walk(e.left); walk(e.right) }
                     is NotExpr -> walk(e.inner)
                     is IfExpr -> { walk(e.condition); walk(e.thenExpr); walk(e.elseExpr) }
+                    is Interpolation -> e.pieces.forEach { piece -> walk(piece) }
                     is IsExpr -> walk(e.subject)
                     is FunCall -> e.args.forEach { walk(it) }
                     // exists/aggregates/selectors reach other instances
@@ -2001,6 +2089,7 @@ class Validator(private val model: Model) {
                 else followPath(e, scope, acc, visiting)
             }
             is IfExpr -> { signedExpr(e.condition, scope, 0, acc, visiting); signedExpr(e.thenExpr, scope, 0, acc, visiting); signedExpr(e.elseExpr, scope, 0, acc, visiting) }
+            is Interpolation -> e.pieces.forEach { piece -> signedExpr(piece, scope, 0, acc, visiting) }
             is UnaryMinus -> signedExpr(e.inner, scope, 0, acc, visiting)
             is AggCall -> signedCollection(e.collection, scope, 0, acc, visiting)
             is FunCall -> e.args.forEach { signedExpr(it, scope, 0, acc, visiting) }
@@ -2388,6 +2477,7 @@ class Validator(private val model: Model) {
                 is UnaryMinus -> walk(e.inner)
                 is NotExpr -> walk(e.inner)
                 is IfExpr -> { walk(e.condition); walk(e.thenExpr); walk(e.elseExpr) }
+                is Interpolation -> e.pieces.forEach { piece -> walk(piece) }
                 is FunCall -> e.args.forEach(::walk)
                 else -> {}
             }
@@ -2807,6 +2897,7 @@ class Validator(private val model: Model) {
                 is Binary -> { walk(e.left); walk(e.right) }
                 is NotExpr -> walk(e.inner)
                 is IfExpr -> { walk(e.condition); walk(e.thenExpr); walk(e.elseExpr) }
+                is Interpolation -> e.pieces.forEach { piece -> walk(piece) }
                 is IsExpr -> walk(e.subject)
                 is ExistsExpr -> {
                     walk(e.forExpr)
@@ -2896,6 +2987,7 @@ class Validator(private val model: Model) {
             is Binary -> { exprMentions(e.left, out); exprMentions(e.right, out) }
             is NotExpr -> exprMentions(e.inner, out)
             is IfExpr -> { exprMentions(e.condition, out); exprMentions(e.thenExpr, out); exprMentions(e.elseExpr, out) }
+            is Interpolation -> e.pieces.forEach { piece -> exprMentions(piece, out) }
             is IsExpr -> { add(e.refinement); exprMentions(e.subject, out) }
             is ExistsExpr -> {
                 add(e.shape)
@@ -3686,6 +3778,7 @@ class Validator(private val model: Model) {
                     is UnaryMinus -> walk(e.inner)
                     is NotExpr -> walk(e.inner)
                     is IfExpr -> { walk(e.condition); walk(e.thenExpr); walk(e.elseExpr) }
+                    is Interpolation -> e.pieces.forEach { piece -> walk(piece) }
                     is FunCall -> e.args.forEach(::walk)
                     else -> {}
                 }
@@ -3863,6 +3956,7 @@ class Validator(private val model: Model) {
                 is Binary -> { walk(site, e.left); walk(site, e.right) }
                 is NotExpr -> walk(site, e.inner)
                 is IfExpr -> { walk(site, e.condition); walk(site, e.thenExpr); walk(site, e.elseExpr) }
+                is Interpolation -> e.pieces.forEach { piece -> walk(site, piece) }
                 is IsExpr -> walk(site, e.subject)
                 is ExistsExpr -> {
                     walk(site, e.forExpr)

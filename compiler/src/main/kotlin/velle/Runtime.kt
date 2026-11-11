@@ -1763,7 +1763,7 @@ class VelleSystem(
                         .single { (it.type as? RelType)?.let { t -> !t.many && model.typeAccepts(t.shape, target) } == true }
                     fields[matched.name] = ref
                 }
-                item.fields.forEach { f -> fields[f.name] = evaluator.eval(f.value, ctx) }
+                item.fields.forEach { f -> fields[f.name] = evaluator.evalFor(f.value, fieldTypeOf(item.shape, f.name), ctx) }
                 // a required field given an absent value: the selection that fed it matched
                 // nothing (Reference §10, §14). The firing fails rather than storing a record
                 // with a hole in it, as a selection that does not single out a winner does.
@@ -1846,6 +1846,7 @@ class VelleSystem(
                 is UnaryMinus -> walk(x.inner)
                 is NotExpr -> walk(x.inner)
                 is IfExpr -> { walk(x.condition); walk(x.thenExpr); walk(x.elseExpr) }
+                is Interpolation -> x.pieces.forEach { piece -> walk(piece) }
                 is IsExpr -> walk(x.subject)
                 is Access -> walk(x.target)
                 is FunCall -> x.args.forEach { walk(it) }

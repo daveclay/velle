@@ -106,6 +106,7 @@ object SpecGen {
                     }
                     is NotExpr -> walkExpr(x.inner)
                     is Binary -> { walkExpr(x.left); walkExpr(x.right) }
+                    is Interpolation -> x.pieces.forEach { piece -> walkExpr(piece) }
                     else -> {}
                 }
             }
@@ -272,6 +273,7 @@ object SpecGen {
                 when (x) {
                     is DurationLit -> if (x.unit == "days") days = x.amount
                     is Binary -> { walk(x.left); walk(x.right) }
+                    is Interpolation -> x.pieces.forEach { piece -> walk(piece) }
                     is NotExpr -> walk(x.inner)
                     is ExistsExpr -> x.collection?.where?.let { walk(it) }
                     else -> {}

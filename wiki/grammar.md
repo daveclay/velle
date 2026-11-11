@@ -14,10 +14,12 @@ Identifier      := LowercaseLetter (Letter | Digit)*      -- properties, aliases
 
 IntegerLiteral  := Digit+
 DecimalLiteral  := Digit+ "." Digit+
-TextLiteral     := '"' <single line; escapes: \" \\ \n \t \r \uXXXX> '"'
-                   -- Kotlin's string lexer minus "\$": no interpolation/templates, no raw/triple-quoted
-                   -- strings, no literal newlines. Composing text out of data is presentation logic —
-                   -- compiling territory; a spec that seems to need it wants separate fields on a fact shape.
+TextLiteral     := '"' (Character | "${" valueExpr "}")* '"'
+                   -- single line; escapes: \" \\ \$ \n \t \r \uXXXX. A `${...}` piece is any value
+                   -- expression, read with the lexer's ordinary rules to the matching `}`; the literal is the
+                   -- runs and the pieces' texts joined (Reference §5, "Text made from other values"). `\$`
+                   -- gives a literal `${`; a `$` not followed by `{` is a character. No raw or triple-quoted
+                   -- strings, no literal newlines.
 BooleanLiteral  := "true" | "false"
 DurationLiteral := IntegerLiteral ("seconds" | "minutes" | "hours" | "days" | "weeks")
                    -- surface spelling of the duration constructors: "3 days" is days(3) (Reference §10)
@@ -252,7 +254,7 @@ The conditional is **`if p then a else b`**, always fully spelled — `else` is 
 
 Narrowing is shared with predicates and branch-sensitive ([Reference §10](Reference-10-Predicate-expressions)): inside a `then` branch, the governing predicate's `is some` / `is none` / `is Refinement` checks license `.` exactly as they do within a conjunction; `?.` remains the no-narrowing escape.
 
-Type rules ride on the Kotlin grounding ([Reference §5](Reference-05-Scalars)): arithmetic over the numeric scalars, `+`/`-` between `Date`/`DateTime`/`time` and a duration (a literal or a `duration` field; calendar step on `Date`, exact time on `DateTime`, wrapping on `time`), `+`/`-` between two durations, `-` between two `Date`s, two `DateTime`s, or two `time`s giving a duration, and `+`/`-` on a declared `many` as set union and removal, or as append and removal of every occurrence on a `many` of values that tolerates duplication (element or collection on the right; [Reference §6, "Committing and assigning collections"](Reference-06-Relationships#committing-and-assigning-collections), [Reference §5, "Collections of values"](Reference-05-Scalars#collections-of-values-many)). `+` between two texts is not admitted and is refused ([checks.md, F2](checks#f2--type-checking)); joining texts is OQ80 in `working-docs/QUESTIONS.md`. The duration and collection cases are the only operator overloads.
+Type rules ride on the Kotlin grounding ([Reference §5](Reference-05-Scalars)): arithmetic over the numeric scalars, `+`/`-` between `Date`/`DateTime`/`time` and a duration (a literal or a `duration` field; calendar step on `Date`, exact time on `DateTime`, wrapping on `time`), `+`/`-` between two durations, `-` between two `Date`s, two `DateTime`s, or two `time`s giving a duration, and `+`/`-` on a declared `many` as set union and removal, or as append and removal of every occurrence on a `many` of values that tolerates duplication (element or collection on the right; [Reference §6, "Committing and assigning collections"](Reference-06-Relationships#committing-and-assigning-collections), [Reference §5, "Collections of values"](Reference-05-Scalars#collections-of-values-many)). `+` between two texts is not admitted and is refused ([checks.md, F2](checks#f2--type-checking)); a text made from other values is a text literal with pieces ([Reference §5, "Text made from other values"](Reference-05-Scalars#text-made-from-other-values)). The duration and collection cases are the only operator overloads.
 
 ## Predicates
 

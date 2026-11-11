@@ -132,8 +132,7 @@ class MixedKindComparisonTest {
         """.trimIndent()
         val m = f2(spec)
         assertEquals(1, m.size, m.toString())
-        assertEquals("'name + \"_unit\"' — '+' is not defined on a text; Velle does not join or compute with texts. " +
-            "A value made of parts is a shape with a field for each part, and a value that is a number or a date is declared as one", m.single())
+        assertEquals("'name + \"_unit\"' — '+' is not defined on a text; a text made from other values is a text literal with pieces, \"\${name}_unit\"", m.single())
     }
 
     @Test

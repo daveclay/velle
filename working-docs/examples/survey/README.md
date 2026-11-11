@@ -5,7 +5,7 @@ where an admin defines a *kind* of surveyed thing (site, plot, specimen) and
 its *fields* at runtime; an *entry* is one surveyed thing; a *reading* is
 one field's value, held as text because the field says what it means; a
 *submission* carries a list of readings. The findings are work items
-in OQ43 and OQ53, and the OQs OQ80, OQ86, OQ89, and OQ90 under "Expressions,
+in OQ43 and OQ53, and the OQs OQ86, OQ89, and OQ90 under "Expressions,
 refinements, and unions" in `QUESTIONS.md`; the lookup finding (OQ74, settled) became
 the worked pattern "An act that names a record by its values" in `wiki/patterns.md`,
 the walk finding (OQ76, settled) became Reference §7 "Walks", the text-as-data
@@ -38,8 +38,6 @@ what to expect:
 | `05-text-as-number-refused` | `value < field.min` with `value: text?` and `min: decimal?` | `[F2] 'value < field.min' — compares the text 'value' with a decimal; a text is not compared as a decimal. Write number(value), which is absent when the text is not a number, or declare 'value' as a decimal on a shape of its own` | checks F2; Reference §5 |
 | `05-text-as-number-function` | the settled spelling for a value that is text by the business's design: `number(value) is none` as the format check and `number(value) < field.min` as the minimum | passes | Reference §5 "The built-in functions" |
 | `05-text-as-number-workaround` | the spelling for a shape that can declare the type: one optional typed field per kind (`numberValue: decimal?`, `dateValue: Date?`, `textValue: text?`) and a `never` per kind; gives up holding every value in one field | passes | Reference §5 |
-| `06-text-composition-refused` | `unitName: text = name + "_unit"` | `[F2] 'name + "_unit"' — '+' is not defined on a text; Velle does not join or compute with texts. A value made of parts is a shape with a field for each part, and a value that is a number or a date is declared as one` | checks F2; the spelling for joining texts is OQ80 |
-| `06-text-composition-workaround` | the unit reading matched by `starts with`, `ends with`, and `length(...) == length(name) + 5` | passes | OQ80 (the unit as a field of the reading, `unit: text?`, is OQ80 §1) |
 | `07-boolean-derivation-refused` | `isRoot: boolean = parentName is none or parentName == "survey"` | `expected LIDENT, found KW('is')` | OQ89 |
 | `08-timestamp-field-name-refused` | a field named `timestamp` | `expected LIDENT, found KW('timestamp')` | OQ90 |
 | `09-lookup-in-rule-first` | the served spelling: `key: text unique` on the entry and `Arrival from { entry: (Entry where key == this.entryKey) }` in a run-once rule, with an existence `never` | passes; at runtime a good key pairs the submission with its entry and a bad key is refused at the door (`UniqueKeyTest`; `LookupProbeTest` runs the `first ... by` spelling for a shape without a key) | patterns, "An act that names a record by its values"; Reference §21 "Keys" |

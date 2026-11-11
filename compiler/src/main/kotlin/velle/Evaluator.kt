@@ -1,5 +1,9 @@
 package velle
 
+import velle.ext.builtin.ReadRegex
+import velle.ext.builtin.RegexType
+import velle.ext.builtin.RegexValue
+
 import java.math.BigDecimal
 import java.util.UUID
 
@@ -99,7 +103,7 @@ class Evaluator(private val system: VelleSystem) {
                 ?: throw VelleRuntimeError("capture '${m.owner}.${m.name}' read outside membership")
             return store.getValue(m.name)
         }
-        m.derived?.let { return eval(it.expr, Ctx(m.owner, id)) }
+        m.derived?.let { return evalDeclared(it.expr, m.type, Ctx(m.owner, id)) }
         m.inverse?.let { inv ->
             // inferred inverse collection: a view over the declared side (Reference §6);
             // liveIds excludes instances the current transaction deleted (OQ37)
@@ -135,6 +139,7 @@ class Evaluator(private val system: VelleSystem) {
         is IntLit -> Value.VNum(BigDecimal(e.value))
         is DecLit -> Value.VNum(BigDecimal(e.text))
         is TextLit -> Value.VText(e.value)
+        is Interpolation -> evalInterpolation(e, ctx)
         is BoolLit -> Value.VBool(e.value)
         NoneLit -> Value.VNone
         EmptyLit -> Value.VEmpty
@@ -547,7 +552,8 @@ class Evaluator(private val system: VelleSystem) {
     private fun evalFun(e: FunCall, ctx: Ctx): Value {
         val fn = model.functionScope[e.name]
             ?: throw VelleRuntimeError("unknown function '${e.name}' — no builtin or registered function has that name")
-        val vals = e.args.map { eval(it, ctx) }
+        // the literal argument of `regex(...)` is a pattern piece by piece (Reference §10)
+        val vals = e.args.map { arg -> if (fn === ReadRegex && arg is Interpolation) evalInterpolation(arg, ctx, ::patternText) else eval(arg, ctx) }
         if (vals.any { it == Value.VNone }) return Value.VNone
         val args = vals.mapIndexed { i, v -> FunctionResolver.Arg(runtimeTypeOf(v, e.args[i], ctx), FunctionResolver.isConstant(e.args[i])) }
         val ok = when (val r = resolver.resolve(fn, Printer.expr(e), args) { Printer.expr(e.args[it]) }) {
@@ -678,6 +684,103 @@ class Evaluator(private val system: VelleSystem) {
     private fun typeOfValue(v: Value): velle.ext.VelleType<*>? =
         if (v is Value.VExt) v.type else model.registry.typeFor(scalarKindOf(v))
 
+    // ── the text operators (Reference §10) ───────────────────────────────────
+
+    /** The text operators: exact, case-sensitive; an absent operand satisfies none of them, like
+     *  every ordered comparison. The right of `matches` is a quoted pattern or a `Regex`. */
+    private fun textOperator(op: String, l: Value, r: Value): Value {
+        val subject = (l as? Value.VText)?.v
+        val text = (r as? Value.VText)?.v
+        val regex = regexOperand(r)
+        if (subject == null || (text == null && regex == null)) {
+            if (l != Value.VNone && r != Value.VNone) throw VelleRuntimeError("'$op' on non-text")
+            return Value.VBool(false)
+        }
+        return Value.VBool(when (op) {
+            "contains" -> text != null && subject.contains(text)
+            "starts with" -> text != null && subject.startsWith(text)
+            "ends with" -> text != null && subject.endsWith(text)
+            "matches" -> (regex ?: regexOf(text ?: "")).matches(subject)
+            else -> likePattern(text ?: "").matches(subject)
+        })
+    }
+
+    /** A `Regex` value's own compiled pattern; null for anything else. */
+    private fun regexOperand(r: Value): Regex? =
+        (r as? Value.VExt)?.takeIf { RegexType.isRegex(it.type) }?.let { (it.v as RegexValue).pattern }
+
+    /** The right side of a text operator: a literal with pieces beside `like` is characters piece by
+     *  piece, beside `matches` it is a pattern piece by piece; anything else evaluates as itself. */
+    private fun patternOperand(e: Binary, ctx: Ctx): Value {
+        val right = e.right as? Interpolation ?: return eval(e.right, ctx)
+        return when (e.op) {
+            "like" -> evalInterpolation(right, ctx, ::likeCharacters)
+            "matches" -> evalPattern(right, ctx)
+            else -> eval(right, ctx)
+        }
+    }
+
+    // ── a text literal with pieces (Reference §5) ────────────────────────────
+
+    /** The text of a literal with pieces: each piece through [render], its type's canonical
+     *  text unless the literal is a pattern; absent when any piece is. */
+    private fun evalInterpolation(e: Interpolation, ctx: Ctx, render: (Value) -> String = ::canonicalText): Value {
+        val text = StringBuilder()
+        for (part in e.parts) {
+            when (part) {
+                is TextRun -> text.append(part.text)
+                is TextPiece -> {
+                    val value = eval(part.expr, ctx)
+                    if (value == Value.VNone) return Value.VNone
+                    text.append(render(value))
+                }
+            }
+        }
+        return Value.VText(text.toString())
+    }
+
+    /** An expression where a declared type is known: a literal with pieces in a `Regex` position
+     *  is read as a pattern (Reference §10); anything else evaluates as itself. */
+    fun evalDeclared(e: Expr, declared: VType?, ctx: Ctx): Value =
+        if (e is Interpolation && isRegexType(declared)) evalPattern(e, ctx) else eval(e, ctx)
+
+    /** [evalDeclared] for a stored field's declared type, as a creation writes it. */
+    fun evalFor(e: Expr, declared: TypeRef?, ctx: Ctx): Value =
+        if (e is Interpolation && declared is ScalarType && !declared.many && model.typeScope[declared.name]?.let { RegexType.isRegex(it) } == true) evalPattern(e, ctx)
+        else eval(e, ctx)
+
+    private fun isRegexType(t: VType?): Boolean = ((t as? VType.Optional)?.inner ?: t) == VType.Ext(RegexType.QUALIFIED_NAME)
+
+    /** A literal with pieces as a pattern: a text piece is characters, a `Regex` piece is pattern, and
+     *  the whole is a `Regex`. One that does not compile is a failure, not a false. */
+    private fun evalPattern(e: Interpolation, ctx: Ctx): Value {
+        val text = evalInterpolation(e, ctx, ::patternText) as? Value.VText ?: return Value.VNone
+        val regexType = model.registry[RegexType.QUALIFIED_NAME] ?: throw VelleRuntimeError("the Regex type is not registered")
+        try {
+            return Value.VExt(regexType, RegexValue(text.v))
+        } catch (rejected: velle.ext.LiteralRejected) {
+            throw VelleRuntimeError("'${Printer.expr(e)}' — the pattern built from its pieces is not a regular expression: ${rejected.message}")
+        }
+    }
+
+    /** The text of a value as a piece: its type's canonical text (Reference §5). */
+    private fun canonicalText(value: Value): String {
+        val type = typeOfValue(value) ?: throw VelleRuntimeError("$value is not a value a text can hold")
+        return type.canonicalAny(rawOf(value))
+    }
+
+    /** A piece inside a `like` pattern is characters: its wildcards and the escape are escaped. */
+    private fun likeCharacters(value: Value): String = buildString {
+        for (character in canonicalText(value)) {
+            if (character == '\\' || character == '%' || character == '_') append('\\')
+            append(character)
+        }
+    }
+
+    /** A piece inside a pattern: a `Regex` is spliced as pattern, anything else is its characters, quoted. */
+    private fun patternText(value: Value): String =
+        (value as? Value.VExt)?.takeIf { RegexType.isRegex(it.type) }?.let { (it.v as RegexValue).source } ?: Regex.escape(canonicalText(value))
+
     private fun evalSingularFor(e: SingularFor, ctx: Ctx): Value {
         val target = eval(e.forExpr, ctx) as? Value.VRef
             ?: throw VelleRuntimeError("'for' target is not an instance")
@@ -697,7 +800,7 @@ class Evaluator(private val system: VelleSystem) {
             "or" -> return Value.VBool(truthy(eval(e.left, ctx)) || truthy(eval(e.right, ctx)))
         }
         val l0 = eval(e.left, ctx)
-        val r0 = eval(e.right, ctx)
+        val r0 = patternOperand(e, ctx)
         // an extension type's arithmetic is its declared operator table (Reference §5;
         // OQ65): `Money * decimal` keeps the number a number, `Money + 10` reads 10 as Money
         if (l0 is Value.VExt || r0 is Value.VExt) extOperator(e.op, l0, r0)?.let { return it }
@@ -740,23 +843,7 @@ class Evaluator(private val system: VelleSystem) {
             // under the element type's equality; the empty collection contains nothing
             in TEXT_OPERATORS -> if (e.op == "contains" && (l is Value.VVals || l == Value.VEmpty)) {
                 Value.VBool(l is Value.VVals && l.values.any { valueEquals(it, r) })
-            } else {
-                val a = (l as? Value.VText)?.v
-                val b = (r as? Value.VText)?.v
-                if (a == null || b == null) {
-                    if (l != Value.VNone && r != Value.VNone)
-                        throw VelleRuntimeError("'${e.op}' on non-text")
-                    Value.VBool(false)
-                } else Value.VBool(
-                    when (e.op) {
-                        "contains" -> a.contains(b)
-                        "starts with" -> a.startsWith(b)
-                        "ends with" -> a.endsWith(b)
-                        "matches" -> regexOf(b).matches(a)
-                        else -> likePattern(b).matches(a)
-                    }
-                )
-            }
+            } else textOperator(e.op, l, r)
             else -> throw VelleRuntimeError("unknown operator '${e.op}'")
         }
     }

@@ -153,6 +153,7 @@ class QueryCompiler(
         is Binary -> containsThis(e.left) || containsThis(e.right)
         is NotExpr -> containsThis(e.inner)
         is IfExpr -> containsThis(e.condition) || containsThis(e.thenExpr) || containsThis(e.elseExpr)
+        is Interpolation -> e.pieces.any { containsThis(it) }
         is IsExpr -> containsThis(e.subject)
         is ListLit -> e.items.any { containsThis(it) }
         is ExistsExpr -> (e.forExpr?.let { containsThis(it) } ?: false) ||
@@ -387,6 +388,8 @@ class QueryCompiler(
         is DurationLit -> QConst.QDuration(Value.VDuration(e.amount, e.unit).toJava())
         is UnaryMinus -> (constFold(e.inner) as? QConst.QNum)?.let { QConst.QNum(it.v.negate()) }
         is Binary -> foldBinary(e)
+        // a text literal with pieces whose pieces all fold is one text (Reference §5)
+        is Interpolation -> foldInterpolation(e)
         // the query API's constants (ValueLit): a value supplied at the moment of asking
         is ValueLit -> when (val v = e.value) {
             is Value.VNum -> QConst.QNum(v.v)
@@ -404,6 +407,32 @@ class QueryCompiler(
         }
         is RefLit -> QConst.QRef(Ref.Persisted(e.ref.shape, e.ref.key))
         else -> null
+    }
+
+    private fun foldInterpolation(e: Interpolation): QConst? {
+        val text = StringBuilder()
+        for (part in e.parts) {
+            when (part) {
+                is TextRun -> text.append(part.text)
+                is TextPiece -> text.append(canonicalOf(constFold(part.expr) ?: return null) ?: return null)
+            }
+        }
+        return QConst.QText(text.toString())
+    }
+
+    /** A constant as the text its type renders it to (`VelleType.canonical`), the form a piece takes; null for a record. */
+    private fun canonicalOf(c: QConst): String? = when (c) {
+        is QConst.QNum -> velle.ext.builtin.DecimalType.canonical(c.v)
+        is QConst.QText -> c.v
+        is QConst.QBool -> velle.ext.builtin.BooleanType.canonical(c.v)
+        is QConst.QDate -> velle.ext.builtin.DateType.canonical(c.v)
+        is QConst.QDateTime -> velle.ext.builtin.DateTimeType.canonical(c.v)
+        is QConst.QUuid -> velle.ext.builtin.UuidType.canonical(c.v)
+        is QConst.QDuration -> velle.ext.builtin.DurationType.canonical(c.v)
+        is QConst.QTime -> velle.ext.builtin.TimeType.canonical(c.v)
+        is QConst.QBytes -> velle.ext.builtin.BytesType.canonical(c.v)
+        is QConst.QExt -> c.type.canonicalAny(c.value)
+        is QConst.QRef -> null
     }
 
     private fun foldBinary(e: Binary): QConst? {
