@@ -2,9 +2,12 @@
 
 Velle is a language intended to describe a system that is agnostic to how the system is executed at runtime.
 
-Velle captures discussions between a Product Owner and an Engineer without adding obfuscation and complexity of how that system actually runs on a computer. Reading Velle describes the system - its conceptual models and behaviors - without introducing computer science terms and concepts. The Product Owner and Engineer could read Velle together to understand the system. Velle can generate artifacts useful to Product Owners: design specs and diagrams — class, state-flow, cause-graph, and sequence views derived from the spec (`diagrams.md`).
 
-Velle abstracts away the stack, functions, variables, scope, closures in favor of shapes, relationships, and rules. It leaves the implementation of lower-level mechanisms up to an implementor: the mechanics of publishing an event payload to a enterprise service bus, calling a legacy SOAP endpoint, etc.
+Velle captures the conversation between a product owner and an engineer. Reading a Velle spec describes the business concepts and rules of the system.
+
+It documents a system's business rules in an intuitive, expressive syntax, and provides the ability to validate them with proofs. It intentionally avoids traditional code structures and syntax. Traditional code requires the engineer to translate business domain problems into the domain of running on a digital computer with functions, variables, stack frames and memory.
+
+"Compiling" Velle runs a validator proof on the business rules and generates an executable runtime, executable specifications, and design artifacts and diagrams. The generated runtime provides a typed API that the engineer owns, used to bind the Velle runtime within a traditional runtime - e.g REST API with a PostgreSQL db.
 
 Velle enforces business concepts and rules at a higher layer of abstraction, while letting existing languages and frameworks implement lower layer details.
 

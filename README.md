@@ -1,12 +1,15 @@
 # Velle
 
-Velle is a language for describing a system without saying how the system runs on a computer.
+Velle captures the conversation between a product owner and an engineer. Reading a Velle spec describes the business concepts and rules of the system.
 
-Velle captures the conversation between a product owner and an engineer. Reading a Velle spec describes the system, its conceptual models and its behaviors, without computer-science terms. The product owner and the engineer can read it together and agree on what the system does. From the spec, Velle generates a validated, executable runtime, a typed surface the engineer's own transport code calls, executable specifications, and the design artifacts a product owner uses: class, state-flow, cause-graph, and sequence diagrams.
+It documents a system's business rules in an intuitive, expressive syntax, and provides the ability to validate them with proofs. It intentionally avoids traditional code structures and syntax. Traditional code requires the engineer to translate business domain problems into the domain of running on a digital computer with functions, variables, stack frames and memory.
 
-Velle has no stack, functions, variables, scope, or closures. It has shapes, relationships, refinements, and rules, and it enforces business concepts at that layer. Everything below it, such as publishing to a message bus or calling a legacy endpoint, is left to existing languages and frameworks.
 
-A spec runs as a web application by declaring its generated system as one Spring Boot bean: the starter connects it to the application's database, serves every act and shape over REST and GraphQL, runs its schedules, and serves a console ([Serving a system](https://github.com/daveclay/velle/wiki/Serving-a-system)). Every example spec is served that way over PostgreSQL by its `examples/<system>/app/` module.
+"Compiling" Velle runs a validator proof on the business rules and generates an executable runtime, executable specifications, and design artifacts and diagrams. The generated runtime provides a typed API that the engineer owns, used to bind the Velle runtime within a traditional runtime - e.g REST API with a PostgreSQL db ([Serving a system](https://github.com/daveclay/velle/wiki/Serving-a-system).
+
+Velle has no stack, functions, variables, scope, or closures. It has shapes, relationships, refinements, and rules, and it enforces business concepts at that layer. Everything below it, such as publishing to a message bus or calling a legacy endpoint, is left to existing languages and frameworks. 
+
+Velle enforces business concepts and rules at a higher layer of abstraction, while letting existing languages and frameworks implement lower layer details.
 
 ```
 shape Invoice {
