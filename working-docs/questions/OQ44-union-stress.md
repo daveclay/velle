@@ -48,4 +48,13 @@ Each is a compile-error today where it should license the read, or an unguarded 
 
 ## 5. Method
 
-One adversarial spec per numbered case, either as a `UnionTest` case (a diagnostic expected) or under `examples/union-stress/` (a runtime behavior expected), with the verdict recorded here in the HOLDS / TAX / GAP vocabulary (`GLOSSARY.md`). Gaps that need a ruling get one here; rulings promote to the Reference and `checks.md` as they settle, and the items under this question in `QUESTIONS.md` close as the checks tighten.
+One adversarial spec per numbered case, either as a `UnionTest` case (a diagnostic expected) or under `examples/union-stress/` (a runtime behavior expected), with the verdict recorded here in the HOLDS / TAX / GAP vocabulary (`GLOSSARY.md`). Gaps that need a ruling get one here; rulings promote to the Reference and `checks.md` as they settle, and the work items in §6 close as the checks tighten.
+
+## 6. Work items
+
+- [ ] Tighten V5, V6, V10, V12, V14, and V15's transition leg to reason per operand of a cross-base refinement (today: skipped, fail-open); rides OQ16's calibration.
+- [ ] Extend narrowing to `x is not A`, nested conditionals, and three-or-more-operand else-branches (`Validator.kt`, the narrowing block).
+- [ ] Carry narrowing into a collection filter's source path, in the name check and in the read-summary collector (`Model.collectExpr`) (S14, B4).
+- [ ] Name-check the predicate of a refinement or `never` whose subject is a cross-base union (`Validator.walkRefExpr` skips it when `Model.baseOf` has no single base), so a field the operands declare separately is the Reference §9 error and not a per-instance read at runtime (B1).
+- [ ] Resolve the element of a refinement-filtered collection as the refinement, so an aggregate or selector over `claims where PaidClaim` can read `PaidClaim`'s own body properties (P8).
+- [ ] Add a union notation to the class and state-flow diagrams (`diagrams.md`).

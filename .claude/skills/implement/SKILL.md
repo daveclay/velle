@@ -93,8 +93,10 @@ One commit, all of the following:
 1. The OQ line leaves its section of `working-docs/QUESTIONS.md`. A row goes
    at the top of the settled table: the decisions in brief and where each
    retired (Reference §N, `checks.md` V<n>, `patterns.md` heading, a test).
-2. Residue finds a home: a `- [ ]` line under an existing OQ or standing
-   alone, or a section of an existing OQ. A new OQ only at Dave's direction.
+2. Residue finds a home: a `- [ ]` line in the work-items section of an
+   existing OQ that holds its context, or a tagged line of its own in
+   `QUESTIONS.md` (`- **OQ<n>** — ...`, no file while it fits in one line).
+   Every work item has a tag (Dave, 2026-11-11).
 3. Every reference to the file is repointed. Grep repo-wide for the tag
    across `wiki/`, `working-docs/`, `compiler/`, `stores/`, `apis/`,
    `extensions/`, `examples/` including generated output, test names,

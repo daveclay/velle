@@ -84,8 +84,22 @@ The first pharmacy draft voided a never-filled prescription with a `delete`, sco
 
 A derivation recalculates when a record it aggregates over is deleted: `balance = amount - sum(payments, amount)` jumps when a `Payment` goes, and the invoice may re-enter `OverdueInvoice` and be reminded again. Correct by construction, since a derivation is a current-state computation, not a proof of once-ness. What was flagged and never ruled: a consumer that assumed monotone history, a stored fold twin or a nightly snapshot (Reference §19, §20's rungs), inherits the non-monotonicity without any check saying so. No example exercises a deleter against a fold or a snapshot. **Wanted:** a spec that does, and a ruling on whether the existence-dependency check should name the fold or snapshot the way it names a guard.
 
-## The rest, each one line in `QUESTIONS.md`
+## The rest
 
 - V21 (`initially`/`timestamp` on an act is a compile error; OQ31, settled) is in `checks.md` and not in the validator; once it lands, the now-dead `initially` optional-parameter branch in `Codegen.kt` `commitFn` goes (optional `?` fields stay optional parameters, ratified 2026-08-20; no example spec puts `initially` on an act any more).
 - The slices `Validator.kt`'s header lists as not implemented: V11 branch-sensitive narrowing beyond the union slice; V12 at-most-one beyond the refinement slice (`singular_references.md`); the A-series beyond A4/A5.
 - The static selector-discrimination check: a `latest`/`first` whose candidates can collide within one transaction fails loudly at runtime today (Reference §10); the static proof, or a demand for a discriminating datum at compile time, rides OQ16.
+
+## Work items
+
+- [ ] Relax V6 to accept a capture of the base shape's own derived property, which is evaluable for every instance (S6).
+- [ ] Let V29, V10, and V26 discharge a creation or deletion whose only effect on the aggregate a prohibition consults is in the safe direction (P4).
+- [ ] Teach the disarm proof (V2, and V16 through it) to look through a named refinement whose predicate is an inverse collection's `is not empty` (P7).
+- [ ] Prove a `never` over a rule-written field inductively instead of failing closed (S7, P5; rides OQ16's discharge vocabulary). The survey pass adds the sharpest case: a request renames a record and other requests refer to records by that name, so every refusal that resolves a name is refused with the rename rule (`working-docs/examples/survey/03-*`; "V10" above).
+- [ ] Put a derived collection's self-read through a `many` hop into V14's definition graph, so it fails closed as Reference §19 says (B6; masked today by the evaluator's refusal of the read, OQ91).
+- [ ] Collect the data point OQ37's coarseness ruling asked for: whether V25's accepted false positive (window arithmetic the refinement-overlap prover cannot see) forces the field-witness restructure often enough to justify sharpening the prover.
+- [ ] Let V24 discharge a referrer whose existence the deleter's scope provably excludes (P6: the fills of a never-filled prescription).
+- [ ] Write a spec that deletes against a stored fold twin or a snapshot and rule whether the existence-dependency check should name them (OQ37's flagged edge).
+- [ ] Implement V21 in the validator (`initially`/`timestamp` on an act is a compile error; OQ31), then remove the now-dead `initially` optional-parameter branch from `Codegen.kt` `commitFn`.
+- [ ] Close the validator gaps `Validator.kt`'s header lists: V11 branch-sensitive narrowing · V12 at-most-one beyond the refinement slice (`singular_references.md`) · the A-series beyond A4/A5.
+- [ ] Add the static selector-discrimination check (selectors fail loudly at runtime today; Reference §10; rides OQ16).

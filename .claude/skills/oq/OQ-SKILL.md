@@ -1,15 +1,20 @@
 ---
 name: oq
-description: How to work with working-docs/QUESTIONS.md and the OQ files under working-docs/questions/. Use whenever a task opens, edits, asks Dave about, settles, builds, or deletes an open question (OQ), adds or re-homes a `- [ ]` work item, or touches the settled table. Load before editing any of those files.
+description: How to work with working-docs/QUESTIONS.md and the OQ files under working-docs/questions/. Use whenever a task opens, edits, asks Dave about, settles, builds, or deletes an open question (OQ), adds or re-homes a `- [ ]` work item (every work item has an OQ tag), or touches the settled table. Load before editing any of those files.
 ---
 
 # Open questions (OQ) and QUESTIONS.md
 
-An OQ is a work item whose context does not fit in one line. There is one
-list of work, `working-docs/QUESTIONS.md`. An OQ file is where a line's
-context lives, not a different kind of thing. Everything below follows from
-that and from corrections Dave has given; each rule names the correction so
-the reason is not lost.
+Every piece of work has an OQ tag, so Dave can name it (Dave, 2026-11-11).
+`working-docs/QUESTIONS.md` is the directory: one line per OQ and nothing
+else. An OQ whose context fits in its line is only that line; a file is not
+required (Dave, 2026-11-11). An OQ with more has a file, which holds
+everything about it: the discussion, the decisions, and its `- [ ]` work
+items. A work item is one action, verb-first, one line; it is a `- [ ]`
+line in the file of the OQ that holds its context, or an OQ of its own.
+A `- [ ]` line never stands in `QUESTIONS.md`. Everything below follows
+from that and from corrections Dave has given; each rule names the
+correction so the reason is not lost.
 
 This skill covers the first four phases of a piece of Velle work: pick or
 open an OQ (§2), investigate it (§3), decide it with Dave, one decision at a
@@ -24,20 +29,30 @@ a question by default are under "Design principles" there.
 and `examples/`. Nothing else. No TODO.md, no investigate-, break-, or
 audit- files. An investigation is part of an OQ file and dies with it.
 
-### QUESTIONS.md, the index
+### QUESTIONS.md, the directory
 
 - Opening paragraphs state the rules and the next free tag
   (`next free: OQ<n>`). Bump the number every time an OQ is opened.
-- Sections are the part of Velle an item changes (Calibration, Prohibitions,
+- Sections are the part of Velle an OQ changes (Calibration, Prohibitions,
   Validator proofs, Expressions, Acts, Serialization domains, Spec
   generation, Reads, Serving, Velle UI, Runtime, Deletion, Larger language
-  questions, Examples and docs). File an item by what it changes, never by
+  questions, Examples and docs). File an OQ by what it changes, never by
   where it was found.
-- An OQ line: `- **[OQ<n>](questions/OQ<n>-<slug>.md)** — <the question in
-  plain words> · <status: opened when, from where, what awaits whom>`.
-- A work item: `  - [ ] <verb-first action>, one line.` It sits under the OQ
-  that holds its context, or stands alone when its whole context fits in
-  the line. Context never goes in QUESTIONS.md itself.
+- An OQ line with a file: `- **[OQ<n>](questions/OQ<n>-<slug>.md)** — <the
+  question in plain words> · <status: opened when, from where, what awaits
+  whom; how many work items the file holds, when it holds any>`.
+- An OQ line without a file: `- **OQ<n>** — <the action, verb-first, with
+  its whole context in the line>`. This is a work item that fits under no
+  existing OQ. It needs a number so Dave can reference it, not a file
+  (Dave, 2026-11-11: "it is not required to make the actual OQ file if
+  it's just one line, it just needs an OQ number"). When its context
+  outgrows the line, write the file and turn the line into the linked form;
+  the tag does not change.
+- No `- [ ]` line, ever. A work item with context lives in its OQ's file
+  (Dave, 2026-11-11: "QUESTIONS.md is a directory, the OQ contains the
+  details, work items, etc."). Before 2026-11-11 a work item could stand
+  here untagged; those were each given a tag (OQ81 through OQ118) on that
+  date.
 - The settled table at the bottom: `| OQ<n> — <title> | <where it retired>
   |`. New rows go at the top of the table.
 
@@ -76,6 +91,10 @@ Below the rule, numbered sections `## 1.`, `## 2.` ... Typical shape:
 1. What runs today, checked against HEAD, with the example files that show it.
 2. What to decide: one decision section per decision, in the shape below.
 3. The build, once decided: the files and docs that change.
+4. Work items: the file's `- [ ]` lines, one action each, verb-first. This
+   is the only place a work item lives (Dave, 2026-11-11). An OQ opened
+   from a single work item has at least this section; a decision it needs
+   is still a `### D<n>.` section with an explicit question.
 
 A decision section (Dave, 2026-11-11):
 
@@ -122,13 +141,18 @@ OQ keeps a one-line pointer in place.
 
 1. **Check for an existing OQ first.** Grep `QUESTIONS.md` and
    `questions/` for the topic. Do not open an OQ when a relevant one exists
-   (Dave, 2026-10-14). Residue from a settled OQ goes to an existing OQ or a
-   bare `- [ ]` line; ask Dave before opening a new one for it.
+   (Dave, 2026-10-14). Residue from a settled OQ goes to an existing OQ's
+   work-items section when one holds its context; otherwise it is a tagged
+   line of its own, since every work item has a tag (Dave, 2026-11-11). A
+   new tag for residue is the rule, not something to ask about.
 2. Take the next free tag from `QUESTIONS.md`, bump it there. Tags are never
    reused or renumbered. Gaps mean settled.
-3. Write the file with the header above. "In plain terms" is mandatory.
-4. Add the OQ line under the right section of `QUESTIONS.md`, with its
-   `- [ ]` items under it.
+3. Write the file with the header above when the context does not fit in
+   one line; "In plain terms" is mandatory in a file. A one-line OQ has no
+   file.
+4. Add the OQ line under the right section of `QUESTIONS.md`, linked when
+   a file exists. `- [ ]` items go in the file's work-items section, never
+   under the line.
 5. Opening at birth: any design question with discussion worth keeping, or
    referenced from more than one doc, gets its tag the moment it surfaces,
    wherever it surfaced (a wiki pass, a stress pass, a chat).
@@ -229,9 +253,9 @@ referenced 'probe J' but it's not in the list of probes").
 When every decision carries `· Decided`, the file's last section, "The
 build", is the implementation plan. It gathers each decision's "Proposed
 changes" list in build order: code, regenerated output, wiki pages,
-examples, tests, the settled row. It is mirrored by `- [ ]` items under the
-OQ's line in `QUESTIONS.md`. Show Dave the section before building. Then
-load the `implement` skill.
+examples, tests, the settled row. It is mirrored by `- [ ]` items in the
+file's own work-items section, never in `QUESTIONS.md`. Show Dave the
+section before building. Then load the `implement` skill.
 
 ### How long the file lives
 
@@ -263,8 +287,11 @@ name (`checks.md` V23).
 ## 8. Before reporting done
 
 - Does `QUESTIONS.md` still say the right next free tag?
-- Does every OQ line in `QUESTIONS.md` point at a file that exists, and does
-  every file have a line? (`ls working-docs/questions` against a grep.)
+- Is there any `- [ ]` line in `QUESTIONS.md`? There must be none; every
+  work item is in an OQ file.
+- Does every linked OQ line in `QUESTIONS.md` point at a file that exists,
+  and does every file have a line? (`ls working-docs/questions` against a
+  grep.) An unlinked line has no file by design.
 - Does any wiki page point into `working-docs/questions/`? It must not.
 - Does the chat message point at the file and section for each decision,
   rather than restating the decisions?

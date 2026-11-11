@@ -13,3 +13,8 @@ Reference §22 has the item. When the construct lands it defines *when* the tick
 - **A missed run** (from OQ71 D4, 2026-10-28) — whether a run that did not happen, because nothing was running at the moment, is owed and made up at the next start. Dave's direction: this is what the schedule means, so the spec says it, not a deployment property. Measuring "missed" needs the cadence (the schedule's next moment after the latest `Tick` row, Reference §17, against the clock), so it lands with the cadence here. Until then the starter does nothing and an engineer ticks by hand at startup.
 
 Adjacent but distinct: bootstrap/backfill (OQ28) is about first deployment against pre-existing state, not tick cadence.
+
+## Work items
+
+- [ ] Let the spec say whether a schedule's missed run is owed and made up at the next start; the starter then compares the schedule's next moment after the latest `Tick` with the clock and ticks once (from OQ71 D4, 2026-10-28).
+- [ ] Decide whether a duration may be built from a data value (`treatedAt + interval days`); today a duration takes a literal count only (S13, P12).

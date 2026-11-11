@@ -105,3 +105,7 @@ Reference §9 extends `or` across unrelated bases under its unchanged property r
 - **Inverse naming.** Whether the mixin-inferred inverse is named from the mixin (`memberChanges`) or is not inferred at all, demanding per-includer views (V19's demand-intent posture).
 - **Rules and `never` declared over a mixin with a transient act includer** as V18 answers — one answer covering several acts.
 - **Whether a mixin may include a mixin**, and whether the diamond is then worth allowing or refused outright.
+
+## 7. Work items
+
+- [ ] Restore Reference §22's mixin item, which Reference §9 still points at.

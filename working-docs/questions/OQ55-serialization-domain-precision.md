@@ -28,3 +28,12 @@ A delete keys the deleted row and re-uses creation-shaped relevance at shape gra
 
 - Commutation-sweep extensions (`CommutationSweepTest`; OQ42 item 3's noted residue): randomized value exploration for the value-boundary bugs the fixed small worlds miss, commit-versus-tick-firing pairs over `scheduledRuleDomains`, and triples.
 - The advisory ruling (`checks.md` A5; `patterns.md`, "A wide domain: the two authors") is held deliberately revisitable: stress-test it against realistic specs once OQ16 resolves. Peptides and pharmacy are the first two specs to run it against.
+
+## 6. Work items
+
+- [ ] Teach the domain derivation to key a series read rooted at the subject's inferred inverse (S12).
+- [ ] Fix the derivation's resolution of a sibling join's second binding against the first binding's element shape instead of the subject (`Domains.kt`; P11).
+- [ ] Precision follow-ups from the symmetric-evaluation audit (§3): element-scoped `this.` paths going opaque, the condition collector not expanding refinement filters or `is` atoms, multi-hop route composition.
+- [ ] Teach the derivation to propagate deletion-caused drift precisely (today a delete re-uses creation-shaped relevance at shape granularity).
+- [ ] Commutation-sweep extensions (`CommutationSweepTest`): randomized value exploration, commit-versus-tick-firing pairs over `scheduledRuleDomains`, triples.
+- [ ] Stress-test the A5 advisory ruling against realistic specs once OQ16 resolves (`patterns.md`, "A wide domain: the two authors").

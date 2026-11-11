@@ -44,3 +44,9 @@ If deferred, say so at Reference §6 ("Inline part creation"), so the ephemeral-
 
 `working-docs/examples/survey/04-transient-with-parts-refused.velle`: a submission that carries a list of readings and is answered and not kept, `transient act Submission { ... readings: many Reading = (Reading where submission == this) } with readings`. Refused on three checks at once: V17 (`Reading.submission` references the transient act), V18 (nothing provably answers it), V22 (the closure on a transient act, this question). The consequence chain in a full spec: the request is made durable, so it needs an outcome record for the handled-once partition (`not exists Outcome for this`), and once the outcome record exists two more fields hang off it, the record's name and parent, which the V10 posture (OQ53) keeps off the record itself. One missing form shaped three parts of the spec. The workaround file is `04-transient-with-parts-workaround.velle`.
 
+
+## Work items
+
+- [ ] Weigh the survey pass's consequence chain when deciding §1: a request carrying a list of values cannot be transient, so it is durable, so it needs an outcome record to be handled once, and two more fields hang off that record (`working-docs/examples/survey/04-*`; "Evidence from the survey pass" above).
+- [ ] Revisit: can rules copy a transient container act *and its parts* into a durable tree? Confirm or break the tracing; the outcome scopes this question.
+- [ ] Confirm outcome-mediated provenance satisfies `why` when provenance lands (Reference §22's `why` item).

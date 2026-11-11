@@ -2,7 +2,7 @@
 
 **Status:** opened 2026-11-08 by Dave from the OQ74 session. Not designed; D1–D3 await Dave.
 **In plain terms:** when a derived property is defined using itself on a related record and the compiler cannot tell the chain ends, it prints one message for every such case, and the message is written in the compiler's own vocabulary: certificate, whitelist, strictly descends a creation-fixed datum, acyclic, to-one on its own shape. An author who has never seen those words cannot tell from it what in their spec failed or what to type instead. The question is what the message should say, whether it should name the one condition this spec missed rather than recite the list, and whether the rule that governs wiki prose applies to every diagnostic.
-**See:** `checks.md` V14 · `compiler/src/main/kotlin/velle/Validator.kt` (`checkWellFoundedness`, the message at the `Diagnostic("V14", ...)` call; `certifiedSelfRecursion` knows which condition failed and throws the knowledge away) · CLAUDE.md "Writing for the wiki" (the word rules) · `working-docs/examples/survey/02-lookup-recursion-refused.velle` (the survey case that drew it; OQ76's file) · OQ76 (whether the walk should be a formula at all) · the item under "Examples and docs" for invalid examples with their diagnostics
+**See:** `checks.md` V14 · `compiler/src/main/kotlin/velle/Validator.kt` (`checkWellFoundedness`, the message at the `Diagnostic("V14", ...)` call; `certifiedSelfRecursion` knows which condition failed and throws the knowledge away) · CLAUDE.md "Writing for the wiki" (the word rules) · `working-docs/examples/survey/02-lookup-recursion-refused.velle` (the survey case that drew it; OQ76's file) · OQ76 (whether the walk should be a formula at all) · OQ118 (invalid examples with their diagnostics)
 
 ---
 
@@ -34,4 +34,4 @@ The reader of a diagnostic is the reader of the wiki: a backend engineer or a pr
 
 ### D3. Where the long form lives
 
-`checks.md` V14 is one paragraph and uses the same vocabulary. The Reference page an author would turn to is §7 (derived properties), which today does not say that a derived property may be defined through itself at all, nor the two forms that pass. The item under "Examples and docs" asks for invalid examples with their diagnostics; the survey's `02-lookup-recursion-refused.velle` is one.
+`checks.md` V14 is one paragraph and uses the same vocabulary. The Reference page an author would turn to is §7 (derived properties), which today does not say that a derived property may be defined through itself at all, nor the two forms that pass. OQ118 asks for invalid examples with their diagnostics; the survey's `02-lookup-recursion-refused.velle` is one.

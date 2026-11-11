@@ -1002,3 +1002,7 @@ The React code that remains is the components, each a function of one interface,
 - §8.7 listed help text, a confirmation before an act, and an empty-list message as UX words the language lacks. §9.5 shows each would be one more row in the interface table and one more binding, so adding them is cheap once the word exists.
 
 The decisions this section raises are D16 to D19 in §6.
+
+## 10. Work items
+
+- [ ] Decide whether the console belongs in the starter for good, is replaced by the default Velle UI (D4), or stays a developer tool; and whether its request-header box is the right stand-in for a login.

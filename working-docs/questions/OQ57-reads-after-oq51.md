@@ -14,3 +14,14 @@
 - **The typed builder's reach.** v1 exposes scalar and to-one reference members only (`Codegen.kt`, `fieldHandle` returns nothing for collections). Let it filter on collections (`many` fields and inferred inverses: `is empty`, `exists ... where`) and name a union-typed reference's operand.
 - **Ordering by the store key is an advisory, not an error** (Dave, 2026-10-12). A query or a selector naming `id` as an order datum has a defined meaning but one the author probably did not intend, since the key is minted and carries no business order (Reference §5, §10); the cursor's hidden tie-break (Reference §22) is the sanctioned use and raises nothing.
 - **A deleted row's key is never reissued.** The store conformance pass found SQLite's plain `INTEGER PRIMARY KEY` reissuing a deleted row's key, so a dangling reference silently became a reference to a stranger; the store uses `AUTOINCREMENT` and `CommitSet.Deletion`'s kdoc in `Hydration.kt` states the obligation. Decide whether it joins `evaluation.md`'s universal-transaction contract. Its sibling, scan order as the query surface's order, closed 2026-10-12: no store obligation, every query names its order.
+
+## Work items
+
+- [ ] Make the loading of associated and joined records configurable in the query API: lazy handles first; later a query names the relationships it wants loaded with the root, nested to any depth, batched per level.
+- [ ] Support transaction isolation levels for reads: the read request names the isolation it wants and the store binding maps it.
+- [ ] Decide whether a shape may declare a default read order that a query inherits when it names none.
+- [ ] Give a registered query its two remaining effects: a named candidate method in the generated typed store, and a generated test per registered query; both need the registry as an input to `gradle generate`.
+- [ ] Decide whether the plain accessors (`invoices()`, lists of handles in scan order) stay now that the query API exists.
+- [ ] Let the typed builder filter on collections (`many` fields and inferred inverses) and name a union-typed reference's operand (`Codegen.kt`, `fieldHandle`).
+- [ ] Make ordering by the store key an advisory warning, not an error; the cursor's hidden tie-break is the sanctioned use.
+- [ ] Decide whether "a deleted row's key is never reissued" joins `evaluation.md`'s universal-transaction contract (stated today in `Hydration.kt`'s kdoc).

@@ -80,3 +80,7 @@ states of Listing = Draft | Submitted | Published | Archived   -- candidate cons
 ```
 
 Until it lands, richer-state "only if" sentences are N `undeletable` declarations, and the under-coverage hazard is the documented, accepted gap.
+
+## 3. Work items
+
+- [ ] Grow V18 beyond the complement slice once V9's exhaustiveness engine exists.

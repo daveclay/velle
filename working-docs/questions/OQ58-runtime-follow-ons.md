@@ -44,3 +44,10 @@ fails loudly the moment two corrections to one observation land at the same cloc
 ## 4. The sixteen compiler tests failing at HEAD
 
 `BillingFixtureTest`'s billing fixture inventory, `RuntimeTest` committing `Customer` directly (billing enters through `SignUp` now), and fixture drift in `RuleGraphGenTest`, `StateFlowGenTest`, `DiagramGenTest`, `QueryCompilerTest`. Verified present on a clean checkout before the store pass (2026-09-14); still the same sixteen on 2026-10-14.
+
+## 5. Work items
+
+- [ ] Build reverse-path candidate narrowing (per-watcher read paths walked backward from the mutation); bare-shape entrant diffs and aggregate pre-filters ride with it.
+- [ ] Switch the generated `System` to real time by default, with the controllable clock as the test affordance.
+- [ ] Decide what a ledger ordered by `timestamp on create` does about ties within one clock instant: note it in Reference §10/§12 and recommend an author-carried sequence datum, or step the harness clock per commit (S4).
+- [ ] Fix the sixteen compiler tests failing at HEAD (`BillingFixtureTest`, `RuntimeTest`, and fixture drift in four generator tests; same sixteen on 2026-10-14).

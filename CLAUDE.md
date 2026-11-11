@@ -24,9 +24,12 @@ settles it.
 
 `working-docs/` holds exactly `QUESTIONS.md`, `questions/` (one file per
 open question, `OQ<n>-<slug>.md`), and `examples/` (survey specs that probe
-a gap). Nothing else: no TODO file, no investigation or audit files. An open
-question is a work item whose context does not fit on one line. See the
-`oq` skill before touching any of it.
+a gap). Nothing else: no TODO file, no investigation or audit files.
+`QUESTIONS.md` is a directory, one line per open question, and a question
+whose context fits in its line has no file. Every work item has an OQ tag:
+it is a `- [ ]` line in its OQ's file, or a tagged line of its own in
+`QUESTIONS.md`, never a `- [ ]` there. See the `oq` skill before touching
+any of it.
 
 References run one way: working documents may cite the wiki and the code;
 the wiki and the code never cite `working-docs/`, except `QUESTIONS.md` by

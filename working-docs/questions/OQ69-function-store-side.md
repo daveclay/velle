@@ -35,3 +35,7 @@ Types chose a binding per type and store, written by whoever knows the store (OQ
 - **The evaluator and the store must agree.** `LOWER` in SQLite folds ASCII only; Kotlin's `lowercase()` folds Unicode. `dayOfWeek` through `strftime('%w')` counts Sunday as 0; Velle counts Monday as 1. A rendering that disagrees with the evaluator over-returns or under-returns; under-returning is a correctness bug the superset contract does not cover. Whether a binding carries sample inputs the store checks at construction, as E4 round-trips a type's samples.
 - **Aggregates over a `many` of values.** `sum(scores)` reads a junction table; pushing it down is a correlated subquery, not a function rendering, and may belong to OQ67's SQL layer rather than here.
 - **The read API's handles.** `name.lowercase`, `name matches`, `due.dayOfWeek` are generated handles over the builtin list (`Read.kt`, `TextFunction`, `PartOf`). A registered function needs a generated handle too, which is OQ66's codegen item; it is noted here only because a handle with no rendering is the scan case above, and the engineer cannot see that from the handle.
+
+## 4. Work items
+
+- [ ] Render `number(text)` (Reference §5) in SQL: `CAST` alone is unsound, SQLite's gives 0 for a text that is not a number and PostgreSQL's throws, so until a dialect guards the cast a read that filters on it runs in memory.
