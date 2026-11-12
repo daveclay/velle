@@ -91,3 +91,7 @@ Cost: `Value.VNum` and `Value.VExt` both exist, so the runtime keeps a small con
 5. `stores/sqlite`: eight bindings in `META-INF/services`; `sqlType` deleted.
 6. Tests: E2 over the eight builtins is the first new test; every existing example is the regression suite, since nothing in a spec changes.
 7. Docs: Reference §5 says the builtins are registered types Velle ships; the Extension types guide names them as the reference implementations to read; `checks.md` E1 states the `velle` namespace rule; `evaluation.md` the `duration` type if it becomes one.
+
+## 6. Work items
+
+- [ ] Type arithmetic by its operands in the numeric tower (§3.4), so that a `decimal` result declared `integer`, `half: integer = total / 2` in `working-docs/examples/survey/12-declared-type-decimal-in-integer-accepted.velle`, is refused by the declared-type check of OQ82 instead of reading back `1.5` (`DeclaredTypeProbeTest`). Until then the four number types are one kind for that check (OQ82 D2, decided 2026-11-12).

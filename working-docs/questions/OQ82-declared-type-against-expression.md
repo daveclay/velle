@@ -1,6 +1,6 @@
 # OQ82 — Does the compiler refuse a property whose expression is not of its declared type?
 
-**Status:** opened 2026-11-11 as a one-line item from the survey pass; given this file 2026-11-12 after OQ89 showed `label: text = (a is none)` validating. D1 decided 2026-11-12; D2 to D5 await Dave. D5 was opened from Dave's answer to D1.
+**Status:** opened 2026-11-11 as a one-line item from the survey pass; given this file 2026-11-12 after OQ89 showed `label: text = (a is none)` validating. D1 and D2 decided 2026-11-12; D3 to D5 await Dave. D5 was opened from Dave's answer to D1.
 
 **In plain terms:** a product owner writes `label: text = ...` and the compiler takes the word `text` on trust. If the formula after `=` makes a yes-or-no, a number, or nothing at all, the compiler says nothing, and the mistake shows up later as a failed read, a failed commit, or a wrong value handed to whoever reads the record. The question is whether the compiler compares the declared type with what the formula makes, and refuses when they differ.
 
@@ -80,7 +80,7 @@ Costs:
 
 **Decided:** yes, 2026-11-12: a declared type that differs from the expression's is a validation failure. Dave added that it would be nicer for the type to be inferred so the mistake cannot be made at all; that is D5.
 
-### D2. Are the whole-number and decimal types one kind for this check?
+### D2. Are the whole-number and decimal types one kind for this check? · Decided 2026-11-12
 
 Are `integer`, `long`, `decimal`, and `double` one kind for this check, so that `half: integer = total / 2` and `n: decimal = 5` both pass, and only a non-number in a number is refused?
 
@@ -103,7 +103,7 @@ Costs:
 
 - OQ68 gains the work item: type arithmetic by its operands so that a `decimal` result in an `integer` property is refused.
 
-**Decided:** 
+**Decided:** yes, 2026-11-12, and OQ68 is to fix it: the four number types are one kind for this check until the numeric tower types arithmetic by its operands. The work item is in OQ68 §6.
 
 ### D3. Is an expression that may be absent refused in a required declaration?
 
@@ -205,4 +205,4 @@ Written once D1 to D4 are decided; it gathers each decision's proposed changes i
 
 ## 4. Work items
 
-- [ ] Decide D2 to D5.
+- [ ] Decide D3 to D5.
