@@ -1,6 +1,6 @@
 # OQ69 — A function's store side: how a function a spec calls says what a store may run for it
 
-**Status:** opened 2026-10-26 at Dave's request after `matches` landed. D1 through D10 decided 2026-11-11; D11, a build question, awaits Dave. §3 is the implementation plan; §4 holds the work items.
+**Status:** opened 2026-10-26 at Dave's request after `matches` landed. Settled 2026-11-11, every decision answered; build pending. §3 is the implementation plan; §4 holds the work items.
 
 **In plain terms:** A spec may call a function on a stored value, such as the lowercase form of a name, or whether a product code fits a pattern. When a read filters a million stored records by that call, the database should do the narrowing and hand back only the records that fit, rather than every record for Velle to check one by one in memory. Today only a few of Velle's own functions get that, each written by hand into the SQL store, and a function an engineer registers never does. This question is how a function says what a database may run for it, database by database, and what a store does when it cannot.
 
@@ -218,7 +218,7 @@ Recommendation: yes. It gets a tag of its own when a read over one is measured s
 
 **Decided:** yes, out, 2026-11-11, and for a stronger reason than the one above. Dave: a function can iterate over arbitrary values easily enough, but knowing what the function joins to is not merely difficult. The store API is responsible for fetching records from arbitrary data sources, and what a collection joins to might be data from an external API joined with records from the database. The function operates in memory over those records. An optimization can be made when it is a single database, but Velle will not assume that. So a function over a collection is never rendered, by principle, not by complexity, and no tag is opened for it. A proposal in chat the same day to render it as a correlated subquery the layer owns was set aside for the same reason.
 
-### D11. Whether the text operators stay rendered by name until OQ114
+### D11. Whether the text operators stay rendered by name until OQ114 · Decided 2026-11-11
 
 Does the build leave `is empty`, `contains`, `starts with`, `ends with`, and `like` rendered by name in `renderCmp` exactly as today, moving only `matches` to a binding?
 
@@ -232,6 +232,8 @@ Against the spec in §1, `AdaProduct`'s `starts with "ada"` keeps rendering `LIK
 
 - `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`, `renderCmp`: the five text operators and `QF.TextBlank` unchanged; only the `matches` branch removed.
 - `working-docs/QUESTIONS.md`, OQ114's line: a pointer that the five move to bindings when it settles.
+
+**Decided:** yes, 2026-11-11, for this build. Dave does not like special cases like this and prefers a unified approach in which Velle's own functions work the same way user-provided functions do; that preference is moved to OQ114, which is where the five text operators become registered functions and then render through the binding mechanism this file builds.
 
 ### D10. Whether a function author provides a rendering per database · Decided 2026-11-11
 
@@ -287,7 +289,7 @@ The store on SQLite picks `RoundToCentsSql`; on PostgreSQL, `RoundToCentsPostgre
 
 ## 3. The build
 
-The decided proposed changes, in build order. D3, D7, and D9 change nothing. D11, a build question, is open.
+The decided proposed changes, in build order. D3, D7, and D9 change nothing.
 
 1. **The pre-filter carries a call** (D4). `compiler/src/main/kotlin/velle/Query.kt`: `QF.Cmp` takes a column expression, a path or a call of a registered function over a path with constant arguments, the operands held under the parameter names of the signature the call matched, a variadic parameter's as a list; `tryCmp` accepts a call on the path side; a predicate function renders as a clause of its own. A call whose arguments are all constants still folds in `constFold`.
 2. **The SQL expression type** (D4). `stores/sql/src/main/kotlin/velle/sql/SqlExpr.kt`: a sealed type with `Column`, `Param`, `Literal`, `Call(name, args)`, `Infix(left, op, right)`, `Cast(expr, StorageClass)`, `Raw(sql)`; rendered only by `SqlStore`'s renderer, which writes `?` for a `Param`, queues its value, quotes a `Column`, and asks the dialect's column for a `Cast`.
