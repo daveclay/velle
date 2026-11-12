@@ -11,7 +11,7 @@ The comparison operators are `==`, `!=`, `<`, `<=`, `>`, and `>=`.
 
 `qty between 2 and 5` is `qty >= 2 and qty <= 5`, both bounds included. It works on any ordered value: `due between today and today + 7 days`.
 
-`status in ["open", "pending"]` asks whether the value equals one of the listed values, and `status not in ["open", "pending"]` whether it equals none. The values are written between square brackets, separated by commas, and are of the left side's type. The right side may also be a `many` of values ([§5](Reference-05-Scalars)): `qty in scores`. When the left side is a record, the right side may be a collection of records, such as a walk's set ([§7](Reference-07-Derived-properties)): `this in lineage` asks whether the record is one of them. An absent value is in nothing.
+`status in ["open", "pending"]` asks whether the value equals one of the listed values, and `status not in ["open", "pending"]` whether it equals none. The values are written between square brackets, separated by commas, and are of the left side's type. The right side may also be a `many` of values ([§5](Reference-05-Scalars)): `qty in scores`. When the left side is a record, the right side may be a collection of records, such as a walk's set ([§7](Reference-07-Derived-properties)): `this in lineage` asks whether the record is one of them. An absent value is in nothing, and nothing is in an absent collection: `value in first(Field where name == this.fieldName by name).options` is false when no field has the name.
 
 Text values also support `contains`, `starts with`, `ends with`, `like`, and `matches`, all case-sensitive. In a `like` pattern, `%` matches any run of characters, including none, `_` matches one character, and `\` escapes either. `matches` takes a regular expression, in the Java dialect, that the whole text must match: `email matches "[^@ ]+@[^@ ]+\\.[a-z]+"`. A backslash in a text literal is written twice, so the regular expression `\.` is spelled `"\\."` in a spec. The compiler reads the expression when the spec compiles, so a malformed one is an error there, never at run time.
 
@@ -84,6 +84,8 @@ The first argument is any collection expression. A relationship filtered with `w
 A relationship is followed with a dot: `response.outcome`, `ward.admissions`, including a relationship back to the same shape.
 
 A dot through an optional value is allowed only when the value is known to be present: its type is not optional, or an `is some` or `is none` test earlier in the same `and` chain, or in the matching branch of an `if`, has established it. Plain `.` on an optional value with no such test is a compile error.
+
+A selection or a function whose result may be absent, `first(Field where name == this.fieldName by name).options`, is read through with a plain dot and needs no test; when it matched nothing, the rest of the path is absent.
 
 `?.` needs no test. If the value on its left is absent, the rest of the path evaluates to `none`:
 

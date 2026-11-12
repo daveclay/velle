@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
  * `x in values` inside an `exists (... as r where ...)` (Reference §10; checks.md F2): the right
  * side resolves in the element's scope, through an optional derived reference narrowed by
  * `is some`, and the prohibition refuses a value outside the options at the door.
- * The spelling is `working-docs/examples/survey/01-in-inside-exists-refused.velle`.
+ * The spelling is the reading example under Reference §10, "Naming a level with `as`".
  */
 class InInsideExistsTest {
 

@@ -162,9 +162,11 @@ class Evaluator(private val system: VelleSystem) {
         is AggCall -> evalAgg(e, ctx)
         is FunCall -> evalFun(e, ctx)
         is SingularFor -> evalSingularFor(e, ctx)
+        // a dot on a selection or a function result that matched nothing (Reference §10,
+        // "Reaching through relationships"): the rest of the path is absent, as after `?.`
         is Access -> {
             var v = eval(e.target, ctx)
-            for (seg in e.segs) v = access(v, seg)
+            for (seg in e.segs) v = if (v == Value.VNone) Value.VNone else access(v, seg)
             v
         }
         is SetExpr -> evalSetExpr(e, ctx)
@@ -852,10 +854,10 @@ class Evaluator(private val system: VelleSystem) {
                 })
             }
             // `x in [a, b]` / `x in values` (Reference §10): membership under the element's
-            // equality; an absent left side is in nothing
+            // equality; an absent left side is in nothing, and nothing is in an absent right side
             // `record in records` over a collection of records (Reference §7, "Walks"): membership by identity
             "in" -> if (r is Value.VColl) Value.VBool(l is Value.VRef && l.id in r.ids) else {
-                val set = (r as? Value.VVals)?.values ?: if (r == Value.VEmpty) emptyList() else throw VelleRuntimeError("'in' on $r")
+                val set = (r as? Value.VVals)?.values ?: if (r == Value.VEmpty || r == Value.VNone) emptyList() else throw VelleRuntimeError("'in' on $r")
                 Value.VBool(l != Value.VNone && set.any { valueEquals(l, it) })
             }
             "==", "!=" -> {
