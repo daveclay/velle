@@ -1,6 +1,6 @@
 # OQ82 — Does the compiler refuse a property whose expression is not of its declared type?
 
-**Status:** opened 2026-11-11 as a one-line item from the survey pass; given this file 2026-11-12 after OQ89 showed `label: text = (a is none)` validating. D1 to D4 decided 2026-11-12; D5 awaits Dave. D5 was opened from Dave's answer to D1.
+**Status:** opened 2026-11-11 as a one-line item from the survey pass; given this file 2026-11-12 after OQ89 showed `label: text = (a is none)` validating. D1 to D5 decided 2026-11-12; the build in §3 is for Dave to see before it starts. D5 was opened from Dave's answer to D1.
 
 **In plain terms:** a product owner writes `label: text = ...` and the compiler takes the word `text` on trust. If the formula after `=` makes a yes-or-no, a number, or nothing at all, the compiler says nothing, and the mistake shows up later as a failed read, a failed commit, or a wrong value handed to whoever reads the record. The question is whether the compiler compares the declared type with what the formula makes, and refuses when they differ.
 
@@ -172,7 +172,7 @@ Costs:
 
 **Decided:** no, 2026-11-12: a declaration whose expression's type the compiler cannot read is refused, and the compiler reads a type off every form. Dave confirmed the plan fixes the compiler to do what it does not do today: type every form, and refuse the remainder.
 
-### D5. May a derived property leave its type out and take the expression's?
+### D5. May a derived property leave its type out and take the expression's? · Decided 2026-11-12
 
 May a derived or `captured` property be declared without a type, `isRoot = parentName is none`, taking the type the validator reads off the expression, so that the mismatch of D1 cannot be written?
 
@@ -214,12 +214,28 @@ Costs:
 - `wiki/grammar.md`, Reference §7, Reference §8 (`captured`), `wiki/checks.md` F2.
 - `DeclaredTypeTest`: an untyped property of each readable form, and the refusal of an unreadable one.
 
-**Decided:** 
+**Decided:** yes, 2026-11-12, with one addition from Dave: two properties that refer to each other with neither declaring a type are refused. The resolution runs in dependency order, and a cycle among untyped properties is a diagnostic naming the properties and the type to declare on one of them.
 
 ## 3. The build
 
-Written once D1 to D4 are decided; it gathers each decision's proposed changes in build order.
+Each decision's proposed changes, in build order.
+
+1. **The type inference becomes a model fact** (D4, D5). `scalarTypeOf` and its helpers (`operatorLine`, `typeNamed`, `valueCollectionType`, the function resolution it calls) move from `Validator.kt` into `Model.kt` as the one reading of an expression's type, over a scope and the aliases in it. It covers every form of `grammar.md`: a literal, a path, arithmetic, a call, `count` and `sum`, a walk (today); a condition, `is`, `exists`, `and`, `or`, `not` as `boolean`; a conditional as its branches' type, optional when a branch is `none` or optional, with a path narrowed by the condition read as present (D3); a set denotation as a collection of its shape; `first` and `latest` and `(Shape for expr)` as that shape, optional; a field read through any of them as the field's type; a text literal with pieces as `text`, optional when a piece is (Reference §5). A registered function whose signature states no result type reads as untyped.
+2. **An untyped property resolves once** (D5). `Ast.kt`: `DerivedProp.type` becomes optional. `Parser.kt`: `name = expr` and `captured name = expr` in a shape or refinement body. `Model.kt`: each derived and `captured` property's type is its declaration's, or its expression's, resolved in dependency order over the untyped ones; a cycle among untyped properties is F2 naming each property in it and the type to declare on one; an untyped property whose expression reads as untyped is F2 naming the expression (D4). `Codegen.kt`, `SpecGen.kt`, `Printer.kt`, `apis/json` `Describe.kt`, and every other reader of `DerivedProp.type` read the resolved type from the model.
+3. **The check** (D1, D2, D3, D4). `Validator.kt`, under F2, at five places: a derived property, a `captured` property, an `initially`, a field in a `from` block, the right side of an assignment. The declared type against the expression's: the four number types one kind (D2); a required declaration refuses an optional expression (D3), naming `?` and the `is some` test; an expression that reads as untyped is refused naming it (D4). The diagnostic: `'Kind.label' is declared a text and computed as a boolean; declare it 'label: boolean', or compute a text`.
+4. **Regenerate** every module under `examples/` (the `implement` skill §2).
+5. **Wiki.** `wiki/checks.md` F2: the declared type against the expression, the optional case, the untyped refusal, the cycle, and that the inference covers every form. Reference §7: the untyped spelling, `isRoot = parentName is none`, beside the typed one, and the cycle rule; "What the compiler checks" on §5, §7, §8 (`captured`), §12, §14: one line each. `wiki/grammar.md`: `derivedProp := Identifier (":" propType)? "=" valueExpr`, the same for `captured`.
+6. **Examples.** `examples/loyalty/loyalty.velle`: `onTime` and one or two more derived properties written untyped, so the generated output exercises the resolved type. The survey's `12-declared-type-*-accepted` files become `-refused` with their README rows quoting the diagnostic; `12-declared-type-decimal-in-integer-accepted` stays accepted under D2 and its row points at OQ68.
+7. **Tests.** `DeclaredTypeProbeTest` becomes `DeclaredTypeTest`: one case per survey file, the untyped spelling of each readable form, the cycle, the untyped-expression refusal, the narrowed conditional. The full suite against the baseline (the `implement` skill §3).
+8. **Settle.** The OQ82 line leaves `working-docs/QUESTIONS.md`, a row goes to the top of the settled table, this file is deleted in the same commit.
 
 ## 4. Work items
 
-- [ ] Decide D5.
+- [ ] Move the expression type inference into `Model.kt` and cover every form of `grammar.md` (§3 step 1).
+- [ ] Make `DerivedProp.type` optional, parse `name = expr`, resolve untyped properties in dependency order, refuse a cycle and an untyped expression (§3 step 2).
+- [ ] Add the declared-type check at the five places under F2 (§3 step 3).
+- [ ] Regenerate every example module (§3 step 4).
+- [ ] Write `checks.md` F2, Reference §5, §7, §8, §12, §14, and `grammar.md` (§3 step 5).
+- [ ] Rewrite `examples/loyalty/loyalty.velle` and the survey's `12-*` files with their README rows (§3 step 6).
+- [ ] Turn `DeclaredTypeProbeTest` into `DeclaredTypeTest` and run the suite against the baseline (§3 step 7).
+- [ ] Settle: the directory line, the settled row, this file deleted (§3 step 8).
