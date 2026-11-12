@@ -1,6 +1,6 @@
 # OQ82 — Does the compiler refuse a property whose expression is not of its declared type?
 
-**Status:** opened 2026-11-11 as a one-line item from the survey pass; given this file 2026-11-12 after OQ89 showed `label: text = (a is none)` validating. D1 to D3 decided 2026-11-12; D4 and D5 await Dave. D5 was opened from Dave's answer to D1.
+**Status:** opened 2026-11-11 as a one-line item from the survey pass; given this file 2026-11-12 after OQ89 showed `label: text = (a is none)` validating. D1 to D4 decided 2026-11-12; D5 awaits Dave. D5 was opened from Dave's answer to D1.
 
 **In plain terms:** a product owner writes `label: text = ...` and the compiler takes the word `text` on trust. If the formula after `=` makes a yes-or-no, a number, or nothing at all, the compiler says nothing, and the mistake shows up later as a failed read, a failed commit, or a wrong value handed to whoever reads the record. The question is whether the compiler compares the declared type with what the formula makes, and refuses when they differ.
 
@@ -143,17 +143,34 @@ Costs:
 
 **Decided:** yes, 2026-11-12: a declared absence in a required declaration is refused; a selection that matches nothing stays the runtime failure of Reference §14.
 
-### D4. Is an expression whose type the validator cannot read accepted in silence?
+### D4. Is an expression whose type the validator cannot read accepted in silence? · Decided 2026-11-12
 
 When the validator reads no type off an expression, is the declaration accepted with no diagnostic?
 
-Recommendation: yes. Refusing on unknown would refuse every form the inference does not cover, and the cover is listed in `checks.md` F2 so the gap is visible rather than silent by accident. The build extends the inference to the forms in §1; what stays unknown after that is listed in the same F2 paragraph.
+Recommendation as first written: yes, since refusing on unknown would refuse every form the inference does not cover. Withdrawn in chat on 2026-11-12 when Dave asked why such a declaration should be valid: the gap is in the inference, not a reason to accept a spec. The example that showed it, a shape `Entry` with `name: text unique` and `weight: decimal`:
+
+```
+act Lookup {
+    wanted: text                                                  -- a stored text
+    found: boolean = (Entry where name == this.wanted) is some    -- a condition: typed boolean, checked under D1
+    heaviest: text = first(Entry where weight > 0 by weight)      -- a selector: no type read off it today; an Entry or absent, never a text
+}
+```
+
+Under silence the `heaviest` line validates and the mistake reaches the read. Under refusal with the inference as it is, the correct spelling `heaviest: one Entry? = first(...)` is refused too. The way out is neither: the inference covers every form of the grammar, and what it still cannot type is refused.
 
 Costs:
 
-- A mismatch through a form the inference skips passes. The list in F2 says which.
+- The build is larger: the inference gains the selector, the `(Shape for expr)` read, a field read through either, the set denotation, the condition, and the conditional.
+- A form the inference misses fails an example's compile under `examples/`, which is the failure wanted.
 
-**Decided:** 
+#### Proposed changes
+
+- `Validator.kt` (or `Model.kt` under D5): the type inference covers every expression form of `grammar.md`; a declaration whose expression it cannot type is F2, naming the expression; a registered function whose signature states no result type is F2, naming the function.
+- `wiki/checks.md` F2: the refusal, and that the inference covers every form.
+- `DeclaredTypeTest`: a selector, a `for` read, and a field read through each, typed and checked.
+
+**Decided:** no, 2026-11-12: a declaration whose expression's type the compiler cannot read is refused, and the compiler reads a type off every form. Dave confirmed the plan fixes the compiler to do what it does not do today: type every form, and refuse the remainder.
 
 ### D5. May a derived property leave its type out and take the expression's?
 
@@ -205,4 +222,4 @@ Written once D1 to D4 are decided; it gathers each decision's proposed changes i
 
 ## 4. Work items
 
-- [ ] Decide D4 and D5.
+- [ ] Decide D5.
