@@ -46,6 +46,35 @@ sealed interface QF {
     /** The subject row's to-one [field] references a [shape] row satisfying
      *  [inner]; absent reference → false (both polarities' safe reading). */
     data class RelPred(val field: String, val shape: String, val inner: QF) : QF
+
+    /** A call of a registered function over the subject row compared to a constant
+     *  (Reference §5; the SQL layer renders it through the function's binding, or
+     *  degrades). An absent result reads as an absent column does. */
+    data class CallCmp(val call: QCall, val op: String, val value: QConst) : QF
+
+    /** A call of a registered predicate over the subject row; an absent result is false. */
+    data class Pred(val call: QCall) : QF
+}
+
+/**
+ * One call the pre-filter carries: the function's qualified name, which of its
+ * signatures the call matched (an index into `VelleFunction.signatures`), the
+ * operands under that signature's parameter names, a variadic parameter's
+ * arguments as one [QArg.Many] under its name, and the call's scalar result
+ * type. Every operand is the subject row's own stored column or a constant:
+ * a value that lives in another table is never rendered, and the call stays
+ * with the evaluator.
+ */
+data class QCall(val function: String, val signature: Int, val operands: Map<String, QArg>, val result: VType)
+
+/** One operand of a [QCall]. */
+sealed interface QArg {
+    /** The subject row's stored column [field], of the member's declared [type]. */
+    data class Column(val field: String, val type: VType) : QArg
+    /** A constant, read as the [type] the matched signature gave the argument. */
+    data class Const(val value: QConst, val type: VType) : QArg
+    /** A variadic parameter's arguments, in order. */
+    data class Many(val items: List<QArg>) : QArg
 }
 
 /** Constant leaves, in the model's scalar vocabulary. */
@@ -92,6 +121,8 @@ class QueryCompiler(
      *  constant (`ValueLit` of a `VRef`, the query API) reaches the row. */
     private val keyOf: (Long) -> Ref.Persisted? = { null },
 ) {
+
+    private val resolver by lazy { FunctionResolver(model.registry) { c -> model.scalarOf(c.name) } }
 
     /** Pre-filter for candidates of [cond] over its base shape's table. */
     fun filterFor(cond: RefExpr): QF = simplify(compileRef(cond, positive = true))
@@ -141,6 +172,7 @@ class QueryCompiler(
             is NotExpr -> QF.Not(compileExpr(e.inner, scope, !positive, depth))
             is BoolLit -> if (e.value) QF.True else QF.False
             is PathExpr -> compileBoolAtom(e, scope, positive)
+            is FunCall -> compileCall(e, scope)?.takeIf { it.result == VType.Bool }?.let { QF.Pred(it) } ?: fail(positive)
             is IsExpr -> compileIs(e, scope, positive)
             is ExistsExpr -> compileExists(e, scope, positive, depth)
             else -> fail(positive)
@@ -286,33 +318,109 @@ class QueryCompiler(
     }
 
     private fun tryCmp(pathSide: Expr, op: String, constSide: Expr, scope: String): QF? {
-        val p = pathSide as? PathExpr ?: return null
         val const = constFold(constSide) ?: return null
         // an instance constant tests a to-one reference column by key: `==` / `!=` only
         val wantInstance = const is QConst.QRef
         if (wantInstance && op != "==" && op != "!=") return null
+        if (pathSide is FunCall) {
+            if (wantInstance) return null
+            val call = compileCall(pathSide, scope) ?: return null
+            val typed = readConstantAs(call.result, const) ?: return null
+            if (op in TEXT_OPERATORS && typed !is QConst.QText) return null
+            return QF.CallCmp(call, op, typed)
+        }
+        val p = pathSide as? PathExpr ?: return null
         val hops = resolveHops(p, scope, wantInstance = wantInstance) ?: return null
-        val colType = hops.last().second.type.strip()
-        // a number or text constant against an extension-typed column reads as the type (OQ65 D2)
+        val typed = readConstantAs(hops.last().second.type.strip(), const) ?: return null
+        if (op in TEXT_OPERATORS && typed !is QConst.QText) return null
+        return wrapHops(hops.dropLast(1), QF.Cmp(hops.last().first, op, typed))
+    }
+
+    /**
+     * [const] as a value of [columnType]: a number or text constant against an
+     * extension type reads as the type (OQ65 D2); a quoted text against a `time`
+     * or `uuid` reads as the type (Reference §5). Null when no value of the type
+     * equals the constant, which leaves the comparison to the evaluator.
+     */
+    private fun readConstantAs(columnType: VType, const: QConst): QConst? {
         val typed = when {
-            colType is VType.Ext && (const is QConst.QNum || const is QConst.QText) -> {
-                val t = model.registry[colType.qualifiedName] ?: return null
+            columnType is VType.Ext && (const is QConst.QNum || const is QConst.QText) -> {
+                val t = model.registry[columnType.qualifiedName] ?: return null
                 when (val r = t.readLiteral((const as? QConst.QNum)?.v, (const as? QConst.QText)?.v)) {
                     is LiteralRead.Ok -> QConst.QExt(t, r.value)
                     else -> return null
                 }
             }
-            // a quoted text against a `time` or `uuid` column reads as the type (Reference §5);
-            // one the type cannot read is left to the evaluator
-            colType == VType.TimeT && const is QConst.QText ->
+            columnType == VType.TimeT && const is QConst.QText ->
                 runCatching { QConst.QTime(java.time.LocalTime.parse(const.v)) }.getOrNull() ?: return null
-            colType == VType.UuidT && const is QConst.QText ->
+            columnType == VType.UuidT && const is QConst.QText ->
                 runCatching { QConst.QUuid(java.util.UUID.fromString(const.v)) }.getOrNull() ?: return null
             else -> const
         }
-        if (!typesMatch(colType, typed)) return null
-        if (op in TEXT_OPERATORS && typed !is QConst.QText) return null
-        return wrapHops(hops.dropLast(1), QF.Cmp(hops.last().first, op, typed))
+        return typed.takeIf { typesMatch(columnType, it) }
+    }
+
+    // ── calls ────────────────────────────────────────────────────────────────
+
+    /**
+     * A call the store may render: a registered function whose arguments are
+     * the subject row's own stored columns and constants, matched to one
+     * signature as the validator and the evaluator match it. Null for anything
+     * else, a call over a reference's column or a `many` included, which stays
+     * with the evaluator.
+     */
+    private fun compileCall(e: FunCall, scope: String): QCall? {
+        val fn = model.functionScope[e.name] ?: return null
+        val args = e.args.map { argOf(it, scope) ?: return null }
+        val resolverArgs = args.mapIndexed { i, arg -> FunctionResolver.Arg(arg.type, FunctionResolver.isConstant(e.args[i])) }
+        val ok = resolver.resolve(fn, Printer.expr(e), resolverArgs) { Printer.expr(e.args[it]) } as? FunctionResolver.Outcome.Ok ?: return null
+        if (ok.result == VType.Unknown) return null
+        val parameters = ok.signature.parameters
+        val fixed = if (parameters.lastOrNull()?.variadic == true) parameters.size - 1 else parameters.size
+        val operands = linkedMapOf<String, QArg>()
+        for ((i, arg) in args.withIndex()) {
+            val typed = typedArg(arg, ok.argTypes[i]?.strip()) ?: return null
+            if (i < fixed) { operands[parameters[i].name] = typed; continue }
+            val name = parameters.last().name
+            operands[name] = QArg.Many(((operands[name] as? QArg.Many)?.items ?: emptyList()) + typed)
+        }
+        return QCall(fn.qualifiedName, fn.signatures.indexOf(ok.signature), operands, ok.result.strip())
+    }
+
+    private sealed interface RawArg { val type: VType? }
+    private class RawColumn(val field: String, override val type: VType) : RawArg
+    private class RawConst(val value: QConst, override val type: VType?) : RawArg
+
+    /** An argument as the resolver sees it: the row's own column, or a constant; null for anything else. */
+    private fun argOf(e: Expr, scope: String): RawArg? {
+        constFold(e)?.let { return RawConst(it, constType(it)) }
+        val p = e as? PathExpr ?: return null
+        val hops = resolveHops(p, scope) ?: return null
+        val (field, member) = hops.singleOrNull() ?: return null
+        return RawColumn(field, member.type)
+    }
+
+    /** The argument under the type the matched signature gave it: a constant read as an extension type when the signature says so. */
+    private fun typedArg(arg: RawArg, resolved: VType?): QArg? = when (arg) {
+        is RawColumn -> QArg.Column(arg.field, arg.type)
+        is RawConst -> {
+            val type = resolved ?: arg.type ?: return null
+            readConstantAs(type, arg.value)?.let { QArg.Const(it, type) }
+        }
+    }
+
+    private fun constType(c: QConst): VType? = when (c) {
+        is QConst.QNum -> VType.Num("decimal")
+        is QConst.QText -> VType.Text
+        is QConst.QBool -> VType.Bool
+        is QConst.QDate -> VType.DateT
+        is QConst.QDateTime -> VType.DateTimeT
+        is QConst.QUuid -> VType.UuidT
+        is QConst.QDuration -> VType.DurationT
+        is QConst.QTime -> VType.TimeT
+        is QConst.QBytes -> VType.BytesT
+        is QConst.QExt -> VType.Ext(c.type.qualifiedName)
+        is QConst.QRef -> null
     }
 
     private fun flip(op: String): String = when (op) {

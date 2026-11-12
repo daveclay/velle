@@ -3,6 +3,7 @@ package velle.sqlite
 import velle.Model
 import velle.VelleSystem
 import velle.sql.OneConnection
+import velle.sql.SqlFunctionBinding
 import velle.sql.SqlStore
 import velle.sql.SqlTypeBinding
 import java.sql.Connection
@@ -25,7 +26,9 @@ class SqliteStore(
     model: Model,
     dataSource: DataSource,
     bindings: List<SqlTypeBinding<*>> = SqlTypeBinding.load(),
-) : SqlStore(model, dataSource, SqliteDialect, bindings) {
+    functionBindings: List<SqlFunctionBinding> = SqlFunctionBinding.load(),
+    insistRendered: Set<String> = emptySet(),
+) : SqlStore(model, dataSource, SqliteDialect, bindings, functionBindings = functionBindings, insistRendered = insistRendered) {
 
     /** The store over one connection the caller holds: an in-memory database's natural unit. */
     constructor(model: Model, conn: Connection, bindings: List<SqlTypeBinding<*>> = SqlTypeBinding.load()) :

@@ -25,7 +25,8 @@ import java.util.UUID
  * `matches` is left to the evaluator: PostgreSQL's regular expressions are
  * not Java's, and a pattern the database cannot read would fail the query
  * rather than over-return, which the superset contract does not allow
- * (the function's store side is OQ69's).
+ * (a function binding claiming PostgreSQL may translate it one day: the wiki
+ * guide `Extension-functions`, "Holding a function in a store").
  *
  * A datetime is held as `TIMESTAMPTZ`, which keeps microseconds: an instant
  * with finer precision comes back rounded to the microsecond.

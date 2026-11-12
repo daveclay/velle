@@ -103,6 +103,8 @@ The filter is a tree of these forms from `compiler/src/main/kotlin/velle/Query.k
 
 - `True`, `False`, `And`, `Or`, `Not`.
 - `Cmp`: one column of the subject row compared to a constant with `==`, `!=`, `<`, `<=`, `>`, `>=`, or a text operator from [§10](Reference-10-Predicate-expressions): `contains`, `starts with`, `ends with`, `like`, `matches`. The constant is always on the right.
+- `CallCmp`: a call of a registered function over the subject row's own columns and constants, compared to a constant with the same operators. The call names the function, the signature it matched, and its operands under that signature's parameter names.
+- `Pred`: a call of a registered function whose result is a boolean, true when the result is.
 - `NullCheck`: `is none` or `is some` on an optional column.
 - `TextBlank`: `is empty` on a text column, which is absent or nothing but whitespace.
 - `Exists`: some row of another shape references the subject row and satisfies an inner filter.
@@ -118,6 +120,8 @@ Two rules keep a translation correct:
 Some translations are looser than the evaluator on purpose, and that is fine. SQLite's `LIKE` ignores ASCII case, so the SQLite store's translation of `contains` returns rows the case-sensitive evaluator then drops. A column that holds a decimal as text cannot be ordered by SQL, so the SQLite store translates `<` on such a column to "every row". The only mistake is a translation that is tighter than the evaluator: one that drops a row the condition accepts. The evaluator never sees that row, and the spec's answer is wrong.
 
 A store may also give the database a function it lacks, as the SQLite store does for `matches`: SQLite has no regular expressions, so the store registers a `REGEXP` function on the connection when it is built. When the connection refuses the registration, the store translates `matches` to "every row" and the evaluator does the matching. The spec behaves identically either way.
+
+A call of a registered function is translated through the function's binding for the store's dialect, when one is on the classpath, and becomes "every row" when none is. The binding renders the call; the SQL store writes the SQL around it, binds the constants, and keeps an absent result reading as an absent column does, under `not` as well. The function's body still decides over every row that comes back. [Extension functions](Extension-functions), "Holding a function in a store", says how a binding is written and chosen.
 
 ## Tuning one question with hand-written SQL
 
@@ -179,7 +183,7 @@ A store implements `StateResolver` and `CommitCallback` in the vocabulary of wha
 
 Only then, and only where measurement asks for it:
 
-7. **A translation of the filter** in `fetchCandidates`, as much of the tree as the database can answer, with every untranslatable part becoming "every row" by the rule above.
+7. **A translation of the filter** in `fetchCandidates`, as much of the tree as the database can answer, with every untranslatable part becoming "every row" by the rule above. A store that translates a call defines its own binding interface for functions in its own vocabulary, as the SQL stores do with `SqlFunctionBinding`.
 8. **Hand-tuned SQL** for named questions through the generated typed store.
 
 The in-memory store keeps every guarantee with one lock for its rows and one lock per queue key, which is why a spec runs and its generated tests pass before any database exists.
@@ -187,6 +191,7 @@ The in-memory store keeps every guarantee with one lock for its rows and one loc
 ## What the compiler checks
 
 - **Refuses to start** a store that holds a field of an extension type it has no binding for, or whose binding does not read the type's own sample values back unchanged ([checks.md, E4](checks#e4--a-store-holds-every-type-it-stores)).
+- **Refuses to start** a SQL store given a function binding for a function nothing registers, two bindings claiming one function on one dialect, a binding reading an operand that is no parameter of its function, or a refused DDL for a function the system insists on rendering ([checks.md, E5](checks#e5--a-stores-function-bindings-fit-the-functions-they-claim)).
 - **Nothing else.** The exact reads, the whole commit, the one snapshot, the taking of turns, the permanence, and the absence of side writes are promises the store makes across processes Velle never sees. The validator's proofs rest on them and cannot test them.
 
 ## Related pages
@@ -195,6 +200,7 @@ The in-memory store keeps every guarantee with one lock for its rows and one loc
 - [Act API](Act-API), the generated Kotlin that commits through the store.
 - [Read API](Read-API), the generated Kotlin that reads from it.
 - [Extension types](Extension-types), "Holding a type in a store", the binding a store needs per type.
+- [Extension functions](Extension-functions), "Holding a function in a store", the binding a SQL store may use per function.
 - [§10 Predicate expressions](Reference-10-Predicate-expressions), the conditions the filter is compiled from.
 - [§13 Exit triggers](Reference-13-Exit-triggers), the captured values a store keeps per membership.
 - [§22 Open / unresolved](Reference-22-Open-unresolved), the read API and the architecture the store sits in.

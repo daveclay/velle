@@ -1,6 +1,7 @@
 package velle.postgres
 
 import velle.Model
+import velle.sql.SqlFunctionBinding
 import velle.sql.SqlStore
 import velle.sql.SqlStoreConformance
 import velle.sql.SqlTypeBinding
@@ -14,6 +15,12 @@ class PostgresConformanceTest : SqlStoreConformance() {
     fun docker() = PostgresTesting.assumeAvailable()
 
     override fun dataSource(): DataSource = PostgresTesting.dataSource()
-    override fun store(model: Model, dataSource: DataSource, bindings: List<SqlTypeBinding<*>>, lockTimeout: Duration): SqlStore =
-        PostgresStore(model, dataSource, bindings, lockTimeout)
+    override fun store(
+        model: Model,
+        dataSource: DataSource,
+        bindings: List<SqlTypeBinding<*>>,
+        lockTimeout: Duration,
+        functionBindings: List<SqlFunctionBinding>,
+        insistRendered: Set<String>,
+    ): SqlStore = PostgresStore(model, dataSource, bindings, lockTimeout, functionBindings, insistRendered)
 }

@@ -94,8 +94,12 @@ class TextOperatorsTest {
         assertEquals(QF.Cmp("name", "ends with", QConst.QText("Corp")), qc.filterFor(RefName("CorpCustomer")))
         assertEquals(QF.Cmp("name", "contains", QConst.QText("Ltd")), qc.filterFor(RefName("MentionsLtd")))
         assertEquals(QF.Cmp("email", "like", QConst.QText("%@example._o_")), qc.filterFor(RefName("ExampleMailbox")))
-        // `lowercase(name)` is not a column: degrades to true (the evaluator decides)
-        assertEquals(QF.True, qc.filterFor(RefName("LowerAcme")))
+        // `lowercase(name)` travels as a call over the column, under the signature's parameter name;
+        // the store renders it through a binding or degrades, and the evaluator decides either way
+        assertEquals(
+            QF.CallCmp(QCall("velle.lowercase", 0, mapOf("text" to QArg.Column("name", VType.Text)), VType.Text), "contains", QConst.QText("acme")),
+            qc.filterFor(RefName("LowerAcme")),
+        )
         // constant on the left is not a column test either
         val flipped = RefName("Customer", Binary("contains", TextLit("Acme Ltd"), PathExpr("name")))
         assertEquals(QF.True, qc.filterFor(flipped))

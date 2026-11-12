@@ -50,7 +50,14 @@ abstract class SqlStoreConformance {
     /** A `DataSource` over a fresh, empty database (or schema) of its own, handing out real connections: a unit of work takes one and returns it. */
     protected abstract fun dataSource(): DataSource
 
-    protected abstract fun store(model: Model, dataSource: DataSource, bindings: List<SqlTypeBinding<*>>, lockTimeout: Duration = Duration.ofSeconds(10)): SqlStore
+    protected abstract fun store(
+        model: Model,
+        dataSource: DataSource,
+        bindings: List<SqlTypeBinding<*>>,
+        lockTimeout: Duration = Duration.ofSeconds(10),
+        functionBindings: List<SqlFunctionBinding> = emptyList(),
+        insistRendered: Set<String> = emptySet(),
+    ): SqlStore
 
     /** Releases what [dataSource] created, a temporary file for one database; nothing by default. */
     protected open fun release(dataSource: DataSource) {}
@@ -178,9 +185,15 @@ abstract class SqlStoreConformance {
 
     protected class Attached(val sys: VelleSystem, val store: SqlStore, val counting: Counting, val ds: DataSource)
 
-    protected fun attach(ds: DataSource = ds(), spec: String = this.spec, bindings: List<SqlTypeBinding<*>> = emptyList()): Attached {
+    protected fun attach(
+        ds: DataSource = ds(),
+        spec: String = this.spec,
+        bindings: List<SqlTypeBinding<*>> = emptyList(),
+        functionBindings: List<SqlFunctionBinding> = emptyList(),
+        insistRendered: Set<String> = emptySet(),
+    ): Attached {
         val sys = system(spec)
-        val store = store(sys.model, ds, bindings).apply { createSchema() }
+        val store = store(sys.model, ds, bindings, functionBindings = functionBindings, insistRendered = insistRendered).apply { createSchema() }
         val counting = Counting(store)
         sys.connect(counting, store)
         return Attached(sys, store, counting, ds)
@@ -297,18 +310,18 @@ abstract class SqlStoreConformance {
 
     // ── the pre-filter: pushed down where the column answers, same answer either way ──
 
-    /** The names of the customers in [refinement], and how many rows the store handed back for the scan. */
-    private fun Attached.members(refinement: String): Pair<Set<String>, Int?> {
+    /** The names of the [shape] records in [refinement], and how many rows the store handed back for the scan. */
+    private fun Attached.members(refinement: String, shape: String = "Customer"): Pair<Set<String>, Int?> {
         counting.reset()
         val names = sys.scope { sys.instancesOf(refinement).map { sys.get(it, "name") as String }.toSet() }
-        val scan = counting.candidates.singleOrNull { it.first == "Customer" }?.third
+        val scan = counting.candidates.singleOrNull { it.first == shape }?.third
         return names to scan
     }
 
-    /** [refinement] holds for exactly the customers in [expected]; when
+    /** [refinement] holds for exactly the records in [expected]; when
      *  [pushed], the store handed back only the matching rows, otherwise every row. */
-    private fun Attached.check(refinement: String, expected: Set<String>, pushed: Boolean, total: Int) {
-        val (names, scanned) = members(refinement)
+    private fun Attached.check(refinement: String, expected: Set<String>, pushed: Boolean, total: Int, shape: String = "Customer") {
+        val (names, scanned) = members(refinement, shape)
         assertEquals(expected, names, refinement)
         assertNotNull(scanned, "$refinement: the runtime asks for candidates with the compiled filter")
         if (pushed) assertEquals(expected.size, scanned, "$refinement: pushed down, the store returns only the matching rows")
@@ -355,6 +368,112 @@ abstract class SqlStoreConformance {
         b.check("NoEmail", setOf("Cyd", "Adela"), pushed = true, n)
         assertEquals(setOf("Ada", "Cyd"), b.members("Vip").first)
     }
+
+    // ── a registered function's call, through its binding ────────────────────
+
+    private val functionSpec = """
+        act Thing {
+            name: text
+            n: integer
+            m: integer?
+        }
+        shape Big = Thing where doubled(n) >= 6
+        shape NotBig = Thing where not (doubled(n) >= 6)
+        shape Flipped = Thing where 6 <= doubled(n)
+        shape NotSix = Thing where doubled(n) != 6
+        shape Even = Thing where isEven(n)
+        shape NotEven = Thing where not isEven(n)
+        shape MBig = Thing where doubled(m) >= 6
+        shape NotMBig = Thing where not (doubled(m) >= 6)
+        shape Far = Thing where abs(n - 4) >= 2
+    """.trimIndent()
+
+    private fun Attached.thing(name: String, n: Int, m: Int?): Ref.Persisted =
+        accepted(sys.commit("Thing", mapOf("name" to name, "n" to n, "m" to m).filterValues { it != null }))!!
+
+    /** Four things; [bindings] attach to a second process over the same database so every read hydrates from the store. */
+    private fun things(bindings: List<SqlFunctionBinding>, insistRendered: Set<String> = emptySet()): Attached {
+        val first = attach(spec = functionSpec, functionBindings = bindings, insistRendered = insistRendered)
+        first.thing("A", 3, 3); first.thing("B", 1, null); first.thing("C", 5, 2); first.thing("D", 2, 4)
+        return attach(first.ds, functionSpec, functionBindings = bindings, insistRendered = insistRendered)
+    }
+
+    @Test
+    fun `a registered function with a binding narrows the scan and the body still decides`() {
+        val b = things(listOf(DoubledSql, IsEvenSql))
+        val pushed = answers(StorageClass.INTEGER, ">=", b)
+        b.check("Big", setOf("A", "C"), pushed, 4, shape = "Thing")
+        b.check("NotBig", setOf("B", "D"), pushed, 4, shape = "Thing")
+        b.check("Flipped", setOf("A", "C"), pushed, 4, shape = "Thing")
+        b.check("NotSix", setOf("B", "C", "D"), pushed, 4, shape = "Thing")
+        b.check("Even", setOf("D"), pushed = true, total = 4, shape = "Thing")
+        b.check("NotEven", setOf("A", "B", "C"), pushed = true, total = 4, shape = "Thing")
+        // an absent argument makes the call absent, which fails the comparison and so satisfies its `not`
+        b.check("MBig", setOf("A", "D"), pushed, 4, shape = "Thing")
+        b.check("NotMBig", setOf("B", "C"), pushed, 4, shape = "Thing")
+    }
+
+    @Test
+    fun `a function with no binding runs in memory and a call over an expression stays with the evaluator`() {
+        val b = things(emptyList())
+        b.check("Big", setOf("A", "C"), pushed = false, total = 4, shape = "Thing")
+        b.check("Even", setOf("D"), pushed = false, total = 4, shape = "Thing")
+        // `abs` ships a binding, but its argument here is an expression, not the row's own column:
+        // nothing of the filter compiles, so the runtime asks for every row outright
+        assertEquals(setOf("B", "D"), b.members("Far", "Thing").first)
+        assertTrue("Thing" in b.counting.fetchAlls && b.counting.candidates.isEmpty(), "the whole table, with no filter to hand the store")
+    }
+
+    @Test
+    fun `the binding claiming the dialect is picked over the one claiming any SQL database`() {
+        val onThisDialect = DoubledOn(dialectName())
+        val onAnother = DoubledOn("NoSuchDatabase")
+        val b = things(listOf(DoubledSql, onThisDialect, onAnother))
+        DoubledSql.renders = 0; onThisDialect.renders = 0; onAnother.renders = 0
+        b.check("Big", setOf("A", "C"), answers(StorageClass.INTEGER, ">=", b), 4, shape = "Thing")
+        assertTrue(onThisDialect.renders > 0, "the binding claiming ${dialectName()} rendered the call")
+        assertEquals(0, DoubledSql.renders, "the SQL-wide binding was not asked")
+        assertEquals(0, onAnother.renders, "a binding claiming another dialect is loaded and ignored")
+    }
+
+    @Test
+    fun `the store refuses two bindings claiming one function on one dialect, and names them`() {
+        val error = assertFailsWith<IllegalStateException> { attach(spec = functionSpec, functionBindings = listOf(DoubledSql, DoubledWithDdl(emptyList()))) }
+        assertTrue("velle.sqltest.doubled" in error.message!! && "DoubledSql" in error.message!! && "DoubledWithDdl" in error.message!!, error.message)
+        val onDialect = assertFailsWith<IllegalStateException> { attach(spec = functionSpec, functionBindings = listOf(DoubledOn(dialectName()), DoubledOn(dialectName()))) }
+        assertTrue(dialectName() in onDialect.message!!, onDialect.message)
+    }
+
+    @Test
+    fun `the store refuses a binding reading an operand that is no parameter, and one for a function nothing registers`() {
+        val wrongName = assertFailsWith<IllegalStateException> { attach(spec = functionSpec, functionBindings = listOf(DoubledWrongName)) }
+        assertTrue("'amount'" in wrongName.message!! && "'value'" in wrongName.message!!, wrongName.message)
+        val unregistered = assertFailsWith<IllegalStateException> { attach(spec = functionSpec, functionBindings = listOf(NothingSql)) }
+        assertTrue("velle.sqltest.nothing" in unregistered.message!!, unregistered.message)
+    }
+
+    @Test
+    fun `a binding's DDL runs with the schema, again harmlessly, and a refused one is reported with the function left to the body`() {
+        val marker = "CREATE TABLE IF NOT EXISTS velle_sqltest_marker (x INTEGER)"
+        val b = things(listOf(DoubledWithDdl(listOf(marker))))
+        assertEquals(0L, b.count("velle_sqltest_marker"), "the DDL ran with the schema, in both processes")
+        assertEquals(emptyMap(), b.store.renderingsNotInstalled)
+        b.check("Big", setOf("A", "C"), answers(StorageClass.INTEGER, ">=", b), 4, shape = "Thing")
+
+        val refused = things(listOf(DoubledWithDdl(listOf("CREATE FUNCTION velle_sqltest_bogus("))))
+        assertEquals(setOf("velle.sqltest.doubled"), refused.store.renderingsNotInstalled.keys)
+        refused.check("Big", setOf("A", "C"), pushed = false, total = 4, shape = "Thing")
+    }
+
+    @Test
+    fun `a system that insists on a rendering does not start when its DDL is refused`() {
+        val error = assertFailsWith<IllegalStateException> {
+            attach(spec = functionSpec, functionBindings = listOf(DoubledWithDdl(listOf("CREATE FUNCTION velle_sqltest_bogus("))), insistRendered = setOf("velle.sqltest.doubled"))
+        }
+        assertTrue("velle.sqltest.doubled" in error.message!! && "insists" in error.message!!, error.message)
+    }
+
+    private fun dialectName(): String = store(system(functionSpec).model, ds(), emptyList()).dialect.name
 
     // ── references, unions, the join read ────────────────────────────────────
 

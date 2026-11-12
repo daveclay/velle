@@ -100,7 +100,37 @@ class Median : VelleFunction {
 
 A function that a rule folds a value into, `x = f(x, y)`, may state two facts about itself that [§19](Reference-19-Self-referential-folds-and-tolerates) reads: `foldStepsCommute`, that applying two steps in either order gives the same result, and `foldIdempotent`, that applying one step twice changes nothing. Both default to false. `max` and `min` claim both, so a rule may fold a peak at a scheduled tick with no guard; a function that claims neither is refused in the same place `+` is.
 
-A function is registered by naming its class in `META-INF/services/velle.ext.VelleFunction` in the library's resources, one class per line. A module that depends on the library sees the function. A function needs no store binding: the runtime evaluates it in memory, and a store that cannot translate it simply hands back every candidate record for the runtime to decide over ([Store API](Store-API)).
+A function is registered by naming its class in `META-INF/services/velle.ext.VelleFunction` in the library's resources, one class per line. A module that depends on the library sees the function. A function needs no store binding to run: the runtime evaluates it in memory, and a store that cannot translate it hands back every candidate record for the runtime to decide over ([Store API](Store-API)). A binding, below, lets a store hand back fewer.
+
+## Holding a function in a store
+
+A function is agnostic to the store. The runtime calls its body wherever the spec uses it, and the body always runs and has the last word. When a refinement's condition filters stored records by a call, the store hands back candidate records and the body decides over each one. A store may narrow those candidates by running SQL for the call. That SQL is a separate piece, a [function binding](GLOSSARY#function-binding), written by whoever knows the store. It only narrows. A function with no binding runs in memory, and a spec, its generated tests, and the in-memory store need none.
+
+For the SQL stores the piece is a `velle.sql.SqlFunctionBinding`. From `stores/sql/src/main/kotlin/velle/sql/BuiltinFunctionBindings.kt`, the binding Velle ships for `abs`:
+
+```kotlin
+class AbsBinding : SqlFunctionBinding {
+    override val function: String = "velle.abs"
+    override fun render(operands: SqlOperands): SqlExpr = SqlExpr.Call("ABS", operands["value"])
+}
+```
+
+- `function` names the registered function by qualified name.
+- `render` gives the call as a small tree, `SqlExpr`, over the operands the store hands in under the matched signature's parameter names. `operands["value"]` is `abs`'s one parameter; the arguments of a variadic parameter, such as `max`'s `rest`, are `operands.all("rest")`; `operands.signature` says which signature the call matched when the function has several. The tree's forms are `Call(name, args)`, `Infix(left, op, right)`, `Literal(value)` for a constant the binding supplies, `Cast(expr, storage)` for the database's cast to a storage kind, and `Raw(sql, args)` with `{0}`, `{1}` standing for the args, for a form the others cannot write. The store writes the SQL, quotes the column, and binds every constant; a binding writes no SQL text except through `Raw`.
+- `dialects`, left out above, names the databases the rendering is for, by the dialect's name: `SQLite`, `PostgreSQL`. Left out, the rendering serves every SQL database.
+- `ddl`, also left out, lists statements the store runs once with the schema, such as a `CREATE OR REPLACE FUNCTION` the rendering calls. Each must be safe to run again.
+
+One function may have several bindings, in one library or several: a SQL-wide one, and one for each database whose SQL differs. The store picks the binding claiming its dialect over the one claiming any. A binding may live in the function's own library or in a library of its own, and anyone may publish one for a database the function's author never saw. A binding is registered in `META-INF/services/velle.sql.SqlFunctionBinding`; a SQL store loads every binding on the classpath when it is built, or takes a list. The owner of a system chooses the bindings it runs with by what they put on the classpath, and replaces one with a bug as they would replace any library. Nothing in Velle overrides that choice.
+
+What the store does with a binding:
+
+- A call is rendered only when every argument is the record's own stored field or a constant. A call over a `many`, over a related record's field, or over an expression stays with the evaluator, and so does a call whose result the database's column cannot compare faithfully.
+- An absent argument makes the call absent. An absent call fails every comparison but `!=` and makes a predicate false, under `not` as well, exactly as the evaluator reads it.
+- When the database refuses a binding's DDL, the store records the function in `renderingsNotInstalled` and leaves it to the evaluator. A system that depends on the rendering names the function in the store's `insistRendered`, and the refusal stops the store from starting.
+
+A binding whose SQL rejects a record the body would accept makes the runtime miss that record, and nothing at runtime can detect it. A binding's author tests it against every database it claims, as the author of any library that talks to a database does. Velle ships a SQL-wide binding only for a builtin whose SQL agrees with its body on every database: `abs` has one; `lowercase` has none, because a database's `LOWER` may fold only ASCII letters where the body folds every letter.
+
+A body that reaches a store of its own, opening a connection and running a query, is outside the contract a function makes. It runs once per record, outside the read's own snapshot, and at compile time with no system behind it.
 
 ## The builtin functions
 
@@ -135,4 +165,4 @@ The aggregates `count`, `sum`, `latest` and `first` have their own syntax, a col
 - [§10 Predicate expressions](Reference-10-Predicate-expressions), where a call goes and how an absent value narrows.
 - [§19 Self-referential folds](Reference-19-Self-referential-folds-and-tolerates), what the two fold facts buy a rule.
 - [Extension types](Extension-types), the types a function is written over, and the capabilities a type implements.
-- [Store API](Store-API), why a function needs no store side.
+- [Store API](Store-API), the filter a call travels to the store in, and what the store may do with it.

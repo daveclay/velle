@@ -254,8 +254,11 @@ class PredicateFunctionsTest {
             QF.And(QF.Cmp("qty", ">=", QConst.QNum(java.math.BigDecimal(2))), QF.Cmp("qty", "<=", QConst.QNum(java.math.BigDecimal(5)))),
             qc.filterFor(RefName("Mid"))
         )
-        // a function of a column is not a column: the evaluator decides
-        assertEquals(QF.True, qc.filterFor(RefName("Weekend")))
+        // a function of a column travels as a call, with the matched signature's parameter name on the operand
+        assertEquals(
+            QF.CallCmp(QCall("velle.dayOfWeek", 0, mapOf("value" to QArg.Column("placed", VType.DateT)), VType.Num("integer")), ">=", QConst.QNum(java.math.BigDecimal(6))),
+            qc.filterFor(RefName("Weekend")),
+        )
         assertEquals(QF.True, qc.filterFor(RefName("Even")))
     }
 

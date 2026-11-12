@@ -2,6 +2,7 @@ package velle.postgres
 
 import velle.Model
 import velle.VelleSystem
+import velle.sql.SqlFunctionBinding
 import velle.sql.SqlStore
 import velle.sql.SqlTypeBinding
 import java.time.Duration
@@ -18,7 +19,9 @@ class PostgresStore(
     dataSource: DataSource,
     bindings: List<SqlTypeBinding<*>> = SqlTypeBinding.load(),
     lockTimeout: Duration = Duration.ofSeconds(10),
-) : SqlStore(model, dataSource, PostgresDialect, bindings, lockTimeout) {
+    functionBindings: List<SqlFunctionBinding> = SqlFunctionBinding.load(),
+    insistRendered: Set<String> = emptySet(),
+) : SqlStore(model, dataSource, PostgresDialect, bindings, lockTimeout, functionBindings, insistRendered) {
 
     companion object {
         /** Create the schema for [system]'s model in the database behind [dataSource] and connect the system through this store, both halves of the protocol. */

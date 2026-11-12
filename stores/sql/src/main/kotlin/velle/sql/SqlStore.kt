@@ -4,6 +4,8 @@ import velle.ActorProp
 import velle.CommitCallback
 import velle.CommitSet
 import velle.Model
+import velle.QArg
+import velle.QCall
 import velle.QConst
 import velle.QF
 import velle.Ref
@@ -68,6 +70,11 @@ import java.sql.ResultSet
  * [SqlTypeBinding] names, with the binding's encoding. The store refuses to
  * start without a binding for every extension type the model stores (E4),
  * [bindings] defaulting to every binding on the classpath.
+ *
+ * A call of a registered function in a pre-filter renders through the function's
+ * [SqlFunctionBinding] for this dialect, [functionBindings] defaulting to every
+ * binding on the classpath, or stays with the evaluator when there is none. The
+ * body runs on every row handed back either way.
  */
 open class SqlStore(
     private val model: Model,
@@ -76,6 +83,9 @@ open class SqlStore(
     bindings: List<SqlTypeBinding<*>> = SqlTypeBinding.load(),
     /** How long a write unit waits for one of its queue-key locks before the envelope fails. */
     private val lockTimeout: Duration = Duration.ofSeconds(10),
+    functionBindings: List<SqlFunctionBinding> = SqlFunctionBinding.load(),
+    /** Qualified names of the functions this system depends on rendering: a refused DDL for one stops the store. */
+    private val insistRendered: Set<String> = emptySet(),
 ) : StateResolver, CommitCallback {
 
     companion object {
@@ -148,6 +158,68 @@ open class SqlStore(
     }
 
     private val bindings: Map<String, SqlTypeBinding<*>> = bindings.associateBy { it.type }
+
+    /** The binding that renders each function on this dialect: the one claiming the dialect, else the one claiming any. */
+    private val renderings: Map<String, SqlFunctionBinding> = selectRenderings(functionBindings)
+
+    private val refusedDdl = HashMap<String, String>()
+
+    /** The functions whose binding's DDL the database refused, with its error; each runs in memory. Known after [createSchema]. */
+    val renderingsNotInstalled: Map<String, String> get() = refusedDdl
+
+    private fun selectRenderings(all: List<SqlFunctionBinding>): Map<String, SqlFunctionBinding> {
+        val selected = HashMap<String, SqlFunctionBinding>()
+        for ((function, candidates) in all.groupBy { it.function }) {
+            val registered = model.registry.function(function)
+                ?: throw IllegalStateException("${dialect.name} store: ${candidates.first()::class.qualifiedName} is a binding for '$function', and no registered function has that name")
+            val claimingDialect = candidates.filter { it.dialects?.contains(dialect.name) == true }
+            val claimingAny = candidates.filter { it.dialects == null }
+            if (claimingDialect.size > 1) throw conflict(function, dialect.name, claimingDialect)
+            if (claimingAny.size > 1) throw conflict(function, "any SQL database", claimingAny)
+            val chosen = claimingDialect.firstOrNull() ?: claimingAny.firstOrNull() ?: continue
+            checkOperandNames(registered, chosen)
+            selected[function] = chosen
+        }
+        return selected
+    }
+
+    private fun conflict(function: String, where: String, claiming: List<SqlFunctionBinding>) = IllegalStateException(
+        "${dialect.name} store: two bindings claim '$function' on $where, ${claiming.joinToString { it::class.qualifiedName ?: "?" }}; " +
+            "the system's owner keeps one, by the classpath or the store's explicit list"
+    )
+
+    /** Every name a binding reads is a parameter of each signature of its function: checked here, not at query time. */
+    private fun checkOperandNames(registered: velle.ext.VelleFunction, binding: SqlFunctionBinding) {
+        for (signature in registered.signatures) {
+            val single = HashMap<String, SqlExpr>()
+            val many = HashMap<String, List<SqlExpr>>()
+            for (parameter in signature.parameters) {
+                if (parameter.variadic) many[parameter.name] = listOf(SqlExpr.Column("probe", VType.Unknown))
+                else single[parameter.name] = SqlExpr.Column("probe", VType.Unknown)
+            }
+            try {
+                binding.render(SqlOperands(signature, single, many))
+            } catch (error: IllegalArgumentException) {
+                throw IllegalStateException("${dialect.name} store: ${binding::class.qualifiedName}, the binding for '${registered.qualifiedName}', ${error.message}")
+            }
+        }
+    }
+
+    /** Runs each selected binding's DDL once with the schema; a refusal is recorded, or stops the store when the system insists. */
+    private fun installRenderings(conn: Connection) {
+        for ((function, binding) in renderings) {
+            if (binding.ddl.isEmpty()) continue
+            try {
+                conn.createStatement().use { statement -> for (sql in binding.ddl) statement.execute(sql) }
+                refusedDdl.remove(function)
+            } catch (error: java.sql.SQLException) {
+                val message = error.message ?: error::class.simpleName ?: "refused"
+                if (function in insistRendered)
+                    throw IllegalStateException("${dialect.name} store: the database refused the DDL of ${binding::class.qualifiedName}, the binding for '$function', which this system insists on: $message", error)
+                refusedDdl[function] = message
+            }
+        }
+    }
 
     /** Reference columns and capture keys: a key as the dialect's integer column. */
     private val keyStorage: StorageColumn = dialect.column(StorageClass.INTEGER)
@@ -344,6 +416,7 @@ open class SqlStore(
                 st.execute("""CREATE TABLE IF NOT EXISTS "${captureTable(cs.refinement)}" (id ${keyStorage.columnType} PRIMARY KEY$cols)""")
             }
         }
+        installRenderings(conn)
     }
 
     // ── the resolver: the typed read questions (Hydration.kt, StateResolver) ──
@@ -425,6 +498,8 @@ open class SqlStore(
             is QF.NullCheck -> """$alias."${f.field}" IS ${if (f.isNull) "" else "NOT "}NULL"""
             is QF.TextBlank -> """($alias."${f.field}" IS NULL OR TRIM($alias."${f.field}") = '')"""
             is QF.Cmp -> renderCmp(f, shape, alias, positive)
+            is QF.CallCmp -> renderCallCmp(f, alias, positive)
+            is QF.Pred -> renderPred(f, alias, positive)
             is QF.Exists -> {
                 val a = "t${nextAlias++}"
                 // correlation through a union-typed back-reference must also
@@ -487,6 +562,101 @@ open class SqlStore(
                 "!=" -> "($col IS NULL OR $col != ?)"
                 else -> "$col ${f.op} ?"
             }
+        }
+
+        // ── a registered function's call, through its binding (Extension-functions, "Holding a function in a store") ──
+
+        /** The call's tree from its binding, or null when no binding renders it here: the call is then the evaluator's. */
+        private fun callTree(call: QCall, alias: String): SqlExpr? {
+            val binding = renderings[call.function]?.takeIf { call.function !in refusedDdl } ?: return null
+            val signature = model.registry.function(call.function)?.signatures?.getOrNull(call.signature) ?: return null
+            val single = HashMap<String, SqlExpr>()
+            val many = HashMap<String, List<SqlExpr>>()
+            for ((name, arg) in call.operands) {
+                if (arg is QArg.Many) many[name] = arg.items.map { operand(it, alias) ?: return null }
+                else single[name] = operand(arg, alias) ?: return null
+            }
+            return binding.render(SqlOperands(signature, single, many))
+        }
+
+        private fun operand(arg: QArg, alias: String): SqlExpr? = when (arg) {
+            is QArg.Column -> SqlExpr.Column("""$alias."${arg.field}"""", bareOf(arg.type))
+            is QArg.Const -> bareOf(arg.type).let { bare -> constantFor(arg.value, bare)?.let { SqlExpr.Param(it, bare) } }
+            is QArg.Many -> null
+        }
+
+        private fun bareOf(t: VType): VType = if (t is VType.Optional) t.inner else t
+
+        /** Writes [e] out, queueing every constant it holds in the order its `?` appears. */
+        private fun renderExpr(e: SqlExpr): String = when (e) {
+            is SqlExpr.Column -> e.reference
+            is SqlExpr.Param -> { binds.add(bindValue(e.value, e.type)); "?" }
+            is SqlExpr.Literal -> { binds.add(literalBind(e.value)); "?" }
+            is SqlExpr.Call -> "${e.name}(${e.args.joinToString(", ") { renderExpr(it) }})"
+            is SqlExpr.Infix -> "(${renderExpr(e.left)} ${e.op} ${renderExpr(e.right)})"
+            is SqlExpr.Cast -> "CAST(${renderExpr(e.expr)} AS ${dialect.column(e.storage).columnType})"
+            is SqlExpr.Raw -> Regex("\\{(\\d+)\\}").replace(e.sql) { match -> renderExpr(e.args[match.groupValues[1].toInt()]) }
+        }
+
+        private fun bindValue(value: Any, type: VType): Any =
+            if (type is VType.Inst) keyStorage.bind(value) else scalarColumn(type).bind(value)
+
+        private fun literalBind(value: Any): Any = when (value) {
+            is Int -> dialect.column(StorageClass.INTEGER).bind(value.toLong())
+            is Long -> dialect.column(StorageClass.INTEGER).bind(value)
+            is BigDecimal -> dialect.column(StorageClass.DECIMAL).bind(value)
+            is Double -> dialect.column(StorageClass.DOUBLE).bind(value)
+            is String -> dialect.column(StorageClass.TEXT).bind(value)
+            is Boolean -> dialect.column(StorageClass.BOOLEAN).bind(value)
+            else -> throw IllegalArgumentException("a SqlExpr.Literal holds an Int, Long, BigDecimal, Double, String, or Boolean, not ${value::class.qualifiedName}")
+        }
+
+        private fun answersOf(type: VType): Set<String> =
+            if (type is VType.Inst) keyStorage.answers else scalarColumn(type).answers
+
+        /**
+         * `call op constant`. An absent result reads as an absent column (Query.kt):
+         * it satisfies `!=` and fails every other comparison, in either polarity,
+         * so the clause is forced to true or false and never left NULL under `not`.
+         */
+        private fun renderCallCmp(f: QF.CallCmp, alias: String, positive: Boolean): String {
+            val tree = callTree(f.call, alias) ?: return degrade(positive)
+            val result = f.call.result
+            if (f.op in TEXT_OPERATORS) {
+                val text = (f.value as? QConst.QText)?.v?.takeIf { result == VType.Text } ?: return degrade(positive)
+                if (f.op == "matches") {
+                    if (dialect.regexMatch("x") == null) return degrade(positive)
+                    val sql = dialect.regexMatch(renderExpr(tree))!!
+                    binds.add(text)
+                    return "COALESCE($sql, FALSE)"
+                }
+                val pattern = when (f.op) {
+                    "contains" -> "%" + likeEscape(text) + "%"
+                    "starts with" -> likeEscape(text) + "%"
+                    "ends with" -> "%" + likeEscape(text)
+                    else -> text
+                }
+                val rendered = renderExpr(tree)
+                binds.add(pattern)
+                return "COALESCE($rendered LIKE ? ESCAPE '\\', FALSE)"
+            }
+            if (f.op !in answersOf(result)) return degrade(positive)
+            val value = constantFor(f.value, result) ?: return degrade(positive)
+            if (f.op == "!=") {
+                val once = renderExpr(tree)
+                val again = renderExpr(tree)
+                binds.add(bindValue(value, result))
+                return "($once IS NULL OR $again != ?)"
+            }
+            val rendered = renderExpr(tree)
+            binds.add(bindValue(value, result))
+            return "COALESCE($rendered ${if (f.op == "==") "=" else f.op} ?, FALSE)"
+        }
+
+        /** A registered predicate's call: true when its result is, and an absent result is false. */
+        private fun renderPred(f: QF.Pred, alias: String, positive: Boolean): String {
+            val tree = callTree(f.call, alias) ?: return degrade(positive)
+            return "COALESCE(${renderExpr(tree)}, FALSE)"
         }
 
         private fun likeEscape(s: String): String = buildString {

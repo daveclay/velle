@@ -200,6 +200,10 @@ The spec uses an operator, comparison, aggregate, function, or selector order on
 
 Checked when a store is built for a model, not by the compiler: for every extension type on a stored field of a non-transient shape, the store has a binding for the type, and the binding reads back the type's samples unchanged. The SQLite store refuses to start otherwise, naming the type and the binding interface to implement; a store written by hand owes the same refusal.
 
+### E5 — A store's function bindings fit the functions they claim
+
+Checked when a SQL store is built, not by the compiler: every function binding names a registered function; no two bindings claim one function on one dialect, nor one function on any SQL database; and every operand name a binding reads is a parameter of each signature of its function. The store refuses to start otherwise, naming the binding's class and the function. A binding's DDL the database refuses stops the store only when the system insists on that function; otherwise the function is left to the evaluator and the refusal is reported. Pinned by the SQL layer's conformance scenarios, `stores/sql/src/testFixtures/kotlin/velle/sql/SqlStoreConformance.kt`.
+
 ## Advisories
 
 ### A1 — Rung recognition

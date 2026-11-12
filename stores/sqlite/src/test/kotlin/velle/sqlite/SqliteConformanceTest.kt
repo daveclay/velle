@@ -2,6 +2,7 @@ package velle.sqlite
 
 import org.sqlite.SQLiteDataSource
 import velle.Model
+import velle.sql.SqlFunctionBinding
 import velle.sql.SqlStore
 import velle.sql.SqlStoreConformance
 import velle.sql.SqlTypeBinding
@@ -35,6 +36,12 @@ class SqliteConformanceTest : SqlStoreConformance() {
         for (suffix in listOf("", "-wal", "-shm")) Files.deleteIfExists(Path.of("$file$suffix"))
     }
 
-    override fun store(model: Model, dataSource: DataSource, bindings: List<SqlTypeBinding<*>>, lockTimeout: Duration): SqlStore =
-        SqliteStore(model, dataSource, bindings)
+    override fun store(
+        model: Model,
+        dataSource: DataSource,
+        bindings: List<SqlTypeBinding<*>>,
+        lockTimeout: Duration,
+        functionBindings: List<SqlFunctionBinding>,
+        insistRendered: Set<String>,
+    ): SqlStore = SqliteStore(model, dataSource, bindings, functionBindings, insistRendered)
 }
