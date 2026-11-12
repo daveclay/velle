@@ -1,0 +1,10 @@
+act Reading {
+    efficacy: decimal
+}
+shape Verdict {
+    reading: one Reading
+    effective: boolean
+}
+rule RecordVerdict when (Reading where not exists Verdict for this) {
+    Verdict from { reading: this, effective: "yes" }
+}

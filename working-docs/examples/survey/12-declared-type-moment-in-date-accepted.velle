@@ -1,0 +1,4 @@
+act Kind {
+    name: text
+    seen: Date = now
+}

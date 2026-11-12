@@ -1,0 +1,4 @@
+act Kind {
+    name: text
+    applied: boolean initially 5
+}

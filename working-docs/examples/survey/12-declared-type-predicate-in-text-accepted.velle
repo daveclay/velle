@@ -1,0 +1,4 @@
+act Kind {
+    parentName: text?
+    label: text = (parentName is none)
+}

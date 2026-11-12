@@ -1,0 +1,4 @@
+act Kind {
+    total: decimal
+    half: integer = total / 2
+}

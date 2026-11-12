@@ -1,0 +1,7 @@
+act Kind {
+    name: text
+    ready: boolean initially false
+}
+shape ReadyKind = Kind where ready {
+    captured since: Date = now
+}

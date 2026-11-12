@@ -48,3 +48,15 @@ what to expect:
 | `10-mixed-comparisons-refused` | every comparison between two builtin scalar kinds that differ, field against field and field against a constant of another kind, under `==` and `<`; and, accepted in the same file, the one reading kept: a quoted text beside a `time` or a `uuid` | one `[F2]` per prohibition, `compares the <kind> '<field>' with a <kind>; a <kind> is not compared as a <kind>`, with `Write number(...)` / `date(...)` / `datetime(...)` or `Declare ... as a time` when a text field is one side; `'time' rejects this constant: 'abc' is not a time of day` for the unreadable constant | checks F2; Reference §5; `MixedKindComparisonTest` |
 | `11-optional-key` | a key over an optional field, `key: text? unique`, and the lookup `(Entry where key == this.entryKey)` behind a refinement's `entryKey is some` | passes; at runtime two keyless entries coexist and a present key is refused the second time (`UniqueKeyTest`) | Reference §21 "Keys"; checks V36 |
 | `09-lookup-in-never-value-in-refused` | `value in first(Field where ... by name).options` | `[F2] ... 'in' takes a list of values [a, b] or a many of values on the right` | OQ86 |
+| `12-declared-type-predicate-in-text-accepted` | `label: text = (parentName is none)` | validates; the read returns a boolean (`DeclaredTypeProbeTest`) | OQ82 |
+| `12-declared-type-number-in-text-accepted` | `label: text = count * 2` | validates; the read returns a number | OQ82 |
+| `12-declared-type-moment-in-date-accepted` | `seen: Date = now` | validates; the read returns a moment | OQ82 |
+| `12-declared-type-absent-in-required-accepted` | `parent: text = parentName` with `parentName: text?` | validates; the read returns absent on a required property | OQ82 |
+| `12-declared-type-one-in-many-accepted` | `names: many text = name` | validates; the read returns one text | OQ82 |
+| `12-declared-type-branches-in-boolean-accepted` | `flagged: boolean = if name == "x" then "yes" else "no"` | validates; the read returns a text | OQ82 |
+| `12-declared-type-decimal-in-integer-accepted` | `half: integer = total / 2` | validates; the read returns `1.5` | OQ82 |
+| `12-declared-type-initially-accepted` | `applied: boolean initially 5` | validates; the read returns `true` | OQ82 |
+| `12-declared-type-from-block-accepted` | `effective: "yes"` in a `from` block for a `boolean` field | validates; the read fails, `hydrating Verdict.effective: not a boolean (yes)` | OQ82 |
+| `12-declared-type-assignment-accepted` | `note.locked = 5` on a `boolean` field | validates; the read returns `true`, and a refinement over the field with a capture fails the commit, `non-boolean in predicate position: VNum(v=5)` | OQ82 |
+| `12-declared-type-captured-accepted` | `captured since: Date = now` | validates | OQ82 |
+| `12-declared-type-set-in-one-refused` | `entry: one Entry? = (Entry where name == this.wanted)`, no key on `Entry` | `[V36] (Entry where name == this.wanted) is a set of Entry where one record is expected, and Entry declares no key. ...` | checks V36; OQ82 |

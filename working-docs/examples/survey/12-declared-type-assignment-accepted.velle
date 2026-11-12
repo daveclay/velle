@@ -1,0 +1,9 @@
+act Note {
+    locked: boolean initially false
+}
+act Lock {
+    note: one Note
+}
+rule ApplyLock when Lock {
+    note.locked = 5
+}

@@ -1,0 +1,4 @@
+act Kind {
+    count: integer
+    label: text = count * 2
+}

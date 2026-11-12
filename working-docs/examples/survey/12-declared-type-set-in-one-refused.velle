@@ -1,0 +1,7 @@
+shape Entry {
+    name: text
+}
+act Lookup {
+    wanted: text
+    entry: one Entry? = (Entry where name == this.wanted)
+}
