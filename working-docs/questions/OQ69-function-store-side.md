@@ -1,6 +1,6 @@
 # OQ69 — A function's store side: how a function a spec calls says what a store may run for it
 
-**Status:** opened 2026-10-26 at Dave's request after `matches` landed. Settled 2026-11-11, every decision answered; build pending. §3 is the implementation plan, with one build question for Dave; §4 holds the work items.
+**Status:** opened 2026-10-26 at Dave's request after `matches` landed. D1 through D10 decided 2026-11-11; D11, a build question, awaits Dave. §3 is the implementation plan; §4 holds the work items.
 
 **In plain terms:** A spec may call a function on a stored value, such as the lowercase form of a name, or whether a product code fits a pattern. When a read filters a million stored records by that call, the database should do the narrowing and hand back only the records that fit, rather than every record for Velle to check one by one in memory. Today only a few of Velle's own functions get that, each written by hand into the SQL store, and a function an engineer registers never does. This question is how a function says what a database may run for it, database by database, and what a store does when it cannot.
 
@@ -218,6 +218,21 @@ Recommendation: yes. It gets a tag of its own when a read over one is measured s
 
 **Decided:** yes, out, 2026-11-11, and for a stronger reason than the one above. Dave: a function can iterate over arbitrary values easily enough, but knowing what the function joins to is not merely difficult. The store API is responsible for fetching records from arbitrary data sources, and what a collection joins to might be data from an external API joined with records from the database. The function operates in memory over those records. An optimization can be made when it is a single database, but Velle will not assume that. So a function over a collection is never rendered, by principle, not by complexity, and no tag is opened for it. A proposal in chat the same day to render it as a correlated subquery the layer owns was set aside for the same reason.
 
+### D11. Whether the text operators stay rendered by name until OQ114
+
+Does the build leave `is empty`, `contains`, `starts with`, `ends with`, and `like` rendered by name in `renderCmp` exactly as today, moving only `matches` to a binding?
+
+D1's proposed changes say the renderer stops knowing every function by name and each builtin becomes a shipped binding. Under D10 a binding is keyed by a registered function's qualified name, `velle.matches`. Only `matches` is a registered function; the other five are operators of the predicate grammar (Reference §10), with no qualified name to key a binding by. Making them registered functions is OQ114, not this question's to decide.
+
+Recommendation: yes. The alternative is to invent a keying for operators inside this build, which pre-empts OQ114. When OQ114 settles, the five move to bindings through the mechanism this file builds, with nothing in it to change.
+
+Against the spec in §1, `AdaProduct`'s `starts with "ada"` keeps rendering `LIKE ? ESCAPE '\'` from `renderCmp`, while the `lowercase(name)` on its left renders through the `lowercase` binding; `KitProduct`'s `matches` renders through the `SQLite` binding.
+
+#### Proposed changes
+
+- `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`, `renderCmp`: the five text operators and `QF.TextBlank` unchanged; only the `matches` branch removed.
+- `working-docs/QUESTIONS.md`, OQ114's line: a pointer that the five move to bindings when it settles.
+
 ### D10. Whether a function author provides a rendering per database · Decided 2026-11-11
 
 Does a function author ship renderings for several databases themselves, one binding per database they know, with the store picking the binding for the dialect it runs on?
@@ -272,21 +287,19 @@ The store on SQLite picks `RoundToCentsSql`; on PostgreSQL, `RoundToCentsPostgre
 
 ## 3. The build
 
-The decided proposed changes, in build order. D3, D7, and D9 change nothing. One build question, B1, is at the end.
+The decided proposed changes, in build order. D3, D7, and D9 change nothing. D11, a build question, is open.
 
 1. **The pre-filter carries a call** (D4). `compiler/src/main/kotlin/velle/Query.kt`: `QF.Cmp` takes a column expression, a path or a call of a registered function over a path with constant arguments, the operands held under the parameter names of the signature the call matched, a variadic parameter's as a list; `tryCmp` accepts a call on the path side; a predicate function renders as a clause of its own. A call whose arguments are all constants still folds in `constFold`.
 2. **The SQL expression type** (D4). `stores/sql/src/main/kotlin/velle/sql/SqlExpr.kt`: a sealed type with `Column`, `Param`, `Literal`, `Call(name, args)`, `Infix(left, op, right)`, `Cast(expr, StorageClass)`, `Raw(sql)`; rendered only by `SqlStore`'s renderer, which writes `?` for a `Param`, queues its value, quotes a `Column`, and asks the dialect's column for a `Cast`.
 3. **The binding** (D1, D4, D6, D10). `stores/sql/src/main/kotlin/velle/sql/SqlFunctionBinding.kt`: `function` (the qualified name), `dialects: Set<String>?` (null for any SQL database), `render(operands): SqlExpr` with the matched signature askable, and an optional `ddl`; loaded from `META-INF/services/velle.sql.SqlFunctionBinding` or an explicit list, as `SqlTypeBinding` is.
 4. **The store selects and checks** (D2, D6, D10). `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`: at construction, for each function pick the binding claiming the dialect, else the SQL-wide one, else none; refuse two classpath bindings claiming one function and one dialect; refuse a binding naming a function not on the classpath or an operand name that is no parameter of any of its signatures. `createSchema` runs each selected binding's DDL; a refusal is recorded against the function, readable after construction, and the function left to the body; a constructor option lists the functions the owner insists on, a refused DDL for one of which stops the store. No override of any kind.
-5. **The renderer** (D1, D4, D8). `SqlStore.kt`, `renderCmp`: a column expression that is a call renders through its binding's `SqlExpr` or degrades; a rendered call under `not` is guarded against an absent value as `!=` is today, so an absent argument reads as Velle reads it. `renderCmp` stops knowing `matches` by name.
+5. **The renderer** (D1, D4, D8, D11). `SqlStore.kt`, `renderCmp`: a column expression that is a call renders through its binding's `SqlExpr` or degrades; a rendered call under `not` is guarded against an absent value as `!=` is today, so an absent argument reads as Velle reads it. `renderCmp` stops knowing `matches` by name; the text operators stay as D11 decides.
 6. **The dialects** (D2, D10). `stores/sql/src/main/kotlin/velle/sql/SqlDialect.kt`: `regexMatch` removed; `name` documented as the stable identifier a binding claims. `stores/sqlite/src/main/kotlin/velle/sqlite/SqliteDialect.kt`: `regexMatch` removed, `prepare` unchanged; a `matches` binding claiming `SQLite` in the same module renders `Infix(text, "REGEXP", pattern)`. `stores/postgres/src/main/kotlin/velle/postgres/PostgresDialect.kt`: `regexMatch` removed. No SQL-wide `matches` binding is needed, since a function with no binding degrades; D10's proposed change naming one is dropped.
 7. **Tests.** `stores/sql` conformance suite (`SqlStoreConformance`): a registered test function with a binding renders and the body still decides; a binding claiming the dialect is picked over the SQL-wide one; two bindings claiming one function and one dialect are refused; a wrong operand name is refused; an absent argument under `not`; a refused DDL is reported and the function left to the body; the insist option stops the store. `stores/sqlite/src/test/kotlin/velle/sqlite/RegexOverSqliteTest.kt` passes unchanged through the new binding. The test function and binding live beside `compiler/src/test/kotlin/velle/TestFunctions.kt` and in `stores/sql`'s test sources.
 8. **Wiki.** `wiki/Extension-functions.md`: a section "Holding a function in a store", mirroring `wiki/Extension-types.md` "Holding a type in a store": a function is agnostic to the store, the body always runs and has the last word, a binding only narrows (D5); the binding's shape and the operand names (D4); one binding per database the author knows, the SQL-wide one as the fallback, packaged in the function's library or any other, and how a third party adds a database (D1, D10); a binding is a library the owner replaces, never overridden (D2); a binding whose SQL rejects a row the body would accept makes the runtime miss a record, nothing at runtime detects it, and the author tests against every database they claim (D8); a body that reaches a store is outside the contract (D5); DDL and its refusal (D6). `wiki/Store-API.md`: the function binding beside the type binding, the dialect name as a contract, the report and the insist option, the one sentence on narrowing from the store's side. `wiki/evaluation.md` "The pre-filter": a call over a column is compiled and rendered through a binding or degrades.
 9. **The settling commit.** The settled row in `working-docs/QUESTIONS.md`, this file deleted, the OQ69 line removed, OQ96's and OQ115's lines re-read for a stale pointer.
 
 The two work items in §4 that predate the build, `number(text)` and the column piece, are built after step 8 through the same mechanism and are not part of the settling commit unless they fall out of it.
-
-**B1.** D1's proposed change moves the text operators `contains`, `starts with`, `ends with`, `like`, and `is empty` out of `renderCmp` into shipped bindings. A binding is keyed by a registered function's qualified name, and the text operators are not registered functions; making them so is OQ114. Does the build leave the text operators in `renderCmp` as they are, moving only `matches`, until OQ114 settles? Recommendation: yes; step 5 above is written that way.
 
 ## 4. Work items
 
