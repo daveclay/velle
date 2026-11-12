@@ -1,6 +1,6 @@
 # OQ82 — Does the compiler refuse a property whose expression is not of its declared type?
 
-**Status:** opened 2026-11-11 as a one-line item from the survey pass; given this file 2026-11-12 after OQ89 showed `label: text = (a is none)` validating. Not decided: D1 to D4 await Dave.
+**Status:** opened 2026-11-11 as a one-line item from the survey pass; given this file 2026-11-12 after OQ89 showed `label: text = (a is none)` validating. D1 decided 2026-11-12; D2 to D5 await Dave. D5 was opened from Dave's answer to D1.
 
 **In plain terms:** a product owner writes `label: text = ...` and the compiler takes the word `text` on trust. If the formula after `=` makes a yes-or-no, a number, or nothing at all, the compiler says nothing, and the mistake shows up later as a failed read, a failed commit, or a wrong value handed to whoever reads the record. The question is whether the compiler compares the declared type with what the formula makes, and refuses when they differ.
 
@@ -35,7 +35,7 @@ What the validator can read off an expression today (`scalarTypeOf`, `Validator.
 
 ## 2. What to decide
 
-### D1. Does the compiler refuse a property whose expression's type differs from its declared type?
+### D1. Does the compiler refuse a property whose expression's type differs from its declared type? · Decided 2026-11-12
 
 Does the compiler refuse a derived property, a `captured` property, an `initially`, a field in a `from` block, and an assignment when the type it reads off the expression is not the declared type?
 
@@ -78,7 +78,7 @@ Costs:
 - `DeclaredTypeProbeTest` becomes `DeclaredTypeTest`, one case per survey file.
 - The survey's `12-*-accepted` files become `12-*-refused`, with the README rows updated.
 
-**Decided:** 
+**Decided:** yes, 2026-11-12: a declared type that differs from the expression's is a validation failure. Dave added that it would be nicer for the type to be inferred so the mistake cannot be made at all; that is D5.
 
 ### D2. Are the whole-number and decimal types one kind for this check?
 
@@ -155,10 +155,54 @@ Costs:
 
 **Decided:** 
 
+### D5. May a derived property leave its type out and take the expression's?
+
+May a derived or `captured` property be declared without a type, `isRoot = parentName is none`, taking the type the validator reads off the expression, so that the mismatch of D1 cannot be written?
+
+Recommendation: yes, for a derived and a `captured` property, when the validator reads a type off the expression. When it reads none, the compiler refuses the declaration and names the type to declare, so an untyped property is never a property of unknown type. A declared type stays allowed and is checked under D1; it is the author's word for the readers of the spec, and for a number it can say `integer` where the inference says `decimal` (D2). A stored property keeps its type, since nothing computes it; a `from` field and an assignment already take their type from the target.
+
+From `working-docs/examples/survey/12-declared-type-predicate-in-text-accepted.velle`, rewritten:
+
+```
+act Kind {
+    parentName: text?                               -- a stored text, may be absent
+    count: integer                                  -- a stored whole number
+    isRoot = parentName is none                     -- derived; the condition is a boolean, so isRoot is a boolean
+    doubled = count * 2                             -- derived; arithmetic is a number, so doubled is a decimal (D2)
+    parent = parentName                             -- derived; an optional text, so parent is a text? (D3)
+    label: text = "kind ${count}"                   -- declared, and checked against the literal under D1
+}
+```
+
+A declaration the compiler refuses, against the same act and a shape `Entry` with a `name: text` field:
+
+```
+    entry = first(Entry where name == this.parent by name)   -- no type read off a selector until the build covers it: refused
+```
+
+with the diagnostic naming the declaration to write, `entry: one Entry?`. Under D4 the forms the validator reads a type off are listed in `checks.md` F2; the same list says what may leave its type out.
+
+Costs:
+
+- The inference moves from the validator into the model, since the generated Kotlin, the spec generator, and the API description all read a derived property's type today (`Codegen.kt`, `SpecGen.kt`, `apis/json` `Describe.kt`). It is the largest part of the build.
+- Two spellings for one declaration, typed and untyped. The typed one is documentation and the only one that says `integer`.
+- A reader of the spec no longer sees the type on the line. The generated surfaces still carry it.
+- The grammar changes: `derivedProp := Identifier (":" propType)? "=" valueExpr`, in `grammar.md` and Reference §7.
+
+#### Proposed changes
+
+- `Ast.kt`: `DerivedProp.type` becomes optional; `Parser.kt` accepts `name = expr` in a shape or refinement body.
+- `Model.kt`: the expression type inference, moved from `Validator.kt`, resolves an untyped property's type once; a property with no readable type is F2.
+- `Codegen.kt`, `SpecGen.kt`, `apis/json` `Describe.kt`, `Printer.kt`: read the resolved type.
+- `wiki/grammar.md`, Reference §7, Reference §8 (`captured`), `wiki/checks.md` F2.
+- `DeclaredTypeTest`: an untyped property of each readable form, and the refusal of an unreadable one.
+
+**Decided:** 
+
 ## 3. The build
 
 Written once D1 to D4 are decided; it gathers each decision's proposed changes in build order.
 
 ## 4. Work items
 
-- [ ] Decide D1 to D4.
+- [ ] Decide D2 to D5.
