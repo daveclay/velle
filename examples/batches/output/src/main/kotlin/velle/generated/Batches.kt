@@ -458,7 +458,9 @@ act PeptideBatch {
     -- the batches this one was mixed from, and every batch behind them
     -- velle: a derived relationship from the source side (a batch one of whose
     -- uses is in this batch's composition) and a walk over it (Reference §7,
-    -- "Walks"); a walk ends over any data, so no proof is owed
+    -- "Walks"); a walk ends over any data, so no proof is owed. A batch is in
+    -- its own lineage only when the chain comes back to it, which the books
+    -- rule below refuses
     drawnFrom: many PeptideBatch = (PeptideBatch where exists (components where composition == this.origin))
     lineage: many PeptideBatch = walk drawnFrom
     -- the kind, read off the origin, never stored

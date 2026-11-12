@@ -193,8 +193,8 @@ class Evaluator(private val system: VelleSystem) {
                 else -> emptyList()
             }
         }
-        val visited = linkedSetOf(start)
         e.until?.let { cond ->
+            val visited = linkedSetOf(start)
             var at: Long? = start
             while (at != null) {
                 val here = ctx.copy(subjectScope = scope, subjectId = at, elements = emptyList())
@@ -205,14 +205,15 @@ class Evaluator(private val system: VelleSystem) {
         }
         var frontier = listOf(start)
         var depth = 0
-        val reached = mutableListOf<Long>()
+        // the start is not seeded: it is reached, and held, only when a step comes back to it
+        val reached = linkedSetOf<Long>()
         while (frontier.isNotEmpty() && (e.steps == null || depth < e.steps)) {
             val nextFrontier = mutableListOf<Long>()
-            for (id in frontier) for (n in next(id)) if (visited.add(n)) { nextFrontier.add(n); reached.add(n) }
+            for (id in frontier) for (neighbour in next(id)) if (reached.add(neighbour)) nextFrontier.add(neighbour)
             frontier = nextFrontier
             depth++
         }
-        return Value.VColl(reached, base)
+        return Value.VColl(reached.toList(), base)
     }
 
     /** `(Shape where pred)` / `(path where pred)` as a collection value (Reference §6). */

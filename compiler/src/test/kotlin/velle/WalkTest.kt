@@ -182,16 +182,17 @@ class WalkTest {
     """
 
     @Test
-    fun `a ring is walked once, without the start record`() {
+    fun `a ring is walked once, and holds the start record because a step reaches it`() {
         val sys = system(ring)
         sys.scope {
             val alice = sys.mustCommit("Profile", "name" to "Alice", "friends" to emptyList<Long>())
             val bob = sys.mustCommit("Profile", "name" to "Bob", "friends" to listOf(alice))
             val chris = sys.mustCommit("Profile", "name" to "Chris", "friends" to listOf(bob))
+            assertEquals(setOf(bob, alice), coll(sys.get(chris, "network")).toSet(), "a chain: the start is not reached")
             sys.mustCommit("Befriend", "who" to alice, "friend" to chris)
-            assertEquals(setOf(bob, alice), coll(sys.get(chris, "network")).toSet())
-            assertEquals(setOf(chris, bob), coll(sys.get(alice, "network")).toSet())
-            assertEquals(2, coll(sys.get(alice, "network")).size, "each record once, the start left out")
+            assertEquals(setOf(bob, alice, chris), coll(sys.get(chris, "network")).toSet())
+            assertEquals(setOf(chris, bob, alice), coll(sys.get(alice, "network")).toSet())
+            assertEquals(3, coll(sys.get(alice, "network")).size, "each record once, the start among them")
         }
     }
 
@@ -205,6 +206,35 @@ class WalkTest {
             val d = sys.mustCommit("Profile", "name" to "D", "friends" to listOf(c))
             assertEquals(listOf(c, b, a), coll(sys.get(d, "network")))
             assertEquals(listOf(c, b), coll(sys.get(d, "nearby")))
+        }
+    }
+
+    @Test
+    fun `a walk holds its start when a step reaches it, so this in a walk is true on a ring`() {
+        // the loop prohibition `never (S where this in W)` reads exactly this
+        val sys = system("""
+            act Profile {
+                name: text
+                friends: many Profile
+                network: many Profile = walk friends
+                reachesItself: boolean = if this in network then true else false
+            }
+            transient act Befriend {
+                who: one Profile
+                friend: one Profile
+            }
+            rule ApplyBefriend when Befriend {
+                this.who.friends = this.who.friends + this.friend
+            }
+        """)
+        sys.scope {
+            val alice = sys.mustCommit("Profile", "name" to "Alice", "friends" to emptyList<Long>())
+            val bob = sys.mustCommit("Profile", "name" to "Bob", "friends" to listOf(alice))
+            assertEquals(false, sys.get(alice, "reachesItself"), "a chain: no step reaches the start")
+            sys.mustCommit("Befriend", "who" to alice, "friend" to bob)
+            assertEquals(setOf(bob, alice), coll(sys.get(alice, "network")).toSet(), "Alice is reached from Alice through Bob")
+            assertEquals(true, sys.get(alice, "reachesItself"), "the start is in its own walk on a ring")
+            assertEquals(true, sys.get(bob, "reachesItself"))
         }
     }
 

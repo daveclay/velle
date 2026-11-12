@@ -41,7 +41,7 @@ shape Member {
 }
 ```
 
-- `walk referrer` is every member reached by following `referrer` one or more times. The member themself is not in it. Its type is `many Member`: a collection like any other, so `count(upline)`, `(upline where tier == "gold")`, and a membership test with `in` all apply.
+- `walk referrer` is every member reached by following `referrer` one or more times. The member themself is in it only when the chain comes back to them. Its type is `many Member`: a collection like any other, so `count(upline)`, `(upline where tier == "gold")`, and a membership test with `in` all apply.
 - `walk referrer until referrer is none` is the nearest-match form. Velle checks the condition at the member themself first, then at each member up the chain, and answers the first at which it holds. A founder has no referrer, so a founder is their own founding referrer. When the condition holds nowhere, the value is `none`, so the type is `one Member?`. Inside the condition, bare names and `this` name the record being looked at.
 - `recruits` is an ordinary derived collection, one step down. `walk recruits` follows it every step. The relationship a walk follows may be stored or derived, `one` or `many`.
 - `walk recruits for 2 steps` is the same set cut off after two steps: recruits and their recruits. The number is a business fact and part of the meaning.
@@ -61,7 +61,7 @@ never (PeptideBatch where this in lineage) tolerates contention
 
 - `drawnFrom` is the batches one step behind this one: those with a component in this batch's composition.
 - `lineage` is every batch behind those, at any remove.
-- The prohibition says a batch is never in its own lineage. `in` with a collection of records on the right asks whether the record on the left is one of them ([§10](Reference-10-Predicate-expressions)).
+- The prohibition says a batch is never in its own lineage. A batch is in its own lineage only when the chain of `drawnFrom` comes back to it, so the prohibition refuses the commit that would close that ring. `in` with a collection of records on the right asks whether the record on the left is one of them ([§10](Reference-10-Predicate-expressions)).
 - A walk reads every record it can reach, so nothing ties the prohibition's read to one key and every commit on the shape takes turns. `tolerates contention` says the business accepts that ([§19, "A read over a whole shape"](Reference-19-Self-referential-folds-and-tolerates#a-read-over-a-whole-shape-tolerates-contention)).
 
 A formula may also read the same property on a related record one link away, as `previous.streakAfter` does in [§19](Reference-19-Self-referential-folds-and-tolerates). The compiler accepts that only when it can see the chain ends. A walk is the spelling that needs no such proof.

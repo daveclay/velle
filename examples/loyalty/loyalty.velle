@@ -30,7 +30,8 @@ shape Member {
     tier: text initially "basic"
 
     -- The referral chain, walked (Reference §7, "Walks"). `upline` is everyone
-    -- above this member, at any remove; `foundingReferrer` is who brought the
+    -- above this member, at any remove, the member themself only if the chain
+    -- came back to them; `foundingReferrer` is who brought the
     -- whole branch in: the first member up the chain with no referrer, the
     -- member themself when they are the founder. `recruits` is one step down,
     -- `downline` every step, `closeDownline` two steps: recruits and theirs.
