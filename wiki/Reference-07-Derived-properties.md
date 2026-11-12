@@ -19,6 +19,19 @@ balance: decimal = total - sum(payments, amount)
 
 A derived property may also be a collection, written as a filtered set: `recruits: many Member = (Member where referrer == this)` names the members who name this one as their referrer ([§6, "Renamed and derived collections"](Reference-06-Relationships#renamed-and-derived-collections)).
 
+## The type may be left out
+
+When the expression says what it makes, the type need not be written. From `examples/loyalty/loyalty.velle`:
+
+```
+recruits = (Member where referrer == this)
+onTime = paidOn <= dueBy
+```
+
+- The compiler reads the type off the expression: a filtered set of `Member` is a `many Member`, a comparison is a `boolean`, `total - sum(payments, amount)` is a `decimal`, `first(Entry where ... by name)` is a `one Entry?`, and `parentName` with `parentName: text?` is a `text?`. Every reader of the record sees that type, the generated code and the API description included.
+- Declaring the type is still right where the declaration is the clearer sentence, and wherever the expression does not say it: a whole number the arithmetic types `decimal`, `count: integer = total / 2`; a collection or an absence with no element to read, `empty` and `none`, which take their type from a declaration.
+- Two properties that take their type from each other, neither declaring one, have no type to start from, and the compiler refuses them until one of them declares it. A property that reads itself along a relationship, `runningPeak` in `examples/peptides/peptides.velle`, declares its type for the same reason.
+
 ## A boolean property is its condition
 
 A product owner says "a dues payment is on time when it was paid by its due date". The property is the condition, so it is written as one. A condition is a value of type `boolean` wherever a value is written: a derived property, a field in a `from` block ([§14](Reference-14-Rules)), an assignment ([§12](Reference-12-Assignment)).
@@ -88,6 +101,9 @@ A formula may also read the same property on a related record one link away, as 
 
 ## What the compiler checks
 
+- The compiler rejects a derived property whose expression makes a type other than the declared one, a condition in a `text`, a `DateTime` in a `Date`, one value in a `many`, and names the type to declare or the type to compute. The four number types are one kind here ([checks.md, F2](checks#f2--type-checking)).
+- The compiler rejects a required declaration computed from a value that may be absent by declaration: an optional field not tested with `is some`, a `none` branch, a function whose result may be absent. The message names the `?` to add and the test to write. A selection that matches nothing, `first`, `latest`, `(Shape for expr)`, is absent by data, which the runtime refuses at the read ([§14, "A required field given an absent value"](Reference-14-for#a-required-field-given-an-absent-value); [checks.md, F2](checks#f2--type-checking)).
+- The compiler rejects a property that states no type when it reads none off the expression, `empty`, `none`, or a function whose result depends on an untyped argument, and two or more untyped properties that take their type from one another ([checks.md, F2](checks#f2--type-checking)).
 - The compiler rejects a walk whose relationship is not a member of the shape the walk is written on ([checks.md, F1](checks#f1--name-resolution-and-casing)), or is not a relationship that points back at that shape ([checks.md, F2](checks#f2--type-checking)).
 - The compiler rejects `walk R until P` when `R` is a `many`. Two records at the same distance may both satisfy the condition, and "the nearest" has no single answer. The message says to walk a `one`, or to declare the set with `walk R` and select from it with `first(... by ...)` ([checks.md, F2](checks#f2--type-checking)).
 - The compiler rejects `for 0 steps`, and warns on `for 1 steps`, which is the relationship itself ([checks.md, F2](checks#f2--type-checking); [A2](checks#a2--dead-machinery)).

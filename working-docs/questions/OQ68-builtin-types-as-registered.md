@@ -94,4 +94,4 @@ Cost: `Value.VNum` and `Value.VExt` both exist, so the runtime keeps a small con
 
 ## 6. Work items
 
-- [ ] Type arithmetic by its operands in the numeric tower (§3.4), so that a `decimal` result declared `integer`, `half: integer = total / 2` in `working-docs/examples/survey/12-declared-type-decimal-in-integer-accepted.velle`, is refused by the declared-type check of OQ82 instead of reading back `1.5` (`DeclaredTypeProbeTest`). Until then the four number types are one kind for that check (OQ82 D2, decided 2026-11-12).
+- [ ] Type arithmetic by its operands in the numeric tower (§3.4), so that a `decimal` result declared `integer`, `half: integer = total / 2` in `working-docs/examples/survey/12-declared-type-decimal-in-integer-accepted.velle`, is refused by the declared-type check (`wiki/checks.md` F2) instead of reading back `1.5` (`DeclaredTypeTest`). Until then the four number types are one kind for that check (decided 2026-11-12, settled table OQ82).

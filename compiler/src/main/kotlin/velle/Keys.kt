@@ -43,7 +43,7 @@ class KeyLookups(decls: List<Decl>) {
     // ── the positions that expect one record ─────────────────────────────────
 
     private fun rewriteMember(member: Member, scope: String, present: Set<String>): Member =
-        if (member is DerivedProp && !isMany(member.type)) member.copy(expr = rewriteElement(member.expr, scope, present))
+        if (member is DerivedProp && member.type != null && !isMany(member.type)) member.copy(expr = rewriteElement(member.expr, scope, present))
         else member
 
     private fun rewriteItem(item: BodyItem, scope: String, present: Set<String>): BodyItem = when (item) {

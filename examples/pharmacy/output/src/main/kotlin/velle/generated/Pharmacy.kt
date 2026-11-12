@@ -3564,7 +3564,7 @@ transient act FillPrescription by Staff as filledBy {
     lot: one StockLot
     quantity: integer
     fillNumber: integer
-    dispensable: boolean = if prescription is Fillable and quantity <= lot.onHand then true else false
+    dispensable: boolean = prescription is Fillable and quantity <= lot.onHand
 }
 
 FillPrescription requires filledBy to be Technician or filledBy to be Pharmacist
@@ -3719,7 +3719,7 @@ shape ReadyForPickup = VerifiedFill where not exists Pickup for this and not exi
 -- velle: a text literal with pieces names the drug in the subject (Reference §5,
 -- "Text made from other values")
 rule NoticeReady when ReadyForPickup {
-    Notice from { recipient: prescription.order.patient, subject: "${prescription.drug.name} ready for pickup", sentOn: now }
+    Notice from { recipient: prescription.order.patient, subject: "${'$'}{prescription.drug.name} ready for pickup", sentOn: now }
 }
 
 shape Uncollected = ReadyForPickup where readyOn < today - 10 days
@@ -3845,7 +3845,7 @@ rule AskPrescriber
     when (RefillRefusal where reason == "no refills remaining" and
           not exists AuthorisationRequest for prescription) {
     AuthorisationRequest from { prescription: prescription, requestedOn: now }
-    Notice from { recipient: prescription.order.prescriber, subject: "refill authorisation requested for ${prescription.drug.name}", sentOn: now }
+    Notice from { recipient: prescription.order.prescriber, subject: "refill authorisation requested for ${'$'}{prescription.drug.name}", sentOn: now }
 }
 
 -- Open refill work is nagged daily once it is two days old.
@@ -3888,7 +3888,7 @@ rule QueueAutoRefill
 -- velle: a `when leaving` rule naming only a schedule sees the leavers at the
 -- tick itself: exits by aging, never the commit-caused ones
 rule NoticeExpiry when leaving ActivePrescription on Daily {
-    Notice from { recipient: order.patient, subject: "prescription for ${drug.name} expired", sentOn: now }
+    Notice from { recipient: order.patient, subject: "prescription for ${'$'}{drug.name} expired", sentOn: now }
 }
 
 -- ── Insurance: claims and adjudication ───────────────────────────────────────

@@ -381,7 +381,7 @@ object Codegen {
         /** A union's own derived members, carried by each operand's model object (read in the union's scope). */
         fun unionMembers(shape: String): List<Triple<String, String, VType>> =
             unionsOf(shape).flatMap { u ->
-                model.refinements.getValue(u).members.filterIsInstance<DerivedProp>().map { Triple(it.name, u, model.typeOf(it.type)) }
+                model.refinements.getValue(u).members.filterIsInstance<DerivedProp>().map { Triple(it.name, u, model.membersOf(u).getValue(it.name).type) }
             }
 
         /** The refinements a model object of [root] carries a membership flag for. */
@@ -681,7 +681,8 @@ object Codegen {
             line()
             line("    companion object {")
             line("        private val SPEC = \"\"\"")
-            spec.trimEnd().lines().forEach { line(it) }
+            // a `$` in the spec, a text literal with pieces, is not Kotlin interpolation
+            spec.trimEnd().lines().forEach { line(it.replace("$", "\${'$'}")) }
             line("\"\"\"")
             line("    }")
         }

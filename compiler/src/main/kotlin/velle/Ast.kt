@@ -179,9 +179,11 @@ fun ShapeDecl.keys(): List<UniqueKey> = members.mapNotNull { member ->
     }
 }
 
+/** A derived property (Reference §7). [type] is the declaration's, or null when the property
+ *  states none and takes its expression's, resolved once by the model. */
 data class DerivedProp(
     val name: String,
-    val type: TypeRef,
+    val type: TypeRef?,
     val expr: Expr,
     val captured: Boolean = false,
     val visible: List<VisibleClause> = emptyList(),

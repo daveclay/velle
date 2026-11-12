@@ -117,7 +117,7 @@ object Printer {
             append(fieldVisibility(m.visible))
         }
         is UniqueKey -> "unique (${m.fields.joinToString(", ")})"
-        is DerivedProp -> (if (m.captured) "captured " else "") + "${m.name}: ${type(m.type)} = ${expr(m.expr)}" + fieldVisibility(m.visible)
+        is DerivedProp -> (if (m.captured) "captured " else "") + m.name + (m.type?.let { ": ${type(it)}" } ?: "") + " = ${expr(m.expr)}" + fieldVisibility(m.visible)
         is TimestampProp -> "${m.name}: timestamp on ${m.on}" + fieldVisibility(m.visible)
         is VisibleClause -> visible(m)
         is ActorProp -> "by ${m.shape}" + if (m.named) " as ${m.name}" else ""

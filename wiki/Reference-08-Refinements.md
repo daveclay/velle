@@ -32,7 +32,7 @@ shape ArchivedInvoice = Invoice where exists ArchiveRequest for this {
 A refinement body declares properties of the same two kinds a shape body does:
 
 - **Derived**, written `name: Type = expr`. It is recalculated from current data every time it is read, exactly like a [derived property](Reference-07-Derived-properties) on a shape. It can be read only on a member.
-- **Captured**, written `captured name: Type = expr`. It is calculated once, at the commit where the record enters the refinement, and keeps that value for as long as the record stays a member. It does not exist before entry. When the record leaves, the value is dropped at the end of the exit commit, so a rule that fires on leaving may still read it ([§13](Reference-13-Exit-triggers)). If the record enters again later, the value is calculated again.
+- **Captured**, written `captured name: Type = expr`, or `captured name = expr` when the expression says its type ([§7, "The type may be left out"](Reference-07-Derived-properties#the-type-may-be-left-out)). It is calculated once, at the commit where the record enters the refinement, and keeps that value for as long as the record stays a member. It does not exist before entry. When the record leaves, the value is dropped at the end of the exit commit, so a rule that fires on leaving may still read it ([§13](Reference-13-Exit-triggers)). If the record enters again later, the value is calculated again.
 
 Capturing `today` or `now` records the moment of entry. `archivedOn` above is the date the invoice was archived.
 
@@ -146,6 +146,7 @@ The compiler rejects the spec when a rule that deletes the base shape could fire
 - **It rejects** two refinements that overlap where the spec needs them disjoint, and a set that fails to cover a shape where the spec needs it covered ([checks.md, V9](checks#v9--refinement-overlap-and-exhaustiveness)). The one-writer, freeze, and deletion checks rely on this proof.
 - **It rejects** a captured expression that reads something the refinement's condition does not guarantee ([checks.md, V6](checks#v6--capture-entry-evaluability)). `(ArchiveRequest for this)` is allowed above only because the condition says `exists ArchiveRequest for this`. A capture that reads only the base shape's own fields, such as `captured balanceWhenOverdue: Money = balance` on `OverdueInvoice`, needs no such guarantee.
 - **It rejects** reading a refinement property on a record not yet narrowed to that refinement ([checks.md, V11](checks#v11--narrowing-analysis)).
+- **It rejects** a derived or captured property whose expression makes a type other than the declared one, or may be absent where the declaration is required; the refinement's own condition counts, so `Ticket where closedBy is some` may declare `closer: one Agent = closedBy` ([§7, "What the compiler checks"](Reference-07-Derived-properties#what-the-compiler-checks); [checks.md, F2](checks#f2--type-checking)).
 
 ## Related pages
 

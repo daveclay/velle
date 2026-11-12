@@ -276,7 +276,7 @@ shape Member {
     -- of the spelling
     upline: many Member = walk referrer
     foundingReferrer: one Member? = walk referrer until referrer is none
-    recruits: many Member = (Member where referrer == this)
+    recruits = (Member where referrer == this)
     downline: many Member = walk recruits
     closeDownline: many Member = walk recruits for 2 steps
 
@@ -313,7 +313,7 @@ act DuesPayment {
     coveredMonth: text
     dueBy: Date
     paidOn: Date
-    onTime: boolean = paidOn <= dueBy
+    onTime = paidOn <= dueBy
     previous: one DuesPayment? =
         latest(DuesPayment where member == this.member and paidOn < this.paidOn by paidOn)
     streakAfter: integer =

@@ -45,7 +45,7 @@ internal object ClassDiagramGen {
                     edges.add("$name \"*\" --> \"1\" ${model.baseOf(m.shape) ?: m.shape} : ${m.name} (by ${m.shape})")
                     continue
                 }
-                memberLine(m)?.let { appendLine("        $it") }
+                memberLine(model, shape.name, m)?.let { appendLine("        $it") }
             }
             appendLine("    }")
         }
@@ -54,7 +54,7 @@ internal object ClassDiagramGen {
             val base = model.baseOf(name) ?: continue
             appendLine("    class $name {")
             appendLine("        <<refinement>>")
-            for (m in r.members) memberLine(m)?.let { appendLine("        $it") }
+            for (m in r.members) memberLine(model, name, m)?.let { appendLine("        $it") }
             appendLine("    }")
             appendLine("    $base <|-- $name")
             for (operand in refNames(r.expr).filter { it in model.refinements }.distinct())
@@ -65,10 +65,10 @@ internal object ClassDiagramGen {
         appendLine()
     }
 
-    private fun memberLine(m: Member): String? = when (m) {
+    private fun memberLine(model: Model, owner: String, m: Member): String? = when (m) {
         is StoredProp -> "${m.name}: ${Printer.type(m.type)}" +
             (m.initially?.let { init -> Printer.expr(init).takeIf { "(" !in it }?.let { " = $it" } } ?: "")
-        is DerivedProp -> "/${m.name}: ${Printer.type(m.type)}" + if (m.captured) " captured at entry" else ""
+        is DerivedProp -> "/${m.name}: ${m.type?.let(Printer::type) ?: model.spell(model.membersOf(owner).getValue(m.name).type)}" + if (m.captured) " captured at entry" else ""
         is TimestampProp -> "${m.name}: timestamp on ${m.on}"
         is ActorProp -> "${m.name}: one ${m.shape} (by)"
         is VisibleClause -> Printer.visible(m)

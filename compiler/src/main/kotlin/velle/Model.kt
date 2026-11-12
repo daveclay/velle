@@ -86,7 +86,7 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
             else t
         fun fix(m: Member): Member = when (m) {
             is StoredProp -> m.copy(type = manyOfType(m.type, m.tolerates))
-            is DerivedProp -> m.copy(type = manyOfType(m.type))
+            is DerivedProp -> m.copy(type = m.type?.let { manyOfType(it) })
             else -> m
         }
         val lookups = KeyLookups(allDecls.map { d -> when (d) {
@@ -462,8 +462,10 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
         fun add(owner: String, m: Member) {
             when (m) {
                 is StoredProp -> out[m.name] = MemberInfo(m.name, owner, typeOf(m.type), stored = true, visible = m.visible)
+                // a derived property that states no type holds `Unknown` until every member is in,
+                // then takes its expression's type (resolveUntyped below)
                 is DerivedProp -> out[m.name] =
-                    MemberInfo(m.name, owner, typeOf(m.type), stored = false, derived = m, captured = m.captured, visible = m.visible)
+                    MemberInfo(m.name, owner, m.type?.let { typeOf(it) } ?: VType.Unknown, stored = false, derived = m, captured = m.captured, visible = m.visible)
                 is TimestampProp -> out[m.name] =
                     MemberInfo(m.name, owner, VType.DateTimeT, stored = false, timestamp = true, visible = m.visible)
                 is VisibleClause -> {}
@@ -499,7 +501,7 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
                     inverse = InverseInfo(otherName, f.name, (f.type as RelType).many)))
             }
             out["id"] = MemberInfo("id", scope, VType.Id, stored = false)
-            return out
+            return resolveUntyped(scope, out)
         }
         refinements[scope]?.let { r ->
             if (isCrossBase(scope)) {
@@ -521,10 +523,58 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
                 collectOperandScopes(r.expr).forEach { operand -> out.putAll(membersOf(operand)) }
             }
             r.members.forEach { add(scope, it) }
-            return out
+            return resolveUntyped(scope, out)
         }
         return out
     }
+
+    /** Every member of [scope] with its type: a derived property that states none takes its
+     *  expression's (Reference §7). The map is cached as it stands first, so the readings can
+     *  see the typed members while the untyped ones resolve. */
+    private fun resolveUntyped(scope: String, out: LinkedHashMap<String, MemberInfo>): Map<String, MemberInfo> {
+        val untyped = out.values.filter { it.derived?.type == null && it.derived != null }
+        if (untyped.isEmpty()) return out
+        memberCache[scope] = out
+        for (info in untyped) out[info.name] = info.copy(type = resolvedDerivedType(info.owner, info.derived!!))
+        return out
+    }
+
+    private val derivedTypeCache = HashMap<Pair<String, String>, VType>()
+    private val derivedResolving = LinkedHashSet<Pair<String, String>>()
+
+    /** The properties found to take their type from one another with none declaring it, so the
+     *  validator says nothing more about them. */
+    val untypedByCycle = HashSet<Pair<String, String>>()
+
+    /** The type of a derived or captured property that states none: its expression's, read once
+     *  (Reference §7). `Unknown` when the expression gives none, or when the property takes its
+     *  type from itself through other untyped properties; the cycle is F2, reported once. */
+    fun resolvedDerivedType(owner: String, prop: DerivedProp): VType {
+        val key = owner to prop.name
+        derivedTypeCache[key]?.let { return it }
+        if (key in derivedResolving) { reportCycle(derivedResolving.dropWhile { it != key }); return VType.Unknown }
+        derivedResolving.add(key)
+        // `empty` and `none` take their type from a declaration, so they give an untyped property none
+        val type = try {
+            types.of(prop.expr, owner, TypeEnv(thisScope = owner))?.takeIf { it != types.emptyCollection && it != types.absent } ?: VType.Unknown
+        } finally { derivedResolving.remove(key) }
+        derivedTypeCache[key] = type
+        return type
+    }
+
+    private fun reportCycle(cycle: List<Pair<String, String>>) {
+        if (!untypedByCycle.addAll(cycle) && cycle.all { it in untypedByCycle }) return
+        val names = cycle.map { (owner, name) -> "'$owner.$name'" }
+        val message = if (names.size == 1) "${names.single()} takes its type from itself and declares none; declare it"
+            else "${names.dropLast(1).joinToString(", ")} and ${names.last()} each take the type of the next and none declares one; declare a type on one of them"
+        diagnostics.add(Diagnostic("F2", message))
+    }
+
+    /** The one reading of an expression's type (checks.md F2). */
+    val types: ExprTypes by lazy { ExprTypes(this) }
+
+    /** The function dispatch (OQ66): a call resolves to the signature its arguments match. */
+    val functionResolver: FunctionResolver by lazy { FunctionResolver(registry) { c -> scalarOf(c.name) } }
 
     private fun MemberInfo.sameDeclarationAs(o: MemberInfo): Boolean = name == o.name && when {
         inverse != null || o.inverse != null -> inverse == o.inverse
@@ -721,7 +771,7 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
             val props = r.members.filterIsInstance<DerivedProp>().filter { it.captured }
             if (props.isEmpty()) return@mapNotNull null
             val base = baseOf(name) ?: return@mapNotNull null
-            CaptureSchema(name, base, props.map { CaptureSchema.Prop(it.name, typeOf(it.type)) })
+            CaptureSchema(name, base, props.map { CaptureSchema.Prop(it.name, membersOf(name).getValue(it.name).type) })
         }
     }
 

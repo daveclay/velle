@@ -70,7 +70,8 @@ foldHazard    := "duplication" | "reordering"       -- Reference §19; "loss" is
                                                     -- "Collections of values"); on a `many` of records it is
                                                     -- a validator error (checks catalog, F3)
 
-derivedProp   := Identifier ":" propType "=" valueExpr
+derivedProp   := Identifier (":" propType)? "=" valueExpr      -- the type may be left out when the expression says it
+                                                               -- (Reference §7, "The type may be left out")
               | Identifier ":" "many" (ShapeName | scalarType) "=" setExpr
                                                     -- derived collection: a view (Reference §6, "Renamed and
                                                     -- derived collections"); setExpr only in this position
@@ -110,8 +111,8 @@ refAtom        := ShapeName ("where" predicate)?         -- base or named refine
                | "(" refExpr ")"
 
 refinementBody := "{" refinementMember* "}"
-refinementMember := "captured" Identifier ":" propType "=" valueExpr
-                 | Identifier ":" propType "=" valueExpr                -- derived (live)
+refinementMember := "captured" Identifier (":" propType)? "=" valueExpr
+                 | Identifier (":" propType)? "=" valueExpr             -- derived (live)
                  | "frozen" (Identifier ("," Identifier)*)?             -- bare "frozen" = every stored field
                  | "undeletable"                                        -- the deletion gate (OQ37-R1): state-scoped, frozen's sibling
 ```

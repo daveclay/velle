@@ -123,7 +123,7 @@ class Validator(private val model: Model) {
         val members = model.shapes.values.flatMap { s -> s.members.map { s.name to it } } +
             model.refinements.values.flatMap { r -> r.members.map { r.name to it } }
         for ((owner, m) in members) {
-            val (field, t) = when (m) { is StoredProp -> m.name to m.type; is DerivedProp -> m.name to m.type; else -> null } ?: continue
+            val (field, t) = when (m) { is StoredProp -> m.name to m.type; is DerivedProp -> m.type?.let { m.name to it }; else -> null } ?: continue
             val at = "'$owner.$field'"
             when (t) {
                 is ScalarType -> if (!TypeRegistry.isBuiltin(t.name)) model.resolveTypeName(t.name, at)
@@ -151,7 +151,12 @@ class Validator(private val model: Model) {
                                 "'${t.shape}' is a union whose operands carry a predicate; a field's target union must be " +
                                 "a pure `or` of base shapes (Reference §9)"
                             else "State the condition on the act that creates '$name': '$name requires ${m.name} to be ${t.shape}', or a gate refinement")))
-                    m.initially?.let { checkExpr(it, name, allowGenerator = true); checkExtWrite(model.typeOf(t), it, name, "'$name.${m.name} initially'") }
+                    m.initially?.let {
+                        val before = diags.size
+                        checkExpr(it, name, allowGenerator = true)
+                        checkExtWrite(model.typeOf(t), it, name, "'$name.${m.name} initially'")
+                        if (diags.size == before) checkDeclaredType("'$name.${m.name}'", m.name, model.typeOf(t), it, name, INITIALLY)
+                    }
                     // `initially required` demands an optional type: the whole point of
                     // the decomposition is read-side optionality with creation-side
                     // requiredness (OQ37-R10); a plain field is already both
@@ -168,7 +173,7 @@ class Validator(private val model: Model) {
                         diags.add(Diagnostic("F3", "'$name.${m.name}' — a `many ${t.shape}` holds each record once, so it cannot tolerate duplication; " +
                             "if how many times a link occurs matters, that count is data on a link shape (Reference §6)"))
                 }
-                is DerivedProp -> { checkExpr(m.expr, name); checkWalkDeclaration(name, m); checkInterpolationDeclaration(name, m) }
+                is DerivedProp -> checkDerivedProperty(name, m)
                 is ActorProp -> checkActorClause(name, shape, m)
                 else -> {}
             }
@@ -433,7 +438,7 @@ class Validator(private val model: Model) {
             walkRefExpr(r.expr)
             if (bases.size > 1) checkCrossBaseUnion(name, r, bases)
             for (m in r.members) when (m) {
-                is DerivedProp -> { checkExpr(m.expr, name); checkWalkDeclaration(name, m); checkInterpolationDeclaration(name, m) }
+                is DerivedProp -> checkDerivedProperty(name, m)
                 is FrozenClause -> {
                     val base = model.baseOf(name) ?: continue
                     val stored = model.shapes[base]?.members?.filterIsInstance<StoredProp>()?.map { it.name } ?: emptyList()
@@ -508,11 +513,13 @@ class Validator(private val model: Model) {
         // the body's `as` names (Reference §14; V33): each stands for the record its
         // statement creates, as a reference, for the other statements of its level
         val created = checkCreationAliases(rule, scope)
+        ruleNarrowing = model.types.narrowingOf(rule.condition, scope)
         try {
             (rule.condition as? RefName)?.where?.let { checkExpr(it, scope) }
             checkBody(rule, scope, rule.body, created)
         } finally {
             rule.by?.let { aliasScopes.remove(it.name); ruleActor = null }
+            ruleNarrowing = Narrowing.NONE
         }
     }
 
@@ -791,8 +798,11 @@ class Validator(private val model: Model) {
                 diags.add(Diagnostic("F3", "rule '${rule.name}' assigns ${resolved.owner}.${resolved.member.name} — $kind is never assignable"))
             }
         }
+        val before = diags.size
         checkExpr(a.value, scope)
         checkExtWrite(resolved.member.type, a.value, scope, "rule '${rule.name}' assigns ${resolved.owner}.${resolved.member.name}")
+        if (resolved.member.stored && diags.size == before)
+            checkDeclaredType("rule '${rule.name}' assigns '${resolved.owner}.${resolved.member.name}'", resolved.member.name, resolved.member.type, a.value, scope, ASSIGNED)
     }
 
     private fun checkCreation(rule: RuleDecl, scope: String, c: Creation) {
@@ -815,7 +825,10 @@ class Validator(private val model: Model) {
                 m.actor -> diags.add(Diagnostic("F3", "rule '${rule.name}' supplies '${c.shape}.${f.name}' — the actor is a fact of the act's commit, never supplied (Reference §22)"))
                 !m.stored -> diags.add(Diagnostic("F3", "rule '${rule.name}' supplies derived '${c.shape}.${f.name}'"))
             }
+            val before = diags.size
             checkExpr(f.value, scope)
+            if (m != null && m.stored && diags.size == before)
+                checkDeclaredType("rule '${rule.name}' supplies '${c.shape}.${f.name}'", f.name, m.type, f.value, scope, SUPPLIED)
         }
         // F4 totality: every stored field without an initializer must be supplied
         // (the `for` form's type-matched field counts as supplied)
@@ -1115,6 +1128,106 @@ class Validator(private val model: Model) {
 
     /** A text literal with pieces is absent when a piece is (Reference §5): a property holding one
      *  with an optional piece is declared `text?`. A refinement body may narrow the piece, so it is left alone. */
+    /** A derived or captured property (Reference §7): its expression resolves, a walk and a text
+     *  literal declare what they make, and the declared type is the expression's. A property that
+     *  states no type takes its expression's, and is refused when the compiler reads none. */
+    private fun checkDerivedProperty(owner: String, m: DerivedProp) {
+        val before = diags.size
+        checkExpr(m.expr, owner)
+        checkWalkDeclaration(owner, m)
+        checkInterpolationDeclaration(owner, m)
+        if (diags.size != before) return
+        val declared = m.type
+        if (declared == null) {
+            if ((owner to m.name) in model.untypedByCycle) return
+            if (model.membersOf(owner).getValue(m.name).type == VType.Unknown)
+                diags.add(Diagnostic("F2", "'$owner.${m.name}' states no type, and the compiler reads none off '${Printer.expr(m.expr)}'; declare it"))
+            return
+        }
+        checkDeclaredType("'$owner.${m.name}'", m.name, model.typeOf(declared), m.expr, owner, COMPUTED)
+    }
+
+    /** How a site words the declared type against the expression's: a derived property computes, an
+     *  `initially` starts, a `from` block supplies, an assignment assigns. */
+    private class Wording(
+        val mismatch: (site: String, field: String, declared: String, actual: String, actualSpelled: String) -> String,
+        val absent: (site: String, field: String, declared: String, optionalSpelled: String) -> String,
+        val none: (site: String, field: String, declared: String, optionalSpelled: String) -> String,
+    )
+
+    private val COMPUTED = Wording(
+        { site, field, declared, actual, spelled -> "$site is declared $declared and computed as $actual; declare it '$field: $spelled', or compute $declared" },
+        { site, field, declared, spelled -> "$site is declared $declared and may be absent; declare it '$field: $spelled', or test the value with 'is some' first" },
+        { site, field, declared, spelled -> "$site is declared $declared and computed as none; declare it '$field: $spelled'" },
+    )
+    private val INITIALLY = Wording(
+        { site, field, declared, actual, spelled -> "$site is declared $declared and starts as $actual; declare it '$field: $spelled', or start it with $declared" },
+        { site, field, declared, spelled -> "$site is declared $declared and may start absent; declare it '$field: $spelled'" },
+        { site, field, declared, spelled -> "$site is declared $declared and starts as none; declare it '$field: $spelled'" },
+    )
+    private val SUPPLIED = Wording(
+        { site, _, declared, actual, _ -> "$site — declared $declared, given $actual; supply $declared" },
+        { site, field, declared, spelled -> "$site — declared $declared, given a value that may be absent; test it with 'is some' first, or declare the field '$field: $spelled'" },
+        { site, field, declared, spelled -> "$site — declared $declared, given none; declare the field '$field: $spelled'" },
+    )
+    private val ASSIGNED = Wording(
+        { site, _, declared, actual, _ -> "$site — declared $declared, given $actual; assign $declared" },
+        { site, field, declared, spelled -> "$site — declared $declared, given a value that may be absent; test it with 'is some' first, or declare the field '$field: $spelled'" },
+        { site, field, declared, spelled -> "$site — declared $declared, given none; declare the field '$field: $spelled'" },
+    )
+
+    /**
+     * The declared type of a property against the expression written for it (Reference §7, §12,
+     * §14; checks.md F2): the expression's type is the declared one, the number types being
+     * one kind, and a required declaration takes no expression that may be absent. A constant
+     * the declared type reads, `"09:00"` for a `time`, is read by it. An extension type is
+     * [checkExtWrite]'s. An expression the compiler reads no type off is refused.
+     */
+    private fun checkDeclaredType(site: String, field: String, declared: VType, value: Expr, scope: String, wording: Wording) {
+        if (value is PathExpr && value.root == "randomUUID" && value.segs.isEmpty()) return
+        // one message per reason: a diagnostic that already names the expression has said what is wrong
+        val written = Printer.expr(value)
+        if (diags.any { written in it.message }) return
+        val declaredBare = ExprTypes.bare(declared)
+        constantOf(value)?.let { constant ->
+            val reader = registryName(declared)?.let { model.registry.builtins[it] ?: model.registry[it] }
+            if (reader != null && readsForm(reader, constant)) { checkConstantAs(constant, reader, value); return }
+        }
+        if (declaredBare is VType.Ext) return
+        val actual = model.types.of(value, scope, typeEnv())
+        if (actual == null) {
+            diags.add(Diagnostic("F2", "$site — the compiler reads no type off '${Printer.expr(value)}' to check against the declared ${model.spell(declared)}"))
+            return
+        }
+        val optionalSpelled = model.spell(VType.Optional(declaredBare))
+        if (actual == model.types.absent) {
+            if (declared !is VType.Optional) diags.add(Diagnostic("F2", wording.none(site, field, model.words(declared), optionalSpelled)))
+            return
+        }
+        val actualBare = ExprTypes.bare(actual)
+        if (!declaredAccepts(declaredBare, actualBare)) {
+            diags.add(Diagnostic("F2", wording.mismatch(site, field, model.words(declared), model.words(actualBare), model.spell(actualBare))))
+            return
+        }
+        // a text literal with an optional piece has its own sentence (checkInterpolationDeclaration); a
+        // selection that matches nothing is absent by data, the runtime's to refuse (Reference §14)
+        if (actual is VType.Optional && declared !is VType.Optional && value !is Interpolation && model.types.absenceDeclared(value, scope, typeEnv()))
+            diags.add(Diagnostic("F2", wording.absent(site, field, model.words(declared), optionalSpelled)))
+    }
+
+    /** Whether a declaration of [declared] holds a value of [actual]: the same type, any number
+     *  for a number (Reference §5), a record or collection of a shape the declaration admits. */
+    private fun declaredAccepts(declared: VType, actual: VType): Boolean = when {
+        actual == VType.Unknown -> true
+        declared is VType.Num && actual is VType.Num -> true
+        actual == model.types.emptyCollection -> declared is VType.Coll || declared is VType.CollS
+        declared is VType.Inst && actual is VType.Inst -> model.types.admits(declared.shape, actual.shape)
+        declared is VType.Coll && actual is VType.Coll -> model.types.admits(declared.shape, actual.shape)
+        declared is VType.CollS && actual is VType.CollS ->
+            declared.name == actual.name || (declared.name in TypeRegistry.NUMBER_NAMES && actual.name in TypeRegistry.NUMBER_NAMES)
+        else -> declared == actual
+    }
+
     private fun checkInterpolationDeclaration(owner: String, m: DerivedProp) {
         val literal = m.expr as? Interpolation ?: return
         val declared = m.type as? ScalarType ?: return
@@ -1130,9 +1243,11 @@ class Validator(private val model: Model) {
      *  `many` of the reached shape, or, with `until`, a `one ...?` of it. */
     private fun checkWalkDeclaration(owner: String, m: DerivedProp) {
         val w = m.expr as? WalkExpr ?: return
+        // a walk property that states no type takes the walk's (Reference §7)
+        val declared = m.type ?: return
         val target = model.walkTarget(w, owner) ?: return
         val spelled = "'$owner.${m.name}'"
-        val t = m.type as? RelType
+        val t = declared as? RelType
         when {
             t == null -> diags.add(Diagnostic("F2", "$spelled — a walk gives records of '$target', not a value; " +
                 "declare it `${if (w.until != null) "one $target?" else "many $target"}`"))
@@ -1163,78 +1278,23 @@ class Validator(private val model: Model) {
         is VType.CollS -> "a many of ${t.name}"
     }
 
-    /** The scalar type of a simple expression where it can be read off the model
-     *  (a literal, `lowercase(...)`, a path to a scalar member); null when unknown. */
-    private fun scalarTypeOf(e: Expr, scope: String): VType? = when (e) {
-        is TextLit, is Interpolation -> VType.Text
-        is IntLit, is DecLit -> VType.Num("decimal")
-        is BoolLit -> VType.Bool
-        is TodayLit -> VType.DateT
-        is NowLit -> VType.DateTimeT
-        is DurationLit -> VType.DurationT
-        is ValueLit -> when (e.value) {
-            is Value.VText -> VType.Text
-            is Value.VNum -> VType.Num("decimal")
-            is Value.VBool -> VType.Bool
-            is Value.VDate -> VType.DateT
-            is Value.VDateTime -> VType.DateTimeT
-            is Value.VUuid -> VType.UuidT
-            is Value.VDuration -> VType.DurationT
-            is Value.VTime -> VType.TimeT
-            is Value.VBytes -> VType.BytesT
-            is Value.VExt -> VType.Ext(e.value.type.qualifiedName)
-            else -> null
-        }
-        is UnaryMinus -> scalarTypeOf(e.inner, scope)
-        // a registered function's result, from the signature its arguments match (Reference §5)
-        is FunCall -> (resolveCall(e, scope) as? FunctionResolver.Outcome.Ok)?.result?.takeIf { it != VType.Unknown }
-        is AggCall -> when (e.name) {
-            "count" -> VType.Num("integer")
-            "sum" -> if (e.field == null) valueCollectionType(e.collection, scope)?.let { model.scalarOf(it.name) }
-                else model.collectionElement(e.collection, scope, aliasScopes)?.let { el -> model.membersOf(el)[e.field]?.type }
-                    ?.let { (it as? VType.Optional)?.inner ?: it }
-            else -> null
-        }
-        // arithmetic: numbers stay numbers; an extension type's line names its result
-        is Binary -> if (e.op !in setOf("+", "-", "*", "/", "%")) null else {
-            val l = scalarTypeOf(e.left, scope); val r = scalarTypeOf(e.right, scope)
-            when {
-                l is VType.Ext || r is VType.Ext -> operatorLine(e, l, r, scope)?.let { typeNamed(it.result) }
-                l is VType.Num && r is VType.Num -> VType.Num("decimal")
-                // durations (Reference §5): a date or moment moved by a span stays what it was;
-                // two spans make a span; the difference of two dates or two moments is a span
-                e.op in setOf("+", "-") && (l == VType.DateT || l == VType.DateTimeT || l == VType.TimeT) && r == VType.DurationT -> l
-                e.op in setOf("+", "-") && l == VType.DurationT && r == VType.DurationT -> VType.DurationT
-                e.op == "-" && l == VType.DateT && r == VType.DateT -> VType.DurationT
-                e.op == "-" && l == VType.DateTimeT && r == VType.DateTimeT -> VType.DurationT
-                e.op == "-" && l == VType.TimeT && r == VType.TimeT -> VType.DurationT
-                else -> null
-            }
-        }
-        is WalkExpr -> model.walkType(e, scope)
-        is PathExpr -> if (e.root in scalarAliases) (if (e.segs.isEmpty()) scalarAliases[e.root] else null) else {
-            val names = if (e.root == "this") e.segs.map { it.name } else listOf(e.root) + e.segs.map { it.name }
-            var sc: String? = if (e.root in aliasScopes) aliasScopes[e.root] else (thisScope ?: scope)
-            var t: VType? = null
-            for ((i, n) in names.withIndex()) {
-                val m = sc?.let { model.membersOf(it)[n] } ?: run { t = null; break }
-                t = (m.type as? VType.Optional)?.inner ?: m.type
-                sc = m.type.instanceShape()
-                if (i != names.lastIndex && sc == null) { t = null; break }
-            }
-            t
-        }
-        else -> null
-    }
+    /** The validator's scope state as a [TypeEnv] for the model's type reading: what `this` names,
+     *  the aliases, and the paths the branch being checked has narrowed (V11). */
+    private fun typeEnv(): TypeEnv = TypeEnv(
+        thisScope, aliasScopes.toMap(), scalarAliases.toMap(),
+        narrowed = narrowed.entries.associate { (key, shape) -> key.split(".").let { if (it.first() == "this") it.drop(1) else it } to shape },
+    ).with(ruleNarrowing)
 
-    /** The `many` of values a collection expression names when it is one bare path to one
-     *  (Reference §5), the one form the validator admits over values; null otherwise. */
-    private fun valueCollectionType(c: CollectionExpr, scope: String): VType.CollS? {
-        if (c.where != null) return null
-        val src = c.bindings.singleOrNull()?.takeIf { it.alias == null }?.source as? PathExpr ?: return null
-        if (src.segs.isEmpty() && (src.root in model.shapes || src.root in model.refinements)) return null
-        return scalarTypeOf(src, scope) as? VType.CollS
-    }
+    /** What the rule being checked shows for its body through its condition's inline `where`. */
+    private var ruleNarrowing: Narrowing = Narrowing.NONE
+
+    /** The type of an expression as the model reads it (`ExprTypes`), with its optionality
+     *  taken off, as the kind checks here want it; null when the model gives none or the
+     *  expression is `none`. [declaredTypeOf] is where the optionality matters. */
+    private fun scalarTypeOf(e: Expr, scope: String): VType? =
+        model.types.of(e, scope, typeEnv())?.takeIf { it != model.types.absent }?.let { ExprTypes.bare(it) }
+
+    private fun valueCollectionType(c: CollectionExpr, scope: String): VType.CollS? = model.types.valueCollectionType(c, scope, typeEnv())
 
     /** `x in [a, b]` / `x in values` (Reference §10): the right side lists values of the left side's type. */
     private fun checkIn(e: Binary, scope: String) {
@@ -1274,51 +1334,20 @@ class Validator(private val model: Model) {
     // ── extension types in expressions (Reference §5; OQ65 D2, D4; checks E3) ─────────
 
     /** A bare constant: its number or its text, or null for anything else. */
-    private fun constantOf(e: Expr): Pair<BigDecimal?, String?>? = when (e) {
-        is IntLit -> BigDecimal(e.value) to null
-        is DecLit -> BigDecimal(e.text) to null
-        is UnaryMinus -> constantOf(e.inner)?.let { (n, _) -> n?.negate()?.let { it to null } }
-        is TextLit -> null to e.value
-        else -> null
-    }
+    private fun constantOf(e: Expr): Pair<BigDecimal?, String?>? = velle.constantOf(e)
 
-    /** The registry's name for a type: a builtin keyword or `namespace.name`; null when unknown. */
-    private fun registryName(t: VType?): String? = when (val bare = (t as? VType.Optional)?.inner ?: t) {
-        is VType.Ext -> bare.qualifiedName
-        is VType.Num -> "decimal"
-        VType.Text -> "text"
-        VType.Bool -> "boolean"
-        VType.DateT -> "Date"
-        VType.DateTimeT -> "DateTime"
-        VType.UuidT -> "uuid"
-        VType.DurationT -> "duration"
-        VType.TimeT -> "time"
-        VType.BytesT -> "bytes"
-        else -> null
-    }
+    private fun registryName(t: VType?): String? = velle.registryName(t)
 
-    private fun typeNamed(name: String): VType? = when (name) {
-        in TypeRegistry.NUMBER_NAMES -> VType.Num(name)
-        "text" -> VType.Text
-        "boolean" -> VType.Bool
-        "Date" -> VType.DateT
-        "DateTime" -> VType.DateTimeT
-        "uuid" -> VType.UuidT
-        "duration" -> VType.DurationT
-        "time" -> VType.TimeT
-        "bytes" -> VType.BytesT
-        else -> model.registry[name]?.let { VType.Ext(it.qualifiedName) }
-    }
+    private fun typeNamed(name: String): VType? = velle.typeNamed(name, model.registry)
 
-    private fun extOf(t: VType?): VelleType<*>? = ((t as? VType.Optional)?.inner ?: t)?.let { if (it is VType.Ext) model.registry[it.qualifiedName] else null }
+    private fun extOf(t: VType?): VelleType<*>? = velle.extOf(t, model.registry)
 
     /** A type's name as this spec writes it, with its Kotlin class when it is an extension type, for an E3 sentence. */
     private fun describe(t: VelleType<*>) =
         if (model.registry.vtypeOf(t) is VType.Ext) "'${model.specNameOf(t)}' (${t::class.qualifiedName})" else "'${t.name}'"
 
     /** Whether a constant of this form can be read as the type [name] names, builtin or registered. */
-    private fun readsConstant(name: String, c: Pair<BigDecimal?, String?>): Boolean =
-        (model.registry.builtins[name] ?: model.registry[name])?.let { readsForm(it, c) } ?: false
+    private fun readsConstant(name: String, c: Pair<BigDecimal?, String?>): Boolean = velle.readsConstant(name, c, model.registry)
 
     /** A constant where [type] is expected: F2 when the type reads no such constant or
      *  its reader refuses this one (OQ65 D2). Returns whether it read. */
@@ -1348,6 +1377,12 @@ class Validator(private val model: Model) {
         val ln = registryName(l); val rn = registryName(r)
         val lext = extOf(l); val rext = extOf(r)
         fun refuse(msg: String): velle.ext.Operator<*, *, *>? { diags.add(Diagnostic("E3", "'${Printer.expr(e)}' — $msg")); return null }
+        model.types.operatorLine(e, l, r)?.let { line ->
+            // the constant beside the line reads as the type the line names
+            if (lext != null && rc != null) registry[line.right]?.let { checkConstantAs(rc, it, e.right) }
+            if (rext != null && lc != null) registry[line.left]?.let { checkConstantAs(lc, it, e.left) }
+            return line
+        }
         return when {
             lext != null && rc != null -> {
                 val lines = registry.operatorsFrom(lext.qualifiedName, e.op).filter { readsConstant(it.right, rc) }
@@ -1420,8 +1455,7 @@ class Validator(private val model: Model) {
     }
 
     /** Whether [type] declares a reader for the form of constant [c] is, a number or a text. */
-    private fun readsForm(type: VelleType<*>, c: Pair<BigDecimal?, String?>): Boolean =
-        if (c.first != null) type.literals.fromNumber != null else type.literals.fromText != null
+    private fun readsForm(type: VelleType<*>, c: Pair<BigDecimal?, String?>): Boolean = velle.readsForm(type, c)
 
     /**
      * Why two builtin kinds do not meet, and what to write: a text field beside a number, a
@@ -1484,15 +1518,9 @@ class Validator(private val model: Model) {
      * argument, with constants read as that type. The dispatch Custom functions (OQ66)
      * will register into.
      */
-    private val resolver by lazy { FunctionResolver(model.registry) { c -> model.scalarOf(c.name) } }
-
     /** The signature a call matches, or why none does; null when the name resolves to no function
      *  (reported once, by [checkFunctionCall]). */
-    private fun resolveCall(e: FunCall, scope: String): FunctionResolver.Outcome? {
-        val fn = model.functionScope[e.name] ?: return null
-        val args = e.args.map { FunctionResolver.Arg(scalarTypeOf(it, scope), FunctionResolver.isConstant(it)) }
-        return resolver.resolve(fn, Printer.expr(e), args) { Printer.expr(e.args[it]) }
-    }
+    private fun resolveCall(e: FunCall, scope: String): FunctionResolver.Outcome? = model.types.resolveCall(e, scope, typeEnv())
 
     /**
      * A call of a builtin or registered function (Reference §5; `velle.ext.VelleFunction`):
@@ -3319,7 +3347,7 @@ class Validator(private val model: Model) {
             for (m in members) {
                 val (mName, type) = when (m) {
                     is StoredProp -> m.name to m.type
-                    is DerivedProp -> m.name to m.type
+                    is DerivedProp -> m.type?.let { m.name to it } ?: continue
                     else -> continue
                 }
                 val rel = type as? RelType ?: continue

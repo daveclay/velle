@@ -441,7 +441,7 @@ class VelleSystem(
         val values = props.associate { p ->
             val v = raw[p.name]
             p.name to if (v == null) Value.VNone
-            else rawToValue(v, model.typeOf(p.type), "$refinement.${p.name} (capture)")
+            else rawToValue(v, model.membersOf(refinement).getValue(p.name).type, "$refinement.${p.name} (capture)")
         }
         captures[id to refinement] = values
         return values

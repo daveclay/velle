@@ -211,7 +211,7 @@ act SkuFamily {
 }
 
 shape ProductInFamily = Product where exists (SkuFamily where this.sku matches skuPattern)
-shape ProductOfFamily = Product where exists (SkuFamily where this.sku matches "^${prefix}-${skuPattern}$")
+shape ProductOfFamily = Product where exists (SkuFamily where this.sku matches "^${'$'}{prefix}-${'$'}{skuPattern}${'$'}")
 
 act Order {
     customer: one Customer

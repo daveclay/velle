@@ -102,6 +102,7 @@ A block holds creations and other blocks. To write one field of every member of 
 ## What the compiler checks
 
 - The compiler rejects a `from` block that omits a declared field, other than ones Velle fills itself such as `id` ([checks.md, F4](checks#f4--mapping-totality)).
+- The compiler rejects a `from` block that gives a field a value of another type than the field's, `effective: "yes"` for a `boolean`, and one that gives a required field a value that may be absent by declaration, an optional field of the subject not tested with `is some`; a selection that matches nothing is the runtime's, below ([checks.md, F2](checks#f2--type-checking)).
 - The compiler rejects `for` when more than one field matches the value's type ([checks.md, V13](checks#v13--ambiguity-is-a-connected-diagnostic)).
 - The compiler rejects an `as` name that is already a name in the rule, a read through the name, the name in an assignment or a `delete`, and two named creations pointing at each other ([checks.md, V33](checks#v33--a-creations-as-name)).
 - The compiler rejects a `for each` whose source is not a collection or a range, a range bound that is not a number, a name already in the rule, an assignment or `delete` inside a block, and an `as` name read outside the block that binds it ([checks.md, V34](checks#v34--a-for-each-block)).

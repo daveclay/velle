@@ -201,8 +201,7 @@ class Parser(private val tokens: List<Token>) {
         if (t.isKw("captured")) {
             next()
             val name = expect(TokType.LIDENT).text
-            expect(TokType.COLON)
-            val type = parseTypeRef()
+            val type = parseDeclaredTypeOrNone()
             expect(TokType.ASSIGN)
             skipNewlines()
             if (!refinementBody) fail("'captured' is only legal in a refinement body", t)
@@ -214,6 +213,11 @@ class Parser(private val tokens: List<Token>) {
             return parseUniqueKey()
         }
         val name = expect(TokType.LIDENT).text
+        // `name = expr`: a derived property that states no type and takes its expression's (Reference §7)
+        if (at(TokType.ASSIGN)) {
+            next(); skipNewlines()
+            return DerivedProp(name, null, parseValue(), visible = parseFieldVisibility())
+        }
         expect(TokType.COLON)
         if (peek().isKw("timestamp")) {
             next(); expectKw("on")
@@ -247,6 +251,13 @@ class Parser(private val tokens: List<Token>) {
         // given (Reference §5, "Collections of values"); the clause is the type's flag here
         val typed = if (type is ScalarType && type.many && tolerates == "duplication") type.copy(ordered = true) else type
         return StoredProp(name, typed, initially, tolerates, initiallyRequired, visible, unique)
+    }
+
+    /** The `: type` of a declaration, or null when the declaration states none (Reference §7). */
+    private fun parseDeclaredTypeOrNone(): TypeRef? {
+        if (!at(TokType.COLON)) return null
+        next()
+        return parseTypeRef()
     }
 
     /** `unique` is contextual (grammar.md): the key word only after a field's type and

@@ -198,6 +198,7 @@ An act declared `by` carries one more system-filled property: the actor who comm
 - **Rejects** a rule that appends to a collection tolerating duplication on a schedule, unless the property also tolerates reordering ([checks.md, V8](checks#v8--fold-obligations-and-tolerance-coverage)).
 - **Refuses** at the boundary a committed `many` of values that holds the same value twice, unless the property tolerates duplication ([checks.md, V21](checks#v21--act-field-forms)).
 - **Rejects** `initially` on anything but a stored property, and any assignment to a `timestamp` field or `id` ([checks.md, F3](checks#f3--position-rules)).
+- **Rejects** an `initially` whose value is of another type than the field, `applied: boolean initially 5`, naming the type to declare or the value to start with; a constant the field's type reads, `"09:00"` for a `time`, is read, and one it rejects is an error at the constant; the four number types are one kind ([checks.md, F2](checks#f2--type-checking)).
 - **Rejects** `initially` or `timestamp` on an act, naming the field and where it should move ([checks.md, V21](checks#v21--act-field-forms)).
 - **Rejects** a declared field named `id` ([checks.md, F1](checks#f1--name-resolution-and-casing)).
 
