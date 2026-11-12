@@ -110,6 +110,16 @@ shape CustomerWithOverpayment =
 
 An `as` name is visible inside the predicate it is declared in and anything nested within it, not outside it and not to a second `as` name beside it.
 
+Over a `many` of values ([§5](Reference-05-Scalars)) the `as` name is the value itself, and naming it is the one way to filter such a collection, since a value has no fields a bare name could mean. A reading's value must be one of its field's options:
+
+```
+never (Submission where exists (readings as r where
+       r.field is some and r.value is some
+       and not exists (r.field.options as option where option == r.value)))
+```
+
+`option` is each text in `options` in turn. The same test reads more directly as `r.value not in r.field.options`; the named form is for a filter `in` cannot say, such as `count(options as option where option starts with "b")`.
+
 ## Comparing two collections at once
 
 To match records from two collections of the same subject against each other, list both bindings with a comma and write one shared `where`:
@@ -147,7 +157,8 @@ A number or a quoted text compared with a field of an [extension type](Reference
 ## What the compiler checks
 
 - The compiler rejects a comparison between values of different types, a text operator on a non-text value (except `contains` on a `many` of values, [§5](Reference-05-Scalars)), duration arithmetic on anything but a `Date`, `DateTime`, `time`, or `duration`, a `by` property that is not orderable, and `x is R` when `x` and `R` share no base shape ([checks.md, F2](checks#f2--type-checking)).
-- The compiler rejects a listed value after `in` that is not of the left side's type, a right side of `in` that is neither a list, a `many` of values, nor a collection of records beside a record, a list of values anywhere but after `in`, a `matches` whose right side is neither a quoted text, a text literal with pieces, nor a `Regex`, a quoted pattern that is not a regular expression, and a pattern with pieces whose fixed runs are not one around a placeholder for each piece, `is empty` on a value that is neither a collection nor a text, and a `sum` with no field over anything but a `many` of numbers or durations ([checks.md, F2](checks#f2--type-checking)).
+- The compiler rejects a listed value after `in` that is not of the left side's type, a right side of `in` that is neither a list, a `many` of values, nor a collection of records beside a record, a list of values anywhere but after `in`, a `matches` whose right side is neither a quoted text, a text literal with pieces, nor a `Regex`, a quoted pattern that is not a regular expression, and a pattern with pieces whose fixed runs are not one around a placeholder for each piece, `is empty` on a value that is neither a collection nor a text, and a `sum` with no field over anything but a `many` of numbers or durations, or over the values of one that pass a filter ([checks.md, F2](checks#f2--type-checking)).
+- The compiler rejects a `where` over a `many` of values that does not name each value with `as`, a `by`, a sum by a field, or a second binding over one, and names the `(values as value where ...)` form ([checks.md, F2](checks#f2--type-checking)).
 - The compiler rejects a constant an extension type's reader refuses or does not read, and an operator, comparison, or `sum` the type does not declare, naming the Kotlin class to extend ([checks.md, E3](checks#e3--a-capability-the-type-does-not-declare)).
 - The compiler rejects plain `.` through an optional value with no earlier presence test, and names `?.` as the alternative ([checks.md, V11](checks#v11--narrowing-analysis)).
 - The compiler rejects `(Shape for expr)` and `exists Shape for expr` when more than one field matches the subject's type, or when it cannot prove at most one record exists. The diagnostic asks for `latest` or `first` over a filtered collection ([checks.md, V12](checks#v12--singular-reference-proofs)).

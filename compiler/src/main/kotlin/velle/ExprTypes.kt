@@ -81,7 +81,7 @@ class ExprTypes(private val model: Model) {
         is WalkExpr -> model.walkType(expr, env.thisScope ?: scope)
         is PathExpr -> pathType(expr, scope, env)
         is Access -> accessType(expr, scope, env)
-        is SetExpr -> recordElement(expr.collection, scope, env)?.let { VType.Coll(it) }
+        is SetExpr -> recordElement(expr.collection, scope, env)?.let { VType.Coll(it) } ?: valueCollectionType(expr.collection, scope, env)
         is SingularFor -> VType.Optional(VType.Inst(expr.shape))
     }
 
@@ -105,11 +105,12 @@ class ExprTypes(private val model: Model) {
     private fun recordElement(collection: CollectionExpr, scope: String, env: TypeEnv): String? =
         model.collectionElement(collection, env.thisScope ?: scope, env.aliases)?.takeIf { it in model.shapes || it in model.refinements }
 
-    /** The `many` of values a collection expression names when it is one bare path to one
-     *  (Reference §5), the one form admitted over values; null otherwise. */
+    /** The `many` of values a collection expression names: one bare path to one, or that path
+     *  filtered by naming each value, `(options as o where ...)` (Reference §5); null otherwise. */
     fun valueCollectionType(collection: CollectionExpr, scope: String, env: TypeEnv): VType.CollS? {
-        if (collection.where != null) return null
-        val src = collection.bindings.singleOrNull()?.takeIf { it.alias == null }?.source as? PathExpr ?: return null
+        val binding = collection.bindings.singleOrNull() ?: return null
+        if (collection.where != null && binding.alias == null) return null
+        val src = binding.source as? PathExpr ?: return null
         if (src.segs.isEmpty() && (src.root in model.shapes || src.root in model.refinements)) return null
         return bareOrNull(of(src, scope, env)) as? VType.CollS
     }

@@ -842,7 +842,7 @@ class DomainAnalysis(private val model: Model) {
                     is PathExpr ->
                         if ((src.root in model.shapes || src.root in model.refinements) && src.segs.isEmpty())
                             bareShapeSource(src.root, b, c, ctx)
-                        else walkPath(src, inner) ?: unknownScope()
+                        else walkPath(src, inner) ?: if (b.alias != null && namesValues(src, inner)) Scope(VALUE_ALIAS, Anchor.Unknown) else unknownScope()
                     is ShapeForSource -> correlatedSource(src.shape, src.forExpr, inner)
                     else -> {
                         walkExpr(src, inner)
@@ -855,6 +855,10 @@ class DomainAnalysis(private val model: Model) {
             c.where?.let { walkExpr(it, inner) }
             return elem
         }
+
+        /** Whether a binding path names a `many` of values, so its `as` name is a value (Reference §5). */
+        private fun namesValues(src: PathExpr, ctx: Ctx): Boolean =
+            model.pathEndType(src, ctx.innermost().name, ctx.aliases.mapValues { entry -> entry.value.name }, ctx.subject.name) is VType.CollS
 
         /** Fail-closed element scope for a binding the walker cannot attribute:
          *  no members resolve on it, so every read under it widens. */

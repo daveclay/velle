@@ -75,7 +75,10 @@ derivedProp   := Identifier (":" propType)? "=" valueExpr      -- the type may b
               | Identifier ":" "many" (ShapeName | scalarType) "=" setExpr
                                                     -- derived collection: a view (Reference §6, "Renamed and
                                                     -- derived collections"); setExpr only in this position
-setExpr       := "(" ShapeName ("where" predicate)? ")"
+setExpr       := "(" (ShapeName | path | walkExpr) ("where" predicate)? ")"
+              | "(" path "as" Identifier "where" predicate ")"
+                                                    -- a `many` of values filtered by naming each value
+                                                    -- (Reference §5, "Collections of values")
 
 timestampProp := Identifier ":" "timestamp" "on" ("create" | "update")
 

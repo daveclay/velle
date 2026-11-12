@@ -5,7 +5,7 @@ where an admin defines a *kind* of surveyed thing (site, plot, specimen) and
 its *fields* at runtime; an *entry* is one surveyed thing; a *reading* is
 one field's value, held as text because the field says what it means; a
 *submission* carries a list of readings. The findings are work items
-in OQ43 and OQ53, and the OQs OQ86 and OQ90 under "Expressions,
+in OQ43 and OQ53, and OQ90 under "Expressions,
 refinements, and unions" in `QUESTIONS.md`; the lookup finding (OQ74, settled) became
 the worked pattern "An act that names a record by its values" in `wiki/patterns.md`,
 the walk finding (OQ76, settled) became Reference §7 "Walks", the text-as-data
@@ -28,8 +28,6 @@ what to expect:
 
 | File | Shows | Diagnostic today | Where |
 |---|---|---|---|
-| `01-in-inside-exists-refused` | `r.value not in r.field.options` inside an `exists` over the submission's readings. The same test at the reading's own scope, in the same file, is accepted. | `[F2] 'r.value in r.field.options' — 'in' takes a list of values [a, b] or a many of values on the right` | OQ86 |
-| `01-in-inside-exists-alias-refused` | the options searched with `not exists (r.field.options as o where o == r.value)`, the former workaround | `[F2] 'r.field.options' is a collection of values, not of records — it can be counted, run over with `for each`, or tested with `is empty`, but not filtered, summed, or ordered (Reference §5)`; accepted until 2026-11-12 only because the path through the optional derived `field` had no type read off it | OQ86; checks F2 |
 | `02-lookup-recursion-stored-accepted` | the nearest kind with a location as `walk parent until hasLocation`, the ancestor set as `walk parent`, and a prohibition reading it, over a stored `parent`; `name: text unique` is the kind's key | passes | Reference §7 "Walks" (OQ76, settled); Reference §21 "Keys" (OQ77, settled) |
 | `03-assigned-field-refused` | a rule assigns `entry.label`; a `never` over the submission resolves a parent by label | `[V10] never over Entry.label is a guarantee ('ApplyRelabel' writes the field it reads) — v0 cannot yet prove it inductively over its writers; fail closed` | OQ53, V10 |
 | `03-assigned-field-workaround` | the label derived from the latest `Outcome` record; nothing assigns it | passes | OQ53, V10 |
@@ -47,7 +45,7 @@ what to expect:
 | `09-lookup-in-never-writer-refused` | the same `never` with a rule assigning `Field.name` | `[V10] never over Field.name is a guarantee ('ApplyRename' writes the field it reads) — v0 cannot yet prove it inductively over its writers; fail closed` | V10; the pairing record of the patterns page is the spelling |
 | `10-mixed-comparisons-refused` | every comparison between two builtin scalar kinds that differ, field against field and field against a constant of another kind, under `==` and `<`; and, accepted in the same file, the one reading kept: a quoted text beside a `time` or a `uuid` | one `[F2]` per prohibition, `compares the <kind> '<field>' with a <kind>; a <kind> is not compared as a <kind>`, with `Write number(...)` / `date(...)` / `datetime(...)` or `Declare ... as a time` when a text field is one side; `'time' rejects this constant: 'abc' is not a time of day` for the unreadable constant | checks F2; Reference §5; `MixedKindComparisonTest` |
 | `11-optional-key` | a key over an optional field, `key: text? unique`, and the lookup `(Entry where key == this.entryKey)` behind a refinement's `entryKey is some` | passes; at runtime two keyless entries coexist and a present key is refused the second time (`UniqueKeyTest`) | Reference §21 "Keys"; checks V36 |
-| `09-lookup-in-never-value-in-refused` | `value in first(Field where ... by name).options` | `[F2] ... 'in' takes a list of values [a, b] or a many of values on the right` | OQ86 |
+| `09-lookup-in-never-value-in-accepted` | `value in first(Field where ... by name).options` | passes since 2026-11-12, when the settled OQ82's type reading resolved the right side; at runtime, when no Field matches, the right side is absent and `in` is a runtime error, not false (`Evaluator.kt`, the `in` branch) | OQ123 |
 | `12-declared-type-predicate-in-text-refused` | `label: text = (parentName is none)` | `[F2] 'Kind.label' is declared a text and computed as a boolean; declare it 'label: boolean', or compute a text` | checks F2; Reference §7 |
 | `12-declared-type-number-in-text-refused` | `label: text = count * 2` | `[F2] 'Kind.label' is declared a text and computed as a decimal; declare it 'label: decimal', or compute a text` | checks F2 |
 | `12-declared-type-moment-in-date-refused` | `seen: Date = now` | `[F2] 'Kind.seen' is declared a Date and computed as a DateTime; declare it 'seen: DateTime', or compute a Date` | checks F2 |

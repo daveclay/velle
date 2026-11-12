@@ -943,6 +943,16 @@ class Parser(private val tokens: List<Token>) {
             return SingularFor(shape, e)
         }
         val inner = parseValue()
+        // a collection filtered by naming each element, `(options as o where o == x)`:
+        // the one way to filter a `many` of values (Reference §5)
+        if (peek().isKw("as") && inner is PathExpr) {
+            next()
+            val alias = expect(TokType.LIDENT).text
+            expectKw("where"); skipNewlines()
+            val where = parsePredicate()
+            expect(TokType.RPAREN)
+            return SetExpr(CollectionExpr(listOf(Binding(inner, alias)), where))
+        }
         // set denotation: `(Shape where pred)` / `(this.invoices where Overdue)` (Reference §6);
         // a walk's set filters the same way, `(walk friends where verified)` (Reference §7)
         if (peek().isKw("where")) {

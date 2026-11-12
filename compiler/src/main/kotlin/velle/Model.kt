@@ -911,7 +911,9 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
                     } else {
                         collectPath(src, subject, s, env, root)
                         bScope = pathElementShape(src, subject, env, root)
-                        if (bScope == null) s.opaque = true
+                        // a `many` of values filtered by naming each value (Reference §5): the name is a value
+                        if (bScope == null && b.alias != null && pathEndType(src, subject, env, root) is VType.CollS) env = env + (b.alias to VALUE_ALIAS)
+                        else if (bScope == null) s.opaque = true
                     }
                 }
                 is ShapeForSource -> {
@@ -995,18 +997,23 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
         if (e.until != null) VType.Optional(VType.Inst(it)) else VType.Coll(it)
     }
 
-    fun pathElementShape(p: PathExpr, subject: String, aliases: Map<String, String> = emptyMap(), root: String = subject): String? {
-        var scope: String? = when {
-            p.root == "this" -> root
+    fun pathElementShape(p: PathExpr, subject: String, aliases: Map<String, String> = emptyMap(), root: String = subject): String? =
+        pathEndType(p, subject, aliases, root)?.let { it.instanceShape() ?: (it as? VType.Coll)?.shape }
+
+    /** The declared type at the end of a path: the record a bare `this` or alias names, else the
+     *  last member's type; null when a step does not resolve or the root is a value name. */
+    fun pathEndType(p: PathExpr, subject: String, aliases: Map<String, String> = emptyMap(), root: String = subject): VType? {
+        var type: VType? = when {
+            p.root == "this" -> VType.Inst(root)
             aliases[p.root] == VALUE_ALIAS -> return null
-            p.root in aliases -> aliases.getValue(p.root)
-            else -> membersOf(subject)[p.root]?.type?.let { it.instanceShape() ?: (it as? VType.Coll)?.shape }
+            p.root in aliases -> VType.Inst(aliases.getValue(p.root))
+            else -> membersOf(subject)[p.root]?.type
         }
         for (seg in p.segs) {
-            val m = membersOf(scope ?: return null)[seg.name] ?: return null
-            scope = m.type.instanceShape() ?: (m.type as? VType.Coll)?.shape
+            val scope = type?.let { it.instanceShape() ?: (it as? VType.Coll)?.shape } ?: return null
+            type = membersOf(scope)[seg.name]?.type ?: return null
         }
-        return scope
+        return type
     }
 }
 

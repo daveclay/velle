@@ -983,6 +983,8 @@ class Validator(private val model: Model) {
                     val elem = coll?.let { model.scalarOf(it.name) }
                     if (coll == null)
                         diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — a sum over records names the field to sum: sum(items, amount) (Reference §10)"))
+                    else if (e.collection.where != null)
+                        diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — a sum adds a whole `many` of values; derive the values that pass as a `many` of their own and sum that (Reference §5)"))
                     else if (elem !is VType.Num && elem != VType.DurationT)
                         diags.add(Diagnostic("F2", "'${Printer.expr(e)}' — a sum adds numbers or durations, but these values are ${coll.name}"))
                 }
@@ -1580,18 +1582,27 @@ class Validator(private val model: Model) {
     ) {
         var element = scope
         val introduced = mutableListOf<String>()
+        val introducedValues = mutableListOf<String>()
         for (b in c.bindings) {
             when (val src = b.source) {
                 is PathExpr ->
                     if (src.root in model.shapes || src.root in model.refinements) element = src.root
                     else {
                         resolvePath(src, scope)
-                        // a `many` of values has no members to filter, sum, or order by:
-                        // only a bare `count(values)` reads it (Reference §5)
-                        if (scalarTypeOf(src, scope) is VType.CollS &&
+                        val valueElement = scalarTypeOf(src, scope) as? VType.CollS
+                        // a `many` of values has no members to filter, sum, or order by (Reference §5):
+                        // it is counted bare, or filtered by naming each value, `(options as o where ...)`
+                        val filterByName = b.alias != null && c.where != null && sumField == null && orderBy == null && c.bindings.size == 1
+                        if (valueElement != null && filterByName) {
+                            scalarAliases[b.alias!!] = model.scalarOf(valueElement.name)
+                            introducedValues.add(b.alias)
+                            continue
+                        }
+                        if (valueElement != null &&
                             (c.where != null || sumField != null || orderBy != null || c.bindings.size > 1 || b.alias != null)) {
                             diags.add(Diagnostic("F2", "'${Printer.expr(src)}' is a collection of values, not of records — " +
-                                "it can be counted, run over with `for each`, or tested with `is empty`, but not filtered, summed, or ordered (Reference §5)"))
+                                "it can be counted, run over with `for each`, tested with `is empty`, or filtered by naming each value, " +
+                                "`(${Printer.expr(src)} as value where ...)`, but not filtered by a member, summed, or ordered (Reference §5)"))
                             return
                         }
                         model.pathElementShape(src, scope, aliasScopes, thisScope ?: scope)?.let { element = it }
@@ -1627,6 +1638,7 @@ class Validator(private val model: Model) {
             }
         }
         introduced.forEach { aliasScopes.remove(it) }
+        introducedValues.forEach { scalarAliases.remove(it) }
     }
 
     /** `as`-alias → element scope, live while the binding's `where` is checked. */

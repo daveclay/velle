@@ -216,8 +216,10 @@ class Evaluator(private val system: VelleSystem) {
         return Value.VColl(reached.toList(), base)
     }
 
-    /** `(Shape where pred)` / `(path where pred)` as a collection value (Reference §6). */
+    /** `(Shape where pred)` / `(path where pred)` as a collection value (Reference §6);
+     *  `(values as v where pred)` as the values that pass (Reference §5). */
     private fun evalSetExpr(e: SetExpr, ctx: Ctx): Value {
+        valueCollectionOf(e.collection, ctx)?.let { return it }
         val b = e.collection.bindings.single()
         val (scope, ids) = bindingCandidates(b, ctx)
         val kept = ids.filter { id ->
@@ -350,13 +352,26 @@ class Evaluator(private val system: VelleSystem) {
         }
     }
 
-    /** The values a collection expression names when it is one bare path to a
-     *  `many <scalar>` field (the only form the validator admits over values); null otherwise. */
+    /** The values a collection expression names: one bare path to a `many` of values, or that
+     *  path filtered by naming each value, `(options as o where o == x)` (Reference §5); null otherwise. */
     private fun valueCollectionOf(c: CollectionExpr, ctx: Ctx): Value.VVals? {
-        if (c.where != null) return null
-        val src = c.bindings.singleOrNull()?.takeIf { it.alias == null }?.source as? PathExpr ?: return null
-        if (src.segs.isEmpty() && (src.root in model.shapes || src.root in model.refinements)) return null
-        return eval(src, ctx) as? Value.VVals
+        val binding = c.bindings.singleOrNull() ?: return null
+        if (c.where != null && binding.alias == null) return null
+        val src = binding.source as? PathExpr ?: return null
+        if (!namesValues(src, ctx)) return null
+        val values = eval(src, ctx) as? Value.VVals ?: return null
+        val where = c.where ?: return values
+        val name = binding.alias ?: return values
+        return values.copy(values = values.values.filter { value -> truthy(eval(where, ctx.copy(locals = ctx.locals + (name to value)))) })
+    }
+
+    /** Whether a binding path names a `many` of values, read off the declarations, so a
+     *  collection of records is never evaluated to find out. */
+    private fun namesValues(src: PathExpr, ctx: Ctx): Boolean {
+        if (src.root in ctx.locals || src.root in ctx.pending) return false
+        if (src.segs.isEmpty() && (src.root in model.shapes || src.root in model.refinements)) return false
+        val aliasScopes = ctx.aliases.mapValues { entry -> entry.value.first }
+        return model.pathEndType(src, ctx.innermost().first, aliasScopes, ctx.subjectScope) is VType.CollS
     }
 
     private fun bindingCandidates(b: Binding, ctx: Ctx, where: Expr? = null): Pair<String, List<Long>> = when (val src = b.source) {
@@ -431,12 +446,30 @@ class Evaluator(private val system: VelleSystem) {
         // one binding's element — only unambiguous for single-binding collections
         val keyableWhere = c.where.takeIf { c.bindings.size == 1 }
         for (b in c.bindings) {
+            // a `many` of values named with `as` (Reference §5): one context per value, the name bound to it
+            val values = valuesBound(b, ctx)
+            if (values != null) {
+                ctxs = ctxs.flatMap { outer -> values.asSequence().map { value -> outer.copy(locals = outer.locals + (b.alias!! to value)) } }
+                continue
+            }
             // sibling bindings all resolve against the same enclosing subject
             // (Reference §10) — only the shared `where` sees the pushed frames
             val (scope, ids) = bindingCandidates(b, ctx, keyableWhere)
             ctxs = ctxs.flatMap { outer -> ids.asSequence().map { outer.push(scope, it, b.alias) } }
         }
         return if (c.where == null) ctxs else ctxs.filter { truthy(eval(c.where, it)) }
+    }
+
+    /** The values a binding with an alias runs over when its path names a `many` of values; null for records. */
+    private fun valuesBound(b: Binding, ctx: Ctx): List<Value>? {
+        if (b.alias == null) return null
+        val src = b.source as? PathExpr ?: return null
+        if (!namesValues(src, ctx)) return null
+        return when (val collection = eval(src, ctx)) {
+            is Value.VVals -> collection.values
+            Value.VEmpty, Value.VNone -> emptyList()
+            else -> throw VelleRuntimeError("'${Printer.expr(src)}' is not a collection of values: $collection")
+        }
     }
 
     private fun anyCombination(c: CollectionExpr, ctx: Ctx): Boolean = combinations(c, ctx).any()
