@@ -660,7 +660,7 @@ transient act FillPrescription by Staff as filledBy {
     lot: one StockLot
     quantity: integer
     fillNumber: integer
-    dispensable: boolean = if prescription is Fillable and quantity <= lot.onHand then true else false
+    dispensable: boolean = prescription is Fillable and quantity <= lot.onHand
 }
 
 FillPrescription requires filledBy to be Technician or filledBy to be Pharmacist

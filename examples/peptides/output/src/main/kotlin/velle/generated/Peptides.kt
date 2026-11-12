@@ -2077,8 +2077,7 @@ shape EffectiveTrial = CompleteTrial where efficacy >= protocol.efficacyThreshol
 -- trial, with the efficacy as it stood then — a correction landing later
 -- moves the live number, never the recorded one. The record is what the
 -- field stage reads.
--- velle: a boolean field computed by a conditional — a comparison is a
--- predicate, not a value, so `if ... then true else false` is the spelling
+-- velle: a boolean field is written as its condition (Reference §7)
 shape GreenhouseResult {
     trial: one GreenhouseTrial
     efficacy: decimal
@@ -2090,7 +2089,7 @@ rule RecordGreenhouseResult when (CompleteTrial where not exists GreenhouseResul
     GreenhouseResult from {
         trial: this
         efficacy: efficacy
-        effective: if efficacy >= protocol.efficacyThreshold then true else false
+        effective: efficacy >= protocol.efficacyThreshold
     }
 }
 

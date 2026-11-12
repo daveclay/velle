@@ -19,6 +19,26 @@ balance: decimal = total - sum(payments, amount)
 
 A derived property may also be a collection, written as a filtered set: `recruits: many Member = (Member where referrer == this)` names the members who name this one as their referrer ([§6, "Renamed and derived collections"](Reference-06-Relationships#renamed-and-derived-collections)).
 
+## A boolean property is its condition
+
+A product owner says "a dues payment is on time when it was paid by its due date". The property is the condition, so it is written as one. A condition is a value of type `boolean` wherever a value is written: a derived property, a field in a `from` block ([§14](Reference-14-Rules)), an assignment ([§12](Reference-12-Assignment)).
+
+From `examples/loyalty/loyalty.velle`, on `DuesPayment`:
+
+```
+onTime: boolean = paidOn <= dueBy
+```
+
+From `examples/pharmacy/pharmacy.velle`, on `FillPrescription`:
+
+```
+dispensable: boolean = prescription is Fillable and quantity <= lot.onHand
+```
+
+- Any condition of [§10](Reference-10-Predicate-expressions) is a value: a comparison, `is`, `exists`, `and`, `or`, `not`, and a boolean field on its own. `if paidOn <= dueBy then true else false` says the same thing at twice the length.
+- A condition as the operand of a comparison is parenthesized: `(a < b) == expected`. Without the parentheses, `a < b == expected` has no meaning and is refused.
+- In `if p then a else b`, each branch reaches to the end of its text: `if p then 1 else q == 2` is `if p then 1 else (q == 2)`.
+
 ## Walks: a value found along a relationship
 
 Some values are not on the record, and not one link away, but somewhere along a chain of records of the same kind. A member's referrer has a referrer of their own. A batch was mixed from batches that were themselves mixed from others. The business sentence is "everyone above me", "every batch behind this one", or "the first one up the chain that has a location". A **walk** is how Velle says it. You name the relationship, and Velle follows it from the record, step after step, visiting each record once. Because each record is visited once, a walk ends over any data, including data that loops back on itself, and there is nothing for you to prove.

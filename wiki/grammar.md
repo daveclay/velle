@@ -217,12 +217,14 @@ An act is a base shape whose instances are externally committable — transpilat
 
 ## Value expressions
 
-The formalization [Reference §22](Reference-22-Open-unresolved) lacked. Predicates (below) and value expressions share atoms, paths, narrowing, and calls; a predicate *is* the boolean case of this grammar.
+The formalization [Reference §22](Reference-22-Open-unresolved) lacked. A value is a predicate (below): a predicate is the boolean case of this grammar, so a boolean property is written as its condition, `onTime: boolean = paidOn <= dueBy` ([Reference §7, "A boolean property is its condition"](Reference-07-Derived-properties#a-boolean-property-is-its-condition)). A predicate's atoms are the arithmetic expressions, so `a == b and c` compares `a` with `b`; a comparison or a conditional in operand position is parenthesized, `(a < b) == expected`.
 
 ```
-valueExpr   := condExpr
+valueExpr   := predicate                 -- "Predicates" below; its atoms are condExpr, existsExpr, isExpr,
+                                         -- the comparisons over addExpr, and addExpr itself
 condExpr    := "if" predicate "then" valueExpr ("else" "if" predicate "then" valueExpr)* "else" valueExpr
-            | addExpr
+                                         -- each branch reaches to the end of its text:
+                                         -- `if p then 1 else q == 2` is `if p then 1 else (q == 2)`
 
 addExpr     := mulExpr (addOp mulExpr | addOp DurationLiteral)*
 addOp       := "+" | "-"
@@ -258,5 +260,5 @@ Type rules ride on the Kotlin grounding ([Reference §5](Reference-05-Scalars)):
 
 ## Predicates
 
-[Reference §10](Reference-10-Predicate-expressions)'s grammar, unchanged, with one generalization: `comparison := valueExpr compareOp valueExpr`, where `compareOp` is `==` `!=` `<` `<=` `>` `>=` or one of the text operators `contains`, `starts with`, `ends with`, `like`, `matches` (text operands only, exact and case-sensitive; `like` takes a pattern with `%` for any run of characters, `_` for any one, `\` escaping either; `matches` a regular expression the whole text must match; [Reference §10](Reference-10-Predicate-expressions)), plus the forms `valueExpr between valueExpr and valueExpr` and `valueExpr not? in (listLiteral | valueExpr)` with `listLiteral := "[" (valueExpr ("," valueExpr)*)? "]"` (the right side a list of values, a `many` of values, or, when the left side is a record, a collection of records such as a walk's set; [Reference §7](Reference-07-Derived-properties)) — its operands are value expressions (they always were; [§10](Reference-10-Predicate-expressions)'s `expr := path (+/- duration)?` was the fragment of value grammar predicates needed before this document existed). [§10](Reference-10-Predicate-expressions) remains the normative statement of `is`, `exists`, bare boolean atoms, aggregates, selectors, `as` bindings, sibling joins, and `for`-sugar legality.
+[Reference §10](Reference-10-Predicate-expressions)'s grammar, unchanged, with two generalizations: `atom` admits `condExpr`, and `comparison := addExpr compareOp addExpr`, where `compareOp` is `==` `!=` `<` `<=` `>` `>=` or one of the text operators `contains`, `starts with`, `ends with`, `like`, `matches` (text operands only, exact and case-sensitive; `like` takes a pattern with `%` for any run of characters, `_` for any one, `\` escaping either; `matches` a regular expression the whole text must match; [Reference §10](Reference-10-Predicate-expressions)), plus the forms `addExpr between addExpr and addExpr` and `addExpr not? in (listLiteral | addExpr)` with `listLiteral := "[" (valueExpr ("," valueExpr)*)? "]"` (the right side a list of values, a `many` of values, or, when the left side is a record, a collection of records such as a walk's set; [Reference §7](Reference-07-Derived-properties)) — its operands are arithmetic expressions ([§10](Reference-10-Predicate-expressions)'s `expr := path (+/- duration)?` was the fragment of them that predicates needed before this document existed). [§10](Reference-10-Predicate-expressions) remains the normative statement of `is`, `exists`, bare boolean atoms, aggregates, selectors, `as` bindings, sibling joins, and `for`-sugar legality.
 

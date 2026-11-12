@@ -313,7 +313,7 @@ act DuesPayment {
     coveredMonth: text
     dueBy: Date
     paidOn: Date
-    onTime: boolean = if paidOn <= dueBy then true else false
+    onTime: boolean = paidOn <= dueBy
     previous: one DuesPayment? =
         latest(DuesPayment where member == this.member and paidOn < this.paidOn by paidOn)
     streakAfter: integer =

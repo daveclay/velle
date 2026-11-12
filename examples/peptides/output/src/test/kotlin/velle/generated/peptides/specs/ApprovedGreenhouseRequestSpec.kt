@@ -18,7 +18,7 @@ import velle.generated.peptides.*
  * shape CompleteTrial = LaidOutTrial and ObservedToEnd
  *
  * rule RecordGreenhouseResult when (CompleteTrial where not (exists GreenhouseResult for this)) {
- *     GreenhouseResult from { trial: this, efficacy: efficacy, effective: if efficacy >= protocol.efficacyThreshold then true else false }
+ *     GreenhouseResult from { trial: this, efficacy: efficacy, effective: efficacy >= protocol.efficacyThreshold }
  * }
  *
  * shape ApplicableCorrection = CorrectObservation where observation is not LockedObservation

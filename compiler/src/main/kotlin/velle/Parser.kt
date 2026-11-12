@@ -650,8 +650,11 @@ class Parser(private val tokens: List<Token>) {
     }
 
     private fun parseAtom(): Expr {
+        if (peek().isKw("if")) return parseIf()
         if (peek().isKw("exists")) return parseExists()
-        val left = parseValue()
+        // an operand is an arithmetic expression: `a == b and c` compares `a` with `b`;
+        // a comparison or conditional in operand position is parenthesized
+        val left = parseAdditive()
         val t = peek()
         return when {
             t.isKw("is") -> { next(); parseIsRhs(left) }
@@ -666,35 +669,35 @@ class Parser(private val tokens: List<Token>) {
             t.type in COMPARISON_OPS -> {
                 val op = next().text
                 skipNewlines()
-                Binary(op, left, parseValue())
+                Binary(op, left, parseAdditive())
             }
             // the text operators are contextual words (Tokens.kt, TEXT_OPERATORS):
             // `contains` / `like` / `matches`, and `starts with` / `ends with` as two words
             t.type == TokType.LIDENT && (t.text == "contains" || t.text == "like" || t.text == "matches") -> {
                 val op = next().text
                 skipNewlines()
-                Binary(op, left, parseValue())
+                Binary(op, left, parseAdditive())
             }
             // `x in [a, b]` and `x not in [a, b]` (Reference §10): membership of a listed set of values
             t.type == TokType.LIDENT && t.text == "in" -> {
                 next()
                 skipNewlines()
-                Binary("in", left, parseValue())
+                Binary("in", left, parseAdditive())
             }
             t.isKw("not") && peekAhead(1).let { it.type == TokType.LIDENT && it.text == "in" } -> {
                 next(); next()
                 skipNewlines()
-                NotExpr(Binary("in", left, parseValue()))
+                NotExpr(Binary("in", left, parseAdditive()))
             }
             // `x between a and b` (Reference §10) is `x >= a and x <= b`, both bounds included
             t.type == TokType.LIDENT && t.text == "between" -> {
                 next()
                 skipNewlines()
-                val lo = parseValue()
+                val lo = parseAdditive()
                 skipNewlines()
                 expectKw("and")
                 skipNewlines()
-                val hi = parseValue()
+                val hi = parseAdditive()
                 Binary("and", Binary(">=", left, lo), Binary("<=", left, hi))
             }
             t.type == TokType.LIDENT && (t.text == "starts" || t.text == "ends") &&
@@ -702,7 +705,7 @@ class Parser(private val tokens: List<Token>) {
                 val op = next().text + " with"
                 next()
                 skipNewlines()
-                Binary(op, left, parseValue())
+                Binary(op, left, parseAdditive())
             }
             else -> left // boolean atom, or a plain value in value position
         }
@@ -742,15 +745,16 @@ class Parser(private val tokens: List<Token>) {
         val shape = expect(TokType.UIDENT).text
         expectKw("for")
         skipNewlines()
-        return ExistsExpr(shape = shape, forExpr = parseValue())
+        return ExistsExpr(shape = shape, forExpr = parseAdditive())
     }
 
     // ── values ───────────────────────────────────────────────────────────────
 
-    fun parseValue(): Expr {
-        if (peek().isKw("if")) return parseIf()
-        return parseAdditive()
-    }
+    /** A value is a predicate (grammar.md, "Value expressions"): a condition is a value of
+     *  type boolean, so `isRoot: boolean = parentName is none` needs no `if ... then true
+     *  else false`. The conditional `if` and `exists` start an atom; the arithmetic
+     *  expressions are the operands of a comparison. */
+    fun parseValue(): Expr = parsePredicate()
 
     private fun parseIf(): Expr {
         expectKw("if")
@@ -927,7 +931,7 @@ class Parser(private val tokens: List<Token>) {
             expect(TokType.RPAREN)
             return SingularFor(shape, e)
         }
-        val inner = parsePredicate()
+        val inner = parseValue()
         // set denotation: `(Shape where pred)` / `(this.invoices where Overdue)` (Reference §6);
         // a walk's set filters the same way, `(walk friends where verified)` (Reference §7)
         if (peek().isKw("where")) {

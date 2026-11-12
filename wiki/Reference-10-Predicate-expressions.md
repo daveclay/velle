@@ -67,6 +67,8 @@ The general form is also how to add a second condition on the related record, as
 
 A boolean field is a complete condition on its own. `where applied` means `applied == true`, and `where not applied` means `applied == false`, so a flag refinement reads as the business phrase: `Deposit where not applied`.
 
+The other way round, a condition is a value of type `boolean`: a boolean property is written as its condition, `onTime: boolean = paidOn <= dueBy` ([§7, "A boolean property is its condition"](Reference-07-Derived-properties#a-boolean-property-is-its-condition)).
+
 ## Counting and summing
 
 ```

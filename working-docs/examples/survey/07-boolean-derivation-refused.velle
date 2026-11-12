@@ -1,5 +1,0 @@
-act Kind {
-    name: text
-    parentName: text?
-    isRoot: boolean = parentName is none or parentName == "survey"
-}
