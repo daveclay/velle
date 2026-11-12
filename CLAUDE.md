@@ -112,6 +112,9 @@ default and are not applied back over existing choices without his say.
   shape. A type says nothing about storage; storage is a binding per type
   and store. Custom functions outrank custom types.
 - Velle codes to its own extension interfaces (`compiler/CLAUDE.md`).
+- A binding is a library. The owner of the spec chooses which bindings
+  their system runs with by what they put on the classpath, and replaces one
+  with a bug as they would any library. Velle never overrides that choice.
 - The store API is agnostic to how and where records are stored
   (`compiler/CLAUDE.md`).
 - Velle captures the product-owner and engineer conversation as a pure

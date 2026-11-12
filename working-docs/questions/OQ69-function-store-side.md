@@ -1,41 +1,267 @@
-# OQ69 — A function's store side: how a function a spec calls says what the pre-filter may render for it, per store
+# OQ69 — A function's store side: how a function a spec calls says what a store may run for it
 
-**Status:** opened 2026-10-26 at Dave's request after `matches` landed. Nothing designed past the inventory below and the items to settle.
-**In plain terms:** OQ66 lets an engineer register a function a spec may call, and fixes what the validator and the evaluator need from it. A store needs a third thing from the same function: how to ask the database the question the function asks, so a query over a million rows does not bring every row into memory. `matches` is the first builtin with that third part done by installation rather than translation: `SqliteStore` registers a `REGEXP` function on its connection and renders `matches` as `col REGEXP ?`. It is hard-coded, as every other rendering is. The question is what the contract looks like when the function is the engineer's, the store is not SQLite, or the rendering is only an over-approximation.
-**See:** OQ66 (the spec and evaluator side of a function; this file is the store side and nothing else) · the SQL store layer as built (`stores/sql`, OQ67 retired 2026-10-26; a rendering is written at the layer, `SqlStore`, or at a dialect, `SqliteDialect.regexMatch` / `PostgresDialect.regexMatch`) · OQ65 D5 and `stores/sql/src/main/kotlin/velle/sql/SqlTypeBinding.kt` (the type side of the same split: a binding per type and store, with `answers` naming the comparisons the column answers faithfully) · `compiler/src/main/kotlin/velle/Query.kt` (`QF`, `compileCmp`, `tryCmp`: a column test needs a path on one side and a constant on the other, so a call is never a column test today; `QF.TextBlank`) · `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt` (`render`, `renderCmp`, `degrade`) and `stores/sqlite/.../SqliteDialect.kt` (`regexpRegistered`, `regexMatch`: the one function rendering that already lives at the dialect) · `evaluation.md` "The pre-filter" (over-returning is always legal; the predicate decides in memory) · Reference §10 (the predicate forms), §5 (the closed function list).
+**Status:** opened 2026-10-26 at Dave's request after `matches` landed. D1, D2, D4, D5, D6, D7, and D10 decided 2026-11-11; D3, D8, and D9 await Dave; the file holds two work items.
+
+**In plain terms:** A spec may call a function on a stored value, such as the lowercase form of a name, or whether a product code fits a pattern. When a read filters a million stored records by that call, the database should do the narrowing and hand back only the records that fit, rather than every record for Velle to check one by one in memory. Today only a few of Velle's own functions get that, each written by hand into the SQL store, and a function an engineer registers never does. This question is how a function says what a database may run for it, database by database, and what a store does when it cannot.
+
+**See:** OQ66 (settled table in `working-docs/QUESTIONS.md`: a registered function's signature and body; this file is the store side and nothing else) · OQ67 (settled table: the SQL layer `stores/sql` and the two dialects `stores/sqlite` and `stores/postgres`; a rendering is written at the layer or at a dialect) · `stores/sql/src/main/kotlin/velle/sql/SqlTypeBinding.kt` (the type side of the same split: a binding per type and store, with `answers` naming the comparisons the column answers faithfully) · OQ103 (whether a dialect may override a type binding, the same question D2 asks for a function) · `compiler/src/main/kotlin/velle/Query.kt` (`compileCmp`, `tryCmp`: a column test needs a path on one side and a constant on the other, so a call is never a column test today; `constFold`, `foldInterpolation`) · `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt` (`WhereRenderer.render`, `renderCmp`, `degrade`) · `stores/sqlite/src/main/kotlin/velle/sqlite/SqliteDialect.kt` (`prepare`, `regexMatch`: the one function rendering that lives at a dialect) · `stores/postgres/src/main/kotlin/velle/postgres/PostgresDialect.kt` (`regexMatch` returns null) · `stores/sqlite/src/test/kotlin/velle/sqlite/RegexOverSqliteTest.kt` (`matches` in the store) · `wiki/evaluation.md` "The pre-filter" and `wiki/GLOSSARY.md` "candidate pre-filter / superset contract" (over-returning is always legal; the predicate decides in memory) · Reference §10 (the predicate forms), Reference §5 (the function list, "Text made from other values") · `wiki/Extension-functions.md` (a function needs no store binding) · `wiki/Extension-types.md` "Holding a type in a store" (the shape a function's section would mirror) · `wiki/Read-API.md` (`where { title.length gt 10 }`, the query handles) · OQ115 (a generated read-API handle per registered function) · OQ96 (a walk is never rendered) · OQ80 (settled table: a text literal with a column piece stays with the evaluator until this question renders it) · OQ75 (settled table: a SQL rendering of `number` is this file's work item)
 
 ---
 
-## 1. What exists: three ways a function reaches the store, none declared
+Terms used in this file. The **pre-filter** is the SQL `WHERE` clause Velle compiles from a predicate and sends to the store to narrow the candidate records. The **superset contract** is the rule that the pre-filter may return more records than match, never fewer, and the evaluator decides in memory (`wiki/GLOSSARY.md`). A **rendering** is the SQL the pre-filter writes for one function call. The **store side** of a function is its rendering, per store. A **binding** is a library object that pairs one function, or one type, with what one store layer does with it.
 
-- **Rendered as SQL by the store.** `is empty` on text is `(col IS NULL OR TRIM(col) = '')`; `contains`, `starts with`, `ends with`, `like` are `LIKE ... ESCAPE '\'`. The store knows these by name in `render` and `renderCmp`.
-- **Installed on the connection and rendered as a call.** `matches` is `col REGEXP ?`, after `org.sqlite.Function.create(conn, "REGEXP", ...)` at construction. If the registration throws (a connection that is not SQLite's own, a pool's wrapper), `regexpRegistered` is false and `matches` degrades to the superset. Nothing reports the degradation.
-- **Not pushed down.** `lowercase`, `uppercase`, `trim`, `length`, `abs`, `%`, `year`, `month`, `day`, `dayOfWeek`, `hour`, `minute`, a text literal with pieces whose piece is a column (Reference §5, "Text made from other values"; one whose pieces are all constants folds to one text in `QueryCompiler.constFold` and renders as a plain column test, and a rendering of a column piece would be `||` or `CONCAT` over the columns with the dialect's cast of a non-text piece, the same mechanism this file settles for a function), and `sum`/`max`/`min` over a `many` of values: the compiler's column test takes a path and a constant, so a call on either side falls to `fail(positive)` and the evaluator decides over every candidate row. Correct under the superset contract. `where { name.lowercase startsWith "ada" }` scans the table.
+## 1. What runs today
 
-The third way is the baseline every function starts from: a function with no store side works. So the question is not whether a function must push down but how one that can says so, and how a store that cannot honour it says that.
+Three ways a function reaches the store, none declared by the function. Checked against HEAD on 2026-11-11.
 
-## 2. The split, as stated
+**Rendered as SQL by the SQL layer.** `is empty` on a text renders `(col IS NULL OR TRIM(col) = '')` (`SqlStore.kt`, `WhereRenderer.render`, the `QF.TextBlank` case). `contains`, `starts with`, `ends with`, and `like` render `LIKE ... ESCAPE '\'` (`SqlStore.kt`, `renderCmp`). The layer knows each by name.
 
-A registered function has up to three parts. OQ66 owns the first two.
+**Installed on the connection and rendered as a call.** `matches` renders `col REGEXP ?` on SQLite (`SqliteDialect.kt`, `regexMatch`) after `prepare` creates a `REGEXP` function on the connection, once per underlying connection. A connection that is not SQLite's own and cannot be unwrapped to one throws at `prepare` with the message "SQLite store: the connection is not SQLite's own and cannot be unwrapped to one", so a failed installation stops the store; nothing degrades silently any more. PostgreSQL's `regexMatch` returns null, so `matches` degrades to the superset there and runs in memory (`PostgresDialect.kt`). `RegexOverSqliteTest.kt` shows the SQLite side.
 
-1. Its signature and facts, for the validator: what it accepts, what it returns, whether fold steps commute and repeat harmlessly, whether it reads the clock.
-2. Its Kotlin body, for the evaluator.
-3. Its rendering, per store, for the pre-filter: a SQL expression over the column, or a function the store installs on connect and then calls by name; in either case with a statement of whether the rendering is faithful or a superset, as a type binding's `answers` is.
+**Not pushed down.** `lowercase`, `uppercase`, `trim`, `length`, `abs`, `%`, `year`, `month`, `day`, `dayOfWeek`, `hour`, `minute`, `number`, `date`, `datetime`, a text literal with a column piece (Reference §5, "Text made from other values"), and `sum`, `max`, `min` over a `many` of values. The compiler's column test takes a path on one side and a constant on the other (`Query.kt`, `tryCmp`); a call on either side is not a column test, the clause degrades to `TRUE` in positive position (`SqlStore.kt`, `degrade`), and the evaluator decides over every candidate record. Correct under the superset contract, and a table scan. A text literal whose pieces are all constants folds to one text (`Query.kt`, `foldInterpolation`) and renders as a plain column test.
 
-Types chose a binding per type and store, written by whoever knows the store (OQ65 D5). The default expectation is that functions follow, and that the builtins' renderings move out of `SqliteStore.render` into the same mechanism, so Velle uses its own contract for `lowercase` and `matches` as OQ68 wants for `decimal` and `Date`.
+The third way is the baseline every function starts from: a function with no store side works (`wiki/Extension-functions.md`, "A function needs no store binding"). So the question is not whether a function must push down but how one that can says so, and how a store that cannot honour it says that.
 
-## 3. What has to be settled
+The two spellings the decisions below are written against, both validated on 2026-11-11, with `Product` taken from `examples/orders/orders.velle` and a `name` field added:
 
-- **Where the rendering lives.** On the function object (one object, three parts, so a function library depends on every store it renders for) or beside it as a binding per function and store (a `SqlFunctionBinding` library, as `finance-sql` is to `finance`). The type precedent is the binding.
-- **At which layer.** `TRIM`, `LOWER`, `LENGTH`, `ABS`, `%` are SQL-wide and belong to the SQL layer (`SqlStore`); `REGEXP`, `strftime` for the date parts, and `LIKE`'s case folding are dialect. A rendering written at the SQL layer serves every SQL store, one written at a dialect only that database. Whether a dialect may override a SQL-layer rendering. `matches` is the live case: SQLite renders it through a Java-regex `REGEXP` function and is exact; PostgreSQL's `regexMatch` returns null (its regex syntax is not Java's, and a pattern it cannot read would fail the query rather than over-return), so `matches` runs in memory there. The ways out: render `~` anchored and accept the syntax risk; translate Java patterns to PostgreSQL's syntax in the dialect, degrading what has no translation; or restrict `matches` to a portable subset the compiler checks.
-- **What a rendering is.** A template over the column and the constant (`"LOWER({col})"`, `"{col} REGEXP {arg}"`), a Kotlin function from rendered operands to a SQL fragment, or a value of a small expression type the SQL layer renders. The template is the least power and the least to get wrong; the compiled pre-filter (`QF`) would need a node for "call of a registered function over a column" either way.
-- **Faithful or superset.** `evaluation.md` says over-returning is always legal and the evaluator decides in memory, so a rendering is only ever a performance claim: whether the contract stays that way, which makes "faithful" a word the binding never needs, or whether a faithful rendering may one day skip the in-memory check (the correctness side of the line, where `fetchCaptures` sits). Keeping the rendering on the performance side is the simpler contract, and the one `matches` was built under.
-- **Installation and its failure.** A function installed on a connection may be refused (a pooled connection, a read replica, a database Velle does not own). Today the refusal degrades silently to the superset. Whether the store should say what it could not install, at construction, and whether a system may insist (fail to build) on a rendering it depends on.
-- **Errors inside an installed function.** A SQL function can throw at query time. `REGEXP` compiles a pattern the validator already compiled, so it cannot fail on a checked spec, but a query from the read API (Reference §22) carries patterns the validator never saw. Where that error surfaces: as a query diagnostic before the query runs (the validator's `checkQueryPredicate` could compile it), or as a store failure.
-- **The evaluator and the store must agree.** `LOWER` in SQLite folds ASCII only; Kotlin's `lowercase()` folds Unicode. `dayOfWeek` through `strftime('%w')` counts Sunday as 0; Velle counts Monday as 1. A rendering that disagrees with the evaluator over-returns or under-returns; under-returning is a correctness bug the superset contract does not cover. Whether a binding carries sample inputs the store checks at construction, as E4 round-trips a type's samples.
-- **Aggregates over a `many` of values.** `sum(scores)` reads a junction table; pushing it down is a correlated subquery, not a function rendering, and may belong to OQ67's SQL layer rather than here.
-- **The read API's handles.** `name.lowercase`, `name matches`, `due.dayOfWeek` are generated handles over the builtin list (`Read.kt`, `TextFunction`, `PartOf`). A registered function needs a generated handle too, which is OQ66's codegen item; it is noted here only because a handle with no rendering is the scan case above, and the engineer cannot see that from the handle.
+```velle
+act Product {                                    -- a record the world creates
+    name: text                                   -- a stored text
+    sku: text                                    -- a stored text
+}
 
-## 4. Work items
+shape AdaProduct = Product where lowercase(name) starts with "ada"   -- a call on the left of a text operator: tryCmp finds no column test, the clause degrades to TRUE, the evaluator reads every Product
+shape KitProduct = Product where sku matches "^KIT-[0-9]+$"          -- a path beside a constant: a column test; SQLite renders `"sku" REGEXP ?`, PostgreSQL degrades to TRUE
+```
 
-- [ ] Render `number(text)` (Reference §5) in SQL: `CAST` alone is unsound, SQLite's gives 0 for a text that is not a number and PostgreSQL's throws, so until a dialect guards the cast a read that filters on it runs in memory.
+A query from the read API, `products.where { name.lowercase startsWith "ada" }` (`wiki/Read-API.md`), compiles to the same pre-filter and scans the same table. The engineer cannot see that from the handle; a generated handle per registered function is OQ115.
+
+## 2. What to decide
+
+### D1. Whether a function's rendering is a binding of its own, per function and store · Decided 2026-11-11
+
+Is a function's rendering a separate binding, one per function and store layer, written by whoever knows the store, as a type's `SqlTypeBinding` is? The alternative is one function object carrying all three parts (signature, body, rendering), so a function library depends on every store it renders for.
+
+Recommendation: a binding of its own, `SqlFunctionBinding` in `stores/sql`, registered through `META-INF/services/velle.sql.SqlFunctionBinding` as a type binding is through `META-INF/services/velle.sql.SqlTypeBinding`. The function library stays free of every store, which is the choice OQ65 D5 made for types. The builtins' renderings move out of `SqlStore` into bindings Velle ships, so Velle codes to its own extension interface (`compiler/CLAUDE.md`).
+
+Costs:
+
+- The engineer who writes both the function and its rendering writes two classes in two libraries.
+- A binding naming a function that is not on the classpath is a misconfiguration the store refuses at construction, so a typo in the qualified name is loud.
+- Until the builtins move, two mechanisms render functions.
+
+Against the spec in §1, the binding Velle would ship for its own `lowercase`, whose qualified name is `velle.lowercase` (`BuiltinFunctions.kt`, `namespace = "velle"`):
+
+```kotlin
+// stores/sql: the binding names the function and speaks SQL-layer SQL; it names no database (D2 decides what a dialect may replace)
+object LowercaseSql : SqlFunctionBinding {
+    override val function: String = "velle.lowercase"                       // the qualified name the function registers under (OQ66)
+    override fun render(operands: List<String>): String = "LOWER(${operands[0]})"   // D4 decides whether this is a template or a function
+}
+```
+
+With it, `AdaProduct`'s clause renders `LOWER("name") LIKE ? ESCAPE '\'` and the evaluator still decides each returned row (D5).
+
+#### Proposed changes
+
+- `stores/sql/src/main/kotlin/velle/sql/SqlFunctionBinding.kt`: a new interface beside `SqlTypeBinding`, loaded from the classpath or an explicit list, keyed by the function's qualified name.
+- `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`: `renderCmp` stops knowing `contains`, `starts with`, `ends with`, `like`, `matches`, and `is empty` by name; each becomes a shipped binding, and a call in the pre-filter renders through its binding or degrades.
+- `wiki/Extension-functions.md`: a section "Holding a function in a store", mirroring `wiki/Extension-types.md` "Holding a type in a store".
+- `wiki/Store-API.md`: the binding named beside the type binding.
+
+**Decided:** yes, 2026-11-11. Dave: the binding is a separate thing from the function, and where it is packaged is the author's choice. Alice may own `finance` and Bob `finance-sql`; Alice may ship the SQL bindings inside `finance` herself, taking the dependency on `stores/sql`; Alice may ship MySQL and PostgreSQL bindings and Dana the SQLite one in a `finance-sqlite` library. The first cost above is therefore not a cost: two classes, in one library or several. For the API it means anyone providing a custom function has a way to provide the dialect-specific implementations, which D10 gives the shape of.
+
+### D2. Whether a dialect may override a binding's rendering · Decided 2026-11-11
+
+May a dialect replace, by the function's qualified name, the rendering a binding gives for that dialect, as the last word on its own database?
+
+Under D10 the database-specific renderings belong to the function's bindings, so a dialect has nothing to contribute in the ordinary case. The override is for a rendering the binding author got wrong on a database they do not run, fixed by the dialect author without waiting on the binding's next release. OQ103 asks whether a dialect may override a type binding; the two should be answered alike.
+
+Recommendation: yes, with the precedence fixed once: the dialect's override, then the binding claiming that dialect, then the SQL-wide binding, then degradation.
+
+Costs:
+
+- Two places a rendering can come from, so a surprising rendering has two files to look in.
+- A dialect override is a second thing to test per database; `SqlStoreConformance` (`stores/sql`) gains a case for it.
+
+#### Proposed changes
+
+- `stores/sql/src/main/kotlin/velle/sql/SqlDialect.kt`: a rendering per qualified function name the dialect chooses to override, defaulting to none; `regexMatch` is removed, its work moving to the `matches` bindings under D10.
+- `wiki/Store-API.md`: the order of precedence.
+
+**Decided:** no, 2026-11-11. A dialect never renders a function, so `SqlDialect` gains no override hook and the first proposed change above does not happen; `regexMatch` is still removed, under D10, and there is no precedence to document. Dave's reasoning: a binding is a library. Bob owns `finance-sql`, Chris uses it; when Chris finds a bug he removes the library and replaces it with his own or an alternative, which is normal library behaviour in any system. The owner of the spec decides which binding runs, and Velle cannot override that choice, even to fix a bug. A dialect could not do so in any case: for `PostgresDialect` to render `velle.finance.roundToCents` Velle's source would have to name a library it has never heard of, so the only functions a dialect could ever render are Velle's own, and D10 makes those bindings too. No override mechanism of any kind is added; two classpath bindings claiming one function and one dialect are refused at construction (D10) and the owner removes one.
+
+### D3. Whether `matches` keeps running in memory on PostgreSQL
+
+Does `matches` keep running in memory on PostgreSQL until the dialect translates a Java pattern to PostgreSQL's syntax, rather than rendering PostgreSQL's `~` and accepting that a pattern PostgreSQL cannot read fails the query?
+
+The ways out: render `~` anchored and accept the syntax risk; translate Java patterns to PostgreSQL's syntax in the dialect, degrading what has no translation; or restrict `matches` to a portable subset the compiler checks. A failed query is worse than a scan: it breaks the promise, D5, that a rendering is only ever a performance surface.
+
+Recommendation: keep it in memory now. A translation is a dialect replacement under D2, added as a work item when a PostgreSQL system measures the scan slow. This decision keeps today's behaviour and changes nothing.
+
+### D4. What a rendering is · Decided 2026-11-11
+
+Is a rendering a text template over numbered holes, `"LOWER({0})"` and `"{0} REGEXP {1}"`, with the store binding the constants? The alternatives are a Kotlin function from rendered operands to a SQL fragment, or a value of a small expression type the SQL layer renders.
+
+Recommendation: the template. It is the least power and the least to get wrong, and a binding is then a name and a string. Either way the compiled pre-filter changes: a column test's left side becomes a column expression, a path or a call of a registered function over a path with constant arguments, and the renderer writes the template around the column and the operator around that. A predicate function, one whose result is `boolean`, renders as a clause on its own.
+
+Costs:
+
+- A template cannot ask the dialect for a cast. The one case that needs one is a text literal with a non-text column piece (OQ80 D6: the piece renders as its type's `canonical` text), which is this file's second work item; a Kotlin function would take the cast from the dialect directly, so that item may force the richer form.
+- A call whose arguments are all constants is folded by `constFold` before the store sees it, so a template never meets one.
+
+Against the spec in §1, `AdaProduct` under D4: `Query.kt` compiles `lowercase(name)` to a column expression, a call of `velle.lowercase` over the path `name`; `SqlStore` renders the binding's template with `"name"` in hole 0 and wraps the text operator around it.
+
+#### Proposed changes
+
+- `compiler/src/main/kotlin/velle/Query.kt`: `QF.Cmp` takes a column expression, not a field name; `tryCmp` accepts a call of a registered function over a path with constant arguments on the path side.
+- `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`: `renderCmp` renders the column expression through the binding's template before the operator.
+- `wiki/evaluation.md` "The pre-filter": what the pre-filter now compiles.
+
+**Decided:** the expression type, with named operands, 2026-11-11. Not the template recommended above: the template cannot write the column piece this file carries as a work item, and a Kotlin function returning text leaves bind order and quoting to every author. A binding's `render` receives the operands under the parameter names of the signature the call matched, `operands["amount"]`, a variadic parameter's arguments as a list under its one name, and returns a value of a small sealed type in `stores/sql`, `SqlExpr`: `Column`, `Param`, `Literal`, `Call(name, args)`, `Infix(left, op, right)`, `Cast(expr, StorageClass)`, and `Raw(sql)` as the escape for a form the type does not cover. The SQL layer alone renders the tree, writes `?` for a constant, queues its value, quotes a column, and asks the dialect for a cast. A binding may ask which signature the call matched, since `max` over a `many` and `max` over two scalars are different SQL. Every name a binding reads must be a parameter of a signature of the function it claims, checked when the store is built, so a wrong name is refused at construction, not at query time. The second proposed change above renders through `SqlExpr` rather than a template; the rest stand.
+
+### D5. Whether a rendering is only ever a performance claim · Decided 2026-11-11
+
+Does a function's rendering stay on the performance side of the line, with the evaluator always deciding in memory, so a binding never says whether its rendering is faithful or a superset?
+
+`wiki/evaluation.md` says over-returning is always legal and only `fetchCaptures` sits on the correctness side. Under that, "faithful" is a word the binding never needs; a type binding needs `answers` only because a comparison the column does not answer faithfully would under-return.
+
+Recommendation: yes. It is the simpler contract and the one `matches` was built under.
+
+Costs:
+
+- A faithful rendering can never skip the in-memory check, so a read is never served by the database alone.
+- A rendering that under-returns is a correctness bug nothing in the contract catches; D8 is the guard.
+
+#### Proposed changes
+
+- `SqlFunctionBinding` carries no faithfulness claim and no `answers`.
+- `wiki/Store-API.md`: a function rendering is a performance surface, stated once.
+
+**Decided:** yes, 2026-11-11, in these words rather than "performance claim": a custom function is agnostic to a database-backed store. The function's body always runs and has the last word on membership; a binding's SQL only narrows the rows the store hands back for the body to decide over. The runtime calls the body everywhere a spec uses the function, a derived property, an assignment, a `never`, a `from` block, and the store is touched at one place only, `fetchCandidates`. So a function with no binding runs only in memory, a function with a binding runs in both, and no function runs only in SQL. A body that reaches a store of its own is outside OQ66's contract, which is documented and not enforced. Dave asked that the agnosticism be documented as the key point, so the wiki change is the first of these:
+
+- `wiki/Extension-functions.md`: a section stating that a custom function is agnostic to the store, that the body always runs and decides, that a binding only narrows, and that a body reaching a store is outside the contract.
+- `wiki/Store-API.md`: the same in one sentence, from the store's side.
+
+### D6. What a store does when a binding's DDL is refused · Decided 2026-11-11
+
+Does a store whose database refuses a binding's DDL say so when the schema is created, naming the function and the database's error, and leave that function to the body, with an option for the owner to insist, which turns the report into a refusal to start?
+
+Revised 2026-11-11 from a draft about installing a callback on a connection, which D10's amendment set aside. A binding that needs a function the database does not have ships DDL, `CREATE OR REPLACE FUNCTION ...`, which the store runs with `createSchema`, once per database, stored in the schema beside the tables. A database can refuse it: the role may not create functions, the database is a read replica, the schema is not Velle's to change. Today nothing in Velle ships DDL for a function, so nothing is refused.
+
+Recommendation: yes. Report and degrade by default, because D5 makes degradation safe: the body still decides, and the only loss is the scan. The report is what makes the loss visible, since a scan nobody reads is the failure mode. The insist option is a list of qualified function names the owner's system depends on rendering; a refused DDL for one of them stops the store from starting, with the database's error.
+
+Costs:
+
+- One more construction-time surface on `SqlStore`, beside E4.
+- A system that insists ties itself to a database and a role with DDL rights, which is the owner's call and should be one line.
+- SQLite's `REGEXP` is not covered: it is connection preparation in the dialect, and an un-unwrappable connection keeps failing hard in `native`, which also guards the transaction modes.
+
+#### Proposed changes
+
+- `stores/sql/src/main/kotlin/velle/sql/SqlFunctionBinding.kt`: an optional `ddl` the binding contributes.
+- `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`: `createSchema` runs each binding's DDL for the bindings selected for the dialect; a refusal is recorded against the function, available after construction, and the function is left to the body; a constructor option naming the functions the owner insists on.
+- `wiki/Store-API.md`: the report and the option.
+
+**Decided:** yes, 2026-11-11. The store reports a refused DDL at schema creation, naming the function and the database's error, and leaves the function to the body; an owner may insist on a list of qualified function names, and a refused DDL for one of them stops the store from starting.
+
+### D7. Where an error inside an installed function surfaces · Decided 2026-11-11
+
+Does the validator's `checkQueryPredicate` compile a `matches` pattern that arrives from the read API before the query runs, so a malformed pattern is a query diagnostic and never a store failure?
+
+`REGEXP` compiles a pattern the validator already compiled, so it cannot fail on a checked spec. A query from the read API (Reference §22) carries patterns the validator never saw, and today the first place they are read is inside the SQLite function at query time.
+
+Recommendation: yes. Costs:
+
+- The validator compiles the pattern with Java's syntax. A dialect that translates patterns (D3) checks the translated form as well, a second compile per query.
+
+#### Proposed changes
+
+- `compiler/src/main/kotlin/velle/Validator.kt`: `checkQueryPredicate` compiles a `matches` pattern constant and reports a malformed one as a query diagnostic.
+- `wiki/Read-API.md`: a malformed pattern is refused before the query runs.
+
+**Decided:** closed, 2026-11-11, by what is built; no changes. Dave: whether a regular expression is valid is not up to the function to decide. It is the type's: under OQ80 D9 a pattern is a value of the `Regex` type (`compiler/src/main/kotlin/velle/ext/builtin/RegexType.kt`), a literal beside `matches` is read as one when the spec or the query is checked, and a text that is not a regular expression is refused as F2 there (`Validator.kt`, `checkMatchesPattern`, `compileOrRefuse`). `Read.kt` runs `checkQueryPredicate` on every query's `where` before the query runs, so the read API gets the same refusal. The premise above, that a pattern from the read API is first read inside the database's function, was true when this file was opened and is not true at HEAD. The function, the binding, and the database never see an invalid pattern. The same holds for any constant argument: it is read through the parameter's type, in a spec and in a query alike.
+
+### D8. Whether a binding carries samples the store checks at construction
+
+Does a function binding carry sample arguments that the store runs through both the rendering and the function's body when it is built, refusing to start on a disagreement, as E4 round-trips a type's samples through the dialect's column?
+
+The evaluator and the store must agree, and SQL-wide names hide disagreements. SQLite's `LOWER` folds ASCII only while Kotlin's `lowercase()` folds Unicode, so `lowercase(name) == "àda"` rendered as `LOWER("name") = ?` under-returns a name spelled `ÀDA`. `strftime('%w')` counts Sunday as 0 while Velle's `dayOfWeek` is Monday 1 (`BuiltinFunctions.kt`, `DayOfWeek`, Java's `DayOfWeek.value`). Under-returning is a correctness bug the superset contract does not cover.
+
+Recommendation: yes. A sample is one argument list and the body's answer for it; the store renders the call over a literal row holding the arguments, runs it, and compares.
+
+Costs:
+
+- Samples are hand-picked and catch only what they contain; a sample with no non-ASCII letter does not catch `LOWER`.
+- A binding whose rendering is a superset by design, broader than the body, fails a strict comparison; the check compares for under-returning only, which is the only direction the contract forbids.
+
+#### Proposed changes
+
+- `SqlFunctionBinding` gains `samples`, each an argument list.
+- `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`: at construction, each sample is rendered and run against the body; an under-return refuses the store as E4 does.
+- `wiki/checks.md`: an E-series entry beside E4.
+
+### D9. Whether an aggregate over a `many` of values is left out of this question
+
+Is `sum(scores)` over a `many` of values, which reads a junction table, left out of this question?
+
+Pushing it down is a correlated subquery at the SQL layer, not a rendering of a function over a column, and nothing in D1 to D8 serves it.
+
+Recommendation: yes. It gets a tag of its own when a read over one is measured slow, as OQ96 does for a walk. This decision changes nothing.
+
+### D10. Whether a function author provides a rendering per database · Decided 2026-11-11
+
+Does a function author ship renderings for several databases themselves, one binding per database they know, with the store picking the binding for the dialect it runs on?
+
+The case is an open-source function. Alice publishes `velle.finance.roundToCents` and knows SQLite and PostgreSQL round differently. She cannot edit `SqliteDialect` or `PostgresDialect`, which Velle owns, nor a MySQL dialect someone else will own, so a database-specific rendering that lives on the dialect is out of her hands. Nothing selects by dialect today: `SqlStore.kt` keys type bindings by type name alone, `bindings.associateBy { it.type }`, and `dialect.name` appears only in error messages. The type side never needed selection because `StorageClass` makes one binding serve every dialect; SQL text is not portable that way.
+
+Recommendation: yes. A binding claims a function and the dialects it renders for.
+
+- `SqlFunctionBinding` gains `dialects: Set<String>?`, null meaning any SQL database. `SqlDialect.name` becomes the stable identifier it is keyed by, `SQLite`, `PostgreSQL`, `MySQL`, no longer "for messages" only.
+- The store loads every binding on the classpath, as it loads type bindings, and for each function picks the binding claiming its dialect, else the SQL-wide one, else degrades (D2 fixes where a dialect override sits).
+- Two bindings on the classpath claiming the same function and the same dialect are a conflict the store refuses at construction, as two functions claiming one qualified name are refused by E1. A binding for a dialect that is not the one in use is loaded and ignored.
+- A binding gains `install(conn: Connection)`, called by the store on every connection it takes, as `SqlDialect.prepare` is today, so a rendering that needs a function created on the connection, `REGEXP` on SQLite, can create it.
+- Anyone may fill a gap: Chris, running MySQL, publishes `finance-mysql` holding a binding for Alice's function claiming `MySQL`. Alice did not have to know MySQL existed.
+
+Costs:
+
+- A binding that installs something depends on that database's driver, so `finance-sql` either declares SQLite's and PostgreSQL's drivers as optional dependencies or splits into `finance-sqlite` and `finance-postgres`. A binding that is only SQL text has no driver dependency and stays in one library.
+- The dialect name is now a public contract a binding author writes against; renaming a dialect breaks bindings.
+- Velle's own `matches` becomes two bindings: a SQL-wide one with no rendering, and a `SQLite` one in `stores/sqlite`, where the driver is, that installs `REGEXP` and renders `{0} REGEXP {1}`. `SqlDialect.regexMatch` goes away.
+
+Against the spec in §1, what Alice ships for a function used as `shape Rounded = Product where roundToCents(price) == 10` once `Product` has `price: decimal`:
+
+```kotlin
+// finance-sql, depends on stores/sql only: the rendering every SQL database gets
+object RoundToCentsSql : SqlFunctionBinding {
+    override val function: String = "velle.finance.roundToCents"
+    override val dialects: Set<String>? = null                              // any SQL database
+    override fun render(operands: List<String>): String = "ROUND(${operands[0]}, 2)"   // half away from zero on most databases
+}
+
+// finance-sql as well: PostgreSQL's ROUND on a double is half to even, so the binding casts first
+object RoundToCentsPostgres : SqlFunctionBinding {
+    override val function: String = "velle.finance.roundToCents"
+    override val dialects: Set<String>? = setOf("PostgreSQL")               // picked over RoundToCentsSql when the store runs on PostgreSQL
+    override fun render(operands: List<String>): String = "ROUND(CAST(${operands[0]} AS NUMERIC), 2)"
+}
+```
+
+The store on SQLite picks `RoundToCentsSql`; on PostgreSQL, `RoundToCentsPostgres`; on a MySQL dialect with no binding on the classpath, `RoundToCentsSql` again, since it claims any; and D8's samples check each against the body.
+
+#### Proposed changes
+
+- `stores/sql/src/main/kotlin/velle/sql/SqlFunctionBinding.kt`: `dialects` and `install` on the interface D1 adds.
+- `stores/sql/src/main/kotlin/velle/sql/SqlDialect.kt`: `name` documented as the stable identifier bindings claim; `regexMatch` removed.
+- `stores/sql/src/main/kotlin/velle/sql/SqlStore.kt`: bindings selected per function by dialect, the conflict check at construction, `install` called where `prepare` is.
+- `stores/sqlite/src/main/kotlin/velle/sqlite/SqliteDialect.kt`: the `REGEXP` creation moves out of `prepare` into a `matches` binding claiming `SQLite`, in the same module.
+- `stores/sql/src/main/kotlin/velle/sql/RegexBinding.kt` or beside it: the SQL-wide `matches` binding with no rendering.
+- `wiki/Extension-functions.md` "Holding a function in a store": one binding per database the author knows, the SQL-wide one as the fallback, and how a third party adds a database.
+- `wiki/Store-API.md`: the dialect name as a contract.
+
+**Decided:** yes, 2026-11-11. Dave: support the ability for the function author to provide for multiple dialects. The case that decided it is an open-source function whose author ships one implementation for MySQL and a different one for PostgreSQL, and cannot edit any dialect. Amended 2026-11-11 on D6: the per-connection `install(conn)` hook above is dropped. Dave envisions a binding as custom SQL computed in `render`, or a function created in the database by DDL once, with the schema; registering a callback on a JDBC connection, which only SQLite's driver offers, is not worth designing for. A binding may therefore contribute DDL, run when `SqlStore.createSchema` runs, and nothing per connection. SQLite's `REGEXP` callback stays where it is, in `SqliteDialect.prepare`, as the dialect preparing its own connection, and the `matches` binding claiming `SQLite` renders `{text} REGEXP {pattern}` against it; D2's rule that a dialect never renders a function is kept, since preparing a connection is not rendering.
+
+## 3. Work items
+
+- [ ] Render `number(text)` (Reference §5) in SQL only behind a dialect guard: `CAST` alone is unsound, SQLite's gives 0 for a text that is not a number and PostgreSQL's throws, so until a dialect guards the cast a query that filters on it runs in memory (OQ75 residue).
+- [ ] Render a text literal with a column piece (Reference §5, "Text made from other values") as `||` or `CONCAT` over the columns, with the dialect's cast of a non-text piece to its `canonical` text, through the mechanism D1 to D4 settle (OQ80 residue).
