@@ -1,6 +1,6 @@
 # OQ82 — Does the compiler refuse a property whose expression is not of its declared type?
 
-**Status:** opened 2026-11-11 as a one-line item from the survey pass; given this file 2026-11-12 after OQ89 showed `label: text = (a is none)` validating. D1 and D2 decided 2026-11-12; D3 to D5 await Dave. D5 was opened from Dave's answer to D1.
+**Status:** opened 2026-11-11 as a one-line item from the survey pass; given this file 2026-11-12 after OQ89 showed `label: text = (a is none)` validating. D1 to D3 decided 2026-11-12; D4 and D5 await Dave. D5 was opened from Dave's answer to D1.
 
 **In plain terms:** a product owner writes `label: text = ...` and the compiler takes the word `text` on trust. If the formula after `=` makes a yes-or-no, a number, or nothing at all, the compiler says nothing, and the mistake shows up later as a failed read, a failed commit, or a wrong value handed to whoever reads the record. The question is whether the compiler compares the declared type with what the formula makes, and refuses when they differ.
 
@@ -105,7 +105,7 @@ Costs:
 
 **Decided:** yes, 2026-11-12, and OQ68 is to fix it: the four number types are one kind for this check until the numeric tower types arithmetic by its operands. The work item is in OQ68 §6.
 
-### D3. Is an expression that may be absent refused in a required declaration?
+### D3. Is an expression that may be absent refused in a required declaration? · Decided 2026-11-12
 
 Is `parent: text = parentName`, with `parentName: text?`, refused because a required property is computed from a value that may be absent? The same for a conditional with a `none` branch in a required property, and for an optional path in a required `from` field or assignment.
 
@@ -141,7 +141,7 @@ Costs:
 - `wiki/checks.md` F2 and Reference §7: the optional case, naming `text?`.
 - `DeclaredTypeTest`: the optional cases, narrowed and not.
 
-**Decided:** 
+**Decided:** yes, 2026-11-12: a declared absence in a required declaration is refused; a selection that matches nothing stays the runtime failure of Reference §14.
 
 ### D4. Is an expression whose type the validator cannot read accepted in silence?
 
@@ -205,4 +205,4 @@ Written once D1 to D4 are decided; it gathers each decision's proposed changes i
 
 ## 4. Work items
 
-- [ ] Decide D3 to D5.
+- [ ] Decide D4 and D5.
