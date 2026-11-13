@@ -589,6 +589,9 @@ class Model(rawDecls: List<Decl>, val registry: TypeRegistry = TypeRegistry.defa
     /** The one reading of an expression's type (checks.md F2). */
     val types: ExprTypes by lazy { ExprTypes(this) }
 
+    /** What the prohibitions the rules cannot move say about presence (Reference §21). */
+    val presenceFacts: PresenceFacts by lazy { PresenceFacts(decls) }
+
     /** The function dispatch (OQ66): a call resolves to the signature its arguments match. */
     val functionResolver: FunctionResolver by lazy { FunctionResolver(registry) { c -> scalarOf(c.name) } }
 

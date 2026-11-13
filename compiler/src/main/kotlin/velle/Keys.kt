@@ -27,14 +27,17 @@ class KeyLookups(decls: List<Decl>) {
     private val shapes = decls.filterIsInstance<ShapeDecl>().associateBy { it.name }
     private val refinements = decls.filterIsInstance<RefinementDecl>().associateBy { it.name }
 
+    /** What the prohibitions the rules cannot move show present (Reference §21), read the same way `ExprTypes` reads them. */
+    private val prohibitions = PresenceFacts(decls)
+
     val rewritten: List<Decl> = decls.map { decl ->
         when (decl) {
             is ShapeDecl -> decl.copy(members = decl.members.map { rewriteMember(it, decl.name, emptySet()) })
             is RefinementDecl -> baseOf(decl.name)?.let { base ->
-                decl.copy(members = decl.members.map { rewriteMember(it, base, presentIn(decl.expr)) })
+                decl.copy(members = decl.members.map { rewriteMember(it, base, presentIn(decl.expr) + shownBy(decl.name, decl.expr)) })
             } ?: decl
             is RuleDecl -> baseOfExpr(decl.condition)?.let { base ->
-                decl.copy(body = decl.body.map { rewriteItem(it, base, presentIn(decl.condition)) })
+                decl.copy(body = decl.body.map { rewriteItem(it, base, presentIn(decl.condition) + shownBy(subjectOf(decl.condition) ?: base, decl.condition)) })
             } ?: decl
             else -> decl
         }
@@ -170,6 +173,28 @@ class KeyLookups(decls: List<Decl>) {
         val path = test.subject as? PathExpr ?: return@flatMapTo emptyList()
         val segments = if (path.root == "this") path.segs.map { it.name } else listOf(path.root) + path.segs.map { it.name }
         segments.indices.map { last -> segments.take(last + 1).joinToString(".") }
+    }
+
+    /** The paths the prohibitions show present for a record of [scope] given what [expr] establishes, spelled with dots. */
+    private fun shownBy(scope: String, expr: RefExpr): Set<String> =
+        prohibitions.presentIn(scope, establishedIn(expr)).mapTo(linkedSetOf()) { path -> path.joinToString(".") }
+
+    /** The tests a refinement expression establishes: its own `where` conjuncts and, through a name, the named refinement's. */
+    private fun establishedIn(expr: RefExpr, seen: MutableSet<String> = mutableSetOf()): Set<String> = when (expr) {
+        is RefName -> {
+            val own = conjuncts(expr.where).map(PresenceFacts::testKey).toSet()
+            val named = refinements[expr.name]?.takeIf { seen.add(expr.name) }?.let { establishedIn(it.expr, seen) }.orEmpty()
+            own + named
+        }
+        is RefAnd -> establishedIn(expr.left, seen) + establishedIn(expr.right, seen)
+        is RefOr, is RefNot -> emptySet()
+    }
+
+    /** The name a rule's subject is a member of, when the condition names one. */
+    private fun subjectOf(expr: RefExpr): String? = when (expr) {
+        is RefName -> expr.name
+        is RefAnd -> subjectOf(expr.left)
+        is RefOr, is RefNot -> null
     }
 
     /** What a refinement expression narrows with `is some`: its own `where` and, through a name, the refinement it names. */

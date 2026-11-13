@@ -14,17 +14,35 @@ data class TypeEnv(
     val scalarAliases: Map<String, VType> = emptyMap(),
     val present: Set<List<String>> = emptySet(),
     val narrowed: Map<List<String>, String> = emptyMap(),
+    /** The tests the scope and the governing conditions establish, keyed as [PresenceFacts.testKey] keys them. */
+    val established: Set<String> = emptySet(),
 ) {
     fun with(narrowing: Narrowing): TypeEnv =
-        if (narrowing.present.isEmpty() && narrowing.narrowed.isEmpty()) this
-        else copy(present = present + narrowing.present, narrowed = narrowed + narrowing.narrowed)
+        if (narrowing.isEmpty()) this
+        else copy(present = present + narrowing.present, narrowed = narrowed + narrowing.narrowed, established = established + narrowing.established)
 }
 
-/** What a governing condition shows (Reference §10): the paths present, and the paths narrowed to a shape. */
-data class Narrowing(val present: Set<List<String>> = emptySet(), val narrowed: Map<List<String>, String> = emptyMap()) {
-    operator fun plus(other: Narrowing) = Narrowing(present + other.present, narrowed + other.narrowed)
-    infix fun both(other: Narrowing) = Narrowing(present intersect other.present, narrowed.filter { (path, shape) -> other.narrowed[path] == shape })
-    companion object { val NONE = Narrowing() }
+/** What a governing condition shows (Reference §10): the paths present, the paths narrowed to a shape,
+ *  and the tests established, keyed as [PresenceFacts.testKey] keys them, which a prohibition's condition is matched against. */
+data class Narrowing(
+    val present: Set<List<String>> = emptySet(),
+    val narrowed: Map<List<String>, String> = emptyMap(),
+    val established: Set<String> = emptySet(),
+) {
+    operator fun plus(other: Narrowing) = Narrowing(present + other.present, narrowed + other.narrowed, established + other.established)
+    infix fun both(other: Narrowing) = Narrowing(
+        present intersect other.present,
+        narrowed.filter { (path, shape) -> other.narrowed[path] == shape },
+        established intersect other.established,
+    )
+    fun isEmpty() = present.isEmpty() && narrowed.isEmpty() && established.isEmpty()
+
+    companion object {
+        val NONE = Narrowing()
+
+        /** A path and every path on the way to it: `site.region.name` with `site.region` and `site`. */
+        fun stepsOf(path: List<String>): Set<List<String>> = path.indices.mapTo(linkedSetOf()) { last -> path.take(last + 1) }
+    }
 }
 
 /**
@@ -157,11 +175,20 @@ class ExprTypes(private val model: Model) {
 
     private fun pathType(path: PathExpr, scope: String, outer: TypeEnv): VType? {
         if (path.root in outer.scalarAliases) return if (path.segs.isEmpty()) outer.scalarAliases[path.root] else null
-        val env = outer.with(narrowingOf(outer.thisScope ?: scope))
+        val env = scopeEnv(outer, scope)
         val start: String? = if (path.root in env.aliases) env.aliases[path.root] else env.thisScope ?: scope
         if (path.root == "this" || path.root in env.aliases) return along(start, path.segs, aliasPrefix(path, env), optional = false, env)
         val rootMember = start?.let { model.membersOf(it)[path.root] } ?: return null
         return along(rootMember, path.segs, listOf(path.root), optional = false, env)
+    }
+
+    /** The environment a read in [scope] sees: what the scope's own `where` shows, and what the
+     *  prohibitions the rules cannot move show there given the tests established (Reference §21). */
+    private fun scopeEnv(outer: TypeEnv, scope: String): TypeEnv {
+        val name = outer.thisScope ?: scope
+        val env = outer.with(narrowingOf(name))
+        val shown = model.presenceFacts.presentIn(name, env.established)
+        return if (shown.isEmpty()) env else env.with(Narrowing(present = shown))
     }
 
     /** The names a path's present and narrowed steps are kept under: the alias with them when the
@@ -175,7 +202,7 @@ class ExprTypes(private val model: Model) {
      */
     fun untestedStep(path: PathExpr, scope: String, outer: TypeEnv): List<String>? {
         if (path.root in outer.scalarAliases) return null
-        val env = outer.with(narrowingOf(outer.thisScope ?: scope))
+        val env = scopeEnv(outer, scope)
         val startsAtRecord = path.root == "this" || path.root in env.aliases
         var current: String? = if (path.root in env.aliases) env.aliases[path.root] else env.thisScope ?: scope
         val steps = if (startsAtRecord) path.segs else listOf(Seg(path.root, viaQdot = false)) + path.segs
@@ -298,15 +325,21 @@ class ExprTypes(private val model: Model) {
      */
     fun narrowingOf(cond: Expr, holds: Boolean, scope: String, env: TypeEnv): Narrowing = when {
         cond is Binary && cond.op == "and" && holds -> narrowingOf(cond.left, true, scope, env) + narrowingOf(cond.right, true, scope, env)
+        // an `or` failing is both sides failing
+        cond is Binary && cond.op == "or" && !holds -> narrowingOf(cond.left, false, scope, env) + narrowingOf(cond.right, false, scope, env)
         cond is IsExpr && cond.subject is PathExpr -> {
             val path = namesOf(cond.subject)
             when {
-                cond.kind == "some" && holds || cond.kind == "none" && !holds -> Narrowing(present = stepsOf(path))
-                cond.kind == "refinement" && holds -> Narrowing(narrowed = mapOf(path to cond.refinement!!))
+                cond.kind == "some" && holds || cond.kind == "none" && !holds ->
+                    Narrowing(present = Narrowing.stepsOf(path), established = setOf(PresenceFacts.testKey(IsExpr(cond.subject, "some"))))
+                cond.kind == "some" || cond.kind == "none" ->
+                    Narrowing(established = setOf(PresenceFacts.testKey(IsExpr(cond.subject, "none"))))
+                cond.kind == "refinement" && holds -> Narrowing(narrowed = mapOf(path to cond.refinement!!), established = setOf(PresenceFacts.testKey(cond)))
                 cond.kind == "refinement" -> complementOf(cond.subject, cond.refinement!!, scope, env)?.let { Narrowing(narrowed = mapOf(path to it)) } ?: Narrowing.NONE
                 else -> Narrowing.NONE
             }
         }
+        holds -> Narrowing(established = setOf(PresenceFacts.testKey(cond)))
         else -> Narrowing.NONE
     }
 
@@ -322,9 +355,6 @@ class ExprTypes(private val model: Model) {
     /** A member's type: its declaration's, or, for a derived property that states none, its expression's (Reference §7). */
     fun memberType(member: MemberInfo): VType =
         member.derived?.takeIf { it.type == null }?.let { model.resolvedDerivedType(member.owner, it) } ?: member.type
-
-    /** A path and every path on the way to it: `site.region.name` with `site.region` and `site`. */
-    private fun stepsOf(path: List<String>): Set<List<String>> = path.indices.mapTo(linkedSetOf()) { last -> path.take(last + 1) }
 
     private fun namesOf(path: PathExpr): List<String> = if (path.root == "this") path.segs.map { it.name } else listOf(path.root) + path.segs.map { it.name }
 

@@ -36,6 +36,8 @@ A requirement that only restricts who may commit an act has a third spelling, in
 
 When a prohibition rejects something, the rejection quotes the declaration as you wrote it: a requirement is reported as unmet, a `never` as reached.
 
+A prohibition that only forbids an optional field absent on every record of a shape is the required declaration said the long way round. `never (Request where key is none)` beside `key: text?` admits nothing `key: text` does not, and a state the type admits is one the books never hold; the compiler advises `declare 'key: text' and drop the prohibition` ([checks.md, A8](checks#a8--a-prohibition-that-is-a-required-declaration)). A prohibition with a condition says what no type can: "whenever a parent label was given, the parent is resolved" is `never (Submission where parentLabel is some and parent is none)`, and the compiler reads it as a fact wherever the condition holds, below.
+
 ## Keys
 
 Many business sentences of the form "no two records share this" are about one value or one set of values: no two kinds share a name, no two readings of one assay sit at the same hour mark, one origin yields one batch. Such a sentence is a *key*, and Velle spells it with `unique` in the shape's body instead of a `never` with a count in it. From `examples/peptides/peptides.velle`, `examples/batches/batches.velle`, and `compiler/src/test/kotlin/velle/UniqueKeyTest.kt`:
@@ -125,6 +127,23 @@ Nothing is checked twice.
 **A key names stored fields.** The compiler rejects `unique` over a field the shape does not declare, a derived property, a timestamp, or a collection, naming the field ([checks.md, V35](checks#v35--a-key-names-stored-fields)).
 
 **A record that arrived without an act is still checked.** A seeded row that already violates a constraint, or has aged into one, is rejected at the next act that reaches it, or thrown at the next tick.
+
+**A prohibition the rules cannot move shows a field present.** `never (Submission where parentLabel is some and parent is none)` says `parent` is present on every submission where `parentLabel is some` holds. A rule or property over `Submission`, or over a refinement within it, whose own conditions establish `parentLabel is some`, spelled the same, reads `parent.key` with a plain dot there, and a key filter may compare with `parent.key` ([§10, "Reaching through relationships"](Reference-10-Predicate-expressions#reaching-through-relationships); [checks.md, V11](checks#v11--narrowing-analysis), [V36](checks#v36--a-filter-over-a-key-is-one-record)):
+
+```
+act Submission {
+    parentLabel: text?
+    parent: one Entry?
+}
+
+never (Submission where parentLabel is some and parent is none)
+
+rule LinkParent when (Submission where parentLabel is some) {
+    Link from { submission: this, parentKey: parent.key }    -- `parent` is present here: the rule's `where` establishes the prohibition's condition
+}
+```
+
+The prohibition counts only when no rule can move it: no rule assigns a field it reads, no shape it reads through is deleted, and every part of its predicate is a test, with no `exists` or selection in it. Otherwise the rule restates the consequence, `where parentLabel is some and parent is some`. A condition spelled differently from the prohibition's, `not (parentLabel is none)` against `parentLabel is some`, is not matched; the diagnostic that refuses the read names the test to write.
 
 **A proved prohibition is used by other proofs.** `never (Customer where referrer == this)` is what lets the compiler prove that writes to `customer.tier` and `customer.referrer.tier` from one commit can never land on the same record, which the one-writer check needs ([§12](Reference-12-Assignment); [checks.md, V1](checks#v1--one-writer-disjointness)). A prohibition is available to other proofs only once the compiler has finished enforcing it ([checks.md, V10](checks#v10--never-obligations-and-spend-tracking)).
 

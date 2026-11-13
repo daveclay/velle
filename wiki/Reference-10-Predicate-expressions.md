@@ -85,7 +85,7 @@ A relationship is followed with a dot: `response.outcome`, `ward.admissions`, in
 
 A dot through an optional value is allowed only when the value is known to be present: its type is not optional, or an `is some` or `is none` test earlier in the same `and` chain, or in the matching branch of an `if`, has established it. Plain `.` on an optional value with no such test is a compile error.
 
-A test on a path establishes every step of the path. Once `site?.region is some` holds, `site` holds a record and that record's `region` holds one, so the branch it governs reads `site.region.name` with plain dots: `if site?.region is some then site.region.name else "unplaced"`. The same holds in the `else` branch of `site?.region is none`. The path under test is spelled with `?.`, because it is read before it is known to be present.
+A test on a path establishes every step of the path. Once `site?.region is some` holds, `site` holds a record and that record's `region` holds one, so the branch it governs reads `site.region.name` with plain dots: `if site?.region is some then site.region.name else "unplaced"`. The same holds in the `else` branch of `site?.region is none`. The path under test is spelled with `?.`, because it is read before it is known to be present. A prohibition the rules cannot move establishes a step as well: `never (Submission where parentLabel is some and parent is none)` shows `parent` present wherever `parentLabel is some` is established ([§21, "What the compiler checks"](Reference-21-never#what-the-compiler-checks)).
 
 A selection or a function whose result may be absent, `first(Field where name == this.fieldName by name).options`, is read through with a plain dot and needs no test; when it matched nothing, the rest of the path is absent.
 

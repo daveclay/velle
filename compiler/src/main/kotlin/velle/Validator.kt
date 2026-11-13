@@ -71,6 +71,7 @@ class Validator(private val model: Model) {
         checkDeleteStranding()         // V28 (OQ37: the V17 mirror at deletion; deletion-side forms transaction-bound)
         checkDeletionSideReferences()  // V24 (OQ37-R14: a deletion-side body keeps no reference to its subject)
         checkDeleterReachesBareLeaving() // A6 (advisory, OQ37-R18: the omission hazard)
+        checkNeverMakesRequired()        // A8 (advisory): a prohibition that is a required declaration said the long way round
         checkDeadTriggerHalves()       // A2 (advisory, OQ37-R17/R19: inert `not deleted` / inert `leaving`)
         checkDriftExposedPartitions() // A4 (advisory)
         checkContention()             // A5 (advisory, OQ40)
@@ -1285,9 +1286,8 @@ class Validator(private val model: Model) {
      *  the aliases, and the paths the branch being checked has narrowed (V11). */
     private fun typeEnv(): TypeEnv = TypeEnv(
         thisScope, aliasScopes.toMap(), scalarAliases.toMap(),
-        present = presentPaths.toSet(),
         narrowed = narrowed.entries.associate { (key, shape) -> key.split(".").let { if (it.first() == "this") it.drop(1) else it } to shape },
-    ).with(ruleNarrowing)
+    ).with(ruleNarrowing).with(branchNarrowing)
 
     /** What the rule being checked shows for its body through its condition's inline `where`. */
     private var ruleNarrowing: Narrowing = Narrowing.NONE
@@ -1759,14 +1759,14 @@ class Validator(private val model: Model) {
         return model.pathElementShape(p, scope, aliasScopes, thisScope ?: scope)
     }
 
-    /** The paths an `is some` or `is none` test has shown present in the branch being checked (Reference §10). */
-    private val presentPaths = mutableSetOf<List<String>>()
+    /** What the governing tests of the branch being checked show: paths present and tests established (Reference §10). */
+    private var branchNarrowing: Narrowing = Narrowing.NONE
 
-    /** Checks [body] with what [condition] shows present where it [holds] or where it fails. */
+    /** Checks [body] with what [condition] shows where it [holds] or where it fails. */
     private inline fun withPresence(condition: Expr, holds: Boolean, scope: String, body: () -> Unit) {
-        val added = model.types.narrowingOf(condition, holds, scope, typeEnv()).present - presentPaths
-        presentPaths.addAll(added)
-        try { body() } finally { presentPaths.removeAll(added) }
+        val saved = branchNarrowing
+        branchNarrowing = saved + model.types.narrowingOf(condition, holds, scope, typeEnv())
+        try { body() } finally { branchNarrowing = saved }
     }
 
     /** V11: a plain dot after a step that may be absent, `site.region` with `site: one Site?` and no
@@ -3862,6 +3862,43 @@ class Validator(private val model: Model) {
                     "may not keep a reference to its subject ('this'): the record will not exist after the " +
                     "deleting commit. Copy the fields that must survive instead (Reference §13)"))
         }
+    }
+
+    // A8 (advisory, Reference §21) — a prohibition over a base shape that only forbids
+    // optional fields absent on every record admits nothing the required declaration
+    // does not; the author almost certainly meant the declaration.
+    private fun checkNeverMakesRequired() {
+        for (never in model.nevers) {
+            val target = never.target as? RefName ?: continue
+            val shape = model.shapes[target.name] ?: continue
+            val disjuncts = PresenceFacts.disjuncts(target.where)
+            if (disjuncts.isEmpty()) continue
+            val fields = disjuncts.map { disjunct -> optionalFieldForbiddenAbsent(disjunct, shape) ?: continue }
+            val names = fields.joinToString(" and ") { field -> "'${field.name}'" }
+            val required = fields.joinToString(" and ") { field -> "'${field.name}: ${Printer.type(requiredType(field.type))}'" }
+            val spelling = if (never.requirement != null) "requirement" else "prohibition"
+            diags.add(Diagnostic("A8", "${Printer.prohibition(never)} only makes $names required on every ${shape.name}; " +
+                "declare $required and drop the $spelling", advisory = true))
+        }
+    }
+
+    /** `field is none` over an optional stored field of [shape]; null for any other test. */
+    private fun optionalFieldForbiddenAbsent(test: Expr, shape: ShapeDecl): StoredProp? {
+        val absence = test as? IsExpr ?: return null
+        if (absence.kind != "none") return null
+        val names = (absence.subject as? PathExpr)?.let { path -> PresenceFacts.namesOf(path) } ?: return null
+        val field = names.singleOrNull()?.let { name -> shape.members.filterIsInstance<StoredProp>().firstOrNull { it.name == name } } ?: return null
+        return field.takeIf { isOptionalType(it.type) }
+    }
+
+    private fun isOptionalType(type: TypeRef): Boolean = when (type) {
+        is ScalarType -> type.optional
+        is RelType -> type.optional
+    }
+
+    private fun requiredType(type: TypeRef): TypeRef = when (type) {
+        is ScalarType -> type.copy(optional = false)
+        is RelType -> type.copy(optional = false)
     }
 
     // A6 (advisory, OQ37-R18) — a deleter reaches a bare `when leaving` rule's
