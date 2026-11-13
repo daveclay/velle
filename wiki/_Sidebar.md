@@ -30,6 +30,7 @@
 - [[grammar|grammar]]
 - [[evaluation|evaluation]]
 - [[checks|checks]]
+- [[diagnostics|diagnostics]]
 - [[patterns|patterns]]
 - [[testgen|testgen]]
 - [[diagrams|diagrams]]

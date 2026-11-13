@@ -1,0 +1,12 @@
+-- `after commit` with no guard and no backup schedule.
+act Order {
+    total: decimal
+}
+
+shape Confirmation {
+    order: one Order
+}
+
+rule Confirm when Order after commit {
+    Confirmation from { order: this }
+}

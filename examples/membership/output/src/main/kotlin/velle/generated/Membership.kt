@@ -1129,7 +1129,7 @@ shape Delinquent = Member where balance < 0
 shape DeepDelinquent = Member where balance < -100
 
 -- We track the worst balance each member has ever hit.
--- velle: a whitelisted fold (min): duplication- and order-insensitive, no guard owed
+-- velle: a fold accepted as written (min): duplication- and order-insensitive, no guard owed
 rule TrackLowestBalance when Delinquent {
     this.lowestBalance = min(this.lowestBalance, this.balance)
 }

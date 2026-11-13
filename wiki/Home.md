@@ -47,6 +47,7 @@ Cited by bare name (`checks.md`, `evaluation.md`) throughout the Reference and t
 - [[grammar|grammar]] — The whole-language grammar, settled and normative
 - [[evaluation|evaluation]] — The operational semantics of a transpiled system, in execution order
 - [[checks|checks]] — Every check the v0 validator runs, one entry each
+- [[diagnostics|diagnostics]] — What the compiler says for each refused spelling, generated from the specs that draw it
 - [[patterns|patterns]] — Worked spellings the normative documents cite
 - [[testgen|testgen]] — How executable specifications are generated from a spec
 - [[diagrams|diagrams]] — The design artifacts derived from a spec and the projection principle behind them

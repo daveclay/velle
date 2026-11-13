@@ -1,0 +1,10 @@
+-- A property that reads itself on a stored `parent: one Kind?` with no `never (Kind where parent == this)`.
+act Kind {
+    name: text unique
+    hasLocation: boolean
+    parent: one Kind?
+
+    locationHolder: one Kind? =
+        if hasLocation then this
+        else parent?.locationHolder
+}

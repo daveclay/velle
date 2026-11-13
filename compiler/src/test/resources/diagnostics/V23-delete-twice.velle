@@ -1,0 +1,7 @@
+-- The same record deleted twice in one body.
+act Task { name: text }
+transient act Drop { task: one Task }
+rule ApplyDrop when Drop {
+    delete task
+    delete task
+}

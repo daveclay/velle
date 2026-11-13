@@ -1,0 +1,43 @@
+-- `(OpenDelinquencyFlag for this)` read as one record, where a second rule creates flags without checking none is open.
+act Account {
+    balance: decimal
+}
+
+act BalanceReport {
+    account: one Account
+    reported: decimal
+}
+
+shape DelinquencyFlag {
+    account: one Account
+    flaggedOn: Date initially today
+}
+
+shape DelinquencyResolution {
+    flag: one DelinquencyFlag
+    resolvedOn: Date initially today
+}
+
+shape Delinquent = Account where balance < 0
+shape OpenDelinquencyFlag = DelinquencyFlag where not exists DelinquencyResolution for this
+
+rule RecordBalance when BalanceReport {
+    account.balance = reported
+}
+
+rule OpenDelinquencyEpisode
+    when (Delinquent where not exists OpenDelinquencyFlag for this) {
+    DelinquencyFlag from { account: this }
+}
+
+rule CloseDelinquencyEpisode when leaving Delinquent {
+    DelinquencyResolution from { flag: (OpenDelinquencyFlag for this) }
+}
+
+act ManualFlag {
+    account: one Account
+}
+
+rule FlagManually when ManualFlag {
+    DelinquencyFlag from { account: account }
+}

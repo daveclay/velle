@@ -1,0 +1,15 @@
+-- A `never` over a field a rule assigns: a guarantee the compiler cannot yet prove.
+act Account {
+    balance: decimal initially 0
+    suspended: boolean initially false
+}
+
+act Suspend {
+    account: one Account
+}
+
+rule ApplySuspend when Suspend {
+    account.suspended = true
+}
+
+never (Account where suspended)

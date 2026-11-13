@@ -1,0 +1,21 @@
+-- The prohibition is written, but a rule assigns `parent`, so the compiler cannot rely on it.
+act Kind {
+    name: text unique
+    hasLocation: boolean
+    parent: one Kind?
+
+    locationHolder: one Kind? =
+        if hasLocation then this
+        else parent?.locationHolder
+}
+
+act Reparent {
+    kind: one Kind
+    newParent: one Kind?
+}
+
+rule Apply when Reparent {
+    kind.parent = newParent
+}
+
+never (Kind where parent == this)

@@ -1,0 +1,12 @@
+-- `after commit` on a schedule, with no guard.
+act Order {
+    total: decimal
+}
+
+shape Confirmation {
+    order: one Order
+}
+
+rule Confirm when Order after commit, Hourly {
+    Confirmation from { order: this }
+}

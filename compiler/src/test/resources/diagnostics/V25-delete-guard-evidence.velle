@@ -1,0 +1,11 @@
+-- A delete of the `DepositApplication` that a guard reads with `not exists`.
+act Account { owner: text, balance: decimal initially 0 }
+act Deposit { account: one Account, amount: decimal }
+shape DepositApplication { deposit: one Deposit? initially required, note: text }
+shape UnappliedDeposit = Deposit where not exists DepositApplication for this
+rule ApplyDeposit when UnappliedDeposit after commit, Hourly {
+    account.balance = account.balance + amount
+    DepositApplication from { deposit: this, note: "applied" }
+}
+transient act PurgeApplication { application: one DepositApplication }
+rule ApplyPurge when PurgeApplication { delete application }

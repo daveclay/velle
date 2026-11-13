@@ -1,0 +1,11 @@
+-- A property that reads itself two steps away, `parent?.parent?.locationHolder`, with the prohibition present.
+act Kind {
+    name: text unique
+    hasLocation: boolean
+    parent: one Kind?
+
+    locationHolder: one Kind? =
+        if hasLocation then this
+        else parent?.parent?.locationHolder
+}
+never (Kind where parent == this)

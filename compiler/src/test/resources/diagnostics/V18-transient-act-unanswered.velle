@@ -1,0 +1,20 @@
+-- A transient act with one rule over a condition and nothing over its opposite.
+act Account {
+    balance: decimal initially 0
+}
+
+shape OverdrawnAccount = Account where balance < 0
+
+transient act WithdrawRequest {
+    account: one Account
+    amount: decimal
+}
+
+shape Withdrawal {
+    account: one Account
+    amount: decimal
+}
+
+rule ApplyWithdrawal when (WithdrawRequest where account is not OverdrawnAccount) {
+    Withdrawal from { account: account, amount: amount }
+}

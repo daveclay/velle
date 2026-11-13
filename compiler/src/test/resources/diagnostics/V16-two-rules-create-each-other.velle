@@ -1,0 +1,16 @@
+-- Two rules that each create the other's trigger, with no guard: `Reply` creates a `Pong`, `ReReply` creates a `Ping`.
+act Ping {
+    note: text
+}
+
+shape Pong {
+    ping: one Ping
+}
+
+rule Reply when Ping {
+    Pong from { ping: this }
+}
+
+rule ReReply when Pong {
+    Ping from { note: "again" }
+}

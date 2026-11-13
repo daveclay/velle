@@ -2496,14 +2496,26 @@ class Validator(private val model: Model) {
             .any { it.target.segs.lastOrNull()?.name == atom.name || (it.target.segs.isEmpty() && it.target.root == atom.name) }
     }
 
+    /** V4: a rule behind the `after commit` boundary needs a guard, so a lost firing is found, and a backup schedule, so it is retried. */
+    private fun afterCommitProblem(rule: RuleDecl, noGuard: Boolean, noSchedule: Boolean): String? {
+        val guardFix = "trigger the rule on a guard, a condition its body makes false by creating a record or setting a field"
+        return when {
+            noGuard && noSchedule -> "rule '${rule.name}' fires 'after commit', in a transaction of its own, so a firing " +
+                "can be lost between the commit and the rule, and nothing would find it; $guardFix, " +
+                "and add a backup schedule beside 'after commit' (Reference §18)"
+            noGuard -> "rule '${rule.name}' fires 'after commit' and on a schedule without a guard, so a lost firing " +
+                "would never be found and the schedule would fire it again for every record; $guardFix (Reference §18)"
+            noSchedule -> "rule '${rule.name}' fires 'after commit' with a guard but no backup schedule, so a lost " +
+                "firing would never be retried; add a schedule beside it, 'after commit, Hourly' (Reference §18)"
+            else -> null
+        }
+    }
+
     private fun checkBoundaryAndDisarm(rule: RuleDecl) {
         val atoms = guardAtoms(rule)
         val schedules = rule.triggers.filter { it != "commit" }
         if (rule.preposition == "after") {
-            if (atoms.isEmpty() || schedules.isEmpty())
-                diags.add(Diagnostic("V4", "rule '${rule.name}' declares 'after commit' without " +
-                    (if (atoms.isEmpty()) "a dischargeable guard" else "a backstop schedule") +
-                    " — this firing can be lost at the declared boundary (Reference §11, §18)"))
+            afterCommitProblem(rule, atoms.isEmpty(), schedules.isEmpty())?.let { problem -> diags.add(Diagnostic("V4", problem)) }
         }
         // V2: a guarded rule that can re-evaluate (boundary or tick) must disarm its own
         // trigger. Falsifying any one conjunct falsifies the conjunction, so one
@@ -2518,7 +2530,8 @@ class Validator(private val model: Model) {
                         is GuardAtom.Flag -> "assign '${atom.name}'"
                     }
                 }
-                diags.add(Diagnostic("V2", "rule '${rule.name}' never leaves its trigger state — its body must $what (the disarm law, Reference §18)"))
+                diags.add(Diagnostic("V2", "rule '${rule.name}' never leaves its trigger state, so it would fire again " +
+                    "for the same record; its body must $what to make its own condition false (Reference §18)"))
             }
         }
         // V7: a capture-reading rule is transaction-bound
@@ -2822,16 +2835,20 @@ class Validator(private val model: Model) {
             val guarded = guardAtoms(w.rule).any { disarmed(w.rule, it) }
             val duplicationExposed = (w.rule.preposition == "after" || schedules.isNotEmpty()) && !guarded
             if (duplicationExposed && tolerates != "duplication")
-                diags.add(Diagnostic("V8", "'${w.owner}.${w.member.name}' folds its own value and can be applied twice " +
-                    "(rule '${w.rule.name}') — gate it on a dischargeable state, derive it, add a reconciliation sweep, " +
-                    "or declare `tolerates duplication` (Reference §19)"))
+                diags.add(Diagnostic("V8", "'${w.owner}.${w.member.name}' is computed from its own value by rule " +
+                    "'${w.rule.name}', which can fire more than once for one record, so the same record could be " +
+                    "folded in twice; guard the rule so it fires once per record (Reference §18), derive " +
+                    "'${w.member.name}' from the records instead, add a scheduled rule that recomputes it, " +
+                    "or declare '${w.member.name}' with 'tolerates duplication' (Reference §19)"))
             // +/- folds commute with each other ((x-a)-b == (x-b)-a); only genuinely
             // order-dependent forms (streaks, resets) fail this
             val orderSafe = facts?.commutes == true
             if (schedules.isNotEmpty() && !orderSafe && tolerates != "reordering")
-                diags.add(Diagnostic("V8", "'${w.owner}.${w.member.name}' is an order-dependent fold on a tick cadence " +
-                    "(rule '${w.rule.name}') — nothing orders one tick's firings; " +
-                    "spell the value as a predecessor recurrence over the ordering datum (Reference §19)"))
+                diags.add(Diagnostic("V8", "'${w.owner}.${w.member.name}' is computed from its own value by rule " +
+                    "'${w.rule.name}', which runs on a schedule, and the records one run handles have no order, " +
+                    "so the result depends on which is folded in first; compute it from the records in order, " +
+                    "as 'streakAfter' does from its predecessor in Reference §19, or declare " +
+                    "'${w.member.name}' with 'tolerates reordering'"))
         }
     }
 
@@ -2844,8 +2861,10 @@ class Validator(private val model: Model) {
             val written = writes.map { it.owner to it.member.name }.toSet()
             (s.fields intersect written).forEach { (shape, field) ->
                 val writer = writes.first { it.owner == shape && it.member.name == field }.rule.name
-                diags.add(Diagnostic("V10", "never over $shape.$field is a guarantee ('$writer' writes the field it reads) — " +
-                    "v0 cannot yet prove it inductively over its writers; fail closed (Reference §21, OQ16)"))
+                diags.add(Diagnostic("V10", "a 'never' reads '$shape.$field', which rule '$writer' assigns, so it is a " +
+                    "guarantee that the rules keep it true, and the compiler cannot yet prove one over every " +
+                    "assignment; read a field no rule assigns, or derive '$field' from the records the rule " +
+                    "writes (Reference §21)"))
             }
         }
     }
@@ -3395,10 +3414,7 @@ class Validator(private val model: Model) {
             if (node in visiting) {
                 val cycle = path.dropWhile { it != node } + node
                 val broken = cycle.any { r -> guardAtoms(r).any { disarmed(r, it) } || deletesSubject(r) }
-                if (!broken)
-                    diags.add(Diagnostic("V16", "rule cascade may not quiesce: " +
-                        cycle.joinToString(" -> ") { it.name } +
-                        " — no disarming guard breaks the cycle (Reference §11, OQ16)"))
+                if (!broken) diags.add(Diagnostic("V16", cascadeMessage(cycle.dropLast(1))))
                 return
             }
             visiting.add(node)
@@ -3407,6 +3423,20 @@ class Validator(private val model: Model) {
             done.add(node)
         }
         commitRules.forEach { dfs(it, emptyList()) }
+    }
+
+    /** V16: rules that each fire from what the one before creates, with no guard among them. */
+    private fun cascadeMessage(rules: List<RuleDecl>): String {
+        val names = rules.map { rule -> "'${rule.name}'" }
+        val fix = "so it fires once per record (Reference §18)"
+        return when (rules.size) {
+            1 -> "rule ${names.single()} fires from what it creates itself, round and round, and never makes " +
+                "its own condition false; guard it $fix"
+            2 -> "rules ${names[0]} and ${names[1]} each fire from what the other creates, round and round, " +
+                "and neither makes its own condition false; guard one of them $fix"
+            else -> "rules ${names.dropLast(1).joinToString(", ")}, and ${names.last()} each fire from what the " +
+                "one before creates, round and round, and none makes its own condition false; guard one of them $fix"
+        }
     }
 
     // ── V12 (refinement slice): at-most-one proofs for (Refinement for expr) ─
@@ -3425,20 +3455,22 @@ class Validator(private val model: Model) {
             if (e !is SingularFor || e.shape !in model.refinements) return@forEachSpecExpr
             val r = e.shape
             val base = model.baseOf(r) ?: return@forEachSpecExpr
-            val demand = "$site — '($r for ...)' needs at-most-one"
+            val demand = "$site reads '($r for ...)' as one record"
+            val selectFix = "select one with 'latest($r where ... by ...)' or 'first(...)' instead"
             if (base in model.exposed)
-                diags.add(Diagnostic("V12", "$demand, but '$base' is an act — an external committer " +
-                    "can create a second member while one exists; use latest/first instead"))
+                diags.add(Diagnostic("V12", "$demand, but '$base' is an act, so a caller can commit a second " +
+                    "'$r' while one exists; $selectFix"))
             antiMonotoneFailure(r, base)?.let { why ->
-                diags.add(Diagnostic("V12", "$demand, but membership in '$r' can recur — $why; " +
-                    "use latest/first instead"))
+                diags.add(Diagnostic("V12", "$demand, but the compiler cannot see that a record is never a member " +
+                    "of '$r' twice: $why; $selectFix"))
             }
             for (rule in model.rules.values) {
                 for (c in rule.body.statements().filterIsInstance<Creation>()) {
                     if (c.shape != base) continue
                     if (!creationGuarded(rule, c, r, base))
-                        diags.add(Diagnostic("V12", "$demand, but rule '${rule.name}' creates '$base' " +
-                            "without the entry guard 'not exists $r for ...' — guard it, or use latest/first"))
+                        diags.add(Diagnostic("V12", "$demand, but rule '${rule.name}' creates a '$base' without " +
+                            "checking that no '$r' exists for it, so two could exist at once; condition the rule " +
+                            "on 'not exists $r for ...', or $selectFix"))
                 }
             }
         }
@@ -3453,10 +3485,12 @@ class Validator(private val model: Model) {
      */
     private fun antiMonotoneFailure(r: String, base: String): String? {
         val conjuncts = refPredicateConjuncts(RefName(r))
-            ?: return "'$r' composes with or/not — v0 proves plain conjunctions only"
+            ?: return "'$r' is defined with 'or' or 'not' around its conditions, and the compiler reads only " +
+                "a plain 'and' of 'not exists ...' and 'not <flag>' tests"
         for (c in conjuncts) {
             val inner = (c as? NotExpr)?.inner
-                ?: return "a conjunct is not of the form 'not ...' — not provably anti-monotone in v0"
+                ?: return "a condition of '$r' is not a 'not exists ...' or 'not <flag>' test, so a record " +
+                    "that leaves '$r' could join it again"
             when {
                 inner is ExistsExpr -> {
                     // 'not exists W' was anti-monotone because facts persisted; a
@@ -3466,8 +3500,8 @@ class Validator(private val model: Model) {
                             ?.takeIf { it.segs.isEmpty() }?.root
                     val wb = w?.let { model.baseOf(it) }
                     if (wb != null && wb in model.deletedShapes)
-                        return "a rule deletes '$wb' (OQ37), so the 'not exists' conjunct can " +
-                            "re-become true — re-entry by deletion is possible"
+                        return "a rule deletes '$wb', so a record that left '$r' because a '$wb' existed " +
+                            "could join it again when that '$wb' is deleted"
                 }
                 inner is PathExpr && inner.segs.isEmpty() -> {
                     val flag = inner.root
@@ -3475,11 +3509,11 @@ class Validator(private val model: Model) {
                         it.owner == base && it.member.name == flag && it.value != BoolLit(true)
                     }
                     if (falseWriter != null)
-                        return "rule '${falseWriter.rule.name}' writes '$flag' non-true, " +
-                            "re-entry by drift is possible"
+                        return "rule '${falseWriter.rule.name}' sets '$flag' to something other than true, " +
+                            "so a record that left '$r' could join it again"
                 }
-                else -> return "a conjunct is not provably anti-monotone in v0 " +
-                    "('not exists ...' and one-way latch flags are the provable forms)"
+                else -> return "a condition of '$r' is not a 'not exists ...' or 'not <flag>' test, so a record " +
+                    "that leaves '$r' could join it again"
             }
         }
         return null
@@ -3634,13 +3668,12 @@ class Validator(private val model: Model) {
                 }
             }
             if (!bare && !complementPair)
-                diags.add(Diagnostic("V18", "a '$t' can arrive that nothing provably answers. '$t' is transient — " +
-                    "it is not kept after its commit — so an unanswered '$t' would be ignored, and no record " +
-                    "that it arrived would exist anywhere. v0 proves coverage for an answer on the bare shape " +
-                    "or a complementary pair (P / not P), where an answer is a rule's condition or a `never` " +
-                    "over the act (the boundary refusal is the response); add a catch-all rule, refuse the " +
-                    "remainder with a `never`, or restructure the partitions as complements (per-reason " +
-                    "refusals go in one complement rule with a conditional reason value)"))
+                diags.add(Diagnostic("V18", "a '$t' can arrive that no rule or 'never' answers, and it is " +
+                    "transient, so an unanswered one would be ignored with no record that it arrived. The compiler " +
+                    "sees every '$t' answered when a rule or a 'never' is written over the bare '$t', or when two " +
+                    "answers have conditions that are each other's opposite, 'P' and 'not P'; add a rule over '$t' " +
+                    "with no condition, refuse the rest with 'never ($t where not P)', or write one rule on the " +
+                    "opposite condition whose reason is a conditional value (Reference §4)"))
         }
     }
 
@@ -3692,7 +3725,7 @@ class Validator(private val model: Model) {
         rule.body.any { it is DeleteStmt && it.target == PathExpr("this") }
 
     private fun siteLabel(s: DeleteSite) =
-        "rule '${s.rule.name}' deletes ${s.shape} ('delete ${Printer.expr(s.stmt.target)}')"
+        "rule '${s.rule.name}' deletes a '${s.shape}' ('delete ${Printer.expr(s.stmt.target)}')"
 
     // V23 — the statement: literal static to-one path; a shape known to the
     // spec, never a transient act; one deleter per instance per commit (two
@@ -3713,25 +3746,23 @@ class Validator(private val model: Model) {
                     }
                 if (shape == null) {
                     if (!(t.root == "this" && t.segs.isEmpty()))
-                        diags.add(Diagnostic("V23", "rule '${rule.name}' — 'delete ${Printer.expr(t)}' " +
-                            "does not resolve to a single instance: the target is a literal static " +
-                            "to-one path (OQ37; no fan-out deletes in v0 — a per-member delete is its " +
-                            "own rule on the shape that owns the instances)"))
+                        diags.add(Diagnostic("V23", "rule '${rule.name}' deletes '${Printer.expr(t)}', which does " +
+                            "not name one record through 'one' fields; a delete removes one record, named by a " +
+                            "fixed path such as 'delete this' or 'delete listing' (Reference §12)"))
                     continue
                 }
                 if (shape in model.transients)
-                    diags.add(Diagnostic("V23", "rule '${rule.name}' deletes transient act '$shape' — " +
-                        "a transient act is an input to the state, not a member of it: there is " +
-                        "nothing to delete (Reference §4)"))
+                    diags.add(Diagnostic("V23", "rule '${rule.name}' deletes the transient act '$shape', which is " +
+                        "not kept after its commit, so there is nothing to delete (Reference §4)"))
                 // a collection anywhere in the target is a fan-out — refused
                 if (pathHasCollectionHop(t, scope))
-                    diags.add(Diagnostic("V23", "rule '${rule.name}' — 'delete ${Printer.expr(t)}' " +
-                        "traverses a collection: no fan-out deletes in v0 — a per-member delete is " +
-                        "its own rule on the shape that owns the instances (OQ37)"))
+                    diags.add(Diagnostic("V23", "rule '${rule.name}' deletes '${Printer.expr(t)}', which goes " +
+                        "through a collection; a delete removes one record, so write a rule whose subject is " +
+                        "each record to delete, and it fires once per record (Reference §12)"))
                 // same body: the same instance deleted twice, or written and deleted
                 val dupes = rule.body.filterIsInstance<DeleteStmt>().count { it.target == t }
                 if (dupes > 1)
-                    diags.add(Diagnostic("V23", "rule '${rule.name}' deletes ${Printer.expr(t)} twice in one body"))
+                    diags.add(Diagnostic("V23", "rule '${rule.name}' deletes '${Printer.expr(t)}' twice in one body; delete it once"))
                 for (a in rule.body.filterIsInstance<Assignment>()) {
                     val writesDeleted =
                         if (t.root == "this" && t.segs.isEmpty())
@@ -3741,9 +3772,9 @@ class Validator(private val model: Model) {
                             a.target.segs.dropLast(1).map { it.name } == t.segs.map { it.name } &&
                             a.target.segs.size == t.segs.size + 1
                     if (writesDeleted)
-                        diags.add(Diagnostic("V23", "rule '${rule.name}' both writes " +
-                            "${Printer.expr(a.target)} and deletes ${Printer.expr(t)} in one commit — " +
-                            "there is no business sentence \"change it and also remove it, at once\" (OQ37)"))
+                        diags.add(Diagnostic("V23", "rule '${rule.name}' both assigns '${Printer.expr(a.target)}' " +
+                            "and deletes '${Printer.expr(t)}' in one commit, and a record cannot be changed and " +
+                            "removed at once; drop the assignment, or keep the record (Reference §12)"))
                 }
             }
         }
@@ -3755,18 +3786,18 @@ class Validator(private val model: Model) {
             val (a, b) = sites[i] to sites[j]
             if (a.rule === b.rule || a.shape != b.shape) continue
             if (!provablyDisjoint(a.rule, b.rule) && canCoFire(a.rule, b.rule))
-                diags.add(Diagnostic("V23", "rules '${a.rule.name}' and '${b.rule.name}' can both delete " +
-                    "a ${a.shape} at one commit and their triggers are not provably disjoint — " +
-                    "one deleter per instance per commit (OQ37)"))
+                diags.add(Diagnostic("V23", "rules '${a.rule.name}' and '${b.rule.name}' can both fire from one " +
+                    "commit and each deletes a '${a.shape}', and the compiler cannot see that they never delete " +
+                    "the same record; condition one so the two cannot fire together (Reference §12)"))
         }
         for (site in sites) {
             for (w in writes) {
                 if (w.owner != site.shape || w.rule === site.rule) continue
                 if (!provablyDisjoint(w.rule, site.rule) && canCoFire(w.rule, site.rule))
-                    diags.add(Diagnostic("V23", "'${w.rule.name}' writes ${w.owner}.${w.member.name} and " +
-                        "sibling '${site.rule.name}' deletes ${site.shape} — a commit that both writes a " +
-                        "field of an instance and deletes it is refused, fail closed (OQ37); " +
-                        "condition one rule away from the other"))
+                    diags.add(Diagnostic("V23", "rule '${w.rule.name}' assigns '${w.owner}.${w.member.name}' and " +
+                        "rule '${site.rule.name}' deletes a '${site.shape}', and both can fire from one commit, " +
+                        "so one record could be changed and removed at once; condition one so the two cannot " +
+                        "fire together (Reference §12)"))
             }
         }
     }
@@ -3832,12 +3863,11 @@ class Validator(private val model: Model) {
                 for (site in model.deleteSites) {
                     if (site.shape != base) continue
                     if (deleteExcludes(site, witness)) continue
-                    diags.add(Diagnostic("V25", "${siteLabel(site)}, whose existence '${rule.name}'s " +
-                        "guard reads ('not exists $witness ...') — the delete re-arms the guard and the " +
-                        "rule applies again. Restructure the guard onto a field witness, write the " +
-                        "disjointness into the predicates (the shared refinement-overlap prover, nothing " +
-                        "finer — OQ37, ruled conservative), or — for intentional re-triggering — model " +
-                        "the reversal as data (Reference §22); this hazard is not `tolerates`-signable"))
+                    diags.add(Diagnostic("V25", "${siteLabel(site)}, and rule '${rule.name}' fires only while " +
+                        "none exists ('not exists $witness ...'), so the delete would make '${rule.name}' fire " +
+                        "again for the same record; keep the evidence of '${rule.name}' as a field on the record " +
+                        "instead, condition '${site.rule.name}' so it never deletes one the guard reads, or " +
+                        "record the reversal as data if the rule is meant to fire again (Reference §18)"))
                 }
             }
         }
@@ -3847,11 +3877,10 @@ class Validator(private val model: Model) {
             for (site in model.deleteSites) {
                 if (site.shape != base) continue
                 if (e.shape != base && deleteExcludes(site, e.shape)) continue
-                diags.add(Diagnostic("V25", "${siteLabel(site)}, and $spot relies on " +
-                    "'(${e.shape} for ...)' being present — the delete can strand the singular " +
-                    "reference mid-episode. Condition the deleter on the complement of " +
-                    "'${e.shape}' (complementary predicates, which the shared prover clears), " +
-                    "or restructure (OQ37)"))
+                diags.add(Diagnostic("V25", "${siteLabel(site)}, and $spot reads '(${e.shape} for ...)' as " +
+                    "the one record, so the delete could remove it while the read still needs it; condition " +
+                    "'${site.rule.name}' so it deletes only records that are not in '${e.shape}', or keep " +
+                    "the record (Reference §12)"))
             }
         }
     }
@@ -3874,10 +3903,10 @@ class Validator(private val model: Model) {
             val consulted = s.touchedShapes().mapNotNull { model.baseOf(it) }.toSet() - setOfNotNull(nBase)
             for (site in model.deleteSites) {
                 if (site.shape !in consulted && !s.opaque) continue
-                diags.add(Diagnostic("V26", "${siteLabel(site)}, which ${n.keyword} #${i + 1} " +
-                    "(over $nBase) consults — the delete can end a transaction violating the " +
-                    "invariant, and v0 cannot prove otherwise: condition the deleting act, or " +
-                    "resolve the invariant's other side in the same commit (OQ37)"))
+                diags.add(Diagnostic("V26", "${siteLabel(site)}, and the '${n.keyword}' " +
+                    "(${Printer.prohibitionBody(n)}) reads '${site.shape}', so the delete could leave the books " +
+                    "in the forbidden state, which the compiler cannot rule out; condition '${site.rule.name}' " +
+                    "so it cannot, or put the books right in the same commit (Reference §21)"))
             }
         }
     }
@@ -3911,10 +3940,10 @@ class Validator(private val model: Model) {
                     val base = model.baseOf(c.shape) ?: c.shape
                     if (base !in consulted && !s.opaque) continue
                     val moment = if (schedules.isNotEmpty()) "on ${schedules.joinToString(", ")}" else "after commit"
-                    diags.add(Diagnostic("V29", "rule '${rule.name}' $moment creates a ${c.shape}, which ${n.keyword} #${i + 1} " +
-                        "(${Printer.prohibitionBody(n)}) consults — the firing can end its transaction in the " +
-                        "forbidden state with no caller to refuse, and v0 cannot prove the condition excludes it: " +
-                        "guard the record's creation on a state the prohibition cannot reach, restore within the " +
+                    diags.add(Diagnostic("V29", "rule '${rule.name}' creates a '${c.shape}' $moment with nobody " +
+                        "asking, and the '${n.keyword}' (${Printer.prohibitionBody(n)}) reads '${c.shape}', so the " +
+                        "firing could be refused at every tick with no caller to tell; condition '${rule.name}' so " +
+                        "it cannot create a '${c.shape}' the prohibition forbids, put the books right within the " +
                         "firing, or retract the prohibition (Reference §21)"))
                 }
             }

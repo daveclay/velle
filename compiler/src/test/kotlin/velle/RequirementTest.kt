@@ -175,6 +175,6 @@ class RequirementTest {
         """.trimIndent()
         val v29 = Validator.validate(src).filter { it.code == "V29" }
         assertEquals(1, v29.size, Validator.validate(src).toString())
-        assertTrue("which requires #1 (Shipment requires order is not CancelledOrder) consults" in v29.single().message, v29.single().message)
+        assertTrue("the 'requires' (Shipment requires order is not CancelledOrder) reads 'Cancellation'" in v29.single().message, v29.single().message)
     }
 }

@@ -1,0 +1,15 @@
+-- A property that reads itself through a selection, `latest(...).streakAfter`, rather than one step through a field.
+shape Account {
+    note: text
+}
+
+act Payment {
+    account: one Account
+    onTime: boolean
+    receivedOn: timestamp on create
+    previous: one Payment? = latest(Payment where account == this.account and receivedOn < this.receivedOn by receivedOn)
+    streakAfter: integer =
+        if not onTime then 0
+        else if previous is some then latest(Payment where account == this.account and receivedOn < this.receivedOn by receivedOn).streakAfter + 1
+        else 1
+}

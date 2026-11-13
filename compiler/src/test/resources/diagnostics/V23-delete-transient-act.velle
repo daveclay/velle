@@ -1,0 +1,4 @@
+-- `delete ping` where `Ping` is a transient act.
+transient act Ping { note: text }
+transient act Purge { ping: one Ping }
+rule ApplyPurge when Purge { delete ping }

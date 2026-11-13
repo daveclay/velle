@@ -1,0 +1,15 @@
+-- `previous` picks by `receivedOn <= this.receivedOn`, so it can pick a payment with the same timestamp.
+shape Account {
+    note: text
+}
+
+act Payment {
+    account: one Account
+    onTime: boolean
+    receivedOn: timestamp on create
+    previous: one Payment? = latest(Payment where account == this.account and receivedOn <= this.receivedOn by receivedOn)
+    streakAfter: integer =
+        if not onTime then 0
+        else if previous is some then previous.streakAfter + 1
+        else 1
+}

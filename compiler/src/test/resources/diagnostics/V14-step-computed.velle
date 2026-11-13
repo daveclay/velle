@@ -1,0 +1,12 @@
+-- A property that reads itself on a `parent` computed by a lookup, not a `latest`/`first` picking a strictly earlier record.
+act Kind {
+    name: text unique
+    hasLocation: boolean
+    parentName: text?
+parent: one Kind? = if parentName is none then none else first(Kind where name == this.parentName by name)
+
+    locationHolder: one Kind? =
+        if hasLocation then this
+        else parent?.locationHolder
+}
+never (Kind where parent == this)

@@ -1,0 +1,11 @@
+-- A property that reads itself on `parent: one Kind`, a required field, so no kind ends the chain.
+act Kind {
+    name: text unique
+    hasLocation: boolean
+    parent: one Kind
+
+    locationHolder: one Kind? =
+        if hasLocation then this
+        else parent.locationHolder
+}
+never (Kind where parent == this)

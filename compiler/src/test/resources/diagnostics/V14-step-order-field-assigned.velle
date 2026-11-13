@@ -1,0 +1,24 @@
+-- `previous` picks by `position < this.position`, and a rule assigns `position`.
+shape Account {
+    note: text
+}
+
+act Payment {
+    account: one Account
+    onTime: boolean
+    position: integer
+    previous: one Payment? = latest(Payment where account == this.account and position < this.position by position)
+    streakAfter: integer =
+        if not onTime then 0
+        else if previous is some then previous.streakAfter + 1
+        else 1
+}
+
+act Reorder {
+    payment: one Payment
+    newPosition: integer
+}
+
+rule Apply when Reorder {
+    payment.position = newPosition
+}

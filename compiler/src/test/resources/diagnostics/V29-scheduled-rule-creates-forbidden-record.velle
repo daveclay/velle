@@ -1,0 +1,14 @@
+-- A nightly rule creates a `Cancellation`, which `never (Shipment where order is CancelledOrder)` reads.
+act Order { reference: text  placedOn: Date }
+act Payment { order: one Order  paidOn: Date }
+shape UnpaidOrder = Order where not exists (payments)
+act Cancellation { order: one Order  requestedOn: Date }
+shape CancelledOrder = Order where exists (cancellations)
+act Shipment { order: one Order  shippedOn: Date }
+never (Shipment where order is CancelledOrder)
+
+rule CancelUnpaid
+    when (UnpaidOrder where placedOn < today - 7 days and not exists (cancellations))
+    on Nightly {
+    Cancellation from { order: this, requestedOn: today }
+}

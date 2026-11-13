@@ -454,7 +454,7 @@ class BillingSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z")) 
 -- Billing: a small invoicing system — the first Velle spec, and v0's test fixture.
 -- Deliberately exercises the full v0 surface: every property kind, relationships,
 -- refinements (composition, capture, frozen), guards with disarm proofs, a
--- whitelisted fold, after-commit with a backstop, a tick sweep whose memory is
+-- a fold accepted as written, after-commit with a backstop, a tick sweep whose memory is
 -- data, when-leaving, rejection-as-data, and door-checked `never`s.
 --
 -- Comment convention (here and in membership.velle): plain comments tell the
@@ -559,7 +559,7 @@ rule RecordPayment when SubmitPayment {
 }
 
 -- We remember the largest single payment each customer has ever made.
--- velle: a whitelisted fold (max): duplication- and order-insensitive, so no guard owed
+-- velle: a fold accepted as written (max): duplication- and order-insensitive, so no guard owed
 rule TrackLargestPayment when Payment {
     invoice.customer.largestPayment = max(invoice.customer.largestPayment, amount)
 }

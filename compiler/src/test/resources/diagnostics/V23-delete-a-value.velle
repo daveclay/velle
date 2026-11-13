@@ -1,0 +1,4 @@
+-- `delete task.name`, a delete of a text rather than a record.
+act Task { name: text }
+transient act Drop { task: one Task }
+rule ApplyDrop when Drop { delete task.name }

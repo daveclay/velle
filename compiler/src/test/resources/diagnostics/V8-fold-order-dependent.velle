@@ -1,0 +1,17 @@
+-- A streak folded from its own value by a guarded rule on a schedule: the records one run handles have no order.
+act Account {
+    streak: integer initially 0
+}
+
+act Payment {
+    account: one Account
+    onTime: boolean
+    handled: boolean initially false
+}
+
+shape UnhandledPayment = Payment where not handled
+
+rule TrackStreak when UnhandledPayment on commit, Hourly {
+    account.streak = if onTime then account.streak + 1 else 0
+    this.handled = true
+}

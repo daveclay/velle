@@ -1,0 +1,7 @@
+-- A body that assigns `task.done` and deletes `task` in one commit.
+act Task { name: text, done: boolean initially false }
+transient act Drop { task: one Task }
+rule ApplyDrop when Drop {
+    task.done = true
+    delete task
+}

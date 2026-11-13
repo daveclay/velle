@@ -212,10 +212,10 @@ class ExtensionTypeTest {
     fun `V8 reads the operator's fold facts`() {
         // `+` on Price commutes (declared) and is not idempotent: a scheduled fold passes the ordering leg
         val commuting = messages(money + "act Account { balance: Price initially 0, fee: Price }\nrule Charge when Account on Nightly { balance = balance - fee }")
-        assertTrue("order-dependent fold" !in commuting, commuting)
+        assertTrue("the records one run handles have no order" !in commuting, commuting)
         // `*` on Price declares neither: a scheduled fold is refused as order-dependent
         val notCommuting = messages(money + "act Account { balance: Price initially 0 }\nrule Grow when Account on Nightly { balance = balance * 2 }")
-        assertTrue("order-dependent fold" in notCommuting, notCommuting)
+        assertTrue("the records one run handles have no order" in notCommuting, notCommuting)
     }
 
     // ── the worked Price (D6) in memory ──────────────────────────────────────

@@ -1,0 +1,5 @@
+-- One rule assigns `Task.done` and a sibling rule on the same act deletes a `Task`.
+act Task { name: text, done: boolean initially false }
+transient act Drop { task: one Task, other: one Task }
+rule Mark when Drop { other.done = true }
+rule DropIt when Drop { delete task }

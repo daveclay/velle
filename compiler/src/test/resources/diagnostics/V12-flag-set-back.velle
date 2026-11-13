@@ -1,0 +1,40 @@
+-- `(OpenDelinquencyFlag for this)` read as one record, where a rule sets the closing flag back to false.
+act Account {
+    balance: decimal
+}
+
+act BalanceReport {
+    account: one Account
+    reported: decimal
+}
+
+shape DelinquencyFlag {
+    account: one Account
+    resolved: boolean initially false
+}
+
+act FlagDispute {
+    flag: one DelinquencyFlag
+}
+
+shape Delinquent = Account where balance < 0
+shape OpenDelinquencyFlag = DelinquencyFlag where not resolved
+
+rule RecordBalance when BalanceReport {
+    account.balance = reported
+}
+
+rule OpenDelinquencyEpisode
+    when (Delinquent where not exists OpenDelinquencyFlag for this) {
+    DelinquencyFlag from { account: this }
+}
+
+rule CloseFlag when (OpenDelinquencyFlag where account is not Delinquent) {
+    this.resolved = true
+}
+
+rule ReopenFlag when FlagDispute {
+    flag.resolved = false
+}
+
+shape Reportable = Account where (OpenDelinquencyFlag for this).resolved == false

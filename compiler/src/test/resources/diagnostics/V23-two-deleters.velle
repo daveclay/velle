@@ -1,0 +1,5 @@
+-- Two rules on one act that each delete a `Task`.
+act Task { name: text }
+transient act Drop { task: one Task, other: one Task }
+rule DropFirst when Drop { delete task }
+rule DropSecond when Drop { delete other }

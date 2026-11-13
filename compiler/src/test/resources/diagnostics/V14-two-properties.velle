@@ -1,0 +1,12 @@
+-- Two properties computed from each other: `label = path` and `path` reads `parent.label`.
+act Kind {
+    name: text unique
+    parent: one Kind?
+
+    label: text = path
+    path: text =
+        if parent is none then name
+        else "${parent.label}/${name}"
+}
+
+never (Kind where parent == this)

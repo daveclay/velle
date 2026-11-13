@@ -103,9 +103,9 @@ A rejection is data, not just a message. A refusal carries the act, the records 
 
 ## What the compiler checks
 
-**A guarantee is proved, not checked at run time.** The compiler examines every rule that writes a field the prohibition reads and proves none can end a transaction in the forbidden configuration. When it cannot, the error names both sides and the three ways out:
+**A guarantee is proved, not checked at run time.** The compiler examines every rule that writes a field the prohibition reads and proves none can end a transaction in the forbidden configuration. When it cannot, the error names the field, the rule that assigns it, and the two ways out:
 
-> `SuspendManually` can end a transaction violating `never (Account where balance >= 0 and suspended)`: condition the act, restore within the transaction, or retract the prohibition.
+> a 'never' reads 'Account.suspended', which rule 'SuspendManually' assigns, so it is a guarantee that the rules keep it true, and the compiler cannot yet prove one over every assignment; read a field no rule assigns, or derive 'suspended' from the records the rule writes (Reference §21)
 
 **A refusal or a constraint is compiled into the generated code.** No compile-time proof can stop tomorrow's request, so the generated system evaluates the prohibition against incoming data and rejects a violating act. The check runs at one of two moments:
 

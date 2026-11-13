@@ -1,0 +1,13 @@
+-- A balance folded from its own value by a rule on a schedule with no guard: `account.balance = account.balance + amount`.
+act Account {
+    balance: decimal initially 0
+}
+
+act Deposit {
+    account: one Account
+    amount: decimal
+}
+
+rule ApplyDeposit when Deposit on commit, Hourly {
+    account.balance = account.balance + amount
+}

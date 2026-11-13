@@ -1,0 +1,5 @@
+-- `delete order.lineItems`, a delete through a collection.
+act Order { code: text }
+shape LineItem { order: one Order? initially required, sku: text }
+transient act Wipe { order: one Order }
+rule ApplyWipe when Wipe { delete order.lineItems }

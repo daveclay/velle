@@ -48,7 +48,15 @@ A diagnostic is read by a Velle author, not a compiler engineer. Name the
 property or field the author wrote and the spelling that would be accepted.
 No internal vocabulary (certificate, whitelist, witness, discharge, rung).
 One message per reason. V14's messages in `Validator.kt` (`SelfReadProblem`)
-and the `V14 message` tests in `ValidatorTest.kt` are the model.
+are the model.
+
+Every message's text is pinned by `wiki/diagnostics.md`, which
+`DiagnosticCatalogTest` generates from the refused specs under
+`compiler/src/test/resources/diagnostics/`, one file per message, named
+`<check>-<slug>.velle` and opening with `--` lines saying what it spells.
+A new or changed message gets its spec there, and the page is regenerated
+with `VELLE_UPDATE_DIAGNOSTICS=true ./gradlew :compiler:test --tests
+velle.DiagnosticCatalogTest`; the diff is the review.
 
 ## Checks
 

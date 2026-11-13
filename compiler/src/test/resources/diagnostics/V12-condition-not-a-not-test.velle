@@ -1,0 +1,35 @@
+-- `(OpenDelinquencyFlag for this)` read as one record, where the refinement's condition is a comparison a record can satisfy again.
+act Account {
+    balance: decimal
+}
+
+act BalanceReport {
+    account: one Account
+    reported: decimal
+}
+
+shape DelinquencyFlag {
+    account: one Account
+    flaggedOn: Date initially today
+}
+
+shape DelinquencyResolution {
+    flag: one DelinquencyFlag
+    resolvedOn: Date initially today
+}
+
+shape Delinquent = Account where balance < 0
+shape OpenDelinquencyFlag = DelinquencyFlag where flaggedOn > today - 30 days
+
+rule RecordBalance when BalanceReport {
+    account.balance = reported
+}
+
+rule OpenDelinquencyEpisode
+    when (Delinquent where not exists OpenDelinquencyFlag for this) {
+    DelinquencyFlag from { account: this }
+}
+
+rule CloseDelinquencyEpisode when leaving Delinquent {
+    DelinquencyResolution from { flag: (OpenDelinquencyFlag for this) }
+}

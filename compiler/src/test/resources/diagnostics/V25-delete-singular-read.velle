@@ -1,0 +1,12 @@
+-- A delete of the flag that `(OpenFlag for this)` reads as the one record.
+act Account { owner: text }
+act DelinquencyFlag { account: one Account, note: text }
+shape Resolution { flag: one DelinquencyFlag? initially required, note: text }
+shape OpenFlag = DelinquencyFlag where not exists Resolution for this
+shape Cleared = Account where exists DelinquencyFlag for this
+rule Escalate when Cleared {
+    Note from { body: (OpenFlag for this).note }
+}
+shape Note { body: text }
+transient act Purge { flag: one DelinquencyFlag }
+rule ApplyPurge when Purge { delete flag }

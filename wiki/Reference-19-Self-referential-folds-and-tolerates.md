@@ -45,7 +45,7 @@ The compiler does not analyze your formula. It recognizes a short list of forms 
 
 For an extension type the author answers both columns per operator, and the compiler checks each answer on the type's own sample values. `Money` declares that two `+` steps may be applied in either order and that one step applied twice is not the same as once, so a `Money` fold reads the second row of the table.
 
-A fold is rejected when the rule is exposed to a hazard its form is not known to be safe under. The error asks for a policy: "this value's correctness depends on each qualifying commit being folded exactly once; state how that is ensured." A streak really does break under replay, so the error is correct even when the code is what you meant. The four answers:
+A fold is rejected when the rule is exposed to a hazard its form is not known to be safe under. The error names the field, the rule, and the four answers below. A streak really does break under replay, so the error is correct even when the code is what you meant. The four answers:
 
 1. **Guard the rule** so it fires once per record ([§18](Reference-18-Run-once-guards)).
 2. **Derive the value** from the source records instead. A derived `balance = sum(deposits, amount)` cannot double count.
@@ -70,12 +70,13 @@ Same trigger, different outcomes:
 rule ApplyDeposit when Deposit on commit, Hourly {
     account.balance = account.balance + amount
 }
--- "correctness depends on each Deposit being folded exactly once, and nothing
---  ensures it. Gate the rule on a dischargeable state (see UnappliedDeposit),
---  define balance as a derivation over deposits, add a reconciliation sweep,
---  or declare `tolerates duplication` on the field."
+-- "'Account.balance' is computed from its own value by rule 'ApplyDeposit',
+--  which can fire more than once for one record, so the same record could be
+--  folded in twice; guard the rule so it fires once per record, derive
+--  'balance' from the records instead, add a scheduled rule that recomputes
+--  it, or declare 'balance' with 'tolerates duplication'"
 
--- silent: whitelisted fold — fold it twice, ten times, out of order; same value
+-- silent: a fold accepted as written. Fold it twice, ten times, out of order; same value
 rule TrackLargest when Deposit on commit, Hourly {
     account.largestDeposit = max(account.largestDeposit, amount)
 }

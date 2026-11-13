@@ -1,0 +1,6 @@
+-- A delete of a `LineItem` that `never (Order where count(lineItems) == 0)` reads.
+act Order { code: text }
+shape LineItem { order: one Order? initially required, sku: text }
+never (Order where count(lineItems) == 0)
+transient act Remove { item: one LineItem }
+rule ApplyRemove when Remove { delete item }

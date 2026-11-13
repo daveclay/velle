@@ -1,0 +1,5 @@
+-- A property computed from itself on the same record: `next: integer = next + 1`.
+shape Counter {
+    base: integer
+    next: integer = next + 1
+}

@@ -1,0 +1,7 @@
+-- Two refinements defined by each other: `Odd` by `Even` and `Even` by `Odd`.
+act Item {
+    flag: boolean
+}
+
+shape Odd = Item where this is Even
+shape Even = Item where this is Odd

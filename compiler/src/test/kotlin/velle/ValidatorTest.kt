@@ -43,7 +43,12 @@ class ValidatorTest {
         """.trimIndent()
         val d = diags(src).filter { it.code == "V29" }
         assertEquals(1, d.size, "got: ${diags(src)}")
-        assertTrue("rule 'CancelUnpaid' on Nightly creates a Cancellation, which never #1 (Shipment where order is CancelledOrder) consults" in d.single().message, d.single().message)
+        assertEquals(
+            "rule 'CancelUnpaid' creates a 'Cancellation' on Nightly with nobody asking, and the 'never' " +
+                "(Shipment where order is CancelledOrder) reads 'Cancellation', so the firing could be refused at " +
+                "every tick with no caller to tell; condition 'CancelUnpaid' so it cannot create a 'Cancellation' " +
+                "the prohibition forbids, put the books right within the firing, or retract the prohibition (Reference §21)",
+            d.single().message)
     }
 
     @Test
@@ -166,7 +171,7 @@ class ValidatorTest {
         val v29 = diags(src).filter { it.code == "V29" }
         // the constraint over Shipment still refuses the nightly cancellation; the refusal over Ship does not join
         assertEquals(1, v29.size, "got: ${diags(src)}")
-        assertTrue("never #1" in v29.single().message, v29.single().message)
+        assertTrue("(Shipment where order is CancelledOrder)" in v29.single().message, v29.single().message)
     }
 
     @Test
@@ -948,200 +953,6 @@ class ValidatorTest {
             shape Even = Item where this is Odd
         """.trimIndent()
         assertTrue(codes(src).contains("V14"), "got: ${diags(src)}")
-    }
-
-    // ── V14: one message per reason, naming the step and the spelling that passes ──
-
-    private fun v14Message(source: String): String =
-        diags(source).single { it.code == "V14" }.message
-
-    /** The survey's kind-and-parent case: a kind's location holder is its parent's when it has none. */
-    private fun kindWithParent(parentDeclaration: String, locationHolderFormula: String, trailer: String = ""): String = """
-        act Kind {
-            name: text unique
-            hasLocation: boolean
-            $parentDeclaration
-
-            locationHolder: one Kind? =
-                if hasLocation then this
-                else $locationHolderFormula
-        }
-        $trailer
-    """.trimIndent()
-
-    @Test
-    fun `V14 message - a property computed from itself on the same record`() {
-        val src = """
-            shape Counter {
-                base: integer
-                next: integer = next + 1
-            }
-        """.trimIndent()
-        assertEquals(
-            "'Counter.next' is computed from itself, and there is nothing to start from; " +
-                "compute it from other fields, or read it on a related record one step away",
-            v14Message(src))
-    }
-
-    @Test
-    fun `V14 message - a property read more than one step away`() {
-        val src = kindWithParent("parent: one Kind?", "parent?.parent?.locationHolder", "never (Kind where parent == this)")
-        assertEquals(
-            "'Kind.locationHolder' reads itself two steps away, through 'parent.parent'; " +
-                "the compiler can see the chain ends only when the property reads itself one step away. " +
-                "Read 'parent.locationHolder', or write the walk 'walk parent' (Reference §7)",
-            v14Message(src))
-    }
-
-    @Test
-    fun `V14 message - a property read through a selection`() {
-        val src = recurrence.replace(
-            "previous.streakAfter + 1",
-            "latest(Payment where account == this.account and receivedOn < this.receivedOn by receivedOn).streakAfter + 1")
-        assertEquals(
-            "'Payment.streakAfter' reads itself through a selection; " +
-                "the compiler can see the chain ends only when the property reads itself one step away, " +
-                "through a field of Payment holding one Payment",
-            v14Message(src))
-    }
-
-    @Test
-    fun `V14 message - the step is a required field`() {
-        val src = kindWithParent("parent: one Kind", "parent.locationHolder", "never (Kind where parent == this)")
-        assertEquals(
-            "'Kind.locationHolder' reads itself on its 'parent', and every record has one, " +
-                "so the chain through 'parent' never ends; " +
-                "declare 'parent: one Kind?' so the record at the top of the chain has none",
-            v14Message(src))
-    }
-
-    @Test
-    fun `V14 message - the step is stored and nothing forbids a record being its own step`() {
-        val src = kindWithParent("parent: one Kind?", "parent?.locationHolder")
-        assertEquals(
-            "'Kind.locationHolder' reads itself on its 'parent', so the chain through 'parent' must end, " +
-                "and nothing says a record is never its own 'parent'; " +
-                "write 'never (Kind where parent == this)', or write the walk 'walk parent' (Reference §7)",
-            v14Message(src))
-    }
-
-    @Test
-    fun `V14 message - the prohibition is written but a rule assigns the step`() {
-        val src = kindWithParent("parent: one Kind?", "parent?.locationHolder", """
-            act Reparent {
-                kind: one Kind
-                newParent: one Kind?
-            }
-
-            rule Apply when Reparent {
-                kind.parent = newParent
-            }
-
-            never (Kind where parent == this)
-        """.trimIndent())
-        assertEquals(
-            "'Kind.locationHolder' reads itself on its 'parent', so the chain through 'parent' must end. " +
-                "'never (Kind where parent == this)' says so, but rule 'Apply' assigns 'parent', " +
-                "so the compiler cannot rely on it; " +
-                "leave 'parent' as set at creation, or write the walk 'walk parent' (Reference §7)",
-            v14Message(src))
-    }
-
-    @Test
-    fun `V14 message - the step is computed by some other formula`() {
-        val src = kindWithParent(
-            "parentName: text?\n    parent: one Kind? = if parentName is none then none else first(Kind where name == this.parentName by name)",
-            "parent?.locationHolder",
-            "never (Kind where parent == this)")
-        assertEquals(
-            "'Kind.locationHolder' reads itself on its 'parent', so the chain through 'parent' must end, " +
-                "and 'parent' is computed, so the compiler cannot see that it does. " +
-                "It can when 'parent' is 'latest' or 'first' over Kind picking a record strictly earlier " +
-                "by a field fixed at creation, as 'previous' does in Reference §19, " +
-                "or when 'parent' is a stored field and the spec says 'never (Kind where parent == this)'; " +
-                "write one of those, or write the walk 'walk parent' (Reference §7)",
-            v14Message(src))
-    }
-
-    @Test
-    fun `V14 message - the step picks by a comparison that is not strict`() {
-        val src = recurrence.replace("receivedOn < this.receivedOn", "receivedOn <= this.receivedOn")
-        assertEquals(
-            "'Payment.streakAfter' reads itself on its 'previous', so the chain through 'previous' must end. " +
-                "'previous' picks by 'receivedOn <= this.receivedOn', which can pick a record with the same 'receivedOn', " +
-                "so the chain can come back to this record; write 'receivedOn < this.receivedOn'",
-            v14Message(src))
-    }
-
-    @Test
-    fun `V14 message - the step picks by a field a rule assigns`() {
-        val src = """
-            shape Account {
-                note: text
-            }
-
-            act Payment {
-                account: one Account
-                onTime: boolean
-                position: integer
-                previous: one Payment? = latest(Payment where account == this.account and position < this.position by position)
-                streakAfter: integer =
-                    if not onTime then 0
-                    else if previous is some then previous.streakAfter + 1
-                    else 1
-            }
-
-            act Reorder {
-                payment: one Payment
-                newPosition: integer
-            }
-
-            rule Apply when Reorder {
-                payment.position = newPosition
-            }
-        """.trimIndent()
-        assertEquals(
-            "'Payment.streakAfter' reads itself on its 'previous', so the chain through 'previous' must end. " +
-                "'previous' picks by 'position < this.position', and rule 'Apply' assigns 'position', " +
-                "so the order can change after the fact; pick by a field no rule assigns, or by a 'timestamp on create'",
-            v14Message(src))
-    }
-
-    @Test
-    fun `V14 message - two properties computed from each other, reported once`() {
-        val src = """
-            act Kind {
-                name: text unique
-                parent: one Kind?
-
-                label: text = path
-                path: text =
-                    if parent is none then name
-                    else "${'$'}{parent.label}/${'$'}{name}"
-            }
-
-            never (Kind where parent == this)
-        """.trimIndent()
-        assertEquals(
-            "'Kind.label' is computed from 'Kind.path', which is computed from 'Kind.label', " +
-                "so neither can be computed first; define one of them without the other",
-            v14Message(src))
-    }
-
-    @Test
-    fun `V14 message - two refinements defined by each other`() {
-        val src = """
-            act Item {
-                flag: boolean
-            }
-
-            shape Odd = Item where this is Even
-            shape Even = Item where this is Odd
-        """.trimIndent()
-        assertEquals(
-            "shape 'Odd' is defined by 'Even', which is defined by 'Odd', " +
-                "so neither can be decided first; define one of them without the other",
-            v14Message(src))
     }
 
     // ── V15 (third leg): transition interference ─────────────────────────────

@@ -1,0 +1,15 @@
+-- A guarded rule whose body never makes its own guard false: `Apply` fires for an unapplied deposit and never sets `applied`.
+act Deposit {
+    amount: decimal
+    applied: boolean initially false
+}
+
+shape UnappliedDeposit = Deposit where not applied
+
+shape Application {
+    deposit: one Deposit
+}
+
+rule Apply when UnappliedDeposit after commit, Hourly {
+    Application from { deposit: this }
+}
