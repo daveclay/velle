@@ -4,3 +4,6 @@ build/
 billing.db
 .DS_Store
 working-docs/examples/*/out/
+# written by the ub-mode tools crapper, dryer, and mutator
+.metrics/
+target/

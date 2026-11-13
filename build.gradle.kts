@@ -5,6 +5,18 @@ plugins {
     id("org.springframework.boot") version "4.1.2" apply false
 }
 
+// Every Kotlin module writes a JaCoCo XML report, build/reports/jacoco/test/jacocoTestReport.xml,
+// when `gradlew test jacocoTestReport` runs. The ub-mode tools crapper and mutator read it
+// (`.claude/skills/ub-mode/SKILL.md`).
+subprojects {
+    plugins.withId("org.jetbrains.kotlin.jvm") {
+        apply(plugin = "jacoco")
+        tasks.withType<org.gradle.testing.jacoco.tasks.JacocoReport>().configureEach {
+            reports.xml.required.set(true)
+        }
+    }
+}
+
 tasks.register("generate") {
     description = "Regenerate every example's transpiled output from its .velle spec"
     dependsOn(
