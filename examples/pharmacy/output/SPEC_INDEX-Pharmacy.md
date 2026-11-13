@@ -160,28 +160,32 @@ each case below is an executable test.
 ## CounsellingSpec.kt
 
 
+## VerificationSpec.kt
+
+
+## PickupSpec.kt
+
+
 ## Not yet generated
 
-- requires #33: the role gate an act's `by` clause states
+- requires #31: the role gate an act's `by` clause states
 - requires #7: multi-conjunct predicate
 - requires #22: shape is not an act
-- never #26: shape is not an act
-- never #30: shape is not an act
 - never #24: multi-conjunct predicate
 - requires #25: multi-conjunct predicate
-- requires #39: the role gate an act's `by` clause states
-- requires #27: complex comparison subject
-- never #28: non-comparison predicate
-- never #29: non-literal bound
-- requires #31: multi-conjunct predicate
-- never #32: complex comparison subject
+- requires #37: the role gate an act's `by` clause states
+- requires #26: complex comparison subject
+- never #27: non-comparison predicate
+- never #28: non-literal bound
+- requires #29: multi-conjunct predicate
+- never #30: complex comparison subject
 - requires #1: shape is not an act
 - requires #2: non-comparison predicate
-- requires #34: the role gate an act's `by` clause states
+- requires #32: the role gate an act's `by` clause states
 - never #3: complex comparison subject
 - never #4: non-literal bound
 - requires #5: multi-conjunct predicate
-- unique #41: a key, unique (drug, effectiveOn): no bound to cross
+- unique #39: a key, unique (drug, effectiveOn): no bound to cross
 - requires #10: multi-conjunct predicate
 - never #12: shape is not an act
 - never #13: shape is not an act
@@ -194,8 +198,10 @@ each case below is an executable test.
 - never #20: complex comparison subject
 - never #21: complex comparison subject
 - never #23: multi-conjunct predicate
+- requires #33: the role gate an act's `by` clause states
+- requires #34: the role gate an act's `by` clause states
 - requires #35: the role gate an act's `by` clause states
 - requires #36: the role gate an act's `by` clause states
-- requires #37: the role gate an act's `by` clause states
 - requires #38: the role gate an act's `by` clause states
-- requires #40: the role gate an act's `by` clause states
+- unique #40: a key, fill: one Fill unique: no bound to cross
+- unique #41: a key, fill: one Fill unique: no bound to cross

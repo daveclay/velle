@@ -35,7 +35,7 @@ rule OpenAccountReview
     when (ChronicDelinquent where not exists (AccountReview where member == this))
     on commit, Daily {
     AccountReview from { member: this, openedOn: now } as review
-    AuditEntry from { member: this, review: review, note: "account review opened", loggedOn: now }
+    AuditEntry from { member: this, review: review, note: "account review opened for ${name}", loggedOn: now }
 }
 ```
 

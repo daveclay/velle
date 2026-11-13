@@ -12,7 +12,7 @@ import velle.generated.peptides.*
  * shape ApprovedGreenhouseRequest = RequestGreenhouseTrial where exists (LabExperiment where (HitExperiment and (peptide == this.peptide)) and (pathogen == this.pathogen))
  *
  * rule RefuseGreenhouseTrial when RefusedGreenhouseRequest {
- *     GreenhouseRefusal from { requestKey: requestKey, reason: "no standing lab hit against this pathogen" }
+ *     GreenhouseRefusal from { requestKey: requestKey, reason: "no standing lab hit for ${peptide.code} against ${pathogen.name}" }
  * }
  *
  */

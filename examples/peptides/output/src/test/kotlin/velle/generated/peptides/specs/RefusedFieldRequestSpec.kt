@@ -12,7 +12,7 @@ import velle.generated.peptides.*
  * shape ApprovedFieldRequest = RequestFieldTrial where exists (GreenhouseResult where (effective and (trial.peptide == this.peptide)) and (trial.pathogen == this.pathogen))
  *
  * rule RefuseFieldTrial when RefusedFieldRequest {
- *     FieldRefusal from { requestKey: requestKey, reason: "no effective greenhouse result against this pathogen" }
+ *     FieldRefusal from { requestKey: requestKey, reason: "no effective greenhouse result for ${peptide.code} against ${pathogen.name}" }
  * }
  *
  */

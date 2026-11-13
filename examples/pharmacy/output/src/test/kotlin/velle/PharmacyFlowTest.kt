@@ -215,7 +215,7 @@ open class PharmacyFlowTest {
         // more than the lot holds is answered on record, over the shelf as it stands
         val small = s.lot(c.drug, lotNumber = "SMALL", received = 20)
         val k0 = s.requestFill(c.prescription, small, c.technician)
-        assertEquals("the lot does not hold that much", sys.read(sys.fillRefusals().single { sys.read(it).requestKey == k0 }).reason)
+        assertEquals("lot SMALL holds 20, fewer than the 30 asked for", sys.read(sys.fillRefusals().single { sys.read(it).requestKey == k0 }).reason)
         assertEquals(0, sys.fills().size)
 
         // a partial fill is fine; the second fill is the next number

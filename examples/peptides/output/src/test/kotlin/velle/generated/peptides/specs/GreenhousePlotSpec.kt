@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.peptides.*
 
 /**
- * never (GreenhousePlot where (treatment != "peptide") and (treatment != "control"))
+ * GreenhousePlot requires (treatment == "peptide") or (treatment == "control")
  *
  */
 class GreenhousePlotSpec : SpecSupport() {

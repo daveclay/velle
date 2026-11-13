@@ -28,6 +28,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
      *  System-wide over DelinquencyFlag — consults DelinquencyFlag correlated through 'member' (unexamined (A5)).
      *  System-wide over AccountReview — consults AccountReview correlated through 'member' (unexamined (A5)).
      *  System-wide over AuditEntry — creates AuditEntry referencing an instance the derivation cannot key (unexamined (A5)).
+     *  System-wide over Member — reads Member.name with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewSignUp): Commit<NewSignUp, Nothing?> =
@@ -52,6 +53,7 @@ class MembershipSystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"
      *  System-wide over DelinquencyFlag — consults DelinquencyFlag correlated through 'member' (unexamined (A5)).
      *  System-wide over AccountReview — consults AccountReview correlated through 'member' (unexamined (A5)).
      *  System-wide over AuditEntry — creates AuditEntry referencing an instance the derivation cannot key (unexamined (A5)).
+     *  System-wide over Member — reads Member.name with no path back to any key (unexamined (A5)).
      *  Commits sharing a queue key are handled one at a time, in arrival
      *  order (U3); commits whose keys are disjoint run in parallel. */
     fun commit(input: NewMakeDeposit): Commit<NewMakeDeposit, Nothing?> =
@@ -1180,8 +1182,9 @@ rule CloseDelinquencyEpisode when leaving Delinquent {
 -- A third episode makes a member chronic: open an account review — once,
 -- ever — and write the audit entry that names the review it opened.
 -- velle: count over a shape-name collection, `as` naming a created record so
--- a second creation in the same body can point at it (Reference §14), and a
--- mixed commit-plus-tick trigger
+-- a second creation in the same body can point at it (Reference §14), a note
+-- made from the member's own values (Reference §5, "Text made from other
+-- values"), and a mixed commit-plus-tick trigger
 shape ChronicDelinquent = Member where count(DelinquencyFlag where member == this) >= 3
 
 shape AuditEntry {
@@ -1200,7 +1203,7 @@ rule OpenAccountReview
     when (ChronicDelinquent where not exists (AccountReview where member == this))
     on commit, Daily {
     AccountReview from { member: this, openedOn: now } as review
-    AuditEntry from { member: this, review: review, note: "account review opened", loggedOn: now }
+    AuditEntry from { member: this, review: review, note: "account review opened for ${'$'}{name}", loggedOn: now }
 }
 
 -- ── Nightly engagement snapshot ──────────────────────────────────────────────
@@ -1231,7 +1234,7 @@ transient act RaiseTicket {
     assignee: one Agent?
 }
 
-never (RaiseTicket where priority != "low" and priority != "normal" and priority != "high")
+RaiseTicket requires priority == "low" or priority == "normal" or priority == "high"
 
 shape Ticket {
     member: one Member

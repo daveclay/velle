@@ -7,24 +7,8 @@ import velle.generated.*
 import velle.generated.pharmacy.*
 
 /**
- * rule RecordPickup when PickUp {
- *     Pickup from { fill: fill, collectedBy: collectedBy, amountPaid: amountPaid }
- * }
- *
- * PickUp requires (fill to be VerifiedFill) and (not (exists ReturnToStock for fill))
- *
- * never (PickUp where fill is CounsellingDue)
- *
- * never (PickUp where amountPaid < fill.amountDue)
+ * fill: one Fill unique
  *
  */
-class PickUpSpec : SpecSupport() {
-
-    @Test
-    fun `RecordPickup - a new PickUp produces a Pickup`() {
-        val beforePickup = count("Pickup")
-        // given: a 'PickUp' committed entering 'PickUp' — transient: the act is not kept
-        givens.pickUp()
-        assertEquals(beforePickup + 1, count("Pickup"), "rule RecordPickup: one 'Pickup' per firing")
-    }
+class PickupSpec : SpecSupport() {
 }

@@ -1449,7 +1449,8 @@ rule ApplyCardUpdate when CardUpdate {
 -- is never stored — it is read off the successful charges minus the refunds.
 -- Receipts go to the card's billing contact when that whole chain exists.
 -- velle: filtered `sum` with a named-refinement collection filter; a
--- multi-link `?.` chain; `first(...)` and `is empty` in a derived property.
+-- multi-link `?.` chain; `first(...)` in a derived property, absent while
+-- there is no attempt to read.
 -- Placing the order is the input; the order record carries the commit-stamped
 -- `placedOn` on the rule-created side (V21).
 transient act PlaceOrder {
@@ -1469,8 +1470,7 @@ shape Order {
     placedOn: timestamp on create
     netPaid: decimal = sum(chargeAttempts where SuccessfulCharge, amount) - sum(refunds, amount)
     receiptEmail: text? = customer.card?.billingContact?.email
-    firstAttemptedOn: DateTime? = if chargeAttempts is empty then none
-                                  else first(chargeAttempts by requestedOn).requestedOn
+    firstAttemptedOn: DateTime? = first(chargeAttempts by requestedOn).requestedOn
 }
 
 rule AcceptOrder when PlaceOrder {
@@ -1517,7 +1517,7 @@ transient act ProcessorVerdict {
     outcome: text
 }
 
-never (ProcessorVerdict where outcome != "approved" and outcome != "declined" and outcome != "error")
+ProcessorVerdict requires outcome == "approved" or outcome == "declined" or outcome == "error"
 
 shape ChargeResponse {
     attempt: one ChargeAttempt

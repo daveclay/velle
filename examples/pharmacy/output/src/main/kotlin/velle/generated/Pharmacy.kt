@@ -717,6 +717,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
         fun verification(key: StoreKey): Verification = byKey("Verification", key)
         fun verification(key: Long): Verification = verification(StoreKey(key))
+        /** The Verification whose fill this is, or null when none has it. */
+        fun verificationByFill(fill: Ref<Fill>): Verification? = byValues("Verification", VerificationFields(), { materializeVerification(it) }) { (this.fill eq fill) }
 
         val counsellings: CounsellingQuery get() = query("Counselling", CounsellingFields()) { materializeCounselling(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
@@ -737,6 +739,8 @@ class PharmacySystem(startTime: Instant = Instant.parse("2026-01-01T09:00:00Z"))
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
         fun pickup(key: StoreKey): Pickup = byKey("Pickup", key)
         fun pickup(key: Long): Pickup = pickup(StoreKey(key))
+        /** The Pickup whose fill this is, or null when none has it. */
+        fun pickupByFill(fill: Ref<Fill>): Pickup? = byValues("Pickup", PickupFields(), { materializePickup(it) }) { (this.fill eq fill) }
 
         val counterAlerts: CounterAlertQuery get() = query("CounterAlert", CounterAlertFields()) { materializeCounterAlert(it) }
         /** Fetch by store key (a model object is not a key: resolve it with `read(it)`). */
@@ -3358,7 +3362,8 @@ act PrescriberOrder by Staff as enteredBy {
 -- records around it. Its states are read off those records.
 -- velle: derived properties mixing a conditional over refinement membership
 -- with Date arithmetic; a selector ordered by a business date with a
--- sequence number as the tie-breaker; `first(...)`
+-- sequence number as the tie-breaker; a selection over no fills reads
+-- absent, so the two dates are optional with no `is empty` guard
 shape Prescription {
     order: one PrescriberOrder
     drug: one Drug
@@ -3369,8 +3374,8 @@ shape Prescription {
     expiresOn: Date = if drug is Controlled then order.writtenOn + 180 days else order.writtenOn + 365 days
     fillsRecorded: integer = count(fills)
     refillsRemaining: integer = refillsAuthorized + 1 - count(fills where ConsumingFill)
-    lastFilledOn: Date? = if fills is empty then none else latest(fills by filledOn, fillNumber).filledOn
-    firstFilledOn: Date? = if fills is empty then none else first(fills by filledOn, fillNumber).filledOn
+    lastFilledOn: Date? = latest(fills by filledOn, fillNumber).filledOn
+    firstFilledOn: Date? = first(fills by filledOn, fillNumber).filledOn
 }
 
 never (Prescription where quantity <= 0)
@@ -3635,7 +3640,7 @@ rule RefuseFill when RefusedFill {
                  else if prescription is Discontinued then "prescription discontinued"
                  else if prescription is Exhausted then "no refills remaining"
                  else if prescription is not Cleared then "unresolved allergy or interaction conflict"
-                 else "the lot does not hold that much")
+                 else "lot ${'$'}{lot.lotNumber} holds ${'$'}{lot.onHand}, fewer than the ${'$'}{quantity} asked for")
     }
 }
 
@@ -3671,17 +3676,16 @@ transient act VerifyFill by LicensedPharmacist {
 never (VerifyFill where actor == fill.filledBy and fill.lot.drug is Controlled)
 VerifyFill requires outcome == "approved" or outcome == "rejected"
 
+-- A fill is verified once: a key on the verification record (Reference §21,
+-- "Keys"), since the request's own verification is the one that would make
+-- "already verified" true.
 shape Verification {
-    fill: one Fill
+    fill: one Fill unique
     pharmacist: one Staff
     outcome: text
     note: text
     verifiedAt: timestamp on create
 }
-
--- A fill is verified once: stated on the fill, since the request's own
--- verification is the one that would make "already verified" true.
-never (Fill where count(verifications) > 1)
 
 rule RecordVerification when VerifyFill {
     Verification from { fill: fill, pharmacist: actor, outcome: outcome, note: note }
@@ -3752,7 +3756,7 @@ rule RecordCounterExit when leaving ReadyForPickup {
 -- once. "At the counter" is not written as `fill is not ReadyForPickup`: the
 -- pickup itself ends that membership, so the refusal would read its own
 -- consequence at the settled transaction. Its stable parts are spelled out,
--- and "collected once" is a constraint on the fill.
+-- and "collected once" is a key on the pickup record (Reference §21, "Keys").
 transient act PickUp {
     fill: one Fill
     collectedBy: text
@@ -3764,13 +3768,11 @@ never (PickUp where fill is CounsellingDue)
 never (PickUp where amountPaid < fill.amountDue)
 
 shape Pickup {
-    fill: one Fill
+    fill: one Fill unique
     collectedBy: text
     amountPaid: decimal
     pickedUpAt: timestamp on create
 }
-
-never (Fill where count(pickups) > 1)
 
 rule RecordPickup when PickUp {
     Pickup from { fill: fill, collectedBy: collectedBy, amountPaid: amountPaid }

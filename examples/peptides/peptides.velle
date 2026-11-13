@@ -209,7 +209,8 @@ shape RefusedGreenhouseRequest = RequestGreenhouseTrial where
 -- arm.
 -- velle: derived collections with a set-denotation formula beside the
 -- inferred inverse; `sum` / `count` over a derived collection's derived field;
--- an optional derived from a `first(...)` selector
+-- an optional derived from a `first(...)` selector, absent while the trial
+-- is untreated with no `is empty` guard
 shape GreenhouseTrial {
     requestKey: text
     peptide: one Peptide
@@ -217,7 +218,7 @@ shape GreenhouseTrial {
     greenhouse: one Greenhouse
     protocol: one GreenhouseProtocol
     approvedOn: timestamp on create
-    treatedAt: DateTime? = if treatments is empty then none else first(treatments by treatedAt).treatedAt
+    treatedAt: DateTime? = first(treatments by treatedAt).treatedAt
     treatedPlots: many GreenhousePlot = (GreenhousePlot where trial == this and treatment == "peptide")
     controlPlots: many GreenhousePlot = (GreenhousePlot where trial == this and treatment == "control")
     meanTreatedAudpc: decimal = if treatedPlots is empty then 0.0 else sum(treatedPlots, audpc) / count(treatedPlots)
@@ -243,7 +244,7 @@ rule ApproveGreenhouseTrial when ApprovedGreenhouseRequest {
 }
 
 rule RefuseGreenhouseTrial when RefusedGreenhouseRequest {
-    GreenhouseRefusal from { requestKey: requestKey, reason: "no standing lab hit against this pathogen" }
+    GreenhouseRefusal from { requestKey: requestKey, reason: "no standing lab hit for ${peptide.code} against ${pathogen.name}" }
 }
 
 -- Plots are laid out on benches, each in the peptide arm or the control arm.
@@ -257,18 +258,17 @@ act GreenhousePlot {
                      else latest(plotObservations by dayAfterTreatment).audpcSoFar
 }
 
-never (GreenhousePlot where treatment != "peptide" and treatment != "control")
+GreenhousePlot requires treatment == "peptide" or treatment == "control"
 
 -- Treatment day: the plants are inoculated and the peptide applied. The
 -- record is the fact; a trial is treated once.
 -- velle: an act rather than an assignment into the trial, so the
--- prohibitions that read the treatment stay door-checked (Reference §21)
+-- prohibitions that read the treatment stay door-checked (Reference §21);
+-- "treated once" is the key on `trial` (Reference §21, "Keys")
 act Treatment {
-    trial: one GreenhouseTrial
+    trial: one GreenhouseTrial unique
     treatedAt: DateTime
 }
-
-never (Treatment where count(trial.treatments) > 1)
 
 shape TreatedTrial = GreenhouseTrial where treatments is not empty
 
@@ -637,7 +637,7 @@ rule ApproveFieldTrial when ApprovedFieldRequest {
 }
 
 rule RefuseFieldTrial when RefusedFieldRequest {
-    FieldRefusal from { requestKey: requestKey, reason: "no effective greenhouse result against this pathogen" }
+    FieldRefusal from { requestKey: requestKey, reason: "no effective greenhouse result for ${peptide.code} against ${pathogen.name}" }
 }
 
 -- A trial is permitted while a permit for its crop at its site is in force.
@@ -685,7 +685,7 @@ act FieldPlot {
     yieldKgPerHa: decimal = if harvests is empty then 0.0 else latest(harvests by harvestedOn).yieldKgPerHa
 }
 
-never (FieldPlot where treatment != "peptide" and treatment != "control")
+FieldPlot requires treatment == "peptide" or treatment == "control"
 
 -- The peptide is sprayed on the treated plots on a date. The request is
 -- transient for the same reason as planting: the halt check below must be a

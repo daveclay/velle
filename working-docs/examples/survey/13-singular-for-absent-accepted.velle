@@ -1,0 +1,17 @@
+-- An optional derived property reading the one related record through
+-- `(Arrival for this)`, singular because `entry` is a key on Arrival
+-- (Reference §21, "Keys"; Reference §10, "Reading the one related record").
+-- The compiler accepts the property as a `DateTime?`. At runtime an entry with
+-- no arrival does not read absent: `Evaluator.evalSingularFor` throws
+-- `(Arrival for ...) found no instance — the licensing predicate should have
+-- prevented this`, and every read of the entry fails with it. The selection
+-- form, `first(arrivals by at).at`, reads absent (Reference §10).
+act Entry {
+    key: text unique
+    arrivedAt: DateTime? = (Arrival for this).at
+}
+
+act Arrival {
+    entry: one Entry unique
+    at: DateTime
+}

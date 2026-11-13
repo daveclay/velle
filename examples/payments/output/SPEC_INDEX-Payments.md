@@ -49,4 +49,4 @@ each case below is an executable test.
 
 ## Not yet generated
 
-- never #2: multi-conjunct predicate
+- requires #2: multi-conjunct predicate

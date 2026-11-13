@@ -610,33 +610,33 @@ interface PeptidesStore {
     /** Serves never #4 — `GreenhousePlot where (treatment != "peptide") and (treatment != "control")`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never4Candidates(): List<GreenhousePlotRow>
-    /** Serves never #6 — `PlotObservation where (recordedSeverity < 0) or (recordedSeverity > 100)`.
+    /** Serves never #5 — `PlotObservation where (recordedSeverity < 0) or (recordedSeverity > 100)`.
+     *  Superset contract: any superset of the matching rows is correct. */
+    fun never5Candidates(): List<PlotObservationRow>
+    /** Serves never #6 — `PlotObservation where dayAfterTreatment < 0`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never6Candidates(): List<PlotObservationRow>
-    /** Serves never #7 — `PlotObservation where dayAfterTreatment < 0`.
+    /** Serves never #7 — `PlotObservation where plot.trial is not TreatedTrial`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never7Candidates(): List<PlotObservationRow>
-    /** Serves never #8 — `PlotObservation where plot.trial is not TreatedTrial`.
+    /** Serves never #10 — `FieldPlot where (treatment != "peptide") and (treatment != "control")`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never8Candidates(): List<PlotObservationRow>
-    /** Serves never #11 — `FieldPlot where (treatment != "peptide") and (treatment != "control")`.
+    fun never10Candidates(): List<FieldPlotRow>
+    /** Serves never #11 — `Scouting where (severity < 0) or (severity > 100)`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never11Candidates(): List<FieldPlotRow>
-    /** Serves never #12 — `Scouting where (severity < 0) or (severity > 100)`.
+    fun never11Candidates(): List<ScoutingRow>
+    /** Serves never #12 — `Scouting where (incidencePercent < 0) or (incidencePercent > 100)`.
      *  Superset contract: any superset of the matching rows is correct. */
     fun never12Candidates(): List<ScoutingRow>
-    /** Serves never #13 — `Scouting where (incidencePercent < 0) or (incidencePercent > 100)`.
+    /** Serves never #13 — `Harvest where yieldKgPerHa < 0`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never13Candidates(): List<ScoutingRow>
-    /** Serves never #14 — `Harvest where yieldKgPerHa < 0`.
+    fun never13Candidates(): List<HarvestRow>
+    /** Serves never #14 — `PhytotoxicityReport where (severity < 1) or (severity > 5)`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never14Candidates(): List<HarvestRow>
-    /** Serves never #15 — `PhytotoxicityReport where (severity < 1) or (severity > 5)`.
+    fun never14Candidates(): List<PhytotoxicityReportRow>
+    /** Serves never #16 — `CollectionTask where dayMark < 0`.
      *  Superset contract: any superset of the matching rows is correct. */
-    fun never15Candidates(): List<PhytotoxicityReportRow>
-    /** Serves never #17 — `CollectionTask where dayMark < 0`.
-     *  Superset contract: any superset of the matching rows is correct. */
-    fun never17Candidates(): List<CollectionTaskRow>
+    fun never16Candidates(): List<CollectionTaskRow>
 }
 
 /** The candidate questions as recognizable templates (QTemplate). */
@@ -663,15 +663,15 @@ class PeptidesStoreQuestions(model: Model) {
     val never2Candidates = QTemplate.of(model, "AssayReading", model.nevers[1].target)
     val never3Candidates = QTemplate.of(model, "AssayReading", model.nevers[2].target)
     val never4Candidates = QTemplate.of(model, "GreenhousePlot", model.nevers[3].target)
+    val never5Candidates = QTemplate.of(model, "PlotObservation", model.nevers[4].target)
     val never6Candidates = QTemplate.of(model, "PlotObservation", model.nevers[5].target)
     val never7Candidates = QTemplate.of(model, "PlotObservation", model.nevers[6].target)
-    val never8Candidates = QTemplate.of(model, "PlotObservation", model.nevers[7].target)
-    val never11Candidates = QTemplate.of(model, "FieldPlot", model.nevers[10].target)
+    val never10Candidates = QTemplate.of(model, "FieldPlot", model.nevers[9].target)
+    val never11Candidates = QTemplate.of(model, "Scouting", model.nevers[10].target)
     val never12Candidates = QTemplate.of(model, "Scouting", model.nevers[11].target)
-    val never13Candidates = QTemplate.of(model, "Scouting", model.nevers[12].target)
-    val never14Candidates = QTemplate.of(model, "Harvest", model.nevers[13].target)
-    val never15Candidates = QTemplate.of(model, "PhytotoxicityReport", model.nevers[14].target)
-    val never17Candidates = QTemplate.of(model, "CollectionTask", model.nevers[16].target)
+    val never13Candidates = QTemplate.of(model, "Harvest", model.nevers[12].target)
+    val never14Candidates = QTemplate.of(model, "PhytotoxicityReport", model.nevers[13].target)
+    val never16Candidates = QTemplate.of(model, "CollectionTask", model.nevers[15].target)
 }
 
 /**
@@ -957,6 +957,10 @@ open class PeptidesStoreOverGeneric(
         backend.fetchCandidates("GreenhousePlot", questions.never4Candidates.instantiate(listOf()))
             .map { it.toGreenhousePlotRow() }
 
+    override fun never5Candidates(): List<PlotObservationRow> =
+        backend.fetchCandidates("PlotObservation", questions.never5Candidates.instantiate(listOf()))
+            .map { it.toPlotObservationRow() }
+
     override fun never6Candidates(): List<PlotObservationRow> =
         backend.fetchCandidates("PlotObservation", questions.never6Candidates.instantiate(listOf()))
             .map { it.toPlotObservationRow() }
@@ -965,32 +969,28 @@ open class PeptidesStoreOverGeneric(
         backend.fetchCandidates("PlotObservation", questions.never7Candidates.instantiate(listOf()))
             .map { it.toPlotObservationRow() }
 
-    override fun never8Candidates(): List<PlotObservationRow> =
-        backend.fetchCandidates("PlotObservation", questions.never8Candidates.instantiate(listOf()))
-            .map { it.toPlotObservationRow() }
-
-    override fun never11Candidates(): List<FieldPlotRow> =
-        backend.fetchCandidates("FieldPlot", questions.never11Candidates.instantiate(listOf()))
+    override fun never10Candidates(): List<FieldPlotRow> =
+        backend.fetchCandidates("FieldPlot", questions.never10Candidates.instantiate(listOf()))
             .map { it.toFieldPlotRow() }
+
+    override fun never11Candidates(): List<ScoutingRow> =
+        backend.fetchCandidates("Scouting", questions.never11Candidates.instantiate(listOf()))
+            .map { it.toScoutingRow() }
 
     override fun never12Candidates(): List<ScoutingRow> =
         backend.fetchCandidates("Scouting", questions.never12Candidates.instantiate(listOf()))
             .map { it.toScoutingRow() }
 
-    override fun never13Candidates(): List<ScoutingRow> =
-        backend.fetchCandidates("Scouting", questions.never13Candidates.instantiate(listOf()))
-            .map { it.toScoutingRow() }
-
-    override fun never14Candidates(): List<HarvestRow> =
-        backend.fetchCandidates("Harvest", questions.never14Candidates.instantiate(listOf()))
+    override fun never13Candidates(): List<HarvestRow> =
+        backend.fetchCandidates("Harvest", questions.never13Candidates.instantiate(listOf()))
             .map { it.toHarvestRow() }
 
-    override fun never15Candidates(): List<PhytotoxicityReportRow> =
-        backend.fetchCandidates("PhytotoxicityReport", questions.never15Candidates.instantiate(listOf()))
+    override fun never14Candidates(): List<PhytotoxicityReportRow> =
+        backend.fetchCandidates("PhytotoxicityReport", questions.never14Candidates.instantiate(listOf()))
             .map { it.toPhytotoxicityReportRow() }
 
-    override fun never17Candidates(): List<CollectionTaskRow> =
-        backend.fetchCandidates("CollectionTask", questions.never17Candidates.instantiate(listOf()))
+    override fun never16Candidates(): List<CollectionTaskRow> =
+        backend.fetchCandidates("CollectionTask", questions.never16Candidates.instantiate(listOf()))
             .map { it.toCollectionTaskRow() }
 }
 
@@ -1197,23 +1197,23 @@ class PeptidesStoreResolver(
         if (shape == "GreenhousePlot")
             questions.never4Candidates.match(filter)?.let { h -> return store.never4Candidates().map { it.toRow() } }
         if (shape == "PlotObservation")
+            questions.never5Candidates.match(filter)?.let { h -> return store.never5Candidates().map { it.toRow() } }
+        if (shape == "PlotObservation")
             questions.never6Candidates.match(filter)?.let { h -> return store.never6Candidates().map { it.toRow() } }
         if (shape == "PlotObservation")
             questions.never7Candidates.match(filter)?.let { h -> return store.never7Candidates().map { it.toRow() } }
-        if (shape == "PlotObservation")
-            questions.never8Candidates.match(filter)?.let { h -> return store.never8Candidates().map { it.toRow() } }
         if (shape == "FieldPlot")
+            questions.never10Candidates.match(filter)?.let { h -> return store.never10Candidates().map { it.toRow() } }
+        if (shape == "Scouting")
             questions.never11Candidates.match(filter)?.let { h -> return store.never11Candidates().map { it.toRow() } }
         if (shape == "Scouting")
             questions.never12Candidates.match(filter)?.let { h -> return store.never12Candidates().map { it.toRow() } }
-        if (shape == "Scouting")
-            questions.never13Candidates.match(filter)?.let { h -> return store.never13Candidates().map { it.toRow() } }
         if (shape == "Harvest")
-            questions.never14Candidates.match(filter)?.let { h -> return store.never14Candidates().map { it.toRow() } }
+            questions.never13Candidates.match(filter)?.let { h -> return store.never13Candidates().map { it.toRow() } }
         if (shape == "PhytotoxicityReport")
-            questions.never15Candidates.match(filter)?.let { h -> return store.never15Candidates().map { it.toRow() } }
+            questions.never14Candidates.match(filter)?.let { h -> return store.never14Candidates().map { it.toRow() } }
         if (shape == "CollectionTask")
-            questions.never17Candidates.match(filter)?.let { h -> return store.never17Candidates().map { it.toRow() } }
+            questions.never16Candidates.match(filter)?.let { h -> return store.never16Candidates().map { it.toRow() } }
         return fetchAll(shape) // unrecognized filters fall back to the scan floor
     }
 

@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.peptides.*
 
 /**
- * never (Treatment where count(trial.treatments) > 1)
+ * trial: one GreenhouseTrial unique
  *
  */
 class TreatmentSpec : SpecSupport() {

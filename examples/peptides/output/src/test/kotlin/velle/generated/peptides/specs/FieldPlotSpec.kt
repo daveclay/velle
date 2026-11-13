@@ -7,7 +7,7 @@ import velle.generated.*
 import velle.generated.peptides.*
 
 /**
- * never (FieldPlot where (treatment != "peptide") and (treatment != "control"))
+ * FieldPlot requires (treatment == "peptide") or (treatment == "control")
  *
  */
 class FieldPlotSpec : SpecSupport() {

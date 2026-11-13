@@ -72,9 +72,6 @@ each case below is an executable test.
 ## GreenhousePlotSpec.kt
 
 
-## TreatmentSpec.kt
-
-
 ## PlotObservationSpec.kt
 
 - never - a PlotObservation where dayAfterTreatment below 0 is refused
@@ -102,25 +99,28 @@ each case below is an executable test.
 - never - a CollectionTask where dayMark below 0 is refused
 - never - a CollectionTask with dayMark 0 is accepted
 
+## TreatmentSpec.kt
+
+
 ## WeatherObservationSpec.kt
 
 
 ## Not yet generated
 
-- never #10: non-comparison predicate
-- never #16: non-comparison predicate
+- never #9: non-comparison predicate
+- never #15: non-comparison predicate
 - never #1: non-literal bound
 - never #2: complex comparison subject
-- unique #18: a key, unique (assay, hoursElapsed): no bound to cross
-- never #4: multi-conjunct predicate
+- unique #17: a key, unique (assay, hoursElapsed): no bound to cross
+- requires #4: multi-conjunct predicate
 - never #5: complex comparison subject
-- never #6: complex comparison subject
-- never #8: non-comparison predicate
+- never #7: non-comparison predicate
 - unique #19: a key, unique (plot, dayAfterTreatment): no bound to cross
-- never #9: complex comparison subject
-- never #11: multi-conjunct predicate
+- never #8: complex comparison subject
+- requires #10: multi-conjunct predicate
+- never #11: complex comparison subject
 - never #12: complex comparison subject
-- never #13: complex comparison subject
 - unique #21: a key, unique (plot, daysAfterPlanting): no bound to cross
-- never #15: complex comparison subject
+- never #14: complex comparison subject
+- unique #18: a key, trial: one GreenhouseTrial unique: no bound to cross
 - unique #20: a key, unique (site, observedOn): no bound to cross

@@ -17,10 +17,6 @@ import velle.generated.pharmacy.*
  *
  * Fill requires fillNumber == count(prescription.fills where fillNumber <= this.fillNumber)
  *
- * never (Fill where count(verifications) > 1)
- *
- * never (Fill where count(pickups) > 1)
- *
  */
 class FillSpec : SpecSupport() {
 
