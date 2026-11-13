@@ -70,9 +70,9 @@ never (Member where referrer == this)
 -- payment last and kept the wrong answer (Reference §19, "Order-dependent folds
 -- at a tick: the predecessor recurrence").
 -- velle: the predecessor recurrence — a derived to-one `previous` whose
--- selector strictly descends a datum fixed at creation (checks.md V14, the
--- strict-descent certificate); `streakAfter` as readable history; the current
--- value as a selector read
+-- selector picks a strictly earlier record by a datum fixed at creation, so
+-- the chain ends (checks.md V14); `streakAfter` as readable history; the
+-- current value as a selector read
 act DuesPayment {
     member: one Member
     coveredMonth: text

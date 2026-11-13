@@ -97,7 +97,33 @@ never (PeptideBatch where this in lineage) tolerates contention
 - The prohibition says a batch is never in its own lineage. A batch is in its own lineage only when the chain of `drawnFrom` comes back to it, so the prohibition refuses the commit that would close that ring. `in` with a collection of records on the right asks whether the record on the left is one of them ([§10](Reference-10-Predicate-expressions)).
 - A walk reads every record it can reach, so nothing ties the prohibition's read to one key and every commit on the shape takes turns. `tolerates contention` says the business accepts that ([§19, "A read over a whole shape"](Reference-19-Self-referential-folds-and-tolerates#a-read-over-a-whole-shape-tolerates-contention)).
 
-A formula may also read the same property on a related record one link away, as `previous.streakAfter` does in [§19](Reference-19-Self-referential-folds-and-tolerates). The compiler accepts that only when it can see the chain ends. A walk is the spelling that needs no such proof.
+## A property that reads itself
+
+A formula may read the same property on one related record of the same shape, one step away. The compiler accepts that only when it can see the chain of records ends, which it can in two cases.
+
+The step is a stored `one` that may be absent, and a prohibition says a record is never its own step:
+
+```
+act Kind {
+    name: text unique
+    parent: one Kind?
+    hasLocation: boolean
+
+    locationHolder: one Kind? =
+        if hasLocation then this
+        else parent?.locationHolder
+}
+
+never (Kind where parent == this)
+```
+
+- `parent` may be absent, so a kind at the top of the tree ends the chain.
+- `locationHolder` reads itself on the parent, one step away.
+- The prohibition keeps a kind from being its own parent, so the chain cannot come back to its start. The compiler relies on it only while no rule assigns `parent` ([§21](Reference-21-never)).
+
+In the other case the step is `latest` or `first` over the same shape, picking a record strictly earlier by a field fixed at creation. `previous` in [§19](Reference-19-Self-referential-folds-and-tolerates) picks the latest payment with an earlier `receivedOn`, and `streakAfter` reads itself through it; `DuesPayment` in `examples/loyalty/loyalty.velle` is the full example.
+
+In every other case the compiler rejects the property and says why: the step is required, so no record ends the chain; nothing forbids a record being its own step; the step is computed by some other formula; the comparison is not strict, so two records with the same value could pick each other; the property reads itself more than one step away. A walk needs no such proof, so `walk parent until hasLocation` is the plainer spelling for `locationHolder` above.
 
 ## What the compiler checks
 
@@ -110,7 +136,7 @@ A formula may also read the same property on a related record one link away, as 
 - The compiler rejects a walk property declared with a type other than the walk's: `many S` for a set, `one S?` for `until` ([checks.md, F2](checks#f2--type-checking)).
 - The compiler rejects `x in records` when `x` is a value rather than a record, or a record of another shape ([checks.md, F2](checks#f2--type-checking)).
 - The compiler rejects a `never` that reads a field a rule assigns, through a walk as through any other read ([checks.md, V10](checks#v10--never-obligations-and-spend-tracking)). A prohibition over a walk is for a relationship that is fixed when the record is created.
-- The compiler rejects a derived property defined in terms of itself on a related record unless the chain provably ends ([checks.md, V14](checks#v14--well-foundedness-coarse)). The message names the walk as the fix.
+- The compiler rejects a derived property that reads itself unless the step is one of the two forms under "A property that reads itself", and rejects two or more properties computed from each other. The message names the property, the step, why the compiler cannot see the chain ends, and the spelling that passes, the walk among them ([checks.md, V14](checks#v14--well-foundedness-coarse)).
 - The compiler warns when a prohibition or a rule reads a walk without `tolerates contention` ([checks.md, A5](checks#a5--contention-width)).
 
 ## Related pages

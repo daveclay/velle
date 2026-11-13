@@ -1,0 +1,15 @@
+-- The same property reading itself on a parent every kind must have. With
+-- no kind at the top of the tree, the chain of parents has no end, so the
+-- compiler refuses it (checks.md V14). Declaring `parent: one Kind?` is the
+-- spelling that passes.
+act Kind {
+    name: text unique
+    parent: one Kind
+    hasLocation: boolean
+
+    locationHolder: one Kind? =
+        if hasLocation then this
+        else parent.locationHolder
+}
+
+never (Kind where parent == this)

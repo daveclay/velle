@@ -1856,8 +1856,8 @@ act Assay {
 -- mark. A reading entered late slots in at its hour and every later reading's
 -- peak re-derives.
 -- velle: the predecessor recurrence (Reference §19): a derived `previous` by
--- `latest ... by` a creation-fixed datum plus one self-referential hop; V14's
--- descent certificate; `max` as the duplication- and order-safe fold
+-- `latest ... by` a creation-fixed datum plus one self-referential hop, the
+-- form V14 accepts; `max` as the duplication- and order-safe fold
 act AssayReading {
     assay: one Assay
     hoursElapsed: integer

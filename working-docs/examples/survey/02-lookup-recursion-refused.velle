@@ -1,0 +1,23 @@
+-- A kind of surveyed thing (site, plot, specimen) names its parent kind.
+-- The nearest kind up the tree that records a location is where a
+-- specimen's location comes from. Written by hand as a property that reads
+-- itself on the parent, before the walk existed. The parent is found by a
+-- lookup on the name, so the compiler cannot see that the chain of parents
+-- ends, and refuses it (checks.md V14). The spelling that validates is the
+-- walk in `02-lookup-recursion-stored-accepted.velle`.
+act Kind {
+    name: text unique
+    parentName: text?
+    hasLocation: boolean
+
+    parent: one Kind? =
+        if parentName is none then none
+        else if exists (Kind where name == this.parentName) then first(Kind where name == this.parentName by name)
+        else none
+
+    locationHolder: one Kind? =
+        if hasLocation then this
+        else parent?.locationHolder
+}
+
+never (Kind where parent == this)

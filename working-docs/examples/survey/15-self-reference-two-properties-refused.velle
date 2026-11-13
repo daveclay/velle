@@ -1,0 +1,15 @@
+-- Two properties defined through each other: the path of a kind is its
+-- parent's label and its own name, and the label is the path. Neither can
+-- be computed before the other, so the compiler refuses it (checks.md V14).
+-- One of them has to be defined without the other.
+act Kind {
+    name: text unique
+    parent: one Kind?
+
+    label: text = path
+    path: text =
+        if parent is none then name
+        else "${parent.label}/${name}"
+}
+
+never (Kind where parent == this)

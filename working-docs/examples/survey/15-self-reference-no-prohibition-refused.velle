@@ -1,0 +1,14 @@
+-- The same property reading itself on a stored parent, with nothing that
+-- says a kind is never its own parent. The chain could come back to its
+-- start, so the compiler refuses it (checks.md V14). The prohibition
+-- `never (Kind where parent == this)` is what makes it pass, as in
+-- `ValidatorTest`, "V14 - root through parent is certified by a spendable never".
+act Kind {
+    name: text unique
+    parent: one Kind?
+    hasLocation: boolean
+
+    locationHolder: one Kind? =
+        if hasLocation then this
+        else parent?.locationHolder
+}

@@ -1,0 +1,15 @@
+-- The same property reading itself two parents up instead of one. The
+-- compiler accepts a property that reads itself one step away and no
+-- further, so it refuses this (checks.md V14), although the prohibition
+-- is present.
+act Kind {
+    name: text unique
+    parent: one Kind?
+    hasLocation: boolean
+
+    locationHolder: one Kind? =
+        if hasLocation then this
+        else parent?.parent?.locationHolder
+}
+
+never (Kind where parent == this)

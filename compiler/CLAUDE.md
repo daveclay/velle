@@ -47,8 +47,8 @@ checks; do not claim they follow it.
 A diagnostic is read by a Velle author, not a compiler engineer. Name the
 property or field the author wrote and the spelling that would be accepted.
 No internal vocabulary (certificate, whitelist, witness, discharge, rung).
-One message per reason. OQ78 in `working-docs/QUESTIONS.md` holds the
-rewrite of V14's message as the model.
+One message per reason. V14's messages in `Validator.kt` (`SelfReadProblem`)
+and the `V14 message` tests in `ValidatorTest.kt` are the model.
 
 ## Checks
 

@@ -1,0 +1,8 @@
+-- A property defined as one more than itself, on the same record. There is
+-- nothing to start from, so the compiler refuses it (checks.md V14).
+act Kind {
+    name: text unique
+    base: integer
+
+    next: integer = next + 1
+}

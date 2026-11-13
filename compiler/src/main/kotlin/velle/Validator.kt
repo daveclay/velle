@@ -2393,14 +2393,14 @@ class Validator(private val model: Model) {
     /**
      * Does a spendable `never (S where hop == this)` hold — no instance of
      * [shape]'s [hop] relationship ever points back at its own instance? The
-     * direct-case acyclicity certificate (checks.md V14) and the aliasing
+     * proof that a self-read's chain ends (checks.md V14) and the aliasing
      * discharge (checks.md V1/V15). The predicate must be exactly the one
      * equality over the whole base shape: a refinement scope or an extra
      * conjunct narrows what the invariant forbids, which weakens it below
      * what the proof needs — fail closed on those.
      */
-    private fun neverForbidsSelfReference(shape: String, hop: String): Boolean =
-        spendableNevers.any { n ->
+    private fun neverForbidsSelfReference(shape: String, hop: String, prohibitions: List<NeverDecl> = spendableNevers): Boolean =
+        prohibitions.any { n ->
             val t = n.target as? RefName ?: return@any false
             if (t.name != shape) return@any false
             val w = t.where as? Binary ?: return@any false
@@ -2850,183 +2850,354 @@ class Validator(private val model: Model) {
         }
     }
 
-    // ── V14: definition-graph well-foundedness (stratify, then certify) ──────
+    // ── V14: definition-graph well-foundedness (stratify, then prove each self-read ends) ──
     //
-    // Evaluation is definition-unfolding, and unfolding is the one thing that
-    // can fail to bottom out — so the definition graph (derived properties;
+    // Evaluation unfolds definitions, and unfolding is the one thing that can
+    // fail to bottom out, so the definition graph (derived properties;
     // refinements referencing refinements) must be well-founded. The acyclic
-    // part passes free (stratification). Each static cycle owes a certificate
-    // from the decidable whitelist (checks.md V14), and v0 certifies exactly
-    // one cycle form — a single derived property reading itself one hop
-    // through an optional to-one on its own shape — by either:
-    //   (a) strict descent: the hop is a derived selector over the same shape
-    //       whose predicate strictly compares a creation-fixed datum against
-    //       the subject's (`previous` = latest(... receivedOn < this.receivedOn
-    //       ...) — the streakAfter recurrence, Reference §19);
-    //   (b) spent acyclicity: the hop is a stored to-one and a spendable
-    //       `never (S where hop == this)` forbids it pointing back at its own
-    //       instance (`root` through `parent`, Reference §7, §21 — the direct case).
-    // Everything else — direct self-reads, deeper paths, multi-node cycles,
-    // refinement cycles — fails closed; fixpoint semantics are never attempted.
+    // part passes free. A cycle through two or more definitions is refused.
+    // A single derived property reading itself is accepted in exactly two
+    // forms, both one step through an optional to-one on its own shape:
+    //   (a) the step is `latest`/`first` over the same shape picking a record
+    //       strictly earlier by a field fixed at creation (`previous` and
+    //       `streakAfter`, Reference §19);
+    //   (b) the step is a stored field and a spendable
+    //       `never (S where step == this)` forbids a record being its own step
+    //       (`root` through `parent`, Reference §7, §21).
+    // Everything else is refused with a message naming the reason and the
+    // spelling that passes (checks.md V14); fixpoint semantics are never
+    // attempted.
 
     private sealed interface DefNode {
         data class Prop(val shape: String, val prop: String) : DefNode
         data class Ref(val name: String) : DefNode
     }
 
-    private fun label(n: DefNode) = when (n) {
-        is DefNode.Prop -> "${n.shape}.${n.prop}"
-        is DefNode.Ref -> "shape '${n.name}'"
+    private fun label(node: DefNode) = when (node) {
+        is DefNode.Prop -> "${node.shape}.${node.prop}"
+        is DefNode.Ref -> "shape '${node.name}'"
     }
 
     private fun checkWellFoundedness() {
         val edges = mutableMapOf<DefNode, Set<DefNode>>()
         val exprs = mutableMapOf<DefNode, Pair<String, DerivedProp>>()
         for ((shapeName, shape) in model.shapes) {
-            for (m in shape.members.filterIsInstance<DerivedProp>()) {
-                val s = ReadSummary()
-                model.collectExpr(m.expr, shapeName, s)
+            for (member in shape.members.filterIsInstance<DerivedProp>()) {
+                val summary = ReadSummary()
+                model.collectExpr(member.expr, shapeName, summary)
                 val refs = mutableSetOf<String>()
-                exprMentions(m.expr, refs)
-                val node = DefNode.Prop(shapeName, m.name)
-                edges[node] = s.derivedSeen.map { DefNode.Prop(it.first, it.second) }.toSet() +
-                    refs.map { DefNode.Ref(it) }
-                exprs[node] = shapeName to m
+                exprMentions(member.expr, refs)
+                val node = DefNode.Prop(shapeName, member.name)
+                edges[node] = summary.derivedSeen.map { seen -> DefNode.Prop(seen.first, seen.second) }.toSet() +
+                    refs.map { ref -> DefNode.Ref(ref) }
+                exprs[node] = shapeName to member
             }
         }
-        for ((name, r) in model.refinements) {
-            val s = model.summaryOfRefExpr(r.expr)
+        for ((name, refinement) in model.refinements) {
+            val summary = model.summaryOfRefExpr(refinement.expr)
             val refs = mutableSetOf<String>()
-            refExprMentions(r.expr, refs)
-            edges[DefNode.Ref(name)] = s.derivedSeen.map { DefNode.Prop(it.first, it.second) }.toSet() +
-                refs.map { DefNode.Ref(it) }
+            refExprMentions(refinement.expr, refs)
+            edges[DefNode.Ref(name)] = summary.derivedSeen.map { seen -> DefNode.Prop(seen.first, seen.second) }.toSet() +
+                refs.map { ref -> DefNode.Ref(ref) }
         }
+        for (cycle in reportedOnce(definitionCycles(edges))) {
+            val message = cycleMessage(cycle, exprs) ?: continue
+            diags.add(Diagnostic("V14", message))
+        }
+    }
+
+    /** Every cycle the depth-first walk meets, each as its distinct nodes in walk order. */
+    private fun definitionCycles(edges: Map<DefNode, Set<DefNode>>): List<List<DefNode>> {
+        val cycles = mutableListOf<List<DefNode>>()
         val visiting = mutableSetOf<DefNode>()
         val done = mutableSetOf<DefNode>()
         fun dfs(node: DefNode, path: List<DefNode>) {
             if (node in done) return
             if (node in visiting) {
-                val cycle = path.dropWhile { it != node } + node
-                val selfLoop = (cycle.toSet().singleOrNull() as? DefNode.Prop)
-                    ?.let { exprs[it] }
-                if (selfLoop != null && certifiedSelfRecursion(selfLoop.first, selfLoop.second)) return
-                diags.add(Diagnostic("V14", "definition cycle: " +
-                    cycle.joinToString(" -> ") { label(it) } +
-                    " — no certificate from the whitelist applies: v0 certifies a derived property " +
-                    "that reads itself one hop through an optional to-one on its own shape, where the hop " +
-                    "either strictly descends a creation-fixed datum (a derived `latest ... by` predecessor) " +
-                    "or is proven acyclic by a spendable `never (Shape where hop == this)`; " +
-                    "restructure, name the walk (`walk <relationship>`, Reference §7), or supply a certificate (checks.md V14)"))
+                cycles.add(path.dropWhile { onPath -> onPath != node })
                 return
             }
             visiting.add(node)
-            edges[node].orEmpty().forEach { dfs(it, path + node) }
+            edges[node].orEmpty().forEach { next -> dfs(next, path + node) }
             visiting.remove(node)
             done.add(node)
         }
-        edges.keys.forEach { dfs(it, emptyList()) }
+        edges.keys.forEach { node -> dfs(node, emptyList()) }
+        return cycles
     }
 
     /**
-     * Certify one self-recursive derived property: every occurrence of the
-     * property's own name in its formula must be exactly `<hop>.<prop>`, one
-     * hop through an optional to-one on the same shape (the optionality is
-     * the structural base case — the chain can end), and every such hop must
-     * carry a descent or acyclicity certificate. Any other occurrence — a
-     * direct self-read, a deeper path, a read through a selector — fails
-     * closed. Name collisions with same-named fields elsewhere fail closed
-     * too; the walk is syntactic, and coarse-but-sound is the v0 contract.
+     * One message per cycle. A read of a derived property unfolds what that
+     * property reads, so two properties computed from each other also show up
+     * as each one reading itself; the cycle through both is the one reported,
+     * and a cycle whose nodes all lie on a larger reported cycle is dropped.
      */
-    private fun certifiedSelfRecursion(shape: String, prop: DerivedProp): Boolean {
-        val name = prop.name
-        val hops = mutableSetOf<String>()
-        var ok = true
-        fun walk(e: Expr?) {
-            if (e == null || !ok) return
-            when (e) {
-                is PathExpr -> {
-                    if (e.root == name || e.segs.any { it.name == name }) {
-                        val hop = e.root.takeIf { e.root != name && e.segs.size == 1 && e.segs[0].name == name }
-                        val m = hop?.let { model.membersOf(shape)[it] }
-                        if (m == null || m.type !is VType.Optional || m.type.instanceShape() != shape) {
-                            ok = false
-                            return
-                        }
-                        hops.add(hop)
-                    }
-                }
+    private fun reportedOnce(cycles: List<List<DefNode>>): List<List<DefNode>> {
+        val distinct = cycles.distinctBy { cycle -> cycle.toSet() }
+        return distinct.filter { cycle ->
+            val nodes = cycle.toSet()
+            distinct.none { other -> other.toSet().let { otherNodes -> nodes != otherNodes && otherNodes.containsAll(nodes) } }
+        }
+    }
+
+    /** The message for one cycle, or null when it is a self-read the compiler can see ends. */
+    private fun cycleMessage(cycle: List<DefNode>, exprs: Map<DefNode, Pair<String, DerivedProp>>): String? {
+        val only = cycle.singleOrNull()
+        if (only is DefNode.Ref) {
+            return "shape '${only.name}' is defined by itself, so it can never be decided; define it without '${only.name}'"
+        }
+        if (only is DefNode.Prop) {
+            val (shape, property) = exprs.getValue(only)
+            return selfReadProblem(shape, property)?.message(shape, property.name)
+        }
+        return mutualCycleMessage(cycle)
+    }
+
+    /** `'Kind.label' is computed from 'Kind.path', which is computed from 'Kind.label', so neither can be computed first; ...` */
+    private fun mutualCycleMessage(cycle: List<DefNode>): String {
+        fun quoted(node: DefNode) = when (node) {
+            is DefNode.Prop -> "'${node.shape}.${node.prop}'"
+            is DefNode.Ref -> "'${node.name}'"
+        }
+        fun verb(node: DefNode) = if (node is DefNode.Prop) "is computed from" else "is defined by"
+        val first = cycle.first()
+        val text = StringBuilder(if (first is DefNode.Ref) "shape ${quoted(first)}" else quoted(first))
+        (cycle + first).zipWithNext().forEachIndexed { index, (from, to) ->
+            text.append(if (index == 0) " ${verb(from)} " else ", which ${verb(from)} ")
+            text.append(quoted(to))
+        }
+        val decided = if (cycle.all { node -> node is DefNode.Ref }) "decided" else "computed"
+        text.append(
+            if (cycle.size == 2) ", so neither can be $decided first; define one of them without the other"
+            else ", so none of them can be $decided first; define one of them without the others")
+        return text.toString()
+    }
+
+    /** Why a derived property that reads itself cannot be shown to end, with the names its message needs. */
+    private sealed interface SelfReadProblem {
+        fun message(shape: String, property: String): String
+
+        fun own(shape: String, property: String) = "'$shape.$property'"
+
+        fun walkFix(step: String) = ", or write the walk 'walk $step' (Reference §7)"
+
+        fun rulesPhrase(writers: List<String>): String {
+            val names = writers.joinToString(" and ") { writer -> "'$writer'" }
+            return if (writers.size == 1) "rule $names assigns" else "rules $names assign"
+        }
+
+        fun countWord(count: Int) = when (count) {
+            2 -> "two"
+            3 -> "three"
+            4 -> "four"
+            else -> count.toString()
+        }
+    }
+
+    private object DirectRead : SelfReadProblem {
+        override fun message(shape: String, property: String) =
+            "${own(shape, property)} is computed from itself, and there is nothing to start from; " +
+                "compute it from other fields, or read it on a related record one step away"
+    }
+
+    private object ThroughSelection : SelfReadProblem {
+        override fun message(shape: String, property: String) =
+            "${own(shape, property)} reads itself through a selection; the compiler can see the chain ends " +
+                "only when the property reads itself one step away, through a field of $shape holding one $shape"
+    }
+
+    private inner class DeepPath(val stepsBefore: List<String>) : SelfReadProblem {
+        override fun message(shape: String, property: String): String {
+            val firstStep = stepsBefore.first()
+            val walk = if (model.membersOf(shape)[firstStep]?.type?.instanceShape() == shape) walkFix(firstStep) else ""
+            return "${own(shape, property)} reads itself ${countWord(stepsBefore.size)} steps away, " +
+                "through '${stepsBefore.joinToString(".")}'; the compiler can see the chain ends only when " +
+                "the property reads itself one step away. Read '$firstStep.$property'$walk"
+        }
+    }
+
+    private class StepNotToSameShape(val step: String) : SelfReadProblem {
+        override fun message(shape: String, property: String) =
+            "${own(shape, property)} reads itself through '$step', which is not a field of $shape holding one $shape; " +
+                "the compiler can see the chain ends only when the property reads itself one step away through such a field"
+    }
+
+    private class RequiredStep(val step: String) : SelfReadProblem {
+        override fun message(shape: String, property: String) =
+            "${own(shape, property)} reads itself on its '$step', and every record has one, " +
+                "so the chain through '$step' never ends; " +
+                "declare '$step: one $shape?' so the record at the top of the chain has none"
+    }
+
+    private class NoProhibition(val step: String) : SelfReadProblem {
+        override fun message(shape: String, property: String) =
+            "${own(shape, property)} reads itself on its '$step', so the chain through '$step' must end, " +
+                "and nothing says a record is never its own '$step'; " +
+                "write 'never ($shape where $step == this)'${walkFix(step)}"
+    }
+
+    private class UnreliableProhibition(val step: String, val writers: List<String>) : SelfReadProblem {
+        override fun message(shape: String, property: String): String {
+            val why = if (writers.isEmpty()) "a rule changes what it reads" else "${rulesPhrase(writers)} '$step'"
+            return "${own(shape, property)} reads itself on its '$step', so the chain through '$step' must end. " +
+                "'never ($shape where $step == this)' says so, but $why, so the compiler cannot rely on it; " +
+                "leave '$step' as set at creation${walkFix(step)}"
+        }
+    }
+
+    private class ComputedStep(val step: String) : SelfReadProblem {
+        override fun message(shape: String, property: String) =
+            "${own(shape, property)} reads itself on its '$step', so the chain through '$step' must end, " +
+                "and '$step' is computed, so the compiler cannot see that it does. " +
+                "It can when '$step' is 'latest' or 'first' over $shape picking a record strictly earlier " +
+                "by a field fixed at creation, as 'previous' does in Reference §19, " +
+                "or when '$step' is a stored field and the spec says 'never ($shape where $step == this)'; " +
+                "write one of those${walkFix(step)}"
+    }
+
+    private class NonStrictComparison(val step: String, val comparison: OrderingComparison) : SelfReadProblem {
+        override fun message(shape: String, property: String) =
+            "${own(shape, property)} reads itself on its '$step', so the chain through '$step' must end. " +
+                "'$step' picks by '${comparison.spelled()}', which can pick a record with the same '${comparison.datum}', " +
+                "so the chain can come back to this record; write '${comparison.strictened().spelled()}'"
+    }
+
+    private class ChangingOrderField(val step: String, val comparison: OrderingComparison, val writers: List<String>) : SelfReadProblem {
+        override fun message(shape: String, property: String): String {
+            val why = if (writers.isEmpty()) "'${comparison.datum}' is not a field fixed at creation"
+                else "${rulesPhrase(writers)} '${comparison.datum}'"
+            return "${own(shape, property)} reads itself on its '$step', so the chain through '$step' must end. " +
+                "'$step' picks by '${comparison.spelled()}', and $why, so the order can change after the fact; " +
+                "pick by a field no rule assigns, or by a 'timestamp on create'"
+        }
+    }
+
+    /**
+     * Why one self-recursive derived property cannot be shown to end, or null
+     * when it can: every occurrence of the property's own name in its formula
+     * is exactly `<step>.<property>`, one step through an optional to-one on
+     * the same shape (the optionality is the base case: the chain can end),
+     * and every such step is a descent or carries a spendable prohibition.
+     * The walk is syntactic; a name collision with a same-named field
+     * elsewhere is refused as a deep path, coarse but sound.
+     */
+    private fun selfReadProblem(shape: String, property: DerivedProp): SelfReadProblem? {
+        val name = property.name
+        val steps = mutableSetOf<String>()
+        var problem: SelfReadProblem? = null
+        fun found(found: SelfReadProblem) { if (problem == null) problem = found }
+        fun readOfSelf(path: PathExpr) {
+            if (path.root == name) return found(DirectRead)
+            if (path.segs.none { seg -> seg.name == name }) return
+            val stepsBefore = listOf(path.root) + path.segs.takeWhile { seg -> seg.name != name }.map { seg -> seg.name }
+            if (stepsBefore.size > 1) return found(DeepPath(stepsBefore))
+            val step = stepsBefore.single()
+            if (step == "this") return found(DirectRead)
+            val member = model.membersOf(shape)[step]
+            when {
+                member == null || member.type.instanceShape() != shape -> found(StepNotToSameShape(step))
+                member.type !is VType.Optional -> found(RequiredStep(step))
+                else -> steps.add(step)
+            }
+        }
+        fun walk(expr: Expr?) {
+            if (expr == null || problem != null) return
+            when (expr) {
+                is PathExpr -> readOfSelf(expr)
                 is Access -> {
-                    if (e.segs.any { it.name == name }) { ok = false; return }
-                    walk(e.target)
+                    if (expr.segs.any { seg -> seg.name == name }) found(ThroughSelection) else walk(expr.target)
                 }
-                is UnaryMinus -> walk(e.inner)
-                is Binary -> { walk(e.left); walk(e.right) }
-                is NotExpr -> walk(e.inner)
-                is IfExpr -> { walk(e.condition); walk(e.thenExpr); walk(e.elseExpr) }
-                is Interpolation -> e.pieces.forEach { piece -> walk(piece) }
-                is IsExpr -> walk(e.subject)
+                is UnaryMinus -> walk(expr.inner)
+                is Binary -> { walk(expr.left); walk(expr.right) }
+                is NotExpr -> walk(expr.inner)
+                is IfExpr -> { walk(expr.condition); walk(expr.thenExpr); walk(expr.elseExpr) }
+                is Interpolation -> expr.pieces.forEach { piece -> walk(piece) }
+                is IsExpr -> walk(expr.subject)
                 is ExistsExpr -> {
-                    walk(e.forExpr)
-                    e.collection?.let { c -> c.bindings.forEach { walk(it.source) }; walk(c.where) }
+                    walk(expr.forExpr)
+                    expr.collection?.let { collection -> collection.bindings.forEach { binding -> walk(binding.source) }; walk(collection.where) }
                 }
-                is AggCall -> { e.collection.bindings.forEach { walk(it.source) }; walk(e.collection.where) }
-                is FunCall -> e.args.forEach { walk(it) }
-                is SingularFor -> walk(e.forExpr)
-                is ShapeForSource -> walk(e.forExpr)
-                is SetExpr -> { e.collection.bindings.forEach { walk(it.source) }; walk(e.collection.where) }
-                is WalkExpr -> { if (e.rel == name) ok = false; walk(e.until) }
+                is AggCall -> { expr.collection.bindings.forEach { binding -> walk(binding.source) }; walk(expr.collection.where) }
+                is FunCall -> expr.args.forEach { arg -> walk(arg) }
+                is SingularFor -> walk(expr.forExpr)
+                is ShapeForSource -> walk(expr.forExpr)
+                is SetExpr -> { expr.collection.bindings.forEach { binding -> walk(binding.source) }; walk(expr.collection.where) }
+                is WalkExpr -> { if (expr.rel == name) found(DirectRead) else walk(expr.until) }
                 else -> {}
             }
         }
-        walk(prop.expr)
-        return ok && hops.isNotEmpty() && hops.all { hopCertified(shape, it) }
+        walk(property.expr)
+        problem?.let { return it }
+        if (steps.isEmpty()) return StepNotToSameShape(name)
+        return steps.firstNotNullOfOrNull { step -> stepProblem(shape, step) }
     }
 
-    private fun hopCertified(shape: String, hop: String): Boolean {
-        val m = model.membersOf(shape)[hop] ?: return false
-        m.derived?.let { return strictDescentSelector(shape, it.expr) }
-        return m.stored && neverForbidsSelfReference(shape, hop)
+    /** Why one step of a self-read is no proof the chain ends, or null when it is. */
+    private fun stepProblem(shape: String, step: String): SelfReadProblem? {
+        val member = model.membersOf(shape).getValue(step)
+        member.derived?.let { derived -> return descentProblem(shape, step, derived.expr) }
+        if (!member.stored) return ComputedStep(step)
+        if (neverForbidsSelfReference(shape, step)) return null
+        val writers = writes.filter { write -> write.owner == shape && write.member.name == step }.map { write -> write.rule.name }.distinct()
+        return if (neverForbidsSelfReference(shape, step, model.nevers)) UnreliableProhibition(step, writers) else NoProhibition(step)
     }
 
-    /** Is [e] a `latest`/`first` over [shape]'s own instances whose predicate
-     *  carries a strict comparison of a creation-fixed datum against the
-     *  subject's — so every hop lands on a strictly smaller (or larger) value
-     *  of a datum that never changes, and the chain must end in finite data? */
-    private fun strictDescentSelector(shape: String, e: Expr): Boolean {
-        val agg = e as? AggCall ?: return false
-        if (agg.name != "latest" && agg.name != "first") return false
-        val src = agg.collection.bindings.singleOrNull()?.source ?: return false
+    /**
+     * Why a computed step is no strict descent, or null when it is one: a
+     * `latest`/`first` over the shape's own instances whose predicate carries
+     * a strict comparison of a creation-fixed datum against the subject's, so
+     * every step lands on a strictly smaller (or larger) value of a datum that
+     * never changes, and the chain must end in finite data.
+     */
+    private fun descentProblem(shape: String, step: String, expr: Expr): SelfReadProblem? {
+        val selection = expr as? AggCall ?: return ComputedStep(step)
+        if (selection.name != "latest" && selection.name != "first") return ComputedStep(step)
+        val source = selection.collection.bindings.singleOrNull()?.source ?: return ComputedStep(step)
         val overOwnShape = when {
-            src is PathExpr && src.segs.isEmpty() -> model.baseOf(src.root) == shape
-            src is ShapeForSource -> model.baseOf(src.shape) == shape
+            source is PathExpr && source.segs.isEmpty() -> model.baseOf(source.root) == shape
+            source is ShapeForSource -> model.baseOf(source.shape) == shape
             else -> false
         }
-        if (!overOwnShape) return false
-        val conjuncts = agg.collection.where?.let(::conjunctsOf) ?: return false
-        return conjuncts.any { strictDescentConjunct(shape, it) }
+        if (!overOwnShape) return ComputedStep(step)
+        val conjuncts = selection.collection.where?.let(::conjunctsOf) ?: return ComputedStep(step)
+        val comparisons = conjuncts.mapNotNull(::orderingComparison)
+        if (comparisons.any { comparison -> comparison.strict && creationFixed(shape, comparison.datum) }) return null
+        val nearest = comparisons.firstOrNull() ?: return ComputedStep(step)
+        if (!nearest.strict) return NonStrictComparison(step, nearest)
+        val writers = writes.filter { write -> write.owner == shape && write.member.name == nearest.datum }.map { write -> write.rule.name }.distinct()
+        return ChangingOrderField(step, nearest, writers)
     }
 
-    private fun strictDescentConjunct(shape: String, c: Expr): Boolean {
-        val bin = c as? Binary ?: return false
-        if (bin.op != "<" && bin.op != ">") return false
-        fun bare(e: Expr): String? =
-            (e as? PathExpr)?.takeIf { it.segs.isEmpty() && it.root != "this" }?.root
-        fun viaThis(e: Expr): String? =
-            (e as? PathExpr)?.takeIf { it.root == "this" && it.segs.size == 1 }?.segs?.single()?.name
-        val datum = bare(bin.left)?.takeIf { it == viaThis(bin.right) }
-            ?: bare(bin.right)?.takeIf { it == viaThis(bin.left) }
-            ?: return false
-        return creationFixed(shape, datum)
+    /** `datum < this.datum`: a conjunct ordering the selected record against the subject by one field. */
+    private data class OrderingComparison(val datum: String, val op: String) {
+        val strict get() = op == "<" || op == ">"
+        fun spelled() = "$datum $op this.$datum"
+        fun strictened() = copy(op = op.trimEnd('='))
+    }
+
+    private fun orderingComparison(conjunct: Expr): OrderingComparison? {
+        val comparison = conjunct as? Binary ?: return null
+        if (comparison.op !in setOf("<", ">", "<=", ">=")) return null
+        fun bare(expr: Expr): String? =
+            (expr as? PathExpr)?.takeIf { path -> path.segs.isEmpty() && path.root != "this" }?.root
+        fun viaThis(expr: Expr): String? =
+            (expr as? PathExpr)?.takeIf { path -> path.root == "this" && path.segs.size == 1 }?.segs?.single()?.name
+        bare(comparison.left)?.takeIf { datum -> datum == viaThis(comparison.right) }
+            ?.let { datum -> return OrderingComparison(datum, comparison.op) }
+        val flipped = mapOf("<" to ">", ">" to "<", "<=" to ">=", ">=" to "<=")
+        bare(comparison.right)?.takeIf { datum -> datum == viaThis(comparison.left) }
+            ?.let { datum -> return OrderingComparison(datum, flipped.getValue(comparison.op)) }
+        return null
     }
 
     /** Fixed at the creation commit, never changed after: a `timestamp on
      *  create` field, or a stored field no rule ever assigns. */
     private fun creationFixed(shape: String, field: String): Boolean {
         val members = model.shapes[shape]?.members ?: return false
-        members.filterIsInstance<TimestampProp>().find { it.name == field }
-            ?.let { return it.on == "create" }
-        if (members.filterIsInstance<StoredProp>().none { it.name == field }) return false
-        return writes.none { it.owner == shape && it.member.name == field }
+        members.filterIsInstance<TimestampProp>().find { member -> member.name == field }
+            ?.let { timestamp -> return timestamp.on == "create" }
+        if (members.filterIsInstance<StoredProp>().none { member -> member.name == field }) return false
+        return writes.none { write -> write.owner == shape && write.member.name == field }
     }
 
     // ── refinement mentions (the definition graph's refinement edges, and
