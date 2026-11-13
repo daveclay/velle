@@ -14,8 +14,7 @@ import java.math.BigDecimal
  * Where checks.md calls for a prover (predicate disjointness, never-induction,
  * confluence), v0 proves the syntactic cases and fails closed on the rest —
  * calibration against realistic specs is OQ16's deferred work. Not yet
- * implemented (tracked in checks.md): V11 branch-sensitive narrowing beyond
- * the union slice (`is <Operand>` in conditionals and conjunctions), V12
+ * implemented (tracked in checks.md): V11's `not (x is A)`, V12
  * at-most-one proofs beyond the refinement slice (base-shape to-one-inverse
  * proofs stay runtime-enforced), and the A-series beyond A4/A5
  * (drift-exposed partitions and contention — advisory, via Validator.advisories).
@@ -882,13 +881,14 @@ class Validator(private val model: Model) {
             is PathExpr -> {
                 if (allowGenerator && e.root == "randomUUID" && e.segs.isEmpty()) return
                 resolvePath(e, scope)
+                checkDotsLicensed(e, scope)
             }
             is UnaryMinus -> checkExpr(e.inner, scope)
             is ListLit -> e.items.forEach { checkExpr(it, scope) }
             is Binary -> {
                 checkExpr(e.left, scope)
                 // a conjunction narrows what follows it (Reference §10)
-                if (e.op == "and") withNarrowing(narrowingsOf(e.left)) { checkExpr(e.right, scope) }
+                if (e.op == "and") withNarrowing(narrowingsOf(e.left)) { withPresence(e.left, holds = true, scope) { checkExpr(e.right, scope) } }
                 else checkExpr(e.right, scope)
                 // the text operators take text on both sides (Reference §10; OQ51 R1);
                 // `values contains x` over a `many` of values takes an element (Reference §5)
@@ -941,8 +941,8 @@ class Validator(private val model: Model) {
             is NotExpr -> checkExpr(e.inner, scope)
             is IfExpr -> {
                 checkExpr(e.condition, scope)
-                withNarrowing(narrowingsOf(e.condition)) { checkExpr(e.thenExpr, scope) }
-                withNarrowing(complementNarrowingsOf(e.condition, scope)) { checkExpr(e.elseExpr, scope) }
+                withNarrowing(narrowingsOf(e.condition)) { withPresence(e.condition, holds = true, scope) { checkExpr(e.thenExpr, scope) } }
+                withNarrowing(complementNarrowingsOf(e.condition, scope)) { withPresence(e.condition, holds = false, scope) { checkExpr(e.elseExpr, scope) } }
             }
             is IsExpr -> {
                 checkExpr(e.subject, scope)
@@ -1285,6 +1285,7 @@ class Validator(private val model: Model) {
      *  the aliases, and the paths the branch being checked has narrowed (V11). */
     private fun typeEnv(): TypeEnv = TypeEnv(
         thisScope, aliasScopes.toMap(), scalarAliases.toMap(),
+        present = presentPaths.toSet(),
         narrowed = narrowed.entries.associate { (key, shape) -> key.split(".").let { if (it.first() == "this") it.drop(1) else it } to shape },
     ).with(ruleNarrowing)
 
@@ -1756,6 +1757,28 @@ class Validator(private val model: Model) {
         }
         if (p.root == "this" && p.segs.isEmpty()) return thisScope ?: scope
         return model.pathElementShape(p, scope, aliasScopes, thisScope ?: scope)
+    }
+
+    /** The paths an `is some` or `is none` test has shown present in the branch being checked (Reference §10). */
+    private val presentPaths = mutableSetOf<List<String>>()
+
+    /** Checks [body] with what [condition] shows present where it [holds] or where it fails. */
+    private inline fun withPresence(condition: Expr, holds: Boolean, scope: String, body: () -> Unit) {
+        val added = model.types.narrowingOf(condition, holds, scope, typeEnv()).present - presentPaths
+        presentPaths.addAll(added)
+        try { body() } finally { presentPaths.removeAll(added) }
+    }
+
+    /** V11: a plain dot after a step that may be absent, `site.region` with `site: one Site?` and no
+     *  test showing `site` present, names the step and the two spellings that read it. */
+    private fun checkDotsLicensed(path: PathExpr, scope: String) {
+        val step = model.types.untestedStep(path, scope, typeEnv()) ?: return
+        val stepSpelled = step.joinToString(".")
+        // the `?.` goes on the dot after the step: the root is a step of its own unless it is `this`
+        val dotAfterStep = step.size - (if (path.root == "this") 0 else 1)
+        val licensed = PathExpr(path.root, path.segs.mapIndexed { index, seg -> if (index == dotAfterStep) seg.copy(viaQdot = true) else seg })
+        diags.add(Diagnostic("V11", "'${Printer.expr(path)}' reads through '$stepSpelled', which may be absent; " +
+            "test '$stepSpelled is some' first, or write '${Printer.expr(licensed)}' to read absent when it is (Reference §10)"))
     }
 
     private inline fun withNarrowing(entries: List<Pair<PathExpr, String>>, body: () -> Unit) {

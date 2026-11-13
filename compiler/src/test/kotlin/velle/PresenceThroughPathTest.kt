@@ -39,8 +39,93 @@ class PresenceThroughPathTest {
     }
 
     @Test
-    fun `a test on a plain-dot path shows its steps present the same way`() {
-        assertEquals(emptyList(), diagnostics(withName("""siteName: text = if site.name is some then site.name else "none"""")))
+    fun `a test on a plain-dot path is itself a plain dot through an untested optional`() {
+        val diags = diagnostics(withName("""siteName: text = if site.name is some then site.name else "none""""))
+        assertEquals(1, diags.size, diags.toString())
+        assertTrue(diags.single().startsWith("[V11] 'site.name' reads through 'site', which may be absent"), diags.single())
+        assertTrue("write 'site?.name'" in diags.single(), diags.single())
+    }
+
+    @Test
+    fun `V11 - a plain dot through an untested optional is refused, naming the step and both spellings`() {
+        val diags = diagnostics("""
+            act Entry {
+                key: text unique
+                site: one Site?
+                inNorth: boolean = site.region.name == "north"
+            }
+            act Site {
+                region: one Region?
+            }
+            act Region {
+                name: text
+            }
+        """)
+        assertEquals(listOf("[V11] 'site.region.name' reads through 'site', which may be absent; " +
+            "test 'site is some' first, or write 'site?.region.name' to read absent when it is (Reference §10)"), diags)
+    }
+
+    @Test
+    fun `V11 - a question-dot through the optional step reads absent and needs no test`() {
+        assertEquals(emptyList(), diagnostics(withName("""siteName: text? = site?.name""")))
+        assertEquals(emptyList(), diagnostics("""
+            act Entry {
+                key: text unique
+                site: one Site?
+                regionName: text? = site?.region?.name
+            }
+            act Site {
+                region: one Region?
+            }
+            act Region {
+                name: text
+            }
+        """))
+    }
+
+    @Test
+    fun `V11 - a conjunction, a refinement's where, and a rule's inline where each license the dots that follow`() {
+        assertEquals(emptyList(), diagnostics("""
+            act Entry {
+                key: text unique
+                site: one Site?
+                named: boolean = site is some and site.name is some and site.name == "x"
+            }
+            act Site {
+                name: text?
+            }
+            shape Sited = Entry where site?.name is some
+            never (Sited where site.name == "forbidden")
+            shape Flag {
+                entry: one Entry
+                siteName: text
+            }
+            rule FlagSite when (Entry where site?.name is some) {
+                Flag from { entry: this, siteName: site.name }
+            }
+        """))
+    }
+
+    @Test
+    fun `V11 - a path from an as-alias is checked and licensed under the alias`() {
+        val spec = """
+            act Reading {
+                site: one Site?
+                value: text
+            }
+            act Site {
+                name: text?
+            }
+            act Report {
+                key: text unique
+                readings: many Reading
+                named: integer = count(readings as r where r.site?.name is some and r.site.name == "x")
+                unnamed: integer = count(readings as r where r.site.name == "x")
+            }
+        """
+        val diags = diagnostics(spec)
+        assertEquals(1, diags.size, diags.toString())
+        assertTrue(diags.single().startsWith("[V11] 'r.site.name' reads through 'r.site', which may be absent"), diags.single())
     }
 
     @Test

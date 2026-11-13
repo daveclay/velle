@@ -159,9 +159,37 @@ class ExprTypes(private val model: Model) {
         if (path.root in outer.scalarAliases) return if (path.segs.isEmpty()) outer.scalarAliases[path.root] else null
         val env = outer.with(narrowingOf(outer.thisScope ?: scope))
         val start: String? = if (path.root in env.aliases) env.aliases[path.root] else env.thisScope ?: scope
-        if (path.root == "this" || path.root in env.aliases) return along(start, path.segs, emptyList(), optional = false, env)
+        if (path.root == "this" || path.root in env.aliases) return along(start, path.segs, aliasPrefix(path, env), optional = false, env)
         val rootMember = start?.let { model.membersOf(it)[path.root] } ?: return null
         return along(rootMember, path.segs, listOf(path.root), optional = false, env)
+    }
+
+    /** The names a path's present and narrowed steps are kept under: the alias with them when the
+     *  path starts at one, `r.field` under `r`, and the steps alone when it starts at `this`. */
+    private fun aliasPrefix(path: PathExpr, env: TypeEnv): List<String> = if (path.root in env.aliases) listOf(path.root) else emptyList()
+
+    /**
+     * The first step of [path] read with a plain dot while it may be absent (Reference §10; checks.md
+     * V11): a member declared optional that no test in [env] shows present, with `.` after it; null
+     * when every dot of the path is licensed, or the path reads nothing the model knows.
+     */
+    fun untestedStep(path: PathExpr, scope: String, outer: TypeEnv): List<String>? {
+        if (path.root in outer.scalarAliases) return null
+        val env = outer.with(narrowingOf(outer.thisScope ?: scope))
+        val startsAtRecord = path.root == "this" || path.root in env.aliases
+        var current: String? = if (path.root in env.aliases) env.aliases[path.root] else env.thisScope ?: scope
+        val steps = if (startsAtRecord) path.segs else listOf(Seg(path.root, viaQdot = false)) + path.segs
+        val names = aliasPrefix(path, env).toMutableList()
+        var mayBeAbsent = false
+        for (step in steps) {
+            if (mayBeAbsent && !step.viaQdot) return names.toList()
+            val member = model.membersOf(current ?: return null)[step.name] ?: return null
+            names.add(step.name)
+            val type = memberType(member)
+            mayBeAbsent = type is VType.Optional && names !in env.present && names !in env.narrowed
+            current = env.narrowed[names] ?: bare(type).instanceShape() ?: (bare(type) as? VType.Coll)?.shape
+        }
+        return null
     }
 
     private fun accessType(expr: Access, scope: String, env: TypeEnv): VType? {
