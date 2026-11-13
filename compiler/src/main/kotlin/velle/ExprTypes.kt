@@ -262,16 +262,18 @@ class ExprTypes(private val model: Model) {
 
     /**
      * What a condition shows in the branch where it [holds] or in the one where it fails
-     * (Reference §10): `x is some` present where it holds, `x is none` present where it fails;
-     * `x is Post` read as a `Post` where it holds, and, over a static union of two operands, as
-     * the other operand where it fails. A conjunction adds up where it holds.
+     * (Reference §10): `x is some` present where it holds, `x is none` present where it fails,
+     * and with the path every step on the way to it, since `site?.name` holding a text means
+     * `site` holds a record; `x is Post` read as a `Post` where it holds, and, over a static
+     * union of two operands, as the other operand where it fails. A conjunction adds up where
+     * it holds.
      */
     fun narrowingOf(cond: Expr, holds: Boolean, scope: String, env: TypeEnv): Narrowing = when {
         cond is Binary && cond.op == "and" && holds -> narrowingOf(cond.left, true, scope, env) + narrowingOf(cond.right, true, scope, env)
         cond is IsExpr && cond.subject is PathExpr -> {
             val path = namesOf(cond.subject)
             when {
-                cond.kind == "some" && holds || cond.kind == "none" && !holds -> Narrowing(present = setOf(path))
+                cond.kind == "some" && holds || cond.kind == "none" && !holds -> Narrowing(present = stepsOf(path))
                 cond.kind == "refinement" && holds -> Narrowing(narrowed = mapOf(path to cond.refinement!!))
                 cond.kind == "refinement" -> complementOf(cond.subject, cond.refinement!!, scope, env)?.let { Narrowing(narrowed = mapOf(path to it)) } ?: Narrowing.NONE
                 else -> Narrowing.NONE
@@ -292,6 +294,9 @@ class ExprTypes(private val model: Model) {
     /** A member's type: its declaration's, or, for a derived property that states none, its expression's (Reference §7). */
     fun memberType(member: MemberInfo): VType =
         member.derived?.takeIf { it.type == null }?.let { model.resolvedDerivedType(member.owner, it) } ?: member.type
+
+    /** A path and every path on the way to it: `site.region.name` with `site.region` and `site`. */
+    private fun stepsOf(path: List<String>): Set<List<String>> = path.indices.mapTo(linkedSetOf()) { last -> path.take(last + 1) }
 
     private fun namesOf(path: PathExpr): List<String> = if (path.root == "this") path.segs.map { it.name } else listOf(path.root) + path.segs.map { it.name }
 

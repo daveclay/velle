@@ -1,0 +1,15 @@
+-- A presence test on a path, `site?.name is some`, with a plain-dot read of
+-- the same path in the branch it governs. The test shows every step of the
+-- path present, `site` and `site.name`, so `site.name` reads a text and the
+-- required declaration is accepted (Reference §10, "Reaching through
+-- relationships"; checks V11). Before OQ125 settled, only `site.name` was
+-- shown present and the declaration was refused as possibly absent.
+act Entry {
+    key: text unique
+    site: one Site?
+    siteName: text = if site?.name is some then site.name else "unnamed"
+}
+
+act Site {
+    name: text?
+}

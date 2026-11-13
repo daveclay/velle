@@ -162,12 +162,14 @@ class KeyLookups(decls: List<Decl>) {
         return true
     }
 
-    /** The paths a condition's conjuncts narrow with `is some`, spelled without `this.`. */
-    private fun narrowings(condition: Expr): Set<String> = conjuncts(condition).mapNotNullTo(linkedSetOf()) { conjunct ->
-        val test = conjunct as? IsExpr ?: return@mapNotNullTo null
-        if (test.kind != "some") return@mapNotNullTo null
-        val path = test.subject as? PathExpr ?: return@mapNotNullTo null
-        if (path.root == "this") path.segs.joinToString(".") { it.name } else (listOf(path.root) + path.segs.map { it.name }).joinToString(".")
+    /** The paths a condition's conjuncts narrow with `is some`, spelled without `this.`, each
+     *  with every path on the way to it: `site?.name is some` shows `site` present as well. */
+    private fun narrowings(condition: Expr): Set<String> = conjuncts(condition).flatMapTo(linkedSetOf()) { conjunct ->
+        val test = conjunct as? IsExpr ?: return@flatMapTo emptyList()
+        if (test.kind != "some") return@flatMapTo emptyList()
+        val path = test.subject as? PathExpr ?: return@flatMapTo emptyList()
+        val segments = if (path.root == "this") path.segs.map { it.name } else listOf(path.root) + path.segs.map { it.name }
+        segments.indices.map { last -> segments.take(last + 1).joinToString(".") }
     }
 
     /** What a refinement expression narrows with `is some`: its own `where` and, through a name, the refinement it names. */
