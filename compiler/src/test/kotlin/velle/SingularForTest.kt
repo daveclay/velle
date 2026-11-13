@@ -3,6 +3,7 @@ package velle
 import java.math.BigDecimal
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -10,7 +11,9 @@ import kotlin.test.assertTrue
  * Runs Reference §20's episodes pattern end-to-end: the exit rule's singular
  * reference `(OpenDelinquencyFlag for this)` — a refinement name in the
  * proof-gated `for` query — resolves through base-instance scan plus
- * membership filter.
+ * membership filter. The form is one record or absent (Reference §10): an entry
+ * with no arrival reads `(Arrival for this).at` absent, and a `from` block that
+ * stores the absent record in a required field fails the firing (Reference §14).
  */
 class SingularForTest {
 
@@ -95,6 +98,58 @@ class SingularForTest {
             sys.report(acct, "-30")
             assertEquals(2, sys.instancesOf("DelinquencyFlag").size)
             assertEquals(1, sys.instancesOf("OpenDelinquencyFlag").size)
+        }
+    }
+
+    private val entryAndArrival = """
+        act Entry {
+            key: text unique
+            arrivedAt: DateTime? = (Arrival for this).at
+        }
+
+        act Arrival {
+            entry: one Entry unique
+            at: DateTime
+        }
+    """.trimIndent()
+
+    @Test
+    fun `an entry with no arrival reads the singular reference absent`() {
+        val sys = VelleSystem(Model(Parser.parse(entryAndArrival)))
+        assertEquals(emptyList(), Validator.validate(entryAndArrival))
+        sys.scope {
+            val entry = sys.mustCommit("Entry", "key" to "PLOT-1")
+            assertEquals(null, sys.get(entry, "arrivedAt"))
+            sys.mustCommit("Arrival", "entry" to entry, "at" to java.time.Instant.parse("2026-11-13T08:00:00Z"))
+            assertEquals(java.time.Instant.parse("2026-11-13T08:00:00Z"), sys.get(entry, "arrivedAt"))
+        }
+    }
+
+    @Test
+    fun `a from block storing an absent singular reference in a required field fails the firing`() {
+        val spec = entryAndArrival + """
+
+            act Audit {
+                entry: one Entry
+            }
+
+            shape AuditNote {
+                arrival: one Arrival
+                audit: one Audit
+            }
+
+            rule NoteArrival when Audit {
+                AuditNote from { arrival: (Arrival for entry), audit: this }
+            }
+        """.trimIndent()
+        assertEquals(emptyList(), Validator.validate(spec))
+        val sys = VelleSystem(Model(Parser.parse(spec)))
+        sys.scope {
+            val entry = sys.mustCommit("Entry", "key" to "PLOT-1")
+            val failure = assertFailsWith<VelleRuntimeError> { sys.commit("Audit", mapOf("entry" to entry)) }
+            assertEquals("'AuditNote.arrival' is required and '(Arrival for entry)' is absent: the selection matched nothing (Reference §14)", failure.message)
+            assertEquals(0, sys.instancesOf("AuditNote").size)
+            assertEquals(0, sys.instancesOf("Audit").size)
         }
     }
 }

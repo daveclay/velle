@@ -821,8 +821,9 @@ class Evaluator(private val system: VelleSystem) {
         val target = eval(e.forExpr, ctx) as? Value.VRef
             ?: throw VelleRuntimeError("'for' target is not an instance")
         val matches = instancesReferencing(e.shape, target.id)
+        // one record or absent (Reference §10): at most one is proven, existence is not
         return when (matches.size) {
-            0 -> throw VelleRuntimeError("(${e.shape} for ...) found no instance — the licensing predicate should have prevented this")
+            0 -> Value.VNone
             1 -> Value.VRef(matches.single())
             else -> throw VelleRuntimeError("(${e.shape} for ...) is not singular (${matches.size} matches) — at-most-one proof gap")
         }
